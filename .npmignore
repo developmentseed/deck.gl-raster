@@ -1,0 +1,17 @@
+src
+tests
+*.test.ts
+*.spec.ts
+tsconfig.json
+tsup.config.ts
+vitest.config.ts
+eslint.config.js
+.prettierrc.json
+.prettierignore
+.eslintcache
+coverage
+.vscode
+.idea
+*.log
+node_modules
+IMPLEMENTATION_PLAN.md
