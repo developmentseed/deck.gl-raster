@@ -4,7 +4,34 @@
  */
 
 export default class Delatin {
-  constructor(data, width, height = width) {
+  data: number[];
+  width: number;
+  height: number;
+
+  /**
+   * vertex coordinates (x, y), i.e.
+   * [x0, y0, x1, y1, ...]
+   */
+  coords: number[];
+
+  /**
+   * triangle vertex indices
+   */
+  triangles: number[];
+
+  private _halfedges: number[];
+  private _candidates: number[];
+  private _queueIndices: number[];
+
+  private _queue: number[];
+  private _errors: number[];
+  private _rms: number[];
+  private _pending: number[];
+  private _pendingLen: number;
+
+  private _rmsSum: number;
+
+  constructor(data: number[], width: number, height: number = width) {
     this.data = data; // height data
     this.width = width;
     this.height = height;
@@ -39,59 +66,67 @@ export default class Delatin {
   }
 
   // refine the mesh until its maximum error gets below the given one
-  run(maxError = 1) {
+  run(maxError: number = 1): void {
     while (this.getMaxError() > maxError) {
       this.refine();
     }
   }
 
   // refine the mesh with a single point
-  refine() {
+  refine(): void {
     this._step();
     this._flush();
   }
 
   // max error of the current mesh
-  getMaxError() {
-    return this._errors[0];
+  getMaxError(): number {
+    return this._errors[0]!;
   }
 
   // root-mean-square deviation of the current mesh
-  getRMSD() {
+  getRMSD(): number {
     return this._rmsSum > 0
       ? Math.sqrt(this._rmsSum / (this.width * this.height))
       : 0;
   }
 
   // height value at a given position
-  heightAt(x, y) {
-    return this.data[this.width * y + x];
+  heightAt(x: number, y: number): number {
+    return this.data[this.width * y + x]!;
   }
 
   // rasterize and queue all triangles that got added or updated in _step
-  _flush() {
+  private _flush() {
     const coords = this.coords;
     for (let i = 0; i < this._pendingLen; i++) {
-      const t = this._pending[i];
+      const t = this._pending[i]!;
       // rasterize triangle to find maximum pixel error
-      const a = 2 * this.triangles[t * 3 + 0];
-      const b = 2 * this.triangles[t * 3 + 1];
-      const c = 2 * this.triangles[t * 3 + 2];
+      const a = 2 * this.triangles[t * 3 + 0]!;
+      const b = 2 * this.triangles[t * 3 + 1]!;
+      const c = 2 * this.triangles[t * 3 + 2]!;
       this._findCandidate(
-        coords[a],
-        coords[a + 1],
-        coords[b],
-        coords[b + 1],
-        coords[c],
-        coords[c + 1],
-        t
+        coords[a]!,
+        coords[a + 1]!,
+        coords[b]!,
+        coords[b + 1]!,
+        coords[c]!,
+        coords[c + 1]!,
+        t,
       );
     }
     this._pendingLen = 0;
   }
 
   // rasterize a triangle, find its max error, and queue it for processing
-  _findCandidate(p0x, p0y, p1x, p1y, p2x, p2y, t) {
+  private _findCandidate(
+    p0x: number,
+    p0y: number,
+    p1x: number,
+    p1y: number,
+    p2x: number,
+    p2y: number,
+    t: number,
+  ) {
     // triangle bounding box
     const minX = Math.min(p0x, p1x, p2x);
     const minY = Math.min(p0y, p1y, p2y);
@@ -185,7 +220,7 @@ export default class Delatin {
   }
 
   // process the next triangle in the queue, splitting it with a new point
-  _step() {
+  private _step(): void {
     // pop triangle with highest error from priority queue
     const t = this._queuePop();
 
@@ -193,18 +228,18 @@ export default class Delatin {
     const e1 = t * 3 + 1;
     const e2 = t * 3 + 2;
 
-    const p0 = this.triangles[e0];
-    const p1 = this.triangles[e1];
-    const p2 = this.triangles[e2];
+    const p0 = this.triangles[e0]!;
+    const p1 = this.triangles[e1]!;
+    const p2 = this.triangles[e2]!;
 
-    const ax = this.coords[2 * p0];
-    const ay = this.coords[2 * p0 + 1];
-    const bx = this.coords[2 * p1];
-    const by = this.coords[2 * p1 + 1];
-    const cx = this.coords[2 * p2];
-    const cy = this.coords[2 * p2 + 1];
-    const px = this._candidates[2 * t];
-    const py = this._candidates[2 * t + 1];
+    const ax = this.coords[2 * p0]!;
+    const ay = this.coords[2 * p0 + 1]!;
+    const bx = this.coords[2 * p1]!;
+    const by = this.coords[2 * p1 + 1]!;
+    const cx = this.coords[2 * p2]!;
+    const cy = this.coords[2 * p2 + 1]!;
+    const px = this._candidates[2 * t]!;
+    const py = this._candidates[2 * t + 1]!;
 
     const pn = this._addPoint(px, py);
 
@@ -215,9 +250,9 @@ export default class Delatin {
     } else if (orient(cx, cy, ax, ay, px, py) === 0) {
       this._handleCollinear(pn, e2);
     } else {
-      const h0 = this._halfedges[e0];
-      const h1 = this._halfedges[e1];
-      const h2 = this._halfedges[e2];
+      const h0 = this._halfedges[e0]!;
+      const h1 = this._halfedges[e1]!;
+      const h2 = this._halfedges[e2]!;
 
       const t0 = this._addTriangle(p0, p1, pn, h0, -1, -1, e0);
       const t1 = this._addTriangle(p1, p2, pn, h1, -1, t0 + 1);
@@ -230,14 +265,22 @@ export default class Delatin {
   }
 
   // add coordinates for a new vertex
-  _addPoint(x, y) {
+  private _addPoint(x: number, y: number): number {
     const i = this.coords.length >> 1;
     this.coords.push(x, y);
     return i;
   }
 
   // add or update a triangle in the mesh
-  _addTriangle(a, b, c, ab, bc, ca, e = this.triangles.length) {
+  _addTriangle(
+    a: number,
+    b: number,
+    c: number,
+    ab: number,
+    bc: number,
+    ca: number,
+    e: number = this.triangles.length,
+  ) {
     const t = e / 3; // new triangle index
 
     // add triangle vertices
@@ -274,7 +317,7 @@ export default class Delatin {
     return e;
   }
 
-  _legalize(a) {
+  private _legalize(a: number): void {
     // if the pair of triangles doesn't satisfy the Delaunay condition
     // (p1 is inside the circumcircle of [p0, pl, pr]), flip them,
     // then do the same check/flip recursively for the new pair of triangles
@@ -290,7 +333,7 @@ export default class Delatin {
     //          \||/                  \  /
     //           pr                    pr
 
-    const b = this._halfedges[a];
+    const b = this._halfedges[a]!;
 
     if (b < 0) {
       return;
@@ -302,31 +345,31 @@ export default class Delatin {
     const ar = a0 + ((a + 2) % 3);
     const bl = b0 + ((b + 2) % 3);
     const br = b0 + ((b + 1) % 3);
-    const p0 = this.triangles[ar];
-    const pr = this.triangles[a];
-    const pl = this.triangles[al];
-    const p1 = this.triangles[bl];
+    const p0 = this.triangles[ar]!;
+    const pr = this.triangles[a]!;
+    const pl = this.triangles[al]!;
+    const p1 = this.triangles[bl]!;
     const coords = this.coords;
 
     if (
       !inCircle(
-        coords[2 * p0],
-        coords[2 * p0 + 1],
-        coords[2 * pr],
-        coords[2 * pr + 1],
-        coords[2 * pl],
-        coords[2 * pl + 1],
-        coords[2 * p1],
-        coords[2 * p1 + 1]
+        coords[2 * p0]!,
+        coords[2 * p0 + 1]!,
+        coords[2 * pr]!,
+        coords[2 * pr + 1]!,
+        coords[2 * pl]!,
+        coords[2 * pl + 1]!,
+        coords[2 * p1]!,
+        coords[2 * p1 + 1]!,
       )
     ) {
       return;
     }
 
-    const hal = this._halfedges[al];
-    const har = this._halfedges[ar];
-    const hbl = this._halfedges[bl];
-    const hbr = this._halfedges[br];
+    const hal = this._halfedges[al]!;
+    const har = this._halfedges[ar]!;
+    const hbl = this._halfedges[bl]!;
+    const hbr = this._halfedges[br]!;
 
     this._queueRemove(a0 / 3);
     this._queueRemove(b0 / 3);
@@ -339,17 +382,17 @@ export default class Delatin {
   }
 
   // handle a case where new vertex is on the edge of a triangle
-  _handleCollinear(pn, a) {
+  private _handleCollinear(pn: number, a: number): void {
     const a0 = a - (a % 3);
     const al = a0 + ((a + 1) % 3);
     const ar = a0 + ((a + 2) % 3);
-    const p0 = this.triangles[ar];
-    const pr = this.triangles[a];
-    const pl = this.triangles[al];
-    const hal = this._halfedges[al];
-    const har = this._halfedges[ar];
+    const p0 = this.triangles[ar]!;
+    const pr = this.triangles[a]!;
+    const pl = this.triangles[al]!;
+    const hal = this._halfedges[al]!;
+    const har = this._halfedges[ar]!;
 
-    const b = this._halfedges[a];
+    const b = this._halfedges[a]!;
 
     if (b < 0) {
       const t0 = this._addTriangle(pn, p0, pr, -1, har, -1, a0);
@@ -362,9 +405,9 @@ export default class Delatin {
     const b0 = b - (b % 3);
     const bl = b0 + ((b + 2) % 3);
     const br = b0 + ((b + 1) % 3);
-    const p1 = this.triangles[bl];
-    const hbl = this._halfedges[bl];
-    const hbr = this._halfedges[br];
+    const p1 = this.triangles[bl]!;
+    const hbl = this._halfedges[bl]!;
+    const hbr = this._halfedges[br]!;
 
     this._queueRemove(b0 / 3);
 
@@ -381,7 +424,7 @@ export default class Delatin {
 
   // priority queue methods
 
-  _queuePush(t, error, rms) {
+  private _queuePush(t: number, error: number, rms: number): void {
     const i = this._queue.length;
     this._queueIndices[t] = i;
     this._queue.push(t);
@@ -390,27 +433,27 @@ export default class Delatin {
     this._queueUp(i);
   }
 
-  _queuePop() {
+  private _queuePop(): number {
     const n = this._queue.length - 1;
     this._queueSwap(0, n);
     this._queueDown(0, n);
-    return this._queuePopBack();
+    return this._queuePopBack()!;
   }
 
-  _queuePopBack() {
-    const t = this._queue.pop();
+  private _queuePopBack(): number {
+    const t = this._queue.pop()!;
     this._errors.pop();
-    this._rmsSum -= this._rms[t];
+    this._rmsSum -= this._rms[t]!;
     this._queueIndices[t] = -1;
     return t;
   }
 
-  _queueRemove(t) {
-    const i = this._queueIndices[t];
+  private _queueRemove(t: number): void {
+    const i = this._queueIndices[t]!;
     if (i < 0) {
       const it = this._pending.indexOf(t);
       if (it !== -1) {
-        this._pending[it] = this._pending[--this._pendingLen];
+        this._pending[it] = this._pending[--this._pendingLen]!;
       } else {
         throw new Error("Broken triangulation (something went wrong).");
       }
@@ -426,23 +469,23 @@ export default class Delatin {
     this._queuePopBack();
   }
 
-  _queueLess(i, j) {
-    return this._errors[i] > this._errors[j];
+  private _queueLess(i: number, j: number): boolean {
+    return this._errors[i]! > this._errors[j]!;
   }
 
-  _queueSwap(i, j) {
-    const pi = this._queue[i];
-    const pj = this._queue[j];
+  private _queueSwap(i: number, j: number): void {
+    const pi = this._queue[i]!;
+    const pj = this._queue[j]!;
     this._queue[i] = pj;
     this._queue[j] = pi;
     this._queueIndices[pi] = j;
     this._queueIndices[pj] = i;
-    const e = this._errors[i];
-    this._errors[i] = this._errors[j];
+    const e = this._errors[i]!;
+    this._errors[i] = this._errors[j]!;
     this._errors[j] = e;
   }
 
-  _queueUp(j0) {
+  private _queueUp(j0: number): void {
     let j = j0;
     while (true) {
       const i = (j - 1) >> 1;
@@ -454,7 +497,7 @@ export default class Delatin {
     }
   }
 
-  _queueDown(i0, n) {
+  private _queueDown(i0: number, n: number): boolean {
     let i = i0;
     while (true) {
       const j1 = 2 * i + 1;
@@ -476,11 +519,27 @@ export default class Delatin {
   }
 }
 
-function orient(ax, ay, bx, by, cx, cy) {
+function orient(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+): number {
   return (bx - cx) * (ay - cy) - (by - cy) * (ax - cx);
 }
 
-function inCircle(ax, ay, bx, by, cx, cy, px, py) {
+function inCircle(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+  px: number,
+  py: number,
+): boolean {
   const dx = ax - px;
   const dy = ay - py;
   const ex = bx - px;
