@@ -365,6 +365,17 @@ export default class RasterReprojector {
     // Now we can resume with code from upstream's `_findCandidate` that
     // modifies the internal state of what triangles to subdivide.
 
+    // Check that the max error point is not one of the existing triangle
+    // vertices
+    // TODO: perhaps we should use float precision epsilon here?
+    if (
+      (maxErrorU === p0u && maxErrorV === p0v) ||
+      (maxErrorU === p1u && maxErrorV === p1v) ||
+      (maxErrorU === p2u && maxErrorV === p2v)
+    ) {
+      maxError = 0;
+    }
+
     // update triangle metadata
     this._candidatesUV[2 * t] = maxErrorU;
     this._candidatesUV[2 * t + 1] = maxErrorV;
