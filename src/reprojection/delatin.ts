@@ -43,10 +43,12 @@ export default class RasterReprojector {
   height: number;
 
   /**
-   * vertex coordinates (x, y), i.e.
+   * UV vertex coordinates (x, y), i.e.
    * [x0, y0, x1, y1, ...]
+   *
+   * These coordinates are floats that range from [0, 1] in both X and Y.
    */
-  coords: number[];
+  uvs: number[];
 
   /**
    * triangle vertex indices
@@ -74,7 +76,7 @@ export default class RasterReprojector {
     this.width = width;
     this.height = height;
 
-    this.coords = []; // vertex coordinates (x, y)
+    this.uvs = []; // vertex coordinates (x, y)
     this.triangles = []; // mesh triangle indices
 
     // additional triangle data
@@ -135,7 +137,7 @@ export default class RasterReprojector {
 
   // rasterize and queue all triangles that got added or updated in _step
   private _flush() {
-    const coords = this.coords;
+    const uvs = this.uvs;
     for (let i = 0; i < this._pendingLen; i++) {
       const t = this._pending[i]!;
       // rasterize triangle to find maximum pixel error
@@ -143,12 +145,12 @@ export default class RasterReprojector {
       const b = 2 * this.triangles[t * 3 + 1]!;
       const c = 2 * this.triangles[t * 3 + 2]!;
       this._findCandidate(
-        coords[a]!,
-        coords[a + 1]!,
-        coords[b]!,
-        coords[b + 1]!,
-        coords[c]!,
-        coords[c + 1]!,
+        uvs[a]!,
+        uvs[a + 1]!,
+        uvs[b]!,
+        uvs[b + 1]!,
+        uvs[c]!,
+        uvs[c + 1]!,
         t,
       );
     }
@@ -270,12 +272,12 @@ export default class RasterReprojector {
     const p1 = this.triangles[e1]!;
     const p2 = this.triangles[e2]!;
 
-    const ax = this.coords[2 * p0]!;
-    const ay = this.coords[2 * p0 + 1]!;
-    const bx = this.coords[2 * p1]!;
-    const by = this.coords[2 * p1 + 1]!;
-    const cx = this.coords[2 * p2]!;
-    const cy = this.coords[2 * p2 + 1]!;
+    const ax = this.uvs[2 * p0]!;
+    const ay = this.uvs[2 * p0 + 1]!;
+    const bx = this.uvs[2 * p1]!;
+    const by = this.uvs[2 * p1 + 1]!;
+    const cx = this.uvs[2 * p2]!;
+    const cy = this.uvs[2 * p2 + 1]!;
     const px = this._candidates[2 * t]!;
     const py = this._candidates[2 * t + 1]!;
 
@@ -304,8 +306,8 @@ export default class RasterReprojector {
 
   // add coordinates for a new vertex
   private _addPoint(x: number, y: number): number {
-    const i = this.coords.length >> 1;
-    this.coords.push(x, y);
+    const i = this.uvs.length >> 1;
+    this.uvs.push(x, y);
     return i;
   }
 
@@ -387,18 +389,18 @@ export default class RasterReprojector {
     const pr = this.triangles[a]!;
     const pl = this.triangles[al]!;
     const p1 = this.triangles[bl]!;
-    const coords = this.coords;
+    const uvs = this.uvs;
 
     if (
       !inCircle(
-        coords[2 * p0]!,
-        coords[2 * p0 + 1]!,
-        coords[2 * pr]!,
-        coords[2 * pr + 1]!,
-        coords[2 * pl]!,
-        coords[2 * pl + 1]!,
-        coords[2 * p1]!,
-        coords[2 * p1 + 1]!,
+        uvs[2 * p0]!,
+        uvs[2 * p0 + 1]!,
+        uvs[2 * pr]!,
+        uvs[2 * pr + 1]!,
+        uvs[2 * pl]!,
+        uvs[2 * pl + 1]!,
+        uvs[2 * p1]!,
+        uvs[2 * p1 + 1]!,
       )
     ) {
       return;
