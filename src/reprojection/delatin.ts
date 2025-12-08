@@ -51,6 +51,11 @@ export default class RasterReprojector {
   uvs: number[];
 
   /**
+   * XY Positions in output CRS, computed via exact forward reprojection.
+   */
+  exactOutputPositions: number[];
+
+  /**
    * triangle vertex indices
    */
   triangles: number[];
@@ -74,6 +79,7 @@ export default class RasterReprojector {
     this.height = height;
 
     this.uvs = []; // vertex coordinates (x, y)
+    this.exactOutputPositions = [];
     this.triangles = []; // mesh triangle indices
 
     // additional triangle data
@@ -290,6 +296,15 @@ export default class RasterReprojector {
   private _addPoint(u: number, v: number): number {
     const i = this.uvs.length >> 1;
     this.uvs.push(u, v);
+
+    // compute and store exact output position via reprojection
+    const pixel = uvToPixel(u, v, this.width, this.height);
+    const exactOutputPosition = this.reprojectors.forwardReproject(pixel);
+    this.exactOutputPositions.push(
+      exactOutputPosition[0]!,
+      exactOutputPosition[1]!,
+    );
+
     return i;
   }
 
