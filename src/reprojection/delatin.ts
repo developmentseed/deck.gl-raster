@@ -4,10 +4,24 @@
  * Define [**Barycentric coordinates**](https://en.wikipedia.org/wiki/Barycentric_coordinate_system) as float-valued triangle-local coordinates, represented as a 3-tuple of floats, where the tuple must add up to 1. The coordinate represents "how close to each vertex" a point in the interior of a triangle is. I.e. `(0, 0, 1)`, `(0, 1, 0)`, and `(1, 0, 0)`  are all valid barycentric coordinates that define one of the three vertices. `(1/3, 1/3, 1/3)` represents the centroid of a triangle. `(1/2, 1/2, 0)` represents a point that is halfway between vertices `a` and `b` and has "none" of vertex `c`.
  *
  *
+ * ## Changes
+ *
+ * - Delatin coordinates are in terms of pixel space whereas here we use uv space.
  *
  * Originally copied from https://github.com/mapbox/delatin under the ISC
  * license, then subject to further modifications.
  */
+
+/**
+ * Barycentric sample points in uv space for where to sample reprojection
+ * errors.
+ */
+const SAMPLE_POINTS: [number, number, number][] = [
+  [1 / 3, 1 / 3, 1 / 3], // centroid
+  [0.5, 0.5, 0], // edge 0–1
+  [0.5, 0, 0.5], // edge 0–2
+  [0, 0.5, 0.5], // edge 1–2
+];
 
 export type Coord = [number, number];
 
@@ -132,22 +146,9 @@ export default class RasterReprojector {
 
   // rasterize and queue all triangles that got added or updated in _step
   private _flush() {
-    const uvs = this.uvs;
     for (let i = 0; i < this._pendingLen; i++) {
       const t = this._pending[i]!;
-      // rasterize triangle to find maximum pixel error
-      const a = 2 * this.triangles[t * 3 + 0]!;
-      const b = 2 * this.triangles[t * 3 + 1]!;
-      const c = 2 * this.triangles[t * 3 + 2]!;
-      this._findCandidate(
-        uvs[a]!,
-        uvs[a + 1]!,
-        uvs[b]!,
-        uvs[b + 1]!,
-        uvs[c]!,
-        uvs[c + 1]!,
-        t,
-      );
+      this._findReprojectionCandidate(t);
     }
     this._pendingLen = 0;
   }
@@ -244,9 +245,116 @@ export default class RasterReprojector {
     }
 
     // update triangle metadata
-    this._candidates[2 * t] = mx;
-    this._candidates[2 * t + 1] = my;
-    this._rms[t] = rms;
+    this._candidatesUV[2 * t] = mx;
+    this._candidatesUV[2 * t + 1] = my;
+
+    // add triangle to priority queue
+    this._queuePush(t, maxError);
+  }
+
+  /**
+   * Conversion of upstream's `_findCandidate` for reprojection error handling.
+   *
+   * @param   {number}  t  The index (into `this.triangles`) of the pending triangle to process.
+   *
+   * @return  {void}    Doesn't return; instead modifies internal state.
+   */
+  private _findReprojectionCandidate(t: number): void {
+    // Find the three vertices of this triangle
+    const a = 2 * this.triangles[t * 3 + 0]!;
+    const b = 2 * this.triangles[t * 3 + 1]!;
+    const c = 2 * this.triangles[t * 3 + 2]!;
+
+    // Get the UV coordinates of each vertex
+    const p0u = this.uvs[a]!;
+    const p0v = this.uvs[a + 1]!;
+    const p1u = this.uvs[b]!;
+    const p1v = this.uvs[b + 1]!;
+    const p2u = this.uvs[c]!;
+    const p2v = this.uvs[c + 1]!;
+
+    // Get the **known** output CRS positions of each vertex
+    const out0x = this.exactOutputPositions[a]!;
+    const out0y = this.exactOutputPositions[a + 1]!;
+    const out1x = this.exactOutputPositions[b]!;
+    const out1y = this.exactOutputPositions[b + 1]!;
+    const out2x = this.exactOutputPositions[c]!;
+    const out2y = this.exactOutputPositions[c + 1]!;
+
+    // A running tally of the maximum pixel error of each of our candidate
+    // points
+    let maxError = 0;
+
+    // The point in uv coordinates that produced the max error
+    // Note that upstream also initializes the point of max error to [0, 0]
+    let maxErrorU: number = 0;
+    let maxErrorV: number = 0;
+
+    // Recall that the sample point is in barycentric coordinates
+    for (const samplePoint of SAMPLE_POINTS) {
+      // Get the UV coordinates of the sample point
+      const uvSample = barycentricMix(
+        p0u,
+        p0v,
+        p1u,
+        p1v,
+        p2u,
+        p2v,
+        samplePoint[0],
+        samplePoint[1],
+        samplePoint[2],
+      );
+
+      // Get the output CRS coordinates of the sample point by bilinear
+      // interpolation
+      const outSample = barycentricMix(
+        out0x,
+        out0y,
+        out1x,
+        out1y,
+        out2x,
+        out2y,
+        samplePoint[0],
+        samplePoint[1],
+        samplePoint[2],
+      );
+
+      // Convert uv to pixel space
+      const pixelExact = uvToPixel(
+        uvSample[0],
+        uvSample[1],
+        this.width,
+        this.height,
+      );
+
+      // Reproject these linearly-interpolated coordinates **from target CRS
+      // to input CRS**. This gives us the **exact position in input space**
+      // of the linearly interpolated sample point in output space.
+      const inputCRSSampled = this.reprojectors.inverseReproject(outSample);
+
+      // Find the pixel coordinates of the sampled point by using the inverse
+      // geotransform.
+      const pixelSampled = this.reprojectors.inputCRSToPixel(inputCRSSampled);
+
+      // 4. error in pixel space
+      const dx = pixelExact[0] - pixelSampled[0];
+      const dy = pixelExact[1] - pixelSampled[1];
+      const err = Math.hypot(dx, dy);
+
+      if (err > maxError) {
+        maxError = err;
+        maxErrorU = uvSample[0];
+        maxErrorV = uvSample[1];
+      }
+    }
+
+    //////
+    // Now we can resume with code from upstream's `_findCandidate` that
+    // modifies the internal state of what triangles to subdivide.
+
+    // update triangle metadata
+    this._candidatesUV[2 * t] = maxErrorU;
+    this._candidatesUV[2 * t + 1] = maxErrorV;
 
     // add triangle to priority queue
     this._queuePush(t, maxError);
@@ -596,4 +704,44 @@ function inCircle(
       ap * (ex * fy - ey * fx) <
     0
   );
+}
+
+/**
+ * Interpolate the value at a given barycentric coordinate within a triangle.
+ *
+ * I've seen the name "mix" used before in graphics programming to refer to
+ * barycentric linear interpolation.
+ */
+// TODO: To avoid array allocation, we could make this generic over u and v and
+// make the caller pass in
+// `mix(au, bu, cu, t0, t1, t2)` and then again for v.
+function barycentricMix(
+  au: number,
+  av: number,
+  bu: number,
+  bv: number,
+  cu: number,
+  cv: number,
+  // Barycentric coordinates
+  t0: number,
+  t1: number,
+  t2: number,
+): [number, number] {
+  const u = t0 * au + t1 * bu + t2 * cu;
+  const v = t0 * av + t1 * bv + t2 * cv;
+  return [u, v];
+}
+
+/**
+ * Convert from uv space to pixel space.
+ */
+function uvToPixel(
+  u: number,
+  v: number,
+  width: number,
+  height: number,
+): [number, number] {
+  const x = u * (width - 1);
+  const y = v * (height - 1);
+  return [x, y];
 }
