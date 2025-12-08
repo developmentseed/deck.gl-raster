@@ -92,12 +92,14 @@ export default class RasterReprojector {
 
     this._rmsSum = 0;
 
-    const x1 = width - 1;
-    const y1 = height - 1;
+    // The two initial triangles cover the entire input texture in UV space, so
+    // they range from [0, 0] to [1, 1] in u and v.
+    const u1 = 1;
+    const v1 = 1;
     const p0 = this._addPoint(0, 0);
-    const p1 = this._addPoint(x1, 0);
-    const p2 = this._addPoint(0, y1);
-    const p3 = this._addPoint(x1, y1);
+    const p1 = this._addPoint(u1, 0);
+    const p2 = this._addPoint(0, v1);
+    const p3 = this._addPoint(u1, v1);
 
     // add initial two triangles
     const t0 = this._addTriangle(p3, p0, p2, -1, -1, -1);
