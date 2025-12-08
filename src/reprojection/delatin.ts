@@ -38,7 +38,7 @@ export interface ReprojectionFns {
 }
 
 export default class RasterReprojector {
-  data: number[];
+  reprojectors: ReprojectionFns;
   width: number;
   height: number;
 
@@ -65,8 +65,12 @@ export default class RasterReprojector {
 
   private _rmsSum: number;
 
-  constructor(data: number[], width: number, height: number = width) {
-    this.data = data; // height data
+  constructor(
+    reprojectors: ReprojectionFns,
+    width: number,
+    height: number = width,
+  ) {
+    this.reprojectors = reprojectors;
     this.width = width;
     this.height = height;
 
