@@ -61,7 +61,12 @@ export default class RasterReprojector {
   triangles: number[];
 
   private _halfedges: number[];
-  private _candidates: number[];
+
+  /**
+   * The UV texture coordinates of candidates found from
+   * `findReprojectionCandidate`.
+   */
+  private _candidatesUV: number[];
   private _queueIndices: number[];
 
   private _queue: number[];
@@ -84,7 +89,7 @@ export default class RasterReprojector {
 
     // additional triangle data
     this._halfedges = [];
-    this._candidates = [];
+    this._candidatesUV = [];
     this._queueIndices = [];
 
     this._queue = []; // queue of added triangles
@@ -260,22 +265,22 @@ export default class RasterReprojector {
     const p1 = this.triangles[e1]!;
     const p2 = this.triangles[e2]!;
 
-    const ax = this.uvs[2 * p0]!;
-    const ay = this.uvs[2 * p0 + 1]!;
-    const bx = this.uvs[2 * p1]!;
-    const by = this.uvs[2 * p1 + 1]!;
-    const cx = this.uvs[2 * p2]!;
-    const cy = this.uvs[2 * p2 + 1]!;
-    const px = this._candidates[2 * t]!;
-    const py = this._candidates[2 * t + 1]!;
+    const au = this.uvs[2 * p0]!;
+    const av = this.uvs[2 * p0 + 1]!;
+    const bu = this.uvs[2 * p1]!;
+    const bv = this.uvs[2 * p1 + 1]!;
+    const cu = this.uvs[2 * p2]!;
+    const cv = this.uvs[2 * p2 + 1]!;
+    const pu = this._candidatesUV[2 * t]!;
+    const pv = this._candidatesUV[2 * t + 1]!;
 
-    const pn = this._addPoint(px, py);
+    const pn = this._addPoint(pu, pv);
 
-    if (orient(ax, ay, bx, by, px, py) === 0) {
+    if (orient(au, av, bu, bv, pu, pv) === 0) {
       this._handleCollinear(pn, e0);
-    } else if (orient(bx, by, cx, cy, px, py) === 0) {
+    } else if (orient(bu, bv, cu, cv, pu, pv) === 0) {
       this._handleCollinear(pn, e1);
-    } else if (orient(cx, cy, ax, ay, px, py) === 0) {
+    } else if (orient(cu, cv, au, av, pu, pv) === 0) {
       this._handleCollinear(pn, e2);
     } else {
       const h0 = this._halfedges[e0]!;
@@ -342,8 +347,8 @@ export default class RasterReprojector {
     }
 
     // init triangle metadata
-    this._candidates[2 * t + 0] = 0;
-    this._candidates[2 * t + 1] = 0;
+    this._candidatesUV[2 * t + 0] = 0;
+    this._candidatesUV[2 * t + 1] = 0;
     this._queueIndices[t] = -1;
 
     // add triangle to pending queue for later rasterization
