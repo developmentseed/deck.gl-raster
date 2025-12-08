@@ -61,11 +61,8 @@ export default class RasterReprojector {
 
   private _queue: number[];
   private _errors: number[];
-  private _rms: number[];
   private _pending: number[];
   private _pendingLen: number;
-
-  private _rmsSum: number;
 
   constructor(
     reprojectors: ReprojectionFns,
@@ -86,11 +83,8 @@ export default class RasterReprojector {
 
     this._queue = []; // queue of added triangles
     this._errors = [];
-    this._rms = [];
     this._pending = []; // triangles pending addition to queue
     this._pendingLen = 0;
-
-    this._rmsSum = 0;
 
     // The two initial triangles cover the entire input texture in UV space, so
     // they range from [0, 0] to [1, 1] in u and v.
@@ -123,18 +117,6 @@ export default class RasterReprojector {
   // max error of the current mesh
   getMaxError(): number {
     return this._errors[0]!;
-  }
-
-  // root-mean-square deviation of the current mesh
-  getRMSD(): number {
-    return this._rmsSum > 0
-      ? Math.sqrt(this._rmsSum / (this.width * this.height))
-      : 0;
-  }
-
-  // height value at a given position
-  heightAt(x: number, y: number): number {
-    return this.data[this.width * y + x]!;
   }
 
   // rasterize and queue all triangles that got added or updated in _step
@@ -196,7 +178,6 @@ export default class RasterReprojector {
     let maxError = 0;
     let mx = 0;
     let my = 0;
-    let rms = 0;
     for (let y = minY; y <= maxY; y++) {
       // compute starting offset
       let dx = 0;
@@ -224,7 +205,6 @@ export default class RasterReprojector {
           // compute z using barycentric coordinates
           const z = z0 * w0 + z1 * w1 + z2 * w2;
           const dz = Math.abs(z - this.heightAt(x, y));
-          rms += dz * dz;
           if (dz > maxError) {
             maxError = dz;
             mx = x;
@@ -258,7 +238,7 @@ export default class RasterReprojector {
     this._rms[t] = rms;
 
     // add triangle to priority queue
-    this._queuePush(t, maxError, rms);
+    this._queuePush(t, maxError);
   }
 
   // process the next triangle in the queue, splitting it with a new point
@@ -350,7 +330,6 @@ export default class RasterReprojector {
     this._candidates[2 * t + 0] = 0;
     this._candidates[2 * t + 1] = 0;
     this._queueIndices[t] = -1;
-    this._rms[t] = 0;
 
     // add triangle to pending queue for later rasterization
     this._pending[this._pendingLen++] = t;
@@ -466,12 +445,11 @@ export default class RasterReprojector {
 
   // priority queue methods
 
-  private _queuePush(t: number, error: number, rms: number): void {
+  private _queuePush(t: number, error: number): void {
     const i = this._queue.length;
     this._queueIndices[t] = i;
     this._queue.push(t);
     this._errors.push(error);
-    this._rmsSum += rms;
     this._queueUp(i);
   }
 
@@ -485,7 +463,6 @@ export default class RasterReprojector {
   private _queuePopBack(): number {
     const t = this._queue.pop()!;
     this._errors.pop();
-    this._rmsSum -= this._rms[t]!;
     this._queueIndices[t] = -1;
     return t;
   }
