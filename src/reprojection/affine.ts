@@ -60,3 +60,15 @@ function e(gt: GeoTransform): number {
 // function f(gt: GeoTransform): number {
 //   return gt[5];
 // }
+
+/**
+ * Apply a GeoTransform to a coordinate.
+ */
+export function applyAffine(
+  x: number,
+  y: number,
+  gt: [number, number, number, number, number, number],
+): [number, number] {
+  const [a, b, c, d, e, f] = gt;
+  return [a * x + b * y + c, d * x + e * y + f];
+}
