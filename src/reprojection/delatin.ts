@@ -305,9 +305,9 @@ export default class RasterReprojector {
   }
 
   // add coordinates for a new vertex
-  private _addPoint(x: number, y: number): number {
+  private _addPoint(u: number, v: number): number {
     const i = this.uvs.length >> 1;
-    this.uvs.push(x, y);
+    this.uvs.push(u, v);
     return i;
   }
 
