@@ -31,24 +31,24 @@ export interface ReprojectionFns {
    *
    * This is the affine geotransform from the input image.
    */
-  pixelToInputCRS(pixel: Coord): Coord;
+  pixelToInputCRS(x: number, y: number): Coord;
 
   /**
    * Convert from input CRS coordinates back to UV coordinates.
    *
    * Inverse of the affine geotransform from the input image.
    */
-  inputCRSToPixel(point: Coord): Coord;
+  inputCRSToPixel(x: number, y: number): Coord;
 
   /**
    * Apply the forward projection from input CRS to output CRS.
    */
-  forwardReproject(point: Coord): Coord;
+  forwardReproject(x: number, y: number): Coord;
 
   /**
    * Apply the inverse projection from output CRS back to input CRS.
    */
-  inverseReproject(point: Coord): Coord;
+  inverseReproject(x: number, y: number): Coord;
 }
 
 export default class RasterReprojector {
@@ -294,12 +294,17 @@ export default class RasterReprojector {
     // Recall that the sample point is in barycentric coordinates
     for (const samplePoint of SAMPLE_POINTS) {
       // Get the UV coordinates of the sample point
-      const uvSample = barycentricMix(
+      const uvSampleU = barycentricMix(
         p0u,
-        p0v,
         p1u,
-        p1v,
         p2u,
+        samplePoint[0],
+        samplePoint[1],
+        samplePoint[2],
+      );
+      const uvSampleV = barycentricMix(
+        p0v,
+        p1v,
         p2v,
         samplePoint[0],
         samplePoint[1],
@@ -308,12 +313,17 @@ export default class RasterReprojector {
 
       // Get the output CRS coordinates of the sample point by bilinear
       // interpolation
-      const outSample = barycentricMix(
+      const outSampleX = barycentricMix(
         out0x,
-        out0y,
         out1x,
-        out1y,
         out2x,
+        samplePoint[0],
+        samplePoint[1],
+        samplePoint[2],
+      );
+      const outSampleY = barycentricMix(
+        out0y,
+        out1y,
         out2y,
         samplePoint[0],
         samplePoint[1],
@@ -321,31 +331,33 @@ export default class RasterReprojector {
       );
 
       // Convert uv to pixel space
-      const pixelExact = uvToPixel(
-        uvSample[0],
-        uvSample[1],
-        this.width,
-        this.height,
-      );
+      const pixelExactX = uvSampleU * (this.width - 1);
+      const pixelExactY = uvSampleV * (this.height - 1);
 
       // Reproject these linearly-interpolated coordinates **from target CRS
       // to input CRS**. This gives us the **exact position in input space**
       // of the linearly interpolated sample point in output space.
-      const inputCRSSampled = this.reprojectors.inverseReproject(outSample);
+      const inputCRSSampled = this.reprojectors.inverseReproject(
+        outSampleX,
+        outSampleY,
+      );
 
       // Find the pixel coordinates of the sampled point by using the inverse
       // geotransform.
-      const pixelSampled = this.reprojectors.inputCRSToPixel(inputCRSSampled);
+      const pixelSampled = this.reprojectors.inputCRSToPixel(
+        inputCRSSampled[0],
+        inputCRSSampled[1],
+      );
 
       // 4. error in pixel space
-      const dx = pixelExact[0] - pixelSampled[0];
-      const dy = pixelExact[1] - pixelSampled[1];
+      const dx = pixelExactX - pixelSampled[0];
+      const dy = pixelExactY - pixelSampled[1];
       const err = Math.hypot(dx, dy);
 
       if (err > maxError) {
         maxError = err;
-        maxErrorU = uvSample[0];
-        maxErrorV = uvSample[1];
+        maxErrorU = uvSampleU;
+        maxErrorV = uvSampleV;
       }
     }
 
@@ -712,37 +724,19 @@ function inCircle(
  *
  * I've seen the name "mix" used before in graphics programming to refer to
  * barycentric linear interpolation.
+ *
+ * Note: the caller must call this method twice: once for u and once again for
+ * v. We do this because we want to avoid allocating an array for the return
+ * value.
  */
-// TODO: To avoid array allocation, we could make this generic over u and v and
-// make the caller pass in
-// `mix(au, bu, cu, t0, t1, t2)` and then again for v.
 function barycentricMix(
-  au: number,
-  av: number,
-  bu: number,
-  bv: number,
-  cu: number,
-  cv: number,
+  a: number,
+  b: number,
+  c: number,
   // Barycentric coordinates
   t0: number,
   t1: number,
   t2: number,
-): [number, number] {
-  const u = t0 * au + t1 * bu + t2 * cu;
-  const v = t0 * av + t1 * bv + t2 * cv;
-  return [u, v];
-}
-
-/**
- * Convert from uv space to pixel space.
- */
-function uvToPixel(
-  u: number,
-  v: number,
-  width: number,
-  height: number,
-): [number, number] {
-  const x = u * (width - 1);
-  const y = v * (height - 1);
-  return [x, y];
+): number {
+  return t0 * a + t1 * b + t2 * c;
 }
