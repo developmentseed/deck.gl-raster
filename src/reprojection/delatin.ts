@@ -435,8 +435,13 @@ export default class RasterReprojector {
     this.uvs.push(u, v);
 
     // compute and store exact output position via reprojection
-    const pixel = uvToPixel(u, v, this.width, this.height);
-    const exactOutputPosition = this.reprojectors.forwardReproject(pixel);
+    const pixelX = u * (this.width - 1);
+    const pixelY = v * (this.height - 1);
+    const inputPosition = this.reprojectors.pixelToInputCRS(pixelX, pixelY);
+    const exactOutputPosition = this.reprojectors.forwardReproject(
+      inputPosition[0],
+      inputPosition[1],
+    );
     this.exactOutputPositions.push(
       exactOutputPosition[0]!,
       exactOutputPosition[1]!,
