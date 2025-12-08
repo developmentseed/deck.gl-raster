@@ -1,9 +1,43 @@
 /**
+ * Define [**uv coordinates**](https://en.wikipedia.org/wiki/UV_mapping) as a float-valued image-local coordinate space where the top left is `(0, 0)` and the bottom right is `(1, 1)`.
+ *
+ * Define [**Barycentric coordinates**](https://en.wikipedia.org/wiki/Barycentric_coordinate_system) as float-valued triangle-local coordinates, represented as a 3-tuple of floats, where the tuple must add up to 1. The coordinate represents "how close to each vertex" a point in the interior of a triangle is. I.e. `(0, 0, 1)`, `(0, 1, 0)`, and `(1, 0, 0)`  are all valid barycentric coordinates that define one of the three vertices. `(1/3, 1/3, 1/3)` represents the centroid of a triangle. `(1/2, 1/2, 0)` represents a point that is halfway between vertices `a` and `b` and has "none" of vertex `c`.
+ *
+ *
+ *
  * Originally copied from https://github.com/mapbox/delatin under the ISC
- * license.
+ * license, then subject to further modifications.
  */
 
-export default class Delatin {
+export type Coord = [number, number];
+
+export interface ReprojectionFns {
+  /**
+   * Convert from UV coordinates to input CRS coordinates.
+   *
+   * This is the affine geotransform from the input image.
+   */
+  pixelToInputCRS(pixel: Coord): Coord;
+
+  /**
+   * Convert from input CRS coordinates back to UV coordinates.
+   *
+   * Inverse of the affine geotransform from the input image.
+   */
+  inputCRSToPixel(point: Coord): Coord;
+
+  /**
+   * Apply the forward projection from input CRS to output CRS.
+   */
+  forwardReproject(point: Coord): Coord;
+
+  /**
+   * Apply the inverse projection from output CRS back to input CRS.
+   */
+  inverseReproject(point: Coord): Coord;
+}
+
+export default class RasterReprojector {
   data: number[];
   width: number;
   height: number;
