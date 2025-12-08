@@ -16,6 +16,10 @@
  * Barycentric sample points in uv space for where to sample reprojection
  * errors.
  */
+// TODO: Increase sampling density if uv area is large
+// Note: these sample points should never be an existing vertex (that is, no
+// vertex of a sample point should ever be `1`, such as `(0,0,1)`, because that
+// would try to sample exactly at an existing triangle vertex).
 const SAMPLE_POINTS: [number, number, number][] = [
   [1 / 3, 1 / 3, 1 / 3], // centroid
   [0.5, 0.5, 0], // edge 0–1
@@ -79,6 +83,9 @@ export default class RasterReprojector {
   /**
    * The UV texture coordinates of candidates found from
    * `findReprojectionCandidate`.
+   *
+   * Maybe in the future we'll want to store the barycentric coordinates instead
+   * of just the uv coordinates?
    */
   private _candidatesUV: number[];
   private _queueIndices: number[];
