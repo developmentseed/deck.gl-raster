@@ -1,3 +1,7 @@
+*.tif
+*.mesh.json
+*.DS_Store
+
 # Logs
 logs
 *.log

@@ -105,17 +105,30 @@ export async function extractGeotiffReprojectors(
     );
   }
   const converter = proj4(sourceProjection, outputCrs);
+  const { pixelToInputCRS, inputCRSToPixel } =
+    fromGeoTransform(baseGeotransform);
 
-  const inverseGeotransform = invertGeoTransform(baseGeotransform);
   return {
-    pixelToInputCRS: (x: number, y: number) =>
-      applyAffine(x, y, baseGeotransform),
-    inputCRSToPixel: (x: number, y: number) =>
-      applyAffine(x, y, inverseGeotransform),
+    pixelToInputCRS,
+    inputCRSToPixel,
     forwardReproject: (x: number, y: number) =>
       converter.forward([x, y], false),
     inverseReproject: (x: number, y: number) =>
       converter.inverse([x, y], false),
+  };
+}
+
+export function fromGeoTransform(
+  geotransform: [number, number, number, number, number, number],
+): {
+  pixelToInputCRS: (x: number, y: number) => [number, number];
+  inputCRSToPixel: (x: number, y: number) => [number, number];
+} {
+  const inverseGeotransform = invertGeoTransform(geotransform);
+  return {
+    pixelToInputCRS: (x: number, y: number) => applyAffine(x, y, geotransform),
+    inputCRSToPixel: (x: number, y: number) =>
+      applyAffine(x, y, inverseGeotransform),
   };
 }
 

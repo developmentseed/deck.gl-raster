@@ -1,7 +1,67 @@
 import { describe, it, expect } from "vitest";
+import { join } from "path";
+import { reprojection } from "@developmentseed/deck.gl-raster";
+import { readFileSync, writeFileSync } from "fs";
+import type { PROJJSONDefinition } from "proj4/dist/lib/core";
+import proj4 from "proj4";
 
-describe("Example Test", () => {
-  it("should test", () => {
-    expect(true).toBeTruthy();
+const FIXTURES_DIR = join(__dirname, "..", "fixtures");
+
+type FixtureJSON = {
+  width: number;
+  height: number;
+  /** geotransform in **GDAL ordering** */
+  geotransform: [number, number, number, number, number, number];
+  projjson: PROJJSONDefinition;
+};
+
+function parseFixture(fixturePath: string): reprojection.RasterReprojector {
+  const { width, height, geotransform, projjson }: FixtureJSON = JSON.parse(
+    readFileSync(fixturePath, "utf-8"),
+  );
+
+  // Convert GDAL geotransform to affine package geotransform
+  const affineGeotransform: [number, number, number, number, number, number] = [
+    geotransform[1], // a: pixel width
+    geotransform[2], // b: row rotation
+    geotransform[0], // c: x origin
+    geotransform[4], // d: column rotation
+    geotransform[5], // e: pixel height (usually negative)
+    geotransform[3], // f: y origin
+  ];
+  const { inputCRSToPixel, pixelToInputCRS } =
+    reprojection.fromGeoTransform(affineGeotransform);
+  const converter = proj4(projjson, "EPSG:4326");
+
+  const reprojectionFns = {
+    pixelToInputCRS,
+    inputCRSToPixel,
+    forwardReproject: (x: number, y: number) =>
+      converter.forward<[number, number]>([x, y], false),
+    inverseReproject: (x: number, y: number) =>
+      converter.inverse<[number, number]>([x, y], false),
+  };
+  return new reprojection.RasterReprojector(reprojectionFns, width, height);
+}
+
+function serializeMesh(reprojector: reprojection.RasterReprojector) {
+  const mesh = {
+    indices: reprojector.triangles,
+    positions: reprojector.exactOutputPositions,
+    texCoords: reprojector.uvs,
+  };
+  return JSON.stringify(mesh);
+}
+
+describe("GeoTIFF Reprojection", () => {
+  it("should generate reprojection mesh", () => {
+    const baseFname = "m_4007307_sw_18_060_20220803";
+    const fixturePath = join(FIXTURES_DIR, `${baseFname}.json`);
+    const reprojector = parseFixture(fixturePath);
+    reprojector.run(0.125);
+
+    const meshJSON = serializeMesh(reprojector);
+    const outputPath = join(FIXTURES_DIR, `${baseFname}.mesh.json`);
+    writeFileSync(outputPath, meshJSON);
   });
 });
