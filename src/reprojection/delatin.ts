@@ -27,35 +27,33 @@ const SAMPLE_POINTS: [number, number, number][] = [
   [0, 0.5, 0.5], // edge 1–2
 ];
 
-export type Coord = [number, number];
-
 export interface ReprojectionFns {
   /**
    * Convert from UV coordinates to input CRS coordinates.
    *
    * This is the affine geotransform from the input image.
    */
-  pixelToInputCRS(x: number, y: number): Coord;
+  pixelToInputCRS(x: number, y: number): [number, number];
 
   /**
    * Convert from input CRS coordinates back to UV coordinates.
    *
    * Inverse of the affine geotransform from the input image.
    */
-  inputCRSToPixel(x: number, y: number): Coord;
+  inputCRSToPixel(x: number, y: number): [number, number];
 
   /**
    * Apply the forward projection from input CRS to output CRS.
    */
-  forwardReproject(x: number, y: number): Coord;
+  forwardReproject(x: number, y: number): [number, number];
 
   /**
    * Apply the inverse projection from output CRS back to input CRS.
    */
-  inverseReproject(x: number, y: number): Coord;
+  inverseReproject(x: number, y: number): [number, number];
 }
 
-export default class RasterReprojector {
+export class RasterReprojector {
   reprojectors: ReprojectionFns;
   width: number;
   height: number;

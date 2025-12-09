@@ -13,6 +13,9 @@ export default [
         sourceType: "module",
         project: "./tsconfig.json",
       },
+      env: {
+        es2021: true,
+      },
     },
     plugins: {
       "@typescript-eslint": tseslint,
