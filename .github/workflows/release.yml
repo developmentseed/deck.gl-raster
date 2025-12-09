@@ -19,4 +19,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - run: npm publish
+      - name: Read version and publish
+        run: |
+          VERSION=$(jq -r .version package.json)
+          if [[ "$VERSION" == *alpha* || "$VERSION" == *beta* ]]; then
+            npm publish --tag beta
+          else
+            npm publish
+          fi
