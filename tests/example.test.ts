@@ -53,12 +53,33 @@ function serializeMesh(reprojector: reprojection.RasterReprojector) {
   return JSON.stringify(mesh);
 }
 
-describe("GeoTIFF Reprojection", () => {
+describe("NAIP", () => {
   it("should generate reprojection mesh", () => {
     const baseFname = "m_4007307_sw_18_060_20220803";
     const fixturePath = join(FIXTURES_DIR, `${baseFname}.json`);
     const reprojector = parseFixture(fixturePath);
     reprojector.run(0.125);
+
+    const meshJSON = serializeMesh(reprojector);
+    const outputPath = join(FIXTURES_DIR, `${baseFname}.mesh.json`);
+    writeFileSync(outputPath, meshJSON);
+  });
+});
+
+describe("nz-imagery", () => {
+  // const folder = "nz-imagery";
+
+  it("should generate reprojection mesh", () => {
+    const baseFname = "250-25_GeoTifv1-05";
+    const fixturePath = join(FIXTURES_DIR, `${baseFname}.json`);
+
+    console.time(`Create reprojector for ${baseFname}`);
+    const reprojector = parseFixture(fixturePath);
+    console.timeEnd(`Create reprojector for ${baseFname}`);
+
+    console.time(`Run reprojector for ${baseFname}`);
+    reprojector.run(0.125);
+    console.timeEnd(`Run reprojector for ${baseFname}`);
 
     const meshJSON = serializeMesh(reprojector);
     const outputPath = join(FIXTURES_DIR, `${baseFname}.mesh.json`);

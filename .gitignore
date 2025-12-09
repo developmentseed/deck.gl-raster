@@ -1,4 +1,10 @@
+# pixi environments
+.pixi
+*.egg-info
+
+
 *.tif
+*.tiff
 *.mesh.json
 *.DS_Store
 

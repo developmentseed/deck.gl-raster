@@ -4,7 +4,15 @@
 
 ```bash
 aws s3 cp s3://naip-visualization/ny/2022/60cm/rgb/40073/m_4007307_sw_18_060_20220803.tif ./ --request-payer
-gdalinfo -json m_4007307_sw_18_060_20220803.tif | jq '{width: .size[0], height: .size[1], geotransform: .geoTransform, projjson: .stac.["proj:projjson"]}' > m_4007307_sw_18_060_20220803.json
+pixi run gdalinfo -json m_4007307_sw_18_060_20220803.tif | jq '{width: .size[0], height: .size[1], geotransform: .geoTransform, projjson: .stac.["proj:projjson"]}' > m_4007307_sw_18_060_20220803.json
+```
+
+### linz
+
+See https://www.linz.govt.nz/products-services/maps/new-zealand-topographic-maps/topo250-map-chooser/topo250-map-25-te-anau.
+
+```bash
+pixi run gdalinfo -json https://static.topo.linz.govt.nz/maps/topo250/geotiff/250-25_GeoTifv1-05.tif | jq '{width: .size[0], height: .size[1], geotransform: .geoTransform, projjson: .stac.["proj:projjson"]}' > linz_250-25_GeoTifv1-05.json
 ```
 
 
