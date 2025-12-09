@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/deck.gl-raster",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "description": "GPU-accelerated COG and Zarr visualization in deck.gl",
   "type": "module",
   "main": "./dist/index.cjs",
