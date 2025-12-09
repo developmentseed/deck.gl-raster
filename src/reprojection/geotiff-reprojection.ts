@@ -82,6 +82,8 @@ const OGC_84: PROJJSONDefinition = {
 
 // Derived from existing work here:
 // https://github.com/developmentseed/lonboard/blob/35a1f3d691604ad9e083bf10a4bfde4158171486/src/cog-tileset/claude-tileset-2d-improved.ts#L141
+//
+// TODO: return a RasterReprojector instance, given the IFD and tile of interest?
 export async function extractGeotiffReprojectors(
   tiff: GeoTIFF,
   outputCrs: string | PROJJSONDefinition | Projection = OGC_84,
