@@ -1,10 +1,11 @@
 # Test fixtures
 
+This document details how we construct our test fixtures. The mesh algorithm doesn't need any of the source _image data_, we only need specific metadata (width, height, geotransform, projection). Therefore, we either use `gdalinfo` to extract such metadata or we parse from STAC metadata.
+
 ### NAIP
 
 ```bash
-aws s3 cp s3://naip-visualization/ny/2022/60cm/rgb/40073/m_4007307_sw_18_060_20220803.tif ./ --request-payer
-pixi run gdalinfo -json m_4007307_sw_18_060_20220803.tif | jq '{width: .size[0], height: .size[1], geotransform: .geoTransform, projjson: .stac.["proj:projjson"]}' > m_4007307_sw_18_060_20220803.json
+AWS_REQUEST_PAYER=requester pixi run gdalinfo -json /vsis3/naip-visualization/ny/2022/60cm/rgb/40073/m_4007307_sw_18_060_20220803.tif | jq '{width: .size[0], height: .size[1], geotransform: .geoTransform, reorderTransform: true, projjson: .stac.["proj:projjson"]}' > m_4007307_sw_18_060_20220803.json
 ```
 
 ### linz
@@ -12,9 +13,25 @@ pixi run gdalinfo -json m_4007307_sw_18_060_20220803.tif | jq '{width: .size[0],
 See https://www.linz.govt.nz/products-services/maps/new-zealand-topographic-maps/topo250-map-chooser/topo250-map-25-te-anau.
 
 ```bash
-pixi run gdalinfo -json https://static.topo.linz.govt.nz/maps/topo250/geotiff/250-25_GeoTifv1-05.tif | jq '{width: .size[0], height: .size[1], geotransform: .geoTransform, projjson: .stac.["proj:projjson"]}' > linz_250-25_GeoTifv1-05.json
+pixi run gdalinfo -json https://static.topo.linz.govt.nz/maps/topo250/geotiff/250-25_GeoTifv1-05.tif | jq '{width: .size[0], height: .size[1], geotransform: .geoTransform, reorderTransform: true, projjson: .stac.["proj:projjson"]}' > linz_250-25_GeoTifv1-05.json
 ```
 
+### National Land Cover Database
+
+```bash
+AWS_REQUEST_PAYER=requester pixi run gdalinfo -json /vsis3/usgs-landcover/annual-nlcd/c1/v0/cu/mosaic/Annual_NLCD_LndCov_2023_CU_C1V0.tif | jq '{width: .size[0], height: .size[1], geotransform: .geoTransform, reorderTransform: true, wkt2: .stac.["proj:wkt2"], projjson: .stac.["proj:projjson"]}' > Annual_NLCD_LndCov_2023_CU_C1V0.json
+```
+
+### MODIS
+
+Notes:
+
+- since we're parsing from STAC metadata, we set `reorderTransform` to false as the geotransform is already in the correct order.
+- We hard-code the proj4 string since proj4js currently has a bug with the WKT2 string: https://github.com/proj4js/proj4js/issues/539
+
+```bash
+curl -s https://planetarycomputer.microsoft.com/api/stac/v1/collections/modis-09A1-061/items/MYD09A1.A2025169.h10v05.061.2025178160305 | jq '{width: .properties.["proj:shape"][0], height: .properties.["proj:shape"][1], geotransform: .properties.["proj:transform"], reorderTransform: false, wkt2: "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs +type=crs"}' > MYD09A1.A2025169.h10v05.061.2025178160305.json
+```
 
 ### Inspecting a mesh in Lonboard
 

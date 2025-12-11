@@ -10,28 +10,43 @@ const FIXTURES_DIR = join(__dirname, "..", "fixtures");
 type FixtureJSON = {
   width: number;
   height: number;
-  /** geotransform in **GDAL ordering** */
+  /** geotransform **may** be in GDAL ordering */
   geotransform: [number, number, number, number, number, number];
-  projjson: PROJJSONDefinition;
+  reorderTransform?: boolean;
+  projjson?: PROJJSONDefinition;
+  wkt2: string;
 };
 
 function parseFixture(fixturePath: string): reprojection.RasterReprojector {
-  const { width, height, geotransform, projjson }: FixtureJSON = JSON.parse(
-    readFileSync(fixturePath, "utf-8"),
-  );
+  const {
+    width,
+    height,
+    geotransform,
+    reorderTransform,
+    projjson,
+    wkt2,
+  }: FixtureJSON = JSON.parse(readFileSync(fixturePath, "utf-8"));
 
-  // Convert GDAL geotransform to affine package geotransform
-  const affineGeotransform: [number, number, number, number, number, number] = [
-    geotransform[1], // a: pixel width
-    geotransform[2], // b: row rotation
-    geotransform[0], // c: x origin
-    geotransform[4], // d: column rotation
-    geotransform[5], // e: pixel height (usually negative)
-    geotransform[3], // f: y origin
+  let affineGeotransform: [number, number, number, number, number, number] = [
+    0, 0, 0, 0, 0, 0,
   ];
+  if (reorderTransform === undefined || reorderTransform === true) {
+    // Convert GDAL geotransform to affine package geotransform
+    affineGeotransform = [
+      geotransform[1], // a: pixel width
+      geotransform[2], // b: row rotation
+      geotransform[0], // c: x origin
+      geotransform[4], // d: column rotation
+      geotransform[5], // e: pixel height (usually negative)
+      geotransform[3], // f: y origin
+    ];
+  } else {
+    affineGeotransform = geotransform;
+  }
+
   const { inputCRSToPixel, pixelToInputCRS } =
     reprojection.fromGeoTransform(affineGeotransform);
-  const converter = proj4(projjson, "EPSG:4326");
+  const converter = proj4(projjson || wkt2, "EPSG:4326");
 
   const reprojectionFns = {
     pixelToInputCRS,
@@ -67,10 +82,46 @@ describe("NAIP", () => {
 });
 
 describe("nz-imagery", () => {
-  // const folder = "nz-imagery";
-
   it("should generate reprojection mesh", () => {
     const baseFname = "linz_250-25_GeoTifv1-05";
+    const fixturePath = join(FIXTURES_DIR, `${baseFname}.json`);
+
+    console.time(`Create reprojector for ${baseFname}`);
+    const reprojector = parseFixture(fixturePath);
+    console.timeEnd(`Create reprojector for ${baseFname}`);
+
+    console.time(`Run reprojector for ${baseFname}`);
+    reprojector.run(0.125);
+    console.timeEnd(`Run reprojector for ${baseFname}`);
+
+    const meshJSON = serializeMesh(reprojector);
+    const outputPath = join(FIXTURES_DIR, `${baseFname}.mesh.json`);
+    writeFileSync(outputPath, meshJSON);
+  });
+});
+
+describe("nlcd", () => {
+  it("should generate reprojection mesh", () => {
+    const baseFname = "Annual_NLCD_LndCov_2023_CU_C1V0";
+    const fixturePath = join(FIXTURES_DIR, `${baseFname}.json`);
+
+    console.time(`Create reprojector for ${baseFname}`);
+    const reprojector = parseFixture(fixturePath);
+    console.timeEnd(`Create reprojector for ${baseFname}`);
+
+    console.time(`Run reprojector for ${baseFname}`);
+    reprojector.run(2);
+    console.timeEnd(`Run reprojector for ${baseFname}`);
+
+    const meshJSON = serializeMesh(reprojector);
+    const outputPath = join(FIXTURES_DIR, `${baseFname}.mesh.json`);
+    writeFileSync(outputPath, meshJSON);
+  });
+});
+
+describe.only("modis", () => {
+  it("should generate reprojection mesh", () => {
+    const baseFname = "MYD09A1.A2025169.h10v05.061.2025178160305";
     const fixturePath = join(FIXTURES_DIR, `${baseFname}.json`);
 
     console.time(`Create reprojector for ${baseFname}`);

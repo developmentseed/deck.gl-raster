@@ -1,0 +1,14 @@
+{
+  "width": 2400,
+  "height": 2400,
+  "geotransform": [
+    463.31271652749973,
+    0.0,
+    -8895604.157333,
+    0.0,
+    -463.3127165279167,
+    4447802.078667
+  ],
+  "reorderTransform": false,
+  "wkt2": "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs +type=crs"
+}
