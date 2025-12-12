@@ -10,8 +10,9 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {},
+  "packageManager": "pnpm@10.25.0",
   "volta": {
     "node": "24.11.1",
-    "pnpm": "8.8.0"
+    "pnpm": "10.25.0"
   }
 }
