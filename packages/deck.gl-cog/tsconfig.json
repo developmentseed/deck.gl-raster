@@ -2,10 +2,12 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
-    "composite": true
+    "rootDir": "./src"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"],
-  "references": []
+  "references": [
+    { "path": "../raster-reproject" },
+    { "path": "../deck.gl-raster" }
+  ]
 }

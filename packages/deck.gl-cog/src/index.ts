@@ -1,4 +1,4 @@
 export {
   extractGeotiffReprojectors,
   fromGeoTransform,
-} from "geotiff-reprojection.js";
+} from "./geotiff-reprojection.js";
