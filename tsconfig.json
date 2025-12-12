@@ -24,5 +24,11 @@
     "skipLibCheck": true,
     "isolatedModules": true
   },
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "references": [
+    { "path": "packages/deck.gl-cog" },
+    { "path": "packages/deck.gl-raster" },
+    { "path": "packages/deck.gl-zarr" },
+    { "path": "packages/raster-reproject" }
+  ]
 }
