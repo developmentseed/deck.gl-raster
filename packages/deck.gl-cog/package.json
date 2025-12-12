@@ -1,0 +1,66 @@
+{
+  "name": "@developmentseed/deck.gl-cog",
+  "version": "0.1.0-beta.2",
+  "description": "Georeferenced image data visualization in deck.gl",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json}\"",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "deck.gl",
+    "geotiff",
+    "zarr",
+    "cog",
+    "cloud-optimized-geotiff",
+    "raster",
+    "visualization",
+    "webgl",
+    "gpu"
+  ],
+  "author": "Development Seed",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/developmentseed/deck.gl-raster.git"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@typescript-eslint/eslint-plugin": "^8.16.0",
+    "@typescript-eslint/parser": "^8.16.0",
+    "eslint": "^9.15.0",
+    "jsdom": "^27.2.0",
+    "prettier": "^3.3.3",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.5"
+  },
+  "dependencies": {
+    "@developmentseed/deck.gl-raster": "workspace:^",
+    "@developmentseed/raster-reproject": "workspace:^",
+    "proj4": "^2.20.2"
+  },
+  "volta": {
+    "extends": "../../package.json"
+  }
+}

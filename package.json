@@ -1,20 +1,17 @@
 {
   "name": "monorepo",
   "private": true,
-  "workspaces": [
-    "packages/*"
-  ],
   "description": "GPU-accelerated COG and Zarr visualization in deck.gl",
   "scripts": {
-    "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces",
-    "lint": "npm run lint --workspaces",
-    "format": "npm run format --workspaces",
-    "typecheck": "npm run typecheck --workspaces"
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format",
+    "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {},
   "volta": {
     "node": "24.11.1",
-    "npm": "11.6.4"
+    "pnpm": "8.8.0"
   }
 }
