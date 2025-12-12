@@ -1,11 +1,11 @@
 /* eslint-env browser */
 
 import type { GeoTIFF, GeoTIFFImage } from "geotiff";
-import { reprojection } from "@developmentseed/raster-reproject";
+import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import {
   applyAffine,
   invertGeoTransform,
-} from "../../raster-reproject/src/reprojection/affine";
+} from "@developmentseed/raster-reproject";
 import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import type Projection from "proj4/dist/lib/Proj";
@@ -90,7 +90,7 @@ const OGC_84: PROJJSONDefinition = {
 export async function extractGeotiffReprojectors(
   tiff: GeoTIFF,
   outputCrs: string | PROJJSONDefinition | Projection = OGC_84,
-): Promise<reprojection.ReprojectionFns> {
+): Promise<ReprojectionFns> {
   const image = await tiff.getImage();
 
   const geoKeys = image.getGeoKeys();
