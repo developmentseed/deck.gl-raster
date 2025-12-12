@@ -167,17 +167,15 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   positions: Float32Array;
   texCoords: Float32Array;
 } {
-  // Extract mesh data
   const numVertices = reprojector.uvs.length / 2;
   const positions = new Float32Array(numVertices * 3);
   const texCoords = new Float32Array(reprojector.uvs);
 
-  // Convert UV coordinates and exact output positions to mesh format
   for (let i = 0; i < numVertices; i++) {
-    // Use exact output positions (already in output CRS)
-    positions[i * 3] = reprojector.exactOutputPositions[i * 2]!; // x
-    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!; // y
-    positions[i * 3 + 2] = 0; // z (flat on the ground)
+    positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
+    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
+    // z (flat on the ground)
+    positions[i * 3 + 2] = 0;
   }
 
   // TODO: Consider using 16-bit indices if the mesh is small enough
