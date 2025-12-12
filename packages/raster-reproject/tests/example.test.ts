@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it } from "vitest";
 import { join } from "path";
 import { reprojection } from "@developmentseed/raster-reproject";
 import { readFileSync, writeFileSync } from "fs";
