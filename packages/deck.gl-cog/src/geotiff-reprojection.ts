@@ -1,7 +1,7 @@
 /* eslint-env browser */
 
 import type { GeoTIFF, GeoTIFFImage } from "geotiff";
-import { ReprojectionFns } from "../../raster-reproject/src/reprojection/delatin";
+import { reprojection } from "@developmentseed/raster-reproject";
 import {
   applyAffine,
   invertGeoTransform,
@@ -90,7 +90,7 @@ const OGC_84: PROJJSONDefinition = {
 export async function extractGeotiffReprojectors(
   tiff: GeoTIFF,
   outputCrs: string | PROJJSONDefinition | Projection = OGC_84,
-): Promise<ReprojectionFns> {
+): Promise<reprojection.ReprojectionFns> {
   const image = await tiff.getImage();
 
   const geoKeys = image.getGeoKeys();

@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "fs";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import proj4 from "proj4";
 
-const FIXTURES_DIR = join(__dirname, "..", "fixtures");
+const FIXTURES_DIR = join(__dirname, "..", "..", "..", "fixtures");
 
 type FixtureJSON = {
   width: number;
@@ -16,6 +16,22 @@ type FixtureJSON = {
   projjson?: PROJJSONDefinition;
   wkt2: string;
 };
+
+function fromGeoTransform(
+  geotransform: [number, number, number, number, number, number],
+): {
+  pixelToInputCRS: (x: number, y: number) => [number, number];
+  inputCRSToPixel: (x: number, y: number) => [number, number];
+} {
+  const inverseGeotransform =
+    reprojection.affine.invertGeoTransform(geotransform);
+  return {
+    pixelToInputCRS: (x: number, y: number) =>
+      reprojection.affine.applyAffine(x, y, geotransform),
+    inputCRSToPixel: (x: number, y: number) =>
+      reprojection.affine.applyAffine(x, y, inverseGeotransform),
+  };
+}
 
 function parseFixture(fixturePath: string): reprojection.RasterReprojector {
   const {
@@ -45,7 +61,7 @@ function parseFixture(fixturePath: string): reprojection.RasterReprojector {
   }
 
   const { inputCRSToPixel, pixelToInputCRS } =
-    reprojection.fromGeoTransform(affineGeotransform);
+    fromGeoTransform(affineGeotransform);
   const converter = proj4(projjson || wkt2, "EPSG:4326");
 
   const reprojectionFns = {
