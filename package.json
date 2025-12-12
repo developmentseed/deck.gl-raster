@@ -3,13 +3,19 @@
   "private": true,
   "description": "GPU-accelerated COG and Zarr visualization in deck.gl",
   "scripts": {
-    "build": "pnpm -r build",
-    "test": "pnpm -r test",
-    "lint": "pnpm -r lint",
+    "build": "tsc --build",
+    "clean": "pnpm --recursive exec rm -rf dist",
     "format": "pnpm -r format",
+    "lint": "pnpm -r lint",
+    "publint": "pnpm --recursive --filter=\"./packages/**\" exec publint",
+    "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "publint": "^0.3.16",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  },
   "packageManager": "pnpm@10.25.0",
   "volta": {
     "node": "24.11.1",

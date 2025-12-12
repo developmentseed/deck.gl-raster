@@ -1,12 +1,12 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ['src/index.ts'],
-  format: ['esm', 'cjs'],
+  entry: ["src/index.ts"],
+  format: ["esm"],
   dts: true,
   sourcemap: true,
   clean: true,
   splitting: false,
   treeshake: true,
-  external: ['@deck.gl/core', '@deck.gl/layers'],
+  external: ["@deck.gl/core", "@deck.gl/layers"],
 });

@@ -3,14 +3,12 @@
   "version": "0.1.0-beta.2",
   "description": "Georeferenced image data visualization in deck.gl",
   "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "default": "./dist/index.js"
     }
   },
   "files": [
@@ -42,7 +40,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/developmentseed/deck.gl-raster.git"
+    "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

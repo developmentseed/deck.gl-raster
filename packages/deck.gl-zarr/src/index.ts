@@ -1,0 +1,2 @@
+// Zarr visualization placeholder
+export {};
