@@ -135,7 +135,7 @@ describe("nlcd", () => {
   });
 });
 
-describe.only("modis", () => {
+describe("modis", () => {
   it("should generate reprojection mesh", () => {
     const baseFname = "MYD09A1.A2025169.h10v05.061.2025178160305";
     const fixturePath = join(FIXTURES_DIR, `${baseFname}.json`);
