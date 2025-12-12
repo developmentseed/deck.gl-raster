@@ -16,6 +16,10 @@ See https://www.linz.govt.nz/products-services/maps/new-zealand-topographic-maps
 pixi run gdalinfo -json https://static.topo.linz.govt.nz/maps/topo250/geotiff/250-25_GeoTifv1-05.tif | jq '{width: .size[0], height: .size[1], geotransform: .geoTransform, reorderTransform: true, projjson: .stac.["proj:projjson"]}' > linz_250-25_GeoTifv1-05.json
 ```
 
+```bash
+pixi run gdalinfo -json https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff | jq '{width: .size[0], height: .size[1], geotransform: .geoTransform, reorderTransform: true, projjson: .stac.["proj:projjson"]}' > CC11.json
+```
+
 ### National Land Cover Database
 
 ```bash
