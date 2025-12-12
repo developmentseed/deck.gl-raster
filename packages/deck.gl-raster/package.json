@@ -51,7 +51,7 @@
     "prettier": "^3.3.3",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.5"
+    "vitest": "^4.0.15"
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.5",

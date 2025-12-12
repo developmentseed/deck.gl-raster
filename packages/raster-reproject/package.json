@@ -52,7 +52,7 @@
     "proj4": "^2.20.2",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.5"
+    "vitest": "^4.0.15"
   },
   "volta": {
     "extends": "../../package.json"
