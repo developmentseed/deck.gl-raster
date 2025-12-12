@@ -1,0 +1,3 @@
+verifyDepsBeforeRun: install
+packages:
+  - "packages/*"

@@ -41,27 +41,30 @@ new Deck({
 
 ## Development
 
+This is a monorepo managed with pnpm workspaces.
+
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
-# Build the library
-npm run build
+# Build all packages
+pnpm build
 
-# Run tests
-npm test
+# Run tests in all packages
+pnpm test
 
-# Run tests in watch mode
-npm run test:watch
+# Run tests in watch mode (in a specific package)
+cd packages/deck.gl-raster
+pnpm test:watch
 
 # Lint code
-npm run lint
+pnpm lint
 
 # Format code
-npm run format
+pnpm format
 
 # Type check
-npm run typecheck
+pnpm typecheck
 ```
 
 ## API Reference

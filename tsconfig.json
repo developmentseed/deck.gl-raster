@@ -7,8 +7,6 @@
     "resolveJsonModule": true,
     "allowJs": false,
     "checkJs": false,
-    "outDir": "./dist",
-    "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -26,6 +24,11 @@
     "skipLibCheck": true,
     "isolatedModules": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": ["node_modules"],
+  "references": [
+    { "path": "packages/deck.gl-cog" },
+    { "path": "packages/deck.gl-raster" },
+    { "path": "packages/deck.gl-zarr" },
+    { "path": "packages/raster-reproject" }
+  ]
 }

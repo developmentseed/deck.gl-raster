@@ -1,8 +1,11 @@
 /* eslint-env browser */
 
 import type { GeoTIFF, GeoTIFFImage } from "geotiff";
-import { ReprojectionFns } from "./delatin";
-import { applyAffine, invertGeoTransform } from "./affine";
+import { ReprojectionFns } from "../../raster-reproject/src/reprojection/delatin";
+import {
+  applyAffine,
+  invertGeoTransform,
+} from "../../raster-reproject/src/reprojection/affine";
 import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import type Projection from "proj4/dist/lib/Proj";
