@@ -43,17 +43,10 @@ export interface RasterLayerProps extends CompositeLayerProps {
    * @default 0.125
    */
   maxError?: number;
-
-  // /**
-  //  * Whether to render in wireframe mode (for debugging)
-  //  * @default false
-  //  */
-  // debugMesh?: boolean;
 }
 
 const defaultProps = {
   maxError: DEFAULT_MAX_ERROR,
-  debugMesh: false,
 };
 
 /**
@@ -131,7 +124,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
     return new SimpleMeshLayer(
       this.getSubLayerProps({
-        id: "mesh",
+        id: "raster",
         texture,
         // Dummy data because we're only rendering _one_ instance of this mesh
         // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
