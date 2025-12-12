@@ -1,7 +1,7 @@
 {
   "name": "@developmentseed/raster-reproject",
   "version": "0.1.0-beta.2",
-  "description": "Georeferenced image data visualization in deck.gl",
+  "description": "Mesh generation for client-side raster reprojection.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
