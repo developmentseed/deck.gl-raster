@@ -5,12 +5,14 @@
   "scripts": {
     "build": "tsc --build",
     "clean": "pnpm --recursive exec rm -rf dist",
-    "test": "pnpm -r test",
-    "lint": "pnpm -r lint",
     "format": "pnpm -r format",
+    "lint": "pnpm -r lint",
+    "publint": "pnpm --recursive --filter=\"./packages/**\" exec publint",
+    "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
+    "publint": "^0.3.16",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"
   },
