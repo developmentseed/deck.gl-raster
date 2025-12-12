@@ -5,6 +5,8 @@ import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 
+const DEFAULT_MAX_ERROR = 0.125;
+
 export interface RasterLayerProps extends CompositeLayerProps {
   /**
    * Width of the input raster image in pixels
@@ -38,7 +40,7 @@ export interface RasterLayerProps extends CompositeLayerProps {
   /**
    * Maximum reprojection error in pixels for mesh refinement.
    * Lower values create denser meshes with higher accuracy.
-   * @default 1
+   * @default 0.125
    */
   maxError?: number;
 
@@ -48,8 +50,6 @@ export interface RasterLayerProps extends CompositeLayerProps {
   //  */
   // debugMesh?: boolean;
 }
-
-const DEFAULT_MAX_ERROR = 0.125;
 
 const defaultProps = {
   maxError: DEFAULT_MAX_ERROR,
@@ -87,7 +87,6 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     // Regenerate mesh if key properties change
     const needsUpdate =
       Boolean(changeFlags.dataChanged) ||
-      changeFlags.updateTriggersChanged ||
       props.width !== oldProps.width ||
       props.height !== oldProps.height ||
       props.reprojectionFns !== oldProps.reprojectionFns ||
@@ -123,11 +122,12 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   renderLayers() {
     const { mesh } = this.state;
     const { texture } = this.props;
-    const { indices, positions, texCoords } = mesh!;
 
     if (!mesh) {
       return null;
     }
+
+    const { indices, positions, texCoords } = mesh;
 
     return new SimpleMeshLayer(
       this.getSubLayerProps({
@@ -180,7 +180,7 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
     positions[i * 3 + 2] = 0; // z (flat on the ground)
   }
 
-  // Triangle indices are already in the correct format
+  // TODO: Consider using 16-bit indices if the mesh is small enough
   const indices = new Uint32Array(reprojector.triangles);
 
   return {
