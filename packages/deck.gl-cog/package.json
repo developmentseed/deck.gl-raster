@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/deck.gl-cog",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "description": "GeoTIFF and Cloud-Optimized GeoTIFF visualization in deck.gl",
   "type": "module",
   "main": "./dist/index.js",
