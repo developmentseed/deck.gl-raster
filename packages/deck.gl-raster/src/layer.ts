@@ -49,8 +49,10 @@ export interface RasterLayerProps extends CompositeLayerProps {
   wireframe?: boolean;
 }
 
+const DEFAULT_MAX_ERROR = 0.125;
+
 const defaultProps = {
-  maxError: 1,
+  maxError: DEFAULT_MAX_ERROR,
   wireframe: false,
 };
 
@@ -74,10 +76,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   };
 
   override initializeState(): void {
-    this.setState({
-      reprojector: undefined,
-      mesh: undefined,
-    });
+    this.setState({});
   }
 
   override updateState({
@@ -103,36 +102,16 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 
   _generateMesh(): void {
-    const { width, height, reprojectionFns, maxError = 1 } = this.props;
+    const {
+      width,
+      height,
+      reprojectionFns,
+      maxError = DEFAULT_MAX_ERROR,
+    } = this.props;
 
-    // Create reprojector instance
     const reprojector = new RasterReprojector(reprojectionFns, width, height);
-
-    // Refine mesh to desired error threshold
     reprojector.run(maxError);
-
-    // Extract mesh data
-    const numVertices = reprojector.uvs.length / 2;
-    const positions = new Float32Array(numVertices * 3);
-    const texCoords = new Float32Array(numVertices * 2);
-
-    // Convert UV coordinates and exact output positions to mesh format
-    for (let i = 0; i < numVertices; i++) {
-      const uvIdx = i * 2;
-      const posIdx = i * 3;
-
-      // Use exact output positions (already in output CRS)
-      positions[posIdx] = reprojector.exactOutputPositions[uvIdx]!; // x
-      positions[posIdx + 1] = reprojector.exactOutputPositions[uvIdx + 1]!; // y
-      positions[posIdx + 2] = 0; // z (flat on the ground)
-
-      // Texture coordinates (UV)
-      texCoords[uvIdx] = reprojector.uvs[uvIdx]!; // u
-      texCoords[uvIdx + 1] = reprojector.uvs[uvIdx + 1]!; // v
-    }
-
-    // Triangle indices are already in the correct format
-    const indices = new Uint32Array(reprojector.triangles);
+    const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
 
     this.setState({
       reprojector,
@@ -168,4 +147,32 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       }),
     );
   }
+}
+
+function reprojectorToMesh(reprojector: RasterReprojector): {
+  indices: Uint32Array;
+  positions: Float32Array;
+  texCoords: Float32Array;
+} {
+  // Extract mesh data
+  const numVertices = reprojector.uvs.length / 2;
+  const positions = new Float32Array(numVertices * 3);
+  const texCoords = new Float32Array(reprojector.uvs);
+
+  // Convert UV coordinates and exact output positions to mesh format
+  for (let i = 0; i < numVertices; i++) {
+    // Use exact output positions (already in output CRS)
+    positions[i * 3] = reprojector.exactOutputPositions[i * 2]!; // x
+    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!; // y
+    positions[i * 3 + 2] = 0; // z (flat on the ground)
+  }
+
+  // Triangle indices are already in the correct format
+  const indices = new Uint32Array(reprojector.triangles);
+
+  return {
+    indices,
+    positions,
+    texCoords,
+  };
 }
