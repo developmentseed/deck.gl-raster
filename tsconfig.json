@@ -10,7 +10,6 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "composite": false,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -25,6 +24,7 @@
     "isolatedModules": true
   },
   "exclude": ["node_modules"],
+  "files": [],
   "references": [
     { "path": "packages/deck.gl-cog" },
     { "path": "packages/deck.gl-raster" },
