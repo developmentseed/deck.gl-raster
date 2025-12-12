@@ -1,4 +1,4 @@
-import type { CompositeLayerProps } from "@deck.gl/core";
+import type { CompositeLayerProps, UpdateParameters } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
@@ -31,29 +31,29 @@ export interface RasterLayerProps extends CompositeLayerProps {
   texture?: SimpleMeshLayerProps["texture"];
 
   /**
+   * Customize the [texture parameters](https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texParameter).
+   */
+  textureParameters?: SimpleMeshLayerProps["textureParameters"];
+
+  /**
    * Maximum reprojection error in pixels for mesh refinement.
    * Lower values create denser meshes with higher accuracy.
    * @default 1
    */
   maxError?: number;
 
-  /**
-   * Material properties for lighting effects
-   */
-  material?: SimpleMeshLayerProps["material"];
-
-  /**
-   * Whether to render in wireframe mode (for debugging)
-   * @default false
-   */
-  wireframe?: boolean;
+  // /**
+  //  * Whether to render in wireframe mode (for debugging)
+  //  * @default false
+  //  */
+  // debugMesh?: boolean;
 }
 
 const DEFAULT_MAX_ERROR = 0.125;
 
 const defaultProps = {
   maxError: DEFAULT_MAX_ERROR,
-  wireframe: false,
+  debugMesh: false,
 };
 
 /**
@@ -79,18 +79,15 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     this.setState({});
   }
 
-  override updateState({
-    props,
-    oldProps,
-    changeFlags,
-  }: {
-    props: RasterLayerProps;
-    oldProps: RasterLayerProps;
-    changeFlags: any;
-  }): void {
+  override updateState(params: UpdateParameters<this>) {
+    super.updateState(params);
+
+    const { props, oldProps, changeFlags } = params;
+
     // Regenerate mesh if key properties change
     const needsUpdate =
-      changeFlags.dataChanged ||
+      Boolean(changeFlags.dataChanged) ||
+      changeFlags.updateTriggersChanged ||
       props.width !== oldProps.width ||
       props.height !== oldProps.height ||
       props.reprojectionFns !== oldProps.reprojectionFns ||
@@ -125,7 +122,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
   renderLayers() {
     const { mesh } = this.state;
-    const { texture, material, wireframe } = this.props;
+    const { texture } = this.props;
+    const { indices, positions, texCoords } = mesh!;
 
     if (!mesh) {
       return null;
@@ -134,16 +132,31 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     return new SimpleMeshLayer(
       this.getSubLayerProps({
         id: "mesh",
-        data: [{ position: [0, 0, 0] }], // Single instance at origin since mesh positions are already in world coordinates
-        mesh: {
-          positions: { value: mesh.positions, size: 3 },
-          texCoords: { value: mesh.texCoords, size: 2 },
-          indices: { value: mesh.indices, size: 1 },
-        },
         texture,
-        material,
-        wireframe,
-        getPosition: (d: { position: number[] }) => d.position,
+        // Dummy data because we're only rendering _one_ instance of this mesh
+        // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
+        data: [1],
+        mesh: {
+          indices: { value: indices, size: 1 },
+          attributes: {
+            POSITION: {
+              value: positions,
+              size: 3,
+            },
+            TEXCOORD_0: {
+              value: texCoords,
+              size: 2,
+            },
+          },
+        },
+        // We're only rendering a single mesh, without instancing
+        // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L244
+        _instanced: false,
+        // Dummy accessors for the dummy data
+        // We place our mesh at the coordinate origin
+        getPosition: [0, 0, 0],
+        // We give a white color to turn off color mixing with the texture
+        getColor: [255, 255, 255],
       }),
     );
   }
