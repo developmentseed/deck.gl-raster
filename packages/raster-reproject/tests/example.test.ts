@@ -1,6 +1,6 @@
 import { describe, it } from "vitest";
-import { join } from "path";
-import type { ReprojectionFns } from "@developmentseed/raster-reproject";
+import { join, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   RasterReprojector,
   applyAffine,
@@ -10,7 +10,9 @@ import { readFileSync, writeFileSync } from "fs";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import proj4 from "proj4";
 
-const FIXTURES_DIR = join(__dirname, "..", "..", "..", "fixtures");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const FIXTURES_DIR = resolve(join(__dirname, "..", "..", "..", "fixtures"));
 
 type FixtureJSON = {
   width: number;
