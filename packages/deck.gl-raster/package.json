@@ -53,9 +53,9 @@
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.5",
+    "@deck.gl/layers": "^9.2.5",
     "@deck.gl/mesh-layers": "^9.2.5",
-    "@developmentseed/raster-reproject": "workspace:^",
-    "proj4": "^2.20.2"
+    "@developmentseed/raster-reproject": "workspace:^"
   },
   "volta": {
     "extends": "../../package.json"
