@@ -34,32 +34,9 @@ function isDegenerate(gt: GeoTransform): boolean {
 }
 
 function determinant(gt: GeoTransform): number {
-  return a(gt) * e(gt) - b(gt) * d(gt);
+  const [a, b, _c, d, e, _f] = gt;
+  return a * e - b * d;
 }
-
-function a(gt: GeoTransform): number {
-  return gt[0];
-}
-
-function b(gt: GeoTransform): number {
-  return gt[1];
-}
-
-// function c(gt: GeoTransform): number {
-//   return gt[2];
-// }
-
-function d(gt: GeoTransform): number {
-  return gt[3];
-}
-
-function e(gt: GeoTransform): number {
-  return gt[4];
-}
-
-// function f(gt: GeoTransform): number {
-//   return gt[5];
-// }
 
 /**
  * Apply a GeoTransform to a coordinate.
