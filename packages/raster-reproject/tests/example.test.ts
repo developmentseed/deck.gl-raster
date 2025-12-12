@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { join } from "path";
-import { reprojection } from "@developmentseed/deck.gl-raster";
+import { reprojection } from "@developmentseed/raster-reproject";
 import { readFileSync, writeFileSync } from "fs";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import proj4 from "proj4";
