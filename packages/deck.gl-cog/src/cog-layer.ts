@@ -16,6 +16,18 @@ export interface COGLayerProps extends CompositeLayerProps {
    * @default 0.125
    */
   maxError?: number;
+
+  /**
+   * Enable debug visualization showing the triangulation mesh
+   * @default false
+   */
+  debug?: boolean;
+
+  /**
+   * Opacity of the debug mesh overlay (0-1)
+   * @default 0.5
+   */
+  debugOpacity?: number;
 }
 
 const defaultProps = {
@@ -78,14 +90,18 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
       return null;
     }
 
+    const { maxError, debug, debugOpacity } = this.props;
+
     return new RasterLayer(
       this.getSubLayerProps({
         id: "raster",
         width,
         height,
         reprojectionFns,
-        maxError: this.props.maxError,
+        maxError,
         texture: image,
+        debug,
+        debugOpacity,
       }),
     );
   }
