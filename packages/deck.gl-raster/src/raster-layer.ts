@@ -77,6 +77,8 @@ export interface RasterLayerProps extends CompositeLayerProps {
   maxError?: number;
 
   debug?: boolean;
+
+  debugOpacity?: number;
 }
 
 const defaultProps = {
@@ -179,6 +181,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
             getLineColor: [0, 0, 0],
             getLineWidth: 0,
             lineWidthMinPixels: 1,
+            opacity: this.props.debugOpacity || 1,
           }),
         );
         layers.push(debugLayer);
