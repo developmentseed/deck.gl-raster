@@ -116,15 +116,18 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     const { props, oldProps, changeFlags } = params;
 
     // Regenerate mesh if key properties change
-    const needsUpdate =
+    const needsMeshUpdate =
       Boolean(changeFlags.dataChanged) ||
       props.width !== oldProps.width ||
       props.height !== oldProps.height ||
       props.reprojectionFns !== oldProps.reprojectionFns ||
       props.maxError !== oldProps.maxError;
 
-    if (needsUpdate) {
+    if (needsMeshUpdate) {
       this._generateMesh();
+    } else if (props.debug && !oldProps.debug) {
+      // Only need to recreate debug triangles if debug was just enabled
+      this._createDebugTriangles();
     }
   }
 
@@ -157,6 +160,18 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     });
   }
 
+  _createDebugTriangles(): void {
+    const { reprojector } = this.state;
+    if (!reprojector) {
+      return;
+    }
+
+    const debugTriangles = reprojectorToTriangles(reprojector);
+    this.setState({
+      debugTriangles,
+    });
+  }
+
   renderLayers() {
     const { mesh } = this.state;
     const { texture, debug } = this.props;
@@ -167,28 +182,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
     const { indices, positions, texCoords } = mesh;
 
-    const layers: Layer[] = [];
-    if (debug) {
-      const { debugTriangles } = this.state;
-      if (debugTriangles) {
-        const debugLayer = new PolygonLayer(
-          this.getSubLayerProps({
-            id: "polygon",
-            data: debugTriangles,
-            getPolygon: (d: ParsedTriangle) => d.geom,
-            getFillColor: (d: ParsedTriangle) =>
-              DEBUG_COLORS[d.idx % DEBUG_COLORS.length],
-            getLineColor: [0, 0, 0],
-            getLineWidth: 0,
-            lineWidthMinPixels: 1,
-            opacity: this.props.debugOpacity || 1,
-          }),
-        );
-        layers.push(debugLayer);
-      }
-    }
-
-    layers.push(
+    const layers: Layer[] = [
       new SimpleMeshLayer(
         this.getSubLayerProps({
           id: "raster",
@@ -219,7 +213,30 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
           getColor: [255, 255, 255],
         }),
       ),
-    );
+    ];
+    if (debug) {
+      const { debugTriangles } = this.state;
+      const { debugOpacity } = this.props;
+      if (debugTriangles) {
+        const debugLayer = new PolygonLayer(
+          this.getSubLayerProps({
+            id: "polygon",
+            data: debugTriangles,
+            getPolygon: (d: ParsedTriangle) => d.geom,
+            getFillColor: (d: ParsedTriangle) =>
+              DEBUG_COLORS[d.idx % DEBUG_COLORS.length],
+            getLineColor: [0, 0, 0],
+            getLineWidth: 0,
+            lineWidthMinPixels: 1,
+            opacity:
+              debugOpacity !== undefined && Number.isFinite(debugOpacity)
+                ? Math.max(0, Math.min(1, debugOpacity))
+                : 1,
+          }),
+        );
+        layers.push(debugLayer);
+      }
+    }
 
     return layers;
   }
