@@ -76,6 +76,8 @@ export default function App() {
   const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [debug, setDebug] = useState(false);
+  const [debugOpacity, setDebugOpacity] = useState(0.25);
 
   useEffect(() => {
     let mounted = true;
@@ -124,6 +126,8 @@ export default function App() {
           id: "cog-layer",
           geotiff,
           maxError: 0.125,
+          debug,
+          debugOpacity,
         }),
       ]
     : [];
@@ -209,10 +213,71 @@ export default function App() {
           <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
             COGLayer Example
           </h3>
-          <p style={{ margin: "0", fontSize: "14px", color: "#666" }}>
+          <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
             Displaying RGB imagery from New Zealand (NZTM2000 projection)
           </p>
-          <div style={{ marginTop: "12px", fontSize: "12px", color: "#999" }}>
+
+          {/* Debug Controls */}
+          <div
+            style={{
+              padding: "12px 0",
+              borderTop: "1px solid #eee",
+              marginTop: "12px",
+            }}
+          >
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "14px",
+                cursor: "pointer",
+                marginBottom: "12px",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={debug}
+                onChange={(e) => setDebug(e.target.checked)}
+                style={{ cursor: "pointer" }}
+              />
+              <span>Show Debug Mesh</span>
+            </label>
+
+            {debug && (
+              <div style={{ marginTop: "8px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    color: "#666",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Debug Opacity: {debugOpacity.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={debugOpacity}
+                  onChange={(e) => setDebugOpacity(parseFloat(e.target.value))}
+                  style={{ width: "100%", cursor: "pointer" }}
+                />
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: "12px",
+              paddingTop: "12px",
+              borderTop: "1px solid #eee",
+              fontSize: "12px",
+              color: "#999",
+            }}
+          >
             <div>Max Error: 0.125 pixels</div>
             <div>Source: LINZ</div>
           </div>

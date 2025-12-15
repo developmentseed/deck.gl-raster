@@ -126,7 +126,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     if (needsMeshUpdate) {
       this._generateMesh();
     } else if (props.debug && !oldProps.debug) {
-      // Only need to recreate debug triangles if debug was just enabled
+      // Even if the mesh wasn't changed, we may need to recreate debug
+      // triangles if debug was just enabled
       this._createDebugTriangles();
     }
   }
