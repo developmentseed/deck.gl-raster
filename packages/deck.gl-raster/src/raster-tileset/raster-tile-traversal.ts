@@ -78,7 +78,8 @@ const REF_POINTS_9 = REF_POINTS_5.concat([
 ]);
 
 /**
- * COG Tile Node - similar to OSMNode but for COG's tile structure.
+ * Raster Tile Node - similar to OSMNode but for a generic raster tileset's
+ * tile structure.
  *
  * Represents a single tile in the COG internal tiling pyramid.
  *
@@ -88,7 +89,7 @@ const REF_POINTS_9 = REF_POINTS_5.concat([
  * - y: tile row (0 to COGOverview.tilesY, top to bottom)
  * - z: overview level. This uses TileMatrixSet ordering where: 0 = coarsest, higher = finer
  */
-export class COGTileNode {
+export class RasterTileNode {
   /** Index across a row */
   x: number;
   /** Index down a column */
@@ -114,7 +115,7 @@ export class COGTileNode {
   private selected?: boolean;
 
   /** A cache of the children of this node. */
-  private _children?: COGTileNode[];
+  private _children?: RasterTileNode[];
 
   constructor(x: number, y: number, z: number, cogMetadata: COGMetadata) {
     this.x = x;
@@ -129,7 +130,7 @@ export class COGTileNode {
   }
 
   /** Get the children of this node. */
-  get children(): COGTileNode[] {
+  get children(): RasterTileNode[] {
     if (!this._children) {
       const maxZ = this.cogMetadata.overviews.length - 1;
       if (this.z >= maxZ) {
@@ -158,7 +159,7 @@ export class COGTileNode {
           // resolutions (higher map zoom level)
           if (childX < childOverview.tilesX && childY < childOverview.tilesY) {
             this._children.push(
-              new COGTileNode(childX, childY, childZ, this.cogMetadata),
+              new RasterTileNode(childX, childY, childZ, this.cogMetadata),
             );
           }
         }
@@ -300,7 +301,7 @@ export class COGTileNode {
    * @param result - Accumulator array for selected tiles
    * @returns Array of selected OSMNode tiles
    */
-  getSelected(result: COGTileNode[] = []): COGTileNode[] {
+  getSelected(result: RasterTileNode[] = []): RasterTileNode[] {
     if (this.selected) {
       result.push(this);
     }
@@ -498,10 +499,10 @@ export function getTileIndices(
   // Create root tiles at coarsest level
   // In contrary to OSM tiling, we might have more than one tile at the
   // coarsest level (z=0)
-  const roots: COGTileNode[] = [];
+  const roots: RasterTileNode[] = [];
   for (let y = 0; y < coarsestOverview.tilesY; y++) {
     for (let x = 0; x < coarsestOverview.tilesX; x++) {
-      roots.push(new COGTileNode(x, y, 0, cogMetadata));
+      roots.push(new RasterTileNode(x, y, 0, cogMetadata));
     }
   }
 
@@ -522,7 +523,7 @@ export function getTileIndices(
   console.log("roots", roots);
 
   // Collect selected tiles
-  const selectedNodes: COGTileNode[] = [];
+  const selectedNodes: RasterTileNode[] = [];
   for (const root of roots) {
     root.getSelected(selectedNodes);
   }
