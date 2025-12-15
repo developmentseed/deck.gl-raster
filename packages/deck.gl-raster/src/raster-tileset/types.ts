@@ -181,7 +181,7 @@ export type COGOverview = {
 /**
  * COG Metadata extracted from GeoTIFF
  */
-export type COGMetadata = {
+export type RasterTilesetMetadata = {
   width: number;
   height: number;
   /** Number of pixels wide for each tile */
@@ -192,9 +192,8 @@ export type COGMetadata = {
   bbox: Bounds; // COG's CRS
   projection: string | null;
   overviews: COGOverview[];
-  image: GeoTIFF; // GeoTIFF reference
-  projectToWgs84: Converter;
-  projectTo3857: Converter;
+  projectToWgs84: (x: number, y: number) => [number, number];
+  projectTo3857: (x: number, y: number) => [number, number];
 };
 
 /**
