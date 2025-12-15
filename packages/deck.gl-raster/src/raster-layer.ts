@@ -1,11 +1,43 @@
-import type { CompositeLayerProps, UpdateParameters } from "@deck.gl/core";
+import type {
+  CompositeLayerProps,
+  Layer,
+  UpdateParameters,
+} from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
+import { PolygonLayer } from "@deck.gl/layers";
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 
 const DEFAULT_MAX_ERROR = 0.125;
+
+const DEBUG_COLORS = [
+  [252, 73, 163], // pink
+  [255, 51, 204], // magenta-pink
+  [204, 102, 255], // purple-ish
+  [153, 51, 255], // deep purple
+  [102, 204, 255], // sky blue
+  [51, 153, 255], // clear blue
+  [102, 255, 204], // teal
+  [51, 255, 170], // aqua-teal
+  [0, 255, 0], // lime green
+  [51, 204, 51], // stronger green
+  [255, 204, 102], // light orange
+  [255, 179, 71], // golden-orange
+  [255, 102, 102], // salmon
+  [255, 80, 80], // red-salmon
+  [255, 0, 0], // red
+  [204, 0, 0], // crimson
+  [255, 128, 0], // orange
+  [255, 153, 51], // bright orange
+  [255, 255, 102], // yellow
+  [255, 255, 51], // lemon
+  [0, 255, 255], // turquoise
+  [0, 204, 255], // cyan
+];
+
+type ParsedTriangle = { idx: number; geom: number[][] };
 
 export interface RasterLayerProps extends CompositeLayerProps {
   /**
@@ -43,10 +75,13 @@ export interface RasterLayerProps extends CompositeLayerProps {
    * @default 0.125
    */
   maxError?: number;
+
+  debug?: boolean;
 }
 
 const defaultProps = {
   maxError: DEFAULT_MAX_ERROR,
+  debug: false,
 };
 
 /**
@@ -66,6 +101,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       indices: Uint32Array;
       texCoords: Float32Array;
     };
+    debugTriangles?: ParsedTriangle[];
   };
 
   override initializeState(): void {
@@ -96,11 +132,17 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       height,
       reprojectionFns,
       maxError = DEFAULT_MAX_ERROR,
+      debug = false,
     } = this.props;
 
     const reprojector = new RasterReprojector(reprojectionFns, width, height);
     reprojector.run(maxError);
     const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
+
+    let debugTriangles: ParsedTriangle[] | undefined = undefined;
+    if (debug) {
+      debugTriangles = reprojectorToTriangles(reprojector);
+    }
 
     this.setState({
       reprojector,
@@ -109,12 +151,13 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         indices,
         texCoords,
       },
+      debugTriangles,
     });
   }
 
   renderLayers() {
     const { mesh } = this.state;
-    const { texture } = this.props;
+    const { texture, debug } = this.props;
 
     if (!mesh) {
       return null;
@@ -122,36 +165,60 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
     const { indices, positions, texCoords } = mesh;
 
-    return new SimpleMeshLayer(
-      this.getSubLayerProps({
-        id: "raster",
-        texture,
-        // Dummy data because we're only rendering _one_ instance of this mesh
-        // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
-        data: [1],
-        mesh: {
-          indices: { value: indices, size: 1 },
-          attributes: {
-            POSITION: {
-              value: positions,
-              size: 3,
-            },
-            TEXCOORD_0: {
-              value: texCoords,
-              size: 2,
+    const layers: Layer[] = [];
+    if (debug) {
+      const { debugTriangles } = this.state;
+      if (debugTriangles) {
+        const debugLayer = new PolygonLayer(
+          this.getSubLayerProps({
+            id: "polygon",
+            data: debugTriangles,
+            getPolygon: (d: ParsedTriangle) => d.geom,
+            getFillColor: (d: ParsedTriangle) =>
+              DEBUG_COLORS[d.idx % DEBUG_COLORS.length],
+            getLineColor: [0, 0, 0],
+            getLineWidth: 0,
+            lineWidthMinPixels: 1,
+          }),
+        );
+        layers.push(debugLayer);
+      }
+    }
+
+    layers.push(
+      new SimpleMeshLayer(
+        this.getSubLayerProps({
+          id: "raster",
+          texture,
+          // Dummy data because we're only rendering _one_ instance of this mesh
+          // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
+          data: [1],
+          mesh: {
+            indices: { value: indices, size: 1 },
+            attributes: {
+              POSITION: {
+                value: positions,
+                size: 3,
+              },
+              TEXCOORD_0: {
+                value: texCoords,
+                size: 2,
+              },
             },
           },
-        },
-        // We're only rendering a single mesh, without instancing
-        // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L244
-        _instanced: false,
-        // Dummy accessors for the dummy data
-        // We place our mesh at the coordinate origin
-        getPosition: [0, 0, 0],
-        // We give a white color to turn off color mixing with the texture
-        getColor: [255, 255, 255],
-      }),
+          // We're only rendering a single mesh, without instancing
+          // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L244
+          _instanced: false,
+          // Dummy accessors for the dummy data
+          // We place our mesh at the coordinate origin
+          getPosition: [0, 0, 0],
+          // We give a white color to turn off color mixing with the texture
+          getColor: [255, 255, 255],
+        }),
+      ),
     );
+
+    return layers;
   }
 }
 
@@ -179,4 +246,32 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
     positions,
     texCoords,
   };
+}
+
+function reprojectorToTriangles(
+  reprojector: RasterReprojector,
+): ParsedTriangle[] {
+  const positions = reprojector.exactOutputPositions;
+  const triangles = reprojector.triangles;
+
+  const trianglePolygons: ParsedTriangle[] = [];
+  for (let triangleIdx = 0; triangleIdx < triangles.length / 3; ++triangleIdx) {
+    const a = triangles[triangleIdx * 3]!;
+    const b = triangles[triangleIdx * 3 + 1]!;
+    const c = triangles[triangleIdx * 3 + 2]!;
+
+    const coords = [
+      [positions[a * 2]!, positions[a * 2 + 1]!],
+      [positions[b * 2]!, positions[b * 2 + 1]!],
+      [positions[c * 2]!, positions[c * 2 + 1]!],
+      [positions[a * 2]!, positions[a * 2 + 1]!],
+    ];
+
+    trianglePolygons.push({
+      idx: triangleIdx,
+      geom: coords,
+    });
+  }
+
+  return trianglePolygons;
 }
