@@ -17,8 +17,6 @@ export type NonGeoBoundingBox = {
 
 export type TileBoundingBox = NonGeoBoundingBox | GeoBoundingBox;
 
-export type TileIndex = { x: number; y: number; z: number };
-
 export type TileLoadProps = {
   index: TileIndex;
   id: string;
@@ -194,8 +192,8 @@ export type TileMatrixSet = {
    */
   tileMatrices: TileMatrix[];
 
-  projectToWgs84: (x: number, y: number) => [number, number];
-  projectTo3857: (x: number, y: number) => [number, number];
+  projectToWgs84: (point: [number, number]) => [number, number];
+  projectTo3857: (point: [number, number]) => [number, number];
 };
 
 /**
@@ -206,7 +204,7 @@ export type TileMatrixSet = {
  * So level `z` is the coarsest resolution (0) and the highest `z` is the finest
  *  resolution.
  */
-export type RasterTileIndex = {
+export type TileIndex = {
   x: number;
   y: number;
 

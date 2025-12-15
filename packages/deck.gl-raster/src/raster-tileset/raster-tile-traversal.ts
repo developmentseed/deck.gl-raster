@@ -26,12 +26,7 @@ import {
   makeOrientedBoundingBoxFromPoints,
 } from "@math.gl/culling";
 
-import type {
-  RasterTilesetMetadata,
-  COGOverview,
-  COGTileIndex,
-  ZRange,
-} from "./types.js";
+import type { TileMatrixSet, TileMatrix, TileIndex, ZRange } from "./types.js";
 
 /**
  * The size of the entire world in deck.gl's common coordinate space.
@@ -61,7 +56,7 @@ const WORLD_SIZE = 512;
 // will never be exact axis aligned boxes in Web Mercator space.
 
 // For most tiles: sample 4 corners and center (5 points total)
-const REF_POINTS_5 = [
+const REF_POINTS_5: [number, number][] = [
   [0.5, 0.5], // center
   [0, 0], // top-left
   [0, 1], // bottom-left
@@ -85,8 +80,8 @@ const REF_POINTS_9 = REF_POINTS_5.concat([
  *
  * COG tile nodes use the following coordinate system:
  *
- * - x: tile column (0 to COGOverview.tilesX, left to right)
- * - y: tile row (0 to COGOverview.tilesY, top to bottom)
+ * - x: tile column (0 to TileMatrix.tilesX, left to right)
+ * - y: tile row (0 to TileMatrix.tilesY, top to bottom)
  * - z: overview level. This uses TileMatrixSet ordering where: 0 = coarsest, higher = finer
  */
 export class RasterTileNode {
@@ -97,7 +92,7 @@ export class RasterTileNode {
   /** TileMatrixSet-style zoom index (higher = finer detail) */
   z: number;
 
-  private metadata: RasterTilesetMetadata;
+  private metadata: TileMatrixSet;
 
   /**
    * Flag indicating whether any descendant of this tile is visible.
@@ -117,12 +112,7 @@ export class RasterTileNode {
   /** A cache of the children of this node. */
   private _children?: RasterTileNode[];
 
-  constructor(
-    x: number,
-    y: number,
-    z: number,
-    metadata: RasterTilesetMetadata,
-  ) {
+  constructor(x: number, y: number, z: number, metadata: TileMatrixSet) {
     this.x = x;
     this.y = y;
     this.z = z;
@@ -130,14 +120,14 @@ export class RasterTileNode {
   }
 
   /** Get overview info for this tile's z level */
-  get overview(): COGOverview {
-    return this.metadata.overviews[this.z]!;
+  get overview(): TileMatrix {
+    return this.metadata.tileMatrices[this.z]!;
   }
 
   /** Get the children of this node. */
   get children(): RasterTileNode[] {
     if (!this._children) {
-      const maxZ = this.metadata.overviews.length - 1;
+      const maxZ = this.metadata.tileMatrices.length - 1;
       if (this.z >= maxZ) {
         // Already at finest resolution, no children
         return [];
@@ -146,11 +136,10 @@ export class RasterTileNode {
       // In TileMatrixSet ordering: refine to z + 1 (finer detail)
       const childZ = this.z + 1;
       const parentOverview = this.overview;
-      const childOverview = this.metadata.overviews[childZ];
+      const childOverview = this.metadata.tileMatrices[childZ]!;
 
       // Calculate scale factor between levels
-      const scaleFactor =
-        parentOverview.scaleFactor / childOverview.scaleFactor;
+      const scaleFactor = parentOverview.cellSize / childOverview.cellSize;
 
       // Generate child tiles
       this._children = [];
@@ -162,7 +151,10 @@ export class RasterTileNode {
           // Only create child if it's within bounds
           // Some tiles on the edges might not need to be created at higher
           // resolutions (higher map zoom level)
-          if (childX < childOverview.tilesX && childY < childOverview.tilesY) {
+          if (
+            childX < childOverview.tileWidth &&
+            childY < childOverview.tileHeight
+          ) {
             this._children.push(
               new RasterTileNode(childX, childY, childZ, this.metadata),
             );
@@ -192,7 +184,7 @@ export class RasterTileNode {
       cullingVolume,
       elevationBounds,
       minZ,
-      maxZ = this.metadata.overviews.length - 1,
+      maxZ = this.metadata.tileMatrices.length - 1,
       project,
     } = params;
 
@@ -223,7 +215,7 @@ export class RasterTileNode {
     );
 
     for (let i = 0; i < cullingVolume.planes.length; i++) {
-      const plane = cullingVolume.planes[i];
+      const plane = cullingVolume.planes[i]!;
       const result = boundingVolume.intersectPlane(plane);
       const planeNames = ["left", "right", "bottom", "top", "near", "far"];
 
@@ -328,7 +320,8 @@ export class RasterTileNode {
     project: ((xyz: number[]) => number[]) | null,
   ) {
     const overview = this.overview;
-    const { tileWidth, tileHeight } = this.metadata;
+    const { tileMatrices } = this.metadata;
+    const { tileWidth, tileHeight } = tileMatrices[tileMatrices.length - 1]!;
 
     // Use geotransform to calculate tile bounds
     // geotransform: [a, b, c, d, e, f] where:
@@ -348,7 +341,7 @@ export class RasterTileNode {
     console.log("refPoints", refPoints);
 
     /** Reference points positions in image CRS */
-    const refPointPositionsImage: number[][] = [];
+    const refPointPositionsImage: [number, number][] = [];
 
     for (const [pX, pY] of refPoints) {
       // pX, pY are in [0, 1] range
@@ -376,15 +369,15 @@ export class RasterTileNode {
     }
 
     /** Reference points positions in EPSG 3857 */
-    const refPointPositionsProjected: number[][] = [];
+    const refPointPositionsProjected: [number, number][] = [];
 
     for (const [pX, pY] of refPointPositionsImage) {
       // Reproject to Web Mercator (EPSG 3857)
-      const projected = this.metadata.projectTo3857.forward([pX, pY]);
+      const projected = this.metadata.projectTo3857([pX, pY]);
       refPointPositionsProjected.push(projected);
 
       // Also log WGS84 for comparison
-      const wgs84 = this.metadata.projectToWgs84.forward([pX, pY]);
+      const wgs84 = this.metadata.projectToWgs84([pX, pY]);
       console.log(
         `Image [${pX.toFixed(2)}, ${pY.toFixed(2)}] -> WGS84 [${wgs84[0].toFixed(6)}, ${wgs84[1].toFixed(6)}] -> WebMerc [${projected[0].toFixed(2)}, ${projected[1].toFixed(2)}]`,
       );
@@ -401,7 +394,7 @@ export class RasterTileNode {
     const WEB_MERCATOR_MAX = 20037508.342789244; // Half Earth circumference
 
     /** Reference points positions in deck.gl world space */
-    const refPointPositionsWorld: number[][] = [];
+    const refPointPositionsWorld: [number, number, number][] = [];
 
     for (const [mercX, mercY] of refPointPositionsProjected) {
       // X: offset from [-20M, 20M] to [0, 40M], then normalize to [0, 512]
@@ -449,7 +442,7 @@ export class RasterTileNode {
    * This is a placeholder - needs proper projection library (proj4js)
    */
   private cogCoordsToLngLat([x, y]: [number, number]): number[] {
-    const [lng, lat] = this.metadata.projectToWgs84.forward([x, y]);
+    const [lng, lat] = this.metadata.projectToWgs84([x, y]);
     return [lng, lat, 0];
   }
 }
@@ -461,19 +454,19 @@ export class RasterTileNode {
  * Overviews follow TileMatrixSet ordering: index 0 = coarsest, higher = finer
  */
 export function getTileIndices(
-  metadata: COGMetadata,
+  metadata: TileMatrixSet,
   opts: {
     viewport: Viewport;
     maxZ: number;
     zRange: ZRange | null;
   },
-): COGTileIndex[] {
+): TileIndex[] {
   const { viewport, maxZ, zRange } = opts;
 
   // console.log("=== getTileIndices called ===");
   // console.log("Viewport:", viewport);
   // console.log("maxZ:", maxZ);
-  // console.log("COG metadata overviews count:", metadata.overviews.length);
+  // console.log("COG metadata tileMatrices count:", metadata.tileMatrices.length);
   // console.log("COG bbox:", metadata.bbox);
 
   const project: ((xyz: number[]) => number[]) | null =
@@ -488,7 +481,7 @@ export function getTileIndices(
   const cullingVolume = new CullingVolume(planes);
 
   // Project zRange from meters to common space
-  const unitsPerMeter = viewport.distanceScales.unitsPerMeter[2];
+  const unitsPerMeter = viewport.distanceScales.unitsPerMeter[2]!;
   const elevationMin = (zRange && zRange[0] * unitsPerMeter) || 0;
   const elevationMax = (zRange && zRange[1] * unitsPerMeter) || 0;
 
@@ -499,14 +492,14 @@ export function getTileIndices(
     viewport instanceof WebMercatorViewport && viewport.pitch <= 60 ? maxZ : 0;
 
   // Start from coarsest overview
-  const coarsestOverview = metadata.overviews[0];
+  const coarsestOverview = metadata.tileMatrices[0]!;
 
   // Create root tiles at coarsest level
   // In contrary to OSM tiling, we might have more than one tile at the
   // coarsest level (z=0)
   const roots: RasterTileNode[] = [];
-  for (let y = 0; y < coarsestOverview.tilesY; y++) {
-    for (let x = 0; x < coarsestOverview.tilesX; x++) {
+  for (let y = 0; y < coarsestOverview.tileHeight; y++) {
+    for (let x = 0; x < coarsestOverview.tileWidth; x++) {
       roots.push(new RasterTileNode(x, y, 0, metadata));
     }
   }
