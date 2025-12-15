@@ -37,7 +37,9 @@ export default function App() {
         }
       } catch (err) {
         if (mounted) {
-          setError(err instanceof Error ? err.message : "Failed to load GeoTIFF");
+          setError(
+            err instanceof Error ? err.message : "Failed to load GeoTIFF",
+          );
           setLoading(false);
         }
       }
@@ -75,60 +77,78 @@ export default function App() {
         <DeckGLOverlay layers={layers} />
       </Map>
 
-      {loading && (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            background: "white",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          }}
-        >
-          Loading GeoTIFF...
-        </div>
-      )}
+      {/* UI Overlay Container */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          pointerEvents: "none",
+          zIndex: 1000,
+        }}
+      >
+        {loading && (
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              background: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              pointerEvents: "auto",
+            }}
+          >
+            Loading GeoTIFF...
+          </div>
+        )}
 
-      {error && (
+        {error && (
+          <div
+            style={{
+              position: "absolute",
+              top: "20px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "#ff4444",
+              color: "white",
+              padding: "12px 24px",
+              borderRadius: "4px",
+              maxWidth: "80%",
+              pointerEvents: "auto",
+            }}
+          >
+            Error: {error}
+          </div>
+        )}
+
         <div
           style={{
             position: "absolute",
             top: "20px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "#ff4444",
-            color: "white",
-            padding: "12px 24px",
-            borderRadius: "4px",
-            maxWidth: "80%",
+            left: "20px",
+            background: "white",
+            padding: "16px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            maxWidth: "300px",
+            pointerEvents: "auto",
           }}
         >
-          Error: {error}
-        </div>
-      )}
-
-      <div
-        style={{
-          position: "absolute",
-          top: "20px",
-          left: "20px",
-          background: "white",
-          padding: "16px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          maxWidth: "300px",
-        }}
-      >
-        <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>COGLayer Example</h3>
-        <p style={{ margin: "0", fontSize: "14px", color: "#666" }}>
-          Displaying RGB imagery from New Zealand (NZTM2000 projection)
-        </p>
-        <div style={{ marginTop: "12px", fontSize: "12px", color: "#999" }}>
-          <div>Max Error: 0.125 pixels</div>
-          <div>Source: LINZ</div>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
+            COGLayer Example
+          </h3>
+          <p style={{ margin: "0", fontSize: "14px", color: "#666" }}>
+            Displaying RGB imagery from New Zealand (NZTM2000 projection)
+          </p>
+          <div style={{ marginTop: "12px", fontSize: "12px", color: "#999" }}>
+            <div>Max Error: 0.125 pixels</div>
+            <div>Source: LINZ</div>
+          </div>
         </div>
       </div>
     </div>
