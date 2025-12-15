@@ -41,6 +41,9 @@ importers:
       maplibre-gl:
         specifier: ^5.0.0
         version: 5.14.0
+      proj4:
+        specifier: ^2.20.2
+        version: 2.20.2
       react:
         specifier: ^19.2.3
         version: 19.2.3

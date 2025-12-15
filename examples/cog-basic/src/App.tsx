@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
-import { Map, useControl } from "react-map-gl/maplibre";
+import { useEffect, useState, useRef } from "react";
+import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { DeckProps } from "@deck.gl/core";
 import { fromUrl } from "geotiff";
 import type { GeoTIFF } from "geotiff";
 import { COGLayer } from "@developmentseed/deck.gl-cog";
+import proj4 from "proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 function DeckGLOverlay(props: DeckProps) {
@@ -13,10 +14,65 @@ function DeckGLOverlay(props: DeckProps) {
   return null;
 }
 
+/**
+ * Calculate the WGS84 bounding box of a GeoTIFF image
+ */
+async function getCogBounds(
+  tiff: GeoTIFF,
+): Promise<[[number, number], [number, number]]> {
+  const image = await tiff.getImage();
+  const projectedBbox = image.getBoundingBox();
+  const geoKeys = image.getGeoKeys();
+
+  // Get the projection code
+  const projectionCode =
+    geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || null;
+
+  if (!projectionCode) {
+    throw new Error("Could not determine projection from GeoTIFF");
+  }
+
+  // Fetch projection definition
+  const url = `https://epsg.io/${projectionCode}.json`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch projection data from ${url}`);
+  }
+  const projDef = await response.json();
+
+  // Reproject to WGS84 (EPSG:4326)
+  const converter = proj4(projDef, "EPSG:4326");
+
+  // Reproject all four corners to handle rotation/skew
+  const [minX, minY, maxX, maxY] = projectedBbox;
+  const corners = [
+    converter.forward([minX, minY]), // bottom-left
+    converter.forward([maxX, minY]), // bottom-right
+    converter.forward([maxX, maxY]), // top-right
+    converter.forward([minX, maxY]), // top-left
+  ];
+
+  // Find the bounding box that encompasses all reprojected corners
+  const lons = corners.map((c) => c[0]);
+  const lats = corners.map((c) => c[1]);
+
+  const west = Math.min(...lons);
+  const south = Math.min(...lats);
+  const east = Math.max(...lons);
+  const north = Math.max(...lats);
+
+  // Return bounds in MapLibre format: [[west, south], [east, north]]
+  return [
+    [west, south],
+    [east, north],
+  ];
+}
+
 const COG_URL =
   "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
 
 export default function App() {
+  const mapRef = useRef<MapRef>(null);
   const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,6 +89,16 @@ export default function App() {
 
         if (mounted) {
           setGeotiff(tiff);
+
+          // Calculate bounds and fit to them
+          const bounds = await getCogBounds(tiff);
+          if (mapRef.current) {
+            mapRef.current.fitBounds(bounds, {
+              padding: 40,
+              duration: 1000,
+            });
+          }
+
           setLoading(false);
         }
       } catch (err) {
@@ -65,10 +131,11 @@ export default function App() {
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <Map
+        ref={mapRef}
         initialViewState={{
-          longitude: 172.6,
-          latitude: -43.5,
-          zoom: 10,
+          longitude: 0,
+          latitude: 0,
+          zoom: 3,
           pitch: 0,
           bearing: 0,
         }}
