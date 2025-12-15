@@ -54,6 +54,8 @@ export interface TileMatrixSetBoundingBox {
  * This matches the natural ordering where z increases with detail.
  */
 export type TileMatrix = {
+  id: string;
+
   /**
    * Scale denominator of this tile matrix.
    *
