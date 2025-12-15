@@ -53,11 +53,13 @@
   },
   "peerDependencies": {
     "@deck.gl/core": "^9.2.5",
+    "@deck.gl/geo-layers": "^9.2.5",
     "@deck.gl/layers": "^9.2.5",
     "@deck.gl/mesh-layers": "^9.2.5"
   },
   "dependencies": {
-    "@developmentseed/raster-reproject": "workspace:^"
+    "@developmentseed/raster-reproject": "workspace:^",
+    "@math.gl/culling": "^4.1.0"
   },
   "volta": {
     "extends": "../../package.json"
