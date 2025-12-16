@@ -95,6 +95,10 @@ const WGS84_ELLIPSOID_A = 6378137;
 const EPSG_3857_CIRCUMFERENCE = 2 * Math.PI * WGS84_ELLIPSOID_A;
 const EPSG_3857_HALF_CIRCUMFERENCE = EPSG_3857_CIRCUMFERENCE / 2;
 
+// 0.28 mm per pixel
+// https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15
+const SCREEN_PIXEL_SIZE = 0.00028;
+
 /**
  * Raster Tile Node - represents a single tile in the TileMatrixSet structure
  *
@@ -195,14 +199,20 @@ export class RasterTileNode {
   }
 
   /**
-   * Recursively traverse the tile quadtree to determine if this tile (or its descendants)
-   * should be rendered.
+   * Recursively traverse the tile pyramid to determine if this tile (or its
+   * descendants) should be rendered.
+   *
+   * I.e. “Given this tile node, should I render this tile, or should I recurse
+   * into its children?”
    *
    * The algorithm performs:
    * 1. Visibility culling - reject tiles outside the view frustum
    * 2. Bounds checking - reject tiles outside the specified geographic bounds
    * 3. LOD selection - choose appropriate zoom level based on distance from camera
    * 4. Recursive subdivision - if LOD is insufficient, test child tiles
+   *
+   * Additionally, there should never be overdraw, i.e. a tile should never be
+   * rendered if any of its descendants are rendered.
    *
    * @returns true if this tile or any descendant is visible, false otherwise
    */
@@ -231,103 +241,56 @@ export class RasterTileNode {
     // Get bounding volume for this tile
     const boundingVolume = this.getBoundingVolume(elevationBounds, project);
 
-    // Note: this is a part of the upstream code because they have _generic_
-    // tiling systems, where the client doesn't know whether a given xyz tile
-    // actually exists. So the idea of `bounds` is to avoid even trying to fetch
-    // tiles that the user doesn't care about (think oceans)
-    //
-    // But in our case, we have known bounds from the COG metadata. So the tiles
-    // are explicitly constructed to match only tiles that exist.
-
-    // Check if tile is within user-specified bounds
-    // if (bounds && !this.insideBounds(bounds)) {
-    //   return false;
-    // }
-
-    console.log("=== FRUSTUM CULLING DEBUG ===");
-    console.log(`Tile: ${this.x}, ${this.y}, ${this.z}`);
-    console.log("Bounding volume center:", boundingVolume.center);
-    console.log("Bounding volume halfSize:", boundingVolume.halfSize);
-    console.log("Viewport cameraPosition:", viewport.cameraPosition);
-    console.log(
-      "Viewport pitch:",
-      viewport instanceof WebMercatorViewport ? viewport.pitch : "N/A",
-    );
-
-    for (let i = 0; i < cullingVolume.planes.length; i++) {
-      const plane = cullingVolume.planes[i]!;
-      const result = boundingVolume.intersectPlane(plane);
-      const planeNames = ["left", "right", "bottom", "top", "near", "far"];
-
-      // Calculate signed distance from OBB center to plane
-      const centerDist =
-        plane.normal.x * boundingVolume.center.x +
-        plane.normal.y * boundingVolume.center.y +
-        plane.normal.z * boundingVolume.center.z +
-        plane.distance;
-
-      console.log(
-        `Plane ${i} (${planeNames[i]}): normal=[${plane.normal.x.toFixed(3)}, ${plane.normal.y.toFixed(3)}, ${plane.normal.z.toFixed(3)}], ` +
-          `distance=${plane.distance.toFixed(3)}, centerDist=${centerDist.toFixed(3)}, result=${result} (${result === 1 ? "INSIDE" : result === 0 ? "INTERSECT" : "OUTSIDE"})`,
-      );
-    }
-    console.log("=== END FRUSTUM DEBUG ===");
-
     // Frustum culling
     // Test if tile's bounding volume intersects the camera frustum
     // Returns: <0 if outside, 0 if intersecting, >0 if fully inside
     const isInside = cullingVolume.computeVisibility(boundingVolume);
-    console.log(
-      `Tile ${this.x},${this.y},${this.z} frustum check: ${isInside} (${isInside < 0 ? "CULLED" : "VISIBLE"})`,
-    );
     if (isInside < 0) {
       return false;
     }
 
-    // LOD (Level of Detail) selection
+    const children = this.children;
+
+    // LOD (Level of Detail) selection (only if allowed at this level)
     // Only select this tile if no child is visible (prevents overlapping tiles)
-    if (!this.childVisible) {
-      let { z } = this;
+    // “When pitch is low, force selection at maxZ.”
+    if (!this.childVisible && this.z >= minZ) {
+      const distance = boundingVolume.distanceTo(viewport.cameraPosition);
 
-      if (z < maxZ && z >= minZ) {
-        // Compute distance-based LOD adjustment
-        // Tiles farther from camera can use lower zoom levels (larger tiles)
-        // Distance is normalized by viewport height to be resolution-independent
-        const distance =
-          (boundingVolume.distanceTo(viewport.cameraPosition) *
-            viewport.scale) /
-          viewport.height;
-        // Increase effective zoom level based on log2(distance)
-        // e.g., if distance=4, accept tiles 2 levels lower than maxZ
-        z += Math.floor(Math.log2(distance));
-      }
+      // world units per screen pixel at this distance
+      const metersPerScreenPixel =
+        (distance * viewport.scale) / viewport.height;
 
-      if (z >= maxZ) {
-        // This tile's LOD is sufficient for its distance - select it for rendering
+      const screenScaleDenominator = metersPerScreenPixel / SCREEN_PIXEL_SIZE;
+
+      // TODO: in the future we could try adding a bias
+      // const LOD_BIAS = 0.75;
+      // this.tileMatrix.scaleDenominator <= screenScaleDenominator * LOD_BIAS
+
+      if (
+        this.tileMatrix.scaleDenominator <= screenScaleDenominator ||
+        this.z >= maxZ ||
+        (children === null && this.z >= minZ)
+      ) {
+        // “Select this tile when its scale is at least as detailed as the screen.”
         this.selected = true;
         return true;
       }
     }
 
     // LOD is not enough, recursively test child tiles
-    this.selected = false;
-    this.childVisible = true;
+    //
+    // Note that if `this.children` is `null`, then there are no children
+    // available because we're already at the finest tile resolution available
+    if (children && children.length > 0) {
+      this.selected = false;
+      this.childVisible = true;
 
-    for (const child of this.children) {
-      child.update(params);
+      for (const child of children) {
+        child.update(params);
+      }
     }
 
-    // // NOTE: this deviates from upstream; we could move to the upstream code if
-    // // we pass in maxZ correctly I think
-    // if (children.length === 0) {
-    //   // No children available (at finest resolution), select this tile
-    //   this.selected = true;
-    //   return true;
-    // }
-
-    // for (const child of children) {
-    //   child.update(params);
-    // }
     return true;
   }
 
