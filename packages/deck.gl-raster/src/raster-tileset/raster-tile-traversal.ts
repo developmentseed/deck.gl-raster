@@ -507,7 +507,7 @@ function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
 
   return [
     (x / EPSG_3857_CIRCUMFERENCE + 0.5) * TILE_SIZE,
-    (0.5 - clampedY / EPSG_3857_CIRCUMFERENCE) * TILE_SIZE,
+    (clampedY / EPSG_3857_CIRCUMFERENCE + 0.5) * TILE_SIZE,
   ];
 }
 
