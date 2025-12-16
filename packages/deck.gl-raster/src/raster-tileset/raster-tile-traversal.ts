@@ -1,8 +1,9 @@
 /**
- * This file implements tile traversal for generic 2D tilesets defined by COG
- * tile layouts.
+ * This file implements tile traversal for generic 2D tilesets defined by
+ * TileMatrixSet tile layouts.
  *
  * The main algorithm works as follows:
+ *
  * 1. Start at the root tile(s) (z=0, covers the entire image, but not
  *    necessarily the whole world)
  * 2. Test if each tile is visible using viewport frustum culling
@@ -22,14 +23,14 @@ import {
 } from "@deck.gl/core";
 import {
   CullingVolume,
-  Plane,
   makeOrientedBoundingBoxFromPoints,
+  Plane,
 } from "@math.gl/culling";
 
 import type {
-  TileMatrixSet,
-  TileMatrix,
   TileIndex,
+  TileMatrix,
+  TileMatrixSet,
   ZRange,
 } from "../raster-tileset/types.js";
 
@@ -38,10 +39,13 @@ import type {
  *
  * The world always spans [0, 512] in both X and Y in Web Mercator common space.
  *
+ * At zoom level 0, there is 1 tile that represents the whole world, so that tile is 512x512 units.
+ * At zoom level z, there are 2^z tiles along each axis, so each tile is (512 / 2^z) units.
+ *
  * The origin (0,0) is at the top-left corner, and (512,512) is at the
  * bottom-right.
  */
-const WORLD_SIZE = 512;
+const TILE_SIZE = 512;
 
 // Reference points used to sample tile boundaries for bounding volume
 // calculation.
@@ -78,23 +82,24 @@ const REF_POINTS_9 = REF_POINTS_5.concat([
 ]);
 
 /**
- * Raster Tile Node - similar to OSMNode but for a generic raster tileset's
- * tile structure.
+ * Raster Tile Node - represents a single tile in the TileMatrixSet structure
  *
- * Represents a single tile in the COG internal tiling pyramid.
+ * Akin to the upstream OSMNode class.
  *
- * COG tile nodes use the following coordinate system:
+ * This node class uses the following coordinate system:
  *
- * - x: tile column (0 to TileMatrix.tilesX, left to right)
- * - y: tile row (0 to TileMatrix.tilesY, top to bottom)
- * - z: overview level. This uses TileMatrixSet ordering where: 0 = coarsest, higher = finer
+ * - x: tile column (0 to TileMatrix.matrixWidth, left to right)
+ * - y: tile row (0 to TileMatrix.matrixHeight, top to bottom)
+ * - z: overview level. This assumes ordering where: 0 = coarsest, higher = finer
  */
 export class RasterTileNode {
   /** Index across a row */
   x: number;
+
   /** Index down a column */
   y: number;
-  /** TileMatrixSet-style zoom index (higher = finer detail) */
+
+  /** Zoom index assumed to be (higher = finer detail) */
   z: number;
 
   private metadata: TileMatrixSet;
@@ -125,40 +130,45 @@ export class RasterTileNode {
   }
 
   /** Get overview info for this tile's z level */
-  get overview(): TileMatrix {
+  get tileMatrix(): TileMatrix {
     return this.metadata.tileMatrices[this.z]!;
   }
 
   /** Get the children of this node. */
-  get children(): RasterTileNode[] {
+  get children(): RasterTileNode[] | null {
     if (!this._children) {
       const maxZ = this.metadata.tileMatrices.length - 1;
       if (this.z >= maxZ) {
         // Already at finest resolution, no children
-        return [];
+        return null;
       }
 
       // In TileMatrixSet ordering: refine to z + 1 (finer detail)
       const childZ = this.z + 1;
-      const parentOverview = this.overview;
-      const childOverview = this.metadata.tileMatrices[childZ]!;
+      const parentMatrix = this.tileMatrix;
+      const childMatrix = this.metadata.tileMatrices[childZ]!;
 
-      // Calculate scale factor between levels
-      const scaleFactor = parentOverview.cellSize / childOverview.cellSize;
+      // Calculate decimation between levels
+      // Note: here we assume that the decimation is an integer.
+      // For non-integer decimation, the tile origin wouldn't necessarily be in
+      // the same place as its children.
+      const decimation = Math.round(
+        parentMatrix.cellSize / childMatrix.cellSize,
+      );
 
       // Generate child tiles
       this._children = [];
-      for (let dy = 0; dy < scaleFactor; dy++) {
-        for (let dx = 0; dx < scaleFactor; dx++) {
-          const childX = this.x * scaleFactor + dx;
-          const childY = this.y * scaleFactor + dy;
+      for (let dy = 0; dy < decimation; dy++) {
+        for (let dx = 0; dx < decimation; dx++) {
+          const childX = this.x * decimation + dx;
+          const childY = this.y * decimation + dy;
 
           // Only create child if it's within bounds
           // Some tiles on the edges might not need to be created at higher
           // resolutions (higher map zoom level)
           if (
-            childX < childOverview.tileWidth &&
-            childY < childOverview.tileHeight
+            childX < childMatrix.matrixWidth &&
+            childY < childMatrix.matrixHeight
           ) {
             this._children.push(
               new RasterTileNode(childX, childY, childZ, this.metadata),
