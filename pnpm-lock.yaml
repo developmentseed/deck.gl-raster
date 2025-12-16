@@ -145,6 +145,9 @@ importers:
       '@math.gl/culling':
         specifier: ^4.1.0
         version: 4.1.0
+      '@math.gl/web-mercator':
+        specifier: ^4.1.0
+        version: 4.1.0
     devDependencies:
       '@types/node':
         specifier: ^25.0.1

@@ -27,13 +27,15 @@ import {
   OrientedBoundingBox,
   Plane,
 } from "@math.gl/culling";
+import { lngLatToWorld } from "@math.gl/web-mercator";
 
 import type {
   TileIndex,
   TileMatrix,
   TileMatrixSet,
   ZRange,
-} from "../raster-tileset/types.js";
+  Bounds,
+} from "./types.js";
 
 /**
  * The size of the entire world in deck.gl's common coordinate space.
@@ -231,6 +233,8 @@ export class RasterTileNode {
     minZ: number;
     /** Maximum (finest) COG overview level */
     maxZ?: number;
+    /** Optional geographic bounds filter */
+    bounds?: Bounds;
   }): boolean {
     const {
       viewport,
@@ -239,10 +243,21 @@ export class RasterTileNode {
       minZ,
       maxZ = this.metadata.tileMatrices.length - 1,
       project,
+      bounds,
     } = params;
 
     // Get bounding volume for this tile
-    const boundingVolume = this.getBoundingVolume(elevationBounds, project);
+    const { boundingVolume, commonSpaceBounds } = this.getBoundingVolume(
+      elevationBounds,
+      project,
+    );
+    console.log("bounding volume", boundingVolume);
+
+    // Step 1: Bounds checking
+    // If geographic bounds are specified, reject tiles outside those bounds
+    if (bounds && !this.insideBounds(bounds, commonSpaceBounds)) {
+      return false;
+    }
 
     // Frustum culling
     // Test if tile's bounding volume intersects the camera frustum
@@ -317,6 +332,26 @@ export class RasterTileNode {
   }
 
   /**
+   * Test if this tile intersects the specified bounds in Web Mercator space.
+   * Used to filter tiles when only a specific geographic region is needed.
+   *
+   * @param bounds - [minX, minY, maxX, maxY] in Web Mercator units (0-512)
+   * @returns true if tile overlaps the bounds
+   */
+  insideBounds(bounds: Bounds, commonSpaceBounds: Bounds): boolean {
+    const [minX, minY, maxX, maxY] = bounds;
+    const [tileMinX, tileMinY, tileMaxX, tileMaxY] = commonSpaceBounds;
+
+    console.log("bounds:", bounds);
+    console.log("tile bounds:", commonSpaceBounds);
+
+    const inside =
+      tileMinX < maxX && tileMaxX > minX && tileMinY < maxY && tileMaxY > minY;
+    console.log("insideBounds", inside);
+    return inside;
+  }
+
+  /**
    * Calculate the 3D bounding volume for this tile in deck.gl's common
    * coordinate space for frustum culling.
    *
@@ -326,7 +361,7 @@ export class RasterTileNode {
   getBoundingVolume(
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
-  ) {
+  ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
     // Case 1: Globe view - need to construct an oriented bounding box from
     // reprojected sample points, but also using the `project` param
     if (project) {
@@ -352,7 +387,10 @@ export class RasterTileNode {
    * convert to deck.gl common space
    *
    */
-  private _getGenericBoundingVolume(zRange: ZRange): OrientedBoundingBox {
+  private _getGenericBoundingVolume(zRange: ZRange): {
+    boundingVolume: OrientedBoundingBox;
+    commonSpaceBounds: Bounds;
+  } {
     const tileMatrix = this.tileMatrix;
     const { tileWidth, tileHeight, geotransform } = tileMatrix;
     const [minZ, maxZ] = zRange;
@@ -385,7 +423,25 @@ export class RasterTileNode {
       }
     }
 
-    return makeOrientedBoundingBoxFromPoints(refPointPositions);
+    // Compute [minx, miny, maxx, maxy] in common space for quick bounds check
+    // TODO: this doesn't densify edges
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    for (const [x, y] of commonSpacePositions) {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+
+    const commonSpaceBounds: Bounds = [minX, minY, maxX, maxY];
+    return {
+      boundingVolume: makeOrientedBoundingBoxFromPoints(refPointPositions),
+      commonSpaceBounds,
+    };
   }
 }
 
@@ -628,6 +684,20 @@ export function getTileIndices(
   const minZ =
     viewport instanceof WebMercatorViewport && viewport.pitch <= 60 ? maxZ : 0;
 
+  console.log("metadata.wgsBounds", metadata.wgsBounds);
+  const { lowerLeft, upperRight } = metadata.wgsBounds;
+  const [minLng, minLat] = lowerLeft;
+  const [maxLng, maxLat] = upperRight;
+  const bottomLeft = lngLatToWorld([minLng, minLat]);
+  const topRight = lngLatToWorld([maxLng, maxLat]);
+  const bounds: Bounds = [
+    bottomLeft[0],
+    bottomLeft[1],
+    topRight[0],
+    topRight[1],
+  ];
+  console.log("computed bounds", bounds);
+
   // Start from coarsest overview
   const rootMatrix = metadata.tileMatrices[0]!;
 
@@ -649,6 +719,7 @@ export function getTileIndices(
     elevationBounds: [elevationMin, elevationMax] as ZRange,
     minZ,
     maxZ,
+    bounds,
   };
 
   for (const root of roots) {
