@@ -1,11 +1,11 @@
 /**
- * COGTileset2D - Improved Implementation with Frustum Culling
+ * Rasterileset2D - Improved Implementation with Frustum Culling
  *
  * This version properly implements frustum culling and bounding volume calculations
  * following the pattern from deck.gl's OSM tile indexing.
  */
 
-import { Viewport, WebMercatorViewport } from "@deck.gl/core";
+import { Viewport } from "@deck.gl/core";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { Matrix4 } from "@math.gl/core";
 
@@ -16,23 +16,15 @@ import type { TileIndex, Bounds, TileMatrixSet, ZRange } from "./types";
 // https://github.com/visgl/deck.gl/pull/9917
 type Tileset2DProps = any;
 
-const viewport = new WebMercatorViewport({
-  height: 500,
-  width: 845,
-  latitude: 40.88775942857086,
-  longitude: -73.20197979318772,
-  zoom: 11.294596276534985,
-});
-
 /**
- * COGTileset2D with proper frustum culling
+ * Rasterileset2D with proper frustum culling
  */
-export class COGTileset2D extends Tileset2D {
-  private cogMetadata: COGMetadata;
+export class Rasterileset2D extends Tileset2D {
+  private metadata: TileMatrixSet;
 
-  constructor(cogMetadata: COGMetadata, opts: Tileset2DProps) {
+  constructor(metadata: TileMatrixSet, opts: Tileset2DProps) {
     super(opts);
-    this.cogMetadata = cogMetadata;
+    this.metadata = metadata;
   }
 
   /**
@@ -41,16 +33,16 @@ export class COGTileset2D extends Tileset2D {
    *
    * Overviews follow TileMatrixSet ordering: index 0 = coarsest, higher = finer
    */
-  getTileIndices(opts: {
+  override getTileIndices(opts: {
     viewport: Viewport;
     maxZoom?: number;
     minZoom?: number;
     zRange: ZRange | null;
     modelMatrix?: Matrix4;
     modelMatrixInverse?: Matrix4;
-  }): COGTileIndex[] {
+  }): TileIndex[] {
     console.log("Called getTileIndices", opts);
-    const tileIndices = getTileIndices(this.cogMetadata, opts);
+    const tileIndices = getTileIndices(this.metadata, opts);
     console.log("Visible tile indices:", tileIndices);
 
     // return [
@@ -65,18 +57,18 @@ export class COGTileset2D extends Tileset2D {
     return tileIndices;
   }
 
-  getTileId(index: COGTileIndex): string {
+  override getTileId(index: TileIndex): string {
     return `${index.x}-${index.y}-${index.z}`;
   }
 
-  getParentIndex(index: COGTileIndex): COGTileIndex {
+  override getParentIndex(index: TileIndex): TileIndex {
     if (index.z === 0) {
       // Already at coarsest level
       return index;
     }
 
-    const currentOverview = this.cogMetadata.overviews[index.z];
-    const parentOverview = this.cogMetadata.overviews[index.z - 1];
+    const currentOverview = this.metadata.tileMatrices[index.z];
+    const parentOverview = this.metadata.tileMatrices[index.z - 1];
 
     const scaleFactor =
       currentOverview.scaleFactor / parentOverview.scaleFactor;
@@ -88,13 +80,13 @@ export class COGTileset2D extends Tileset2D {
     };
   }
 
-  getTileZoom(index: COGTileIndex): number {
+  override getTileZoom(index: TileIndex): number {
     return index.z;
   }
 
-  getTileMetadata(index: COGTileIndex): Record<string, unknown> {
+  override getTileMetadata(index: TileIndex): Record<string, unknown> {
     const { x, y, z } = index;
-    const { overviews, tileWidth, tileHeight } = this.cogMetadata;
+    const { overviews, tileWidth, tileHeight } = this.metadata;
     const overview = overviews[z];
 
     // Use geotransform to calculate tile bounds
