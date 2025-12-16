@@ -181,13 +181,24 @@ export class RasterTileNode {
   }
 
   /**
-   * Update tile visibility using frustum culling
-   * This follows the pattern from OSMNode
+   * Recursively traverse the tile quadtree to determine if this tile (or its descendants)
+   * should be rendered.
+   *
+   * The algorithm performs:
+   * 1. Visibility culling - reject tiles outside the view frustum
+   * 2. Bounds checking - reject tiles outside the specified geographic bounds
+   * 3. LOD selection - choose appropriate zoom level based on distance from camera
+   * 4. Recursive subdivision - if LOD is insufficient, test child tiles
+   *
+   * @returns true if this tile or any descendant is visible, false otherwise
    */
   update(params: {
     viewport: Viewport;
+    // Projection: [lng,lat,z] -> common space. Null for Web Mercator.
     project: ((xyz: number[]) => number[]) | null;
+    // Camera frustum for visibility testing
     cullingVolume: CullingVolume;
+    // [min, max] elevation in common space
     elevationBounds: ZRange;
     /** Minimum (coarsest) COG overview level */
     minZ: number;
@@ -414,12 +425,12 @@ export class RasterTileNode {
     for (const [mercX, mercY] of refPointPositionsProjected) {
       // X: offset from [-20M, 20M] to [0, 40M], then normalize to [0, 512]
       const worldX =
-        ((mercX + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * WORLD_SIZE;
+        ((mercX + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
 
       // Y: same transformation WITHOUT flip
       // Testing hypothesis: Y-flip might be incorrect since geotransform already handles orientation
       const worldY =
-        ((mercY + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * WORLD_SIZE;
+        ((mercY + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
 
       console.log(
         `WebMerc [${mercX.toFixed(2)}, ${mercY.toFixed(2)}] -> World [${worldX.toFixed(4)}, ${worldY.toFixed(4)}]`,
@@ -433,10 +444,10 @@ export class RasterTileNode {
     if (zRange[0] !== zRange[1]) {
       for (const [mercX, mercY] of refPointPositionsProjected) {
         const worldX =
-          ((mercX + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * WORLD_SIZE;
+          ((mercX + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
         const worldY =
-          WORLD_SIZE -
-          ((mercY + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * WORLD_SIZE;
+          TILE_SIZE -
+          ((mercY + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
 
         refPointPositionsWorld.push([worldX, worldY, zRange[1]]);
       }
