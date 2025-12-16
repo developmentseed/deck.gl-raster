@@ -93,6 +93,7 @@ const WGS84_ELLIPSOID_A = 6378137;
  * Full circumference of the EPSG:3857 Web Mercator world, in meters
  */
 const EPSG_3857_CIRCUMFERENCE = 2 * Math.PI * WGS84_ELLIPSOID_A;
+const EPSG_3857_HALF_CIRCUMFERENCE = EPSG_3857_CIRCUMFERENCE / 2;
 
 /**
  * Raster Tile Node - represents a single tile in the TileMatrixSet structure
@@ -583,9 +584,15 @@ function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
   number,
   number,
 ] {
+  // Clamp Y to Web Mercator bounds
+  const clampedY = Math.max(
+    -EPSG_3857_HALF_CIRCUMFERENCE,
+    Math.min(EPSG_3857_HALF_CIRCUMFERENCE, y),
+  );
+
   return [
     (x / EPSG_3857_CIRCUMFERENCE + 0.5) * TILE_SIZE,
-    (0.5 - y / EPSG_3857_CIRCUMFERENCE) * TILE_SIZE,
+    (0.5 - clampedY / EPSG_3857_CIRCUMFERENCE) * TILE_SIZE,
   ];
 }
 
