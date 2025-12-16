@@ -11,6 +11,7 @@
   "dependencies": {
     "@deck.gl/core": "^9.2.5",
     "@deck.gl/layers": "^9.2.5",
+    "@deck.gl/geo-layers": "^9.2.5",
     "@deck.gl/mapbox": "^9.2.5",
     "@deck.gl/mesh-layers": "^9.2.5",
     "@developmentseed/deck.gl-cog": "workspace:^",
