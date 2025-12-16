@@ -7,7 +7,9 @@ import {
   extractGeotransform,
   getGeoTIFFProjection,
 } from "./geotiff-reprojection";
-import proj4 from "proj4";
+import proj4, { ProjectionDefinition } from "proj4";
+import Ellipsoid from "./ellipsoids.js";
+import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 
 // 0.28 mm per pixel
 // https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15
@@ -24,17 +26,26 @@ export async function parseCOGTileMatrixSet(
   tiff: GeoTIFF,
 ): Promise<TileMatrixSet> {
   const fullResImage = await tiff.getImage();
+
+  if (!fullResImage.isTiled) {
+    throw new Error("COG TileMatrixSet requires a tiled GeoTIFF");
+  }
+
   const imageCount = await tiff.getImageCount();
   const bbox = fullResImage.getBoundingBox();
   const fullImageWidth = fullResImage.getWidth();
   const fullImageHeight = fullResImage.getHeight();
 
   const crs = await getGeoTIFFProjection(fullResImage);
+
   if (crs === null) {
     throw new Error(
       "Could not determine coordinate reference system from GeoTIFF geo keys",
     );
   }
+
+  const parsedCrs = parseCrs(crs);
+
   const projectToWgs84 = proj4(crs, "EPSG:4326").forward;
   const projectTo3857 = proj4(crs, "EPSG:3857").forward;
 
@@ -44,6 +55,14 @@ export async function parseCOGTileMatrixSet(
   };
 
   const transform = extractGeotransform(fullResImage);
+
+  if (transform[1] !== 0 || transform[3] !== 0) {
+    // TileMatrixSet assumes orthogonal axes
+    throw new Error(
+      "COG TileMatrixSet with rotation/skewed geotransform is not supported",
+    );
+  }
+
   const cellSize = Math.abs(transform[0]);
 
   const tileWidth = fullResImage.getTileWidth();
@@ -53,7 +72,8 @@ export async function parseCOGTileMatrixSet(
     {
       // Set as highest resolution / finest level
       id: String(imageCount - 1),
-      scaleDenominator: (cellSize * metersPerUnit()) / SCREEN_PIXEL_SIZE,
+      scaleDenominator:
+        (cellSize * metersPerUnit(parsedCrs)) / SCREEN_PIXEL_SIZE,
       cellSize,
       pointOfOrigin: [transform[2], transform[5]],
       tileWidth: fullResImage.getTileWidth(),
@@ -67,12 +87,18 @@ export async function parseCOGTileMatrixSet(
   // Starting from 1 to skip full res image
   for (let imageIdx = 1; imageIdx < imageCount; imageIdx++) {
     const image = await tiff.getImage(imageIdx);
+
+    if (!image.isTiled) {
+      throw new Error("COG TileMatrixSet requires a tiled GeoTIFF");
+    }
+
     const tileMatrix = createOverviewTileMatrix({
       id: String(imageCount - 1 - imageIdx),
       image,
       fullWidth: fullImageWidth,
       fullHeight: fullImageHeight,
       baseTransform: transform,
+      parsedCrs,
     });
     tileMatrices.push(tileMatrix);
   }
@@ -100,9 +126,25 @@ export async function parseCOGTileMatrixSet(
  * > (a is the Earth maximum radius of the ellipsoid).
  */
 // https://github.com/developmentseed/morecantile/blob/7c95a11c491303700d6e33e9c1607f2719584dec/morecantile/utils.py#L67-L90
-function metersPerUnit(): number {
-  // For now, we assume our projection is in meters
-  return 1;
+function metersPerUnit(parsedCrs: ProjectionDefinition): number {
+  switch (parsedCrs.units) {
+    case "metre":
+    case "meter":
+    case "meters":
+      return 1;
+    case "foot":
+      return 0.3048;
+    case "US survey foot":
+      return 1200 / 3937;
+  }
+
+  if (parsedCrs.units === "degree") {
+    // 2 * π * ellipsoid semi-major-axis / 360
+    const { a } = Ellipsoid[parsedCrs.ellps as keyof typeof Ellipsoid];
+    return (2 * Math.PI * a) / 360;
+  }
+
+  throw new Error(`Unsupported CRS units: ${parsedCrs.units}`);
 }
 
 /**
@@ -112,19 +154,28 @@ function createOverviewTileMatrix({
   id,
   image,
   fullWidth,
+  fullHeight,
   baseTransform,
+  parsedCrs,
 }: {
   id: string;
   image: GeoTIFFImage;
   fullWidth: number;
   fullHeight: number;
   baseTransform: [number, number, number, number, number, number];
+  parsedCrs: ProjectionDefinition;
 }): TileMatrix {
   const width = image.getWidth();
   const height = image.getHeight();
 
-  const scale = fullWidth / width;
-  // assert scale is same for x and y?
+  const scaleX = fullWidth / width;
+  const scaleY = fullHeight / height;
+
+  if (Math.abs(scaleX - scaleY) > 1e-6) {
+    throw new Error("Non-uniform overview scaling detected (X/Y differ)");
+  }
+
+  const scale = scaleX;
 
   const geotransform: [number, number, number, number, number, number] = [
     baseTransform[0] * scale,
@@ -141,7 +192,7 @@ function createOverviewTileMatrix({
 
   return {
     id,
-    scaleDenominator: (cellSize * metersPerUnit()) / SCREEN_PIXEL_SIZE,
+    scaleDenominator: (cellSize * metersPerUnit(parsedCrs)) / SCREEN_PIXEL_SIZE,
     cellSize,
     pointOfOrigin: [geotransform[2], geotransform[5]],
     tileWidth,
@@ -150,4 +201,15 @@ function createOverviewTileMatrix({
     matrixHeight: Math.ceil(height / tileHeight),
     geotransform,
   };
+}
+
+function parseCrs(crs: PROJJSONDefinition): ProjectionDefinition {
+  // If you pass proj4.defs a projjson, it doesn't parse it; it just returns the
+  // input.
+  //
+  // Instead, you need to assign it to an alias and then retrieve it.
+
+  const key = "__deck.gl-cog-internal__";
+  proj4.defs(key, crs);
+  return proj4.defs(key);
 }
