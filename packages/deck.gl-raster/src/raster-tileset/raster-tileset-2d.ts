@@ -67,15 +67,14 @@ export class RasterTileset2D extends Tileset2D {
       return index;
     }
 
-    const currentOverview = this.metadata.tileMatrices[index.z];
-    const parentOverview = this.metadata.tileMatrices[index.z - 1];
+    const currentOverview = this.metadata.tileMatrices[index.z]!;
+    const parentOverview = this.metadata.tileMatrices[index.z - 1]!;
 
-    const scaleFactor =
-      currentOverview.scaleFactor / parentOverview.scaleFactor;
+    const decimation = currentOverview.cellSize / parentOverview.cellSize;
 
     return {
-      x: Math.floor(index.x / scaleFactor),
-      y: Math.floor(index.y / scaleFactor),
+      x: Math.floor(index.x / decimation),
+      y: Math.floor(index.y / decimation),
       z: index.z - 1,
     };
   }
@@ -86,14 +85,15 @@ export class RasterTileset2D extends Tileset2D {
 
   override getTileMetadata(index: TileIndex): Record<string, unknown> {
     const { x, y, z } = index;
-    const { overviews, tileWidth, tileHeight } = this.metadata;
-    const overview = overviews[z];
+    const { tileMatrices } = this.metadata;
+    const tileMatrix = tileMatrices[z]!;
+    const { geotransform, tileHeight, tileWidth } = tileMatrix;
 
     // Use geotransform to calculate tile bounds
     // geotransform: [a, b, c, d, e, f] where:
     // x_geo = a * col + b * row + c
     // y_geo = d * col + e * row + f
-    const [a, b, c, d, e, f] = overview.geotransform;
+    const [a, b, c, d, e, f] = geotransform;
 
     // Calculate pixel coordinates for this tile's extent
     const pixelMinCol = x * tileWidth;
@@ -102,19 +102,19 @@ export class RasterTileset2D extends Tileset2D {
     const pixelMaxRow = (y + 1) * tileHeight;
 
     // Calculate the four corners of the tile in geographic coordinates
-    const topLeft = [
+    const topLeft: [number, number] = [
       a * pixelMinCol + b * pixelMinRow + c,
       d * pixelMinCol + e * pixelMinRow + f,
     ];
-    const topRight = [
+    const topRight: [number, number] = [
       a * pixelMaxCol + b * pixelMinRow + c,
       d * pixelMaxCol + e * pixelMinRow + f,
     ];
-    const bottomLeft = [
+    const bottomLeft: [number, number] = [
       a * pixelMinCol + b * pixelMaxRow + c,
       d * pixelMinCol + e * pixelMaxRow + f,
     ];
-    const bottomRight = [
+    const bottomRight: [number, number] = [
       a * pixelMaxCol + b * pixelMaxRow + c,
       d * pixelMaxCol + e * pixelMaxRow + f,
     ];
@@ -141,7 +141,7 @@ export class RasterTileset2D extends Tileset2D {
       projectedBounds,
       tileWidth,
       tileHeight,
-      overview,
+      tileMatrix,
     };
   }
 }
