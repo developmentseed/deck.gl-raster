@@ -82,6 +82,18 @@ const REF_POINTS_9 = REF_POINTS_5.concat([
   [0.5, 1], // bottom edge
 ]);
 
+/** semi-major axis of the WGS84 ellipsoid
+ *
+ * EPSG:3857 also uses the WGS84 datum, so this is used for conversions from
+ * 3857 to deck.gl common space (scaled to [0-512])
+ */
+const WGS84_ELLIPSOID_A = 6378137;
+
+/**
+ * Full circumference of the EPSG:3857 Web Mercator world, in meters
+ */
+const EPSG_3857_CIRCUMFERENCE = 2 * Math.PI * WGS84_ELLIPSOID_A;
+
 /**
  * Raster Tile Node - represents a single tile in the TileMatrixSet structure
  *
@@ -367,73 +379,56 @@ export class RasterTileNode {
     // Web Mercator, then convert to deck.gl common space
     return this._getGenericBoundingVolume(zRange);
 
-    /** Reference points positions in EPSG 3857 */
-    const refPointPositionsProjected: [number, number][] = [];
+    // /** Reference points positions in EPSG 3857 */
+    // const refPointPositionsProjected: [number, number][] = [];
 
-    for (const [pX, pY] of refPointPositionsImage) {
-      // Reproject to Web Mercator (EPSG 3857)
-      const projected = this.metadata.projectTo3857([pX, pY]);
-      refPointPositionsProjected.push(projected);
+    // // Convert from Web Mercator meters to deck.gl's common space (world units)
+    // // Web Mercator range: [-20037508.34, 20037508.34] meters
+    // // deck.gl world space: [0, 512]
+    // const WEB_MERCATOR_MAX = 20037508.342789244; // Half Earth circumference
 
-      // Also log WGS84 for comparison
-      const wgs84 = this.metadata.projectToWgs84([pX, pY]);
-      console.log(
-        `Image [${pX.toFixed(2)}, ${pY.toFixed(2)}] -> WGS84 [${wgs84[0].toFixed(6)}, ${wgs84[1].toFixed(6)}] -> WebMerc [${projected[0].toFixed(2)}, ${projected[1].toFixed(2)}]`,
-      );
-    }
+    // /** Reference points positions in deck.gl world space */
+    // const refPointPositionsWorld: [number, number, number][] = [];
 
-    console.log(
-      "refPointPositionsProjected (EPSG:3857):",
-      refPointPositionsProjected,
-    );
+    // for (const [mercX, mercY] of refPointPositionsProjected) {
+    //   // X: offset from [-20M, 20M] to [0, 40M], then normalize to [0, 512]
+    //   const worldX =
+    //     ((mercX + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
 
-    // Convert from Web Mercator meters to deck.gl's common space (world units)
-    // Web Mercator range: [-20037508.34, 20037508.34] meters
-    // deck.gl world space: [0, 512]
-    const WEB_MERCATOR_MAX = 20037508.342789244; // Half Earth circumference
+    //   // Y: same transformation WITHOUT flip
+    //   // Testing hypothesis: Y-flip might be incorrect since geotransform already handles orientation
+    //   const worldY =
+    //     ((mercY + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
 
-    /** Reference points positions in deck.gl world space */
-    const refPointPositionsWorld: [number, number, number][] = [];
+    //   console.log(
+    //     `WebMerc [${mercX.toFixed(2)}, ${mercY.toFixed(2)}] -> World [${worldX.toFixed(4)}, ${worldY.toFixed(4)}]`,
+    //   );
 
-    for (const [mercX, mercY] of refPointPositionsProjected) {
-      // X: offset from [-20M, 20M] to [0, 40M], then normalize to [0, 512]
-      const worldX =
-        ((mercX + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
+    //   // Add z-range minimum
+    //   refPointPositionsWorld.push([worldX, worldY, zRange[0]]);
+    // }
 
-      // Y: same transformation WITHOUT flip
-      // Testing hypothesis: Y-flip might be incorrect since geotransform already handles orientation
-      const worldY =
-        ((mercY + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
+    // // Add top z-range if elevation varies
+    // if (zRange[0] !== zRange[1]) {
+    //   for (const [mercX, mercY] of refPointPositionsProjected) {
+    //     const worldX =
+    //       ((mercX + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
+    //     const worldY =
+    //       TILE_SIZE -
+    //       ((mercY + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
 
-      console.log(
-        `WebMerc [${mercX.toFixed(2)}, ${mercY.toFixed(2)}] -> World [${worldX.toFixed(4)}, ${worldY.toFixed(4)}]`,
-      );
+    //     refPointPositionsWorld.push([worldX, worldY, zRange[1]]);
+    //   }
+    // }
 
-      // Add z-range minimum
-      refPointPositionsWorld.push([worldX, worldY, zRange[0]]);
-    }
+    // console.log("refPointPositionsWorld", refPointPositionsWorld);
+    // console.log("zRange used:", zRange);
 
-    // Add top z-range if elevation varies
-    if (zRange[0] !== zRange[1]) {
-      for (const [mercX, mercY] of refPointPositionsProjected) {
-        const worldX =
-          ((mercX + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
-        const worldY =
-          TILE_SIZE -
-          ((mercY + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
+    // const obb = makeOrientedBoundingBoxFromPoints(refPointPositionsWorld);
+    // console.log("Created OBB center:", obb.center);
+    // console.log("Created OBB halfAxes:", obb.halfAxes);
 
-        refPointPositionsWorld.push([worldX, worldY, zRange[1]]);
-      }
-    }
-
-    console.log("refPointPositionsWorld", refPointPositionsWorld);
-    console.log("zRange used:", zRange);
-
-    const obb = makeOrientedBoundingBoxFromPoints(refPointPositionsWorld);
-    console.log("Created OBB center:", obb.center);
-    console.log("Created OBB halfAxes:", obb.halfAxes);
-
-    return obb;
+    // return obb;
   }
 
   /**
@@ -444,8 +439,9 @@ export class RasterTileNode {
   _getGenericBoundingVolume(zRange: ZRange): OrientedBoundingBox {
     const tileMatrix = this.tileMatrix;
     const { tileWidth, tileHeight, geotransform } = tileMatrix;
+    const [minZ, maxZ] = zRange;
 
-    const projectedBounds = computeProjectedTileBounds({
+    const tileCrsBounds = computeProjectedTileBounds({
       x: this.x,
       y: this.y,
       transform: geotransform,
@@ -455,9 +451,25 @@ export class RasterTileNode {
 
     const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
       REF_POINTS_9,
-      projectedBounds,
+      tileCrsBounds,
       this.metadata.projectTo3857,
     );
+
+    const commonSpacePositions = refPointsEPSG3857.map((xy) =>
+      rescaleEPSG3857ToCommonSpace(xy),
+    );
+
+    const refPointPositions: [number, number, number][] = [];
+    for (const p of commonSpacePositions) {
+      refPointPositions.push([p[0], p[1], minZ]);
+
+      if (minZ !== maxZ) {
+        // Also sample at maximum elevation to capture the full 3D volume
+        refPointPositions.push([p[0], p[1], maxZ]);
+      }
+    }
+
+    return makeOrientedBoundingBoxFromPoints(refPointPositions);
   }
 }
 
@@ -556,6 +568,25 @@ function sampleReferencePointsInEPSG3857(
 
   return refPointPositions;
 }
+
+/**
+ * Rescale positions from EPSG:3857 into deck.gl's common space
+ *
+ * Similar to the upstream code here:
+ * https://github.com/visgl/deck.gl/blob/b0134f025148b52b91320d16768ab5d14a745328/modules/geo-layers/src/tileset-2d/tile-2d-traversal.ts#L172-L177
+ *
+ * @param   {number[]}  xy  [xy description]
+ *
+ * @return  {number}        [return description]
+ */
+function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
+  number,
+  number,
+] {
+  return [
+    (x / EPSG_3857_CIRCUMFERENCE + 0.5) * TILE_SIZE,
+    (0.5 - y / EPSG_3857_CIRCUMFERENCE) * TILE_SIZE,
+  ];
 }
 
 /**
