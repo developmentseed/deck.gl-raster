@@ -93,15 +93,11 @@ export async function extractGeotiffReprojectors(
 ): Promise<ReprojectionFns> {
   const image = await tiff.getImage();
 
-  const geoKeys = image.getGeoKeys();
-  const projectionCode: number | null =
-    geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || null;
-
   // Extract geotransform from full-resolution image
   // Only the top-level IFD has geo keys, so we'll derive overviews from this
   const baseGeotransform = extractGeotransform(image);
 
-  const sourceProjection = await getProjjson(projectionCode);
+  const sourceProjection = await getGeoTIFFProjection(image);
   if (sourceProjection === null) {
     throw new Error(
       "Could not determine source projection from GeoTIFF geo keys",
@@ -135,6 +131,23 @@ export function fromGeoTransform(
   };
 }
 
+/**
+ * Get the Projection of a GeoTIFF
+ *
+ * The first `image` must be passed in, as only the top-level IFD contains geo
+ * keys.
+ */
+export async function getGeoTIFFProjection(
+  image: GeoTIFFImage,
+): Promise<PROJJSONDefinition | null> {
+  const geoKeys = image.getGeoKeys();
+  const projectionCode: number | null =
+    geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || null;
+
+  const sourceProjection = await getProjjson(projectionCode);
+  return sourceProjection;
+}
+
 /** Query epsg.io for the PROJJSON corresponding to the given EPSG code. */
 async function getProjjson(projectionCode: number | null) {
   if (projectionCode === null) {
@@ -153,6 +166,9 @@ async function getProjjson(projectionCode: number | null) {
 /**
  * Extract affine geotransform from a GeoTIFF image.
  *
+ * The first `image` must be passed in, as only the top-level IFD contains geo
+ * keys.
+ *
  * Returns a 6-element array in Python `affine` package ordering:
  * [a, b, c, d, e, f] where:
  * - x_geo = a * col + b * row + c
@@ -160,7 +176,7 @@ async function getProjjson(projectionCode: number | null) {
  *
  * This is NOT GDAL ordering, which is [c, a, b, f, d, e].
  */
-function extractGeotransform(
+export function extractGeotransform(
   image: GeoTIFFImage,
 ): [number, number, number, number, number, number] {
   const origin = image.getOrigin();
