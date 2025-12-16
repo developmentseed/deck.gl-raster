@@ -345,57 +345,6 @@ export class RasterTileNode {
     // Case 4: Generic case - sample reference points and reproject to
     // Web Mercator, then convert to deck.gl common space
     return this._getGenericBoundingVolume(zRange);
-
-    // /** Reference points positions in EPSG 3857 */
-    // const refPointPositionsProjected: [number, number][] = [];
-
-    // // Convert from Web Mercator meters to deck.gl's common space (world units)
-    // // Web Mercator range: [-20037508.34, 20037508.34] meters
-    // // deck.gl world space: [0, 512]
-    // const WEB_MERCATOR_MAX = 20037508.342789244; // Half Earth circumference
-
-    // /** Reference points positions in deck.gl world space */
-    // const refPointPositionsWorld: [number, number, number][] = [];
-
-    // for (const [mercX, mercY] of refPointPositionsProjected) {
-    //   // X: offset from [-20M, 20M] to [0, 40M], then normalize to [0, 512]
-    //   const worldX =
-    //     ((mercX + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
-
-    //   // Y: same transformation WITHOUT flip
-    //   // Testing hypothesis: Y-flip might be incorrect since geotransform already handles orientation
-    //   const worldY =
-    //     ((mercY + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
-
-    //   console.log(
-    //     `WebMerc [${mercX.toFixed(2)}, ${mercY.toFixed(2)}] -> World [${worldX.toFixed(4)}, ${worldY.toFixed(4)}]`,
-    //   );
-
-    //   // Add z-range minimum
-    //   refPointPositionsWorld.push([worldX, worldY, zRange[0]]);
-    // }
-
-    // // Add top z-range if elevation varies
-    // if (zRange[0] !== zRange[1]) {
-    //   for (const [mercX, mercY] of refPointPositionsProjected) {
-    //     const worldX =
-    //       ((mercX + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
-    //     const worldY =
-    //       TILE_SIZE -
-    //       ((mercY + WEB_MERCATOR_MAX) / (2 * WEB_MERCATOR_MAX)) * TILE_SIZE;
-
-    //     refPointPositionsWorld.push([worldX, worldY, zRange[1]]);
-    //   }
-    // }
-
-    // console.log("refPointPositionsWorld", refPointPositionsWorld);
-    // console.log("zRange used:", zRange);
-
-    // const obb = makeOrientedBoundingBoxFromPoints(refPointPositionsWorld);
-    // console.log("Created OBB center:", obb.center);
-    // console.log("Created OBB halfAxes:", obb.halfAxes);
-
-    // return obb;
   }
 
   /**
