@@ -1,5 +1,5 @@
 /**
- * Rasterileset2D - Improved Implementation with Frustum Culling
+ * RasterTileset2D - Improved Implementation with Frustum Culling
  *
  * This version properly implements frustum culling and bounding volume calculations
  * following the pattern from deck.gl's OSM tile indexing.
@@ -17,9 +17,9 @@ import type { TileIndex, Bounds, TileMatrixSet, ZRange } from "./types";
 type Tileset2DProps = any;
 
 /**
- * Rasterileset2D with proper frustum culling
+ * RasterTileset2D with proper frustum culling
  */
-export class Rasterileset2D extends Tileset2D {
+export class RasterTileset2D extends Tileset2D {
   private metadata: TileMatrixSet;
 
   constructor(metadata: TileMatrixSet, opts: Tileset2DProps) {
