@@ -154,7 +154,6 @@ function createOverviewTileMatrix({
   id,
   image,
   fullWidth,
-  fullHeight,
   baseTransform,
   parsedCrs,
 }: {
@@ -168,12 +167,14 @@ function createOverviewTileMatrix({
   const width = image.getWidth();
   const height = image.getHeight();
 
+  // For now, just use scaleX
+  // https://github.com/developmentseed/morecantile/pull/187/changes#r2621314673
   const scaleX = fullWidth / width;
-  const scaleY = fullHeight / height;
 
-  if (Math.abs(scaleX - scaleY) > 1e-6) {
-    throw new Error("Non-uniform overview scaling detected (X/Y differ)");
-  }
+  // const scaleY = fullHeight / height;
+  // if (Math.abs(scaleX - scaleY) > 1e-3) {
+  //   throw new Error("Non-uniform overview scaling detected (X/Y differ)");
+  // }
 
   const scale = scaleX;
 
