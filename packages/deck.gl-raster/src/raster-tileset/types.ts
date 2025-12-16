@@ -194,6 +194,11 @@ export type TileMatrixSet = {
    */
   tileMatrices: TileMatrix[];
 
+  /**
+   * Bounding box of this TMS in WGS84 lon/lat.
+   */
+  wgsBounds: TileMatrixSetBoundingBox;
+
   projectToWgs84: (point: [number, number]) => [number, number];
   projectTo3857: (point: [number, number]) => [number, number];
 };
