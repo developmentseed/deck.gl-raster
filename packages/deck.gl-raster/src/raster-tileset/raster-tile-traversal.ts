@@ -328,27 +328,27 @@ export class RasterTileNode {
   /**
    * Calculate the 3D bounding volume for this tile in deck.gl's common
    * coordinate space for frustum culling.
-   *
    */
   getBoundingVolume(
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
   ) {
-    const overview = this.overview;
-    const { tileMatrices } = this.metadata;
-    const { tileWidth, tileHeight } = tileMatrices[tileMatrices.length - 1]!;
+    const tileMatrix = this.tileMatrix;
+    const { tileWidth, tileHeight, geotransform } = tileMatrix;
 
-    // Use geotransform to calculate tile bounds
-    // geotransform: [a, b, c, d, e, f] where:
-    // x_geo = a * col + b * row + c
-    // y_geo = d * col + e * row + f
-    const [a, b, c, d, e, f] = overview.geotransform;
+    const projectedBounds = computeProjectedTileBounds({
+      x: this.x,
+      y: this.y,
+      transform: geotransform,
+      tileWidth,
+      tileHeight,
+    });
 
-    // Calculate pixel coordinates for this tile's extent
-    const pixelMinCol = this.x * tileWidth;
-    const pixelMinRow = this.y * tileHeight;
-    const pixelMaxCol = (this.x + 1) * tileWidth;
-    const pixelMaxRow = (this.y + 1) * tileHeight;
+    // I have:
+    // - a tile index x, y, z
+    // - tileMatrix is at the current z
+    //
+    // I need first the projected bounds
 
     // Sample reference points across the tile surface
     const refPoints = REF_POINTS_9;
@@ -451,15 +451,57 @@ export class RasterTileNode {
 
     return obb;
   }
+}
 
-  /**
-   * Convert COG coordinates to lng/lat
-   * This is a placeholder - needs proper projection library (proj4js)
-   */
-  private cogCoordsToLngLat([x, y]: [number, number]): number[] {
-    const [lng, lat] = this.metadata.projectToWgs84([x, y]);
-    return [lng, lat, 0];
+/**
+ * Compute the projected tile bounds in the tile matrix's CRS.
+ *
+ * Because it's a linear transformation from the tile index to projected bounds,
+ * we don't need to sample this for each of the reference points. We only need
+ * the corners.
+ *
+ * @return      The bounding box as [minX, minY, maxX, maxY] in projected CRS.
+ */
+function computeProjectedTileBounds({
+  x,
+  y,
+  transform,
+  tileWidth,
+  tileHeight,
+}: {
+  x: number;
+  y: number;
+  transform: [number, number, number, number, number, number];
+  tileWidth: number;
+  tileHeight: number;
+}): [number, number, number, number] {
+  // geotransform: [a, b, c, d, e, f] where:
+  // x_geo = a * col + b * row + c
+  // y_geo = d * col + e * row + f
+  const [a, b, c, d, e, f] = transform;
+
+  // Currently only support non-rotated/non-skewed transforms
+  if (b !== 0 || d !== 0) {
+    throw new Error(
+      `Rotated/skewed geotransforms not yet supported (b=${b}, d=${d}). ` +
+        `Only north-up, non-rotated rasters are currently supported.`,
+    );
   }
+
+  // Calculate pixel coordinates for this tile's extent
+  const pixelMinCol = x * tileWidth;
+  const pixelMinRow = y * tileHeight;
+  const pixelMaxCol = (x + 1) * tileWidth;
+  const pixelMaxRow = (y + 1) * tileHeight;
+
+  // Convert pixel coordinates to geographic coordinates using geotransform
+  const minX = a * pixelMinCol + b * pixelMinRow + c;
+  const minY = d * pixelMinCol + e * pixelMinRow + f;
+
+  const maxX = a * pixelMaxCol + b * pixelMaxRow + c;
+  const maxY = d * pixelMaxCol + e * pixelMaxRow + f;
+
+  return [minX, minY, maxX, maxY];
 }
 
 /**
