@@ -138,7 +138,7 @@ export class RasterTileNode {
   private selected?: boolean;
 
   /** A cache of the children of this node. */
-  private _children?: RasterTileNode[];
+  private _children?: RasterTileNode[] | null;
 
   constructor(x: number, y: number, z: number, metadata: TileMatrixSet) {
     this.x = x;
@@ -152,48 +152,51 @@ export class RasterTileNode {
     return this.metadata.tileMatrices[this.z]!;
   }
 
-  /** Get the children of this node. */
+  /** Get the children of this node.
+   *
+   * Find all tiles at level this.z + 1 whose spatial extent overlaps this tile.
+   *
+   * A TileMatrixSet is not a quadtree, but rather a stack of independent grids. We can't cleanly find child tiles by decimation directly.
+   *
+   */
   get children(): RasterTileNode[] | null {
     if (!this._children) {
       const maxZ = this.metadata.tileMatrices.length - 1;
       if (this.z >= maxZ) {
         // Already at finest resolution, no children
+        this._children = null;
         return null;
       }
 
       // In TileMatrixSet ordering: refine to z + 1 (finer detail)
-      const childZ = this.z + 1;
       const parentMatrix = this.tileMatrix;
+      const childZ = this.z + 1;
       const childMatrix = this.metadata.tileMatrices[childZ]!;
 
-      // Calculate decimation between levels
-      // Note: here we assume that the decimation is an integer.
-      // For non-integer decimation, the tile origin wouldn't necessarily be in
-      // the same place as its children.
-      const decimation = Math.round(
-        parentMatrix.cellSize / childMatrix.cellSize,
+      // Compute this tile's bounds in TMS' CRS
+      const parentBounds = computeProjectedTileBounds({
+        x: this.x,
+        y: this.y,
+        transform: parentMatrix.geotransform,
+        tileWidth: parentMatrix.tileWidth,
+        tileHeight: parentMatrix.tileHeight,
+      });
+
+      // Find overlapping child index range
+      const { minCol, maxCol, minRow, maxRow } = getOverlappingChildRange(
+        parentBounds,
+        childMatrix,
       );
 
-      // Generate child tiles
-      this._children = [];
-      for (let dy = 0; dy < decimation; dy++) {
-        for (let dx = 0; dx < decimation; dx++) {
-          const childX = this.x * decimation + dx;
-          const childY = this.y * decimation + dy;
+      const children: RasterTileNode[] = [];
 
-          // Only create child if it's within bounds
-          // Some tiles on the edges might not need to be created at higher
-          // resolutions (higher map zoom level)
-          if (
-            childX < childMatrix.matrixWidth &&
-            childY < childMatrix.matrixHeight
-          ) {
-            this._children.push(
-              new RasterTileNode(childX, childY, childZ, this.metadata),
-            );
-          }
+      for (let y = minRow; y <= maxRow; y++) {
+        for (let x = minCol; x <= maxCol; x++) {
+          children.push(new RasterTileNode(x, y, childZ, this.metadata));
         }
       }
+
+      this._children = children.length > 0 ? children : null;
     }
     return this._children;
   }
@@ -557,6 +560,80 @@ function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
     (x / EPSG_3857_CIRCUMFERENCE + 0.5) * TILE_SIZE,
     (0.5 - clampedY / EPSG_3857_CIRCUMFERENCE) * TILE_SIZE,
   ];
+}
+
+/**
+ * Compute the range of tile indices in a child TileMatrix that spatially
+ * overlap a parent tile.
+ *
+ * TileMatrixSets are not guaranteed to form a strict quadtree: successive
+ * TileMatrix levels may differ by non-integer refinement ratios and may not
+ * align perfectly in tile space. As a result, parent/child relationships
+ * cannot be inferred from zoom level or resolution alone.
+ *
+ * This function determines parent→child relationships by:
+ * 1. Treating each TileMatrix as an independent, axis-aligned grid in CRS space
+ * 2. Mapping the parent tile's CRS bounding box into the child grid
+ * 3. Returning the inclusive range of child tile indices whose spatial extent
+ *    intersects the parent tile
+ *
+ * The returned indices are clamped to the valid extents of the child matrix
+ * (`[0, matrixWidth)` and `[0, matrixHeight)`).
+ *
+ * Assumptions:
+ * - The TileMatrix grid is axis-aligned in CRS space
+ * - `cornerOfOrigin` is `"topLeft"`
+ * - Tiles are rectangular and uniformly sized within a TileMatrix
+ *
+ * @param parentBounds  Bounding box of the parent tile in CRS coordinates
+ *                      as `[minX, minY, maxX, maxY]`
+ * @param childMatrix   The TileMatrix definition for the child zoom level
+ *
+ * @returns An object containing inclusive index ranges:
+ *          `{ minCol, maxCol, minRow, maxRow }`, identifying all child tiles
+ *          that spatially overlap the parent tile
+ */
+function getOverlappingChildRange(
+  parentBounds: [number, number, number, number],
+  childMatrix: TileMatrix,
+): {
+  minCol: number;
+  maxCol: number;
+  minRow: number;
+  maxRow: number;
+} {
+  const [pMinX, pMinY, pMaxX, pMaxY] = parentBounds;
+
+  const {
+    tileWidth,
+    tileHeight,
+    cellSize,
+    matrixWidth,
+    matrixHeight,
+    pointOfOrigin,
+  } = childMatrix;
+
+  const childTileWidthCRS = tileWidth * cellSize;
+  const childTileHeightCRS = tileHeight * cellSize;
+
+  // Note: we assume top left origin
+  const originX = pointOfOrigin[0];
+  const originY = pointOfOrigin[1];
+
+  // Convert CRS bounds → tile indices
+  let minCol = Math.floor((pMinX - originX) / childTileWidthCRS);
+  let maxCol = Math.floor((pMaxX - originX) / childTileWidthCRS);
+
+  let minRow = Math.floor((originY - pMaxY) / childTileHeightCRS);
+  let maxRow = Math.floor((originY - pMinY) / childTileHeightCRS);
+
+  // Clamp to matrix bounds
+  minCol = Math.max(0, Math.min(matrixWidth - 1, minCol));
+  maxCol = Math.max(0, Math.min(matrixWidth - 1, maxCol));
+  minRow = Math.max(0, Math.min(matrixHeight - 1, minRow));
+  maxRow = Math.max(0, Math.min(matrixHeight - 1, maxRow));
+
+  return { minCol, maxCol, minRow, maxRow };
 }
 
 /**
