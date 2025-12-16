@@ -352,7 +352,7 @@ export class RasterTileNode {
    * convert to deck.gl common space
    *
    */
-  _getGenericBoundingVolume(zRange: ZRange): OrientedBoundingBox {
+  private _getGenericBoundingVolume(zRange: ZRange): OrientedBoundingBox {
     const tileMatrix = this.tileMatrix;
     const { tileWidth, tileHeight, geotransform } = tileMatrix;
     const [minZ, maxZ] = zRange;
@@ -601,18 +601,14 @@ export function getTileIndices(
 ): TileIndex[] {
   const { viewport, maxZ, zRange } = opts;
 
-  // console.log("=== getTileIndices called ===");
-  // console.log("Viewport:", viewport);
-  // console.log("maxZ:", maxZ);
-  // console.log("COG metadata tileMatrices count:", metadata.tileMatrices.length);
-  // console.log("COG bbox:", metadata.bbox);
-
+  // Only define `project` function for Globe viewports, same as upstream
   const project: ((xyz: number[]) => number[]) | null =
     viewport instanceof _GlobeViewport && viewport.resolution
       ? viewport.projectPosition
       : null;
 
   // Get the culling volume of the current camera
+  // Same as upstream code
   const planes: Plane[] = Object.values(viewport.getFrustumPlanes()).map(
     ({ normal, distance }) => new Plane(normal.clone().negate(), distance),
   );
@@ -626,18 +622,21 @@ export function getTileIndices(
   // Optimization: For low-pitch views, only consider tiles at maxZ level
   // At low pitch (top-down view), all tiles are roughly the same distance,
   // so we don't need the LOD pyramid - just use the finest level
+  //
+  // `minZ` is the lowest zoom level where LOD adjustment is allowed
+  // Below `minZ`, tiles skip the distance-based LOD test entirely
   const minZ =
     viewport instanceof WebMercatorViewport && viewport.pitch <= 60 ? maxZ : 0;
 
   // Start from coarsest overview
-  const coarsestOverview = metadata.tileMatrices[0]!;
+  const rootMatrix = metadata.tileMatrices[0]!;
 
   // Create root tiles at coarsest level
   // In contrary to OSM tiling, we might have more than one tile at the
   // coarsest level (z=0)
   const roots: RasterTileNode[] = [];
-  for (let y = 0; y < coarsestOverview.tileHeight; y++) {
-    for (let x = 0; x < coarsestOverview.tileWidth; x++) {
+  for (let y = 0; y < rootMatrix.matrixHeight; y++) {
+    for (let x = 0; x < rootMatrix.matrixWidth; x++) {
       roots.push(new RasterTileNode(x, y, 0, metadata));
     }
   }
@@ -651,12 +650,10 @@ export function getTileIndices(
     minZ,
     maxZ,
   };
-  console.log("Traversal params:", traversalParams);
 
   for (const root of roots) {
     root.update(traversalParams);
   }
-  console.log("roots", roots);
 
   // Collect selected tiles
   const selectedNodes: RasterTileNode[] = [];
@@ -666,3 +663,11 @@ export function getTileIndices(
 
   return selectedNodes;
 }
+
+/**
+ * Exports only for use in testing
+ */
+export const __TEST_EXPORTS = {
+  computeProjectedTileBounds,
+  RasterTileNode,
+};

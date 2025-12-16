@@ -66,7 +66,7 @@ export type TileMatrix = {
   /**
    * Cell size of this tile matrix.
    *
-   * This is the pixel size in meters.
+   * CRS units per pixel (not necessarily meters).
    */
   cellSize: number;
 
