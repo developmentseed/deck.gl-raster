@@ -65,7 +65,7 @@ export async function parseCOGTileMatrixSet(
   ];
 
   // Starting from 1 to skip full res image
-  for (let imageIdx = 1; imageIdx < imageCount - 1; imageIdx++) {
+  for (let imageIdx = 1; imageIdx < imageCount; imageIdx++) {
     const image = await tiff.getImage(imageIdx);
     const tileMatrix = createOverviewTileMatrix({
       id: String(imageCount - 1 - imageIdx),
