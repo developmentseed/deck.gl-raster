@@ -24,6 +24,7 @@ import {
 import {
   CullingVolume,
   makeOrientedBoundingBoxFromPoints,
+  OrientedBoundingBox,
   Plane,
 } from "@math.gl/culling";
 
@@ -339,60 +340,32 @@ export class RasterTileNode {
   /**
    * Calculate the 3D bounding volume for this tile in deck.gl's common
    * coordinate space for frustum culling.
+   *
+   * TODO: In the future, we can add a fast path in the case that the source
+   * tiling is already in EPSG:3857.
    */
   getBoundingVolume(
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
   ) {
-    const tileMatrix = this.tileMatrix;
-    const { tileWidth, tileHeight, geotransform } = tileMatrix;
-
-    const projectedBounds = computeProjectedTileBounds({
-      x: this.x,
-      y: this.y,
-      transform: geotransform,
-      tileWidth,
-      tileHeight,
-    });
-
-    // I have:
-    // - a tile index x, y, z
-    // - tileMatrix is at the current z
-    //
-    // I need first the projected bounds
-
-    // Sample reference points across the tile surface
-    const refPoints = REF_POINTS_9;
-
-    console.log("refPoints", refPoints);
-
-    /** Reference points positions in image CRS */
-    const refPointPositionsImage: [number, number][] = [];
-
-    for (const [pX, pY] of refPoints) {
-      // pX, pY are in [0, 1] range
-      // Interpolate pixel coordinates within the tile
-      const col = pixelMinCol + pX * (pixelMaxCol - pixelMinCol);
-      const row = pixelMinRow + pY * (pixelMaxRow - pixelMinRow);
-
-      // Convert pixel coordinates to geographic coordinates using geotransform
-      const geoX = a * col + b * row + c;
-      const geoY = d * col + e * row + f;
-
-      refPointPositionsImage.push([geoX, geoY]);
-    }
-
-    console.log("refPointPositionsImage (image CRS):", refPointPositionsImage);
-    console.log("Geotransform [a,b,c,d,e,f]:", [a, b, c, d, e, f]);
-
+    // Case 1: Globe view - need to construct an oriented bounding box from
+    // reprojected sample points, but also using the `project` param
     if (project) {
-      assert(
-        false,
-        "TODO: implement bounding volume implementation in Globe view",
-      );
+      assert(false, "TODO: implement getBoundingVolume in Globe view");
       // Reproject positions to wgs84 instead, then pass them into `project`
       // return makeOrientedBoundingBoxFromPoints(refPointPositions);
     }
+
+    // (Future) Case 2: Web Mercator input image, can directly compute AABB in
+    // common space
+
+    // (Future) Case 3: Source projection is already mercator, like UTM. We
+    // don't need to sample from reference points, we can only use the 4
+    // corners.
+
+    // Case 4: Generic case - sample reference points and reproject to
+    // Web Mercator, then convert to deck.gl common space
+    return this._getGenericBoundingVolume(zRange);
 
     /** Reference points positions in EPSG 3857 */
     const refPointPositionsProjected: [number, number][] = [];
@@ -462,6 +435,30 @@ export class RasterTileNode {
 
     return obb;
   }
+
+  /**
+   * Generic case - sample reference points and reproject to Web Mercator, then
+   * convert to deck.gl common space
+   *
+   */
+  _getGenericBoundingVolume(zRange: ZRange): OrientedBoundingBox {
+    const tileMatrix = this.tileMatrix;
+    const { tileWidth, tileHeight, geotransform } = tileMatrix;
+
+    const projectedBounds = computeProjectedTileBounds({
+      x: this.x,
+      y: this.y,
+      transform: geotransform,
+      tileWidth,
+      tileHeight,
+    });
+
+    const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
+      REF_POINTS_9,
+      projectedBounds,
+      this.metadata.projectTo3857,
+    );
+  }
 }
 
 /**
@@ -512,7 +509,53 @@ function computeProjectedTileBounds({
   const maxX = a * pixelMaxCol + b * pixelMaxRow + c;
   const maxY = d * pixelMaxCol + e * pixelMaxRow + f;
 
-  return [minX, minY, maxX, maxY];
+  // Note: often `e` in the geotransform is negative (for a north up image when
+  // the origin is in the **top** left, then increasing the pixel row means
+  // going down in geospatial space), so maxY < minY
+  //
+  // We want to always return an axis-aligned bbox in the form of
+  // [minX, minY, maxX, maxY], so we need to swap if necessary.
+  //
+  // For now, we just use Math.min/Math.max to ensure correct ordering, but we
+  // could remove the min/max calls if we assume that `a` and `e` are always
+  // positive/negative respectively.
+  return [
+    Math.min(minX, maxX),
+    Math.min(minY, maxY),
+    Math.max(minX, maxX),
+    Math.max(minY, maxY),
+  ];
+}
+
+/**
+ * Sample the selected reference points in EPSG:3857
+ *
+ * Note that EPSG:3857 is **not** the same as deck.gl's common space! deck.gl's
+ * common space is the size of `TILE_SIZE` (512) units, while EPSG:3857 uses
+ * meters.
+ *
+ * @param  refPoints selected reference points. Each coordinate should be in [0-1]
+ * @param  tileBounds the bounds of the tile in **tile CRS** [minX, minY, maxX, maxY]
+ */
+function sampleReferencePointsInEPSG3857(
+  refPoints: [number, number][],
+  tileBounds: [number, number, number, number],
+  projectTo3857: (xy: [number, number]) => [number, number],
+): [number, number][] {
+  const [minX, minY, maxX, maxY] = tileBounds;
+  const refPointPositions: [number, number][] = [];
+
+  for (const [relX, relY] of refPoints) {
+    const geoX = minX + relX * (maxX - minX);
+    const geoY = minY + relY * (maxY - minY);
+
+    // Reproject to Web Mercator (EPSG 3857)
+    const projected = projectTo3857([geoX, geoY]);
+    refPointPositions.push(projected);
+  }
+
+  return refPointPositions;
+}
 }
 
 /**
