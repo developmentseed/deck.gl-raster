@@ -12,14 +12,14 @@ import {
   TileMatrixSet,
 } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { GeoTIFF } from "geotiff";
+import type { GeoTIFF, Pool } from "geotiff";
 import proj4 from "proj4";
 import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
 import {
   fromGeoTransform,
   getGeoTIFFProjection,
 } from "./geotiff-reprojection.js";
-import { loadRgbImage } from "./geotiff.js";
+import { defaultPool, loadRgbImage } from "./geotiff.js";
 
 // Workaround until upstream exposes props
 // https://github.com/visgl/deck.gl/pull/9917
@@ -29,6 +29,14 @@ const DEFAULT_MAX_ERROR = 0.125;
 
 export interface COGLayerProps extends CompositeLayerProps {
   geotiff: GeoTIFF;
+
+  /**
+   * GeoTIFF.js Pool for decoding image chunks.
+   *
+   * If none is provided, a default Pool will be created and shared between all
+   * COGLayer and GeoTIFFLayer instances.
+   */
+  pool?: Pool;
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
@@ -174,6 +182,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
 
         const { imageData, height, width } = await loadRgbImage(geotiffImage, {
           window,
+          pool: this.props.pool || defaultPool(),
         });
 
         return {

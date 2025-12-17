@@ -2,14 +2,22 @@ import type { CompositeLayerProps, UpdateParameters } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { RasterLayer } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { GeoTIFF } from "geotiff";
+import type { GeoTIFF, Pool } from "geotiff";
 import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
-import { loadRgbImage } from "./geotiff.js";
+import { defaultPool, loadRgbImage } from "./geotiff.js";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
 export interface GeoTIFFLayerProps extends CompositeLayerProps {
   geotiff: GeoTIFF;
+
+  /**
+   * GeoTIFF.js Pool for decoding image chunks.
+   *
+   * If none is provided, a default Pool will be created and shared between all
+   * COGLayer and GeoTIFFLayer instances.
+   */
+  pool?: Pool;
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
@@ -76,9 +84,10 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
     const { geotiff } = this.props;
 
     const reprojectionFns = await extractGeotiffReprojectors(geotiff);
-    const { imageData, height, width } = await loadRgbImage(
-      await geotiff.getImage(),
-    );
+    const image = await geotiff.getImage();
+    const { imageData, height, width } = await loadRgbImage(image, {
+      pool: this.props.pool || defaultPool(),
+    });
 
     this.setState({
       reprojectionFns,

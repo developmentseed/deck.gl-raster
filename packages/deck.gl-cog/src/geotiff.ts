@@ -1,6 +1,7 @@
 // Utilities for interacting with geotiff.js.
 
-import type { GeoTIFFImage, Pool, TypedArrayWithDimensions } from "geotiff";
+import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
+import { Pool } from "geotiff";
 
 /**
  * Options that may be passed when reading image data from geotiff.js
@@ -15,6 +16,28 @@ type ReadRasterOptions = {
   /** An AbortSignal that may be signalled if the request is to be aborted */
   signal?: AbortSignal;
 };
+
+/**
+ * A default geotiff.js decoder pool instance.
+ *
+ * It will be created on first call of `defaultPool`.
+ */
+let DEFAULT_POOL: Pool | null = null;
+
+/**
+ * Retrieve the default geotiff.js decoder Pool.
+ *
+ * If a Pool has not yet been created, it will be created on first call.
+ *
+ * The Pool will be shared between all COGLayer and GeoTIFFLayer instances.
+ */
+export function defaultPool(): Pool {
+  if (DEFAULT_POOL === null) {
+    DEFAULT_POOL = new Pool();
+  }
+
+  return DEFAULT_POOL;
+}
 
 /**
  * Load an RGBA image from a GeoTIFFImage.

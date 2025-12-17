@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { DeckProps } from "@deck.gl/core";
-import { fromUrl } from "geotiff";
+import { fromUrl, Pool } from "geotiff";
 import type { GeoTIFF } from "geotiff";
 import { COGLayer, GeoTIFFLayer } from "@developmentseed/deck.gl-cog";
 import proj4 from "proj4";
@@ -82,6 +82,7 @@ export default function App() {
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [renderAsTiled, setRenderAsTiled] = useState(true);
+  const [pool] = useState<Pool>(new Pool());
 
   useEffect(() => {
     let mounted = true;
@@ -134,6 +135,7 @@ export default function App() {
           debug,
           debugOpacity,
           visible: renderAsTiled,
+          pool,
         }),
         new GeoTIFFLayer({
           id: "geotiff-layer",
@@ -142,6 +144,7 @@ export default function App() {
           debug,
           debugOpacity,
           visible: !renderAsTiled,
+          pool,
         }),
       ]
     : [];
