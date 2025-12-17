@@ -675,16 +675,32 @@ export function getTileIndices(
   const elevationMin = (zRange && zRange[0] * unitsPerMeter) || 0;
   const elevationMax = (zRange && zRange[1] * unitsPerMeter) || 0;
 
-  // Optimization: For low-pitch views, only consider tiles at maxZ level
-  // At low pitch (top-down view), all tiles are roughly the same distance,
-  // so we don't need the LOD pyramid - just use the finest level
+  // Upstream deck.gl had a pitch-based optimization here, that took a long time
+  // to debug and understand why it doesn't apply for our use case.
   //
-  // `minZ` is the lowest zoom level where LOD adjustment is allowed
-  // Below `minZ`, tiles skip the distance-based LOD test entirely
-  const minZ =
-    viewport instanceof WebMercatorViewport && viewport.pitch <= 60 ? maxZ : 0;
+  // Their code was:
+  //
+  // ```ts
+  // const minZ =
+  //   viewport instanceof WebMercatorViewport && viewport.pitch <= 60 ? maxZ : 0;
+  // ```
+  //
+  // Which can be understood as:
+  //
+  // > Optimization: For low-pitch views, only consider tiles at maxZ level
+  // > At low pitch (top-down view), all tiles are roughly the same distance,
+  // > so we don't need the LOD pyramid - just use the finest level
+  //
+  // > `minZ` is the lowest zoom level where LOD adjustment is allowed
+  // > Below `minZ`, tiles skip the distance-based LOD test entirely
+  //
+  // However, this relies on a very specific assumption: In Web Mercator, OSM
+  // tiles already match screen resolution at a given zoom.
+  //
+  // In our case we want LOD to be evaluated at **all** levels, so we set the
+  // minZ to 0
+  const minZ = 0;
 
-  console.log("metadata.wgsBounds", metadata.wgsBounds);
   const { lowerLeft, upperRight } = metadata.wgsBounds;
   const [minLng, minLat] = lowerLeft;
   const [maxLng, maxLat] = upperRight;
