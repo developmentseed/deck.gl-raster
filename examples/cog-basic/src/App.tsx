@@ -1,11 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
-// import type { Tileset2DProps } from "@deck.gl/geo-layers/dist/tileset-2d";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { DeckProps } from "@deck.gl/core";
 import { fromUrl } from "geotiff";
 import type { GeoTIFF } from "geotiff";
-import { COGLayer } from "@developmentseed/deck.gl-cog";
+import { COGLayer, GeoTIFFLayer } from "@developmentseed/deck.gl-cog";
 import proj4 from "proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -82,6 +81,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
+  const [renderAsTiled, setRenderAsTiled] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -127,13 +127,21 @@ export default function App() {
 
   const layers = geotiff
     ? [
-        new COGLayer({
-          id: "cog-layer",
-          geotiff,
-          maxError: 0.125,
-          debug,
-          debugOpacity,
-        }),
+        renderAsTiled
+          ? new COGLayer({
+              id: "cog-layer",
+              geotiff,
+              maxError: 0.125,
+              debug,
+              debugOpacity,
+            })
+          : new GeoTIFFLayer({
+              id: "geotiff-layer",
+              geotiff,
+              maxError: 0.125,
+              debug,
+              debugOpacity,
+            }),
       ]
     : [];
 
@@ -230,6 +238,25 @@ export default function App() {
               marginTop: "12px",
             }}
           >
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "14px",
+                cursor: "pointer",
+                marginBottom: "12px",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={renderAsTiled}
+                onChange={(e) => setRenderAsTiled(e.target.checked)}
+                style={{ cursor: "pointer" }}
+              />
+              <span>Render as tiled</span>
+            </label>
+
             <label
               style={{
                 display: "flex",
