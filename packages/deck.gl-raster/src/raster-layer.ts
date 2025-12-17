@@ -141,7 +141,18 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       debug = false,
     } = this.props;
 
-    const reprojector = new RasterReprojector(reprojectionFns, width, height);
+    // The mesh is lined up with the upper and left edges of the raster. So if
+    // we give the raster the same width and height as the number of pixels in
+    // the image, it'll be omitting the last row and column of pixels.
+    //
+    // To account for this, we add 1 to both width and height when generating
+    // the mesh. This also solves obvious gaps in between neighboring tiles in
+    // the COGLayer.
+    const reprojector = new RasterReprojector(
+      reprojectionFns,
+      width + 1,
+      height + 1,
+    );
     reprojector.run(maxError);
     const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
 
