@@ -8,7 +8,7 @@ import { loadRgbImage } from "./geotiff.js";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
-export interface COGLayerProps extends CompositeLayerProps {
+export interface GeoTIFFLayerProps extends CompositeLayerProps {
   geotiff: GeoTIFF;
 
   /**
@@ -36,10 +36,14 @@ const defaultProps = {
 };
 
 /**
- * COGLayer renders a GeoTIFF from an arbitrary projection.
+ * GeoTIFFLayer renders a GeoTIFF file from an arbitrary projection.
+ *
+ * The GeoTIFFLayer differs from the COGLayer in that it doesn't assume any
+ * internal tiling. Rather, it fetches the entire full-resolution image and
+ * displays it directly.
  */
-export class COGLayer extends CompositeLayer<COGLayerProps> {
-  static override layerName = "COGLayer";
+export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
+  static override layerName = "GeoTIFFLayer";
   static override defaultProps = defaultProps;
 
   declare state: {
