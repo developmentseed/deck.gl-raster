@@ -30,6 +30,7 @@ export async function loadRgbImage(
   };
   // Since we set interleave: true, the result is a single array with all
   // samples, so we cast to TypedArrayWithDimensions
+  // https://github.com/geotiffjs/geotiff.js/issues/486
   const rgbImage = (await image.readRGB(
     mergedOptions,
   )) as TypedArrayWithDimensions;
