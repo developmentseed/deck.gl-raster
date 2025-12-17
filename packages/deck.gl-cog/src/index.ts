@@ -1,5 +1,6 @@
 export {
   extractGeotiffReprojectors,
+  getGeoTIFFProjection,
   fromGeoTransform,
 } from "./geotiff-reprojection.js";
 export { COGLayer } from "./cog-layer.js";

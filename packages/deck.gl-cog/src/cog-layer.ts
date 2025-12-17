@@ -2,7 +2,12 @@ import type { CompositeLayerProps, UpdateParameters } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { RasterLayer } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { GeoTIFF, GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
+import type {
+  GeoTIFF,
+  GeoTIFFImage,
+  Pool,
+  TypedArrayWithDimensions,
+} from "geotiff";
 import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
 
 const DEFAULT_MAX_ERROR = 0.125;
@@ -107,10 +112,28 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
   }
 }
 
+type ReadRasterOptions = {
+  /** the subset to read data from in pixels. */
+  window?: [number, number, number, number];
+
+  // I think we always want interleave true
+  // /** whether the data shall be read in one single array or separate arrays */
+  // interleave?: boolean;
+
+  /** The optional decoder pool to use. */
+  pool?: Pool;
+
+  /** An AbortSignal that may be signalled if the request is to be aborted */
+  signal?: AbortSignal;
+};
+
+// TODO: set enableAlpha: true and handle
 async function loadRgbImage(
   image: GeoTIFFImage,
+  options?: ReadRasterOptions,
 ): Promise<{ image: ImageData; height: number; width: number }> {
-  const rgbImage = (await image.readRGB()) as TypedArrayWithDimensions;
+  const rgbImage = (await image.readRGB(options)) as TypedArrayWithDimensions;
+  const { height, width } = rgbImage;
 
   const rgbaLength = (rgbImage.length / 3) * 4;
   const rgbaArray = new Uint8ClampedArray(rgbaLength);
@@ -121,7 +144,7 @@ async function loadRgbImage(
     rgbaArray[i * 4 + 3] = 255;
   }
   return {
-    image: new ImageData(rgbaArray, image.getWidth(), image.getHeight()),
+    image: new ImageData(rgbaArray, width, height),
     height: rgbImage.height,
     width: rgbImage.width,
   };

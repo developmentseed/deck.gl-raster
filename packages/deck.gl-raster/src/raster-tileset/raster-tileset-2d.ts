@@ -41,19 +41,20 @@ export class RasterTileset2D extends Tileset2D {
     modelMatrix?: Matrix4;
     modelMatrixInverse?: Matrix4;
   }): TileIndex[] {
-    console.log("Called getTileIndices", opts);
-    const tileIndices = getTileIndices(this.metadata, opts);
-    console.log("Visible tile indices:", tileIndices);
+    // console.log("Called getTileIndices", opts);
+    const maxAvailableZ = this.metadata.tileMatrices.length - 1;
 
-    // return [
-    //   { x: 0, y: 0, z: 0 },
-    //   { x: 0, y: 0, z: 1 },
-    //   { x: 1, y: 1, z: 2 },
-    //   { x: 1, y: 2, z: 3 },
-    //   { x: 2, y: 1, z: 3 },
-    //   { x: 2, y: 2, z: 3 },
-    //   { x: 3, y: 1, z: 3 },
-    // ]; // Temporary override for testing
+    const maxZ =
+      typeof opts.maxZoom === "number"
+        ? Math.min(opts.maxZoom, maxAvailableZ)
+        : maxAvailableZ;
+
+    const tileIndices = getTileIndices(this.metadata, {
+      viewport: opts.viewport,
+      maxZ,
+      zRange: opts.zRange ?? null,
+    });
+    // console.log("Visible tile indices:", tileIndices.length);
     return tileIndices;
   }
 

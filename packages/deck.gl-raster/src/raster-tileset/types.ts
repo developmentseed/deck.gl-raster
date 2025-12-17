@@ -66,7 +66,7 @@ export type TileMatrix = {
   /**
    * Cell size of this tile matrix.
    *
-   * This is the pixel size in meters.
+   * CRS units per pixel (not necessarily meters).
    */
   cellSize: number;
 
@@ -193,6 +193,11 @@ export type TileMatrixSet = {
    * Describes scale levels and its tile matrices
    */
   tileMatrices: TileMatrix[];
+
+  /**
+   * Bounding box of this TMS in WGS84 lon/lat.
+   */
+  wgsBounds: TileMatrixSetBoundingBox;
 
   projectToWgs84: (point: [number, number]) => [number, number];
   projectTo3857: (point: [number, number]) => [number, number];
