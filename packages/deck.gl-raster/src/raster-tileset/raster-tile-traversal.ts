@@ -15,19 +15,14 @@
  * cover the visible area with appropriate detail.
  */
 
-import {
-  _GlobeViewport,
-  assert,
-  Viewport,
-  WebMercatorViewport,
-} from "@deck.gl/core";
+import { _GlobeViewport, assert, Viewport } from "@deck.gl/core";
 import {
   CullingVolume,
   makeOrientedBoundingBoxFromPoints,
   OrientedBoundingBox,
   Plane,
 } from "@math.gl/culling";
-import { lngLatToWorld } from "@math.gl/web-mercator";
+import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
 import type {
   TileIndex,
@@ -236,6 +231,10 @@ export class RasterTileNode {
     /** Optional geographic bounds filter */
     bounds?: Bounds;
   }): boolean {
+    // Reset state
+    this.childVisible = false;
+    this.selected = false;
+
     const {
       viewport,
       cullingVolume,
@@ -251,7 +250,6 @@ export class RasterTileNode {
       elevationBounds,
       project,
     );
-    console.log("bounding volume", boundingVolume);
 
     // Step 1: Bounds checking
     // If geographic bounds are specified, reject tiles outside those bounds
@@ -273,20 +271,37 @@ export class RasterTileNode {
     // Only select this tile if no child is visible (prevents overlapping tiles)
     // “When pitch is low, force selection at maxZ.”
     if (!this.childVisible && this.z >= minZ) {
-      const distance = boundingVolume.distanceTo(viewport.cameraPosition);
+      const metersPerScreenPixel = getMetersPerPixelAtBoundingVolume(
+        boundingVolume,
+        viewport.zoom,
+      );
+      console.log("metersPerScreenPixel", metersPerScreenPixel);
 
-      // world units per screen pixel at this distance
-      const metersPerScreenPixel =
-        (distance * viewport.scale) / viewport.height;
+      const tileMetersPerPixel =
+        this.tileMatrix.scaleDenominator * SCREEN_PIXEL_SIZE;
 
-      const screenScaleDenominator = metersPerScreenPixel / SCREEN_PIXEL_SIZE;
+      console.log("tileMetersPerPixel", tileMetersPerPixel);
+
+      // const screenScaleDenominator = metersPerScreenPixel / SCREEN_PIXEL_SIZE;
+
+      // console.log("screenScaleDenominator", screenScaleDenominator);
 
       // TODO: in the future we could try adding a bias
       // const LOD_BIAS = 0.75;
       // this.tileMatrix.scaleDenominator <= screenScaleDenominator * LOD_BIAS
 
+      // console.log(
+      //   "this.tileMatrix.scaleDenominator",
+      //   this.tileMatrix.scaleDenominator,
+      // );
+
+      console.log(
+        "tileMetersPerPixel <= metersPerScreenPixel",
+        tileMetersPerPixel <= metersPerScreenPixel,
+      );
+
       if (
-        this.tileMatrix.scaleDenominator <= screenScaleDenominator ||
+        tileMetersPerPixel <= metersPerScreenPixel ||
         this.z >= maxZ ||
         (children === null && this.z >= minZ)
       ) {
@@ -302,11 +317,17 @@ export class RasterTileNode {
     // available because we're already at the finest tile resolution available
     if (children && children.length > 0) {
       this.selected = false;
-      this.childVisible = true;
+
+      let anyChildVisible = false;
 
       for (const child of children) {
-        child.update(params);
+        if (child.update(params)) {
+          anyChildVisible = true;
+        }
       }
+
+      this.childVisible = anyChildVisible;
+      return anyChildVisible;
     }
 
     return true;
@@ -342,12 +363,12 @@ export class RasterTileNode {
     const [minX, minY, maxX, maxY] = bounds;
     const [tileMinX, tileMinY, tileMaxX, tileMaxY] = commonSpaceBounds;
 
-    console.log("bounds:", bounds);
-    console.log("tile bounds:", commonSpaceBounds);
+    // console.log("bounds:", bounds);
+    // console.log("tile bounds:", commonSpaceBounds);
 
     const inside =
       tileMinX < maxX && tileMaxX > minX && tileMinY < maxY && tileMaxY > minY;
-    console.log("insideBounds", inside);
+    // console.log("insideBounds", inside);
     return inside;
   }
 
@@ -712,7 +733,6 @@ export function getTileIndices(
     topRight[0],
     topRight[1],
   ];
-  console.log("computed bounds", bounds);
 
   // Start from coarsest overview
   const rootMatrix = metadata.tileMatrices[0]!;
@@ -738,6 +758,9 @@ export function getTileIndices(
     bounds,
   };
 
+  // console.log("traversalParams", traversalParams);
+  // console.log("roots", roots);
+
   for (const root of roots) {
     root.update(traversalParams);
   }
@@ -750,6 +773,44 @@ export function getTileIndices(
 
   return selectedNodes;
 }
+
+/**
+ * Compute the meters per pixel at a given latitude and zoom level.
+ *
+ * Taken from https://github.com/visgl/deck.gl/blob/b0134f025148b52b91320d16768ab5d14a745328/modules/widgets/src/scale-widget.tsx#L133C1-L144C1
+ *
+ * @param latitude - The current latitude.
+ * @param zoom - The current zoom level.
+ * @returns The number of meters per pixel.
+ */
+function getMetersPerPixel(latitude: number, zoom: number): number {
+  const earthCircumference = 40075016.686;
+  return (
+    (earthCircumference * Math.cos((latitude * Math.PI) / 180)) /
+    Math.pow(2, zoom + 8)
+  );
+}
+
+function getMetersPerPixelAtBoundingVolume(
+  boundingVolume: OrientedBoundingBox,
+  zoom: number,
+): number {
+  const [_lng, lat] = worldToLngLat(boundingVolume.center);
+  return getMetersPerPixel(lat, zoom);
+}
+
+// function getScreenMetersPerPixel(viewport: Viewport, center: Vector3): number {
+//   const lng
+//   const p0 = viewport.projectPosition(center);
+//   const p1 = viewport.projectPosition([
+//     centerArray[0]! + 1,
+//     centerArray[1]!,
+//     centerArray[2]!,
+//   ]);
+
+//   const pixelsPerMeter = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+//   return 1 / pixelsPerMeter;
+// }
 
 /**
  * Exports only for use in testing

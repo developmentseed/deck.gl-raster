@@ -1,19 +1,29 @@
 import { useEffect, useState, useRef } from "react";
 import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
-import type { Tileset2DProps } from "@deck.gl/geo-layers/dist/tileset-2d";
+// import type { Tileset2DProps } from "@deck.gl/geo-layers/dist/tileset-2d";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { PathLayer } from "@deck.gl/layers";
-import type { DeckProps } from "@deck.gl/core";
+import type { DeckProps, Layer } from "@deck.gl/core";
 import { TileLayer, TileLayerProps } from "@deck.gl/geo-layers";
 import { fromUrl } from "geotiff";
-import type { GeoTIFF } from "geotiff";
-import { COGLayer, parseCOGTileMatrixSet } from "@developmentseed/deck.gl-cog";
+import type { GeoTIFF, TypedArrayWithDimensions } from "geotiff";
 import {
+  fromGeoTransform,
+  getGeoTIFFProjection,
+  parseCOGTileMatrixSet,
+} from "@developmentseed/deck.gl-cog";
+import {
+  RasterLayer,
   RasterTileset2D,
   TileMatrixSet,
 } from "@developmentseed/deck.gl-raster";
 import proj4 from "proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { PROJJSONDefinition } from "proj4/dist/lib/core";
+import { ReprojectionFns } from "../../../packages/raster-reproject/dist/delatin";
+
+// Workaround until upstream exposes props
+type Tileset2DProps = any;
 
 window.proj4 = proj4;
 
@@ -80,10 +90,15 @@ async function getCogBounds(
 const COG_URL =
   "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
 
+// const COG_URL =
+//   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
   const [cogMetadata, setCogMetadata] = useState<TileMatrixSet | null>(null);
+  const [sourceProjection, setSourceProjection] =
+    useState<PROJJSONDefinition | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [debug, setDebug] = useState(false);
@@ -98,15 +113,20 @@ export default function App() {
         setError(null);
 
         const tiff = await fromUrl(COG_URL);
-        window.tiff = tiff;
+        (window as any).tiff = tiff;
 
         if (mounted) {
           setGeotiff(tiff);
 
           const m = await parseCOGTileMatrixSet(tiff);
           console.log("COG TileMatrixSet:", m);
-          window.m = m;
+          (window as any).m = m;
           setCogMetadata(m);
+
+          const image = await tiff.getImage();
+          const sourceProjection = await getGeoTIFFProjection(image);
+          setSourceProjection(sourceProjection);
+
           // window.cogMetadata = cogMetadata;d
 
           // Calculate bounds and fit to them
@@ -138,7 +158,7 @@ export default function App() {
   }, []);
 
   const layers =
-    geotiff && cogMetadata
+    geotiff && cogMetadata && sourceProjection
       ? [
           // new COGLayer({
           //   id: "cog-layer",
@@ -147,10 +167,17 @@ export default function App() {
           //   debug,
           //   debugOpacity,
           // }),
-          createTileLayer(cogMetadata, {
-            id: "raster-tile-layer",
-            data: geotiff,
-          }),
+          createTileLayer(
+            cogMetadata,
+            geotiff,
+            sourceProjection,
+            {
+              id: "raster-tile-layer",
+              data: null,
+            },
+            debug,
+            debugOpacity,
+          ),
         ]
       : [];
 
@@ -309,20 +336,147 @@ export default function App() {
   );
 }
 
-function createTileLayer(metadata: TileMatrixSet, props: TileLayerProps) {
+function createTileLayer(
+  metadata: TileMatrixSet,
+  geotiff: GeoTIFF,
+  sourceProjection: PROJJSONDefinition,
+  props: TileLayerProps,
+  debug: boolean = false,
+  debugOpacity: number = 0.25,
+) {
   // Create a factory class that wraps COGTileset2D with the metadata
-  class RasterTilesetWrapper extends RasterTileset2D {
+  class RasterTileset2DFactory extends RasterTileset2D {
     constructor(opts: Tileset2DProps) {
       super(metadata, opts);
     }
   }
 
+  const converter = proj4(sourceProjection, "EPSG:4326");
+  const forwardReproject = (x: number, y: number) =>
+    converter.forward<[number, number]>([x, y], false);
+  const inverseReproject = (x: number, y: number) =>
+    converter.inverse<[number, number]>([x, y], false);
+
   return new TileLayer({
     ...props,
-    TilesetClass: RasterTilesetWrapper,
+    TilesetClass: RasterTileset2DFactory,
+    getTileData: async (
+      tile,
+    ): Promise<{
+      image: ImageData;
+      height: number;
+      width: number;
+      pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
+      inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
+    }> => {
+      const { x, y, z } = tile.index;
+      const imageCount = await geotiff.getImageCount();
+      // Select overview image
+      const image = await geotiff.getImage(imageCount - 1 - z);
+
+      const tileMatrix = metadata.tileMatrices[z]!;
+      const { tileWidth, tileHeight } = tileMatrix;
+
+      const xPixelOrigin = x * tileWidth;
+      const yPixelOrigin = y * tileHeight;
+
+      const [a, b, c, d, e, f] = tileMatrix.geotransform;
+
+      // Affine geotransform for this tile
+
+      const xCoordOffset = a * xPixelOrigin + b * yPixelOrigin + c;
+      const yCoordOffset = d * xPixelOrigin + e * yPixelOrigin + f;
+
+      const tileGeotransform: [number, number, number, number, number, number] =
+        [a, b, xCoordOffset, d, e, yCoordOffset];
+      const { pixelToInputCRS, inputCRSToPixel } =
+        fromGeoTransform(tileGeotransform);
+
+      const window = [
+        x * tileWidth,
+        y * tileHeight,
+        (x + 1) * tileWidth,
+        (y + 1) * tileHeight,
+      ];
+
+      const rgbImage = (await image.readRGB({
+        window,
+        enableAlpha: true,
+      })) as TypedArrayWithDimensions;
+      const imageData = addAlphaChannel(rgbImage);
+      console.log("rgbImage", rgbImage, tile.index, window);
+
+      return {
+        image: imageData,
+        height: rgbImage.height,
+        width: rgbImage.width,
+        pixelToInputCRS,
+        inputCRSToPixel,
+      };
+    },
     renderSubLayers: (props) => {
-      const { tile } = props;
+      const { tile, data } = props;
+
+      console.log("data", data);
+
       console.log("Rendering tile:", tile);
+
+      const layers: Layer[] = [];
+
+      //////////////////////////////////////////////////////////////////////
+      //
+      //
+      // Tasks for the morning:
+      //
+      // - Create reprojectionFns for this tile
+      // - forwardReproject and inverseReproject are constant for the entire geotiff, so we want to create those once in
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //////////////////////////////////////////////////////////////////////
+
+      if (data) {
+        const {
+          image,
+          height,
+          width,
+          pixelToInputCRS,
+          inputCRSToPixel,
+        }: {
+          image: ImageData;
+          height: number;
+          width: number;
+          pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
+          inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
+        } = data;
+
+        const rasterLayer = new RasterLayer({
+          id: `${props.id}-raster`,
+          width,
+          height,
+          texture: image,
+          maxError: 0.125,
+          reprojectionFns: {
+            pixelToInputCRS,
+            inputCRSToPixel,
+            forwardReproject,
+            inverseReproject,
+          },
+          debug,
+          debugOpacity,
+        });
+        layers.push(rasterLayer);
+      }
 
       // Get projected bounds from tile data
       // getTileMetadata returns data that includes projectedBounds
@@ -352,19 +506,48 @@ function createTileLayer(metadata: TileMatrixSet, props: TileLayerProps) {
 
       console.log("Tile bounds path (WGS84):", path);
 
-      return [
-        new PathLayer({
-          id: `${tile.id}-bounds`,
-          data: [{ path }],
-          getPath: (d) => d.path,
-          getColor: [255, 0, 0, 255], // Red
-          getWidth: 2,
-          widthUnits: "pixels",
-          pickable: false,
-        }),
-      ];
+      debug &&
+        layers.push(
+          new PathLayer({
+            id: `${tile.id}-bounds`,
+            data: [{ path }],
+            getPath: (d) => d.path,
+            getColor: [255, 0, 0, 255], // Red
+            getWidth: 2,
+            widthUnits: "pixels",
+            pickable: false,
+          }),
+        );
+
+      return layers;
 
       // return null;
     },
   });
+}
+
+function addAlphaChannel(rgbImage: TypedArrayWithDimensions): ImageData {
+  const { height, width } = rgbImage;
+
+  if (rgbImage.length === height * width * 4) {
+    // Already has alpha channel
+    return new ImageData(new Uint8ClampedArray(rgbImage), width, height);
+  } else if (rgbImage.length === height * width * 3) {
+    // Need to add alpha channel
+
+    const rgbaLength = (rgbImage.length / 3) * 4;
+    const rgbaArray = new Uint8ClampedArray(rgbaLength);
+    for (let i = 0; i < rgbImage.length / 3; ++i) {
+      rgbaArray[i * 4] = rgbImage[i * 3]!;
+      rgbaArray[i * 4 + 1] = rgbImage[i * 3 + 1]!;
+      rgbaArray[i * 4 + 2] = rgbImage[i * 3 + 2]!;
+      rgbaArray[i * 4 + 3] = 255;
+    }
+
+    return new ImageData(rgbaArray, width, height);
+  } else {
+    throw new Error(
+      `Unexpected number of channels in raster data: ${rgbImage.length / (height * width)}`,
+    );
+  }
 }
