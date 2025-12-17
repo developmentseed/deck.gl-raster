@@ -1,30 +1,12 @@
 import { useEffect, useState, useRef } from "react";
 import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
-// import type { Tileset2DProps } from "@deck.gl/geo-layers/dist/tileset-2d";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { PathLayer } from "@deck.gl/layers";
-import type { DeckProps, Layer } from "@deck.gl/core";
-import { TileLayer, TileLayerProps } from "@deck.gl/geo-layers";
+import type { DeckProps } from "@deck.gl/core";
 import { fromUrl } from "geotiff";
 import type { GeoTIFF } from "geotiff";
-import {
-  fromGeoTransform,
-  getGeoTIFFProjection,
-  loadRgbImage,
-  parseCOGTileMatrixSet,
-} from "@developmentseed/deck.gl-cog";
-import {
-  RasterLayer,
-  RasterTileset2D,
-  TileMatrixSet,
-} from "@developmentseed/deck.gl-raster";
+import { COGLayer, GeoTIFFLayer } from "@developmentseed/deck.gl-cog";
 import proj4 from "proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { PROJJSONDefinition } from "proj4/dist/lib/core";
-import { ReprojectionFns } from "../../../packages/raster-reproject/dist/delatin";
-
-// Workaround until upstream exposes props
-type Tileset2DProps = any;
 
 function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -86,22 +68,20 @@ async function getCogBounds(
   ];
 }
 
-const COG_URL =
-  "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
-
 // const COG_URL =
-//   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
+//   "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
+
+const COG_URL =
+  "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
-  const [cogMetadata, setCogMetadata] = useState<TileMatrixSet | null>(null);
-  const [sourceProjection, setSourceProjection] =
-    useState<PROJJSONDefinition | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
+  const [renderAsTiled, setRenderAsTiled] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -116,13 +96,6 @@ export default function App() {
 
         if (mounted) {
           setGeotiff(tiff);
-
-          const m = await parseCOGTileMatrixSet(tiff);
-          setCogMetadata(m);
-
-          const image = await tiff.getImage();
-          const sourceProjection = await getGeoTIFFProjection(image);
-          setSourceProjection(sourceProjection);
 
           // Calculate bounds and fit to them
           const bounds = await getCogBounds(tiff);
@@ -152,29 +125,26 @@ export default function App() {
     };
   }, []);
 
-  const layers =
-    geotiff && cogMetadata && sourceProjection
-      ? [
-          // new COGLayer({
-          //   id: "cog-layer",
-          //   geotiff,
-          //   maxError: 0.125,
-          //   debug,
-          //   debugOpacity,
-          // }),
-          createTileLayer(
-            cogMetadata,
-            geotiff,
-            sourceProjection,
-            {
-              id: "raster-tile-layer",
-              data: null,
-            },
-            debug,
-            debugOpacity,
-          ),
-        ]
-      : [];
+  const layers = geotiff
+    ? [
+        new COGLayer({
+          id: "cog-layer",
+          geotiff,
+          maxError: 0.125,
+          debug,
+          debugOpacity,
+          visible: renderAsTiled,
+        }),
+        new GeoTIFFLayer({
+          id: "geotiff-layer",
+          geotiff,
+          maxError: 0.125,
+          debug,
+          debugOpacity,
+          visible: !renderAsTiled,
+        }),
+      ]
+    : [];
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -281,6 +251,25 @@ export default function App() {
             >
               <input
                 type="checkbox"
+                checked={renderAsTiled}
+                onChange={(e) => setRenderAsTiled(e.target.checked)}
+                style={{ cursor: "pointer" }}
+              />
+              <span>Render as tiled</span>
+            </label>
+
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "14px",
+                cursor: "pointer",
+                marginBottom: "12px",
+              }}
+            >
+              <input
+                type="checkbox"
                 checked={debug}
                 onChange={(e) => setDebug(e.target.checked)}
                 style={{ cursor: "pointer" }}
@@ -329,162 +318,4 @@ export default function App() {
       </div>
     </div>
   );
-}
-
-function createTileLayer(
-  metadata: TileMatrixSet,
-  geotiff: GeoTIFF,
-  sourceProjection: PROJJSONDefinition,
-  props: TileLayerProps,
-  debug: boolean = false,
-  debugOpacity: number = 0.25,
-) {
-  // Create a factory class that wraps COGTileset2D with the metadata
-  class RasterTileset2DFactory extends RasterTileset2D {
-    constructor(opts: Tileset2DProps) {
-      super(metadata, opts);
-    }
-  }
-
-  const converter = proj4(sourceProjection, "EPSG:4326");
-  const forwardReproject = (x: number, y: number) =>
-    converter.forward<[number, number]>([x, y], false);
-  const inverseReproject = (x: number, y: number) =>
-    converter.inverse<[number, number]>([x, y], false);
-
-  return new TileLayer({
-    ...props,
-    TilesetClass: RasterTileset2DFactory,
-    getTileData: async (
-      tile,
-    ): Promise<{
-      image: ImageData;
-      height: number;
-      width: number;
-      pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
-      inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
-    }> => {
-      const { x, y, z } = tile.index;
-      const imageCount = await geotiff.getImageCount();
-      // Select overview image
-      const geotiffImage = await geotiff.getImage(imageCount - 1 - z);
-
-      const tileMatrix = metadata.tileMatrices[z]!;
-      const { tileWidth, tileHeight } = tileMatrix;
-
-      const xPixelOrigin = x * tileWidth;
-      const yPixelOrigin = y * tileHeight;
-
-      const [a, b, c, d, e, f] = tileMatrix.geotransform;
-
-      // Affine geotransform for this tile
-
-      const xCoordOffset = a * xPixelOrigin + b * yPixelOrigin + c;
-      const yCoordOffset = d * xPixelOrigin + e * yPixelOrigin + f;
-
-      const tileGeotransform: [number, number, number, number, number, number] =
-        [a, b, xCoordOffset, d, e, yCoordOffset];
-      const { pixelToInputCRS, inputCRSToPixel } =
-        fromGeoTransform(tileGeotransform);
-
-      const window: [number, number, number, number] = [
-        x * tileWidth,
-        y * tileHeight,
-        (x + 1) * tileWidth,
-        (y + 1) * tileHeight,
-      ];
-
-      const { imageData, height, width } = await loadRgbImage(geotiffImage, {
-        window,
-      });
-
-      return {
-        image: imageData,
-        height,
-        width,
-        pixelToInputCRS,
-        inputCRSToPixel,
-      };
-    },
-    renderSubLayers: (props) => {
-      const { tile, data } = props;
-
-      const layers: Layer[] = [];
-
-      if (data) {
-        const {
-          image,
-          height,
-          width,
-          pixelToInputCRS,
-          inputCRSToPixel,
-        }: {
-          image: ImageData;
-          height: number;
-          width: number;
-          pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
-          inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
-        } = data;
-
-        const rasterLayer = new RasterLayer({
-          id: `${props.id}-raster`,
-          width,
-          height,
-          texture: image,
-          maxError: 0.125,
-          reprojectionFns: {
-            pixelToInputCRS,
-            inputCRSToPixel,
-            forwardReproject,
-            inverseReproject,
-          },
-          debug,
-          debugOpacity,
-        });
-        layers.push(rasterLayer);
-      }
-
-      if (debug) {
-        // Get projected bounds from tile data
-        // getTileMetadata returns data that includes projectedBounds
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const projectedBounds = (tile as any)?.projectedBounds;
-
-        if (!projectedBounds || !metadata) {
-          return [];
-        }
-
-        // Project bounds from image CRS to WGS84
-        const { topLeft, topRight, bottomLeft, bottomRight } = projectedBounds;
-
-        const topLeftWgs84 = metadata.projectToWgs84(topLeft);
-        const topRightWgs84 = metadata.projectToWgs84(topRight);
-        const bottomRightWgs84 = metadata.projectToWgs84(bottomRight);
-        const bottomLeftWgs84 = metadata.projectToWgs84(bottomLeft);
-
-        // Create a closed path around the tile bounds
-        const path = [
-          topLeftWgs84,
-          topRightWgs84,
-          bottomRightWgs84,
-          bottomLeftWgs84,
-          topLeftWgs84, // Close the path
-        ];
-
-        layers.push(
-          new PathLayer({
-            id: `${tile.id}-bounds`,
-            data: [{ path }],
-            getPath: (d) => d.path,
-            getColor: [255, 0, 0, 255], // Red
-            getWidth: 2,
-            widthUnits: "pixels",
-            pickable: false,
-          }),
-        );
-      }
-
-      return layers;
-    },
-  });
 }

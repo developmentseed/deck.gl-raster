@@ -48,7 +48,7 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
 
   declare state: {
     reprojectionFns?: ReprojectionFns;
-    imageData: ImageData;
+    imageData?: ImageData;
     height?: number;
     width?: number;
   };
