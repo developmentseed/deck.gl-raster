@@ -81,7 +81,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
-  const [renderAsTiled, setRenderAsTiled] = useState(false);
+  const [renderAsTiled, setRenderAsTiled] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -127,21 +127,22 @@ export default function App() {
 
   const layers = geotiff
     ? [
-        renderAsTiled
-          ? new COGLayer({
-              id: "cog-layer",
-              geotiff,
-              maxError: 0.125,
-              debug,
-              debugOpacity,
-            })
-          : new GeoTIFFLayer({
-              id: "geotiff-layer",
-              geotiff,
-              maxError: 0.125,
-              debug,
-              debugOpacity,
-            }),
+        new COGLayer({
+          id: "cog-layer",
+          geotiff,
+          maxError: 0.125,
+          debug,
+          debugOpacity,
+          visible: renderAsTiled,
+        }),
+        new GeoTIFFLayer({
+          id: "geotiff-layer",
+          geotiff,
+          maxError: 0.125,
+          debug,
+          debugOpacity,
+          visible: !renderAsTiled,
+        }),
       ]
     : [];
 
