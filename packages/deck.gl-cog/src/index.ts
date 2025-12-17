@@ -3,7 +3,7 @@ export {
   getGeoTIFFProjection,
   fromGeoTransform,
 } from "./geotiff-reprojection.js";
-export { COGLayer } from "./geotiff-layer.js";
-export type { COGLayerProps } from "./geotiff-layer.js";
+export { GeoTIFFLayer } from "./geotiff-layer.js";
+export type { GeoTIFFLayerProps } from "./geotiff-layer.js";
 export { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
 export { loadRgbImage } from "./geotiff.js";
