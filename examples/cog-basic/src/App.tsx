@@ -6,10 +6,11 @@ import { PathLayer } from "@deck.gl/layers";
 import type { DeckProps, Layer } from "@deck.gl/core";
 import { TileLayer, TileLayerProps } from "@deck.gl/geo-layers";
 import { fromUrl } from "geotiff";
-import type { GeoTIFF, TypedArrayWithDimensions } from "geotiff";
+import type { GeoTIFF } from "geotiff";
 import {
   fromGeoTransform,
   getGeoTIFFProjection,
+  loadRgbImage,
   parseCOGTileMatrixSet,
 } from "@developmentseed/deck.gl-cog";
 import {
@@ -24,8 +25,6 @@ import { ReprojectionFns } from "../../../packages/raster-reproject/dist/delatin
 
 // Workaround until upstream exposes props
 type Tileset2DProps = any;
-
-window.proj4 = proj4;
 
 function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -119,15 +118,11 @@ export default function App() {
           setGeotiff(tiff);
 
           const m = await parseCOGTileMatrixSet(tiff);
-          console.log("COG TileMatrixSet:", m);
-          (window as any).m = m;
           setCogMetadata(m);
 
           const image = await tiff.getImage();
           const sourceProjection = await getGeoTIFFProjection(image);
           setSourceProjection(sourceProjection);
-
-          // window.cogMetadata = cogMetadata;d
 
           // Calculate bounds and fit to them
           const bounds = await getCogBounds(tiff);
@@ -372,7 +367,7 @@ function createTileLayer(
       const { x, y, z } = tile.index;
       const imageCount = await geotiff.getImageCount();
       // Select overview image
-      const image = await geotiff.getImage(imageCount - 1 - z);
+      const geotiffImage = await geotiff.getImage(imageCount - 1 - z);
 
       const tileMatrix = metadata.tileMatrices[z]!;
       const { tileWidth, tileHeight } = tileMatrix;
@@ -392,24 +387,21 @@ function createTileLayer(
       const { pixelToInputCRS, inputCRSToPixel } =
         fromGeoTransform(tileGeotransform);
 
-      const window = [
+      const window: [number, number, number, number] = [
         x * tileWidth,
         y * tileHeight,
         (x + 1) * tileWidth,
         (y + 1) * tileHeight,
       ];
 
-      const rgbImage = (await image.readRGB({
+      const { imageData, height, width } = await loadRgbImage(geotiffImage, {
         window,
-        enableAlpha: true,
-      })) as TypedArrayWithDimensions;
-      const imageData = addAlphaChannel(rgbImage);
-      console.log("rgbImage", rgbImage, tile.index, window);
+      });
 
       return {
         image: imageData,
-        height: rgbImage.height,
-        width: rgbImage.width,
+        height,
+        width,
         pixelToInputCRS,
         inputCRSToPixel,
       };
@@ -417,33 +409,7 @@ function createTileLayer(
     renderSubLayers: (props) => {
       const { tile, data } = props;
 
-      console.log("data", data);
-
-      console.log("Rendering tile:", tile);
-
       const layers: Layer[] = [];
-
-      //////////////////////////////////////////////////////////////////////
-      //
-      //
-      // Tasks for the morning:
-      //
-      // - Create reprojectionFns for this tile
-      // - forwardReproject and inverseReproject are constant for the entire geotiff, so we want to create those once in
-      //
-      //
-      //
-      //
-      //
-      //
-      //
-      //
-      //
-      //
-      //
-      //
-      //
-      //////////////////////////////////////////////////////////////////////
 
       if (data) {
         const {
@@ -478,35 +444,33 @@ function createTileLayer(
         layers.push(rasterLayer);
       }
 
-      // Get projected bounds from tile data
-      // getTileMetadata returns data that includes projectedBounds
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const projectedBounds = (tile as any)?.projectedBounds;
+      if (debug) {
+        // Get projected bounds from tile data
+        // getTileMetadata returns data that includes projectedBounds
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const projectedBounds = (tile as any)?.projectedBounds;
 
-      if (!projectedBounds || !metadata) {
-        return [];
-      }
+        if (!projectedBounds || !metadata) {
+          return [];
+        }
 
-      // Project bounds from image CRS to WGS84
-      const { topLeft, topRight, bottomLeft, bottomRight } = projectedBounds;
+        // Project bounds from image CRS to WGS84
+        const { topLeft, topRight, bottomLeft, bottomRight } = projectedBounds;
 
-      const topLeftWgs84 = metadata.projectToWgs84(topLeft);
-      const topRightWgs84 = metadata.projectToWgs84(topRight);
-      const bottomRightWgs84 = metadata.projectToWgs84(bottomRight);
-      const bottomLeftWgs84 = metadata.projectToWgs84(bottomLeft);
+        const topLeftWgs84 = metadata.projectToWgs84(topLeft);
+        const topRightWgs84 = metadata.projectToWgs84(topRight);
+        const bottomRightWgs84 = metadata.projectToWgs84(bottomRight);
+        const bottomLeftWgs84 = metadata.projectToWgs84(bottomLeft);
 
-      // Create a closed path around the tile bounds
-      const path = [
-        topLeftWgs84,
-        topRightWgs84,
-        bottomRightWgs84,
-        bottomLeftWgs84,
-        topLeftWgs84, // Close the path
-      ];
+        // Create a closed path around the tile bounds
+        const path = [
+          topLeftWgs84,
+          topRightWgs84,
+          bottomRightWgs84,
+          bottomLeftWgs84,
+          topLeftWgs84, // Close the path
+        ];
 
-      console.log("Tile bounds path (WGS84):", path);
-
-      debug &&
         layers.push(
           new PathLayer({
             id: `${tile.id}-bounds`,
@@ -518,36 +482,9 @@ function createTileLayer(
             pickable: false,
           }),
         );
+      }
 
       return layers;
-
-      // return null;
     },
   });
-}
-
-function addAlphaChannel(rgbImage: TypedArrayWithDimensions): ImageData {
-  const { height, width } = rgbImage;
-
-  if (rgbImage.length === height * width * 4) {
-    // Already has alpha channel
-    return new ImageData(new Uint8ClampedArray(rgbImage), width, height);
-  } else if (rgbImage.length === height * width * 3) {
-    // Need to add alpha channel
-
-    const rgbaLength = (rgbImage.length / 3) * 4;
-    const rgbaArray = new Uint8ClampedArray(rgbaLength);
-    for (let i = 0; i < rgbImage.length / 3; ++i) {
-      rgbaArray[i * 4] = rgbImage[i * 3]!;
-      rgbaArray[i * 4 + 1] = rgbImage[i * 3 + 1]!;
-      rgbaArray[i * 4 + 2] = rgbImage[i * 3 + 2]!;
-      rgbaArray[i * 4 + 3] = 255;
-    }
-
-    return new ImageData(rgbaArray, width, height);
-  } else {
-    throw new Error(
-      `Unexpected number of channels in raster data: ${rgbImage.length / (height * width)}`,
-    );
-  }
 }

@@ -2,13 +2,9 @@ import type { CompositeLayerProps, UpdateParameters } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { RasterLayer } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type {
-  GeoTIFF,
-  GeoTIFFImage,
-  Pool,
-  TypedArrayWithDimensions,
-} from "geotiff";
+import type { GeoTIFF } from "geotiff";
 import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
+import { loadRgbImage } from "./geotiff.js";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
@@ -48,7 +44,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
 
   declare state: {
     reprojectionFns?: ReprojectionFns;
-    image: ImageData;
+    imageData: ImageData;
     height?: number;
     width?: number;
   };
@@ -76,22 +72,22 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
     const { geotiff } = this.props;
 
     const reprojectionFns = await extractGeotiffReprojectors(geotiff);
-    const { image, height, width } = await loadRgbImage(
+    const { imageData, height, width } = await loadRgbImage(
       await geotiff.getImage(),
     );
 
     this.setState({
       reprojectionFns,
-      image,
+      imageData,
       height,
       width,
     });
   }
 
   renderLayers() {
-    const { reprojectionFns, image, height, width } = this.state;
+    const { reprojectionFns, imageData, height, width } = this.state;
 
-    if (!reprojectionFns || !image || !height || !width) {
+    if (!reprojectionFns || !imageData || !height || !width) {
       return null;
     }
 
@@ -104,48 +100,10 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
         height,
         reprojectionFns,
         maxError,
-        texture: image,
+        texture: imageData,
         debug,
         debugOpacity,
       }),
     );
   }
-}
-
-type ReadRasterOptions = {
-  /** the subset to read data from in pixels. */
-  window?: [number, number, number, number];
-
-  // I think we always want interleave true
-  // /** whether the data shall be read in one single array or separate arrays */
-  // interleave?: boolean;
-
-  /** The optional decoder pool to use. */
-  pool?: Pool;
-
-  /** An AbortSignal that may be signalled if the request is to be aborted */
-  signal?: AbortSignal;
-};
-
-// TODO: set enableAlpha: true and handle
-async function loadRgbImage(
-  image: GeoTIFFImage,
-  options?: ReadRasterOptions,
-): Promise<{ image: ImageData; height: number; width: number }> {
-  const rgbImage = (await image.readRGB(options)) as TypedArrayWithDimensions;
-  const { height, width } = rgbImage;
-
-  const rgbaLength = (rgbImage.length / 3) * 4;
-  const rgbaArray = new Uint8ClampedArray(rgbaLength);
-  for (let i = 0; i < rgbImage.length / 3; ++i) {
-    rgbaArray[i * 4] = rgbImage[i * 3]!;
-    rgbaArray[i * 4 + 1] = rgbImage[i * 3 + 1]!;
-    rgbaArray[i * 4 + 2] = rgbImage[i * 3 + 2]!;
-    rgbaArray[i * 4 + 3] = 255;
-  }
-  return {
-    image: new ImageData(rgbaArray, width, height),
-    height: rgbImage.height,
-    width: rgbImage.width,
-  };
 }
