@@ -17,9 +17,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      # Explicitly check out the branch to pass pnpm's git branch check, which
-      # defaults to requiring being on master|main
-      - run: git checkout ${{ github.ref_name }}
       - uses: pnpm/action-setup@v4
       - run: pnpm install
       - run: pnpm build
@@ -29,7 +26,7 @@ jobs:
           # All packages are expected to have the same version
           VERSION=$(jq -r .version packages/deck.gl-raster/package.json)
           if [[ "$VERSION" == *alpha* || "$VERSION" == *beta* ]]; then
-            pnpm publish --recursive --tag beta
+            pnpm publish --recursive --no-git-checks --tag beta
           else
-            pnpm publish --recursive
+            pnpm publish --recursive --no-git-checks
           fi
