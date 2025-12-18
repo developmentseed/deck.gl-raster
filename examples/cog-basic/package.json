@@ -5,12 +5,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gh-pages": "gh-pages -d dist -b gh-pages"
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.5",
-    "@deck.gl/layers": "^9.2.5",
     "@deck.gl/geo-layers": "^9.2.5",
+    "@deck.gl/layers": "^9.2.5",
     "@deck.gl/mapbox": "^9.2.5",
     "@deck.gl/mesh-layers": "^9.2.5",
     "@developmentseed/deck.gl-geotiff": "workspace:^",
@@ -26,6 +27,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",
+    "gh-pages": "^6.3.0",
     "vite": "^7.3.0"
   }
 }
