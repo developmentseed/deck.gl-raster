@@ -148,6 +148,8 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
         const imageCount = await geotiff.getImageCount();
         // Select overview image
         const geotiffImage = await geotiff.getImage(imageCount - 1 - z);
+        const imageHeight = geotiffImage.getHeight();
+        const imageWidth = geotiffImage.getWidth();
 
         const tileMatrix = metadata.tileMatrices[z]!;
         const { tileWidth, tileHeight } = tileMatrix;
@@ -176,8 +178,8 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
         const window: [number, number, number, number] = [
           x * tileWidth,
           y * tileHeight,
-          (x + 1) * tileWidth,
-          (y + 1) * tileHeight,
+          Math.min((x + 1) * tileWidth, imageWidth),
+          Math.min((y + 1) * tileHeight, imageHeight),
         ];
 
         const { imageData, height, width } = await loadRgbImage(geotiffImage, {
