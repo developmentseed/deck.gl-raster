@@ -16,14 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: volta-cli/action@v4
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
+      - run: pnpm install
+      - run: pnpm build
+      - run: pnpm test
       - name: Read version and publish
         run: |
-          VERSION=$(jq -r .version package.json)
+          # All packages are expected to have the same version
+          VERSION=$(jq -r .version packages/deck.gl-raster/package.json)
           if [[ "$VERSION" == *alpha* || "$VERSION" == *beta* ]]; then
-            npm publish --tag beta
+            pnpm publish --recursive --tag beta
           else
-            npm publish
+            pnpm publish --recursive
           fi
