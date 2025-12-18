@@ -1,0 +1,38 @@
+name: Publish Package
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write # Required for OIDC
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          cache: "pnpm"
+      - run: pnpm install
+      - run: pnpm build
+      - run: pnpm test
+      - name: Read version and publish
+        run: |
+          # All packages are expected to have the same version
+          VERSION=$(jq -r .version packages/deck.gl-raster/package.json)
+          if [[ "$VERSION" == *alpha* || "$VERSION" == *beta* ]]; then
+            pnpm publish --recursive --no-git-checks --tag beta
+          else
+            pnpm publish --recursive --no-git-checks
+          fi
