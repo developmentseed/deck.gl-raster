@@ -4,7 +4,7 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { DeckProps } from "@deck.gl/core";
 import { fromUrl, Pool } from "geotiff";
 import type { GeoTIFF } from "geotiff";
-import { COGLayer, GeoTIFFLayer } from "@developmentseed/deck.gl-cog";
+import { COGLayer, GeoTIFFLayer } from "@developmentseed/deck.gl-geotiff";
 import proj4 from "proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 

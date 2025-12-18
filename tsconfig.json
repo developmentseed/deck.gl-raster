@@ -28,7 +28,7 @@
   "references": [
     { "path": "packages/raster-reproject/tsconfig.build.json" },
     { "path": "packages/deck.gl-raster/tsconfig.build.json" },
-    { "path": "packages/deck.gl-cog/tsconfig.build.json" },
+    { "path": "packages/deck.gl-geotiff/tsconfig.build.json" },
     { "path": "packages/deck.gl-zarr/tsconfig.build.json" }
   ]
 }

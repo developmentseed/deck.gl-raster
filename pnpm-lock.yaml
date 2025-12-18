@@ -35,9 +35,9 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: ^9.2.5
         version: 9.2.5(@deck.gl/core@9.2.5)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.4)(@luma.gl/engine@9.2.4(@luma.gl/core@9.2.4)(@luma.gl/shadertools@9.2.4(@luma.gl/core@9.2.4)))(@luma.gl/gltf@9.2.4(@luma.gl/constants@9.2.4)(@luma.gl/core@9.2.4)(@luma.gl/engine@9.2.4(@luma.gl/core@9.2.4)(@luma.gl/shadertools@9.2.4(@luma.gl/core@9.2.4)))(@luma.gl/shadertools@9.2.4(@luma.gl/core@9.2.4)))(@luma.gl/shadertools@9.2.4(@luma.gl/core@9.2.4))
-      '@developmentseed/deck.gl-cog':
+      '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
-        version: link:../../packages/deck.gl-cog
+        version: link:../../packages/deck.gl-geotiff
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../../packages/deck.gl-raster
@@ -73,7 +73,7 @@ importers:
         specifier: ^7.3.0
         version: 7.3.0(@types/node@25.0.1)
 
-  packages/deck.gl-cog:
+  packages/deck.gl-geotiff:
     dependencies:
       '@deck.gl/core':
         specifier: ^9.2.5
