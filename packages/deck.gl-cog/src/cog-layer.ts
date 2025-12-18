@@ -6,13 +6,13 @@ import type {
 import { CompositeLayer } from "@deck.gl/core";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
-import {
-  RasterLayer,
-  RasterTileset2D,
+import { RasterLayer, RasterTileset2D } from "@developmentseed/deck.gl-raster";
+import type {
+  TileMatrix,
   TileMatrixSet,
 } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { GeoTIFF, Pool } from "geotiff";
+import type { GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
 import proj4 from "proj4";
 import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
 import {
@@ -73,6 +73,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
     forwardReproject?: ReprojectionFns["forwardReproject"];
     inverseReproject?: ReprojectionFns["inverseReproject"];
     metadata?: TileMatrixSet;
+    images?: GeoTIFFImage[];
   };
 
   override initializeState(): void {
@@ -98,6 +99,12 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
     const metadata = await parseCOGTileMatrixSet(geotiff);
 
     const image = await geotiff.getImage();
+    const imageCount = await geotiff.getImageCount();
+    const images: GeoTIFFImage[] = [];
+    for (let imageIdx = 0; imageIdx < imageCount; imageIdx++) {
+      images.push(await geotiff.getImage(imageIdx));
+    }
+
     const sourceProjection = await getGeoTIFFProjection(image);
     if (!sourceProjection) {
       throw new Error(
@@ -115,6 +122,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
       metadata,
       forwardReproject,
       inverseReproject,
+      images,
     });
   }
 
@@ -122,8 +130,9 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
     metadata: TileMatrixSet,
     forwardReproject: ReprojectionFns["forwardReproject"],
     inverseReproject: ReprojectionFns["inverseReproject"],
+    images: GeoTIFFImage[],
   ): TileLayer {
-    const { geotiff, maxError, debug = false, debugOpacity = 0.5 } = this.props;
+    const { maxError, debug = false, debugOpacity = 0.5 } = this.props;
 
     // Create a factory class that wraps COGTileset2D with the metadata
     class RasterTileset2DFactory extends RasterTileset2D {
@@ -145,33 +154,16 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
         inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
       }> => {
         const { x, y, z } = tile.index;
-        const imageCount = await geotiff.getImageCount();
+
         // Select overview image
-        const geotiffImage = await geotiff.getImage(imageCount - 1 - z);
+        const geotiffImage = images[images.length - 1 - z]!;
         const imageHeight = geotiffImage.getHeight();
         const imageWidth = geotiffImage.getWidth();
 
         const tileMatrix = metadata.tileMatrices[z]!;
         const { tileWidth, tileHeight } = tileMatrix;
 
-        const xPixelOrigin = x * tileWidth;
-        const yPixelOrigin = y * tileHeight;
-
-        const [a, b, c, d, e, f] = tileMatrix.geotransform;
-
-        // Affine geotransform for this tile
-
-        const xCoordOffset = a * xPixelOrigin + b * yPixelOrigin + c;
-        const yCoordOffset = d * xPixelOrigin + e * yPixelOrigin + f;
-
-        const tileGeotransform: [
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-        ] = [a, b, xCoordOffset, d, e, yCoordOffset];
+        const tileGeotransform = computeTileGeotransform(x, y, tileMatrix);
         const { pixelToInputCRS, inputCRSToPixel } =
           fromGeoTransform(tileGeotransform);
 
@@ -280,15 +272,44 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
   }
 
   renderLayers() {
-    const { forwardReproject, inverseReproject, metadata } = this.state;
+    const { forwardReproject, inverseReproject, metadata, images } = this.state;
 
-    if (!forwardReproject || !inverseReproject || !metadata) {
+    if (!forwardReproject || !inverseReproject || !metadata || !images) {
       return null;
     }
 
     // Split into a separate method to make TS happy, because when metadata is
     // nullable in any part of function scope, the tileset factory wrapper gives
     // a type error
-    return this.renderTileLayer(metadata, forwardReproject, inverseReproject);
+    return this.renderTileLayer(
+      metadata,
+      forwardReproject,
+      inverseReproject,
+      images,
+    );
   }
+}
+
+/**
+ * Compute the affine geotransform for this tile.
+ *
+ * We need to offset the geotransform for the matrix level by the tile's pixel
+ * origin.
+ */
+function computeTileGeotransform(
+  x: number,
+  y: number,
+  tileMatrix: TileMatrix,
+): [number, number, number, number, number, number] {
+  const { tileWidth, tileHeight } = tileMatrix;
+
+  const xPixelOrigin = x * tileWidth;
+  const yPixelOrigin = y * tileHeight;
+
+  const [a, b, c, d, e, f] = tileMatrix.geotransform;
+
+  const xCoordOffset = a * xPixelOrigin + b * yPixelOrigin + c;
+  const yCoordOffset = d * xPixelOrigin + e * yPixelOrigin + f;
+
+  return [a, b, xCoordOffset, d, e, yCoordOffset];
 }
