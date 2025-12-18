@@ -128,24 +128,25 @@ export default function App() {
 
   const layers = geotiff
     ? [
-        new COGLayer({
-          id: "cog-layer",
-          geotiff,
-          maxError: 0.125,
-          debug,
-          debugOpacity,
-          visible: renderAsTiled,
-          pool,
-        }),
-        new GeoTIFFLayer({
-          id: "geotiff-layer",
-          geotiff,
-          maxError: 0.125,
-          debug,
-          debugOpacity,
-          visible: !renderAsTiled,
-          pool,
-        }),
+        renderAsTiled
+          ? new COGLayer({
+              id: "cog-layer",
+              geotiff,
+              maxError: 0.125,
+              debug,
+              debugOpacity,
+              visible: renderAsTiled,
+              pool,
+            })
+          : new GeoTIFFLayer({
+              id: "geotiff-layer",
+              geotiff,
+              maxError: 0.125,
+              debug,
+              debugOpacity,
+              visible: !renderAsTiled,
+              pool,
+            }),
       ]
     : [];
 
