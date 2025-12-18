@@ -212,7 +212,7 @@ function parseCrs(crs: PROJJSONDefinition): ProjectionDefinition {
   //
   // Instead, you need to assign it to an alias and then retrieve it.
 
-  const key = "__deck.gl-cog-internal__";
+  const key = "__deck.gl-geotiff-internal__";
   proj4.defs(key, crs);
   return proj4.defs(key);
 }
