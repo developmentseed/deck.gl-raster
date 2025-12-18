@@ -153,6 +153,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
         pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
         inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
       }> => {
+        const { signal } = tile;
         const { x, y, z } = tile.index;
 
         // Select overview image
@@ -176,6 +177,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
 
         const { imageData, height, width } = await loadRgbImage(geotiffImage, {
           window,
+          signal,
           pool: this.props.pool || defaultPool(),
         });
 
