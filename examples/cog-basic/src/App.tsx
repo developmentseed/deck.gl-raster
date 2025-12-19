@@ -134,6 +134,7 @@ export default function App() {
           debugOpacity,
           geoKeysParser,
           pool,
+          beforeId: "aeroway-runway", // In interleaved mode render the layer under map labels. Replace with `slot: 'bottom'` if using Mapbox v3 Standard Style.
         }),
         // : new GeoTIFFLayer({
         //     id: "geotiff-layer",
@@ -158,9 +159,9 @@ export default function App() {
           pitch: 0,
           bearing: 0,
         }}
-        mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+        mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={layers} />
+        <DeckGLOverlay layers={layers} interleaved />
       </Map>
 
       {/* UI Overlay Container */}
