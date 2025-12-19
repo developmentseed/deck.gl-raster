@@ -4,17 +4,23 @@ import type {
   TileMatrixSetBoundingBox,
 } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF, GeoTIFFImage } from "geotiff";
-import {
-  extractGeotransform,
-  getGeoTIFFProjection,
-} from "./geotiff-reprojection";
+import { extractGeotransform } from "./geotiff-reprojection";
 import proj4, { ProjectionDefinition } from "proj4";
 import Ellipsoid from "./ellipsoids.js";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
+import { GeoKeysParser } from "./proj";
 
 // 0.28 mm per pixel
 // https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15
 const SCREEN_PIXEL_SIZE = 0.00028;
+
+type SupportedCrsUnit =
+  | "metre"
+  | "meter"
+  | "meters"
+  | "foot"
+  | "US survey foot"
+  | "degree";
 
 /**
  *
@@ -25,7 +31,12 @@ const SCREEN_PIXEL_SIZE = 0.00028;
  */
 export async function parseCOGTileMatrixSet(
   tiff: GeoTIFF,
+  geoKeysParser: GeoKeysParser,
+  options?: {
+    crsUnit?: SupportedCrsUnit;
+  },
 ): Promise<TileMatrixSet> {
+  const { crsUnit } = options || {};
   const fullResImage = await tiff.getImage();
 
   if (!fullResImage.isTiled) {
@@ -37,7 +48,7 @@ export async function parseCOGTileMatrixSet(
   const fullImageWidth = fullResImage.getWidth();
   const fullImageHeight = fullResImage.getHeight();
 
-  const crs = await getGeoTIFFProjection(fullResImage);
+  const crs = await geoKeysParser(fullResImage.getGeoKeys());
 
   if (crs === null) {
     throw new Error(
@@ -74,7 +85,7 @@ export async function parseCOGTileMatrixSet(
       // Set as highest resolution / finest level
       id: String(imageCount - 1),
       scaleDenominator:
-        (cellSize * metersPerUnit(parsedCrs)) / SCREEN_PIXEL_SIZE,
+        (cellSize * metersPerUnit(parsedCrs, crsUnit)) / SCREEN_PIXEL_SIZE,
       cellSize,
       pointOfOrigin: [transform[2], transform[5]],
       tileWidth: fullResImage.getTileWidth(),
@@ -126,10 +137,21 @@ export async function parseCOGTileMatrixSet(
  * > If the CRS uses meters as units of measure for the horizontal dimensions,
  * > then metersPerUnit=1; if it has degrees, then metersPerUnit=2pa/360
  * > (a is the Earth maximum radius of the ellipsoid).
+ *
+ * If `crsUnit` is provided, it takes precedence over the unit defined in the
+ * CRS. This exists because sometimes the parsed CRS from
+ * `geotiff-geokeys-to-proj4` doesn't have a unit defined.
  */
 // https://github.com/developmentseed/morecantile/blob/7c95a11c491303700d6e33e9c1607f2719584dec/morecantile/utils.py#L67-L90
-function metersPerUnit(parsedCrs: ProjectionDefinition): number {
-  switch (parsedCrs.units) {
+function metersPerUnit(
+  parsedCrs: ProjectionDefinition,
+  crsUnit?: SupportedCrsUnit,
+): number {
+  // Hard-code meter support for NLCD COG, while we figure out a general solution
+  return 1;
+
+  const unit = crsUnit || parsedCrs.units;
+  switch (unit) {
     case "metre":
     case "meter":
     case "meters":
@@ -140,13 +162,13 @@ function metersPerUnit(parsedCrs: ProjectionDefinition): number {
       return 1200 / 3937;
   }
 
-  if (parsedCrs.units === "degree") {
+  if (unit === "degree") {
     // 2 * π * ellipsoid semi-major-axis / 360
     const { a } = Ellipsoid[parsedCrs.ellps as keyof typeof Ellipsoid];
     return (2 * Math.PI * a) / 360;
   }
 
-  throw new Error(`Unsupported CRS units: ${parsedCrs.units}`);
+  throw new Error(`Unsupported CRS units: ${unit}`);
 }
 
 /**

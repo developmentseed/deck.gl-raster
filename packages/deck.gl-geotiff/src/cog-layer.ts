@@ -15,11 +15,10 @@ import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
 import proj4 from "proj4";
 import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
-import {
-  fromGeoTransform,
-  getGeoTIFFProjection,
-} from "./geotiff-reprojection.js";
+import { fromGeoTransform } from "./geotiff-reprojection.js";
 import { defaultPool, loadRgbImage } from "./geotiff.js";
+import type { GeoKeysParser } from "./proj.js";
+import { epsgIoGeoKeyParser } from "./proj.js";
 
 // Workaround until upstream exposes props
 // https://github.com/visgl/deck.gl/pull/9917
@@ -29,6 +28,16 @@ const DEFAULT_MAX_ERROR = 0.125;
 
 export interface COGLayerProps extends CompositeLayerProps {
   geotiff: GeoTIFF;
+
+  /**
+   * A function callback for parsing GeoTIFF geo keys to a Proj4 compatible
+   * definition.
+   *
+   * By default, uses epsg.io to resolve EPSG codes found in the GeoTIFF.
+   * Alternatively, you may want to use `geotiff-geokeys-to-proj4`, which is
+   * more extensive but adds 1.5MB to your bundle size.
+   */
+  geoKeysParser?: GeoKeysParser;
 
   /**
    * GeoTIFF.js Pool for decoding image chunks.
@@ -58,8 +67,9 @@ export interface COGLayerProps extends CompositeLayerProps {
   debugOpacity?: number;
 }
 
-const defaultProps = {
+const defaultProps: Partial<COGLayerProps> = {
   maxError: DEFAULT_MAX_ERROR,
+  geoKeysParser: epsgIoGeoKeyParser,
 };
 
 /**
@@ -96,7 +106,8 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
   async _parseGeoTIFF(): Promise<void> {
     const { geotiff } = this.props;
 
-    const metadata = await parseCOGTileMatrixSet(geotiff);
+    const geoKeysParser = this.props.geoKeysParser!;
+    const metadata = await parseCOGTileMatrixSet(geotiff, geoKeysParser);
 
     const image = await geotiff.getImage();
     const imageCount = await geotiff.getImageCount();
@@ -105,7 +116,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
       images.push(await geotiff.getImage(imageIdx));
     }
 
-    const sourceProjection = await getGeoTIFFProjection(image);
+    const sourceProjection = await geoKeysParser(image.getGeoKeys());
     if (!sourceProjection) {
       throw new Error(
         "Could not determine source projection from GeoTIFF geo keys",
