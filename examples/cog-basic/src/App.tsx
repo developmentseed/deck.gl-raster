@@ -19,6 +19,8 @@ function DeckGLOverlay(props: DeckProps) {
 
 async function geoKeysParser(geoKeys: Record<string, any>): Promise<any> {
   const projDefinition = toProj4(geoKeys as any);
+  console.log("projDefinition", projDefinition);
+  window.projDefinition = projDefinition;
   return projDefinition.proj4;
 }
 
@@ -31,8 +33,6 @@ async function getCogBounds(
   const image = await tiff.getImage();
   const projectedBbox = image.getBoundingBox();
   const projDefinition = await geoKeysParser(image.getGeoKeys());
-  console.log("projDefinition", projDefinition);
-  window.projDefinition = projDefinition;
 
   // Reproject to WGS84 (EPSG:4326)
   const converter = proj4(projDefinition, "EPSG:4326");
