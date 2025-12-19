@@ -228,9 +228,9 @@ export default function App() {
           <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
             COGLayer Example
           </h3>
-          <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
+          {/* <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
             Displaying RGB imagery from New Zealand (NZTM2000 projection)
-          </p>
+          </p> */}
 
           {/* Debug Controls */}
           <div
@@ -303,7 +303,7 @@ export default function App() {
             )}
           </div>
 
-          <div
+          {/* <div
             style={{
               marginTop: "12px",
               paddingTop: "12px",
@@ -314,7 +314,7 @@ export default function App() {
           >
             <div>Max Error: 0.125 pixels</div>
             <div>Source: LINZ</div>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>
