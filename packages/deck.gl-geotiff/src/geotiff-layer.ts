@@ -5,11 +5,23 @@ import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { GeoTIFF, Pool } from "geotiff";
 import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
 import { defaultPool, loadRgbImage } from "./geotiff.js";
+import type { GeoKeysParser } from "./proj.js";
+import { epsgIoGeoKeyParser } from "./proj.js";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
 export interface GeoTIFFLayerProps extends CompositeLayerProps {
   geotiff: GeoTIFF;
+
+  /**
+   * A function callback for parsing GeoTIFF geo keys to a Proj4 compatible
+   * definition.
+   *
+   * By default, uses epsg.io to resolve EPSG codes found in the GeoTIFF.
+   * Alternatively, you may want to use `geotiff-geokeys-to-proj4`, which is
+   * more extensive but adds 1.5MB to your bundle size.
+   */
+  geoKeysParser?: GeoKeysParser;
 
   /**
    * GeoTIFF.js Pool for decoding image chunks.
@@ -41,6 +53,7 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
 
 const defaultProps = {
   maxError: DEFAULT_MAX_ERROR,
+  geoKeysParser: epsgIoGeoKeyParser,
 };
 
 /**
@@ -83,7 +96,10 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
   async _parseGeoTIFF(): Promise<void> {
     const { geotiff } = this.props;
 
-    const reprojectionFns = await extractGeotiffReprojectors(geotiff);
+    const reprojectionFns = await extractGeotiffReprojectors(
+      geotiff,
+      this.props.geoKeysParser!,
+    );
     const image = await geotiff.getImage();
     const { imageData, height, width } = await loadRgbImage(image, {
       pool: this.props.pool || defaultPool(),

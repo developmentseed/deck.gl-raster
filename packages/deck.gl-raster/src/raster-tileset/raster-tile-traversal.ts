@@ -275,12 +275,12 @@ export class RasterTileNode {
         boundingVolume,
         viewport.zoom,
       );
-      console.log("metersPerScreenPixel", metersPerScreenPixel);
+      // console.log("metersPerScreenPixel", metersPerScreenPixel);
 
       const tileMetersPerPixel =
         this.tileMatrix.scaleDenominator * SCREEN_PIXEL_SIZE;
 
-      console.log("tileMetersPerPixel", tileMetersPerPixel);
+      // console.log("tileMetersPerPixel", tileMetersPerPixel);
 
       // const screenScaleDenominator = metersPerScreenPixel / SCREEN_PIXEL_SIZE;
 
@@ -295,10 +295,10 @@ export class RasterTileNode {
       //   this.tileMatrix.scaleDenominator,
       // );
 
-      console.log(
-        "tileMetersPerPixel <= metersPerScreenPixel",
-        tileMetersPerPixel <= metersPerScreenPixel,
-      );
+      // console.log(
+      //   "tileMetersPerPixel <= metersPerScreenPixel",
+      //   tileMetersPerPixel <= metersPerScreenPixel,
+      // );
 
       if (
         tileMetersPerPixel <= metersPerScreenPixel ||

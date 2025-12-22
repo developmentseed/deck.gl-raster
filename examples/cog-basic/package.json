@@ -17,6 +17,7 @@
     "@developmentseed/deck.gl-geotiff": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "geotiff": "^2.1.3",
+    "geotiff-geokeys-to-proj4": "^2024.4.13",
     "maplibre-gl": "^5.0.0",
     "proj4": "^2.20.2",
     "react": "^19.2.3",
