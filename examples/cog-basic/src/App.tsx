@@ -1,13 +1,13 @@
-import { useEffect, useState, useRef } from "react";
-import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
+import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { DeckProps, Layer } from "@deck.gl/core";
-import { fromUrl, Pool } from "geotiff";
+import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
 import type { GeoTIFF } from "geotiff";
-import { COGLayer, proj, GeoTIFFLayer } from "@developmentseed/deck.gl-geotiff";
-import proj4 from "proj4";
+import { fromUrl, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
+import proj4 from "proj4";
+import { useEffect, useRef, useState } from "react";
+import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
 
 window.proj4 = proj4;
 
@@ -24,14 +24,11 @@ async function geoKeysParser(
   console.log("projDefinition", projDefinition);
   (window as any).projDefinition = projDefinition;
 
-  // return projDefinition.proj4;
-  const x = {
+  return {
     def: projDefinition.proj4,
     parsed: proj.parseCrs(projDefinition.proj4),
     coordinatesUnits: projDefinition.coordinatesUnits as proj.SupportedCrsUnit,
   };
-  console.log("parsed proj", x);
-  return x;
 }
 
 /**
@@ -146,15 +143,6 @@ export default function App() {
           pool,
           beforeId: "aeroway-runway", // In interleaved mode render the layer under map labels. Replace with `slot: 'bottom'` if using Mapbox v3 Standard Style.
         }),
-        // : new GeoTIFFLayer({
-        //     id: "geotiff-layer",
-        //     geotiff,
-        //     maxError: 0.125,
-        //     debug,
-        //     debugOpacity,
-        //     visible: !renderAsTiled,
-        //     pool,
-        //   }),
       ]
     : [];
 
