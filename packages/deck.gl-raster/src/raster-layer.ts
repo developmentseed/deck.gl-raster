@@ -6,9 +6,9 @@ import type {
 import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
-import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
+import { MeshTextureLayer, MeshTextureLayerProps } from "./mesh-layer";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
@@ -68,6 +68,11 @@ export interface RasterLayerProps extends CompositeLayerProps {
    * Customize the [texture parameters](https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texParameter).
    */
   textureParameters?: SimpleMeshLayerProps["textureParameters"];
+
+  /**
+   * Optional shader injection.
+   */
+  shaders?: MeshTextureLayerProps["shaders"];
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
@@ -186,7 +191,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
   renderLayers() {
     const { mesh } = this.state;
-    const { texture, debug } = this.props;
+    const { texture, debug, shaders } = this.props;
 
     if (!mesh) {
       return null;
@@ -195,10 +200,11 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     const { indices, positions, texCoords } = mesh;
 
     const layers: Layer[] = [
-      new SimpleMeshLayer(
+      new MeshTextureLayer(
         this.getSubLayerProps({
           id: "raster",
           texture,
+          shaders,
           // Dummy data because we're only rendering _one_ instance of this mesh
           // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
           data: [1],

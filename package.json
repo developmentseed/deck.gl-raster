@@ -12,17 +12,19 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^8.49.0",
+    "@typescript-eslint/eslint-plugin": "^8.50.1",
     "publint": "^0.3.16",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2"
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   },
   "pnpm": {
     "overrides": {
-      "deck.gl": "9.2.5",
-      "@deck.gl/*": "9.2.5",
-      "luma.gl": "9.2.5",
-      "@luma.gl/*": "9.2.5"
+      "@luma.gl/constants": "9.2.5",
+      "@luma.gl/core": "9.2.5",
+      "@luma.gl/engine": "9.2.5",
+      "@luma.gl/gltf": "9.2.5",
+      "@luma.gl/shadertools": "9.2.5",
+      "@luma.gl/webgl": "9.2.5"
     }
   },
   "packageManager": "pnpm@10.25.0",
