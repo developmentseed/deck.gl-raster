@@ -6,6 +6,7 @@ import type {
 import { CompositeLayer } from "@deck.gl/core";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
+import type { Device } from "@luma.gl/core";
 import type {
   RasterLayerProps,
   TileMatrix,
@@ -68,6 +69,7 @@ export interface COGLayerProps extends CompositeLayerProps {
   loadTexture?: (
     image: GeoTIFFImage,
     options: {
+      device: Device;
       window: [number, number, number, number];
       signal?: AbortSignal;
       pool: Pool;
@@ -215,6 +217,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
 
         const { texture, height, width, shaders } = await this.props
           .loadTexture!(geotiffImage, {
+          device: this.context.device,
           window,
           signal,
           pool: this.props.pool || defaultPool(),

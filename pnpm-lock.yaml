@@ -52,6 +52,12 @@ importers:
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../../packages/deck.gl-raster
+      '@luma.gl/core':
+        specifier: 9.2.5
+        version: 9.2.5
+      '@luma.gl/shadertools':
+        specifier: ^9.2.5
+        version: 9.2.5(@luma.gl/core@9.2.5)
       geotiff:
         specifier: ^2.1.3
         version: 2.1.3

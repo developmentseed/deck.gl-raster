@@ -1,13 +1,24 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
-import type { GeoTIFF } from "geotiff";
+import type { Device, Texture, TextureProps } from "@luma.gl/core";
+import { ShaderModule } from "@luma.gl/shadertools";
+import {
+  COGLayer,
+  proj,
+  texture as textureUtils,
+} from "@developmentseed/deck.gl-geotiff";
+import type {
+  GeoTIFF,
+  GeoTIFFImage,
+  TypedArrayArrayWithDimensions,
+} from "geotiff";
 import { fromUrl, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
 import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
+import { RasterLayerProps } from "../../../packages/deck.gl-raster/dist/raster-layer";
 
 window.proj4 = proj4;
 
@@ -79,6 +90,139 @@ async function getCogBounds(
 const COG_URL =
   "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
 
+export type LandCoverProps = {
+  min: number;
+  max: number;
+  colormap_texture: Texture;
+};
+
+const landCoverModule = {
+  name: "landCover",
+} as const satisfies ShaderModule<LandCoverProps>;
+
+async function loadLandCoverTexture(
+  image: GeoTIFFImage,
+  options: {
+    device: Device;
+    window: [number, number, number, number];
+    signal?: AbortSignal;
+    pool: Pool;
+  },
+): Promise<{
+  texture: ImageData | TextureProps;
+  shaders?: RasterLayerProps["shaders"];
+  height: number;
+  width: number;
+}> {
+  const { window, signal, pool, device } = options;
+  const data = (await image.readRasters({
+    window,
+    samples: [0],
+    pool,
+    signal,
+  })) as TypedArrayArrayWithDimensions;
+
+  console.log("Read raster data:", {
+    window,
+    dataWidth: data.width,
+    dataHeight: data.height,
+    dataLength: data[0].length,
+    firstBandLength: data[0].length,
+  });
+
+  const colorMapImageData = parseGeoTIFFColormap(image.fileDirectory.ColorMap);
+
+  // Convert ImageData to TextureProps for proper texture binding
+  console.log("Creating colormap texture with dimensions:", {
+    width: colorMapImageData.width,
+    height: colorMapImageData.height,
+    dataLength: colorMapImageData.data.length,
+  });
+
+  const colorMapTexture = device.createTexture({
+    data: colorMapImageData.data,
+    dimension: "2d",
+    format: "rgba8unorm",
+    width: colorMapImageData.width,
+    height: colorMapImageData.height,
+    sampler: {
+      minFilter: "nearest",
+      magFilter: "nearest",
+      addressModeU: "clamp-to-edge",
+      addressModeV: "clamp-to-edge",
+    },
+  });
+
+  const texture: TextureProps = textureUtils.createTextureProps(
+    image,
+    data[0],
+    {
+      width: data.width,
+      height: data.height,
+    },
+  );
+  console.log("texture props", texture);
+  return {
+    texture,
+    shaders: {
+      inject: {
+        "fs:DECKGL_FILTER_COLOR": `
+          // Render single-band data as grayscale
+          float value = color.r;
+          color = vec4(value, value, value, 1.0);
+        `,
+      },
+    },
+    // For colormap rendering:
+    // shaders: {
+    //   inject: {
+    //     "fs:#decl": `
+    //       uniform sampler2D colormap_texture;
+    //     `,
+    //     "fs:DECKGL_FILTER_COLOR": `
+    //       float value = color.r;
+    //       vec3 pickingval = vec3(value, 0., 0.);
+    //       if (value == 250.0) {
+    //           discard;
+    //         } else {
+    //           vec4 color_val = texture(colormap_texture, vec2(value, 0.));
+    //           color = color_val;
+    //         }
+    //     `,
+    //   },
+    //   modules: [landCoverModule],
+    //   shaderProps: {
+    //     landCover: {
+    //       colormap_texture: colorMapTexture,
+    //     },
+    //   },
+    // },
+    height: data.height,
+    width: data.width,
+  };
+}
+
+function parseGeoTIFFColormap(cmap: Uint16Array): ImageData {
+  const size = 256;
+  const rgba = new Uint8ClampedArray(size * 4);
+
+  const rOffset = 0;
+  const gOffset = size;
+  const bOffset = size * 2;
+
+  // Note: >> 8 is needed to convert from 16-bit to 8-bit color values
+  // It just divides by 256 and floors to nearest integer
+  for (let i = 0; i < size; i++) {
+    rgba[4 * i + 0] = cmap[rOffset + i] >> 8;
+    rgba[4 * i + 1] = cmap[gOffset + i] >> 8;
+    rgba[4 * i + 2] = cmap[bOffset + i] >> 8;
+    // Full opacity
+    rgba[4 * i + 3] = 255;
+  }
+
+  return new ImageData(rgba, size, 1);
+}
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
@@ -141,6 +285,7 @@ export default function App() {
           debugOpacity,
           geoKeysParser,
           pool,
+          loadTexture: loadLandCoverTexture,
           beforeId: "aeroway-runway", // In interleaved mode render the layer under map labels. Replace with `slot: 'bottom'` if using Mapbox v3 Standard Style.
         }),
       ]
