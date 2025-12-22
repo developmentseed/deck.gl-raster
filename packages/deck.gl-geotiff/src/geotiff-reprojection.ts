@@ -105,7 +105,7 @@ export async function extractGeotiffReprojectors(
       "Could not determine source projection from GeoTIFF geo keys",
     );
   }
-  const converter = proj4(sourceProjection, outputCrs);
+  const converter = proj4(sourceProjection.def, outputCrs);
   const { pixelToInputCRS, inputCRSToPixel } =
     fromGeoTransform(baseGeotransform);
 

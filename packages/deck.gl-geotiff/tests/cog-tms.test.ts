@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseCOGTileMatrixSet } from "../src";
 import { fromUrl } from "geotiff";
+import { epsgIoGeoKeyParser } from "../src/proj";
 
 describe("create TileMatrixSet from COG", () => {
   it("creates TMS", async () => {
@@ -8,7 +9,7 @@ describe("create TileMatrixSet from COG", () => {
       "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
 
     const tiff = await fromUrl(url);
-    const tms = await parseCOGTileMatrixSet(tiff);
+    const tms = await parseCOGTileMatrixSet(tiff, epsgIoGeoKeyParser);
 
     const expectedTileMatrices = [
       {

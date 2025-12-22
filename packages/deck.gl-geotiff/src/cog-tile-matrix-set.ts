@@ -7,20 +7,11 @@ import type { GeoTIFF, GeoTIFFImage } from "geotiff";
 import { extractGeotransform } from "./geotiff-reprojection";
 import proj4, { ProjectionDefinition } from "proj4";
 import Ellipsoid from "./ellipsoids.js";
-import type { PROJJSONDefinition } from "proj4/dist/lib/core";
-import { GeoKeysParser } from "./proj";
+import { GeoKeysParser, ProjectionInfo, SupportedCrsUnit } from "./proj";
 
 // 0.28 mm per pixel
 // https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15
 const SCREEN_PIXEL_SIZE = 0.00028;
-
-type SupportedCrsUnit =
-  | "metre"
-  | "meter"
-  | "meters"
-  | "foot"
-  | "US survey foot"
-  | "degree";
 
 /**
  *
@@ -32,11 +23,7 @@ type SupportedCrsUnit =
 export async function parseCOGTileMatrixSet(
   tiff: GeoTIFF,
   geoKeysParser: GeoKeysParser,
-  options?: {
-    crsUnit?: SupportedCrsUnit;
-  },
 ): Promise<TileMatrixSet> {
-  const { crsUnit } = options || {};
   const fullResImage = await tiff.getImage();
 
   if (!fullResImage.isTiled) {
@@ -56,10 +43,8 @@ export async function parseCOGTileMatrixSet(
     );
   }
 
-  const parsedCrs = parseCrs(crs);
-
-  const projectToWgs84 = proj4(crs, "EPSG:4326").forward;
-  const projectTo3857 = proj4(crs, "EPSG:3857").forward;
+  const projectToWgs84 = proj4(crs.def, "EPSG:4326").forward;
+  const projectTo3857 = proj4(crs.def, "EPSG:3857").forward;
 
   const boundingBox: TileMatrixSet["boundingBox"] = {
     lowerLeft: [bbox[0]!, bbox[1]!],
@@ -85,7 +70,8 @@ export async function parseCOGTileMatrixSet(
       // Set as highest resolution / finest level
       id: String(imageCount - 1),
       scaleDenominator:
-        (cellSize * metersPerUnit(parsedCrs, crsUnit)) / SCREEN_PIXEL_SIZE,
+        (cellSize * metersPerUnit(crs.parsed, crs.coordinatesUnits)) /
+        SCREEN_PIXEL_SIZE,
       cellSize,
       pointOfOrigin: [transform[2], transform[5]],
       tileWidth: fullResImage.getTileWidth(),
@@ -110,7 +96,7 @@ export async function parseCOGTileMatrixSet(
       fullWidth: fullImageWidth,
       fullHeight: fullImageHeight,
       baseTransform: transform,
-      parsedCrs,
+      crs,
     });
     tileMatrices.push(tileMatrix);
   }
@@ -147,9 +133,6 @@ function metersPerUnit(
   parsedCrs: ProjectionDefinition,
   crsUnit?: SupportedCrsUnit,
 ): number {
-  // Hard-code meter support for NLCD COG, while we figure out a general solution
-  return 1;
-
   const unit = crsUnit || parsedCrs.units;
   switch (unit) {
     case "metre":
@@ -179,14 +162,14 @@ function createOverviewTileMatrix({
   image,
   fullWidth,
   baseTransform,
-  parsedCrs,
+  crs,
 }: {
   id: string;
   image: GeoTIFFImage;
   fullWidth: number;
   fullHeight: number;
   baseTransform: [number, number, number, number, number, number];
-  parsedCrs: ProjectionDefinition;
+  crs: ProjectionInfo;
 }): TileMatrix {
   const width = image.getWidth();
   const height = image.getHeight();
@@ -217,7 +200,9 @@ function createOverviewTileMatrix({
 
   return {
     id,
-    scaleDenominator: (cellSize * metersPerUnit(parsedCrs)) / SCREEN_PIXEL_SIZE,
+    scaleDenominator:
+      (cellSize * metersPerUnit(crs.parsed, crs.coordinatesUnits)) /
+      SCREEN_PIXEL_SIZE,
     cellSize,
     pointOfOrigin: [geotransform[2], geotransform[5]],
     tileWidth,
@@ -226,17 +211,6 @@ function createOverviewTileMatrix({
     matrixHeight: Math.ceil(height / tileHeight),
     geotransform,
   };
-}
-
-function parseCrs(crs: PROJJSONDefinition): ProjectionDefinition {
-  // If you pass proj4.defs a projjson, it doesn't parse it; it just returns the
-  // input.
-  //
-  // Instead, you need to assign it to an alias and then retrieve it.
-
-  const key = "__deck.gl-geotiff-internal__";
-  proj4.defs(key, crs);
-  return proj4.defs(key);
 }
 
 function computeWgs84BoundingBox(

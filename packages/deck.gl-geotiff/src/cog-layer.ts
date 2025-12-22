@@ -123,7 +123,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
       );
     }
 
-    const converter = proj4(sourceProjection, "EPSG:4326");
+    const converter = proj4(sourceProjection.def, "EPSG:4326");
     const forwardReproject = (x: number, y: number) =>
       converter.forward<[number, number]>([x, y], false);
     const inverseReproject = (x: number, y: number) =>

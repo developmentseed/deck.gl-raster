@@ -4,7 +4,7 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { DeckProps, Layer } from "@deck.gl/core";
 import { fromUrl, Pool } from "geotiff";
 import type { GeoTIFF } from "geotiff";
-import { COGLayer, GeoTIFFLayer } from "@developmentseed/deck.gl-geotiff";
+import { COGLayer, proj, GeoTIFFLayer } from "@developmentseed/deck.gl-geotiff";
 import proj4 from "proj4";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -17,11 +17,21 @@ function DeckGLOverlay(props: DeckProps) {
   return null;
 }
 
-async function geoKeysParser(geoKeys: Record<string, any>): Promise<any> {
+async function geoKeysParser(
+  geoKeys: Record<string, any>,
+): Promise<proj.ProjectionInfo> {
   const projDefinition = toProj4(geoKeys as any);
   console.log("projDefinition", projDefinition);
-  window.projDefinition = projDefinition;
-  return projDefinition.proj4;
+  (window as any).projDefinition = projDefinition;
+
+  // return projDefinition.proj4;
+  const x = {
+    def: projDefinition.proj4,
+    parsed: proj.parseCrs(projDefinition.proj4),
+    coordinatesUnits: projDefinition.coordinatesUnits as proj.SupportedCrsUnit,
+  };
+  console.log("parsed proj", x);
+  return x;
 }
 
 /**
@@ -35,7 +45,7 @@ async function getCogBounds(
   const projDefinition = await geoKeysParser(image.getGeoKeys());
 
   // Reproject to WGS84 (EPSG:4326)
-  const converter = proj4(projDefinition, "EPSG:4326");
+  const converter = proj4(projDefinition.def, "EPSG:4326");
 
   // Reproject all four corners to handle rotation/skew
   const [minX, minY, maxX, maxY] = projectedBbox;
