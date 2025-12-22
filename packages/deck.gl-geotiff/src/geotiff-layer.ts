@@ -101,13 +101,13 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
       this.props.geoKeysParser!,
     );
     const image = await geotiff.getImage();
-    const { imageData, height, width } = await loadRgbImage(image, {
+    const { texture, height, width } = await loadRgbImage(image, {
       pool: this.props.pool || defaultPool(),
     });
 
     this.setState({
       reprojectionFns,
-      imageData,
+      imageData: texture,
       height,
       width,
     });

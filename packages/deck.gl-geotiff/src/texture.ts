@@ -32,8 +32,8 @@ export function createTextureProps(
  */
 function inferTextureFormat(
   samplesPerPixel: number,
-  bitsPerSample: number[],
-  sampleFormat: number[],
+  bitsPerSample: Uint16Array,
+  sampleFormat: Uint16Array,
 ): TextureFormat {
   const channelCount = verifySamplesPerPixel(samplesPerPixel);
   const bitWidth = verifyIdenticalBitsPerSample(bitsPerSample);
@@ -70,7 +70,7 @@ function verifySamplesPerPixel(samplesPerPixel: number): ChannelCount {
   );
 }
 
-function verifyIdenticalBitsPerSample(bitsPerSample: number[]): BitWidth {
+function verifyIdenticalBitsPerSample(bitsPerSample: Uint16Array): BitWidth {
   // bitsPerSamples is non-empty
   const first = bitsPerSample[0]!;
 
@@ -94,7 +94,7 @@ function verifyIdenticalBitsPerSample(bitsPerSample: number[]): BitWidth {
 /**
  * Map the geotiff tag SampleFormat to known kinds of scalars
  */
-function inferScalarKind(sampleFormat: number[]): ScalarKind {
+function inferScalarKind(sampleFormat: Uint16Array): ScalarKind {
   // Only support identical SampleFormats for all samples
   const first = sampleFormat[0]!;
 

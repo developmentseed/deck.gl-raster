@@ -10,3 +10,4 @@ export {
 export { loadRgbImage } from "./geotiff.js";
 
 export * as proj from "./proj.js";
+export * as texture from "./texture.js";

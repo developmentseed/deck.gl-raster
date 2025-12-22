@@ -45,7 +45,7 @@ export function defaultPool(): Pool {
 export async function loadRgbImage(
   image: GeoTIFFImage,
   options?: ReadRasterOptions,
-): Promise<{ imageData: ImageData; height: number; width: number }> {
+): Promise<{ texture: ImageData; height: number; width: number }> {
   const mergedOptions = {
     ...options,
     interleave: true,
@@ -60,7 +60,7 @@ export async function loadRgbImage(
   const imageData = addAlphaChannel(rgbImage);
 
   return {
-    imageData,
+    texture: imageData,
     height: rgbImage.height,
     width: rgbImage.width,
   };

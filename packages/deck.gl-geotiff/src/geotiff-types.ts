@@ -4,10 +4,10 @@ import { globals } from "geotiff";
 export type ImageFileDirectory = {
   ImageWidth: number;
   ImageLength: number;
-  BitsPerSample: number[];
+  BitsPerSample: Uint16Array;
   Compression: number;
   PhotometricInterpretation: typeof globals.photometricInterpretations;
   SamplesPerPixel: number;
-  SampleFormat: number[];
+  SampleFormat: Uint16Array;
   PlanarConfiguration: number;
 };
