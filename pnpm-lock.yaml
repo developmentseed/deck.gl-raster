@@ -4,6 +4,12 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  deck.gl: 9.2.5
+  '@deck.gl/*': 9.2.5
+  luma.gl: 9.2.5
+  '@luma.gl/*': 9.2.5
+
 importers:
 
   .:
