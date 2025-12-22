@@ -17,6 +17,14 @@
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"
   },
+  "pnpm": {
+    "overrides": {
+      "deck.gl": "9.2.5",
+      "@deck.gl/*": "9.2.5",
+      "luma.gl": "9.2.5",
+      "@luma.gl/*": "9.2.5"
+    }
+  },
   "packageManager": "pnpm@10.25.0",
   "volta": {
     "node": "24.11.1",
