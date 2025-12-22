@@ -6,6 +6,7 @@ export type { GeoTIFFLayerProps } from "./geotiff-layer.js";
 export {
   extractGeotiffReprojectors,
   fromGeoTransform,
-  getGeoTIFFProjection,
 } from "./geotiff-reprojection.js";
 export { loadRgbImage } from "./geotiff.js";
+
+export * as proj from "./proj.js";

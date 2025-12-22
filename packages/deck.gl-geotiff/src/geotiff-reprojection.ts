@@ -9,8 +9,9 @@ import {
 import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import type Projection from "proj4/dist/lib/Proj";
+import type { GeoKeysParser } from "./proj";
 
-const OGC_84: PROJJSONDefinition = {
+export const OGC_84: PROJJSONDefinition = {
   $schema: "https://proj.org/schemas/v0.7/projjson.schema.json",
   type: "GeographicCRS",
   name: "WGS 84 (CRS84)",
@@ -89,6 +90,7 @@ const OGC_84: PROJJSONDefinition = {
 // TODO: return a RasterReprojector instance, given the IFD and tile of interest?
 export async function extractGeotiffReprojectors(
   tiff: GeoTIFF,
+  geoKeysParser: GeoKeysParser,
   outputCrs: string | PROJJSONDefinition | Projection = OGC_84,
 ): Promise<ReprojectionFns> {
   const image = await tiff.getImage();
@@ -97,13 +99,13 @@ export async function extractGeotiffReprojectors(
   // Only the top-level IFD has geo keys, so we'll derive overviews from this
   const baseGeotransform = extractGeotransform(image);
 
-  const sourceProjection = await getGeoTIFFProjection(image);
+  const sourceProjection = await geoKeysParser(image.getGeoKeys());
   if (sourceProjection === null) {
     throw new Error(
       "Could not determine source projection from GeoTIFF geo keys",
     );
   }
-  const converter = proj4(sourceProjection, outputCrs);
+  const converter = proj4(sourceProjection.def, outputCrs);
   const { pixelToInputCRS, inputCRSToPixel } =
     fromGeoTransform(baseGeotransform);
 
@@ -129,38 +131,6 @@ export function fromGeoTransform(
     inputCRSToPixel: (x: number, y: number) =>
       applyAffine(x, y, inverseGeotransform),
   };
-}
-
-/**
- * Get the Projection of a GeoTIFF
- *
- * The first `image` must be passed in, as only the top-level IFD contains geo
- * keys.
- */
-export async function getGeoTIFFProjection(
-  image: GeoTIFFImage,
-): Promise<PROJJSONDefinition | null> {
-  const geoKeys = image.getGeoKeys();
-  const projectionCode: number | null =
-    geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || null;
-
-  const sourceProjection = await getProjjson(projectionCode);
-  return sourceProjection;
-}
-
-/** Query epsg.io for the PROJJSON corresponding to the given EPSG code. */
-async function getProjjson(projectionCode: number | null) {
-  if (projectionCode === null) {
-    return null;
-  }
-
-  const url = `https://epsg.io/${projectionCode}.json`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch projection data from ${url}`);
-  }
-  const data = await response.json();
-  return data;
 }
 
 /**

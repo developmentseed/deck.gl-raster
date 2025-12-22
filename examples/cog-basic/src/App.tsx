@@ -1,17 +1,34 @@
-import { useEffect, useState, useRef } from "react";
-import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
-import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { DeckProps } from "@deck.gl/core";
-import { fromUrl, Pool } from "geotiff";
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
 import type { GeoTIFF } from "geotiff";
-import { COGLayer, GeoTIFFLayer } from "@developmentseed/deck.gl-geotiff";
-import proj4 from "proj4";
+import { fromUrl, Pool } from "geotiff";
+import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
+import proj4 from "proj4";
+import { useEffect, useRef, useState } from "react";
+import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
+
+window.proj4 = proj4;
 
 function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
   overlay.setProps(props);
   return null;
+}
+
+async function geoKeysParser(
+  geoKeys: Record<string, any>,
+): Promise<proj.ProjectionInfo> {
+  const projDefinition = toProj4(geoKeys as any);
+  console.log("projDefinition", projDefinition);
+  (window as any).projDefinition = projDefinition;
+
+  return {
+    def: projDefinition.proj4,
+    parsed: proj.parseCrs(projDefinition.proj4),
+    coordinatesUnits: projDefinition.coordinatesUnits as proj.SupportedCrsUnit,
+  };
 }
 
 /**
@@ -22,26 +39,10 @@ async function getCogBounds(
 ): Promise<[[number, number], [number, number]]> {
   const image = await tiff.getImage();
   const projectedBbox = image.getBoundingBox();
-  const geoKeys = image.getGeoKeys();
-
-  // Get the projection code
-  const projectionCode =
-    geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || null;
-
-  if (!projectionCode) {
-    throw new Error("Could not determine projection from GeoTIFF");
-  }
-
-  // Fetch projection definition
-  const url = `https://epsg.io/${projectionCode}.json`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch projection data from ${url}`);
-  }
-  const projDef = await response.json();
+  const projDefinition = await geoKeysParser(image.getGeoKeys());
 
   // Reproject to WGS84 (EPSG:4326)
-  const converter = proj4(projDef, "EPSG:4326");
+  const converter = proj4(projDefinition.def, "EPSG:4326");
 
   // Reproject all four corners to handle rotation/skew
   const [minX, minY, maxX, maxY] = projectedBbox;
@@ -71,8 +72,12 @@ async function getCogBounds(
 // const COG_URL =
 //   "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
 
+// const COG_URL =
+//   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
+
+// const COG_URL = "http://127.0.0.1:8080/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
 const COG_URL =
-  "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
+  "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -128,25 +133,16 @@ export default function App() {
 
   const layers = geotiff
     ? [
-        renderAsTiled
-          ? new COGLayer({
-              id: "cog-layer",
-              geotiff,
-              maxError: 0.125,
-              debug,
-              debugOpacity,
-              visible: renderAsTiled,
-              pool,
-            })
-          : new GeoTIFFLayer({
-              id: "geotiff-layer",
-              geotiff,
-              maxError: 0.125,
-              debug,
-              debugOpacity,
-              visible: !renderAsTiled,
-              pool,
-            }),
+        new COGLayer({
+          id: "cog-layer",
+          geotiff,
+          maxError: 0.125,
+          debug,
+          debugOpacity,
+          geoKeysParser,
+          pool,
+          beforeId: "aeroway-runway", // In interleaved mode render the layer under map labels. Replace with `slot: 'bottom'` if using Mapbox v3 Standard Style.
+        }),
       ]
     : [];
 
@@ -161,9 +157,9 @@ export default function App() {
           pitch: 0,
           bearing: 0,
         }}
-        mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+        mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={layers} />
+        <DeckGLOverlay layers={layers} interleaved />
       </Map>
 
       {/* UI Overlay Container */}
@@ -231,9 +227,9 @@ export default function App() {
           <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
             COGLayer Example
           </h3>
-          <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
+          {/* <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
             Displaying RGB imagery from New Zealand (NZTM2000 projection)
-          </p>
+          </p> */}
 
           {/* Debug Controls */}
           <div
@@ -243,7 +239,7 @@ export default function App() {
               marginTop: "12px",
             }}
           >
-            <label
+            {/* <label
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -260,7 +256,7 @@ export default function App() {
                 style={{ cursor: "pointer" }}
               />
               <span>Render as tiled</span>
-            </label>
+            </label> */}
 
             <label
               style={{
@@ -306,7 +302,7 @@ export default function App() {
             )}
           </div>
 
-          <div
+          {/* <div
             style={{
               marginTop: "12px",
               paddingTop: "12px",
@@ -317,7 +313,7 @@ export default function App() {
           >
             <div>Max Error: 0.125 pixels</div>
             <div>Source: LINZ</div>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>
