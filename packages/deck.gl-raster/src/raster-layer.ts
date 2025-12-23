@@ -4,7 +4,7 @@ import type {
   UpdateParameters,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
-import { PolygonLayer } from "@deck.gl/layers";
+import { SolidPolygonLayer } from "@deck.gl/layers";
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
@@ -12,32 +12,38 @@ import { MeshTextureLayer, MeshTextureLayerProps } from "./mesh-layer";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
-const DEBUG_COLORS = [
-  [252, 73, 163], // pink
-  [255, 51, 204], // magenta-pink
-  [204, 102, 255], // purple-ish
-  [153, 51, 255], // deep purple
-  [102, 204, 255], // sky blue
-  [51, 153, 255], // clear blue
-  [102, 255, 204], // teal
-  [51, 255, 170], // aqua-teal
-  [0, 255, 0], // lime green
-  [51, 204, 51], // stronger green
-  [255, 204, 102], // light orange
-  [255, 179, 71], // golden-orange
-  [255, 102, 102], // salmon
-  [255, 80, 80], // red-salmon
-  [255, 0, 0], // red
-  [204, 0, 0], // crimson
-  [255, 128, 0], // orange
-  [255, 153, 51], // bright orange
-  [255, 255, 102], // yellow
-  [255, 255, 51], // lemon
-  [0, 255, 255], // turquoise
-  [0, 204, 255], // cyan
-];
+// prettier-ignore
+const DEBUG_COLORS = new Uint8Array([
+  252, 73, 163, // pink
+  255, 51, 204, // magenta-pink
+  204, 102, 255, // purple-ish
+  153, 51, 255, // deep purple
+  102, 204, 255, // sky blue
+  51, 153, 255, // clear blue
+  102, 255, 204, // teal
+  51, 255, 170, // aqua-teal
+  0, 255, 0, // lime green
+  51, 204, 51, // stronger green
+  255, 204, 102, // light orange
+  255, 179, 71, // golden-orange
+  255, 102, 102, // salmon
+  255, 80, 80, // red-salmon
+  255, 0, 0, // red
+  204, 0, 0, // crimson
+  255, 128, 0, // orange
+  255, 153, 51, // bright orange
+  255, 255, 102, // yellow
+  255, 255, 51, // lemon
+  0, 255, 255, // turquoise
+  0, 204, 255, // cyan
+]);
 
-type ParsedTriangle = { idx: number; geom: number[][] };
+type ParsedTriangles = {
+  startIndices: Uint32Array;
+  positions: Float64Array;
+  fillColors: Uint8Array;
+  earcutIndices: Uint32Array;
+};
 
 export interface RasterLayerProps extends CompositeLayerProps {
   /**
@@ -108,7 +114,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       indices: Uint32Array;
       texCoords: Float32Array;
     };
-    debugTriangles?: ParsedTriangle[];
+    debugTriangles?: ParsedTriangles;
   };
 
   override initializeState(): void {
@@ -161,7 +167,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     reprojector.run(maxError);
     const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
 
-    let debugTriangles: ParsedTriangle[] | undefined = undefined;
+    let debugTriangles: ParsedTriangles | undefined = undefined;
     if (debug) {
       debugTriangles = reprojectorToTriangles(reprojector);
     }
@@ -236,16 +242,31 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       const { debugTriangles } = this.state;
       const { debugOpacity } = this.props;
       if (debugTriangles) {
-        const debugLayer = new PolygonLayer(
+        console.log("debugTriangles", debugTriangles);
+        const { positions, startIndices, fillColors, earcutIndices } =
+          debugTriangles;
+        const debugLayer = new SolidPolygonLayer(
           this.getSubLayerProps({
             id: "polygon",
-            data: debugTriangles,
-            getPolygon: (d: ParsedTriangle) => d.geom,
-            getFillColor: (d: ParsedTriangle) =>
-              DEBUG_COLORS[d.idx % DEBUG_COLORS.length],
-            getLineColor: [0, 0, 0],
-            getLineWidth: 0,
-            lineWidthMinPixels: 1,
+            data: {
+              data: null,
+              // Number of geometries
+              length: startIndices.length,
+              // Offsets into coordinate array where each polygon starts
+              startIndices,
+              attributes: {
+                getPolygon: { valud: positions, size: 2 },
+                getFillColor: { value: fillColors, size: 3 },
+                indices: { value: earcutIndices, size: 1 },
+              },
+            },
+            _normalize: false,
+            // getPolygon: (d: ParsedTriangle) => d.geom,
+            // getFillColor: (d: ParsedTriangle) =>
+            //   DEBUG_COLORS[d.idx % DEBUG_COLORS.length],
+            // getLineColor: [0, 0, 0],
+            // getLineWidth: 0,
+            // lineWidthMinPixels: 1,
             opacity:
               debugOpacity !== undefined && Number.isFinite(debugOpacity)
                 ? Math.max(0, Math.min(1, debugOpacity))
@@ -288,28 +309,50 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
 
 function reprojectorToTriangles(
   reprojector: RasterReprojector,
-): ParsedTriangle[] {
-  const positions = reprojector.exactOutputPositions;
+): ParsedTriangles {
+  const meshPositions = reprojector.exactOutputPositions;
   const triangles = reprojector.triangles;
 
-  const trianglePolygons: ParsedTriangle[] = [];
-  for (let triangleIdx = 0; triangleIdx < triangles.length / 3; ++triangleIdx) {
+  const numTriangles = triangles.length / 3;
+
+  const outputPositions = new Float64Array(numTriangles * 4 * 2);
+  const startIndices = new Uint32Array(numTriangles);
+  const fillColors = new Uint8Array(numTriangles * 3);
+
+  // Because we're rendering triangles, we don't have to perform earcut as an
+  // algorithm. The triangle indexes are already known by the mesh.
+  const earcutIndices = new Uint32Array(numTriangles * 3);
+
+  for (let triangleIdx = 0; triangleIdx < numTriangles; ++triangleIdx) {
     const a = triangles[triangleIdx * 3]!;
     const b = triangles[triangleIdx * 3 + 1]!;
     const c = triangles[triangleIdx * 3 + 2]!;
 
-    const coords = [
-      [positions[a * 2]!, positions[a * 2 + 1]!],
-      [positions[b * 2]!, positions[b * 2 + 1]!],
-      [positions[c * 2]!, positions[c * 2 + 1]!],
-      [positions[a * 2]!, positions[a * 2 + 1]!],
-    ];
+    outputPositions[triangleIdx * 8] = meshPositions[a * 2]!;
+    outputPositions[triangleIdx * 8 + 1] = meshPositions[a * 2 + 1]!;
+    outputPositions[triangleIdx * 8 + 2] = meshPositions[b * 2]!;
+    outputPositions[triangleIdx * 8 + 3] = meshPositions[b * 2 + 1]!;
+    outputPositions[triangleIdx * 8 + 4] = meshPositions[c * 2]!;
+    outputPositions[triangleIdx * 8 + 5] = meshPositions[c * 2 + 1]!;
+    // Close the polygon by repeating the first vertex
+    outputPositions[triangleIdx * 8 + 6] = meshPositions[a * 2]!;
+    outputPositions[triangleIdx * 8 + 7] = meshPositions[a * 2 + 1]!;
 
-    trianglePolygons.push({
-      idx: triangleIdx,
-      geom: coords,
-    });
+    startIndices[triangleIdx] = triangleIdx * 4;
+
+    const colorIdx = triangleIdx % DEBUG_COLORS.length;
+    const color = DEBUG_COLORS.subarray(colorIdx * 3, (colorIdx + 1) * 3);
+    fillColors.subarray(triangleIdx * 3, (triangleIdx + 1) * 3).set(color);
+
+    earcutIndices[triangleIdx * 3] = triangleIdx * 3;
+    earcutIndices[triangleIdx * 3 + 1] = triangleIdx * 3 + 1;
+    earcutIndices[triangleIdx * 3 + 2] = triangleIdx * 3 + 2;
   }
 
-  return trianglePolygons;
+  return {
+    startIndices,
+    positions: outputPositions,
+    fillColors,
+    earcutIndices,
+  };
 }
