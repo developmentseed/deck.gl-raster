@@ -1,7 +1,8 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
-import type { GeoTIFF } from "geotiff";
+import { COGLayer, loadRgbImage, proj } from "@developmentseed/deck.gl-geotiff";
+import { RasterLayerProps } from "@developmentseed/deck.gl-raster";
+import type { GeoTIFF, GeoTIFFImage } from "geotiff";
 import { fromUrl, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -75,9 +76,40 @@ async function getCogBounds(
 // const COG_URL =
 //   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
 
-// const COG_URL = "http://127.0.0.1:8080/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
 const COG_URL =
   "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
+
+async function loadTexture(
+  image: GeoTIFFImage,
+  options: {
+    window: [number, number, number, number];
+    signal?: AbortSignal;
+    pool: Pool;
+  },
+): Promise<{
+  texture: ImageData;
+  shaders?: RasterLayerProps["shaders"];
+  height: number;
+  width: number;
+}> {
+  const { texture, height, width } = await loadRgbImage(image, options);
+  return {
+    texture,
+    shaders: {
+      inject: {
+        // Discard black pixels (in this image the nodata value is 250, which in
+        // the colormap is transformed to black)
+        "fs:DECKGL_FILTER_COLOR": `
+          if (color.r == 0.0 && color.g == 0.0 && color.b == 0.0) {
+            discard;
+          }
+        `,
+      },
+    },
+    height,
+    width,
+  };
+}
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -141,6 +173,7 @@ export default function App() {
           debugOpacity,
           geoKeysParser,
           pool,
+          loadTexture,
           beforeId: "aeroway-runway", // In interleaved mode render the layer under map labels. Replace with `slot: 'bottom'` if using Mapbox v3 Standard Style.
         }),
       ]
