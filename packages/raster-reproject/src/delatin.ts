@@ -79,10 +79,11 @@ export interface ReprojectionFns {
   inverseReproject(x: number, y: number): [number, number];
 }
 
+// TODO: document that height and width here are in terms of input pixels.
 export class RasterReprojector {
   reprojectors: ReprojectionFns;
-  width: number | null;
-  height: number | null;
+  width: number;
+  height: number;
 
   /**
    * UV vertex coordinates (x, y), i.e.
@@ -119,10 +120,16 @@ export class RasterReprojector {
   private _pending: number[];
   private _pendingLen: number;
 
-  constructor(reprojectors: ReprojectionFns) {
+  // Make constructor private so that all instances are created via static
+  // methods
+  private constructor(
+    reprojectors: ReprojectionFns,
+    height: number,
+    width: number = height,
+  ) {
     this.reprojectors = reprojectors;
-    this.width = null;
-    this.height = null;
+    this.width = width;
+    this.height = height;
 
     this.uvs = []; // vertex coordinates (x, y)
     this.exactOutputPositions = [];
@@ -139,16 +146,14 @@ export class RasterReprojector {
     this._pendingLen = 0;
   }
 
-  static fromHeightAndWidth(
+  // TODO: create a name for "initialize with two diagonal triangles covering
+  // the whole uv space"
+  public static fromRectangle(
     reprojectors: ReprojectionFns,
     height: number,
     width: number = height,
   ): RasterReprojector {
-    const reprojector = new RasterReprojector(reprojectors);
-
-    // Set width and height
-    reprojector.width = width;
-    reprojector.height = height;
+    const reprojector = new RasterReprojector(reprojectors, height, width);
 
     // The two initial triangles cover the entire input texture in UV space, so
     // they range from [0, 0] to [1, 1] in u and v.
@@ -167,21 +172,32 @@ export class RasterReprojector {
     return reprojector;
   }
 
-  static fromExistingTriangulation(
+  public static fromExistingTriangulation(
     delaunay: ExistingDelaunayTriangulation,
     reprojectors: ReprojectionFns,
+    height: number,
+    width: number = height,
   ): RasterReprojector {
-    const reprojector = new RasterReprojector(reprojectors);
+    const reprojector = new RasterReprojector(reprojectors, height, width);
 
     // Add points for each value in delaunay.coords
-    // delaunay.coords;
-
-    //
+    reprojector.uvs = Array.from(delaunay.coords);
     reprojector.triangles = Array.from(delaunay.triangles);
-
     reprojector._halfedges = Array.from(delaunay.halfedges);
 
-    // Also need to init triangle metadata
+    // Initialize exactOutputPositions by reprojection
+    const numCoords = delaunay.coords.length / 2;
+    for (let i = 0; i < numCoords; i++) {
+      const u = delaunay.coords[i * 2]!;
+      const v = delaunay.coords[i * 2 + 1]!;
+      const exactOutputPosition = reprojector._computeOutputPosition(u, v);
+      reprojector.exactOutputPositions.push(
+        exactOutputPosition[0]!,
+        exactOutputPosition[1]!,
+      );
+    }
+
+    // TODO: Also need to init triangle metadata
     // Set _candidatesUV and _queueIndices
     // Set `_pending`
 
@@ -499,19 +515,23 @@ export class RasterReprojector {
     this.uvs.push(u, v);
 
     // compute and store exact output position via reprojection
-    const pixelX = u * (this.width - 1);
-    const pixelY = v * (this.height - 1);
-    const inputPosition = this.reprojectors.pixelToInputCRS(pixelX, pixelY);
-    const exactOutputPosition = this.reprojectors.forwardReproject(
-      inputPosition[0],
-      inputPosition[1],
-    );
+    const exactOutputPosition = this._computeOutputPosition(u, v);
     this.exactOutputPositions.push(
       exactOutputPosition[0]!,
       exactOutputPosition[1]!,
     );
 
     return i;
+  }
+
+  private _computeOutputPosition(u: number, v: number): [number, number] {
+    const pixelX = u * (this.width - 1);
+    const pixelY = v * (this.height - 1);
+    const inputPosition = this.reprojectors.pixelToInputCRS(pixelX, pixelY);
+    return this.reprojectors.forwardReproject(
+      inputPosition[0],
+      inputPosition[1],
+    );
   }
 
   // add or update a triangle in the mesh
