@@ -12,6 +12,8 @@
  * license, then subject to further modifications.
  */
 
+import type Delaunator from "delaunator";
+
 /**
  * Barycentric sample points in uv space for where to sample reprojection
  * errors.
@@ -55,8 +57,8 @@ export interface ReprojectionFns {
 
 export class RasterReprojector {
   reprojectors: ReprojectionFns;
-  width: number;
-  height: number;
+  width: number | null;
+  height: number | null;
 
   /**
    * UV vertex coordinates (x, y), i.e.
@@ -93,14 +95,10 @@ export class RasterReprojector {
   private _pending: number[];
   private _pendingLen: number;
 
-  constructor(
-    reprojectors: ReprojectionFns,
-    width: number,
-    height: number = width,
-  ) {
+  constructor(reprojectors: ReprojectionFns) {
     this.reprojectors = reprojectors;
-    this.width = width;
-    this.height = height;
+    this.width = null;
+    this.height = null;
 
     this.uvs = []; // vertex coordinates (x, y)
     this.exactOutputPositions = [];
@@ -115,20 +113,57 @@ export class RasterReprojector {
     this._errors = [];
     this._pending = []; // triangles pending addition to queue
     this._pendingLen = 0;
+  }
+
+  static fromHeightAndWidth(
+    reprojectors: ReprojectionFns,
+    height: number,
+    width: number = height,
+  ): RasterReprojector {
+    const reprojector = new RasterReprojector(reprojectors);
+
+    // Set width and height
+    reprojector.width = width;
+    reprojector.height = height;
 
     // The two initial triangles cover the entire input texture in UV space, so
     // they range from [0, 0] to [1, 1] in u and v.
     const u1 = 1;
     const v1 = 1;
-    const p0 = this._addPoint(0, 0);
-    const p1 = this._addPoint(u1, 0);
-    const p2 = this._addPoint(0, v1);
-    const p3 = this._addPoint(u1, v1);
+    const p0 = reprojector._addPoint(0, 0);
+    const p1 = reprojector._addPoint(u1, 0);
+    const p2 = reprojector._addPoint(0, v1);
+    const p3 = reprojector._addPoint(u1, v1);
 
     // add initial two triangles
-    const t0 = this._addTriangle(p3, p0, p2, -1, -1, -1);
-    this._addTriangle(p0, p3, p1, t0, -1, -1);
-    this._flush();
+    const t0 = reprojector._addTriangle(p3, p0, p2, -1, -1, -1);
+    reprojector._addTriangle(p0, p3, p1, t0, -1, -1);
+    reprojector._flush();
+
+    return reprojector;
+  }
+
+  static fromDelaunator<A extends ArrayLike<number>>(
+    delaunay: Delaunator<A>,
+    reprojectors: ReprojectionFns,
+  ): RasterReprojector {
+    const reprojector = new RasterReprojector(reprojectors);
+
+    // Add points for each value in delaunay.coords
+    // delaunay.coords;
+
+    //
+    reprojector.triangles = Array.from(delaunay.triangles);
+
+    reprojector._halfedges = Array.from(delaunay.halfedges);
+
+    // Also need to init triangle metadata
+    // Set _candidatesUV and _queueIndices
+    // Set `_pending`
+
+    reprojector._flush();
+
+    return reprojector;
   }
 
   // refine the mesh until its maximum error gets below the given one

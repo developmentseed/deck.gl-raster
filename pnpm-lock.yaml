@@ -245,6 +245,9 @@ importers:
 
   packages/raster-reproject:
     devDependencies:
+      '@types/delaunator':
+        specifier: ^5.0.3
+        version: 5.0.3
       '@types/node':
         specifier: ^25.0.1
         version: 25.0.1
@@ -1318,6 +1321,9 @@ packages:
 
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
+
+  '@types/delaunator@5.0.3':
+    resolution: {integrity: sha512-6tTLP8NX0OwtB/fmW9bXp4EWPptawTSsrSGjboWRuzqkxNEEJGyzRPHbr8wnV2DBWfAZ+EPTOvW3B/KysJrl2g==}
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
@@ -3876,6 +3882,8 @@ snapshots:
   '@types/crypto-js@4.2.2': {}
 
   '@types/deep-eql@4.0.2': {}
+
+  '@types/delaunator@5.0.3': {}
 
   '@types/estree@1.0.8': {}
 
