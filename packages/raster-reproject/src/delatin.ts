@@ -12,7 +12,31 @@
  * license, then subject to further modifications.
  */
 
-import type Delaunator from "delaunator";
+/**
+ * A type hint for how to initialize the RasterReprojector from an existing
+ * mesh. This is explicitly designed to match the Delaunator interface.
+ */
+export type ExistingDelaunayTriangulation = {
+  /**
+   * Triangle vertex indices (each group of three numbers forms a triangle).
+   *
+   * All triangles should be directed counterclockwise.
+   */
+  triangles: Uint32Array;
+
+  /**
+   * Triangle half-edge indices that allows you to traverse the triangulation.
+   *
+   * - `i`-th half-edge in the array corresponds to vertex `triangles[i]` the half-edge is coming from.
+   * - `halfedges[i]` is the index of a twin half-edge in an adjacent triangle (or -1 for outer half-edges on the convex hull).
+   */
+  halfedges: Int32Array;
+
+  /**
+   * Input coordinates in the form `[x0, y0, x1, y1, ....]`.
+   */
+  coords: ArrayLike<number>;
+};
 
 /**
  * Barycentric sample points in uv space for where to sample reprojection
@@ -143,8 +167,8 @@ export class RasterReprojector {
     return reprojector;
   }
 
-  static fromDelaunator<A extends ArrayLike<number>>(
-    delaunay: Delaunator<A>,
+  static fromExistingTriangulation(
+    delaunay: ExistingDelaunayTriangulation,
     reprojectors: ReprojectionFns,
   ): RasterReprojector {
     const reprojector = new RasterReprojector(reprojectors);
