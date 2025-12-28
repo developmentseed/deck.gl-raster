@@ -101,6 +101,7 @@ async function loadLandCoverTexture(
     signal?: AbortSignal;
     pool: Pool;
   },
+  colormapTexture: Texture,
 ): Promise<{
   texture: ImageData | TextureProps;
   shaders?: RasterLayerProps["shaders"];
@@ -130,22 +131,6 @@ async function loadLandCoverTexture(
 
   const texture = device.createTexture(textureProps);
 
-  const colorMapImageData = parseGeoTIFFColormap(image.fileDirectory.ColorMap);
-
-  const colorMapTexture = device.createTexture({
-    data: colorMapImageData.data,
-    dimension: "2d",
-    format: "rgba8unorm",
-    width: colorMapImageData.width,
-    height: colorMapImageData.height,
-    sampler: {
-      minFilter: "nearest",
-      magFilter: "nearest",
-      addressModeU: "clamp-to-edge",
-      addressModeV: "clamp-to-edge",
-    },
-  });
-
   // Hard coded NoData value but this ideally would be fetched from COG metadata
   const nodataVal = 250;
   // Since values are 0-1 for unorm textures,
@@ -173,7 +158,7 @@ async function loadLandCoverTexture(
       modules: [landCoverModule],
       shaderProps: {
         landCover: {
-          colormap_texture: colorMapTexture,
+          colormap_texture: colormapTexture,
         },
       },
     },
@@ -205,6 +190,7 @@ function parseGeoTIFFColormap(cmap: Uint16Array): ImageData {
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
+  const [device, setDevice] = useState<Device | null>(null);
   const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -212,6 +198,7 @@ export default function App() {
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [renderAsTiled, setRenderAsTiled] = useState(true);
   const [pool] = useState<Pool>(new Pool());
+  const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -255,22 +242,52 @@ export default function App() {
     };
   }, []);
 
-  const layers = geotiff
-    ? [
-        new COGLayer({
-          id: "cog-layer",
-          geotiff,
-          maxError: 0.125,
-          debug,
-          debugOpacity,
-          geoKeysParser,
-          pool,
-          pickable: true,
-          loadTexture: loadLandCoverTexture,
-          beforeId: "aeroway-runway", // In interleaved mode render the layer under map labels. Replace with `slot: 'bottom'` if using Mapbox v3 Standard Style.
-        }),
-      ]
-    : [];
+  // Once device exists, create global colormap texture
+  useEffect(() => {
+    async function createColormapTexture() {
+      if (device && geotiff) {
+        const image = await geotiff.getImage();
+        const { data, width, height } = parseGeoTIFFColormap(
+          image.fileDirectory.ColorMap,
+        );
+        const colorMapTexture = device.createTexture({
+          data,
+          format: "rgba8unorm",
+          width,
+          height,
+          sampler: {
+            minFilter: "nearest",
+            magFilter: "nearest",
+            addressModeU: "clamp-to-edge",
+            addressModeV: "clamp-to-edge",
+          },
+        });
+
+        console.log("Created global colormap texture", colorMapTexture);
+        setColormapTexture(colorMapTexture);
+      }
+    }
+
+    createColormapTexture();
+  }, [geotiff, device]);
+
+  const layers =
+    geotiff && colormapTexture
+      ? [
+          new COGLayer({
+            id: "cog-layer",
+            geotiff,
+            maxError: 0.125,
+            debug,
+            debugOpacity,
+            geoKeysParser,
+            pool,
+            loadTexture: (image, options) =>
+              loadLandCoverTexture(image, options, colormapTexture),
+            beforeId: "aeroway-runway",
+          }),
+        ]
+      : [];
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -285,7 +302,11 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={layers} interleaved />
+        <DeckGLOverlay
+          layers={layers}
+          interleaved
+          onDeviceInitialized={(device) => setDevice(device)}
+        />
       </Map>
 
       {/* UI Overlay Container */}
