@@ -244,12 +244,13 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
             getFillColor: (d: ParsedTriangle) =>
               DEBUG_COLORS[d.idx % DEBUG_COLORS.length],
             getLineColor: [0, 0, 0],
-            getLineWidth: 0,
-            lineWidthMinPixels: 1,
+            getLineWidth: 1,
+            lineWidthUnits: "pixels",
             opacity:
               debugOpacity !== undefined && Number.isFinite(debugOpacity)
                 ? Math.max(0, Math.min(1, debugOpacity))
                 : 1,
+            pickable: false,
           }),
         );
         layers.push(debugLayer);
