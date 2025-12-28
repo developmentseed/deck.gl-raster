@@ -118,8 +118,6 @@ async function loadLandCoverTexture(
     width,
     height,
     data: imageData.data,
-    mipLevels: 1,
-    // "handle"
   };
 
   const texture = device.createTexture(textureProps);
