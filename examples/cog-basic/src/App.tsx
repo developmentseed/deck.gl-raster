@@ -2,8 +2,12 @@ import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Device, Texture, TextureProps } from "@luma.gl/core";
 import { ShaderModule } from "@luma.gl/shadertools";
-import { COGLayer, proj, loadRgbImage } from "@developmentseed/deck.gl-geotiff";
-import type { GeoTIFF, GeoTIFFImage } from "geotiff";
+import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
+import type {
+  GeoTIFF,
+  GeoTIFFImage,
+  TypedArrayArrayWithDimensions,
+} from "geotiff";
 import { RasterLayerProps } from "@developmentseed/deck.gl-raster";
 import { fromUrl, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
@@ -82,8 +86,6 @@ const COG_URL =
   "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
 
 export type LandCoverProps = {
-  min: number;
-  max: number;
   colormap_texture: Texture;
 };
 
@@ -105,112 +107,76 @@ async function loadLandCoverTexture(
   height: number;
   width: number;
 }> {
-  const { device } = options;
-  const {
-    texture: imageData,
-    height,
-    width,
-  } = await loadRgbImage(image, options);
+  const { device, window, signal, pool } = options;
+
+  const data = (await image.readRasters({
+    window,
+    samples: [0],
+    pool,
+    signal,
+  })) as TypedArrayArrayWithDimensions;
+  const width = data.width;
+  const height = data.height;
+
+  console.log("data", data);
 
   const textureProps: TextureProps = {
-    format: "rgba8unorm",
+    format: "r8unorm",
     dimension: "2d",
     width,
     height,
-    data: imageData.data,
+    data: data[0],
   };
 
   const texture = device.createTexture(textureProps);
-  console.log("Created texture:", texture);
 
-  if (width === 0 || height === 0) {
-    console.warn("Loaded texture has zero width or height");
-    // throw new Error("Loaded texture has zero width or height");
-  }
+  const colorMapImageData = parseGeoTIFFColormap(image.fileDirectory.ColorMap);
 
-  //   const data = (await image.readRasters({
-  //     window,
-  //     samples: [0],
-  //     pool,
-  //     signal,
-  //   })) as TypedArrayArrayWithDimensions;
+  const colorMapTexture = device.createTexture({
+    data: colorMapImageData.data,
+    dimension: "2d",
+    format: "rgba8unorm",
+    width: colorMapImageData.width,
+    height: colorMapImageData.height,
+    sampler: {
+      minFilter: "nearest",
+      magFilter: "nearest",
+      addressModeU: "clamp-to-edge",
+      addressModeV: "clamp-to-edge",
+    },
+  });
 
-  //   console.log("Read raster data:", {
-  //     window,
-  //     dataWidth: data.width,
-  //     dataHeight: data.height,
-  //     dataLength: data[0].length,
-  //     firstBandLength: data[0].length,
-  //   });
+  // Hard coded NoData value but this ideally would be fetched from COG metadata
+  const nodataVal = 250;
+  // Since values are 0-1 for unorm textures,
+  const noDataScaled = nodataVal / 255.0;
 
-  //   const colorMapImageData = parseGeoTIFFColormap(image.fileDirectory.ColorMap);
-
-  //   // Convert ImageData to TextureProps for proper texture binding
-  //   console.log("Creating colormap texture with dimensions:", {
-  //     width: colorMapImageData.width,
-  //     height: colorMapImageData.height,
-  //     dataLength: colorMapImageData.data.length,
-  //   });
-
-  //   const colorMapTexture = device.createTexture({
-  //     data: colorMapImageData.data,
-  //     dimension: "2d",
-  //     format: "rgba8unorm",
-  //     width: colorMapImageData.width,
-  //     height: colorMapImageData.height,
-  //     sampler: {
-  //       minFilter: "nearest",
-  //       magFilter: "nearest",
-  //       addressModeU: "clamp-to-edge",
-  //       addressModeV: "clamp-to-edge",
-  //     },
-  //   });
-
-  //   const texture: TextureProps = textureUtils.createTextureProps(
-  //     image,
-  //     data[0],
-  //     {
-  //       width: data.width,
-  //       height: data.height,
-  //     },
-  //   );
-
-  console.log("texture props", textureProps);
   return {
     texture,
-    // shaders: {
-    //   inject: {
-    //     "fs:DECKGL_FILTER_COLOR": `
-    //       // Render single-band data as grayscale
-    //       float value = color.r;
-    //       color = vec4(value, value, value, 1.0);
-    //     `,
-    //   },
-    // },
     // For colormap rendering:
-    // shaders: {
-    //   inject: {
-    //     "fs:#decl": `
-    //       uniform sampler2D colormap_texture;
-    //     `,
-    //     "fs:DECKGL_FILTER_COLOR": `
-    //       float value = color.r;
-    //       vec3 pickingval = vec3(value, 0., 0.);
-    //       if (value == 250.0) {
-    //           discard;
-    //         } else {
-    //           vec4 color_val = texture(colormap_texture, vec2(value, 0.));
-    //           color = color_val;
-    //         }
-    //     `,
-    //   },
-    //   modules: [landCoverModule],
-    //   shaderProps: {
-    //     landCover: {
-    //       colormap_texture: colorMapTexture,
-    //     },
-    //   },
-    // },
+    shaders: {
+      inject: {
+        "fs:#decl": `
+          uniform sampler2D colormap_texture;
+        `,
+        "fs:DECKGL_FILTER_COLOR": `
+          float value = color.r;
+          vec3 pickingval = vec3(value, 0., 0.);
+          if (value == ${noDataScaled}) {
+              discard;
+            } else {
+              vec4 color_val = texture(colormap_texture, vec2(value, 0.));
+              color = color_val;
+            }
+        `,
+      },
+      modules: [landCoverModule],
+      shaderProps: {
+        landCover: {
+          colormap_texture: colorMapTexture,
+        },
+      },
+    },
     height,
     width,
   };
@@ -236,20 +202,6 @@ function parseGeoTIFFColormap(cmap: Uint16Array): ImageData {
 
   return new ImageData(rgba, size, 1);
 }
-
-//         // Discard black pixels (in this image the nodata value is 250, which in
-//         // the colormap is transformed to black)
-//         "fs:DECKGL_FILTER_COLOR": `
-//           if (color.r == 0.0 && color.g == 0.0 && color.b == 0.0) {
-//             discard;
-//           }
-//         `,
-//       },
-//     },
-//     height,
-//     width,
-//   };
-// }
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -313,6 +265,7 @@ export default function App() {
           debugOpacity,
           geoKeysParser,
           pool,
+          pickable: true,
           loadTexture: loadLandCoverTexture,
           beforeId: "aeroway-runway", // In interleaved mode render the layer under map labels. Replace with `slot: 'bottom'` if using Mapbox v3 Standard Style.
         }),
