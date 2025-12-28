@@ -6,19 +6,20 @@ import {
   COGLayer,
   proj,
   texture as textureUtils,
+  loadRgbImage,
 } from "@developmentseed/deck.gl-geotiff";
 import type {
   GeoTIFF,
   GeoTIFFImage,
   TypedArrayArrayWithDimensions,
 } from "geotiff";
+import { RasterLayerProps } from "@developmentseed/deck.gl-raster";
 import { fromUrl, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
 import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
-import { RasterLayerProps } from "../../../packages/deck.gl-raster/dist/raster-layer";
 
 window.proj4 = proj4;
 
@@ -86,7 +87,6 @@ async function getCogBounds(
 // const COG_URL =
 //   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
 
-// const COG_URL = "http://127.0.0.1:8080/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
 const COG_URL =
   "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
 
@@ -115,12 +115,15 @@ async function loadLandCoverTexture(
   width: number;
 }> {
   const { window, signal, pool, device } = options;
-  const data = (await image.readRasters({
-    window,
-    samples: [0],
-    pool,
-    signal,
-  })) as TypedArrayArrayWithDimensions;
+  const { texture, height, width } = await loadRgbImage(image, options);
+  texture.data;
+
+  //   const data = (await image.readRasters({
+  //     window,
+  //     samples: [0],
+  //     pool,
+  //     signal,
+  //   })) as TypedArrayArrayWithDimensions;
 
   console.log("Read raster data:", {
     window,
@@ -153,14 +156,15 @@ async function loadLandCoverTexture(
     },
   });
 
-  const texture: TextureProps = textureUtils.createTextureProps(
-    image,
-    data[0],
-    {
-      width: data.width,
-      height: data.height,
-    },
-  );
+  //   const texture: TextureProps = textureUtils.createTextureProps(
+  //     image,
+  //     data[0],
+  //     {
+  //       width: data.width,
+  //       height: data.height,
+  //     },
+  //   );
+
   console.log("texture props", texture);
   return {
     texture,
@@ -222,6 +226,20 @@ function parseGeoTIFFColormap(cmap: Uint16Array): ImageData {
 
   return new ImageData(rgba, size, 1);
 }
+
+//         // Discard black pixels (in this image the nodata value is 250, which in
+//         // the colormap is transformed to black)
+//         "fs:DECKGL_FILTER_COLOR": `
+//           if (color.r == 0.0 && color.g == 0.0 && color.b == 0.0) {
+//             discard;
+//           }
+//         `,
+//       },
+//     },
+//     height,
+//     width,
+//   };
+// }
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
