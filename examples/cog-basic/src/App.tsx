@@ -32,7 +32,6 @@ async function geoKeysParser(
   geoKeys: Record<string, any>,
 ): Promise<proj.ProjectionInfo> {
   const projDefinition = toProj4(geoKeys as any);
-  console.log("projDefinition", projDefinition);
   (window as any).projDefinition = projDefinition;
 
   return {
@@ -243,7 +242,6 @@ export default function App() {
           },
         });
 
-        console.log("Created global colormap texture", colorMapTexture);
         setColormapTexture(colorMapTexture);
       }
     }
