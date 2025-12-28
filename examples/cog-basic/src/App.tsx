@@ -2,17 +2,8 @@ import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Device, Texture, TextureProps } from "@luma.gl/core";
 import { ShaderModule } from "@luma.gl/shadertools";
-import {
-  COGLayer,
-  proj,
-  texture as textureUtils,
-  loadRgbImage,
-} from "@developmentseed/deck.gl-geotiff";
-import type {
-  GeoTIFF,
-  GeoTIFFImage,
-  TypedArrayArrayWithDimensions,
-} from "geotiff";
+import { COGLayer, proj, loadRgbImage } from "@developmentseed/deck.gl-geotiff";
+import type { GeoTIFF, GeoTIFFImage } from "geotiff";
 import { RasterLayerProps } from "@developmentseed/deck.gl-raster";
 import { fromUrl, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
@@ -114,9 +105,30 @@ async function loadLandCoverTexture(
   height: number;
   width: number;
 }> {
-  const { window, signal, pool, device } = options;
-  const { texture, height, width } = await loadRgbImage(image, options);
-  texture.data;
+  const { device } = options;
+  const {
+    texture: imageData,
+    height,
+    width,
+  } = await loadRgbImage(image, options);
+
+  const textureProps: TextureProps = {
+    format: "rgba8unorm",
+    dimension: "2d",
+    width,
+    height,
+    data: imageData.data,
+    mipLevels: 1,
+    // "handle"
+  };
+
+  const texture = device.createTexture(textureProps);
+  console.log("Created texture:", texture);
+
+  if (width === 0 || height === 0) {
+    console.warn("Loaded texture has zero width or height");
+    // throw new Error("Loaded texture has zero width or height");
+  }
 
   //   const data = (await image.readRasters({
   //     window,
@@ -125,36 +137,36 @@ async function loadLandCoverTexture(
   //     signal,
   //   })) as TypedArrayArrayWithDimensions;
 
-  console.log("Read raster data:", {
-    window,
-    dataWidth: data.width,
-    dataHeight: data.height,
-    dataLength: data[0].length,
-    firstBandLength: data[0].length,
-  });
+  //   console.log("Read raster data:", {
+  //     window,
+  //     dataWidth: data.width,
+  //     dataHeight: data.height,
+  //     dataLength: data[0].length,
+  //     firstBandLength: data[0].length,
+  //   });
 
-  const colorMapImageData = parseGeoTIFFColormap(image.fileDirectory.ColorMap);
+  //   const colorMapImageData = parseGeoTIFFColormap(image.fileDirectory.ColorMap);
 
-  // Convert ImageData to TextureProps for proper texture binding
-  console.log("Creating colormap texture with dimensions:", {
-    width: colorMapImageData.width,
-    height: colorMapImageData.height,
-    dataLength: colorMapImageData.data.length,
-  });
+  //   // Convert ImageData to TextureProps for proper texture binding
+  //   console.log("Creating colormap texture with dimensions:", {
+  //     width: colorMapImageData.width,
+  //     height: colorMapImageData.height,
+  //     dataLength: colorMapImageData.data.length,
+  //   });
 
-  const colorMapTexture = device.createTexture({
-    data: colorMapImageData.data,
-    dimension: "2d",
-    format: "rgba8unorm",
-    width: colorMapImageData.width,
-    height: colorMapImageData.height,
-    sampler: {
-      minFilter: "nearest",
-      magFilter: "nearest",
-      addressModeU: "clamp-to-edge",
-      addressModeV: "clamp-to-edge",
-    },
-  });
+  //   const colorMapTexture = device.createTexture({
+  //     data: colorMapImageData.data,
+  //     dimension: "2d",
+  //     format: "rgba8unorm",
+  //     width: colorMapImageData.width,
+  //     height: colorMapImageData.height,
+  //     sampler: {
+  //       minFilter: "nearest",
+  //       magFilter: "nearest",
+  //       addressModeU: "clamp-to-edge",
+  //       addressModeV: "clamp-to-edge",
+  //     },
+  //   });
 
   //   const texture: TextureProps = textureUtils.createTextureProps(
   //     image,
@@ -165,18 +177,18 @@ async function loadLandCoverTexture(
   //     },
   //   );
 
-  console.log("texture props", texture);
+  console.log("texture props", textureProps);
   return {
     texture,
-    shaders: {
-      inject: {
-        "fs:DECKGL_FILTER_COLOR": `
-          // Render single-band data as grayscale
-          float value = color.r;
-          color = vec4(value, value, value, 1.0);
-        `,
-      },
-    },
+    // shaders: {
+    //   inject: {
+    //     "fs:DECKGL_FILTER_COLOR": `
+    //       // Render single-band data as grayscale
+    //       float value = color.r;
+    //       color = vec4(value, value, value, 1.0);
+    //     `,
+    //   },
+    // },
     // For colormap rendering:
     // shaders: {
     //   inject: {
@@ -201,8 +213,8 @@ async function loadLandCoverTexture(
     //     },
     //   },
     // },
-    height: data.height,
-    width: data.width,
+    height,
+    width,
   };
 }
 
