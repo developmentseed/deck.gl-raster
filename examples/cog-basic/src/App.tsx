@@ -1,8 +1,12 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { Device, Texture, TextureProps } from "@luma.gl/core";
+import type { Device, Texture } from "@luma.gl/core";
 import { ShaderModule } from "@luma.gl/shadertools";
-import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
+import {
+  COGLayer,
+  parseColormap,
+  proj,
+} from "@developmentseed/deck.gl-geotiff";
 import type {
   GeoTIFF,
   GeoTIFFImage,
@@ -103,33 +107,31 @@ async function loadLandCoverTexture(
   },
   colormapTexture: Texture,
 ): Promise<{
-  texture: ImageData | TextureProps;
+  texture: ImageData | Texture;
   shaders?: RasterLayerProps["shaders"];
   height: number;
   width: number;
 }> {
   const { device, window, signal, pool } = options;
 
-  const data = (await image.readRasters({
+  const {
+    [0]: data,
+    width,
+    height,
+  } = (await image.readRasters({
     window,
     samples: [0],
     pool,
     signal,
   })) as TypedArrayArrayWithDimensions;
-  const width = data.width;
-  const height = data.height;
 
-  console.log("data", data);
-
-  const textureProps: TextureProps = {
+  const texture = device.createTexture({
     format: "r8unorm",
     dimension: "2d",
     width,
     height,
-    data: data[0],
-  };
-
-  const texture = device.createTexture(textureProps);
+    data,
+  });
 
   // Hard coded NoData value but this ideally would be fetched from COG metadata
   const nodataVal = 250;
@@ -167,27 +169,6 @@ async function loadLandCoverTexture(
   };
 }
 
-function parseGeoTIFFColormap(cmap: Uint16Array): ImageData {
-  const size = 256;
-  const rgba = new Uint8ClampedArray(size * 4);
-
-  const rOffset = 0;
-  const gOffset = size;
-  const bOffset = size * 2;
-
-  // Note: >> 8 is needed to convert from 16-bit to 8-bit color values
-  // It just divides by 256 and floors to nearest integer
-  for (let i = 0; i < size; i++) {
-    rgba[4 * i + 0] = cmap[rOffset + i] >> 8;
-    rgba[4 * i + 1] = cmap[gOffset + i] >> 8;
-    rgba[4 * i + 2] = cmap[bOffset + i] >> 8;
-    // Full opacity
-    rgba[4 * i + 3] = 255;
-  }
-
-  return new ImageData(rgba, size, 1);
-}
-
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [device, setDevice] = useState<Device | null>(null);
@@ -196,7 +177,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
-  const [renderAsTiled, setRenderAsTiled] = useState(true);
   const [pool] = useState<Pool>(new Pool());
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
 
@@ -247,7 +227,7 @@ export default function App() {
     async function createColormapTexture() {
       if (device && geotiff) {
         const image = await geotiff.getImage();
-        const { data, width, height } = parseGeoTIFFColormap(
+        const { data, width, height } = parseColormap(
           image.fileDirectory.ColorMap,
         );
         const colorMapTexture = device.createTexture({
