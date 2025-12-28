@@ -28,6 +28,24 @@ type Tileset2DProps = any;
 
 const DEFAULT_MAX_ERROR = 0.125;
 
+export type TileTexture = {
+  texture: ImageData | Texture;
+  height: number;
+  width: number;
+};
+
+export type GetTileTextureOptions = {
+  device: Device;
+  window: [number, number, number, number];
+  signal?: AbortSignal;
+  pool: Pool;
+};
+
+type GetTileDataT = TileTexture & {
+  pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
+  inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
+};
+
 export interface COGLayerProps extends CompositeLayerProps {
   geotiff: GeoTIFF;
 
@@ -65,20 +83,14 @@ export interface COGLayerProps extends CompositeLayerProps {
    * For more customizability, you can also return a Texture object from
    * luma.gl, along with optional custom shaders for the RasterLayer.
    */
-  loadTexture?: (
+  getTileTexture?: (
     image: GeoTIFFImage,
-    options: {
-      device: Device;
-      window: [number, number, number, number];
-      signal?: AbortSignal;
-      pool: Pool;
-    },
-  ) => Promise<{
-    texture: ImageData | Texture;
+    options: GetTileTextureOptions,
+  ) => Promise<TileTexture>;
+
+  renderTexture: (data: TileTexture) => {
     shaders?: RasterLayerProps["shaders"];
-    height: number;
-    width: number;
-  }>;
+  };
 
   /**
    * Enable debug visualization showing the triangulation mesh
@@ -96,7 +108,7 @@ export interface COGLayerProps extends CompositeLayerProps {
 const defaultProps: Partial<COGLayerProps> = {
   maxError: DEFAULT_MAX_ERROR,
   geoKeysParser: epsgIoGeoKeyParser,
-  loadTexture: loadRgbImage,
+  getTileTexture: loadRgbImage,
 };
 
 /**
@@ -179,19 +191,10 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
       }
     }
 
-    return new TileLayer({
+    return new TileLayer<GetTileDataT>({
       id: `cog-tile-layer-${this.id}`,
       TilesetClass: RasterTileset2DFactory,
-      getTileData: async (
-        tile,
-      ): Promise<{
-        texture: ImageData | Texture;
-        shaders?: RasterLayerProps["shaders"];
-        height: number;
-        width: number;
-        pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
-        inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
-      }> => {
+      getTileData: async (tile) => {
         const { signal } = tile;
         const { x, y, z } = tile.index;
 
@@ -214,19 +217,20 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
           Math.min((y + 1) * tileHeight, imageHeight),
         ];
 
-        const { texture, height, width, shaders } = await this.props
-          .loadTexture!(geotiffImage, {
-          device: this.context.device,
-          window,
-          signal,
-          pool: this.props.pool || defaultPool(),
-        });
+        const { texture, height, width } = await this.props.getTileTexture!(
+          geotiffImage,
+          {
+            device: this.context.device,
+            window,
+            signal,
+            pool: this.props.pool || defaultPool(),
+          },
+        );
 
         return {
           texture,
           height,
           width,
-          shaders,
           pixelToInputCRS,
           inputCRSToPixel,
         };
@@ -237,21 +241,11 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
         const layers: Layer[] = [];
 
         if (data) {
-          const {
-            texture,
-            shaders,
-            height,
-            width,
-            pixelToInputCRS,
-            inputCRSToPixel,
-          }: {
-            texture: ImageData | Texture;
-            shaders?: RasterLayerProps["shaders"];
-            height: number;
-            width: number;
-            pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
-            inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
-          } = data;
+          const { texture, height, width, pixelToInputCRS, inputCRSToPixel } =
+            data;
+
+          const { shaders } =
+            this.props.renderTexture && this.props.renderTexture(data);
 
           const rasterLayer = new RasterLayer({
             id: `${props.id}-raster`,
