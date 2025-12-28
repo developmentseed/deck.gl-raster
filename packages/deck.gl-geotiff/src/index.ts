@@ -7,7 +7,7 @@ export {
   extractGeotiffReprojectors,
   fromGeoTransform,
 } from "./geotiff-reprojection.js";
-export { loadRgbImage } from "./geotiff.js";
+export { loadRgbImage, parseColormap } from "./geotiff.js";
 
 export * as proj from "./proj.js";
 export * as texture from "./texture.js";
