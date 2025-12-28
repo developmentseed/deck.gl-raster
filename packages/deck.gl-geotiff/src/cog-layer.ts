@@ -13,7 +13,7 @@ import type {
 } from "@developmentseed/deck.gl-raster";
 import { RasterLayer, RasterTileset2D } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { TextureProps } from "@luma.gl/core";
+import type { Device, Texture } from "@luma.gl/core";
 import type { GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
 import proj4 from "proj4";
 import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
@@ -62,18 +62,19 @@ export interface COGLayerProps extends CompositeLayerProps {
    * The default implementation loads an RGBA image using geotiff.js's readRGB
    * method, returning an ImageData object.
    *
-   * For more customizability, you can also return a TextureProps object from
+   * For more customizability, you can also return a Texture object from
    * luma.gl, along with optional custom shaders for the RasterLayer.
    */
   loadTexture?: (
     image: GeoTIFFImage,
     options: {
+      device: Device;
       window: [number, number, number, number];
       signal?: AbortSignal;
       pool: Pool;
     },
   ) => Promise<{
-    texture: ImageData | TextureProps;
+    texture: ImageData | Texture;
     shaders?: RasterLayerProps["shaders"];
     height: number;
     width: number;
@@ -184,7 +185,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
       getTileData: async (
         tile,
       ): Promise<{
-        texture: ImageData | TextureProps;
+        texture: ImageData | Texture;
         shaders?: RasterLayerProps["shaders"];
         height: number;
         width: number;
@@ -215,6 +216,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
 
         const { texture, height, width, shaders } = await this.props
           .loadTexture!(geotiffImage, {
+          device: this.context.device,
           window,
           signal,
           pool: this.props.pool || defaultPool(),
@@ -243,7 +245,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
             pixelToInputCRS,
             inputCRSToPixel,
           }: {
-            texture: ImageData | TextureProps;
+            texture: ImageData | Texture;
             shaders?: RasterLayerProps["shaders"];
             height: number;
             width: number;
