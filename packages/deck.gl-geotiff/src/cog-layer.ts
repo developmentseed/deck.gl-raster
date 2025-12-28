@@ -6,7 +6,6 @@ import type {
 import { CompositeLayer } from "@deck.gl/core";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
-import type { Device } from "@luma.gl/core";
 import type {
   RasterLayerProps,
   TileMatrix,
