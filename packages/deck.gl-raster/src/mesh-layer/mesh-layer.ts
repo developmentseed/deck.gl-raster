@@ -1,5 +1,7 @@
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
+import { TextureModule } from "../webgl/unorm-texture.js";
+import fs from "./mesh-layer-fragment.glsl.js";
 
 import type { ShaderModule } from "@luma.gl/shadertools";
 
@@ -33,6 +35,9 @@ export class MeshTextureLayer extends SimpleMeshLayer<
 
     return {
       ...upstreamShaders,
+      // Override upstream's fragment shader with our copy with modified
+      // injection points
+      fs,
       inject: {
         ...upstreamShaders.inject,
         ...this.props.shaders?.inject,
@@ -40,6 +45,9 @@ export class MeshTextureLayer extends SimpleMeshLayer<
       modules: [
         ...upstreamShaders.modules,
         ...(this.props.shaders?.modules || []),
+        // Hard-coded addition of our texture module for this example.
+        // Remove before merging.
+        TextureModule,
       ],
     };
   }

@@ -1,13 +1,15 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
-import type { GeoTIFF } from "geotiff";
+import { COGLayer, loadRgbImage, proj } from "@developmentseed/deck.gl-geotiff";
+import type { GeoTIFF, GeoTIFFImage } from "geotiff";
 import { fromUrl, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
 import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
+import { RasterLayerProps } from "../../../packages/deck.gl-raster/dist/raster-layer";
+import { Device, Texture } from "@luma.gl/core";
 
 window.proj4 = proj4;
 
@@ -74,6 +76,47 @@ async function getCogBounds(
 const COG_URL =
   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
 
+async function loadTexture(
+  image: GeoTIFFImage,
+  options: {
+    device: Device;
+    window: [number, number, number, number];
+    signal?: AbortSignal;
+    pool: Pool;
+  },
+): Promise<{
+  texture: ImageData | Texture;
+  shaders?: RasterLayerProps["shaders"];
+  height: number;
+  width: number;
+}> {
+  const { device } = options;
+  const { texture: data, height, width } = await loadRgbImage(image, options);
+
+  // Note: if we set this format to r8unorm it'll only fill the red channel of
+  // the texture, making it red.
+  const texture = device.createTexture({
+    format: "rgba8unorm",
+    dimension: "2d",
+    width,
+    height,
+    data,
+  });
+
+  return {
+    texture,
+    shaders: {
+      shaderProps: {
+        moduleName: {
+          textureName: texture,
+        },
+      },
+    },
+    height,
+    width,
+  };
+}
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
@@ -135,6 +178,7 @@ export default function App() {
           debugOpacity,
           geoKeysParser,
           pool,
+          loadTexture,
           beforeId: "aeroway-runway",
         }),
       ]
