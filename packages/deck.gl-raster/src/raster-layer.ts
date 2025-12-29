@@ -8,7 +8,10 @@ import { PolygonLayer } from "@deck.gl/layers";
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
-import { MeshTextureLayer, MeshTextureLayerProps } from "./mesh-layer";
+import {
+  MeshTextureLayer,
+  MeshTextureLayerProps,
+} from "./mesh-layer/mesh-layer";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
