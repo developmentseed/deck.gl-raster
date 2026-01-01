@@ -1,12 +1,11 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
-import type { GeoTIFF } from "geotiff";
-import { fromUrl, Pool } from "geotiff";
+import { Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 import proj4 from "proj4";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
 
 window.proj4 = proj4;
@@ -30,44 +29,6 @@ async function geoKeysParser(
   };
 }
 
-/**
- * Calculate the WGS84 bounding box of a GeoTIFF image
- */
-async function getCogBounds(
-  tiff: GeoTIFF,
-): Promise<[[number, number], [number, number]]> {
-  const image = await tiff.getImage();
-  const projectedBbox = image.getBoundingBox();
-  const projDefinition = await geoKeysParser(image.getGeoKeys());
-
-  // Reproject to WGS84 (EPSG:4326)
-  const converter = proj4(projDefinition.def, "EPSG:4326");
-
-  // Reproject all four corners to handle rotation/skew
-  const [minX, minY, maxX, maxY] = projectedBbox;
-  const corners = [
-    converter.forward([minX, minY]), // bottom-left
-    converter.forward([maxX, minY]), // bottom-right
-    converter.forward([maxX, maxY]), // top-right
-    converter.forward([minX, maxY]), // top-left
-  ];
-
-  // Find the bounding box that encompasses all reprojected corners
-  const lons = corners.map((c) => c[0]);
-  const lats = corners.map((c) => c[1]);
-
-  const west = Math.min(...lons);
-  const south = Math.min(...lats);
-  const east = Math.max(...lons);
-  const north = Math.max(...lats);
-
-  // Return bounds in MapLibre format: [[west, south], [east, north]]
-  return [
-    [west, south],
-    [east, north],
-  ];
-}
-
 // const COG_URL =
 //   "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
 
@@ -76,65 +37,33 @@ const COG_URL =
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
-  const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [pool] = useState<Pool>(new Pool());
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadGeoTIFF() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const tiff = await fromUrl(COG_URL);
-        (window as any).tiff = tiff;
-
-        if (mounted) {
-          setGeotiff(tiff);
-
-          // Calculate bounds and fit to them
-          const bounds = await getCogBounds(tiff);
-          if (mapRef.current) {
-            mapRef.current.fitBounds(bounds, {
-              padding: 40,
-              duration: 1000,
-            });
-          }
-
-          setLoading(false);
-        }
-      } catch (err) {
-        if (mounted) {
-          setError(
-            err instanceof Error ? err.message : "Failed to load GeoTIFF",
-          );
-          setLoading(false);
-        }
-      }
-    }
-
-    loadGeoTIFF();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const layers = geotiff
+  const layers = true
     ? [
         new COGLayer({
           id: "cog-layer",
-          geotiff,
+          geotiff: COG_URL,
           maxError: 0.125,
           debug,
           debugOpacity,
           geoKeysParser,
           pool,
+          onGeoTIFFLoad: (_tiff, options) => {
+            const { west, south, east, north } = options.geographicBounds;
+            mapRef.current?.fitBounds(
+              [
+                [west, south],
+                [east, north],
+              ],
+              {
+                padding: 40,
+                duration: 1000,
+              },
+            );
+          },
           beforeId: "aeroway-runway",
         }),
       ]
@@ -168,43 +97,6 @@ export default function App() {
           zIndex: 1000,
         }}
       >
-        {loading && (
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              background: "white",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              pointerEvents: "auto",
-            }}
-          >
-            Loading GeoTIFF...
-          </div>
-        )}
-
-        {error && (
-          <div
-            style={{
-              position: "absolute",
-              top: "20px",
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "#ff4444",
-              color: "white",
-              padding: "12px 24px",
-              borderRadius: "4px",
-              maxWidth: "80%",
-              pointerEvents: "auto",
-            }}
-          >
-            Error: {error}
-          </div>
-        )}
-
         <div
           style={{
             position: "absolute",
@@ -276,19 +168,6 @@ export default function App() {
               </div>
             )}
           </div>
-
-          {/* <div
-            style={{
-              marginTop: "12px",
-              paddingTop: "12px",
-              borderTop: "1px solid #eee",
-              fontSize: "12px",
-              color: "#999",
-            }}
-          >
-            <div>Max Error: 0.125 pixels</div>
-            <div>Source: LINZ</div>
-          </div> */}
         </div>
       </div>
     </div>

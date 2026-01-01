@@ -24,7 +24,12 @@ import type { BaseClient, GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
 import proj4 from "proj4";
 import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
 import { fromGeoTransform } from "./geotiff-reprojection.js";
-import { defaultPool, fetchGeoTIFF, loadRgbImage } from "./geotiff.js";
+import {
+  defaultPool,
+  fetchGeoTIFF,
+  getGeographicBounds,
+  loadRgbImage,
+} from "./geotiff.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
 
@@ -144,7 +149,22 @@ export interface COGLayerProps<
    * @param   {GeoTIFF}  geotiff
    * @param   {ProjectionInfo}  projection
    */
-  onGeoTIFFLoad?: (geotiff: GeoTIFF, projection: ProjectionInfo) => void;
+  onGeoTIFFLoad?: (
+    geotiff: GeoTIFF,
+    options: {
+      projection: ProjectionInfo;
+      /**
+       * Bounds of the image in geographic coordinates (WGS84) [minLon, minLat,
+       * maxLon, maxLat]
+       */
+      geographicBounds: {
+        west: number;
+        south: number;
+        east: number;
+        north: number;
+      };
+    },
+  ) => void;
 }
 
 const defaultProps: Partial<COGLayerProps> = {
@@ -209,13 +229,17 @@ export class COGLayer<
       );
     }
 
-    this.props.onGeoTIFFLoad?.(geotiff, sourceProjection);
-
     const converter = proj4(sourceProjection.def, "EPSG:4326");
     const forwardReproject = (x: number, y: number) =>
       converter.forward<[number, number]>([x, y], false);
     const inverseReproject = (x: number, y: number) =>
       converter.inverse<[number, number]>([x, y], false);
+
+    const geographicBounds = getGeographicBounds(image, converter);
+    this.props.onGeoTIFFLoad?.(geotiff, {
+      projection: sourceProjection,
+      geographicBounds,
+    });
 
     this.setState({
       metadata,

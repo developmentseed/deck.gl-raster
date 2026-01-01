@@ -9,6 +9,7 @@ import {
   fromUrl,
   Pool,
 } from "geotiff";
+import { Converter } from "proj4";
 
 /**
  * Options that may be passed when reading image data from geotiff.js
@@ -157,4 +158,40 @@ export async function fetchGeoTIFF(
   }
 
   return input;
+}
+
+/**
+ * Calculate the WGS84 bounding box of a GeoTIFF image
+ */
+export function getGeographicBounds(
+  image: GeoTIFFImage,
+  converter: Converter,
+): { west: number; south: number; east: number; north: number } {
+  const projectedBbox = image.getBoundingBox() as [
+    number,
+    number,
+    number,
+    number,
+  ];
+
+  // Reproject all four corners to handle rotation/skew
+  const [minX, minY, maxX, maxY] = projectedBbox;
+  const corners: [number, number][] = [
+    converter.forward([minX, minY]), // bottom-left
+    converter.forward([maxX, minY]), // bottom-right
+    converter.forward([maxX, maxY]), // top-right
+    converter.forward([minX, maxY]), // top-left
+  ];
+
+  // Find the bounding box that encompasses all reprojected corners
+  const lons = corners.map((c) => c[0]);
+  const lats = corners.map((c) => c[1]);
+
+  const west = Math.min(...lons);
+  const south = Math.min(...lats);
+  const east = Math.max(...lons);
+  const north = Math.max(...lats);
+
+  // Return bounds in MapLibre format: [[west, south], [east, north]]
+  return { west, south, east, north };
 }
