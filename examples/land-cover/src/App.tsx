@@ -139,7 +139,7 @@ type TileDataT = {
   width: number;
 };
 
-function renderTileData(
+function renderTile(
   tileData: TileDataT,
   colormapTexture: Texture,
 ): {
@@ -275,8 +275,7 @@ export default function App() {
             geoKeysParser,
             pool,
             getTileData,
-            renderTileData: (tileData) =>
-              renderTileData(tileData, colormapTexture),
+            renderTile: (tileData) => renderTile(tileData, colormapTexture),
             beforeId: "aeroway-runway",
           }),
         ]

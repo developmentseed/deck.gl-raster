@@ -112,7 +112,16 @@ export interface COGLayerProps<
     options: GetTileTextureOptions,
   ) => Promise<DataT>;
 
-  renderTileData: (data: DataT) => {
+  /**
+   * User-defined method to render data for a tile.
+   *
+   * This receives the data returned by getTileData and must return a render
+   * pipeline.
+   *
+   * The default implementation returns an object with a `texture` property,
+   * assuming that this texture is already renderable.
+   */
+  renderTile: (data: DataT) => {
     texture: RasterLayerProps["texture"];
     shaders?: RasterLayerProps["shaders"];
   };
@@ -142,7 +151,7 @@ const defaultProps: Partial<COGLayerProps> = {
   maxError: DEFAULT_MAX_ERROR,
   geoKeysParser: epsgIoGeoKeyParser,
   getTileData: loadRgbImage,
-  renderTileData: (data) => {
+  renderTile: (data) => {
     return { texture: data.texture };
   },
 };
@@ -281,7 +290,7 @@ export class COGLayer<
 
     if (data) {
       const { height, width } = data;
-      const { texture, shaders } = this.props.renderTileData(data);
+      const { texture, shaders } = this.props.renderTile(data);
 
       layers.push(
         new RasterLayer({
