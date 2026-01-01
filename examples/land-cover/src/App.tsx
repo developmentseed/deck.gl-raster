@@ -96,7 +96,7 @@ const landCoverModule = {
   name: "landCover",
 } as const satisfies ShaderModule<LandCoverProps>;
 
-async function loadLandCoverTexture(
+async function getTileData(
   image: GeoTIFFImage,
   options: {
     device: Device;
@@ -104,13 +104,7 @@ async function loadLandCoverTexture(
     signal?: AbortSignal;
     pool: Pool;
   },
-  colormapTexture: Texture,
-): Promise<{
-  texture: ImageData | Texture;
-  shaders?: RasterLayerProps["shaders"];
-  height: number;
-  width: number;
-}> {
+): Promise<TileDataT> {
   const { device, window, signal, pool } = options;
 
   const {
@@ -131,6 +125,28 @@ async function loadLandCoverTexture(
     height,
     data,
   });
+
+  return {
+    texture,
+    height,
+    width,
+  };
+}
+
+type TileDataT = {
+  texture: Texture;
+  height: number;
+  width: number;
+};
+
+function renderTileData(
+  tileData: TileDataT,
+  colormapTexture: Texture,
+): {
+  texture: RasterLayerProps["texture"];
+  shaders?: RasterLayerProps["shaders"];
+} {
+  const { texture } = tileData;
 
   // Hard coded NoData value but this ideally would be fetched from COG metadata
   const nodataVal = 250;
@@ -163,8 +179,6 @@ async function loadLandCoverTexture(
         },
       },
     },
-    height,
-    width,
   };
 }
 
@@ -252,7 +266,7 @@ export default function App() {
   const layers =
     geotiff && colormapTexture
       ? [
-          new COGLayer({
+          new COGLayer<TileDataT>({
             id: "cog-layer",
             geotiff,
             maxError: 0.125,
@@ -260,8 +274,9 @@ export default function App() {
             debugOpacity,
             geoKeysParser,
             pool,
-            loadTexture: (image, options) =>
-              loadLandCoverTexture(image, options, colormapTexture),
+            getTileData,
+            renderTileData: (tileData) =>
+              renderTileData(tileData, colormapTexture),
             beforeId: "aeroway-runway",
           }),
         ]

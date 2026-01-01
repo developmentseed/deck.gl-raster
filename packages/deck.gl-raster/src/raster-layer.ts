@@ -65,11 +65,6 @@ export interface RasterLayerProps extends CompositeLayerProps {
   texture?: SimpleMeshLayerProps["texture"];
 
   /**
-   * Customize the [texture parameters](https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texParameter).
-   */
-  textureParameters?: SimpleMeshLayerProps["textureParameters"];
-
-  /**
    * Optional shader injection.
    */
   shaders?: MeshTextureLayerProps["shaders"];
