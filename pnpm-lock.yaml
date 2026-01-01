@@ -193,6 +193,12 @@ importers:
         specifier: ^2.20.2
         version: 2.20.2
     devDependencies:
+      '@loaders.gl/core':
+        specifier: ^4.3.4
+        version: 4.3.4
+      '@loaders.gl/loader-utils':
+        specifier: ^4.3.4
+        version: 4.3.4(@loaders.gl/core@4.3.4)
       '@types/node':
         specifier: ^25.0.1
         version: 25.0.1

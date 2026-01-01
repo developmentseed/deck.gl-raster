@@ -42,6 +42,8 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
+    "@loaders.gl/core": "^4.3.4",
+    "@loaders.gl/loader-utils": "^4.3.4",
     "@types/node": "^25.0.1",
     "@typescript-eslint/eslint-plugin": "^8.16.0",
     "@typescript-eslint/parser": "^8.16.0",

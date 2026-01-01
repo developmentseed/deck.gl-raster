@@ -254,7 +254,8 @@ export default function App() {
       ? [
           new COGLayer({
             id: "cog-layer",
-            geotiff,
+            data: COG_URL,
+            // geotiff,
             maxError: 0.125,
             debug,
             debugOpacity,
