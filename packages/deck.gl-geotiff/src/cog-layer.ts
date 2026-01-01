@@ -21,6 +21,7 @@ import { fromGeoTransform } from "./geotiff-reprojection.js";
 import { defaultPool, loadRgbImage } from "./geotiff.js";
 import type { GeoKeysParser } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
+import { GeoTIFFLoader } from "./loader.js";
 
 // Workaround until upstream exposes props
 // https://github.com/visgl/deck.gl/pull/9917
@@ -29,7 +30,7 @@ type Tileset2DProps = any;
 const DEFAULT_MAX_ERROR = 0.125;
 
 export interface COGLayerProps extends CompositeLayerProps {
-  geotiff: GeoTIFF;
+  data: GeoTIFF | string;
 
   /**
    * A function callback for parsing GeoTIFF geo keys to a Proj4 compatible
@@ -97,6 +98,7 @@ const defaultProps: Partial<COGLayerProps> = {
   maxError: DEFAULT_MAX_ERROR,
   geoKeysParser: epsgIoGeoKeyParser,
   loadTexture: loadRgbImage,
+  loaders: [GeoTIFFLoader],
 };
 
 /**
@@ -114,6 +116,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
   };
 
   override initializeState(): void {
+    console.log("initialize props", this.props);
     this.setState({});
   }
 
@@ -123,7 +126,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
     const { props, oldProps, changeFlags } = params;
 
     const needsUpdate =
-      Boolean(changeFlags.dataChanged) || props.geotiff !== oldProps.geotiff;
+      Boolean(changeFlags.dataChanged) || props.data !== oldProps.data;
 
     if (needsUpdate) {
       this._parseGeoTIFF();
@@ -131,7 +134,17 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
   }
 
   async _parseGeoTIFF(): Promise<void> {
-    const { geotiff } = this.props;
+    let geotiff: GeoTIFF;
+
+    console.log(this.props.data, "data");
+
+    // If data is a string URL, create GeoTIFF from URL for lazy loading
+    if (typeof this.props.data === "string") {
+      const { fromUrl } = await import("geotiff");
+      geotiff = await fromUrl(this.props.data);
+    } else {
+      geotiff = this.props.data;
+    }
 
     const geoKeysParser = this.props.geoKeysParser!;
     const metadata = await parseCOGTileMatrixSet(geotiff, geoKeysParser);
@@ -170,6 +183,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
     inverseReproject: ReprojectionFns["inverseReproject"],
     images: GeoTIFFImage[],
   ): TileLayer {
+    console.log(this.props, "props");
     const { maxError, debug = false, debugOpacity = 0.5 } = this.props;
 
     // Create a factory class that wraps COGTileset2D with the metadata
