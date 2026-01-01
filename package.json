@@ -4,6 +4,7 @@
   "description": "GPU-accelerated COG and Zarr visualization in deck.gl",
   "scripts": {
     "build": "tsc --build",
+    "build:watch": "tsc --build --watch",
     "clean": "pnpm --recursive exec rm -rf dist",
     "format": "pnpm -r format",
     "lint": "pnpm -r lint",
