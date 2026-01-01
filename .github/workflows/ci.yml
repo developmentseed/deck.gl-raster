@@ -15,7 +15,7 @@ jobs:
   Test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
       - run: |
           pnpm install
@@ -26,6 +26,6 @@ jobs:
   # Lint:
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v5
+  #     - uses: actions/checkout@v6
   #     - uses: biomejs/setup-biome@v2
   #     - run: biome ci .

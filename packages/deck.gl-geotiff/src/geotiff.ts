@@ -1,7 +1,14 @@
 // Utilities for interacting with geotiff.js.
 
-import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
-import { Pool } from "geotiff";
+import type { GeoTIFF, GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
+import {
+  BaseClient,
+  fromArrayBuffer,
+  fromBlob,
+  fromCustomClient,
+  fromUrl,
+  Pool,
+} from "geotiff";
 
 /**
  * Options that may be passed when reading image data from geotiff.js
@@ -96,4 +103,58 @@ function addAlphaChannel(rgbImage: TypedArrayWithDimensions): ImageData {
       `Unexpected number of channels in raster data: ${rgbImage.length / (height * width)}`,
     );
   }
+}
+
+/**
+ * Parse the GeoTIFF `ColorMap` tag into an ImageData.
+ *
+ * @param   {Uint16Array}  cmap  The colormap array from the GeoTIFF `ColorMap` tag.
+ *
+ * @return  {ImageData}          The parsed colormap as an ImageData object.
+ */
+export function parseColormap(cmap: Uint16Array): ImageData {
+  // TODO: test colormap handling on a 16-bit image with 2^16 entries?
+  const size = cmap.length / 3;
+  const rgba = new Uint8ClampedArray(size * 4);
+
+  const rOffset = 0;
+  const gOffset = size;
+  const bOffset = size * 2;
+
+  // Note: >> 8 is needed to convert from 16-bit to 8-bit color values
+  // It just divides by 256 and floors to nearest integer
+  for (let i = 0; i < size; i++) {
+    rgba[4 * i + 0] = cmap[rOffset + i]! >> 8;
+    rgba[4 * i + 1] = cmap[gOffset + i]! >> 8;
+    rgba[4 * i + 2] = cmap[bOffset + i]! >> 8;
+
+    // Full opacity
+    rgba[4 * i + 3] = 255;
+  }
+
+  return new ImageData(rgba, size, 1);
+}
+
+export async function fetchGeoTIFF(
+  input: GeoTIFF | string | ArrayBuffer | Blob | BaseClient,
+): Promise<GeoTIFF> {
+  if (typeof input === "string") {
+    return fromUrl(input);
+  }
+
+  if (input instanceof ArrayBuffer) {
+    return fromArrayBuffer(input);
+  }
+
+  if (input instanceof Blob) {
+    return fromBlob(input);
+  }
+
+  // TODO: instanceof may fail here if multiple versions of geotiff.js are
+  // present
+  if (input instanceof BaseClient) {
+    return fromCustomClient(input);
+  }
+
+  return input;
 }

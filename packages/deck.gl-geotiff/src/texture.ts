@@ -1,4 +1,4 @@
-import { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
+import { GeoTIFFImage, TypedArray } from "geotiff";
 import type { TextureFormat, TextureProps } from "@luma.gl/core";
 import { ImageFileDirectory } from "./geotiff-types";
 
@@ -7,7 +7,8 @@ import { ImageFileDirectory } from "./geotiff-types";
  */
 export function createTextureProps(
   image: GeoTIFFImage,
-  data: TypedArrayWithDimensions,
+  data: TypedArray,
+  options: { width: number; height: number },
 ): TextureProps {
   const ifd = image.getFileDirectory() as ImageFileDirectory;
   const samplesPerPixel = ifd.SamplesPerPixel;
@@ -22,8 +23,8 @@ export function createTextureProps(
     data,
     dimension: "2d",
     format: textureFormat,
-    width: data.width,
-    height: data.height,
+    width: options.width,
+    height: options.height,
   };
 }
 
