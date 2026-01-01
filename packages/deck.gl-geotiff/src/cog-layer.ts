@@ -1,10 +1,16 @@
 import type {
   CompositeLayerProps,
   Layer,
+  LayersList,
   UpdateParameters,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
-import { TileLayer } from "@deck.gl/geo-layers";
+import {
+  TileLayer,
+  TileLayerProps,
+  _TileLoadProps as TileLoadProps,
+  _Tile2DHeader as Tile2DHeader,
+} from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
 import type {
   RasterLayerProps,
@@ -28,7 +34,34 @@ type Tileset2DProps = any;
 
 const DEFAULT_MAX_ERROR = 0.125;
 
-export interface COGLayerProps extends CompositeLayerProps {
+/**
+ * Minimum interface that **must** be returned from getTileData.
+ */
+export type MinimalDataT = {
+  height: number;
+  width: number;
+};
+
+export type DefaultDataT = MinimalDataT & {
+  texture: ImageData | Texture;
+};
+
+export type GetTileTextureOptions = {
+  device: Device;
+  window: [number, number, number, number];
+  signal?: AbortSignal;
+  pool: Pool;
+};
+
+type GetTileDataResult<DataT> = {
+  data: DataT;
+  pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
+  inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
+};
+
+export interface COGLayerProps<
+  DataT extends MinimalDataT = DefaultDataT,
+> extends CompositeLayerProps {
   /**
    * GeoTIFF input.
    *
@@ -66,7 +99,7 @@ export interface COGLayerProps extends CompositeLayerProps {
   maxError?: number;
 
   /**
-   * User-defined method to load texture.
+   * User-defined method to load data for a tile.
    *
    * The default implementation loads an RGBA image using geotiff.js's readRGB
    * method, returning an ImageData object.
@@ -74,20 +107,24 @@ export interface COGLayerProps extends CompositeLayerProps {
    * For more customizability, you can also return a Texture object from
    * luma.gl, along with optional custom shaders for the RasterLayer.
    */
-  loadTexture?: (
+  getTileData?: (
     image: GeoTIFFImage,
-    options: {
-      device: Device;
-      window: [number, number, number, number];
-      signal?: AbortSignal;
-      pool: Pool;
-    },
-  ) => Promise<{
-    texture: ImageData | Texture;
+    options: GetTileTextureOptions,
+  ) => Promise<DataT>;
+
+  /**
+   * User-defined method to render data for a tile.
+   *
+   * This receives the data returned by getTileData and must return a render
+   * pipeline.
+   *
+   * The default implementation returns an object with a `texture` property,
+   * assuming that this texture is already renderable.
+   */
+  renderTile: (data: DataT) => {
+    texture: RasterLayerProps["texture"];
     shaders?: RasterLayerProps["shaders"];
-    height: number;
-    width: number;
-  }>;
+  };
 
   /**
    * Enable debug visualization showing the triangulation mesh
@@ -113,13 +150,18 @@ export interface COGLayerProps extends CompositeLayerProps {
 const defaultProps: Partial<COGLayerProps> = {
   maxError: DEFAULT_MAX_ERROR,
   geoKeysParser: epsgIoGeoKeyParser,
-  loadTexture: loadRgbImage,
+  getTileData: loadRgbImage,
+  renderTile: (data) => {
+    return { texture: data.texture };
+  },
 };
 
 /**
  * COGLayer renders a COG using a tiled approach with reprojection.
  */
-export class COGLayer extends CompositeLayer<COGLayerProps> {
+export class COGLayer<
+  DataT extends MinimalDataT = DefaultDataT,
+> extends CompositeLayer<COGLayerProps<DataT>> {
   static override layerName = "COGLayer";
   static override defaultProps = defaultProps;
 
@@ -183,14 +225,142 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
     });
   }
 
+  /**
+   * Inner callback passed in to the underlying TileLayer's `getTileData`.
+   */
+  async _getTileData(
+    tile: TileLoadProps,
+    images: GeoTIFFImage[],
+    metadata: TileMatrixSet,
+  ): Promise<GetTileDataResult<DataT>> {
+    const { signal } = tile;
+    const { x, y, z } = tile.index;
+
+    // Select overview image
+    const geotiffImage = images[images.length - 1 - z]!;
+    const imageHeight = geotiffImage.getHeight();
+    const imageWidth = geotiffImage.getWidth();
+
+    const tileMatrix = metadata.tileMatrices[z]!;
+    const { tileWidth, tileHeight } = tileMatrix;
+
+    const tileGeotransform = computeTileGeotransform(x, y, tileMatrix);
+    const { pixelToInputCRS, inputCRSToPixel } =
+      fromGeoTransform(tileGeotransform);
+
+    const window: [number, number, number, number] = [
+      x * tileWidth,
+      y * tileHeight,
+      Math.min((x + 1) * tileWidth, imageWidth),
+      Math.min((y + 1) * tileHeight, imageHeight),
+    ];
+
+    const data = await this.props.getTileData!(geotiffImage, {
+      device: this.context.device,
+      window,
+      signal,
+      pool: this.props.pool || defaultPool(),
+    });
+
+    return {
+      data,
+      pixelToInputCRS,
+      inputCRSToPixel,
+    };
+  }
+
+  _renderSubLayers(
+    // TODO: it would be nice to have a cleaner type here
+    // this is copy-pasted from the upstream tile layer definition for props.
+    props: TileLayerProps<GetTileDataResult<DataT>> & {
+      id: string;
+      data: GetTileDataResult<DataT>;
+      _offset: number;
+      tile: Tile2DHeader<GetTileDataResult<DataT>>;
+    },
+    metadata: TileMatrixSet,
+    forwardReproject: ReprojectionFns["forwardReproject"],
+    inverseReproject: ReprojectionFns["inverseReproject"],
+  ): Layer | LayersList | null {
+    const { maxError, debug = false, debugOpacity = 0.5 } = this.props;
+    const { tile } = props;
+    const { data, pixelToInputCRS, inputCRSToPixel } = props.data;
+
+    const layers: Layer[] = [];
+
+    if (data) {
+      const { height, width } = data;
+      const { texture, shaders } = this.props.renderTile(data);
+
+      layers.push(
+        new RasterLayer({
+          id: `${props.id}-raster`,
+          width,
+          height,
+          texture,
+          shaders,
+          maxError,
+          reprojectionFns: {
+            pixelToInputCRS,
+            inputCRSToPixel,
+            forwardReproject,
+            inverseReproject,
+          },
+          debug,
+          debugOpacity,
+        }),
+      );
+    }
+
+    if (debug) {
+      // Get projected bounds from tile data
+      // getTileMetadata returns data that includes projectedBounds
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const projectedBounds = (tile as any)?.projectedBounds;
+
+      if (!projectedBounds || !metadata) {
+        return [];
+      }
+
+      // Project bounds from image CRS to WGS84
+      const { topLeft, topRight, bottomLeft, bottomRight } = projectedBounds;
+
+      const topLeftWgs84 = metadata.projectToWgs84(topLeft);
+      const topRightWgs84 = metadata.projectToWgs84(topRight);
+      const bottomRightWgs84 = metadata.projectToWgs84(bottomRight);
+      const bottomLeftWgs84 = metadata.projectToWgs84(bottomLeft);
+
+      // Create a closed path around the tile bounds
+      const path = [
+        topLeftWgs84,
+        topRightWgs84,
+        bottomRightWgs84,
+        bottomLeftWgs84,
+        topLeftWgs84, // Close the path
+      ];
+
+      layers.push(
+        new PathLayer({
+          id: `${tile.id}-bounds`,
+          data: [{ path }],
+          getPath: (d) => d.path,
+          getColor: [255, 0, 0, 255], // Red
+          getWidth: 2,
+          widthUnits: "pixels",
+          pickable: false,
+        }),
+      );
+    }
+
+    return layers;
+  }
+
   renderTileLayer(
     metadata: TileMatrixSet,
     forwardReproject: ReprojectionFns["forwardReproject"],
     inverseReproject: ReprojectionFns["inverseReproject"],
     images: GeoTIFFImage[],
   ): TileLayer {
-    const { maxError, debug = false, debugOpacity = 0.5 } = this.props;
-
     // Create a factory class that wraps COGTileset2D with the metadata
     class RasterTileset2DFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
@@ -198,142 +368,17 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
       }
     }
 
-    return new TileLayer({
+    return new TileLayer<GetTileDataResult<DataT>>({
       id: `cog-tile-layer-${this.id}`,
       TilesetClass: RasterTileset2DFactory,
-      getTileData: async (
-        tile,
-      ): Promise<{
-        texture: ImageData | Texture;
-        shaders?: RasterLayerProps["shaders"];
-        height: number;
-        width: number;
-        pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
-        inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
-      }> => {
-        const { signal } = tile;
-        const { x, y, z } = tile.index;
-
-        // Select overview image
-        const geotiffImage = images[images.length - 1 - z]!;
-        const imageHeight = geotiffImage.getHeight();
-        const imageWidth = geotiffImage.getWidth();
-
-        const tileMatrix = metadata.tileMatrices[z]!;
-        const { tileWidth, tileHeight } = tileMatrix;
-
-        const tileGeotransform = computeTileGeotransform(x, y, tileMatrix);
-        const { pixelToInputCRS, inputCRSToPixel } =
-          fromGeoTransform(tileGeotransform);
-
-        const window: [number, number, number, number] = [
-          x * tileWidth,
-          y * tileHeight,
-          Math.min((x + 1) * tileWidth, imageWidth),
-          Math.min((y + 1) * tileHeight, imageHeight),
-        ];
-
-        const { texture, height, width, shaders } = await this.props
-          .loadTexture!(geotiffImage, {
-          device: this.context.device,
-          window,
-          signal,
-          pool: this.props.pool || defaultPool(),
-        });
-
-        return {
-          texture,
-          height,
-          width,
-          shaders,
-          pixelToInputCRS,
-          inputCRSToPixel,
-        };
-      },
-      renderSubLayers: (props) => {
-        const { tile, data } = props;
-
-        const layers: Layer[] = [];
-
-        if (data) {
-          const {
-            texture,
-            shaders,
-            height,
-            width,
-            pixelToInputCRS,
-            inputCRSToPixel,
-          }: {
-            texture: ImageData | Texture;
-            shaders?: RasterLayerProps["shaders"];
-            height: number;
-            width: number;
-            pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
-            inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
-          } = data;
-
-          const rasterLayer = new RasterLayer({
-            id: `${props.id}-raster`,
-            width,
-            height,
-            texture,
-            shaders,
-            maxError,
-            reprojectionFns: {
-              pixelToInputCRS,
-              inputCRSToPixel,
-              forwardReproject,
-              inverseReproject,
-            },
-            debug,
-            debugOpacity,
-          });
-          layers.push(rasterLayer);
-        }
-
-        if (debug) {
-          // Get projected bounds from tile data
-          // getTileMetadata returns data that includes projectedBounds
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const projectedBounds = (tile as any)?.projectedBounds;
-
-          if (!projectedBounds || !metadata) {
-            return [];
-          }
-
-          // Project bounds from image CRS to WGS84
-          const { topLeft, topRight, bottomLeft, bottomRight } =
-            projectedBounds;
-
-          const topLeftWgs84 = metadata.projectToWgs84(topLeft);
-          const topRightWgs84 = metadata.projectToWgs84(topRight);
-          const bottomRightWgs84 = metadata.projectToWgs84(bottomRight);
-          const bottomLeftWgs84 = metadata.projectToWgs84(bottomLeft);
-
-          // Create a closed path around the tile bounds
-          const path = [
-            topLeftWgs84,
-            topRightWgs84,
-            bottomRightWgs84,
-            bottomLeftWgs84,
-            topLeftWgs84, // Close the path
-          ];
-
-          layers.push(
-            new PathLayer({
-              id: `${tile.id}-bounds`,
-              data: [{ path }],
-              getPath: (d) => d.path,
-              getColor: [255, 0, 0, 255], // Red
-              getWidth: 2,
-              widthUnits: "pixels",
-              pickable: false,
-            }),
-          );
-        }
-
-        return layers;
-      },
+      getTileData: async (tile) => this._getTileData(tile, images, metadata),
+      renderSubLayers: (props) =>
+        this._renderSubLayers(
+          props,
+          metadata,
+          forwardReproject,
+          inverseReproject,
+        ),
     });
   }
 
