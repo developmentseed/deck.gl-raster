@@ -24,16 +24,17 @@ type FixtureJSON = {
   wkt2: string;
 };
 
+// Note: this is copied from deck.gl-geotiff
 function fromGeoTransform(
   geotransform: [number, number, number, number, number, number],
 ): {
-  pixelToInputCRS: (x: number, y: number) => [number, number];
-  inputCRSToPixel: (x: number, y: number) => [number, number];
+  forwardTransform: (x: number, y: number) => [number, number];
+  inverseTransform: (x: number, y: number) => [number, number];
 } {
   const inverseGeotransform = invertGeoTransform(geotransform);
   return {
-    pixelToInputCRS: (x: number, y: number) => applyAffine(x, y, geotransform),
-    inputCRSToPixel: (x: number, y: number) =>
+    forwardTransform: (x: number, y: number) => applyAffine(x, y, geotransform),
+    inverseTransform: (x: number, y: number) =>
       applyAffine(x, y, inverseGeotransform),
   };
 }
@@ -65,13 +66,13 @@ function parseFixture(fixturePath: string): RasterReprojector {
     affineGeotransform = geotransform;
   }
 
-  const { inputCRSToPixel, pixelToInputCRS } =
+  const { inverseTransform, forwardTransform } =
     fromGeoTransform(affineGeotransform);
   const converter = proj4(projjson || wkt2, "EPSG:4326");
 
   const reprojectionFns = {
-    pixelToInputCRS,
-    inputCRSToPixel,
+    forwardTransform,
+    inverseTransform,
     forwardReproject: (x: number, y: number) =>
       converter.forward<[number, number]>([x, y], false),
     inverseReproject: (x: number, y: number) =>

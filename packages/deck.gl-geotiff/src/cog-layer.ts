@@ -60,8 +60,8 @@ export type GetTileTextureOptions = {
 
 type GetTileDataResult<DataT> = {
   data: DataT;
-  pixelToInputCRS: ReprojectionFns["pixelToInputCRS"];
-  inputCRSToPixel: ReprojectionFns["inputCRSToPixel"];
+  forwardTransform: ReprojectionFns["forwardTransform"];
+  inverseTransform: ReprojectionFns["inverseTransform"];
 };
 
 export interface COGLayerProps<
@@ -269,7 +269,7 @@ export class COGLayer<
     const { tileWidth, tileHeight } = tileMatrix;
 
     const tileGeotransform = computeTileGeotransform(x, y, tileMatrix);
-    const { pixelToInputCRS, inputCRSToPixel } =
+    const { forwardTransform, inverseTransform } =
       fromGeoTransform(tileGeotransform);
 
     const window: [number, number, number, number] = [
@@ -288,8 +288,8 @@ export class COGLayer<
 
     return {
       data,
-      pixelToInputCRS,
-      inputCRSToPixel,
+      forwardTransform,
+      inverseTransform,
     };
   }
 
@@ -308,7 +308,7 @@ export class COGLayer<
   ): Layer | LayersList | null {
     const { maxError, debug = false, debugOpacity = 0.5 } = this.props;
     const { tile } = props;
-    const { data, pixelToInputCRS, inputCRSToPixel } = props.data;
+    const { data, forwardTransform, inverseTransform } = props.data;
 
     const layers: Layer[] = [];
 
@@ -325,8 +325,8 @@ export class COGLayer<
           shaders,
           maxError,
           reprojectionFns: {
-            pixelToInputCRS,
-            inputCRSToPixel,
+            forwardTransform,
+            inverseTransform,
             forwardReproject,
             inverseReproject,
           },
