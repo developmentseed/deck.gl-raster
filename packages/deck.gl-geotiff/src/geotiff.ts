@@ -1,7 +1,14 @@
 // Utilities for interacting with geotiff.js.
 
-import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
-import { Pool } from "geotiff";
+import type { GeoTIFF, GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
+import {
+  BaseClient,
+  fromArrayBuffer,
+  fromBlob,
+  fromCustomClient,
+  fromUrl,
+  Pool,
+} from "geotiff";
 
 /**
  * Options that may be passed when reading image data from geotiff.js
@@ -126,4 +133,28 @@ export function parseColormap(cmap: Uint16Array): ImageData {
   }
 
   return new ImageData(rgba, size, 1);
+}
+
+export async function fetchGeoTIFF(
+  input: GeoTIFF | string | ArrayBuffer | Blob | BaseClient,
+): Promise<GeoTIFF> {
+  if (typeof input === "string") {
+    return fromUrl(input);
+  }
+
+  if (input instanceof ArrayBuffer) {
+    return fromArrayBuffer(input);
+  }
+
+  if (input instanceof Blob) {
+    return fromBlob(input);
+  }
+
+  // TODO: instanceof may fail here if multiple versions of geotiff.js are
+  // present
+  if (input instanceof BaseClient) {
+    return fromCustomClient(input);
+  }
+
+  return input;
 }

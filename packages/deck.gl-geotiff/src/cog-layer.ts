@@ -14,12 +14,12 @@ import type {
 import { RasterLayer, RasterTileset2D } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device, Texture } from "@luma.gl/core";
-import type { GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
+import type { BaseClient, GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
 import proj4 from "proj4";
 import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
 import { fromGeoTransform } from "./geotiff-reprojection.js";
-import { defaultPool, loadRgbImage } from "./geotiff.js";
-import type { GeoKeysParser } from "./proj.js";
+import { defaultPool, fetchGeoTIFF, loadRgbImage } from "./geotiff.js";
+import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
 
 // Workaround until upstream exposes props
@@ -29,7 +29,16 @@ type Tileset2DProps = any;
 const DEFAULT_MAX_ERROR = 0.125;
 
 export interface COGLayerProps extends CompositeLayerProps {
-  geotiff: GeoTIFF;
+  /**
+   * GeoTIFF input.
+   *
+   * - URL string pointing to a COG
+   * - ArrayBuffer containing the COG data
+   * - Blob containing the COG data
+   * - An instance of GeoTIFF.js's GeoTIFF class
+   * - An instance of GeoTIFF.js's BaseClient for custom fetching
+   */
+  geotiff: GeoTIFF | string | ArrayBuffer | Blob | BaseClient;
 
   /**
    * A function callback for parsing GeoTIFF geo keys to a Proj4 compatible
@@ -91,6 +100,14 @@ export interface COGLayerProps extends CompositeLayerProps {
    * @default 0.5
    */
   debugOpacity?: number;
+
+  /**
+   * Called when the GeoTIFF metadata has been loaded and parsed.
+   *
+   * @param   {GeoTIFF}  geotiff
+   * @param   {ProjectionInfo}  projection
+   */
+  onGeoTIFFLoad?: (geotiff: GeoTIFF, projection: ProjectionInfo) => void;
 }
 
 const defaultProps: Partial<COGLayerProps> = {
@@ -131,7 +148,7 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
   }
 
   async _parseGeoTIFF(): Promise<void> {
-    const { geotiff } = this.props;
+    const geotiff = await fetchGeoTIFF(this.props.geotiff);
 
     const geoKeysParser = this.props.geoKeysParser!;
     const metadata = await parseCOGTileMatrixSet(geotiff, geoKeysParser);
@@ -149,6 +166,8 @@ export class COGLayer extends CompositeLayer<COGLayerProps> {
         "Could not determine source projection from GeoTIFF geo keys",
       );
     }
+
+    this.props.onGeoTIFFLoad?.(geotiff, sourceProjection);
 
     const converter = proj4(sourceProjection.def, "EPSG:4326");
     const forwardReproject = (x: number, y: number) =>
