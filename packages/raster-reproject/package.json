@@ -42,15 +42,15 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^25.0.1",
-    "@typescript-eslint/eslint-plugin": "^8.16.0",
-    "@typescript-eslint/parser": "^8.16.0",
-    "eslint": "^9.15.0",
-    "jsdom": "^27.2.0",
+    "@types/node": "^25.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.51.0",
+    "@typescript-eslint/parser": "^8.51.0",
+    "eslint": "^9.39.2",
+    "jsdom": "^27.4.0",
     "prettier": "^3.3.3",
     "proj4": "^2.20.2",
     "typescript": "^5.7.2",
-    "vitest": "^4.0.15"
+    "vitest": "^4.0.16"
   },
   "volta": {
     "extends": "../../package.json"

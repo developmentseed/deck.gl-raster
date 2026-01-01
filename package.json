@@ -12,7 +12,7 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^8.50.1",
+    "@typescript-eslint/eslint-plugin": "^8.51.0",
     "publint": "^0.3.16",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
