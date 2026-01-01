@@ -13,6 +13,32 @@
  */
 
 /**
+ * A type hint for how to initialize the RasterReprojector from an existing
+ * mesh. This is explicitly designed to match the Delaunator interface.
+ */
+export type ExistingDelaunayTriangulation = {
+  /**
+   * Triangle vertex indices (each group of three numbers forms a triangle).
+   *
+   * All triangles should be directed counterclockwise.
+   */
+  triangles: Uint32Array;
+
+  /**
+   * Triangle half-edge indices that allows you to traverse the triangulation.
+   *
+   * - `i`-th half-edge in the array corresponds to vertex `triangles[i]` the half-edge is coming from.
+   * - `halfedges[i]` is the index of a twin half-edge in an adjacent triangle (or -1 for outer half-edges on the convex hull).
+   */
+  halfedges: Int32Array;
+
+  /**
+   * Input coordinates in the form `[x0, y0, x1, y1, ....]`.
+   */
+  coords: ArrayLike<number>;
+};
+
+/**
  * Barycentric sample points in uv space for where to sample reprojection
  * errors.
  */
@@ -53,6 +79,7 @@ export interface ReprojectionFns {
   inverseReproject(x: number, y: number): [number, number];
 }
 
+// TODO: document that height and width here are in terms of input pixels.
 export class RasterReprojector {
   reprojectors: ReprojectionFns;
   width: number;
@@ -93,10 +120,12 @@ export class RasterReprojector {
   private _pending: number[];
   private _pendingLen: number;
 
-  constructor(
+  // Make constructor private so that all instances are created via static
+  // methods
+  private constructor(
     reprojectors: ReprojectionFns,
-    width: number,
-    height: number = width,
+    height: number,
+    width: number = height,
   ) {
     this.reprojectors = reprojectors;
     this.width = width;
@@ -115,20 +144,66 @@ export class RasterReprojector {
     this._errors = [];
     this._pending = []; // triangles pending addition to queue
     this._pendingLen = 0;
+  }
+
+  // TODO: create a name for "initialize with two diagonal triangles covering
+  // the whole uv space"
+  public static fromRectangle(
+    reprojectors: ReprojectionFns,
+    height: number,
+    width: number = height,
+  ): RasterReprojector {
+    const reprojector = new RasterReprojector(reprojectors, height, width);
 
     // The two initial triangles cover the entire input texture in UV space, so
     // they range from [0, 0] to [1, 1] in u and v.
     const u1 = 1;
     const v1 = 1;
-    const p0 = this._addPoint(0, 0);
-    const p1 = this._addPoint(u1, 0);
-    const p2 = this._addPoint(0, v1);
-    const p3 = this._addPoint(u1, v1);
+    const p0 = reprojector._addPoint(0, 0);
+    const p1 = reprojector._addPoint(u1, 0);
+    const p2 = reprojector._addPoint(0, v1);
+    const p3 = reprojector._addPoint(u1, v1);
 
     // add initial two triangles
-    const t0 = this._addTriangle(p3, p0, p2, -1, -1, -1);
-    this._addTriangle(p0, p3, p1, t0, -1, -1);
-    this._flush();
+    const t0 = reprojector._addTriangle(p3, p0, p2, -1, -1, -1);
+    reprojector._addTriangle(p0, p3, p1, t0, -1, -1);
+    reprojector._flush();
+
+    return reprojector;
+  }
+
+  public static fromExistingTriangulation(
+    delaunay: ExistingDelaunayTriangulation,
+    reprojectors: ReprojectionFns,
+    height: number,
+    width: number = height,
+  ): RasterReprojector {
+    const reprojector = new RasterReprojector(reprojectors, height, width);
+
+    // Add points for each value in delaunay.coords
+    reprojector.uvs = Array.from(delaunay.coords);
+    reprojector.triangles = Array.from(delaunay.triangles);
+    reprojector._halfedges = Array.from(delaunay.halfedges);
+
+    // Initialize exactOutputPositions by reprojection
+    const numCoords = delaunay.coords.length / 2;
+    for (let i = 0; i < numCoords; i++) {
+      const u = delaunay.coords[i * 2]!;
+      const v = delaunay.coords[i * 2 + 1]!;
+      const exactOutputPosition = reprojector._computeOutputPosition(u, v);
+      reprojector.exactOutputPositions.push(
+        exactOutputPosition[0]!,
+        exactOutputPosition[1]!,
+      );
+    }
+
+    // TODO: Also need to init triangle metadata
+    // Set _candidatesUV and _queueIndices
+    // Set `_pending`
+
+    reprojector._flush();
+
+    return reprojector;
   }
 
   // refine the mesh until its maximum error gets below the given one
@@ -440,19 +515,23 @@ export class RasterReprojector {
     this.uvs.push(u, v);
 
     // compute and store exact output position via reprojection
-    const pixelX = u * (this.width - 1);
-    const pixelY = v * (this.height - 1);
-    const inputPosition = this.reprojectors.pixelToInputCRS(pixelX, pixelY);
-    const exactOutputPosition = this.reprojectors.forwardReproject(
-      inputPosition[0],
-      inputPosition[1],
-    );
+    const exactOutputPosition = this._computeOutputPosition(u, v);
     this.exactOutputPositions.push(
       exactOutputPosition[0]!,
       exactOutputPosition[1]!,
     );
 
     return i;
+  }
+
+  private _computeOutputPosition(u: number, v: number): [number, number] {
+    const pixelX = u * (this.width - 1);
+    const pixelY = v * (this.height - 1);
+    const inputPosition = this.reprojectors.pixelToInputCRS(pixelX, pixelY);
+    return this.reprojectors.forwardReproject(
+      inputPosition[0],
+      inputPosition[1],
+    );
   }
 
   // add or update a triangle in the mesh
