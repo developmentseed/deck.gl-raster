@@ -33,14 +33,14 @@ export interface ReprojectionFns {
    *
    * This is the affine geotransform from the input image.
    */
-  pixelToInputCRS(x: number, y: number): [number, number];
+  forwardTransform(x: number, y: number): [number, number];
 
   /**
    * Convert from input CRS coordinates back to UV coordinates.
    *
    * Inverse of the affine geotransform from the input image.
    */
-  inputCRSToPixel(x: number, y: number): [number, number];
+  inverseTransform(x: number, y: number): [number, number];
 
   /**
    * Apply the forward projection from input CRS to output CRS.
@@ -349,7 +349,7 @@ export class RasterReprojector {
 
       // Find the pixel coordinates of the sampled point by using the inverse
       // geotransform.
-      const pixelSampled = this.reprojectors.inputCRSToPixel(
+      const pixelSampled = this.reprojectors.inverseTransform(
         inputCRSSampled[0],
         inputCRSSampled[1],
       );
@@ -442,7 +442,7 @@ export class RasterReprojector {
     // compute and store exact output position via reprojection
     const pixelX = u * (this.width - 1);
     const pixelY = v * (this.height - 1);
-    const inputPosition = this.reprojectors.pixelToInputCRS(pixelX, pixelY);
+    const inputPosition = this.reprojectors.forwardTransform(pixelX, pixelY);
     const exactOutputPosition = this.reprojectors.forwardReproject(
       inputPosition[0],
       inputPosition[1],

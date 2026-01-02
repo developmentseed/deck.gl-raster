@@ -1,7 +1,6 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Device, Texture } from "@luma.gl/core";
-import { ShaderModule } from "@luma.gl/shadertools";
 import {
   COGLayer,
   parseColormap,
@@ -12,7 +11,12 @@ import type {
   GeoTIFFImage,
   TypedArrayArrayWithDimensions,
 } from "geotiff";
-import { RasterLayerProps } from "@developmentseed/deck.gl-raster";
+import {
+  Colormap,
+  CreateTexture,
+  FilterNoDataVal,
+  RasterModule,
+} from "@developmentseed/deck.gl-raster";
 import { fromUrl, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -41,62 +45,10 @@ async function geoKeysParser(
   };
 }
 
-/**
- * Calculate the WGS84 bounding box of a GeoTIFF image
- */
-async function getCogBounds(
-  tiff: GeoTIFF,
-): Promise<[[number, number], [number, number]]> {
-  const image = await tiff.getImage();
-  const projectedBbox = image.getBoundingBox();
-  const projDefinition = await geoKeysParser(image.getGeoKeys());
-
-  // Reproject to WGS84 (EPSG:4326)
-  const converter = proj4(projDefinition.def, "EPSG:4326");
-
-  // Reproject all four corners to handle rotation/skew
-  const [minX, minY, maxX, maxY] = projectedBbox;
-  const corners = [
-    converter.forward([minX, minY]), // bottom-left
-    converter.forward([maxX, minY]), // bottom-right
-    converter.forward([maxX, maxY]), // top-right
-    converter.forward([minX, maxY]), // top-left
-  ];
-
-  // Find the bounding box that encompasses all reprojected corners
-  const lons = corners.map((c) => c[0]);
-  const lats = corners.map((c) => c[1]);
-
-  const west = Math.min(...lons);
-  const south = Math.min(...lats);
-  const east = Math.max(...lons);
-  const north = Math.max(...lats);
-
-  // Return bounds in MapLibre format: [[west, south], [east, north]]
-  return [
-    [west, south],
-    [east, north],
-  ];
-}
-
-// const COG_URL =
-//   "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
-
-// const COG_URL =
-//   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
-
 const COG_URL =
   "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
 
-export type LandCoverProps = {
-  colormap_texture: Texture;
-};
-
-const landCoverModule = {
-  name: "landCover",
-} as const satisfies ShaderModule<LandCoverProps>;
-
-async function loadLandCoverTexture(
+async function getTileData(
   image: GeoTIFFImage,
   options: {
     device: Device;
@@ -104,13 +56,7 @@ async function loadLandCoverTexture(
     signal?: AbortSignal;
     pool: Pool;
   },
-  colormapTexture: Texture,
-): Promise<{
-  texture: ImageData | Texture;
-  shaders?: RasterLayerProps["shaders"];
-  height: number;
-  width: number;
-}> {
+): Promise<TileDataT> {
   const { device, window, signal, pool } = options;
 
   const {
@@ -132,40 +78,50 @@ async function loadLandCoverTexture(
     data,
   });
 
+  return {
+    texture,
+    height,
+    width,
+  };
+}
+
+type TileDataT = {
+  texture: Texture;
+  height: number;
+  width: number;
+};
+
+function renderTile(
+  tileData: TileDataT,
+  colormapTexture: Texture,
+): RasterModule[] {
+  const { texture } = tileData;
+
   // Hard coded NoData value but this ideally would be fetched from COG metadata
   const nodataVal = 250;
   // Since values are 0-1 for unorm textures,
   const noDataScaled = nodataVal / 255.0;
 
-  return {
-    texture,
-    // For colormap rendering:
-    shaders: {
-      inject: {
-        "fs:#decl": `
-          uniform sampler2D colormap_texture;
-        `,
-        "fs:DECKGL_FILTER_COLOR": `
-          float value = color.r;
-          vec3 pickingval = vec3(value, 0., 0.);
-          if (value == ${noDataScaled}) {
-              discard;
-            } else {
-              vec4 color_val = texture(colormap_texture, vec2(value, 0.));
-              color = color_val;
-            }
-        `,
-      },
-      modules: [landCoverModule],
-      shaderProps: {
-        landCover: {
-          colormap_texture: colormapTexture,
-        },
+  return [
+    {
+      module: CreateTexture,
+      props: {
+        textureName: texture,
       },
     },
-    height,
-    width,
-  };
+    {
+      module: FilterNoDataVal,
+      props: {
+        value: noDataScaled,
+      },
+    },
+    {
+      module: Colormap,
+      props: {
+        colormapTexture: colormapTexture,
+      },
+    },
+  ];
 }
 
 export default function App() {
@@ -192,15 +148,6 @@ export default function App() {
 
         if (mounted) {
           setGeotiff(tiff);
-
-          // Calculate bounds and fit to them
-          const bounds = await getCogBounds(tiff);
-          if (mapRef.current) {
-            mapRef.current.fitBounds(bounds, {
-              padding: 40,
-              duration: 1000,
-            });
-          }
 
           setLoading(false);
         }
@@ -252,7 +199,7 @@ export default function App() {
   const layers =
     geotiff && colormapTexture
       ? [
-          new COGLayer({
+          new COGLayer<TileDataT>({
             id: "cog-layer",
             geotiff,
             maxError: 0.125,
@@ -260,8 +207,21 @@ export default function App() {
             debugOpacity,
             geoKeysParser,
             pool,
-            loadTexture: (image, options) =>
-              loadLandCoverTexture(image, options, colormapTexture),
+            getTileData,
+            renderTile: (tileData) => renderTile(tileData, colormapTexture),
+            onGeoTIFFLoad: (_tiff, options) => {
+              const { west, south, east, north } = options.geographicBounds;
+              mapRef.current?.fitBounds(
+                [
+                  [west, south],
+                  [east, north],
+                ],
+                {
+                  padding: 40,
+                  duration: 1000,
+                },
+              );
+            },
             beforeId: "aeroway-runway",
           }),
         ]

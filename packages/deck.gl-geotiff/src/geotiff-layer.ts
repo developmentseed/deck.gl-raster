@@ -2,16 +2,31 @@ import type { CompositeLayerProps, UpdateParameters } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { RasterLayer } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { GeoTIFF, Pool } from "geotiff";
+import type { BaseClient, GeoTIFF, Pool } from "geotiff";
 import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
-import { defaultPool, loadRgbImage } from "./geotiff.js";
-import type { GeoKeysParser } from "./proj.js";
+import {
+  defaultPool,
+  fetchGeoTIFF,
+  getGeographicBounds,
+  loadRgbImage,
+} from "./geotiff.js";
+import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
+import proj4 from "proj4";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
 export interface GeoTIFFLayerProps extends CompositeLayerProps {
-  geotiff: GeoTIFF;
+  /**
+   * GeoTIFF input.
+   *
+   * - URL string pointing to a GeoTIFF
+   * - ArrayBuffer containing the GeoTIFF data
+   * - Blob containing the GeoTIFF data
+   * - An instance of GeoTIFF.js's GeoTIFF class
+   * - An instance of GeoTIFF.js's BaseClient for custom fetching
+   */
+  geotiff: GeoTIFF | string | ArrayBuffer | Blob | BaseClient;
 
   /**
    * A function callback for parsing GeoTIFF geo keys to a Proj4 compatible
@@ -49,6 +64,29 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
    * @default 0.5
    */
   debugOpacity?: number;
+
+  /**
+   * Called when the GeoTIFF metadata has been loaded and parsed.
+   *
+   * @param   {GeoTIFF}  geotiff
+   * @param   {ProjectionInfo}  projection
+   */
+  onGeoTIFFLoad?: (
+    geotiff: GeoTIFF,
+    options: {
+      projection: ProjectionInfo;
+      /**
+       * Bounds of the image in geographic coordinates (WGS84) [minLon, minLat,
+       * maxLon, maxLat]
+       */
+      geographicBounds: {
+        west: number;
+        south: number;
+        east: number;
+        north: number;
+      };
+    },
+  ) => void;
 }
 
 const defaultProps = {
@@ -94,13 +132,31 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
   }
 
   async _parseGeoTIFF(): Promise<void> {
-    const { geotiff } = this.props;
+    const geotiff = await fetchGeoTIFF(this.props.geotiff);
+    const image = await geotiff.getImage();
+
+    const geoKeysParser = this.props.geoKeysParser!;
+    const sourceProjection = await geoKeysParser(image.getGeoKeys());
+    if (!sourceProjection) {
+      throw new Error(
+        "Could not determine source projection from GeoTIFF geo keys",
+      );
+    }
+
+    const converter = proj4(sourceProjection.def, "EPSG:4326");
+
+    if (this.props.onGeoTIFFLoad) {
+      const geographicBounds = getGeographicBounds(image, converter);
+      this.props.onGeoTIFFLoad(geotiff, {
+        projection: sourceProjection,
+        geographicBounds,
+      });
+    }
 
     const reprojectionFns = await extractGeotiffReprojectors(
       geotiff,
-      this.props.geoKeysParser!,
+      sourceProjection.def,
     );
-    const image = await geotiff.getImage();
     const { texture, height, width } = await loadRgbImage(image, {
       pool: this.props.pool || defaultPool(),
     });

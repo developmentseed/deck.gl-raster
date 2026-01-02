@@ -9,7 +9,6 @@ import {
 import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import type Projection from "proj4/dist/lib/Proj";
-import type { GeoKeysParser } from "./proj";
 
 export const OGC_84: PROJJSONDefinition = {
   $schema: "https://proj.org/schemas/v0.7/projjson.schema.json",
@@ -90,7 +89,7 @@ export const OGC_84: PROJJSONDefinition = {
 // TODO: return a RasterReprojector instance, given the IFD and tile of interest?
 export async function extractGeotiffReprojectors(
   tiff: GeoTIFF,
-  geoKeysParser: GeoKeysParser,
+  sourceProjection: string | PROJJSONDefinition,
   outputCrs: string | PROJJSONDefinition | Projection = OGC_84,
 ): Promise<ReprojectionFns> {
   const image = await tiff.getImage();
@@ -99,19 +98,13 @@ export async function extractGeotiffReprojectors(
   // Only the top-level IFD has geo keys, so we'll derive overviews from this
   const baseGeotransform = extractGeotransform(image);
 
-  const sourceProjection = await geoKeysParser(image.getGeoKeys());
-  if (sourceProjection === null) {
-    throw new Error(
-      "Could not determine source projection from GeoTIFF geo keys",
-    );
-  }
-  const converter = proj4(sourceProjection.def, outputCrs);
-  const { pixelToInputCRS, inputCRSToPixel } =
+  const converter = proj4(sourceProjection, outputCrs);
+  const { forwardTransform, inverseTransform } =
     fromGeoTransform(baseGeotransform);
 
   return {
-    pixelToInputCRS,
-    inputCRSToPixel,
+    forwardTransform,
+    inverseTransform,
     forwardReproject: (x: number, y: number) =>
       converter.forward([x, y], false),
     inverseReproject: (x: number, y: number) =>
@@ -122,13 +115,13 @@ export async function extractGeotiffReprojectors(
 export function fromGeoTransform(
   geotransform: [number, number, number, number, number, number],
 ): {
-  pixelToInputCRS: (x: number, y: number) => [number, number];
-  inputCRSToPixel: (x: number, y: number) => [number, number];
+  forwardTransform: (x: number, y: number) => [number, number];
+  inverseTransform: (x: number, y: number) => [number, number];
 } {
   const inverseGeotransform = invertGeoTransform(geotransform);
   return {
-    pixelToInputCRS: (x: number, y: number) => applyAffine(x, y, geotransform),
-    inputCRSToPixel: (x: number, y: number) =>
+    forwardTransform: (x: number, y: number) => applyAffine(x, y, geotransform),
+    inverseTransform: (x: number, y: number) =>
       applyAffine(x, y, inverseGeotransform),
   };
 }

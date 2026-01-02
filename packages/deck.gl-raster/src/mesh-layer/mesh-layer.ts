@@ -1,17 +1,12 @@
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
+import fs from "./mesh-layer-fragment.glsl.js";
 
 import type { ShaderModule } from "@luma.gl/shadertools";
+import type { RasterModule } from "../webgl/types.js";
 
 export interface MeshTextureLayerProps extends SimpleMeshLayerProps {
-  shaders?: {
-    inject?: {
-      "fs:#decl"?: string;
-      "fs:DECKGL_FILTER_COLOR"?: string;
-    };
-    modules?: ShaderModule[];
-    shaderProps?: { [x: string]: Partial<Record<string, unknown> | undefined> };
-  };
+  renderPipeline: RasterModule[];
 }
 
 /**
@@ -31,24 +26,30 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   override getShaders() {
     const upstreamShaders = super.getShaders();
 
+    const modules: ShaderModule[] = upstreamShaders.modules;
+    for (const m of this.props.renderPipeline) {
+      modules.push(m.module);
+    }
+
     return {
       ...upstreamShaders,
-      inject: {
-        ...upstreamShaders.inject,
-        ...this.props.shaders?.inject,
-      },
-      modules: [
-        ...upstreamShaders.modules,
-        ...(this.props.shaders?.modules || []),
-      ],
+      // Override upstream's fragment shader with our copy with modified
+      // injection points
+      fs,
+      modules,
     };
   }
 
   override draw(opts: any): void {
-    if (this.props.shaders?.shaderProps)
-      for (const m of super.getModels()) {
-        m.shaderInputs.setProps(this.props.shaders.shaderProps);
-      }
+    const shaderProps: { [x: string]: Partial<Record<string, unknown>> } = {};
+    for (const m of this.props.renderPipeline) {
+      // Props should be keyed by module name
+      shaderProps[m.module.name] = m.props;
+    }
+
+    for (const m of super.getModels()) {
+      m.shaderInputs.setProps(shaderProps);
+    }
 
     super.draw(opts);
   }

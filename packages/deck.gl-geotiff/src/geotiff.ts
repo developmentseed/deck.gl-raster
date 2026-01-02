@@ -1,7 +1,15 @@
 // Utilities for interacting with geotiff.js.
 
-import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
-import { Pool } from "geotiff";
+import type { GeoTIFF, GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
+import {
+  BaseClient,
+  fromArrayBuffer,
+  fromBlob,
+  fromCustomClient,
+  fromUrl,
+  Pool,
+} from "geotiff";
+import { Converter } from "proj4";
 
 /**
  * Options that may be passed when reading image data from geotiff.js
@@ -126,4 +134,64 @@ export function parseColormap(cmap: Uint16Array): ImageData {
   }
 
   return new ImageData(rgba, size, 1);
+}
+
+export async function fetchGeoTIFF(
+  input: GeoTIFF | string | ArrayBuffer | Blob | BaseClient,
+): Promise<GeoTIFF> {
+  if (typeof input === "string") {
+    return fromUrl(input);
+  }
+
+  if (input instanceof ArrayBuffer) {
+    return fromArrayBuffer(input);
+  }
+
+  if (input instanceof Blob) {
+    return fromBlob(input);
+  }
+
+  // TODO: instanceof may fail here if multiple versions of geotiff.js are
+  // present
+  if (input instanceof BaseClient) {
+    return fromCustomClient(input);
+  }
+
+  return input;
+}
+
+/**
+ * Calculate the WGS84 bounding box of a GeoTIFF image
+ */
+export function getGeographicBounds(
+  image: GeoTIFFImage,
+  converter: Converter,
+): { west: number; south: number; east: number; north: number } {
+  const projectedBbox = image.getBoundingBox() as [
+    number,
+    number,
+    number,
+    number,
+  ];
+
+  // Reproject all four corners to handle rotation/skew
+  const [minX, minY, maxX, maxY] = projectedBbox;
+  const corners: [number, number][] = [
+    converter.forward([minX, minY]), // bottom-left
+    converter.forward([maxX, minY]), // bottom-right
+    converter.forward([maxX, maxY]), // top-right
+    converter.forward([minX, maxY]), // top-left
+  ];
+
+  // Find the bounding box that encompasses all reprojected corners
+  const lons = corners.map((c) => c[0]);
+  const lats = corners.map((c) => c[1]);
+
+  const west = Math.min(...lons);
+  const south = Math.min(...lats);
+  const east = Math.max(...lons);
+  const north = Math.max(...lats);
+
+  // Return bounds in MapLibre format: [[west, south], [east, north]]
+  return { west, south, east, north };
 }
