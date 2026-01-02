@@ -9,7 +9,7 @@ import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
 import { RasterModule } from "./webgl/types";
-import { CreateTextureUnorm } from "./webgl/create-texture";
+import { CreateTexture } from "./webgl/create-texture";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
@@ -233,7 +233,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         data: imageData.data,
       });
       const wrapper: RasterModule = {
-        module: CreateTextureUnorm,
+        module: CreateTexture,
         props: {
           textureName: texture,
         },

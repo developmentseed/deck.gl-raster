@@ -1,8 +1,8 @@
 import type { Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 
-// Props expected by the CreateTextureUnorm shader module
-export type CreateTextureUnormProps = {
+// Props expected by the CreateTexture shader module
+export type CreateTextureProps = {
   textureName: Texture;
 };
 
@@ -10,7 +10,7 @@ export type CreateTextureUnormProps = {
  * A shader module that injects a unorm texture and uses a sampler2D to assign
  * to a color.
  */
-export const CreateTextureUnorm = {
+export const CreateTexture = {
   name: "create-texture-unorm",
   inject: {
     "fs:#decl": `uniform sampler2D textureName;`,
@@ -18,9 +18,9 @@ export const CreateTextureUnorm = {
       color = texture(textureName, geometry.uv);
     `,
   },
-  getUniforms: (props: Partial<CreateTextureUnormProps>) => {
+  getUniforms: (props: Partial<CreateTextureProps>) => {
     return {
       textureName: props.textureName,
     };
   },
-} as const satisfies ShaderModule<CreateTextureUnormProps>;
+} as const satisfies ShaderModule<CreateTextureProps>;

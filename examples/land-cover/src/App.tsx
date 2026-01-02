@@ -13,7 +13,7 @@ import type {
 } from "geotiff";
 import {
   Colormap,
-  CreateTextureUnorm,
+  CreateTexture,
   FilterNoDataVal,
   RasterModule,
 } from "@developmentseed/deck.gl-raster";
@@ -148,7 +148,7 @@ function renderTile(
 
   return [
     {
-      module: CreateTextureUnorm,
+      module: CreateTexture,
       props: {
         textureName: texture,
       },
