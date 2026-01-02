@@ -7,14 +7,6 @@ import type { RasterModule } from "../webgl/types.js";
 
 export interface MeshTextureLayerProps extends SimpleMeshLayerProps {
   renderPipeline: RasterModule[];
-  // shaders?: {
-  //   inject?: {
-  //     "fs:#decl"?: string;
-  //     "fs:DECKGL_FILTER_COLOR"?: string;
-  //   };
-  //   modules?: ShaderModule[];
-  //   shaderProps?: { [x: string]: Partial<Record<string, unknown> | undefined> };
-  // };
 }
 
 /**
@@ -43,10 +35,6 @@ export class MeshTextureLayer extends SimpleMeshLayer<
       // Override upstream's fragment shader with our copy with modified
       // injection points
       fs,
-      // inject: {
-      //   ...upstreamShaders.inject,
-      //   ...this.props.shaders?.inject,
-      // },
       modules: [...upstreamShaders.modules, ...shaderModules],
     };
   }
@@ -54,8 +42,8 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   override draw(opts: any): void {
     const shaderProps: { [x: string]: Partial<Record<string, unknown>> } = {};
     for (const m of this.props.renderPipeline) {
-      // TODO: validate that keys are unique
-      Object.assign(shaderProps, m.props);
+      // Props should be keyed by module name
+      shaderProps[m.module.name] = m.props;
     }
 
     for (const m of super.getModels()) {

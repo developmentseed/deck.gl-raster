@@ -13,13 +13,13 @@ import {
 } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
 import type {
-  RasterLayerProps,
+  RasterModule,
   TileMatrix,
   TileMatrixSet,
 } from "@developmentseed/deck.gl-raster";
 import { RasterLayer, RasterTileset2D } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { Device, Texture } from "@luma.gl/core";
+import type { Device } from "@luma.gl/core";
 import type { BaseClient, GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
 import proj4 from "proj4";
 import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
@@ -48,7 +48,7 @@ export type MinimalDataT = {
 };
 
 export type DefaultDataT = MinimalDataT & {
-  texture: ImageData | Texture;
+  texture: ImageData;
 };
 
 export type GetTileTextureOptions = {
@@ -126,10 +126,7 @@ export interface COGLayerProps<
    * The default implementation returns an object with a `texture` property,
    * assuming that this texture is already renderable.
    */
-  renderTile: (data: DataT) => {
-    texture: RasterLayerProps["texture"];
-    shaders?: RasterLayerProps["shaders"];
-  };
+  renderTile: (data: DataT) => ImageData | RasterModule[];
 
   /**
    * Enable debug visualization showing the triangulation mesh
@@ -172,7 +169,7 @@ const defaultProps: Partial<COGLayerProps> = {
   geoKeysParser: epsgIoGeoKeyParser,
   getTileData: loadRgbImage,
   renderTile: (data) => {
-    return { texture: data.texture };
+    return data.texture;
   },
 };
 
@@ -314,15 +311,13 @@ export class COGLayer<
 
     if (data) {
       const { height, width } = data;
-      const { texture, shaders } = this.props.renderTile(data);
 
       layers.push(
         new RasterLayer({
           id: `${props.id}-raster`,
           width,
           height,
-          texture,
-          shaders,
+          renderPipeline: this.props.renderTile(data),
           maxError,
           reprojectionFns: {
             forwardTransform,
