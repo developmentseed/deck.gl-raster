@@ -4,7 +4,7 @@ import type {
   UpdateParameters,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
-import { PolygonLayer } from "@deck.gl/layers";
+import { PolygonLayer, SolidPolygonLayer } from "@deck.gl/layers";
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
@@ -163,6 +163,71 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     });
   }
 
+  //   data: {
+  //   // @ts-expect-error passed through to enable use by function accessors
+  //   data: batch,
+  //   // Number of geometries
+  //   length: polygonData.length,
+  //   // Offsets into coordinateArray where each polygon starts
+  //   startIndices: resolvedRingOffsets,
+  //   attributes: {
+  //     getPolygon: { value: flatCoordinateArray, size: nDim },
+  //     indices: { value: earcutTriangles, size: 1 },
+  //   },
+  // },
+
+  renderDebugLayerFast(): Layer | null {
+    const { reprojector } = this.state;
+    const { debugOpacity } = this.props;
+
+    if (!reprojector) {
+      return null;
+    }
+
+    const numTriangles = reprojector.triangles.length / 3;
+    const positions = new Float64Array(reprojector.exactOutputPositions);
+    const triangles = new Uint32Array(reprojector.triangles);
+
+    const getFillColor = new Uint8Array(numTriangles * 3 * 4);
+    for (let triangleIdx = 0; triangleIdx < numTriangles; triangleIdx++) {
+      const color = DEBUG_COLORS[triangleIdx % DEBUG_COLORS.length]!;
+      for (let colorIdx = 0; colorIdx < 3; colorIdx++) {
+        const i = triangleIdx * 4 + colorIdx;
+        getFillColor[i * 4] = color[0];
+        getFillColor[i * 4 + 1] = color[1];
+        getFillColor[i * 4 + 2] = color[2];
+        getFillColor[i * 4 + 3] = 255;
+      }
+    }
+
+    const startIndices = new Uint32Array(numTriangles);
+    for (let i = 0; i < numTriangles; i++) {
+      startIndices[i] = i * 3;
+    }
+
+    return new SolidPolygonLayer(
+      this.getSubLayerProps({
+        id: "fast-polygon",
+        _normalize: false,
+        _windingOrder: "CCW",
+        data: {
+          data: null,
+          length: numTriangles,
+          startIndices,
+          attributes: {
+            getPolygon: { value: positions, size: 2 },
+            indices: { value: triangles, size: 1 },
+            getFillColor: { value: getFillColor, size: 4 },
+          },
+        },
+        opacity:
+          debugOpacity !== undefined && Number.isFinite(debugOpacity)
+            ? Math.max(0, Math.min(1, debugOpacity))
+            : 1,
+      }),
+    );
+  }
+
   renderDebugLayer(): Layer | null {
     const { reprojector } = this.state;
     const { debugOpacity } = this.props;
@@ -268,7 +333,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
     const layers: Layer[] = [meshLayer];
     if (debug) {
-      const debugLayer = this.renderDebugLayer();
+      const debugLayer = this.renderDebugLayerFast();
       if (debugLayer) {
         layers.push(debugLayer);
       }
