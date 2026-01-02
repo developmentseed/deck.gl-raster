@@ -4,9 +4,15 @@ import { RasterLayer } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { BaseClient, GeoTIFF, Pool } from "geotiff";
 import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
-import { defaultPool, fetchGeoTIFF, loadRgbImage } from "./geotiff.js";
+import {
+  defaultPool,
+  fetchGeoTIFF,
+  getGeographicBounds,
+  loadRgbImage,
+} from "./geotiff.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
+import proj4 from "proj4";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
@@ -65,7 +71,22 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
    * @param   {GeoTIFF}  geotiff
    * @param   {ProjectionInfo}  projection
    */
-  onGeoTIFFLoad?: (geotiff: GeoTIFF, projection: ProjectionInfo) => void;
+  onGeoTIFFLoad?: (
+    geotiff: GeoTIFF,
+    options: {
+      projection: ProjectionInfo;
+      /**
+       * Bounds of the image in geographic coordinates (WGS84) [minLon, minLat,
+       * maxLon, maxLat]
+       */
+      geographicBounds: {
+        west: number;
+        south: number;
+        east: number;
+        north: number;
+      };
+    },
+  ) => void;
 }
 
 const defaultProps = {
@@ -122,11 +143,19 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
       );
     }
 
-    this.props.onGeoTIFFLoad?.(geotiff, sourceProjection);
+    const converter = proj4(sourceProjection.def, "EPSG:4326");
+
+    if (this.props.onGeoTIFFLoad) {
+      const geographicBounds = getGeographicBounds(image, converter);
+      this.props.onGeoTIFFLoad(geotiff, {
+        projection: sourceProjection,
+        geographicBounds,
+      });
+    }
 
     const reprojectionFns = await extractGeotiffReprojectors(
       geotiff,
-      this.props.geoKeysParser!,
+      sourceProjection.def,
     );
     const { texture, height, width } = await loadRgbImage(image, {
       pool: this.props.pool || defaultPool(),

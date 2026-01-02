@@ -9,7 +9,6 @@ import {
 import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import type Projection from "proj4/dist/lib/Proj";
-import type { GeoKeysParser } from "./proj";
 
 export const OGC_84: PROJJSONDefinition = {
   $schema: "https://proj.org/schemas/v0.7/projjson.schema.json",
@@ -90,7 +89,7 @@ export const OGC_84: PROJJSONDefinition = {
 // TODO: return a RasterReprojector instance, given the IFD and tile of interest?
 export async function extractGeotiffReprojectors(
   tiff: GeoTIFF,
-  geoKeysParser: GeoKeysParser,
+  sourceProjection: string | PROJJSONDefinition,
   outputCrs: string | PROJJSONDefinition | Projection = OGC_84,
 ): Promise<ReprojectionFns> {
   const image = await tiff.getImage();
@@ -99,13 +98,7 @@ export async function extractGeotiffReprojectors(
   // Only the top-level IFD has geo keys, so we'll derive overviews from this
   const baseGeotransform = extractGeotransform(image);
 
-  const sourceProjection = await geoKeysParser(image.getGeoKeys());
-  if (sourceProjection === null) {
-    throw new Error(
-      "Could not determine source projection from GeoTIFF geo keys",
-    );
-  }
-  const converter = proj4(sourceProjection.def, outputCrs);
+  const converter = proj4(sourceProjection, outputCrs);
   const { forwardTransform, inverseTransform } =
     fromGeoTransform(baseGeotransform);
 

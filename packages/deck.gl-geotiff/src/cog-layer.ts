@@ -235,11 +235,13 @@ export class COGLayer<
     const inverseReproject = (x: number, y: number) =>
       converter.inverse<[number, number]>([x, y], false);
 
-    const geographicBounds = getGeographicBounds(image, converter);
-    this.props.onGeoTIFFLoad?.(geotiff, {
-      projection: sourceProjection,
-      geographicBounds,
-    });
+    if (this.props.onGeoTIFFLoad) {
+      const geographicBounds = getGeographicBounds(image, converter);
+      this.props.onGeoTIFFLoad(geotiff, {
+        projection: sourceProjection,
+        geographicBounds,
+      });
+    }
 
     this.setState({
       metadata,
