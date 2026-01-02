@@ -9,7 +9,7 @@ import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
 import { RasterModule } from "./webgl/types";
-import { TextureModule } from "./webgl/unorm-texture";
+import { CreateTextureUnorm } from "./webgl/create-texture";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
@@ -224,9 +224,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   /** Create assembled render pipeline from the renderPipeline prop input. */
   _createRenderPipeline(): RasterModule[] {
     if (this.props.renderPipeline instanceof ImageData) {
-      const wrapper = {
-        id: "unorm-texture-module",
-        module: TextureModule,
+      const wrapper: RasterModule = {
+        module: CreateTextureUnorm,
         props: {
           textureName: this.props.renderPipeline,
         },
