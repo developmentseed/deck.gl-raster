@@ -1,6 +1,7 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer, loadRgbImage, proj } from "@developmentseed/deck.gl-geotiff";
+import { CreateTextureUnorm } from "@developmentseed/deck.gl-raster";
 import { Device, Texture } from "@luma.gl/core";
 import type { GeoTIFFImage } from "geotiff";
 import { Pool } from "geotiff";
@@ -74,16 +75,15 @@ async function getTileData(
 
 function renderTile(data: DataT) {
   const { texture } = data;
-  return {
-    texture: data.texture,
-    shaders: {
-      shaderProps: {
-        moduleName: {
-          textureName: texture,
-        },
+
+  return [
+    {
+      module: CreateTextureUnorm,
+      props: {
+        textureName: texture,
       },
     },
-  };
+  ];
 }
 
 export default function App() {
