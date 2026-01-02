@@ -224,10 +224,18 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   /** Create assembled render pipeline from the renderPipeline prop input. */
   _createRenderPipeline(): RasterModule[] {
     if (this.props.renderPipeline instanceof ImageData) {
+      const imageData = this.props.renderPipeline;
+      const texture = this.context.device.createTexture({
+        format: "rgba8unorm",
+        dimension: "2d",
+        width: imageData.width,
+        height: imageData.height,
+        data: imageData.data,
+      });
       const wrapper: RasterModule = {
         module: CreateTextureUnorm,
         props: {
-          textureName: this.props.renderPipeline,
+          textureName: texture,
         },
       };
       return [wrapper];
