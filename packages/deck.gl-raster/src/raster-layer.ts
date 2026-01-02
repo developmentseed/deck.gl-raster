@@ -188,18 +188,6 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     const positions = new Float64Array(reprojector.exactOutputPositions);
     const triangles = new Uint32Array(reprojector.triangles);
 
-    const getFillColor = new Uint8Array(numTriangles * 3 * 4);
-    for (let triangleIdx = 0; triangleIdx < numTriangles; triangleIdx++) {
-      const color = DEBUG_COLORS[triangleIdx % DEBUG_COLORS.length]!;
-      for (let colorIdx = 0; colorIdx < 3; colorIdx++) {
-        const i = triangleIdx * 4 + colorIdx;
-        getFillColor[i * 4] = color[0];
-        getFillColor[i * 4 + 1] = color[1];
-        getFillColor[i * 4 + 2] = color[2];
-        getFillColor[i * 4 + 3] = 255;
-      }
-    }
-
     const startIndices = new Uint32Array(numTriangles);
     for (let i = 0; i < numTriangles; i++) {
       startIndices[i] = i * 3;
@@ -211,14 +199,23 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         _normalize: false,
         _windingOrder: "CCW",
         data: {
-          data: null,
           length: numTriangles,
           startIndices,
           attributes: {
             getPolygon: { value: positions, size: 2 },
             indices: { value: triangles, size: 1 },
-            getFillColor: { value: getFillColor, size: 4 },
           },
+        },
+        getFillColor: (
+          _: any,
+          { index, target }: { index: number; target: number[] },
+        ) => {
+          const color = DEBUG_COLORS[index % DEBUG_COLORS.length]!;
+          target[0] = color[0];
+          target[1] = color[1];
+          target[2] = color[2];
+          target[3] = 255;
+          return target;
         },
         opacity:
           debugOpacity !== undefined && Number.isFinite(debugOpacity)
