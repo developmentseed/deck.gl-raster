@@ -37,6 +37,11 @@ const DEBUG_COLORS: [number, number, number][] = [
   [0, 204, 255], // cyan
 ];
 
+type DebugData = {
+  reprojector: RasterReprojector;
+  length: number;
+};
+
 export interface RasterLayerProps extends CompositeLayerProps {
   /**
    * Width of the input raster image in pixels
@@ -169,6 +174,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     return new PolygonLayer(
       this.getSubLayerProps({
         id: "polygon",
+        // https://deck.gl/docs/developer-guide/performance#supply-binary-blobs-to-the-data-prop
+        // This `data` gets passed into `getPolygon` with the row index.
         data: { reprojector, length: reprojector.triangles.length / 3 },
         getPolygon: (
           _: any,
@@ -177,7 +184,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
             data,
           }: {
             index: number;
-            data: { reprojector: RasterReprojector; length: number };
+            data: DebugData;
           },
         ) => {
           const triangles = data.reprojector.triangles;
