@@ -26,16 +26,17 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   override getShaders() {
     const upstreamShaders = super.getShaders();
 
-    const shaderModules: ShaderModule[] = this.props.renderPipeline.map(
-      (m) => m.module,
-    );
+    const modules: ShaderModule[] = upstreamShaders.modules;
+    for (const m of this.props.renderPipeline) {
+      modules.push(m.module);
+    }
 
     return {
       ...upstreamShaders,
       // Override upstream's fragment shader with our copy with modified
       // injection points
       fs,
-      modules: [...upstreamShaders.modules, ...shaderModules],
+      modules,
     };
   }
 
