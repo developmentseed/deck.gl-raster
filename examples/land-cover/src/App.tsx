@@ -1,7 +1,6 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Device, Texture } from "@luma.gl/core";
-import { ShaderModule } from "@luma.gl/shadertools";
 import {
   COGLayer,
   parseColormap,
@@ -12,7 +11,12 @@ import type {
   GeoTIFFImage,
   TypedArrayArrayWithDimensions,
 } from "geotiff";
-import { RasterLayerProps } from "@developmentseed/deck.gl-raster";
+import {
+  Colormap,
+  CreateTexture,
+  FilterNoDataVal,
+  RasterModule,
+} from "@developmentseed/deck.gl-raster";
 import { fromUrl, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -43,14 +47,6 @@ async function geoKeysParser(
 
 const COG_URL =
   "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
-
-export type LandCoverProps = {
-  colormap_texture: Texture;
-};
-
-const landCoverModule = {
-  name: "landCover",
-} as const satisfies ShaderModule<LandCoverProps>;
 
 async function getTileData(
   image: GeoTIFFImage,
@@ -98,10 +94,7 @@ type TileDataT = {
 function renderTile(
   tileData: TileDataT,
   colormapTexture: Texture,
-): {
-  texture: RasterLayerProps["texture"];
-  shaders?: RasterLayerProps["shaders"];
-} {
+): RasterModule[] {
   const { texture } = tileData;
 
   // Hard coded NoData value but this ideally would be fetched from COG metadata
@@ -109,33 +102,26 @@ function renderTile(
   // Since values are 0-1 for unorm textures,
   const noDataScaled = nodataVal / 255.0;
 
-  return {
-    texture,
-    // For colormap rendering:
-    shaders: {
-      inject: {
-        "fs:#decl": `
-          uniform sampler2D colormap_texture;
-        `,
-        "fs:DECKGL_FILTER_COLOR": `
-          float value = color.r;
-          vec3 pickingval = vec3(value, 0., 0.);
-          if (value == ${noDataScaled}) {
-              discard;
-            } else {
-              vec4 color_val = texture(colormap_texture, vec2(value, 0.));
-              color = color_val;
-            }
-        `,
-      },
-      modules: [landCoverModule],
-      shaderProps: {
-        landCover: {
-          colormap_texture: colormapTexture,
-        },
+  return [
+    {
+      module: CreateTexture,
+      props: {
+        textureName: texture,
       },
     },
-  };
+    {
+      module: FilterNoDataVal,
+      props: {
+        value: noDataScaled,
+      },
+    },
+    {
+      module: Colormap,
+      props: {
+        colormapTexture: colormapTexture,
+      },
+    },
+  ];
 }
 
 export default function App() {

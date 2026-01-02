@@ -6,6 +6,8 @@ export type {
   TileMatrixSet,
   TileMatrixSetBoundingBox,
 } from "./raster-tileset/types.js";
+export { Colormap, CreateTexture, FilterNoDataVal } from "./webgl/index.js";
+export type { RasterModule } from "./webgl/types.js";
 
 import { __TEST_EXPORTS as traversalTestExports } from "./raster-tileset/raster-tile-traversal.js";
 

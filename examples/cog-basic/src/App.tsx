@@ -1,6 +1,9 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
+import { COGLayer, loadRgbImage, proj } from "@developmentseed/deck.gl-geotiff";
+import { CreateTexture } from "@developmentseed/deck.gl-raster";
+import { Device, Texture } from "@luma.gl/core";
+import type { GeoTIFFImage } from "geotiff";
 import { Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -35,6 +38,54 @@ async function geoKeysParser(
 const COG_URL =
   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
 
+type DataT = {
+  texture: Texture;
+  height: number;
+  width: number;
+};
+
+async function getTileData(
+  image: GeoTIFFImage,
+  options: {
+    device: Device;
+    window: [number, number, number, number];
+    signal?: AbortSignal;
+    pool: Pool;
+  },
+): Promise<DataT> {
+  const { device } = options;
+  const { texture: data, height, width } = await loadRgbImage(image, options);
+
+  // Note: if we set this format to r8unorm it'll only fill the red channel of
+  // the texture, making it red.
+  const texture = device.createTexture({
+    format: "rgba8unorm",
+    dimension: "2d",
+    width,
+    height,
+    data,
+  });
+
+  return {
+    texture,
+    height,
+    width,
+  };
+}
+
+function renderTile(data: DataT) {
+  const { texture } = data;
+
+  return [
+    {
+      module: CreateTexture,
+      props: {
+        textureName: texture,
+      },
+    },
+  ];
+}
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
@@ -51,6 +102,8 @@ export default function App() {
           debugOpacity,
           geoKeysParser,
           pool,
+          getTileData,
+          renderTile,
           onGeoTIFFLoad: (_tiff, options) => {
             const { west, south, east, north } = options.geographicBounds;
             mapRef.current?.fitBounds(

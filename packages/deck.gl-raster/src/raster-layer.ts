@@ -5,10 +5,11 @@ import type {
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
-import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
-import { MeshTextureLayer, MeshTextureLayerProps } from "./mesh-layer";
+import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
+import { RasterModule } from "./webgl/types";
+import { CreateTexture } from "./webgl/create-texture";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
@@ -59,18 +60,14 @@ export interface RasterLayerProps extends CompositeLayerProps {
   reprojectionFns: ReprojectionFns;
 
   /**
-   * Texture to apply to the mesh. Can be:
-   * - URL or Data URL string
-   * - WebGL2-compatible pixel source (Image, ImageData, Canvas, etc.)
-   * - Luma.gl Texture instance
-   * - Plain object: {width, height, data}
+   * Render pipeline for visualizing textures.
+   *
+   * Can be:
+   *
+   * - ImageData representing RGBA pixel data
+   * - Sequence of shader modules to be composed into a shader program
    */
-  texture?: SimpleMeshLayerProps["texture"];
-
-  /**
-   * Optional shader injection.
-   */
-  shaders?: MeshTextureLayerProps["shaders"];
+  renderPipeline: ImageData | RasterModule[];
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
@@ -224,9 +221,32 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     );
   }
 
+  /** Create assembled render pipeline from the renderPipeline prop input. */
+  _createRenderPipeline(): RasterModule[] {
+    if (this.props.renderPipeline instanceof ImageData) {
+      const imageData = this.props.renderPipeline;
+      const texture = this.context.device.createTexture({
+        format: "rgba8unorm",
+        dimension: "2d",
+        width: imageData.width,
+        height: imageData.height,
+        data: imageData.data,
+      });
+      const wrapper: RasterModule = {
+        module: CreateTexture,
+        props: {
+          textureName: texture,
+        },
+      };
+      return [wrapper];
+    } else {
+      return this.props.renderPipeline;
+    }
+  }
+
   renderLayers() {
     const { mesh } = this.state;
-    const { texture, debug, shaders } = this.props;
+    const { debug } = this.props;
 
     if (!mesh) {
       return null;
@@ -237,8 +257,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     const meshLayer = new MeshTextureLayer(
       this.getSubLayerProps({
         id: "raster",
-        texture,
-        shaders,
+        renderPipeline: this._createRenderPipeline(),
         // Dummy data because we're only rendering _one_ instance of this mesh
         // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
         data: [1],
