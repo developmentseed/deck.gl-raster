@@ -41,50 +41,6 @@ async function geoKeysParser(
   };
 }
 
-/**
- * Calculate the WGS84 bounding box of a GeoTIFF image
- */
-async function getCogBounds(
-  tiff: GeoTIFF,
-): Promise<[[number, number], [number, number]]> {
-  const image = await tiff.getImage();
-  const projectedBbox = image.getBoundingBox();
-  const projDefinition = await geoKeysParser(image.getGeoKeys());
-
-  // Reproject to WGS84 (EPSG:4326)
-  const converter = proj4(projDefinition.def, "EPSG:4326");
-
-  // Reproject all four corners to handle rotation/skew
-  const [minX, minY, maxX, maxY] = projectedBbox;
-  const corners = [
-    converter.forward([minX, minY]), // bottom-left
-    converter.forward([maxX, minY]), // bottom-right
-    converter.forward([maxX, maxY]), // top-right
-    converter.forward([minX, maxY]), // top-left
-  ];
-
-  // Find the bounding box that encompasses all reprojected corners
-  const lons = corners.map((c) => c[0]);
-  const lats = corners.map((c) => c[1]);
-
-  const west = Math.min(...lons);
-  const south = Math.min(...lats);
-  const east = Math.max(...lons);
-  const north = Math.max(...lats);
-
-  // Return bounds in MapLibre format: [[west, south], [east, north]]
-  return [
-    [west, south],
-    [east, north],
-  ];
-}
-
-// const COG_URL =
-//   "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
-
-// const COG_URL =
-//   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
-
 const COG_URL =
   "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
 
@@ -207,15 +163,6 @@ export default function App() {
         if (mounted) {
           setGeotiff(tiff);
 
-          // Calculate bounds and fit to them
-          const bounds = await getCogBounds(tiff);
-          if (mapRef.current) {
-            mapRef.current.fitBounds(bounds, {
-              padding: 40,
-              duration: 1000,
-            });
-          }
-
           setLoading(false);
         }
       } catch (err) {
@@ -276,6 +223,19 @@ export default function App() {
             pool,
             getTileData,
             renderTile: (tileData) => renderTile(tileData, colormapTexture),
+            onGeoTIFFLoad: (_tiff, options) => {
+              const { west, south, east, north } = options.geographicBounds;
+              mapRef.current?.fitBounds(
+                [
+                  [west, south],
+                  [east, north],
+                ],
+                {
+                  padding: 40,
+                  duration: 1000,
+                },
+              );
+            },
             beforeId: "aeroway-runway",
           }),
         ]
