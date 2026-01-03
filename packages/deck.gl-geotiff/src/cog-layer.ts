@@ -37,8 +37,6 @@ import { epsgIoGeoKeyParser } from "./proj.js";
 // https://github.com/visgl/deck.gl/pull/9917
 type Tileset2DProps = any;
 
-const DEFAULT_MAX_ERROR = 0.125;
-
 /**
  * Minimum interface that **must** be returned from getTileData.
  */
@@ -164,9 +162,10 @@ export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
 }
 
 const defaultProps: Partial<COGLayerProps> = {
-  maxError: DEFAULT_MAX_ERROR,
   geoKeysParser: epsgIoGeoKeyParser,
   getTileData: loadRgbImage,
+  debug: false,
+  debugOpacity: 0.5,
   renderTile: (data) => {
     return data.texture;
   },
@@ -304,7 +303,7 @@ export class COGLayer<
     forwardReproject: ReprojectionFns["forwardReproject"],
     inverseReproject: ReprojectionFns["inverseReproject"],
   ): Layer | LayersList | null {
-    const { maxError, debug = false, debugOpacity = 0.5 } = this.props;
+    const { maxError, debug, debugOpacity } = this.props;
     const { tile } = props;
     const { data, forwardTransform, inverseTransform } = props.data;
 

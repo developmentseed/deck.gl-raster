@@ -27,6 +27,8 @@ const SAMPLE_POINTS: [number, number, number][] = [
   [0, 0.5, 0.5], // edge 1–2
 ];
 
+const DEFAULT_MAX_ERROR = 0.125;
+
 export interface ReprojectionFns {
   /**
    * Convert from UV coordinates to input CRS coordinates.
@@ -132,7 +134,11 @@ export class RasterReprojector {
   }
 
   // refine the mesh until its maximum error gets below the given one
-  run(maxError: number = 1): void {
+  run(maxError: number = DEFAULT_MAX_ERROR): void {
+    if (maxError <= 0) {
+      throw new Error("maxError must be positive");
+    }
+
     while (this.getMaxError() > maxError) {
       this.refine();
     }

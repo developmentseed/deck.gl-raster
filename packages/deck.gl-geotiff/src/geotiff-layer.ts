@@ -14,8 +14,6 @@ import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
 
-const DEFAULT_MAX_ERROR = 0.125;
-
 export interface GeoTIFFLayerProps extends CompositeLayerProps {
   /**
    * GeoTIFF input.
@@ -90,7 +88,6 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
 }
 
 const defaultProps = {
-  maxError: DEFAULT_MAX_ERROR,
   geoKeysParser: epsgIoGeoKeyParser,
 };
 

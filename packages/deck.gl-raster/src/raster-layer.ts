@@ -82,8 +82,8 @@ export interface RasterLayerProps extends CompositeLayerProps {
 }
 
 const defaultProps = {
-  maxError: DEFAULT_MAX_ERROR,
   debug: false,
+  debugOpacity: 0.5,
 };
 
 /**
