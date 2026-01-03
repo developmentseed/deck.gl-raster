@@ -64,6 +64,8 @@ This layer will use the internal tiling of the COG to only load the portions of 
 
 #### `GeoTIFFLayer`
 
+_Most of the time you should use the `COGLayer` instead of this layer._
+
 In contrast to the COGLayer, this does not exploit the internal tiling of a COG. Instead, it will attempt to load the entire full-resolution image at once and render it using a single `RasterLayer`.
 
 ### `@developmentseed/deck.gl-zarr`
