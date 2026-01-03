@@ -8,8 +8,8 @@ import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
-import { RasterModule } from "./webgl/types";
 import { CreateTexture } from "./webgl/create-texture";
+import type { RasterModule } from "./webgl/types";
 
 const DEFAULT_MAX_ERROR = 0.125;
 

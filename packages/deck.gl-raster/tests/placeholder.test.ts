@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from "vitest";
 
-describe('deck.gl-raster', () => {
-  it('placeholder test', () => {
+describe("deck.gl-raster", () => {
+  it("placeholder test", () => {
     expect(true).toBe(true);
   });
 });

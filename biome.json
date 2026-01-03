@@ -12,7 +12,8 @@
       "!!**/dist",
       "!!**/node_modules",
       "!!**/coverage",
-      "!!**/*.log"
+      "!!**/*.log",
+      "!!**/fixtures"
     ]
   },
   "formatter": {
@@ -37,7 +38,20 @@
         "noExplicitAny": "off"
       },
       "style": {
-        "noNonNullAssertion": "off"
+        "noNonNullAssertion": "off",
+        "useImportType": {
+          "level": "error",
+          "options": {
+            "style": "separatedType"
+          }
+        }
+      }
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
       }
     }
   }

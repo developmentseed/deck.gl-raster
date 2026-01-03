@@ -1,28 +1,29 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { Device, Texture } from "@luma.gl/core";
 import {
   COGLayer,
   parseColormap,
   proj,
 } from "@developmentseed/deck.gl-geotiff";
+import type { RasterModule } from "@developmentseed/deck.gl-raster";
+import {
+  Colormap,
+  CreateTexture,
+  FilterNoDataVal,
+} from "@developmentseed/deck.gl-raster";
+import type { Device, Texture } from "@luma.gl/core";
 import type {
   GeoTIFF,
   GeoTIFFImage,
   TypedArrayArrayWithDimensions,
 } from "geotiff";
-import {
-  Colormap,
-  CreateTexture,
-  FilterNoDataVal,
-  RasterModule,
-} from "@developmentseed/deck.gl-raster";
 import { fromUrl, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
-import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
+import type { MapRef } from "react-map-gl/maplibre";
+import { Map, useControl } from "react-map-gl/maplibre";
 
 window.proj4 = proj4;
 
@@ -60,7 +61,7 @@ async function getTileData(
   const { device, window, signal, pool } = options;
 
   const {
-    [0]: data,
+    0: data,
     width,
     height,
   } = (await image.readRasters({

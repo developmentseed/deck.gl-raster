@@ -5,12 +5,12 @@
  * following the pattern from deck.gl's OSM tile indexing.
  */
 
-import { Viewport } from "@deck.gl/core";
+import type { Viewport } from "@deck.gl/core";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
-import { Matrix4 } from "@math.gl/core";
+import type { Matrix4 } from "@math.gl/core";
 
 import { getTileIndices } from "./raster-tile-traversal";
-import type { TileIndex, Bounds, TileMatrixSet, ZRange } from "./types";
+import type { Bounds, TileIndex, TileMatrixSet, ZRange } from "./types";
 
 // Include correct Tileset2DProps type when exported from deck.gl
 // https://github.com/visgl/deck.gl/pull/9917

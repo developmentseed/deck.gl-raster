@@ -4,10 +4,10 @@ import type {
   TileMatrixSetBoundingBox,
 } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF, GeoTIFFImage } from "geotiff";
-import { extractGeotransform } from "./geotiff-reprojection";
-import proj4, { ProjectionDefinition } from "proj4";
+import proj4, { type ProjectionDefinition } from "proj4";
 import Ellipsoid from "./ellipsoids.js";
-import { GeoKeysParser, ProjectionInfo, SupportedCrsUnit } from "./proj";
+import { extractGeotransform } from "./geotiff-reprojection";
+import type { GeoKeysParser, ProjectionInfo, SupportedCrsUnit } from "./proj";
 
 // 0.28 mm per pixel
 // https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15

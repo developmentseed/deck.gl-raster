@@ -1,4 +1,4 @@
-import { globals } from "geotiff";
+import type { globals } from "geotiff";
 
 /** Improved typing for IFD. */
 export type ImageFileDirectory = {

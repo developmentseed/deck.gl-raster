@@ -1,5 +1,5 @@
-export { RasterLayer } from "./raster-layer.js";
 export type { RasterLayerProps } from "./raster-layer.js";
+export { RasterLayer } from "./raster-layer.js";
 export { RasterTileset2D } from "./raster-tileset/index.js";
 export type {
   TileMatrix,

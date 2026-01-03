@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { parseCOGTileMatrixSet } from "../src";
 import { fromUrl } from "geotiff";
+import { describe, expect, it } from "vitest";
+import { parseCOGTileMatrixSet } from "../src";
 import { epsgIoGeoKeyParser } from "../src/proj";
 
 describe("create TileMatrixSet from COG", () => {

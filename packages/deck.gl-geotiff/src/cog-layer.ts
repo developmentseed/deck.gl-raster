@@ -5,12 +5,12 @@ import type {
   UpdateParameters,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
-import {
-  TileLayer,
+import type {
+  _Tile2DHeader as Tile2DHeader,
   TileLayerProps,
   _TileLoadProps as TileLoadProps,
-  _Tile2DHeader as Tile2DHeader,
 } from "@deck.gl/geo-layers";
+import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
 import type {
   RasterModule,
@@ -23,13 +23,13 @@ import type { Device } from "@luma.gl/core";
 import type { BaseClient, GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
 import proj4 from "proj4";
 import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
-import { fromGeoTransform } from "./geotiff-reprojection.js";
 import {
   defaultPool,
   fetchGeoTIFF,
   getGeographicBounds,
   loadRgbImage,
 } from "./geotiff.js";
+import { fromGeoTransform } from "./geotiff-reprojection.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
 
@@ -64,9 +64,8 @@ type GetTileDataResult<DataT> = {
   inverseTransform: ReprojectionFns["inverseTransform"];
 };
 
-export interface COGLayerProps<
-  DataT extends MinimalDataT = DefaultDataT,
-> extends CompositeLayerProps {
+export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
+  extends CompositeLayerProps {
   /**
    * GeoTIFF input.
    *

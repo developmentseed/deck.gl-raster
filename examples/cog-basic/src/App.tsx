@@ -2,14 +2,15 @@ import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer, loadRgbImage, proj } from "@developmentseed/deck.gl-geotiff";
 import { CreateTexture } from "@developmentseed/deck.gl-raster";
-import { Device, Texture } from "@luma.gl/core";
+import type { Device, Texture } from "@luma.gl/core";
 import type { GeoTIFFImage } from "geotiff";
 import { Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 import proj4 from "proj4";
 import { useRef, useState } from "react";
-import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
+import type { MapRef } from "react-map-gl/maplibre";
+import { Map, useControl } from "react-map-gl/maplibre";
 
 window.proj4 = proj4;
 
