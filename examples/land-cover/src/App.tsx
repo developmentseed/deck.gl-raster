@@ -10,7 +10,7 @@ import {
   Colormap,
   CreateTexture,
   FilterNoDataVal,
-} from "@developmentseed/deck.gl-raster";
+} from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Device, Texture } from "@luma.gl/core";
 import type {
   GeoTIFF,

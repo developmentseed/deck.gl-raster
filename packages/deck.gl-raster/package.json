@@ -9,8 +9,13 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./gpu-modules": {
+      "types": "./dist/gpu-modules/index.d.ts",
+      "default": "./dist/gpu-modules/index.js"
     }
   },
+  "sideEffects": false,
   "files": [
     "dist"
   ],
