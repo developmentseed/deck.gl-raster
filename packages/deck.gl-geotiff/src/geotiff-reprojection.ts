@@ -4,7 +4,7 @@ import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import {
   applyAffine,
   invertGeoTransform,
-} from "@developmentseed/raster-reproject";
+} from "@developmentseed/raster-reproject/affine";
 import type { GeoTIFF, GeoTIFFImage } from "geotiff";
 import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
