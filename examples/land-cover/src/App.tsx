@@ -23,7 +23,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { Map, useControl } from "react-map-gl/maplibre";
+import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 
 window.proj4 = proj4;
 
@@ -230,7 +230,7 @@ export default function App() {
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      <Map
+      <MaplibreMap
         ref={mapRef}
         initialViewState={{
           longitude: 0,
@@ -246,7 +246,7 @@ export default function App() {
           interleaved
           onDeviceInitialized={(device) => setDevice(device)}
         />
-      </Map>
+      </MaplibreMap>
 
       {/* UI Overlay Container */}
       <div
@@ -325,25 +325,6 @@ export default function App() {
               marginTop: "12px",
             }}
           >
-            {/* <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "14px",
-                cursor: "pointer",
-                marginBottom: "12px",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={renderAsTiled}
-                onChange={(e) => setRenderAsTiled(e.target.checked)}
-                style={{ cursor: "pointer" }}
-              />
-              <span>Render as tiled</span>
-            </label> */}
-
             <label
               style={{
                 display: "flex",
@@ -374,16 +355,18 @@ export default function App() {
                   }}
                 >
                   Debug Opacity: {debugOpacity.toFixed(2)}
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={debugOpacity}
+                    onChange={(e) =>
+                      setDebugOpacity(parseFloat(e.target.value))
+                    }
+                    style={{ width: "100%", cursor: "pointer" }}
+                  />
                 </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={debugOpacity}
-                  onChange={(e) => setDebugOpacity(parseFloat(e.target.value))}
-                  style={{ width: "100%", cursor: "pointer" }}
-                />
               </div>
             )}
           </div>
