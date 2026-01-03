@@ -1,14 +1,14 @@
-import { describe, it } from "vitest";
-import { join, dirname, resolve } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { RasterReprojector } from "@developmentseed/raster-reproject";
 import {
-  RasterReprojector,
   applyAffine,
   invertGeoTransform,
-} from "@developmentseed/raster-reproject";
-import { readFileSync, writeFileSync } from "fs";
-import type { PROJJSONDefinition } from "proj4/dist/lib/core";
+} from "@developmentseed/raster-reproject/affine";
 import proj4 from "proj4";
+import type { PROJJSONDefinition } from "proj4/dist/lib/core";
+import { describe, it } from "vitest";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

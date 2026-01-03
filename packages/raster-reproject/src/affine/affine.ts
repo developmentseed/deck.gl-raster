@@ -22,7 +22,7 @@ export function invertGeoTransform(gt: GeoTransform): GeoTransform {
   const rb = -sb * idet;
   const rd = -sd * idet;
   const re = sa * idet;
-  // prettier-ignore
+  // biome-ignore format: array
   return [
       ra, rb, -sc * ra - sf * rb,
       rd, re, -sc * rd - sf * re,

@@ -9,7 +9,7 @@ import {
   fromUrl,
   Pool,
 } from "geotiff";
-import { Converter } from "proj4";
+import type { Converter } from "proj4";
 
 /**
  * Options that may be passed when reading image data from geotiff.js

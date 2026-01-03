@@ -5,12 +5,12 @@ import type {
   UpdateParameters,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
-import {
-  TileLayer,
+import type {
+  _Tile2DHeader as Tile2DHeader,
   TileLayerProps,
   _TileLoadProps as TileLoadProps,
-  _Tile2DHeader as Tile2DHeader,
 } from "@deck.gl/geo-layers";
+import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
 import type {
   RasterModule,
@@ -23,21 +23,19 @@ import type { Device } from "@luma.gl/core";
 import type { BaseClient, GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
 import proj4 from "proj4";
 import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
-import { fromGeoTransform } from "./geotiff-reprojection.js";
 import {
   defaultPool,
   fetchGeoTIFF,
   getGeographicBounds,
   loadRgbImage,
 } from "./geotiff.js";
+import { fromGeoTransform } from "./geotiff-reprojection.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
 
 // Workaround until upstream exposes props
 // https://github.com/visgl/deck.gl/pull/9917
 type Tileset2DProps = any;
-
-const DEFAULT_MAX_ERROR = 0.125;
 
 /**
  * Minimum interface that **must** be returned from getTileData.
@@ -64,9 +62,8 @@ type GetTileDataResult<DataT> = {
   inverseTransform: ReprojectionFns["inverseTransform"];
 };
 
-export interface COGLayerProps<
-  DataT extends MinimalDataT = DefaultDataT,
-> extends CompositeLayerProps {
+export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
+  extends CompositeLayerProps {
   /**
    * GeoTIFF input.
    *
@@ -165,9 +162,10 @@ export interface COGLayerProps<
 }
 
 const defaultProps: Partial<COGLayerProps> = {
-  maxError: DEFAULT_MAX_ERROR,
   geoKeysParser: epsgIoGeoKeyParser,
   getTileData: loadRgbImage,
+  debug: false,
+  debugOpacity: 0.5,
   renderTile: (data) => {
     return data.texture;
   },
@@ -305,7 +303,7 @@ export class COGLayer<
     forwardReproject: ReprojectionFns["forwardReproject"],
     inverseReproject: ReprojectionFns["inverseReproject"],
   ): Layer | LayersList | null {
-    const { maxError, debug = false, debugOpacity = 0.5 } = this.props;
+    const { maxError, debug, debugOpacity } = this.props;
     const { tile } = props;
     const { data, forwardTransform, inverseTransform } = props.data;
 

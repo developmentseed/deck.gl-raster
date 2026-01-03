@@ -3,18 +3,16 @@ import { CompositeLayer } from "@deck.gl/core";
 import { RasterLayer } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { BaseClient, GeoTIFF, Pool } from "geotiff";
-import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
+import proj4 from "proj4";
 import {
   defaultPool,
   fetchGeoTIFF,
   getGeographicBounds,
   loadRgbImage,
 } from "./geotiff.js";
+import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
-import proj4 from "proj4";
-
-const DEFAULT_MAX_ERROR = 0.125;
 
 export interface GeoTIFFLayerProps extends CompositeLayerProps {
   /**
@@ -90,7 +88,6 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
 }
 
 const defaultProps = {
-  maxError: DEFAULT_MAX_ERROR,
   geoKeysParser: epsgIoGeoKeyParser,
 };
 

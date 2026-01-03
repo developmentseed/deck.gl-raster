@@ -1,6 +1,6 @@
-import { GeoTIFFImage, TypedArray } from "geotiff";
 import type { TextureFormat, TextureProps } from "@luma.gl/core";
-import { ImageFileDirectory } from "./geotiff-types";
+import type { GeoTIFFImage, TypedArray } from "geotiff";
+import type { ImageFileDirectory } from "./geotiff-types";
 
 /**
  * Infers texture properties from a GeoTIFF image and its associated data.

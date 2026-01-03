@@ -1,30 +1,29 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { Device, Texture } from "@luma.gl/core";
 import {
   COGLayer,
   parseColormap,
   proj,
 } from "@developmentseed/deck.gl-geotiff";
-import type {
-  GeoTIFF,
-  GeoTIFFImage,
-  TypedArrayArrayWithDimensions,
-} from "geotiff";
+import type { RasterModule } from "@developmentseed/deck.gl-raster";
 import {
   Colormap,
   CreateTexture,
   FilterNoDataVal,
-  RasterModule,
-} from "@developmentseed/deck.gl-raster";
-import { fromUrl, Pool } from "geotiff";
+} from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { Device, Texture } from "@luma.gl/core";
+import type {
+  GeoTIFF,
+  GeoTIFFImage,
+  Pool,
+  TypedArrayArrayWithDimensions,
+} from "geotiff";
+import { fromUrl } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
-import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
-import { Map, useControl, type MapRef } from "react-map-gl/maplibre";
-
-window.proj4 = proj4;
+import type { MapRef } from "react-map-gl/maplibre";
+import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 
 function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -36,7 +35,6 @@ async function geoKeysParser(
   geoKeys: Record<string, any>,
 ): Promise<proj.ProjectionInfo> {
   const projDefinition = toProj4(geoKeys as any);
-  (window as any).projDefinition = projDefinition;
 
   return {
     def: projDefinition.proj4,
@@ -60,7 +58,7 @@ async function getTileData(
   const { device, window, signal, pool } = options;
 
   const {
-    [0]: data,
+    0: data,
     width,
     height,
   } = (await image.readRasters({
@@ -132,7 +130,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
-  const [pool] = useState<Pool>(new Pool());
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
 
   useEffect(() => {
@@ -144,6 +141,7 @@ export default function App() {
         setError(null);
 
         const tiff = await fromUrl(COG_URL);
+        // For debugging purposes
         (window as any).tiff = tiff;
 
         if (mounted) {
@@ -202,11 +200,9 @@ export default function App() {
           new COGLayer<TileDataT>({
             id: "cog-layer",
             geotiff,
-            maxError: 0.125,
             debug,
             debugOpacity,
             geoKeysParser,
-            pool,
             getTileData,
             renderTile: (tileData) => renderTile(tileData, colormapTexture),
             onGeoTIFFLoad: (_tiff, options) => {
@@ -229,7 +225,7 @@ export default function App() {
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      <Map
+      <MaplibreMap
         ref={mapRef}
         initialViewState={{
           longitude: 0,
@@ -245,7 +241,7 @@ export default function App() {
           interleaved
           onDeviceInitialized={(device) => setDevice(device)}
         />
-      </Map>
+      </MaplibreMap>
 
       {/* UI Overlay Container */}
       <div
@@ -324,25 +320,6 @@ export default function App() {
               marginTop: "12px",
             }}
           >
-            {/* <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "14px",
-                cursor: "pointer",
-                marginBottom: "12px",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={renderAsTiled}
-                onChange={(e) => setRenderAsTiled(e.target.checked)}
-                style={{ cursor: "pointer" }}
-              />
-              <span>Render as tiled</span>
-            </label> */}
-
             <label
               style={{
                 display: "flex",
@@ -373,16 +350,18 @@ export default function App() {
                   }}
                 >
                   Debug Opacity: {debugOpacity.toFixed(2)}
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={debugOpacity}
+                    onChange={(e) =>
+                      setDebugOpacity(parseFloat(e.target.value))
+                    }
+                    style={{ width: "100%", cursor: "pointer" }}
+                  />
                 </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={debugOpacity}
-                  onChange={(e) => setDebugOpacity(parseFloat(e.target.value))}
-                  style={{ width: "100%", cursor: "pointer" }}
-                />
               </div>
             )}
           </div>

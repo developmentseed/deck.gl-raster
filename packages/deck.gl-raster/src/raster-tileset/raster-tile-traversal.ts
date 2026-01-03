@@ -15,21 +15,22 @@
  * cover the visible area with appropriate detail.
  */
 
-import { _GlobeViewport, assert, Viewport } from "@deck.gl/core";
+import type { Viewport } from "@deck.gl/core";
+import { _GlobeViewport, assert } from "@deck.gl/core";
+import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
   CullingVolume,
   makeOrientedBoundingBoxFromPoints,
-  OrientedBoundingBox,
   Plane,
 } from "@math.gl/culling";
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
 import type {
+  Bounds,
   TileIndex,
   TileMatrix,
   TileMatrixSet,
   ZRange,
-  Bounds,
 } from "./types.js";
 
 /**
@@ -787,7 +788,7 @@ function getMetersPerPixel(latitude: number, zoom: number): number {
   const earthCircumference = 40075016.686;
   return (
     (earthCircumference * Math.cos((latitude * Math.PI) / 180)) /
-    Math.pow(2, zoom + 8)
+    2 ** (zoom + 8)
   );
 }
 

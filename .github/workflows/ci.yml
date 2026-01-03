@@ -23,9 +23,9 @@ jobs:
           pnpm test
           pnpm publint
 
-  # Lint:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #     - uses: biomejs/setup-biome@v2
-  #     - run: biome ci .
+  Lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: biomejs/setup-biome@v2
+      - run: biome ci .

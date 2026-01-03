@@ -6,14 +6,18 @@
     "build": "tsc --build",
     "build:watch": "tsc --build --watch",
     "clean": "pnpm --recursive exec rm -rf dist",
-    "format": "pnpm -r format",
-    "lint": "pnpm -r lint",
+    "format": "biome format .",
+    "format:fix": "biome format --write .",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
     "publint": "pnpm --recursive --filter=\"./packages/**\" exec publint",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^8.50.1",
+    "@biomejs/biome": "^2.3.10",
     "publint": "^0.3.16",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"

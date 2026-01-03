@@ -11,7 +11,7 @@ Fully client-side with direct image loading, no server required.
 
 [![](./assets/land-cover.jpg)](https://developmentseed.org/deck.gl-raster/)
 
-<p style="text-align: center;"><em><b>1.3GB</b> Land Cover COG rendered with <b>no server</b>.</em></p>
+<p align="center"><em><b>1.3GB</b> Land Cover COG rendered with <b>no server</b>.</em></p>
 
 ## Features
 
@@ -63,6 +63,8 @@ This will work out of the box when the provided image is an RGB image. In partic
 This layer will use the internal tiling of the COG to only load the portions of the image required for the current view.
 
 #### `GeoTIFFLayer`
+
+_Most of the time you should use the `COGLayer` instead of this layer._
 
 In contrast to the COGLayer, this does not exploit the internal tiling of a COG. Instead, it will attempt to load the entire full-resolution image at once and render it using a single `RasterLayer`.
 
