@@ -1,7 +1,7 @@
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import type { ShaderModule } from "@luma.gl/shadertools";
-import type { RasterModule } from "../webgl/types.js";
+import type { RasterModule } from "../gpu-modules/types.js";
 import fs from "./mesh-layer-fragment.glsl.js";
 
 export interface MeshTextureLayerProps extends SimpleMeshLayerProps {

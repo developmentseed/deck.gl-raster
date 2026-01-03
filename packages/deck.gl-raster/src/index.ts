@@ -1,3 +1,4 @@
+export type { RasterModule } from "./gpu-modules/types.js";
 export type { RasterLayerProps } from "./raster-layer.js";
 export { RasterLayer } from "./raster-layer.js";
 export { RasterTileset2D } from "./raster-tileset/index.js";
@@ -6,8 +7,6 @@ export type {
   TileMatrixSet,
   TileMatrixSetBoundingBox,
 } from "./raster-tileset/types.js";
-export { Colormap, CreateTexture, FilterNoDataVal } from "./webgl/index.js";
-export type { RasterModule } from "./webgl/types.js";
 
 import { __TEST_EXPORTS as traversalTestExports } from "./raster-tileset/raster-tile-traversal.js";
 
