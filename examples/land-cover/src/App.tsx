@@ -15,17 +15,15 @@ import type { Device, Texture } from "@luma.gl/core";
 import type {
   GeoTIFF,
   GeoTIFFImage,
+  Pool,
   TypedArrayArrayWithDimensions,
 } from "geotiff";
-import { fromUrl, Pool } from "geotiff";
+import { fromUrl } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
-import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-
-window.proj4 = proj4;
 
 function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -37,7 +35,6 @@ async function geoKeysParser(
   geoKeys: Record<string, any>,
 ): Promise<proj.ProjectionInfo> {
   const projDefinition = toProj4(geoKeys as any);
-  (window as any).projDefinition = projDefinition;
 
   return {
     def: projDefinition.proj4,
@@ -133,7 +130,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
-  const [pool] = useState<Pool>(new Pool());
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
 
   useEffect(() => {
@@ -145,6 +141,7 @@ export default function App() {
         setError(null);
 
         const tiff = await fromUrl(COG_URL);
+        // For debugging purposes
         (window as any).tiff = tiff;
 
         if (mounted) {
@@ -203,11 +200,9 @@ export default function App() {
           new COGLayer<TileDataT>({
             id: "cog-layer",
             geotiff,
-            maxError: 0.125,
             debug,
             debugOpacity,
             geoKeysParser,
-            pool,
             getTileData,
             renderTile: (tileData) => renderTile(tileData, colormapTexture),
             onGeoTIFFLoad: (_tiff, options) => {

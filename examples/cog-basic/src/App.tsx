@@ -3,16 +3,12 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer, loadRgbImage, proj } from "@developmentseed/deck.gl-geotiff";
 import { CreateTexture } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Device, Texture } from "@luma.gl/core";
-import type { GeoTIFFImage } from "geotiff";
-import { Pool } from "geotiff";
+import type { GeoTIFFImage, Pool } from "geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
-import proj4 from "proj4";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-
-window.proj4 = proj4;
 
 function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -24,7 +20,6 @@ async function geoKeysParser(
   geoKeys: Record<string, any>,
 ): Promise<proj.ProjectionInfo> {
   const projDefinition = toProj4(geoKeys as any);
-  (window as any).projDefinition = projDefinition;
 
   return {
     def: projDefinition.proj4,
@@ -57,14 +52,16 @@ async function getTileData(
   const { device } = options;
   const { texture: data, height, width } = await loadRgbImage(image, options);
 
-  // Note: if we set this format to r8unorm it'll only fill the red channel of
-  // the texture, making it red.
   const texture = device.createTexture({
     format: "rgba8unorm",
     dimension: "2d",
     width,
     height,
     data,
+    sampler: {
+      magFilter: "linear",
+      minFilter: "linear",
+    },
   });
 
   return {
@@ -91,16 +88,13 @@ export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
-  const [pool] = useState<Pool>(new Pool());
 
   const cog_layer = new COGLayer({
     id: "cog-layer",
     geotiff: COG_URL,
-    maxError: 0.125,
     debug,
     debugOpacity,
     geoKeysParser,
-    pool,
     getTileData,
     renderTile,
     onGeoTIFFLoad: (_tiff, options) => {
