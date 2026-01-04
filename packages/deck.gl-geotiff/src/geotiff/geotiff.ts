@@ -67,7 +67,7 @@ export async function loadRgbImage(
  * Only supports input arrays with 3 (RGB) or 4 (RGBA) channels. If the input is
  * already RGBA, it is returned unchanged.
  */
-function addAlphaChannel(rgbImage: TypedArrayWithDimensions): ImageData {
+export function addAlphaChannel(rgbImage: TypedArrayWithDimensions): ImageData {
   const { height, width } = rgbImage;
 
   if (rgbImage.length === height * width * 4) {

@@ -1,9 +1,6 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer, loadRgbImage, proj } from "@developmentseed/deck.gl-geotiff";
-import { CreateTexture } from "@developmentseed/deck.gl-raster/gpu-modules";
-import type { Device, Texture } from "@luma.gl/core";
-import type { GeoTIFFImage, Pool } from "geotiff";
+import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState } from "react";
@@ -31,58 +28,11 @@ async function geoKeysParser(
 // const COG_URL =
 //   "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
 
+// const COG_URL =
+//   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
+
 const COG_URL =
-  "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
-
-type DataT = {
-  texture: Texture;
-  height: number;
-  width: number;
-};
-
-async function getTileData(
-  image: GeoTIFFImage,
-  options: {
-    device: Device;
-    window: [number, number, number, number];
-    signal?: AbortSignal;
-    pool: Pool;
-  },
-): Promise<DataT> {
-  const { device } = options;
-  const { texture: data, height, width } = await loadRgbImage(image, options);
-
-  const texture = device.createTexture({
-    format: "rgba8unorm",
-    dimension: "2d",
-    width,
-    height,
-    data,
-    sampler: {
-      magFilter: "linear",
-      minFilter: "linear",
-    },
-  });
-
-  return {
-    texture,
-    height,
-    width,
-  };
-}
-
-function renderTile(data: DataT) {
-  const { texture } = data;
-
-  return [
-    {
-      module: CreateTexture,
-      props: {
-        textureName: texture,
-      },
-    },
-  ];
-}
+  "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif";
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -95,9 +45,8 @@ export default function App() {
     debug,
     debugOpacity,
     geoKeysParser,
-    getTileData,
-    renderTile,
-    onGeoTIFFLoad: (_tiff, options) => {
+    onGeoTIFFLoad: (tiff, options) => {
+      (window as any).tiff = tiff;
       const { west, south, east, north } = options.geographicBounds;
       mapRef.current?.fitBounds(
         [

@@ -27,8 +27,9 @@ import {
   defaultPool,
   fetchGeoTIFF,
   getGeographicBounds,
-  loadRgbImage,
 } from "./geotiff/geotiff.js";
+import type { TextureDataT } from "./geotiff/render-pipeline.js";
+import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { fromGeoTransform } from "./geotiff-reprojection.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
@@ -171,12 +172,8 @@ export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
 
 const defaultProps: Partial<COGLayerProps> = {
   geoKeysParser: epsgIoGeoKeyParser,
-  getTileData: loadRgbImage,
   debug: false,
   debugOpacity: 0.5,
-  renderTile: (data) => {
-    return data.texture;
-  },
 };
 
 /**
@@ -193,6 +190,8 @@ export class COGLayer<
     inverseReproject?: ReprojectionFns["inverseReproject"];
     metadata?: TileMatrixSet;
     images?: GeoTIFFImage[];
+    defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
+    defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
   };
 
   override initializeState(): void {
@@ -246,11 +245,16 @@ export class COGLayer<
       });
     }
 
+    const { getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
+      inferRenderPipeline(image.fileDirectory);
+
     this.setState({
       metadata,
       forwardReproject,
       inverseReproject,
       images,
+      defaultGetTileData,
+      defaultRenderTile,
     });
   }
 
@@ -284,7 +288,10 @@ export class COGLayer<
       Math.min((y + 1) * tileHeight, imageHeight),
     ];
 
-    const data = await this.props.getTileData!(geotiffImage, {
+    const getTileData =
+      this.props.getTileData || this.state.defaultGetTileData!;
+
+    const data = await getTileData(geotiffImage, {
       device: this.context.device,
       window,
       signal,
@@ -292,6 +299,7 @@ export class COGLayer<
     });
 
     return {
+      // @ts-expect-error type mismatch when using provided getTileData
       data,
       forwardTransform,
       inverseTransform,
@@ -303,7 +311,7 @@ export class COGLayer<
     // this is copy-pasted from the upstream tile layer definition for props.
     props: TileLayerProps<GetTileDataResult<DataT>> & {
       id: string;
-      data: GetTileDataResult<DataT>;
+      data?: GetTileDataResult<DataT>;
       _offset: number;
       tile: Tile2DHeader<GetTileDataResult<DataT>>;
     },
@@ -313,19 +321,25 @@ export class COGLayer<
   ): Layer | LayersList | null {
     const { maxError, debug, debugOpacity } = this.props;
     const { tile } = props;
+
+    if (!props.data) {
+      return null;
+    }
+
     const { data, forwardTransform, inverseTransform } = props.data;
 
     const layers: Layer[] = [];
 
     if (data) {
       const { height, width } = data;
+      const renderTile = this.props.renderTile || this.state.defaultRenderTile!;
 
       layers.push(
         new RasterLayer({
           id: `${props.id}-raster`,
           width,
           height,
-          renderPipeline: this.props.renderTile(data),
+          renderPipeline: renderTile(data),
           maxError,
           reprojectionFns: {
             forwardTransform,
