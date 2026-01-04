@@ -4,5 +4,5 @@ export type RasterModule<
   PropsT extends Record<string, any> = Record<string, any>,
 > = {
   module: ShaderModule<PropsT>;
-  props: Partial<PropsT>;
+  props?: Partial<PropsT>;
 };

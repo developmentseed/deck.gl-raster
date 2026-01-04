@@ -27,7 +27,4 @@ export const YCbCrToRGB = {
       color.rgb = ycbcrToRgb(color.rgb);
     `,
   },
-  getUniforms: () => {
-    return {};
-  },
 } as const satisfies ShaderModule<{}>;

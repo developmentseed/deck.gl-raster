@@ -1,6 +1,8 @@
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
+  CMYKToRGB,
   CreateTexture,
+  cieLabToRGB,
   FilterNoDataVal,
   YCbCrToRGB,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
@@ -156,10 +158,17 @@ function photometricInterpretationToRGB(
   switch (PhotometricInterpretation) {
     case globals.photometricInterpretations.RGB:
       return null;
+    case globals.photometricInterpretations.CMYK:
+      return {
+        module: CMYKToRGB,
+      };
     case globals.photometricInterpretations.YCbCr:
       return {
         module: YCbCrToRGB,
-        props: {},
+      };
+    case globals.photometricInterpretations.CIELab:
+      return {
+        module: cieLabToRGB,
       };
     default:
       throw new Error(
