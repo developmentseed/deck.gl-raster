@@ -43,7 +43,7 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     const shaderProps: { [x: string]: Partial<Record<string, unknown>> } = {};
     for (const m of this.props.renderPipeline) {
       // Props should be keyed by module name
-      shaderProps[m.module.name] = m.props;
+      shaderProps[m.module.name] = m.props || {};
     }
 
     for (const m of super.getModels()) {
