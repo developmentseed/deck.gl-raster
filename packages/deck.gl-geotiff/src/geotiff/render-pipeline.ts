@@ -22,6 +22,7 @@ export type TextureDataT = {
 };
 
 export function inferRenderPipeline(
+  // TODO: narrow type to only used fields
   ifd: ImageFileDirectory,
   device: Device,
 ): {
