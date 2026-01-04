@@ -49,10 +49,18 @@ export type DefaultDataT = MinimalDataT & {
   texture: ImageData;
 };
 
-export type GetTileTextureOptions = {
+/** Options passed to `getTileData`. */
+export type GetTileDataOptions = {
+  /** The luma.gl Device */
   device: Device;
+
+  /** the subset to read data from in pixels. */
   window: [number, number, number, number];
+
+  /** An AbortSignal that may be signalled if the request is to be aborted */
   signal?: AbortSignal;
+
+  /** The decoder pool to use. */
   pool: Pool;
 };
 
@@ -111,7 +119,7 @@ export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
    */
   getTileData?: (
     image: GeoTIFFImage,
-    options: GetTileTextureOptions,
+    options: GetTileDataOptions,
   ) => Promise<DataT>;
 
   /**

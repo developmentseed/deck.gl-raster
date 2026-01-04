@@ -1,7 +1,7 @@
 /**
  * Vendored and edited from proj4.js.
  *
- * In the implementation of metersPerUnit while generated a COG TileMatrixSet,
+ * In the implementation of metersPerUnit while generating a COG TileMatrixSet,
  * we need to know the size of the semi major axis in the case the CRS is in
  * degrees.
  *
