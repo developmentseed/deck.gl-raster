@@ -182,3 +182,20 @@ export function getGeographicBounds(
   // Return bounds in MapLibre format: [[west, south], [east, north]]
   return { west, south, east, north };
 }
+
+/** Parse the GDAL_NODATA TIFF tag into a number. */
+export function parseGDALNoData(
+  GDAL_NODATA: string | undefined,
+): number | null {
+  if (!GDAL_NODATA) {
+    return null;
+  }
+
+  // Remove trailing null character if present
+  const noDataString =
+    GDAL_NODATA?.[GDAL_NODATA?.length - 1] === "\x00"
+      ? GDAL_NODATA.slice(0, -1)
+      : GDAL_NODATA;
+
+  return noDataString?.length > 0 ? parseFloat(noDataString) : null;
+}

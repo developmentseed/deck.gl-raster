@@ -10,17 +10,9 @@ import type { Texture } from "@luma.gl/core";
 import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
 import { globals } from "geotiff";
 import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
-import { addAlphaChannel } from "./geotiff";
+import { addAlphaChannel, parseGDALNoData } from "./geotiff";
 import { inferTextureFormat } from "./texture";
-
-type GeoTIFFMetadata = {
-  BitsPerSample: Uint16Array;
-  GDAL_NODATA?: string;
-  PhotometricInterpretation: number;
-  SampleFormat: Uint16Array;
-  /** Number of bands */
-  SamplesPerPixel: number;
-};
+import type { ImageFileDirectory } from "./types";
 
 export type TextureDataT = {
   height: number;
@@ -28,7 +20,7 @@ export type TextureDataT = {
   texture: Texture;
 };
 
-export function inferRenderPipeline(options: GeoTIFFMetadata): {
+export function inferRenderPipeline(options: ImageFileDirectory): {
   getTileData: COGLayerProps<TextureDataT>["getTileData"];
   renderTile: COGLayerProps<TextureDataT>["renderTile"];
 } {
@@ -48,7 +40,7 @@ export function inferRenderPipeline(options: GeoTIFFMetadata): {
 }
 
 /** Create a pipeline for visualizing 8-bit RGB imagery. */
-function createRGB8Pipeline(options: GeoTIFFMetadata): {
+function createRGB8Pipeline(options: ImageFileDirectory): {
   getTileData: COGLayerProps<TextureDataT>["getTileData"];
   renderTile: COGLayerProps<TextureDataT>["renderTile"];
 } {
@@ -68,13 +60,7 @@ function createRGB8Pipeline(options: GeoTIFFMetadata): {
   ];
 
   // Add NoData filtering if GDAL_NODATA is defined
-  // Remove trailing null character if present
-  const noDataString =
-    GDAL_NODATA?.[GDAL_NODATA?.length - 1] === "\x00"
-      ? GDAL_NODATA.slice(0, -1)
-      : GDAL_NODATA;
-  const noDataVal =
-    noDataString && noDataString?.length > 0 ? parseInt(noDataString) : null;
+  const noDataVal = parseGDALNoData(GDAL_NODATA);
   if (noDataVal !== null) {
     // Since values are 0-1 for unorm textures,
     const noDataScaled = noDataVal / 255.0;
@@ -104,7 +90,7 @@ function createRGB8Pipeline(options: GeoTIFFMetadata): {
       mergedOptions,
     )) as TypedArrayWithDimensions;
 
-    // WebGL2 doesn't have an RGB texture format
+    // WebGL2 doesn't have an RGB-only texture format; it requires RGBA.
     const rgbaData = addAlphaChannel(data);
 
     const textureFormat = inferTextureFormat(
