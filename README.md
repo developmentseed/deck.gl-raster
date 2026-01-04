@@ -1,6 +1,6 @@
 # deck.gl-raster
 
-GPU-accelerated [GeoTIFF][geotiff], [Cloud-Optimized GeoTIFF][cogeo] (COG), and, soon, [Zarr] visualization in [deck.gl].
+GPU-accelerated [GeoTIFF][geotiff] and [Cloud-Optimized GeoTIFF][cogeo] (COG) (and _soon_ [Zarr]) visualization in [deck.gl].
 
 Fully client-side with direct image loading, no server required.
 
@@ -11,15 +11,17 @@ Fully client-side with direct image loading, no server required.
 
 [![](./assets/land-cover.jpg)](https://developmentseed.org/deck.gl-raster/)
 
-<p align="center"><em><b>1.3GB</b> Land Cover COG rendered with <b>no server</b>.</em></p>
+<p align="center"><em><b>1.3GB</b> Land Cover COG rendered in the browser with <b>no server</b></em>: <a href="https://developmentseed.org/deck.gl-raster/">Live demo.</a></p>
 
 ## Features
 
-- Client-side GeoTIFF and Cloud-Optimized GeoTIFF visualization with no server required.
-- GPU-based raster reprojection supports imagery from most projections [^1]
-- Intelligent COG rendering, only fetching the relevant portions of the image required for the current view.
-- Supports all GeoTIFFs defined by a linear geotransform (excludes those using Ground Control Points).
-- Future: GPU-based color mapping and band math.
+- Client-side visualization with no server required.
+- Fast, GPU-enabled image processing:
+    - Converting color spaces like CMYK, YCbCr, CIELAB to RGB.
+    - Removing nodata values
+    - Applying colormaps
+- GPU-based raster reprojection supports image sources from most projections [^1]
+- Intelligent COG rendering, only fetching the portions of the image required for the current view.
 
 [^1]: The raster reprojection has not been tested on polar projections or when spanning the antimeridian.
 
@@ -46,15 +48,11 @@ Internally, this uses a deck.gl [`TileLayer`] that matches the internal structur
 [`TileLayer`]: https://deck.gl/docs/api-reference/geo-layers/tile-layer
 
 ```ts
-import { fromUrl } from "geotiff";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
-
-const url = "https://example.com/my-cog.tif"
-const geotiff = await fromUrl(url);
 
 const deckLayer = new COGLayer({
     id: "cog-layer",
-    geotiff,
+    geotiff: "https://example.com/my-cog.tif",
 });
 ```
 
