@@ -21,7 +21,6 @@ export function createTextureProps(
 
   return {
     data,
-    dimension: "2d",
     format: textureFormat,
     width: options.width,
     height: options.height,

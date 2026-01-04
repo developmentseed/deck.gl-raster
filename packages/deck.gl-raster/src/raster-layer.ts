@@ -227,7 +227,6 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       const imageData = this.props.renderPipeline;
       const texture = this.context.device.createTexture({
         format: "rgba8unorm",
-        dimension: "2d",
         width: imageData.width,
         height: imageData.height,
         data: imageData.data,

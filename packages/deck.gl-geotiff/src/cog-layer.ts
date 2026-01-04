@@ -246,7 +246,7 @@ export class COGLayer<
     }
 
     const { getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
-      inferRenderPipeline(image.fileDirectory);
+      inferRenderPipeline(image.fileDirectory, this.context.device);
 
     this.setState({
       metadata,

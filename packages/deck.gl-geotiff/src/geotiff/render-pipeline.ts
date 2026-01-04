@@ -1,16 +1,17 @@
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
   CMYKToRGB,
+  Colormap,
   CreateTexture,
   cieLabToRGB,
   FilterNoDataVal,
   YCbCrToRGB,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
-import type { Texture } from "@luma.gl/core";
+import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
 import { globals } from "geotiff";
 import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
-import { addAlphaChannel, parseGDALNoData } from "./geotiff";
+import { addAlphaChannel, parseColormap, parseGDALNoData } from "./geotiff";
 import { inferTextureFormat } from "./texture";
 import type { ImageFileDirectory } from "./types";
 
@@ -20,44 +21,48 @@ export type TextureDataT = {
   texture: Texture;
 };
 
-export function inferRenderPipeline(options: ImageFileDirectory): {
+export function inferRenderPipeline(
+  ifd: ImageFileDirectory,
+  device: Device,
+): {
   getTileData: COGLayerProps<TextureDataT>["getTileData"];
   renderTile: COGLayerProps<TextureDataT>["renderTile"];
 } {
-  const {
-    BitsPerSample,
-    SamplesPerPixel,
-    SampleFormat,
-    PhotometricInterpretation,
-  } = options;
+  const { SampleFormat } = ifd;
 
-  switch (SamplesPerPixel) {
-    case 3:
-      return createRGB8Pipeline(options);
+  switch (SampleFormat[0]) {
+    // Unsigned integers
+    case 1:
+      return createUnormPipeline(ifd, device);
   }
 
-  throw new Error("todo");
+  throw new Error(
+    "Inferring render pipeline for non-unsigned integers not yet supported",
+  );
 }
 
-/** Create a pipeline for visualizing 8-bit RGB imagery. */
-function createRGB8Pipeline(options: ImageFileDirectory): {
+/**
+ * Create pipeline for visualizing unsigned-integer data.
+ */
+function createUnormPipeline(
+  ifd: ImageFileDirectory,
+  device: Device,
+): {
   getTileData: COGLayerProps<TextureDataT>["getTileData"];
   renderTile: COGLayerProps<TextureDataT>["renderTile"];
 } {
   const {
     BitsPerSample,
+    ColorMap,
     GDAL_NODATA,
     PhotometricInterpretation,
     SampleFormat,
     SamplesPerPixel,
-  } = options;
+  } = ifd;
 
-  const renderPipeline: RasterModule[] = [
-    {
-      module: CreateTexture,
-      props: {},
-    },
-  ];
+  // Texture initialization will be injected inside of renderTile, once the
+  // tile's data has loaded.
+  const renderPipeline: RasterModule[] = [];
 
   // Add NoData filtering if GDAL_NODATA is defined
   const noDataVal = parseGDALNoData(GDAL_NODATA);
@@ -71,10 +76,26 @@ function createRGB8Pipeline(options: ImageFileDirectory): {
     });
   }
 
-  const rgbModule = photometricInterpretationToRGB(PhotometricInterpretation);
-  if (rgbModule) {
-    renderPipeline.push(rgbModule);
+  const toRGBModule = photometricInterpretationToRGB(
+    PhotometricInterpretation,
+    device,
+    ColorMap,
+  );
+  if (toRGBModule) {
+    renderPipeline.push(toRGBModule);
   }
+
+  // For palette images, use nearest-neighbor sampling
+  const samplerOptions: SamplerProps =
+    PhotometricInterpretation === globals.photometricInterpretations.Palette
+      ? {
+          magFilter: "nearest",
+          minFilter: "nearest",
+        }
+      : {
+          magFilter: "linear",
+          minFilter: "linear",
+        };
 
   const getTileData: COGLayerProps<TextureDataT>["getTileData"] = async (
     image: GeoTIFFImage,
@@ -86,29 +107,29 @@ function createRGB8Pipeline(options: ImageFileDirectory): {
       interleave: true,
     };
 
-    const data = (await image.readRasters(
+    let data: TypedArrayWithDimensions | ImageData = (await image.readRasters(
       mergedOptions,
     )) as TypedArrayWithDimensions;
+    let numSamples = SamplesPerPixel;
 
-    // WebGL2 doesn't have an RGB-only texture format; it requires RGBA.
-    const rgbaData = addAlphaChannel(data);
+    if (SamplesPerPixel === 3) {
+      // WebGL2 doesn't have an RGB-only texture format; it requires RGBA.
+      data = addAlphaChannel(data);
+      numSamples = 4;
+    }
 
     const textureFormat = inferTextureFormat(
       // Add one sample for added alpha channel
-      SamplesPerPixel + 1,
+      numSamples,
       BitsPerSample,
       SampleFormat,
     );
     const texture = device.createTexture({
-      data: rgbaData,
-      dimension: "2d",
+      data,
       format: textureFormat,
       width: data.width,
       height: data.height,
-      sampler: {
-        magFilter: "linear",
-        minFilter: "linear",
-      },
+      sampler: samplerOptions,
     });
 
     return {
@@ -121,18 +142,13 @@ function createRGB8Pipeline(options: ImageFileDirectory): {
     tileData: TextureDataT,
   ): RasterModule[] => {
     const { texture } = tileData;
-
-    // We need to edit the pipeline to provide the texture from this tile.
-    //
-    // We can't clone the pipeline because it holds function callbacks in the
-    // raster modules. Instead, we jus
-    const pipeline = [...renderPipeline];
-    pipeline[0] = {
-      module: CreateTexture,
-      props: { textureName: texture },
-    };
-
-    return pipeline;
+    return [
+      {
+        module: CreateTexture,
+        props: { textureName: texture },
+      },
+      ...renderPipeline,
+    ];
   };
 
   return { getTileData, renderTile };
@@ -140,10 +156,39 @@ function createRGB8Pipeline(options: ImageFileDirectory): {
 
 function photometricInterpretationToRGB(
   PhotometricInterpretation: number,
+  device: Device,
+  ColorMap?: Uint16Array,
 ): RasterModule | null {
   switch (PhotometricInterpretation) {
     case globals.photometricInterpretations.RGB:
       return null;
+    case globals.photometricInterpretations.Palette: {
+      if (!ColorMap) {
+        throw new Error(
+          "ColorMap is required for PhotometricInterpretation Palette",
+        );
+      }
+      const { data, width, height } = parseColormap(ColorMap);
+      const cmapTexture = device.createTexture({
+        data,
+        format: "rgba8unorm",
+        width,
+        height,
+        sampler: {
+          minFilter: "nearest",
+          magFilter: "nearest",
+          addressModeU: "clamp-to-edge",
+          addressModeV: "clamp-to-edge",
+        },
+      });
+      return {
+        module: Colormap,
+        props: {
+          colormapTexture: cmapTexture,
+        },
+      };
+    }
+
     case globals.photometricInterpretations.CMYK:
       return {
         module: CMYKToRGB,

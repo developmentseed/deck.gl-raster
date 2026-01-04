@@ -33,6 +33,8 @@ async function geoKeysParser(
 
 const COG_URL =
   "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif";
+// const COG_URL =
+//   "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
