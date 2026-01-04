@@ -1,4 +1,3 @@
-import { assert } from "node:console";
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
 import { globals } from "geotiff";
 import { describe, expect, it } from "vitest";
@@ -76,10 +75,14 @@ describe("land cover, single-band uint8", () => {
     MOCK_RENDER_TILE_DATA as any,
   ) as RasterModule[];
 
-  it("placeholder test", () => {
+  it("Test render pipeline inference", () => {
     expect(Array.isArray(renderPipeline)).toBeTruthy();
     expect(renderPipeline[0]?.module.name).toEqual("create-texture-unorm");
 
-    expect(true).toBe(true);
+    expect(renderPipeline[1]?.module.name).toEqual("nodata");
+    expect(renderPipeline[1]?.props?.value).toEqual(250 / 255.0);
+
+    expect(renderPipeline[2]?.module.name).toEqual("colormap");
+    expect(renderPipeline[2]?.props?.colormapTexture).toBeDefined();
   });
 });
