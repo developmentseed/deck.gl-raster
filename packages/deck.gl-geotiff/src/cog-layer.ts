@@ -28,7 +28,7 @@ import {
   fetchGeoTIFF,
   getGeographicBounds,
   loadRgbImage,
-} from "./geotiff.js";
+} from "./geotiff/geotiff.js";
 import { fromGeoTransform } from "./geotiff-reprojection.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
@@ -55,7 +55,7 @@ export type GetTileDataOptions = {
   device: Device;
 
   /** the subset to read data from in pixels. */
-  window: [number, number, number, number];
+  window?: [number, number, number, number];
 
   /** An AbortSignal that may be signalled if the request is to be aborted */
   signal?: AbortSignal;

@@ -9,7 +9,7 @@ import {
   fetchGeoTIFF,
   getGeographicBounds,
   loadRgbImage,
-} from "./geotiff.js";
+} from "./geotiff/geotiff.js";
 import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
@@ -155,6 +155,7 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
       sourceProjection.def,
     );
     const { texture, height, width } = await loadRgbImage(image, {
+      device: this.context.device,
       pool: this.props.pool || defaultPool(),
     });
 

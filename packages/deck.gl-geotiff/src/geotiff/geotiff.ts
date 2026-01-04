@@ -10,7 +10,7 @@ import {
   Pool,
 } from "geotiff";
 import type { Converter } from "proj4";
-import type { GetTileDataOptions } from "./cog-layer";
+import type { GetTileDataOptions } from "../cog-layer";
 
 /**
  * A default geotiff.js decoder pool instance.
