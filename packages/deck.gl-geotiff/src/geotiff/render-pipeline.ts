@@ -61,9 +61,14 @@ function createUnormPipeline(
     SamplesPerPixel,
   } = ifd;
 
-  // Texture initialization will be injected inside of renderTile, once the
-  // tile's data has loaded.
-  const renderPipeline: RasterModule[] = [];
+  const renderPipeline: RasterModule[] = [
+    {
+      module: CreateTexture,
+      props: {
+        textureName: (data: TextureDataT) => data.texture,
+      },
+    },
+  ];
 
   // Add NoData filtering if GDAL_NODATA is defined
   const noDataVal = parseGDALNoData(GDAL_NODATA);
@@ -142,14 +147,7 @@ function createUnormPipeline(
   const renderTile: COGLayerProps<TextureDataT>["renderTile"] = (
     tileData: TextureDataT,
   ): RasterModule[] => {
-    const { texture } = tileData;
-    return [
-      {
-        module: CreateTexture,
-        props: { textureName: texture },
-      },
-      ...renderPipeline,
-    ];
+    return renderPipeline.map((m, _i) => resolveModule(m, tileData));
   };
 
   return { getTileData, renderTile };
@@ -207,4 +205,23 @@ function photometricInterpretationToRGB(
         `Unsupported PhotometricInterpretation ${PhotometricInterpretation}`,
       );
   }
+}
+
+/**
+ * If any prop of any module is a function, replace that prop value with the
+ * result of that function
+ */
+function resolveModule<T>(m: RasterModule, data: T): RasterModule {
+  const { module, props } = m;
+
+  if (!props) {
+    return { module };
+  }
+
+  const resolvedProps: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(props)) {
+    resolvedProps[key] = typeof value === "function" ? value(data) : value;
+  }
+
+  return { module, props: resolvedProps };
 }
