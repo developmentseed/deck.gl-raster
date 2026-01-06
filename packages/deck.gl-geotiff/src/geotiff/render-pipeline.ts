@@ -38,7 +38,7 @@ export function inferRenderPipeline(
   }
 
   throw new Error(
-    "Inferring render pipeline for non-unsigned integers not yet supported",
+    `Inferring render pipeline for non-unsigned integers not yet supported. Found SampleFormat: ${SampleFormat}`,
   );
 }
 
