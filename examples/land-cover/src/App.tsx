@@ -39,7 +39,9 @@ export default function App() {
     debug,
     debugOpacity,
     geoKeysParser,
-    onGeoTIFFLoad: (_tiff, options) => {
+    onGeoTIFFLoad: (tiff, options) => {
+      // For debugging
+      (window as any).tiff = tiff;
       const { west, south, east, north } = options.geographicBounds;
       mapRef.current?.fitBounds(
         [
