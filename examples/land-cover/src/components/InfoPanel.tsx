@@ -30,6 +30,7 @@ export function InfoPanel({
       <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
         NLCD Land Cover Classification
       </h3>
+      <Legend />
 
       <div
         style={{
@@ -83,8 +84,6 @@ export function InfoPanel({
           </div>
         )}
       </div>
-
-      <Legend />
     </div>
   );
 }
