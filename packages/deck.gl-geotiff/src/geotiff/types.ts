@@ -1,3 +1,20 @@
+export enum PhotometricInterpretationT {
+  WhiteIsZero = 0,
+  BlackIsZero = 1,
+  RGB = 2,
+  Palette = 3,
+  TransparencyMask = 4,
+  CMYK = 5,
+  YCbCr = 6,
+  CIELab = 8,
+  ICCLab = 9,
+}
+
+export enum PlanarConfigurationT {
+  Chunky = 1,
+  Planar = 2,
+}
+
 /** Improved typing for IFD. */
 export type ImageFileDirectory = {
   BitsPerSample: Uint16Array;
@@ -9,9 +26,9 @@ export type ImageFileDirectory = {
   GDAL_NODATA?: string;
   ImageLength: number;
   ImageWidth: number;
-  PhotometricInterpretation: number;
+  PhotometricInterpretation: PhotometricInterpretationT;
   /** Strip or tiled */
-  PlanarConfiguration: number;
+  PlanarConfiguration: PlanarConfigurationT;
   SampleFormat: Uint16Array;
   /** Number of bands */
   SamplesPerPixel: number;

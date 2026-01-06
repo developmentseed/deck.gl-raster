@@ -9,11 +9,11 @@ import {
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
-import { globals } from "geotiff";
 import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
 import { addAlphaChannel, parseColormap, parseGDALNoData } from "./geotiff";
 import { inferTextureFormat } from "./texture";
 import type { ImageFileDirectory } from "./types";
+import { PhotometricInterpretationT } from "./types";
 
 export type TextureDataT = {
   height: number;
@@ -88,7 +88,7 @@ function createUnormPipeline(
 
   // For palette images, use nearest-neighbor sampling
   const samplerOptions: SamplerProps =
-    PhotometricInterpretation === globals.photometricInterpretations.Palette
+    PhotometricInterpretation === PhotometricInterpretationT.Palette
       ? {
           magFilter: "nearest",
           minFilter: "nearest",
@@ -161,9 +161,9 @@ function photometricInterpretationToRGB(
   ColorMap?: Uint16Array,
 ): RasterModule | null {
   switch (PhotometricInterpretation) {
-    case globals.photometricInterpretations.RGB:
+    case PhotometricInterpretationT.RGB:
       return null;
-    case globals.photometricInterpretations.Palette: {
+    case PhotometricInterpretationT.Palette: {
       if (!ColorMap) {
         throw new Error(
           "ColorMap is required for PhotometricInterpretation Palette",
@@ -190,15 +190,15 @@ function photometricInterpretationToRGB(
       };
     }
 
-    case globals.photometricInterpretations.CMYK:
+    case PhotometricInterpretationT.CMYK:
       return {
         module: CMYKToRGB,
       };
-    case globals.photometricInterpretations.YCbCr:
+    case PhotometricInterpretationT.YCbCr:
       return {
         module: YCbCrToRGB,
       };
-    case globals.photometricInterpretations.CIELab:
+    case PhotometricInterpretationT.CIELab:
       return {
         module: cieLabToRGB,
       };
