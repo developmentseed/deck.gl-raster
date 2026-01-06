@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "gh-pages": "gh-pages -d dist -b gh-pages"
+    "publish": "pnpm build && gh-pages -d dist -b gh-pages -e examples/cog-basic"
   },
   "dependencies": {
     "@deck.gl/core": "^9.2.5",
