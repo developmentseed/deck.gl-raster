@@ -24,6 +24,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import { ErrorMessage } from "./components/ErrorMessage";
+import { InfoPanel } from "./components/InfoPanel";
+import { LoadingSpinner } from "./components/LoadingSpinner";
+import { UIOverlay } from "./components/UIOverlay";
 
 function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -243,143 +247,16 @@ export default function App() {
         />
       </MaplibreMap>
 
-      {/* UI Overlay Container */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-          zIndex: 1000,
-        }}
-      >
-        {loading && (
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              background: "white",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              pointerEvents: "auto",
-            }}
-          >
-            Loading GeoTIFF...
-          </div>
-        )}
-
-        {error && (
-          <div
-            style={{
-              position: "absolute",
-              top: "20px",
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "#ff4444",
-              color: "white",
-              padding: "12px 24px",
-              borderRadius: "4px",
-              maxWidth: "80%",
-              pointerEvents: "auto",
-            }}
-          >
-            Error: {error}
-          </div>
-        )}
-
-        <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "20px",
-            background: "white",
-            padding: "16px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            maxWidth: "300px",
-            pointerEvents: "auto",
-          }}
-        >
-          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
-            COGLayer Example
-          </h3>
-          {/* <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
-            Displaying RGB imagery from New Zealand (NZTM2000 projection)
-          </p> */}
-
-          {/* Debug Controls */}
-          <div
-            style={{
-              padding: "12px 0",
-              borderTop: "1px solid #eee",
-              marginTop: "12px",
-            }}
-          >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "14px",
-                cursor: "pointer",
-                marginBottom: "12px",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={debug}
-                onChange={(e) => setDebug(e.target.checked)}
-                style={{ cursor: "pointer" }}
-              />
-              <span>Show Debug Mesh</span>
-            </label>
-
-            {debug && (
-              <div style={{ marginTop: "8px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "12px",
-                    color: "#666",
-                    marginBottom: "4px",
-                  }}
-                >
-                  Debug Opacity: {debugOpacity.toFixed(2)}
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={debugOpacity}
-                    onChange={(e) =>
-                      setDebugOpacity(parseFloat(e.target.value))
-                    }
-                    style={{ width: "100%", cursor: "pointer" }}
-                  />
-                </label>
-              </div>
-            )}
-          </div>
-
-          {/* <div
-            style={{
-              marginTop: "12px",
-              paddingTop: "12px",
-              borderTop: "1px solid #eee",
-              fontSize: "12px",
-              color: "#999",
-            }}
-          >
-            <div>Max Error: 0.125 pixels</div>
-            <div>Source: LINZ</div>
-          </div> */}
-        </div>
-      </div>
+      <UIOverlay>
+        {loading && <LoadingSpinner />}
+        {error && <ErrorMessage message={error} />}
+        <InfoPanel
+          debug={debug}
+          debugOpacity={debugOpacity}
+          onDebugChange={setDebug}
+          onDebugOpacityChange={setDebugOpacity}
+        />
+      </UIOverlay>
     </div>
   );
 }
