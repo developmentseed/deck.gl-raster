@@ -9,7 +9,7 @@ Fully client-side with direct image loading, no server required.
 [deck.gl]: https://deck.gl/
 [Zarr]: https://zarr.dev/
 
-[![](./assets/land-cover.jpg)](https://developmentseed.org/deck.gl-raster/)
+[![](./assets/land-cover.jpg)](https://developmentseed.org/deck.gl-raster/examples/land-cover/)
 
 <p align="center"><em><b>1.3GB</b> Land Cover COG rendered with <b>no server</b>.</em></p>
 
