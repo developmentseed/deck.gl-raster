@@ -1,3 +1,5 @@
+import { Legend } from "./Legend";
+
 interface InfoPanelProps {
   debug: boolean;
   debugOpacity: number;
@@ -26,7 +28,7 @@ export function InfoPanel({
       }}
     >
       <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
-        COGLayer Example
+        NLCD Land Cover Classification
       </h3>
 
       <div
@@ -72,13 +74,17 @@ export function InfoPanel({
                 max="1"
                 step="0.01"
                 value={debugOpacity}
-                onChange={(e) => onDebugOpacityChange(parseFloat(e.target.value))}
+                onChange={(e) =>
+                  onDebugOpacityChange(parseFloat(e.target.value))
+                }
                 style={{ width: "100%", cursor: "pointer" }}
               />
             </label>
           </div>
         )}
       </div>
+
+      <Legend />
     </div>
   );
 }
