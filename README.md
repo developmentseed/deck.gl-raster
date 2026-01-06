@@ -11,7 +11,7 @@ Fully client-side with direct image loading, no server required.
 
 [![](./assets/land-cover.jpg)](https://developmentseed.org/deck.gl-raster/examples/land-cover/)
 
-<p align="center"><em><b>1.3GB</b> Land Cover COG rendered in the browser with <b>no server</b></em>: <a href="https://developmentseed.org/deck.gl-raster/">Live demo.</a></p>
+<p align="center"><em><b>1.3GB</b> Land Cover COG rendered in the browser with <b>no server</b></em>: <a href="https://developmentseed.org/deck.gl-raster/examples/land-cover/">Live demo.</a></p>
 
 ## Features
 

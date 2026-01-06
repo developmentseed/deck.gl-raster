@@ -10,7 +10,20 @@ import {
   Pool,
 } from "geotiff";
 import type { Converter } from "proj4";
-import type { GetTileDataOptions } from "../cog-layer";
+
+/**
+ * Options that may be passed when reading image data from geotiff.js
+ */
+type ReadRasterOptions = {
+  /** the subset to read data from in pixels. */
+  window?: [number, number, number, number];
+
+  /** The optional decoder pool to use. */
+  pool?: Pool;
+
+  /** An AbortSignal that may be signalled if the request is to be aborted */
+  signal?: AbortSignal;
+};
 
 /**
  * A default geotiff.js decoder pool instance.
@@ -39,7 +52,7 @@ export function defaultPool(): Pool {
  */
 export async function loadRgbImage(
   image: GeoTIFFImage,
-  options?: GetTileDataOptions,
+  options?: ReadRasterOptions,
 ): Promise<{ texture: ImageData; height: number; width: number }> {
   const mergedOptions = {
     ...options,

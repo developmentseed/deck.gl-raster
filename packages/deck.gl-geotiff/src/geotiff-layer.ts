@@ -155,7 +155,6 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
       sourceProjection.def,
     );
     const { texture, height, width } = await loadRgbImage(image, {
-      device: this.context.device,
       pool: this.props.pool || defaultPool(),
     });
 
