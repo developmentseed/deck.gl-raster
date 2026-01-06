@@ -28,7 +28,7 @@ async function geoKeysParser(
 }
 
 const COG_URL =
-  "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
+  "https://s3.us-east-1.amazonaws.com/ds-deck.gl-raster-public/cog/Annual_NLCD_LndCov_2024_CU_C1V1.tif";
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
