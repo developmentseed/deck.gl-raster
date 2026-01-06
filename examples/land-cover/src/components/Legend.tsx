@@ -180,6 +180,7 @@ export function Legend() {
       }}
     >
       <button
+        type="button"
         onClick={() => setIsExpanded(!isExpanded)}
         style={{
           width: "100%",
