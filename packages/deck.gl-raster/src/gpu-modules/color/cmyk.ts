@@ -25,4 +25,4 @@ export const CMYKToRGB = {
       color.rgb = cmykToRgb(color);
     `,
   },
-} as const satisfies ShaderModule<{}>;
+} as const satisfies ShaderModule;

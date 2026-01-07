@@ -27,4 +27,4 @@ export const YCbCrToRGB = {
       color.rgb = ycbcrToRgb(color.rgb);
     `,
   },
-} as const satisfies ShaderModule<{}>;
+} as const satisfies ShaderModule;

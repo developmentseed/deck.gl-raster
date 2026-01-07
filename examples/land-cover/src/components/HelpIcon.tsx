@@ -15,10 +15,9 @@ export function HelpIcon({ tooltip }: HelpIconProps) {
         alignItems: "center",
         justifyContent: "center",
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
-      <div
+      <button
+        type="button"
         style={{
           width: "16px",
           height: "16px",
@@ -31,10 +30,15 @@ export function HelpIcon({ tooltip }: HelpIconProps) {
           fontWeight: "bold",
           color: "#666",
           cursor: "help",
+          background: "transparent",
+          padding: 0,
         }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        aria-label="Show debug overlay help"
       >
         ?
-      </div>
+      </button>
       {isHovered && (
         <div
           style={{

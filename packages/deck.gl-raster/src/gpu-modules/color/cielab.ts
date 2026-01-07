@@ -56,4 +56,4 @@ export const cieLabToRGB = {
       color.rgb = cielabToRgb(color);
     `,
   },
-} as const satisfies ShaderModule<{}>;
+} as const satisfies ShaderModule;
