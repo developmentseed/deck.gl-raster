@@ -9,6 +9,9 @@ pnpm install
 # Build all packages
 pnpm build
 
+# Watch mode for development
+pnpm build:watch
+
 # Run tests in all packages
 pnpm test
 
