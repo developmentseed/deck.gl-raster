@@ -1,3 +1,4 @@
+import { HelpIcon } from "./HelpIcon";
 import { Legend } from "./Legend";
 
 interface InfoPanelProps {
@@ -6,6 +7,12 @@ interface InfoPanelProps {
   onDebugChange: (checked: boolean) => void;
   onDebugOpacityChange: (opacity: number) => void;
 }
+
+const helpIconTooltip = `
+Red squares depict the underlying COG tile structure.
+
+Triangles depict the GPU-based reprojection. Instead of per-pixel reprojection, we generate an adaptive triangular mesh. Each triangle locally approximates the non-linear reprojection function, ensuring minimal distortion.
+`;
 
 export function InfoPanel({
   debug,
@@ -27,9 +34,41 @@ export function InfoPanel({
         pointerEvents: "auto",
       }}
     >
-      <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
+      <h3
+        style={{
+          margin: "0 0 8px 0",
+          fontSize: "16px",
+          paddingBottom: "8px",
+          borderBottom: "1px solid #eee",
+        }}
+      >
         NLCD Land Cover Classification
       </h3>
+
+      <p style={{ margin: "8px 0", fontSize: "14px", color: "#666" }}>
+        A <b>1.3GB</b>{" "}
+        <a
+          href="https://cogeo.org/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Cloud-Optimized GeoTIFF
+        </a>{" "}
+        rendered in the browser with <b>no server</b> with{" "}
+        <a
+          href="https://github.com/developmentseed/deck.gl-raster"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            fontFamily: "monospace",
+          }}
+        >
+          @developmentseed/deck.gl-raster
+        </a>
+        .
+        <br />
+      </p>
+
       <Legend />
 
       <div
@@ -39,24 +78,33 @@ export function InfoPanel({
           marginTop: "12px",
         }}
       >
-        <label
+        <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: "8px",
-            fontSize: "14px",
-            cursor: "pointer",
             marginBottom: "12px",
           }}
         >
-          <input
-            type="checkbox"
-            checked={debug}
-            onChange={(e) => onDebugChange(e.target.checked)}
-            style={{ cursor: "pointer" }}
-          />
-          <span>Show Debug Mesh</span>
-        </label>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "14px",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={debug}
+              onChange={(e) => onDebugChange(e.target.checked)}
+              style={{ cursor: "pointer" }}
+            />
+            <span>Show Debug Overlay</span>
+          </label>
+          <HelpIcon tooltip={helpIconTooltip} />
+        </div>
 
         {debug && (
           <div style={{ marginTop: "8px" }}>
