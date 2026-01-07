@@ -47,11 +47,7 @@ export function InfoPanel({
 
       <p style={{ margin: "8px 0", fontSize: "14px", color: "#666" }}>
         A <b>1.3GB</b>{" "}
-        <a
-          href="https://cogeo.org/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <a href="https://cogeo.org/" target="_blank" rel="noopener noreferrer">
           Cloud-Optimized GeoTIFF
         </a>{" "}
         rendered in the browser with <b>no server</b> using{" "}
