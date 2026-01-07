@@ -31,10 +31,6 @@ Fully client-side with direct image loading, no server required.
 
 ## Quick Start
 
-```bash
-npm install @developmentseed/deck.gl-geotiff
-```
-
 ```typescript
 import { Deck } from '@deck.gl/core';
 import { COGLayer } from '@developmentseed/deck.gl-geotiff';
