@@ -16,10 +16,13 @@ Fully client-side with direct image loading, no server required.
 ## Features
 
 - Client-side visualization with no server required.
-- Fast, GPU-enabled image processing:
+- GPU-based image processing:
     - Converting color spaces like CMYK, YCbCr, CIELAB to RGB.
     - Removing nodata values
     - Applying colormaps
+    - _Soon_: color correction, nodata masks, spectral band math, pixel filtering, etc.
+- Automatically-inferred render pipelines based on GeoTIFF metadata
+    - Or, customizable render pipelines with _no GPU knowledge required_.
 - GPU-based raster reprojection supports image sources from most projections [^1]
 - Intelligent COG rendering, only fetching the portions of the image required for the current view.
 
@@ -30,7 +33,7 @@ Fully client-side with direct image loading, no server required.
 This monorepo contains the following packages, each of which are published to NPM:
 
 - [`@developmentseed/deck.gl-geotiff`](#developmentseeddeckgl-geotiff)
-- [`@developmentseed/deck.gl-zarr`](#developmentseeddeckgl-zarr)
+- [`@developmentseed/deck.gl-zarr`](#developmentseeddeckgl-zarr) (_soon_)
 - [`@developmentseed/deck.gl-raster`](#developmentseeddeckgl-raster)
 - [`@developmentseed/raster-reproject`](#developmentseedraster-reproject)
 

@@ -21,6 +21,25 @@ export type TextureDataT = {
   texture: Texture;
 };
 
+/**
+ * A raster module that can be "unresolved", meaning that its props may come
+ * from the result of `getTileData`.
+ *
+ * In this case, one or more of the props may be a function that takes the
+ * `getTileData` result and returns the actual prop value.
+ */
+// TODO: it would be nice to improve the generics here, to connect the type of
+// the props allowed by the module to the return type of this function
+type UnresolvedRasterModule<DataT> =
+  | RasterModule
+  | {
+      module: RasterModule["module"];
+      props?: Record<
+        string,
+        number | Texture | ((data: DataT) => number | Texture)
+      >;
+    };
+
 export function inferRenderPipeline(
   // TODO: narrow type to only used fields
   ifd: ImageFileDirectory,
@@ -61,7 +80,7 @@ function createUnormPipeline(
     SamplesPerPixel,
   } = ifd;
 
-  const renderPipeline: RasterModule[] = [
+  const renderPipeline: UnresolvedRasterModule<TextureDataT>[] = [
     {
       module: CreateTexture,
       props: {
@@ -211,16 +230,19 @@ function photometricInterpretationToRGB(
  * If any prop of any module is a function, replace that prop value with the
  * result of that function
  */
-function resolveModule<T>(m: RasterModule, data: T): RasterModule {
+function resolveModule<T>(m: UnresolvedRasterModule<T>, data: T): RasterModule {
   const { module, props } = m;
 
   if (!props) {
     return { module };
   }
 
-  const resolvedProps: Record<string, unknown> = {};
+  const resolvedProps: Record<string, number | Texture> = {};
   for (const [key, value] of Object.entries(props)) {
-    resolvedProps[key] = typeof value === "function" ? value(data) : value;
+    const newValue = typeof value === "function" ? value(data) : value;
+    if (newValue !== undefined) {
+      resolvedProps[key] = newValue;
+    }
   }
 
   return { module, props: resolvedProps };
