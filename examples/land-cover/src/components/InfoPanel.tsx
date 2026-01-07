@@ -54,7 +54,7 @@ export function InfoPanel({
         >
           Cloud-Optimized GeoTIFF
         </a>{" "}
-        rendered in the browser with <b>no server</b> with{" "}
+        rendered in the browser with <b>no server</b> using{" "}
         <a
           href="https://github.com/developmentseed/deck.gl-raster"
           target="_blank"
