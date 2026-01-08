@@ -4,8 +4,10 @@ import { Legend } from "./Legend";
 interface InfoPanelProps {
   debug: boolean;
   debugOpacity: number;
+  comparisonMode: boolean;
   onDebugChange: (checked: boolean) => void;
   onDebugOpacityChange: (opacity: number) => void;
+  onComparisonModeChange: (checked: boolean) => void;
 }
 
 const helpIconTooltip = `
@@ -17,8 +19,10 @@ Triangles depict the GPU-based reprojection. Instead of per-pixel reprojection, 
 export function InfoPanel({
   debug,
   debugOpacity,
+  comparisonMode,
   onDebugChange,
   onDebugOpacityChange,
+  onComparisonModeChange,
 }: InfoPanelProps) {
   return (
     <div
@@ -74,6 +78,33 @@ export function InfoPanel({
           marginTop: "12px",
         }}
       >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginBottom: "12px",
+          }}
+        >
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "14px",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={comparisonMode}
+              onChange={(e) => onComparisonModeChange(e.target.checked)}
+              style={{ cursor: "pointer" }}
+            />
+            <span>Compare 1985 vs 2024</span>
+          </label>
+        </div>
+
         <div
           style={{
             display: "flex",

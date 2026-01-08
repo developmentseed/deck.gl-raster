@@ -113,6 +113,9 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: ^9.2.5
         version: 9.2.5(@deck.gl/core@9.2.5)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.5)(@luma.gl/engine@9.2.5(@luma.gl/core@9.2.5)(@luma.gl/shadertools@9.2.5(@luma.gl/core@9.2.5)))(@luma.gl/gltf@9.2.5(@luma.gl/constants@9.2.5)(@luma.gl/core@9.2.5)(@luma.gl/engine@9.2.5(@luma.gl/core@9.2.5)(@luma.gl/shadertools@9.2.5(@luma.gl/core@9.2.5)))(@luma.gl/shadertools@9.2.5(@luma.gl/core@9.2.5)))(@luma.gl/shadertools@9.2.5(@luma.gl/core@9.2.5))
+      '@deck.gl/widgets':
+        specifier: ^9.2.5
+        version: 9.2.5(@deck.gl/core@9.2.5)(@luma.gl/core@9.2.5)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
@@ -525,6 +528,12 @@ packages:
       '@luma.gl/engine': 9.2.5
       '@luma.gl/gltf': 9.2.5
       '@luma.gl/shadertools': 9.2.5
+
+  '@deck.gl/widgets@9.2.5':
+    resolution: {integrity: sha512-nzukGcyaVag6XRT8aP3A8Ul2bSdb/TyFmenbDNRhrYop0OdmDl9Bx0U9wZlVlY6vxpB3kssfBXAv+MTdRr2JfA==}
+    peerDependencies:
+      '@deck.gl/core': ~9.2.0
+      '@luma.gl/core': 9.2.5
 
   '@esbuild/aix-ppc64@0.27.2':
     resolution: {integrity: sha512-GZMB+a0mOMZs4MpDbj8RJp4cw+w1WV5NYD6xzgvzUJ5Ek2jerwfO2eADyI6ExDSUED+1X8aMbegahsJi+8mgpw==}
@@ -1809,6 +1818,9 @@ packages:
   potpack@2.1.0:
     resolution: {integrity: sha512-pcaShQc1Shq0y+E7GqJqvZj8DTthWV1KeHGdi0Z6IAin2Oi3JnLCOfwnCo84qc+HAp52wT9nK9H7FAJp5a44GQ==}
 
+  preact@10.28.2:
+    resolution: {integrity: sha512-lbteaWGzGHdlIuiJ0l2Jq454m6kcpI1zNje6d8MlGAFlYvP2GO4ibnat7P74Esfz4sPTdM6UxtTwh/d3pwM9JA==}
+
   process-nextick-args@2.0.1:
     resolution: {integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==}
 
@@ -2537,6 +2549,12 @@ snapshots:
       '@luma.gl/shadertools': 9.2.5(@luma.gl/core@9.2.5)
     transitivePeerDependencies:
       - '@loaders.gl/core'
+
+  '@deck.gl/widgets@9.2.5(@deck.gl/core@9.2.5)(@luma.gl/core@9.2.5)':
+    dependencies:
+      '@deck.gl/core': 9.2.5
+      '@luma.gl/core': 9.2.5
+      preact: 10.28.2
 
   '@esbuild/aix-ppc64@0.27.2':
     optional: true
@@ -3813,6 +3831,8 @@ snapshots:
       source-map-js: 1.2.1
 
   potpack@2.1.0: {}
+
+  preact@10.28.2: {}
 
   process-nextick-args@2.0.1: {}
 
