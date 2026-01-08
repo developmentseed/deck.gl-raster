@@ -23,6 +23,7 @@ Fully client-side with direct image loading, no server required.
   - _Soon_: color correction, nodata masks, spectral band math, pixel filtering
 - **Intelligent rendering**: Automatically infers default render behavior from GeoTIFF metadata
   - Alternatively, fully-customizable rendering with no GPU knowledge required
+- **Native tiling**: Renders tiled data sources _in their native tiling scheme_, without translating to a Web Mercator tiling grid.
 - **Flexible reprojection**: GPU-based raster reprojection from most projections[^1]
 - **Efficient streaming**: Intelligent COG rendering fetches only visible image portions
 - **Multi-resolution support**: Automatic overview selection based on zoom level
