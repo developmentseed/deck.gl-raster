@@ -186,6 +186,9 @@ importers:
       '@luma.gl/core':
         specifier: 9.2.5
         version: 9.2.5
+      flatbush:
+        specifier: ^4.5.0
+        version: 4.5.0
       geotiff:
         specifier: 2.1.3
         version: 2.1.3
@@ -1434,6 +1437,12 @@ packages:
 
   fix-dts-default-cjs-exports@1.0.1:
     resolution: {integrity: sha512-pVIECanWFC61Hzl2+oOCtoJ3F17kglZC/6N94eRWycFgBH35hHx0Li604ZIzhseh97mf2p0cv7vVrOZGoqhlEg==}
+
+  flatbush@4.5.0:
+    resolution: {integrity: sha512-K7JSilGr4lySRLdJqKY45fu0m/dIs6YAAu/ESqdMsnW3pI0m3gpa6oRc6NDXW161Ov9+rIQjsuyOt5ObdIfgwg==}
+
+  flatqueue@3.0.0:
+    resolution: {integrity: sha512-y1deYaVt+lIc/d2uIcWDNd0CrdQTO5xoCjeFdhX0kSXvm2Acm0o+3bAOiYklTEoRyzwio3sv3/IiBZdusbAe2Q==}
 
   fs-extra@11.3.3:
     resolution: {integrity: sha512-VWSRii4t0AFm6ixFFmLLx1t7wS1gh+ckoa84aOeapGum0h+EZd1EhEumSB+ZdDLnEPuucsVB9oB7cxJHap6Afg==}
@@ -3446,6 +3455,12 @@ snapshots:
       magic-string: 0.30.21
       mlly: 1.8.0
       rollup: 4.54.0
+
+  flatbush@4.5.0:
+    dependencies:
+      flatqueue: 3.0.0
+
+  flatqueue@3.0.0: {}
 
   fs-extra@11.3.3:
     dependencies:
