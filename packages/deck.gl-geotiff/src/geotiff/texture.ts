@@ -70,7 +70,9 @@ function verifySamplesPerPixel(samplesPerPixel: number): ChannelCount {
   );
 }
 
-function verifyIdenticalBitsPerSample(bitsPerSample: Uint16Array): BitWidth {
+export function verifyIdenticalBitsPerSample(
+  bitsPerSample: Uint16Array,
+): BitWidth {
   // bitsPerSamples is non-empty
   const first = bitsPerSample[0]!;
 
