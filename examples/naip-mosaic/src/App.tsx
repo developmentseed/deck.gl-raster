@@ -75,9 +75,10 @@ export default function App() {
         }
 
         const data: STACFeatureCollection = await response.json();
-        window.data = data;
+        (window as any).data = data;
         setStacItems(data.features);
       } catch (err) {
+        console.error("Error fetching STAC items:", err);
         setError(
           err instanceof Error ? err.message : "Failed to fetch STAC items",
         );
@@ -103,24 +104,23 @@ export default function App() {
     const mosaicLayer = new TileLayer({
       id: "mosaic-tile-layer",
       TilesetClass: MosaicTileset2DFactory,
-      data: "mosaic", // Dummy data source
-      getTileData: (tile: any) => {
-        // Return the mosaic source data for this tile
-        // The tile will already have the mosaic source information
-        console.log("Loading tile data for tile:", tile);
-        return tile;
+      getTileData: (data: { index: STACItem }) => {
+        const { index } = data;
+        return index.assets.image.href;
       },
       renderSubLayers: (props: any) => {
-        const { tile } = props;
-        if (!tile || !tile.url) {
+        const { data: url } = props;
+
+        if (!url) {
           return null;
         }
 
         // Render each tile as a COGLayer
         return new COGLayer({
-          id: `cog-${tile.id}`,
-          geotiff: tile.url,
+          id: `cog-${url}`,
+          geotiff: url,
           geoKeysParser,
+          // debug: true,
         });
       },
     });
@@ -141,7 +141,7 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={layers} interleaved />
+        <DeckGLOverlay layers={layers} />
       </MaplibreMap>
 
       {/* UI Overlay Container */}
