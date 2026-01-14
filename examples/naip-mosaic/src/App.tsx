@@ -56,7 +56,7 @@ export default function App() {
       try {
         const params = {
           collections: "naip",
-          // bbox: [-107.58, 37.82, -104.52, 40.45],
+          bbox: [-107.58, 37.82, -104.52, 40.45],
           filter: JSON.stringify({
             op: "=",
             args: [{ property: "naip:state" }, "co"],
