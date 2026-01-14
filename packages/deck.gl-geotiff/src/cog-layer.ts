@@ -382,7 +382,7 @@ export class COGLayer<
 
       layers.push(
         new PathLayer({
-          id: `${tile.id}-bounds`,
+          id: `${this.id}-${tile.id}-bounds`,
           data: [path],
           getPath: (d) => d,
           getColor: [255, 0, 0, 255], // Red
