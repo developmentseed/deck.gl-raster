@@ -9,4 +9,8 @@ export {
   extractGeotiffReprojectors,
   fromGeoTransform,
 } from "./geotiff-reprojection.js";
+export {
+  type MosaicSource,
+  MosaicTileset2D,
+} from "./mosaic-layer/mosaic-tileset-2d";
 export * as proj from "./proj.js";

@@ -19,7 +19,7 @@ export type MosaicSource = {
   /**
    * Geographic bounds (WGS84) of the source in [minX, minY, maxX, maxY] format
    */
-  geographicBounds: [number, number, number, number];
+  bbox: [number, number, number, number];
 };
 
 // Include correct Tileset2DProps type when exported from deck.gl
@@ -52,7 +52,7 @@ export class MosaicTileset2D<M extends MosaicSource> extends Tileset2D {
     // Build spatial index of mosaic sources
     const index = new Flatbush(sources.length);
     for (const source of sources) {
-      const [minX, minY, maxX, maxY] = source.geographicBounds;
+      const [minX, minY, maxX, maxY] = source.bbox;
       index.add(minX, minY, maxX, maxY);
     }
     index.finish();
