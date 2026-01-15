@@ -1,6 +1,5 @@
 import type { CompositeLayerProps, Layer, LayersList } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
-import type { _TileLoadProps as TileLoadProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { MosaicSource } from "./mosaic-tileset-2d";
 import { MosaicTileset2D } from "./mosaic-tileset-2d";
@@ -12,7 +11,7 @@ export interface MosaicLayerProps<MosaicT extends MosaicSource = MosaicSource>
   /** Render a source */
   renderSource: (
     source: MosaicT,
-    opts: { signal: AbortSignal },
+    opts: { signal?: AbortSignal },
   ) => Layer | LayersList | null;
 }
 
@@ -34,10 +33,13 @@ export class MosaicLayer<
       }
     }
 
-    return new TileLayer({
+    return new TileLayer<{ source: MosaicT; signal?: AbortSignal }>({
       id: "mosaic-layer",
       TilesetClass: MosaicTileset2DFactory,
-      getTileData: (data: TileLoadProps) => {
+      // @ts-expect-error This errors because TilesetClass is not generic.
+      // TilesetClass returns MosaicT in `index`, but the known type is only
+      // `TileIndex`, which only defines x,y,z
+      getTileData: (data) => {
         const { index, signal } = data;
         return {
           source: index,
