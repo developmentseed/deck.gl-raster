@@ -30,6 +30,12 @@ Fully client-side with direct image loading, no server required.
 
 [^1]: The raster reprojection has not been tested on polar projections or when spanning the antimeridian.
 
+## Examples
+
+- **[Land Cover](https://developmentseed.org/deck.gl-raster/examples/land-cover/)**: 1.3GB NLCD land cover COG with custom colormap
+- **[NAIP Client-side Mosaic](https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/)**: Client-side mosaic of [NAIP](https://www.usgs.gov/centers/eros/science/usgs-eros-archive-aerial-photography-national-agriculture-imagery-program-naip) COGs, loaded directly from [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/dataset/naip). No server involved. Switch between true color, false color infrared, and NDVI renderings
+- **[COG Basic](https://developmentseed.org/deck.gl-raster/examples/cog-basic/)**: RGB aerial imagery with automatic reprojection
+
 ## Quick Start
 
 ```typescript

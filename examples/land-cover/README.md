@@ -2,6 +2,8 @@
 
 This example visualizes a 1.3GB land cover dataset using deck.gl and the `COGLayer`.
 
+Deployed to <https://developmentseed.org/deck.gl-raster/examples/land-cover/>.
+
 ## Setup
 
 1. Install dependencies from the repository root:

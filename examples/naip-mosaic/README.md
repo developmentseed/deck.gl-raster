@@ -2,6 +2,8 @@
 
 This example demonstrates how to use the `MosaicLayer` to visualize a client-side mosaic of Cloud-Optimized GeoTIFFs (COGs) in deck.gl.
 
+Deployed to <https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/>.
+
 ## Setup
 
 1. Install dependencies from the repository root:
