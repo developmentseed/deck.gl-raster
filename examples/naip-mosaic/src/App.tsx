@@ -1,11 +1,6 @@
 import type { DeckProps } from "@deck.gl/core";
-import { TileLayer } from "@deck.gl/geo-layers";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import {
-  COGLayer,
-  MosaicTileset2D,
-  proj,
-} from "@developmentseed/deck.gl-geotiff";
+import { COGLayer, MosaicLayer, proj } from "@developmentseed/deck.gl-geotiff";
 import { toProj4 } from "geotiff-geokeys-to-proj4";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
@@ -90,32 +85,15 @@ export default function App() {
     fetchSTACItems();
   }, []);
 
-  // Create TileLayer with MosaicTileset2D
   const layers = [];
 
   if (stacItems.length > 0) {
-    // Create a factory class that wraps MosaicTileset2D with the metadata
-    class MosaicTileset2DFactory extends MosaicTileset2D<STACItem> {
-      constructor(opts: any) {
-        super(stacItems, opts);
-      }
-    }
+    const mosaicLayer = new MosaicLayer<STACItem>({
+      id: "naip-mosaic-layer",
+      sources: stacItems,
+      renderSource: (source, { signal }) => {
+        const url = source.assets.image.href;
 
-    const mosaicLayer = new TileLayer({
-      id: "mosaic-tile-layer",
-      TilesetClass: MosaicTileset2DFactory,
-      getTileData: (data: { index: STACItem }) => {
-        const { index } = data;
-        return index.assets.image.href;
-      },
-      renderSubLayers: (props: any) => {
-        const { data: url } = props;
-
-        if (!url) {
-          return null;
-        }
-
-        // Render each tile as a COGLayer
         return new COGLayer({
           id: `cog-${url}`,
           geotiff: url,
@@ -124,7 +102,6 @@ export default function App() {
         });
       },
     });
-
     layers.push(mosaicLayer);
   }
 
@@ -133,9 +110,9 @@ export default function App() {
       <MaplibreMap
         ref={mapRef}
         initialViewState={{
-          longitude: -106,
-          latitude: 39,
-          zoom: 7,
+          longitude: -104.9903,
+          latitude: 39.7392,
+          zoom: 10,
           pitch: 0,
           bearing: 0,
         }}

@@ -9,6 +9,8 @@ export {
   extractGeotiffReprojectors,
   fromGeoTransform,
 } from "./geotiff-reprojection.js";
+export type { MosaicLayerProps } from "./mosaic-layer/mosaic-layer.js";
+export { MosaicLayer } from "./mosaic-layer/mosaic-layer.js";
 export {
   type MosaicSource,
   MosaicTileset2D,
