@@ -406,9 +406,7 @@ export default function App() {
           <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
             {loading && "Loading STAC items... "}
             {error && `Error: ${error}`}
-            {!loading &&
-              !error &&
-              `Fetched ${stacItems.length} `}
+            {!loading && !error && `Fetched ${stacItems.length} `}
             <a
               href="https://stacspec.org/en"
               target="_blank"
