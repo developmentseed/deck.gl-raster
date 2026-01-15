@@ -2,12 +2,22 @@ import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { proj } from "@developmentseed/deck.gl-geotiff";
 import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
+import type { RasterModule } from "@developmentseed/deck.gl-raster";
+import { CreateTexture } from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { Texture } from "@luma.gl/core";
+import type { ShaderModule } from "@luma.gl/shadertools";
+import type { GeoTIFF, GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
+import { fromUrl } from "geotiff";
 import "maplibre-gl/dist/maplibre-gl.css";
 import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer";
 import "./proj";
+
+/** Bounding box query passed to Microsoft Planetary Computer STAC API */
+const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];
 
 function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -36,7 +46,6 @@ async function epsgLookup(
 }
 
 type STACItem = {
-  id: string;
   bbox: [number, number, number, number];
   assets: {
     image: {
@@ -48,6 +57,148 @@ type STACItem = {
 type STACFeatureCollection = {
   features: STACItem[];
 };
+
+type TextureDataT = {
+  height: number;
+  width: number;
+  texture: Texture;
+};
+
+/** Custom tile loader that creates a GPU texture from the GeoTIFF image data. */
+async function getTileData(
+  image: GeoTIFFImage,
+  options: GetTileDataOptions,
+): Promise<TextureDataT> {
+  const { device } = options;
+  const mergedOptions = {
+    ...options,
+    interleave: true,
+  };
+
+  const data = (await image.readRasters(
+    mergedOptions,
+  )) as TypedArrayWithDimensions;
+
+  const texture = device.createTexture({
+    data,
+    format: "rgba8unorm",
+    width: data.width,
+    height: data.height,
+  });
+
+  return {
+    texture,
+    height: data.height,
+    width: data.width,
+  };
+}
+
+/** Shader module that sets alpha channel to 1.0 */
+const SetAlpha1 = {
+  name: "set-alpha-1",
+  inject: {
+    "fs:DECKGL_FILTER_COLOR": /* glsl */ `
+      color = vec4(color.rgb, 1.0);
+    `,
+  },
+} as const satisfies ShaderModule;
+
+/** Shader module that reorders bands to a false color infrared composite. */
+const setFalseColorInfrared = {
+  name: "set-false-color-infrared",
+  inject: {
+    // Colors in the original image are ordered as: R, G, B, NIR
+    "fs:DECKGL_FILTER_COLOR": /* glsl */ `
+      float nir = color[3];
+      float red = color[0];
+      float green = color[1];
+      color.rgb = vec3(nir, red, green);
+    `,
+  },
+} as const satisfies ShaderModule;
+
+/** Shader module that calculates NDVI. */
+const ndvi = {
+  name: "ndvi",
+  inject: {
+    // Colors in the original image are ordered as: R, G, B, NIR
+    "fs:DECKGL_FILTER_COLOR": /* glsl */ `
+      float nir = color[3];
+      float red = color[0];
+      float ndvi = (nir - red) / (nir + red);
+      // normalize to 0-1 range
+      color.r = (ndvi + 1.0) / 2.0;
+    `,
+  },
+};
+
+function renderRGB(tileData: TextureDataT): RasterModule[] {
+  const { texture } = tileData;
+  return [
+    {
+      module: CreateTexture,
+      props: {
+        textureName: texture,
+      },
+    },
+    {
+      module: SetAlpha1,
+    },
+  ];
+}
+
+function renderFalseColor(tileData: TextureDataT): RasterModule[] {
+  const { texture } = tileData;
+  return [
+    {
+      module: CreateTexture,
+      props: {
+        textureName: texture,
+      },
+    },
+    {
+      module: setFalseColorInfrared,
+    },
+    {
+      module: SetAlpha1,
+    },
+  ];
+}
+
+function renderNDVI(tileData: TextureDataT): RasterModule[] {
+  const { texture } = tileData;
+  return [
+    {
+      module: CreateTexture,
+      props: {
+        textureName: texture,
+      },
+    },
+    {
+      module: ndvi,
+    },
+    {
+      module: SetAlpha1,
+    },
+  ];
+}
+
+function renderSource(
+  source: STACItem,
+  { data, signal }: { data?: GeoTIFF; signal?: AbortSignal },
+) {
+  const url = source.assets.image.href;
+
+  return new COGLayer<TextureDataT>({
+    id: `cog-${url}`,
+    geotiff: data,
+    geoKeysParser: epsgLookup,
+    getTileData,
+    // renderTile: renderRGB,
+    renderTile: renderFalseColor,
+    signal,
+  });
+}
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -61,7 +212,7 @@ export default function App() {
       try {
         const params = {
           collections: "naip",
-          bbox: [-107.58, 37.82, -104.52, 40.45].join(","),
+          bbox: STAC_BBOX.join(","),
           filter: JSON.stringify({
             op: "=",
             args: [{ property: "naip:state" }, "co"],
@@ -98,19 +249,23 @@ export default function App() {
   const layers = [];
 
   if (stacItems.length > 0) {
-    const mosaicLayer = new MosaicLayer<STACItem>({
+    const mosaicLayer = new MosaicLayer<STACItem, GeoTIFF>({
       id: "naip-mosaic-layer",
       sources: stacItems,
-      renderSource: (source, { signal }) => {
+      // For each source, fetch the GeoTIFF instance
+      // Doing this in getSource allows us to cache the results using TileLayer
+      // mechanisms.
+      getSource: async (source, { signal }) => {
         const url = source.assets.image.href;
-
-        return new COGLayer({
-          id: `cog-${url}`,
-          geotiff: url,
-          geoKeysParser: epsgLookup,
-          signal,
-        });
+        const tiff = await fromUrl(url, {}, signal);
+        return tiff;
       },
+      renderSource,
+      // We have a max of 1000 STAC items fetched from the Microsoft STAC API;
+      // this isn't so large that we can't just cache all the GeoTIFF header
+      // metadata instances
+      maxCacheSize: Infinity,
+      beforeId: "tunnel_service_case",
     });
     layers.push(mosaicLayer);
   }
@@ -126,9 +281,14 @@ export default function App() {
           pitch: 0,
           bearing: 0,
         }}
+        maxBounds={[
+          [STAC_BBOX[0] - 1, STAC_BBOX[1] - 1],
+          [STAC_BBOX[2] + 1, STAC_BBOX[3] + 1],
+        ]}
+        minZoom={4}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={layers} />
+        <DeckGLOverlay layers={layers} interleaved />
       </MaplibreMap>
 
       {/* UI Overlay Container */}
@@ -162,7 +322,7 @@ export default function App() {
           <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
             {loading && "Loading STAC items..."}
             {error && `Error: ${error}`}
-            {!loading && !error && `Loaded ${stacItems.length} NAIP images`}
+            {!loading && !error && `Fetched ${stacItems.length} STAC Items.`}
           </p>
         </div>
       </div>

@@ -82,7 +82,7 @@ export class MosaicLayer<
       minZoom,
       maxZoom,
       extent,
-      maxCacheByteSize,
+      ...(maxCacheByteSize !== undefined && { maxCacheByteSize }),
       maxCacheSize,
       maxRequests,
       getTileData: async (data) => {
