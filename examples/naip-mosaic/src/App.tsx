@@ -136,6 +136,39 @@ const ndvi = {
   },
 };
 
+/** This module name must be consistent */
+const NDVI_FILTER_MODULE_NAME = "ndviFilter";
+
+const ndviUniformBlock = `\
+uniform ${NDVI_FILTER_MODULE_NAME}Uniforms {
+  float ndviMin;
+  float ndviMax;
+} ${NDVI_FILTER_MODULE_NAME};
+`;
+
+// TODO: enable NDVI filtering
+const ndviFilter = {
+  name: NDVI_FILTER_MODULE_NAME,
+  fs: ndviUniformBlock,
+  inject: {
+    "fs:DECKGL_FILTER_COLOR": /* glsl */ `
+      if (color.r < ndviFilter.ndviMin || color.r > ndviFilter.ndviMax) {
+        discard;
+      }
+    `,
+  },
+  uniformTypes: {
+    ndviMin: "f32",
+    ndviMax: "f32",
+  },
+  getUniforms: (props) => {
+    return {
+      ndviMin: props.ndviMin || -1.0,
+      ndviMax: props.ndviMax || 1.0,
+    };
+  },
+} as const satisfies ShaderModule<{ ndviMin: number; ndviMax: number }>;
+
 function renderRGB(tileData: TextureDataT): RasterModule[] {
   const { texture } = tileData;
   return [
@@ -172,6 +205,7 @@ function renderFalseColor(tileData: TextureDataT): RasterModule[] {
 function renderNDVI(
   tileData: TextureDataT,
   colormapTexture: Texture,
+  // ndviRange: [number, number],
 ): RasterModule[] {
   const { texture } = tileData;
   return [
@@ -184,6 +218,13 @@ function renderNDVI(
     {
       module: ndvi,
     },
+    // {
+    //   module: ndviFilter,
+    //   props: {
+    //     ndviMin: ndviRange[0],
+    //     ndviMax: ndviRange[1],
+    //   },
+    // },
     {
       module: Colormap,
       props: {
@@ -210,6 +251,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [renderMode, setRenderMode] = useState<RenderMode>("trueColor");
+  const [ndviRange, setNdviRange] = useState<[number, number]>([-1, 1]);
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
 
@@ -360,14 +402,55 @@ export default function App() {
             pointerEvents: "auto",
           }}
         >
-          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
-            NAIP Mosaic Example
-          </h3>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>NAIP Mosaic</h3>
           <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
-            {loading && "Loading STAC items..."}
+            {loading && "Loading STAC items... "}
             {error && `Error: ${error}`}
-            {!loading && !error && `Fetched ${stacItems.length} STAC Items.`}
+            {!loading &&
+              !error &&
+              `Fetched ${stacItems.length} `}
+            <a
+              href="https://stacspec.org/en"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              STAC
+            </a>
+            {" Items "}
+            from{" "}
+            <a
+              href="https://planetarycomputer.microsoft.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Microsoft Planetary Computer
+            </a>
+            's{" "}
+            <a
+              href="https://planetarycomputer.microsoft.com/dataset/naip"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              NAIP dataset
+            </a>
+            .
+            <br />
+            <br />
+            All imagery is rendered client-side with <b>no server involved</b>{" "}
+            using{" "}
+            <a
+              href="https://github.com/developmentseed/deck.gl-raster"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontFamily: "monospace",
+              }}
+            >
+              @developmentseed/deck.gl-raster
+            </a>
+            .
           </p>
+
           <div>
             <label
               htmlFor="render-mode"
@@ -394,6 +477,135 @@ export default function App() {
               ))}
             </select>
           </div>
+
+          {/* TODO: enable pixel filter */}
+          {false && renderMode === "ndvi" && (
+            <div style={{ marginTop: "16px" }}>
+              <label style={{ fontSize: "14px", fontWeight: 500 }}>
+                NDVI Filter
+              </label>
+              <div
+                style={{
+                  position: "relative",
+                  height: "20px",
+                  marginTop: "8px",
+                }}
+              >
+                {/* Background track */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: 0,
+                    right: 0,
+                    height: "4px",
+                    transform: "translateY(-50%)",
+                    background: "#ddd",
+                    borderRadius: "2px",
+                  }}
+                />
+                {/* Selected range track */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: `${((ndviRange[0] + 1) / 2) * 100}%`,
+                    width: `${((ndviRange[1] - ndviRange[0]) / 2) * 100}%`,
+                    height: "4px",
+                    transform: "translateY(-50%)",
+                    background: "#007bff",
+                    borderRadius: "2px",
+                  }}
+                />
+                <input
+                  type="range"
+                  min={-1}
+                  max={1}
+                  step={0.01}
+                  value={ndviRange[0]}
+                  onChange={(e) =>
+                    setNdviRange([
+                      Math.min(parseFloat(e.target.value), ndviRange[1] - 0.01),
+                      ndviRange[1],
+                    ])
+                  }
+                  style={{
+                    position: "absolute",
+                    width: "100%",
+                    pointerEvents: "none",
+                    background: "transparent",
+                    zIndex: 1,
+                  }}
+                  className="range-thumb"
+                />
+                <input
+                  type="range"
+                  min={-1}
+                  max={1}
+                  step={0.01}
+                  value={ndviRange[1]}
+                  onChange={(e) =>
+                    setNdviRange([
+                      ndviRange[0],
+                      Math.max(parseFloat(e.target.value), ndviRange[0] + 0.01),
+                    ])
+                  }
+                  style={{
+                    position: "absolute",
+                    width: "100%",
+                    pointerEvents: "none",
+                    background: "transparent",
+                    zIndex: 2,
+                  }}
+                  className="range-thumb"
+                />
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginTop: "8px",
+                  fontSize: "12px",
+                  color: "#666",
+                }}
+              >
+                <span>-1</span>
+                <span>
+                  {ndviRange[0].toFixed(2)} to {ndviRange[1].toFixed(2)}
+                </span>
+                <span>+1</span>
+              </div>
+              <style>{`
+                .range-thumb {
+                  -webkit-appearance: none;
+                  appearance: none;
+                  height: 4px;
+                }
+                .range-thumb::-webkit-slider-thumb {
+                  -webkit-appearance: none;
+                  appearance: none;
+                  width: 16px;
+                  height: 16px;
+                  border-radius: 50%;
+                  background: #007bff;
+                  cursor: pointer;
+                  pointer-events: auto;
+                  border: 2px solid white;
+                  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                }
+                .range-thumb::-moz-range-thumb {
+                  width: 16px;
+                  height: 16px;
+                  border-radius: 50%;
+                  background: #007bff;
+                  cursor: pointer;
+                  pointer-events: auto;
+                  border: 2px solid white;
+                  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                }
+              `}</style>
+            </div>
+          )}
         </div>
       </div>
     </div>
