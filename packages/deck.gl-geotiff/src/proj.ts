@@ -3,6 +3,7 @@ import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 
 export type SupportedCrsUnit =
+  | "m"
   | "metre"
   | "meter"
   | "meters"

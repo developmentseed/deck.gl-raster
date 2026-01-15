@@ -1,11 +1,13 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer, MosaicLayer, proj } from "@developmentseed/deck.gl-geotiff";
-import { toProj4 } from "geotiff-geokeys-to-proj4";
+import type { proj } from "@developmentseed/deck.gl-geotiff";
+import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
 import "maplibre-gl/dist/maplibre-gl.css";
+import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import "./proj";
 
 function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -13,15 +15,23 @@ function DeckGLOverlay(props: DeckProps) {
   return null;
 }
 
-async function geoKeysParser(
+async function epsgLookup(
   geoKeys: Record<string, any>,
 ): Promise<proj.ProjectionInfo> {
-  const projDefinition = toProj4(geoKeys as any);
+  const projectionCode: number | null =
+    geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || null;
+
+  if (projectionCode === null) {
+    throw new Error("No projection code found in geoKeys");
+  }
+
+  const crsString = `EPSG:${projectionCode}`;
+  const crs = proj4.defs(crsString);
 
   return {
-    def: projDefinition.proj4,
-    parsed: proj.parseCrs(projDefinition.proj4),
-    coordinatesUnits: projDefinition.coordinatesUnits as proj.SupportedCrsUnit,
+    def: crsString,
+    parsed: crs,
+    coordinatesUnits: crs.units as proj.SupportedCrsUnit,
   };
 }
 
@@ -51,7 +61,7 @@ export default function App() {
       try {
         const params = {
           collections: "naip",
-          bbox: [-107.58, 37.82, -104.52, 40.45],
+          bbox: [-107.58, 37.82, -104.52, 40.45].join(","),
           filter: JSON.stringify({
             op: "=",
             args: [{ property: "naip:state" }, "co"],
@@ -97,8 +107,7 @@ export default function App() {
         return new COGLayer({
           id: `cog-${url}`,
           geotiff: url,
-          geoKeysParser,
-          // debug: true,
+          geoKeysParser: epsgLookup,
           signal,
         });
       },

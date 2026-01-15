@@ -135,6 +135,7 @@ function metersPerUnit(
 ): number {
   const unit = crsUnit || parsedCrs.units;
   switch (unit) {
+    case "m":
     case "metre":
     case "meter":
     case "meters":
