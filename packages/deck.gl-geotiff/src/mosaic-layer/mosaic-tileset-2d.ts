@@ -32,11 +32,11 @@ type Tileset2DProps = any;
  * This is intended to be used for a collection of image mosaics, where we want
  * to render all images currently visible in the viewport.
  */
-export class MosaicTileset2D<M extends MosaicSource> extends Tileset2D {
-  private sources: (TileIndex & M)[];
+export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
+  private sources: (TileIndex & MosaicT)[];
   private index: Flatbush;
 
-  constructor(sources: M[], opts: Tileset2DProps) {
+  constructor(sources: MosaicT[], opts: Tileset2DProps) {
     super(opts);
 
     // Add x,y,z to each source for TileIndex compatibility
@@ -68,7 +68,7 @@ export class MosaicTileset2D<M extends MosaicSource> extends Tileset2D {
     viewport: Viewport;
     maxZoom?: number;
     minZoom?: number;
-  }): (TileIndex & M)[] {
+  }): (TileIndex & MosaicT)[] {
     if (viewport.zoom < (minZoom ?? -Infinity)) {
       return [];
     }
