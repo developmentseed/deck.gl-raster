@@ -20,13 +20,13 @@ const defaultProps: Partial<MosaicLayerProps> = {};
 
 export class MosaicLayer<
   MosaicT extends MosaicSource = MosaicSource,
-> extends CompositeLayer<MosaicLayerProps> {
+> extends CompositeLayer<MosaicLayerProps<MosaicT>> {
   static override layerName = "MosaicLayer";
   static override defaultProps = defaultProps;
 
   renderTileLayer(
     mosaicSources: MosaicT[],
-    renderSource: MosaicLayerProps["renderSource"],
+    renderSource: MosaicLayerProps<MosaicT>["renderSource"],
   ): TileLayer {
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
       constructor(opts: any) {
