@@ -3,8 +3,11 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { proj } from "@developmentseed/deck.gl-geotiff";
 import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
-import { CreateTexture } from "@developmentseed/deck.gl-raster/gpu-modules";
-import type { Texture } from "@luma.gl/core";
+import {
+  Colormap,
+  CreateTexture,
+} from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 import type { GeoTIFF, GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
 import { fromUrl } from "geotiff";
@@ -15,6 +18,7 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer";
 import "./proj";
+import colormap from "./cfastie";
 
 /** Bounding box query passed to Microsoft Planetary Computer STAC API */
 const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];
@@ -165,7 +169,10 @@ function renderFalseColor(tileData: TextureDataT): RasterModule[] {
   ];
 }
 
-function renderNDVI(tileData: TextureDataT): RasterModule[] {
+function renderNDVI(
+  tileData: TextureDataT,
+  colormapTexture: Texture,
+): RasterModule[] {
   const { texture } = tileData;
   return [
     {
@@ -178,33 +185,33 @@ function renderNDVI(tileData: TextureDataT): RasterModule[] {
       module: ndvi,
     },
     {
+      module: Colormap,
+      props: {
+        colormapTexture,
+      },
+    },
+    {
       module: SetAlpha1,
     },
   ];
 }
 
-function renderSource(
-  source: STACItem,
-  { data, signal }: { data?: GeoTIFF; signal?: AbortSignal },
-) {
-  const url = source.assets.image.href;
+type RenderMode = "trueColor" | "falseColor" | "ndvi";
 
-  return new COGLayer<TextureDataT>({
-    id: `cog-${url}`,
-    geotiff: data,
-    geoKeysParser: epsgLookup,
-    getTileData,
-    // renderTile: renderRGB,
-    renderTile: renderFalseColor,
-    signal,
-  });
-}
+const RENDER_MODE_OPTIONS: { value: RenderMode; label: string }[] = [
+  { value: "trueColor", label: "True Color" },
+  { value: "falseColor", label: "False Color Infrared" },
+  { value: "ndvi", label: "NDVI" },
+];
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [stacItems, setStacItems] = useState<STACItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [renderMode, setRenderMode] = useState<RenderMode>("trueColor");
+  const [device, setDevice] = useState<Device | null>(null);
+  const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
 
   // Fetch STAC items on mount
   useEffect(() => {
@@ -246,9 +253,27 @@ export default function App() {
     fetchSTACItems();
   }, []);
 
+  useEffect(() => {
+    if (!device) return;
+
+    // Create colormap texture
+    const texture = device.createTexture({
+      data: colormap.data,
+      width: colormap.width,
+      height: colormap.height,
+      format: "rgba8unorm",
+      sampler: {
+        addressModeU: "clamp-to-edge",
+        addressModeV: "clamp-to-edge",
+      },
+    });
+
+    setColormapTexture(texture);
+  }, [device]);
+
   const layers = [];
 
-  if (stacItems.length > 0) {
+  if (stacItems.length > 0 && colormapTexture) {
     const mosaicLayer = new MosaicLayer<STACItem, GeoTIFF>({
       id: "naip-mosaic-layer",
       sources: stacItems,
@@ -260,7 +285,22 @@ export default function App() {
         const tiff = await fromUrl(url, {}, signal);
         return tiff;
       },
-      renderSource,
+      renderSource: (source, { data, signal }) => {
+        const url = source.assets.image.href;
+        return new COGLayer<TextureDataT>({
+          id: `cog-${url}`,
+          geotiff: data,
+          geoKeysParser: epsgLookup,
+          getTileData,
+          renderTile:
+            renderMode === "trueColor"
+              ? renderRGB
+              : renderMode === "falseColor"
+                ? renderFalseColor
+                : (tileData) => renderNDVI(tileData, colormapTexture),
+          signal,
+        });
+      },
       // We have a max of 1000 STAC items fetched from the Microsoft STAC API;
       // this isn't so large that we can't just cache all the GeoTIFF header
       // metadata instances
@@ -288,7 +328,11 @@ export default function App() {
         minZoom={4}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={layers} interleaved />
+        <DeckGLOverlay
+          layers={layers}
+          interleaved
+          onDeviceInitialized={setDevice}
+        />
       </MaplibreMap>
 
       {/* UI Overlay Container */}
@@ -324,6 +368,32 @@ export default function App() {
             {error && `Error: ${error}`}
             {!loading && !error && `Fetched ${stacItems.length} STAC Items.`}
           </p>
+          <div>
+            <label
+              htmlFor="render-mode"
+              style={{ fontSize: "14px", fontWeight: 500 }}
+            >
+              Render Mode
+            </label>
+            <select
+              id="render-mode"
+              value={renderMode}
+              onChange={(e) => setRenderMode(e.target.value as RenderMode)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                fontSize: "14px",
+                borderRadius: "4px",
+                border: "1px solid #ccc",
+              }}
+            >
+              {RENDER_MODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
     </div>
