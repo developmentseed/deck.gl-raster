@@ -168,6 +168,14 @@ export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
       };
     },
   ) => void;
+
+  /** A user-provided AbortSignal to cancel loading.
+   *
+   * This can be useful in combination with the MosaicLayer, so that when a
+   * mosaic source is out of the viewport, all of its tile requests are
+   * automatically aborted.
+   */
+  signal?: AbortSignal;
 }
 
 const defaultProps: Partial<COGLayerProps> = {
@@ -291,10 +299,16 @@ export class COGLayer<
     const getTileData =
       this.props.getTileData || this.state.defaultGetTileData!;
 
+    // Combine abort signals if both are defined
+    const combinedSignal =
+      signal && this.props.signal
+        ? AbortSignal.any([signal, this.props.signal])
+        : signal || this.props.signal;
+
     const data = await getTileData(geotiffImage, {
       device: this.context.device,
       window,
-      signal,
+      signal: combinedSignal,
       pool: this.props.pool || defaultPool(),
     });
 

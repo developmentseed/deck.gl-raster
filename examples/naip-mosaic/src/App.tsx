@@ -99,6 +99,7 @@ export default function App() {
           geotiff: url,
           geoKeysParser,
           // debug: true,
+          signal,
         });
       },
     });
