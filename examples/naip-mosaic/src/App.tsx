@@ -147,7 +147,7 @@ uniform ${NDVI_FILTER_MODULE_NAME}Uniforms {
 `;
 
 // TODO: enable NDVI filtering
-const ndviFilter = {
+const _ndviFilter = {
   name: NDVI_FILTER_MODULE_NAME,
   fs: ndviUniformBlock,
   inject: {
@@ -479,7 +479,10 @@ export default function App() {
           {/* TODO: enable pixel filter */}
           {false && renderMode === "ndvi" && (
             <div style={{ marginTop: "16px" }}>
-              <label style={{ fontSize: "14px", fontWeight: 500 }}>
+              <label
+                htmlFor="ndvi-filter-min"
+                style={{ fontSize: "14px", fontWeight: 500 }}
+              >
                 NDVI Filter
               </label>
               <div
@@ -516,6 +519,7 @@ export default function App() {
                   }}
                 />
                 <input
+                  id="ndvi-filter-min"
                   type="range"
                   min={-1}
                   max={1}
