@@ -15,7 +15,7 @@ export const WhiteIsZero = {
   inject: {
     "fs:#decl": shader,
     "fs:DECKGL_FILTER_COLOR": /* glsl */ `
-      color.rgb = white_zero_to_rgb(color);
+      color.rgb = white_zero_to_rgb(color.r);
     `,
   },
 } as const satisfies ShaderModule;
