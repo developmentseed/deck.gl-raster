@@ -51,6 +51,13 @@
     "proj4": "^2.20.2",
     "zarrita": "^0.5.4"
   },
+  "peerDependencies": {
+    "@deck.gl/core": "^9.2.5",
+    "@deck.gl/geo-layers": "^9.2.5",
+    "@deck.gl/layers": "^9.2.5",
+    "@deck.gl/mesh-layers": "^9.2.5",
+    "@luma.gl/core": "^9.2.5"
+  },
   "volta": {
     "extends": "../../package.json"
   }
