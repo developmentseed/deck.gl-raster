@@ -9,6 +9,7 @@ import type {
   _Tile2DHeader as Tile2DHeader,
   TileLayerProps,
   _TileLoadProps as TileLoadProps,
+  _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
@@ -33,10 +34,6 @@ import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { fromGeoTransform } from "./geotiff-reprojection.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
 import { epsgIoGeoKeyParser } from "./proj.js";
-
-// Workaround until upstream exposes props
-// https://github.com/visgl/deck.gl/pull/9917
-type Tileset2DProps = any;
 
 /**
  * Minimum interface that **must** be returned from getTileData.

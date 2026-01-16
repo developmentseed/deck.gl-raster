@@ -1,4 +1,5 @@
 import type { Viewport } from "@deck.gl/core";
+import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import Flatbush from "flatbush";
 
@@ -21,10 +22,6 @@ export type MosaicSource = {
    */
   bbox: [number, number, number, number];
 };
-
-// Include correct Tileset2DProps type when exported from deck.gl
-// https://github.com/visgl/deck.gl/pull/9917
-type Tileset2DProps = any;
 
 /**
  * A deck.gl Tileset2D for navigating an arbitrary collection of bounding boxes.

@@ -6,15 +6,12 @@
  */
 
 import type { Viewport } from "@deck.gl/core";
+import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import type { Matrix4 } from "@math.gl/core";
 
 import { getTileIndices } from "./raster-tile-traversal";
 import type { Bounds, TileIndex, TileMatrixSet, ZRange } from "./types";
-
-// Include correct Tileset2DProps type when exported from deck.gl
-// https://github.com/visgl/deck.gl/pull/9917
-type Tileset2DProps = any;
 
 /**
  * RasterTileset2D with proper frustum culling
