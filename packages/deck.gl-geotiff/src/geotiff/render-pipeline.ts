@@ -1,10 +1,12 @@
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
+  BlackIsZero,
   CMYKToRGB,
   Colormap,
   CreateTexture,
   cieLabToRGB,
   FilterNoDataVal,
+  WhiteIsZero,
   YCbCrToRGB,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
@@ -178,8 +180,19 @@ function photometricInterpretationToRGB(
   ColorMap?: Uint16Array,
 ): RasterModule | null {
   switch (PhotometricInterpretation) {
+    case PhotometricInterpretationT.WhiteIsZero:
+      return {
+        module: WhiteIsZero,
+      };
+
+    case PhotometricInterpretationT.BlackIsZero:
+      return {
+        module: BlackIsZero,
+      };
+
     case PhotometricInterpretationT.RGB:
       return null;
+
     case PhotometricInterpretationT.Palette: {
       if (!ColorMap) {
         throw new Error(
@@ -211,14 +224,17 @@ function photometricInterpretationToRGB(
       return {
         module: CMYKToRGB,
       };
+
     case PhotometricInterpretationT.YCbCr:
       return {
         module: YCbCrToRGB,
       };
+
     case PhotometricInterpretationT.CIELab:
       return {
         module: cieLabToRGB,
       };
+
     default:
       throw new Error(
         `Unsupported PhotometricInterpretation ${PhotometricInterpretation}`,
