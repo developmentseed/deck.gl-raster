@@ -6,6 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import { DeckGLSplitView } from "./components/DeckGLSplitView";
 import { InfoPanel } from "./components/InfoPanel";
 import { UIOverlay } from "./components/UIOverlay";
 
@@ -34,6 +35,7 @@ export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
+  const [comparisonMode, setComparisonMode] = useState(false);
 
   const cog_layer = new COGLayer({
     id: "cog-layer",
@@ -61,26 +63,32 @@ export default function App() {
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      <MaplibreMap
-        ref={mapRef}
-        initialViewState={{
-          longitude: 0,
-          latitude: 0,
-          zoom: 3,
-          pitch: 0,
-          bearing: 0,
-        }}
-        mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-      >
-        <DeckGLOverlay layers={[cog_layer]} interleaved />
-      </MaplibreMap>
+      {comparisonMode ? (
+        <DeckGLSplitView debug={debug} debugOpacity={debugOpacity} />
+      ) : (
+        <MaplibreMap
+          ref={mapRef}
+          initialViewState={{
+            longitude: 0,
+            latitude: 0,
+            zoom: 3,
+            pitch: 0,
+            bearing: 0,
+          }}
+          mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+        >
+          <DeckGLOverlay layers={[cog_layer]} />
+        </MaplibreMap>
+      )}
 
       <UIOverlay>
         <InfoPanel
           debug={debug}
           debugOpacity={debugOpacity}
+          comparisonMode={comparisonMode}
           onDebugChange={setDebug}
           onDebugOpacityChange={setDebugOpacity}
+          onComparisonModeChange={setComparisonMode}
         />
       </UIOverlay>
     </div>
