@@ -53,11 +53,11 @@
     "proj4": "^2.20.2"
   },
   "peerDependencies": {
-    "@deck.gl/core": "^9.2.5",
-    "@deck.gl/geo-layers": "^9.2.5",
-    "@deck.gl/layers": "^9.2.5",
-    "@deck.gl/mesh-layers": "^9.2.5",
-    "@luma.gl/core": "^9.2.5"
+    "@deck.gl/core": "^9.2.6",
+    "@deck.gl/geo-layers": "^9.2.6",
+    "@deck.gl/layers": "^9.2.6",
+    "@deck.gl/mesh-layers": "^9.2.6",
+    "@luma.gl/core": "^9.2.6"
   },
   "volta": {
     "extends": "../../package.json"

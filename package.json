@@ -24,12 +24,17 @@
   },
   "pnpm": {
     "overrides": {
-      "@luma.gl/constants": "9.2.5",
-      "@luma.gl/core": "9.2.5",
-      "@luma.gl/engine": "9.2.5",
-      "@luma.gl/gltf": "9.2.5",
-      "@luma.gl/shadertools": "9.2.5",
-      "@luma.gl/webgl": "9.2.5"
+      "@deck.gl/core": "9.2.6",
+      "@deck.gl/geo-layers": "9.2.6",
+      "@deck.gl/layers": "9.2.6",
+      "@deck.gl/mapbox": "9.2.6",
+      "@deck.gl/mesh-layers": "9.2.6",
+      "@luma.gl/constants": "9.2.6",
+      "@luma.gl/core": "9.2.6",
+      "@luma.gl/engine": "9.2.6",
+      "@luma.gl/gltf": "9.2.6",
+      "@luma.gl/shadertools": "9.2.6",
+      "@luma.gl/webgl": "9.2.6"
     }
   },
   "packageManager": "pnpm@10.25.0",
