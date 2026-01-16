@@ -168,7 +168,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       return null;
     }
 
-    return new PolygonLayer(
+    const polygonLayer = new PolygonLayer(
       this.getSubLayerProps({
         id: "polygon",
         // https://deck.gl/docs/developer-guide/performance#supply-binary-blobs-to-the-data-prop
@@ -219,6 +219,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         pickable: false,
       }),
     );
+    console.log("polygonLayer", polygonLayer);
+    return polygonLayer;
   }
 
   /** Create assembled render pipeline from the renderPipeline prop input. */
@@ -284,7 +286,10 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       }),
     );
 
-    const layers: Layer[] = [meshLayer];
+    const layers: Layer[] = [];
+    if (!debug) {
+      layers.push(meshLayer);
+    }
     if (debug) {
       const debugLayer = this.renderDebugLayer();
       if (debugLayer) {
