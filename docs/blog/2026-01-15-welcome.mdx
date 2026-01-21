@@ -7,6 +7,8 @@ tags: [announcement, deck.gl, geospatial]
 ---
 
 import ColorMapDemo from '@site/src/components/ColorMapDemo';
+import BrowserMap from '@site/src/components/Map';
+import COGMap from '@site/src/components/Map/COGMap';
 
 Welcome to the deck.gl-raster documentation! This blog will feature updates, tutorials, and tips for working with raster data in deck.gl.
 
@@ -15,6 +17,14 @@ Welcome to the deck.gl-raster documentation! This blog will feature updates, tut
 ## What is deck.gl-raster?
 
 deck.gl-raster is a collection of packages that enable GPU-accelerated visualization of georeferenced raster data in [deck.gl](https://deck.gl). Whether you're working with Cloud-Optimized GeoTIFFs, Zarr arrays, or other raster formats, these packages provide efficient, scalable rendering.
+
+## Live Demo
+
+Here's a live COG layer rendering Sentinel-2 imagery:
+
+<BrowserMap height="400px">
+  <COGMap url="https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif" />
+</BrowserMap>
 
 ## Interactive Example: Color Maps
 

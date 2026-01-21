@@ -16,9 +16,9 @@ import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer";
-import "./proj";
-import colormap from "./cfastie";
+import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer.ts";
+import "./proj.ts";
+import colormap from "./cfastie.ts";
 
 /** Bounding box query passed to Microsoft Planetary Computer STAC API */
 const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];

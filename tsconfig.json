@@ -4,6 +4,7 @@
     "module": "ESNext",
     "lib": ["ES2022", "DOM"],
     "moduleResolution": "bundler",
+    "rewriteRelativeImportExtensions": true,
     "resolveJsonModule": true,
     "allowJs": false,
     "checkJs": false,

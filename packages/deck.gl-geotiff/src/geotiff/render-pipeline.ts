@@ -9,11 +9,11 @@ import {
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
-import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
-import { addAlphaChannel, parseColormap, parseGDALNoData } from "./geotiff";
-import { inferTextureFormat } from "./texture";
-import type { ImageFileDirectory } from "./types";
-import { PhotometricInterpretationT } from "./types";
+import type { COGLayerProps, GetTileDataOptions } from "../cog-layer.ts";
+import { addAlphaChannel, parseColormap, parseGDALNoData } from "./geotiff.ts";
+import { inferTextureFormat } from "./texture.ts";
+import type { ImageFileDirectory } from "./types.ts";
+import { PhotometricInterpretationT } from "./types.ts";
 
 export type TextureDataT = {
   height: number;

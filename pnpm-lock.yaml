@@ -36,18 +36,48 @@ importers:
 
   docs:
     dependencies:
+      '@deck.gl/core':
+        specifier: 9.2.6
+        version: 9.2.6
+      '@deck.gl/geo-layers':
+        specifier: 9.2.6
+        version: 9.2.6(@deck.gl/core@9.2.6)(@deck.gl/extensions@9.2.5(@deck.gl/core@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/layers@9.2.6(@deck.gl/core@9.2.6)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/mesh-layers@9.2.6(@deck.gl/core@9.2.6)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@loaders.gl/core@4.3.4)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
+      '@deck.gl/layers':
+        specifier: 9.2.6
+        version: 9.2.6(@deck.gl/core@9.2.6)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
+      '@deck.gl/mapbox':
+        specifier: 9.2.6
+        version: 9.2.6(@deck.gl/core@9.2.6)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@math.gl/web-mercator@4.1.0)
+      '@deck.gl/mesh-layers':
+        specifier: 9.2.6
+        version: 9.2.6(@deck.gl/core@9.2.6)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))
+      '@developmentseed/deck.gl-geotiff':
+        specifier: workspace:*
+        version: link:../packages/deck.gl-geotiff
+      '@developmentseed/deck.gl-raster':
+        specifier: workspace:*
+        version: link:../packages/deck.gl-raster
       '@docusaurus/core':
         specifier: ^3.7.0
         version: 3.9.2(@mdx-js/react@3.1.1(@types/react@19.2.7)(react@19.2.3))(esbuild@0.27.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.7.3)
       '@docusaurus/preset-classic':
         specifier: ^3.7.0
         version: 3.9.2(@mdx-js/react@3.1.1(@types/react@19.2.7)(react@19.2.3))(@types/react@19.2.7)(esbuild@0.27.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.7.3)
+      '@luma.gl/core':
+        specifier: 9.2.6
+        version: 9.2.6
+      '@luma.gl/shadertools':
+        specifier: 9.2.6
+        version: 9.2.6(@luma.gl/core@9.2.6)
       '@mdx-js/react':
         specifier: ^3.0.0
         version: 3.1.1(@types/react@19.2.7)(react@19.2.3)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      maplibre-gl:
+        specifier: ^5.0.0
+        version: 5.15.0
       prism-react-renderer:
         specifier: ^2.4.1
         version: 2.4.1(react@19.2.3)
@@ -57,6 +87,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.3(react@19.2.3)
+      react-map-gl:
+        specifier: ^8.0.0
+        version: 8.1.0(maplibre-gl@5.15.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
     devDependencies:
       '@docusaurus/module-type-aliases':
         specifier: ^3.7.0

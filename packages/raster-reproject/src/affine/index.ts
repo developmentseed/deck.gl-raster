@@ -1,2 +1,2 @@
-export type { GeoTransform } from "./affine.js";
-export { applyAffine, invertGeoTransform } from "./affine.js";
+export type { GeoTransform } from "./affine.ts";
+export { applyAffine, invertGeoTransform } from "./affine.ts";

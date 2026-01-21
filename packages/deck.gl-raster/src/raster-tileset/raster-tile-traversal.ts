@@ -31,7 +31,7 @@ import type {
   TileMatrix,
   TileMatrixSet,
   ZRange,
-} from "./types.js";
+} from "./types.ts";
 
 /**
  * The size of the entire world in deck.gl's common coordinate space.

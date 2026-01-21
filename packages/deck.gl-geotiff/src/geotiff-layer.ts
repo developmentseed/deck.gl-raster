@@ -9,10 +9,10 @@ import {
   fetchGeoTIFF,
   getGeographicBounds,
   loadRgbImage,
-} from "./geotiff/geotiff.js";
-import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
-import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
-import { epsgIoGeoKeyParser } from "./proj.js";
+} from "./geotiff/geotiff.ts";
+import { extractGeotiffReprojectors } from "./geotiff-reprojection.ts";
+import type { GeoKeysParser, ProjectionInfo } from "./proj.ts";
+import { epsgIoGeoKeyParser } from "./proj.ts";
 
 export interface GeoTIFFLayerProps extends CompositeLayerProps {
   /**
