@@ -15,7 +15,9 @@
       "!!**/node_modules",
       "!!**/coverage",
       "!!**/*.log",
-      "!!**/fixtures"
+      "!!**/fixtures",
+      "!!docs/.docusaurus",
+      "!!docs/build"
     ]
   },
   "formatter": {
