@@ -1,3 +1,4 @@
+docs/build/
 *.xml
 
 # pixi environments
@@ -118,6 +119,7 @@ dist
 
 # Docusaurus cache and generated files
 .docusaurus
+docs/docs/api/
 
 # Serverless directories
 .serverless/

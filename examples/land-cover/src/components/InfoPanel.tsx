@@ -1,5 +1,5 @@
-import { HelpIcon } from "./HelpIcon";
-import { Legend } from "./Legend";
+import { HelpIcon } from "./HelpIcon.tsx";
+import { Legend } from "./Legend.tsx";
 
 interface InfoPanelProps {
   debug: boolean;

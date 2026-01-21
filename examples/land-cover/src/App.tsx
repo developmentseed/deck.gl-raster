@@ -6,8 +6,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-import { InfoPanel } from "./components/InfoPanel";
-import { UIOverlay } from "./components/UIOverlay";
+import { InfoPanel } from "./components/InfoPanel.tsx";
+import { UIOverlay } from "./components/UIOverlay.tsx";
 
 function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));

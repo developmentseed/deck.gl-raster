@@ -2,8 +2,8 @@ import type { CompositeLayerProps, Layer, LayersList } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
-import type { MosaicSource } from "./mosaic-tileset-2d";
-import { MosaicTileset2D } from "./mosaic-tileset-2d";
+import type { MosaicSource } from "./mosaic-tileset-2d.ts";
+import { MosaicTileset2D } from "./mosaic-tileset-2d.ts";
 
 export type MosaicLayerProps<
   MosaicT extends MosaicSource = MosaicSource,

@@ -23,17 +23,17 @@ import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device } from "@luma.gl/core";
 import type { BaseClient, GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
 import proj4 from "proj4";
-import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
+import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.ts";
 import {
   defaultPool,
   fetchGeoTIFF,
   getGeographicBounds,
-} from "./geotiff/geotiff.js";
-import type { TextureDataT } from "./geotiff/render-pipeline.js";
-import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
-import { fromGeoTransform } from "./geotiff-reprojection.js";
-import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
-import { epsgIoGeoKeyParser } from "./proj.js";
+} from "./geotiff/geotiff.ts";
+import type { TextureDataT } from "./geotiff/render-pipeline.ts";
+import { inferRenderPipeline } from "./geotiff/render-pipeline.ts";
+import { fromGeoTransform } from "./geotiff-reprojection.ts";
+import type { GeoKeysParser, ProjectionInfo } from "./proj.ts";
+import { epsgIoGeoKeyParser } from "./proj.ts";
 
 /**
  * Minimum interface that **must** be returned from getTileData.

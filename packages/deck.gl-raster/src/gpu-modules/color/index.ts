@@ -1,3 +1,3 @@
-export { cieLabToRGB } from "./cielab";
-export { CMYKToRGB } from "./cmyk";
-export { YCbCrToRGB } from "./ycbcr";
+export { cieLabToRGB } from "./cielab.ts";
+export { CMYKToRGB } from "./cmyk.ts";
+export { YCbCrToRGB } from "./ycbcr.ts";

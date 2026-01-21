@@ -10,8 +10,8 @@ import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import type { Matrix4 } from "@math.gl/core";
 
-import { getTileIndices } from "./raster-tile-traversal";
-import type { Bounds, TileIndex, TileMatrixSet, ZRange } from "./types";
+import { getTileIndices } from "./raster-tile-traversal.ts";
+import type { Bounds, TileIndex, TileMatrixSet, ZRange } from "./types.ts";
 
 /**
  * RasterTileset2D with proper frustum culling

@@ -1,7 +1,7 @@
 import { fromUrl } from "geotiff";
 import { describe, expect, it } from "vitest";
-import { parseCOGTileMatrixSet } from "../src";
-import { epsgIoGeoKeyParser } from "../src/proj";
+import { parseCOGTileMatrixSet } from "../src/index.ts";
+import { epsgIoGeoKeyParser } from "../src/proj.ts";
 
 describe("create TileMatrixSet from COG", () => {
   it("creates TMS", async () => {

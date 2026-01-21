@@ -15,7 +15,9 @@
       "!!**/node_modules",
       "!!**/coverage",
       "!!**/*.log",
-      "!!**/fixtures"
+      "!!**/fixtures",
+      "!!docs/.docusaurus",
+      "!!docs/build"
     ]
   },
   "formatter": {
@@ -36,6 +38,9 @@
     "enabled": true,
     "rules": {
       "recommended": true,
+      "correctness": {
+        "useImportExtensions": "error"
+      },
       "style": {
         "noNonNullAssertion": "off",
         "useImportType": {

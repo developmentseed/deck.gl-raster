@@ -5,9 +5,9 @@ import type {
 } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF, GeoTIFFImage } from "geotiff";
 import proj4, { type ProjectionDefinition } from "proj4";
-import Ellipsoid from "./ellipsoids.js";
-import { extractGeotransform } from "./geotiff-reprojection";
-import type { GeoKeysParser, ProjectionInfo, SupportedCrsUnit } from "./proj";
+import Ellipsoid from "./ellipsoids.ts";
+import { extractGeotransform } from "./geotiff-reprojection.ts";
+import type { GeoKeysParser, ProjectionInfo, SupportedCrsUnit } from "./proj.ts";
 
 // 0.28 mm per pixel
 // https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15

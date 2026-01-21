@@ -1,18 +1,18 @@
-export type { COGLayerProps } from "./cog-layer.js";
-export { COGLayer } from "./cog-layer.js";
-export { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
-export { loadRgbImage, parseColormap } from "./geotiff/geotiff.js";
-export * as texture from "./geotiff/texture.js";
-export type { GeoTIFFLayerProps } from "./geotiff-layer.js";
-export { GeoTIFFLayer } from "./geotiff-layer.js";
+export type { COGLayerProps } from "./cog-layer.ts";
+export { COGLayer } from "./cog-layer.ts";
+export { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.ts";
+export { loadRgbImage, parseColormap } from "./geotiff/geotiff.ts";
+export * as texture from "./geotiff/texture.ts";
+export type { GeoTIFFLayerProps } from "./geotiff-layer.ts";
+export { GeoTIFFLayer } from "./geotiff-layer.ts";
 export {
   extractGeotiffReprojectors,
   fromGeoTransform,
-} from "./geotiff-reprojection.js";
-export type { MosaicLayerProps } from "./mosaic-layer/mosaic-layer.js";
-export { MosaicLayer } from "./mosaic-layer/mosaic-layer.js";
+} from "./geotiff-reprojection.ts";
+export type { MosaicLayerProps } from "./mosaic-layer/mosaic-layer.ts";
+export { MosaicLayer } from "./mosaic-layer/mosaic-layer.ts";
 export {
   type MosaicSource,
   MosaicTileset2D,
-} from "./mosaic-layer/mosaic-tileset-2d";
-export * as proj from "./proj.js";
+} from "./mosaic-layer/mosaic-tileset-2d.ts";
+export * as proj from "./proj.ts";

@@ -1,2 +1,2 @@
-export type { ReprojectionFns } from "./delatin.js";
-export { RasterReprojector } from "./delatin.js";
+export type { ReprojectionFns } from "./delatin.ts";
+export { RasterReprojector } from "./delatin.ts";

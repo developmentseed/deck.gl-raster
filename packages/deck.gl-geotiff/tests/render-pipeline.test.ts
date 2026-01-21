@@ -1,8 +1,8 @@
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
 import { globals } from "geotiff";
 import { describe, expect, it } from "vitest";
-import { inferRenderPipeline } from "../src/geotiff/render-pipeline";
-import type { ImageFileDirectory } from "../src/geotiff/types";
+import { inferRenderPipeline } from "../src/geotiff/render-pipeline.ts";
+import type { ImageFileDirectory } from "../src/geotiff/types.ts";
 
 const MOCK_DEVICE = {
   createTexture: (x: any) => x,
