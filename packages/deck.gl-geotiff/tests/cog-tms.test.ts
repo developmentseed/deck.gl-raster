@@ -88,6 +88,7 @@ describe("create TileMatrixSet from COG", () => {
 
 describe("metersPerUnit", () => {
   it("handles lowercase us survey foot", () => {
+    // @ts-expect-error testing case insensitivity with standard casing
     expect(metersPerUnit({}, "us survey foot")).toBe(1200 / 3937);
   });
 
