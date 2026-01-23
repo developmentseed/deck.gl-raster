@@ -1,7 +1,8 @@
 import { fromUrl } from "geotiff";
 import { describe, expect, it } from "vitest";
-import { metersPerUnit, parseCOGTileMatrixSet } from "../src";
+import { parseCOGTileMatrixSet } from "../src";
 import { epsgIoGeoKeyParser } from "../src/proj";
+import { __TEST_EXPORTS as TestExports } from "../src";
 
 describe("create TileMatrixSet from COG", () => {
   it("creates TMS", async () => {
@@ -89,11 +90,11 @@ describe("create TileMatrixSet from COG", () => {
 describe("metersPerUnit", () => {
   it("handles lowercase us survey foot", () => {
     // @ts-expect-error testing case insensitivity with standard casing
-    expect(metersPerUnit({}, "us survey foot")).toBe(1200 / 3937);
+    expect(TestExports.metersPerUnit({}, "us survey foot")).toBe(1200 / 3937);
   });
 
   it("handles mixed case US Survey Foot", () => {
     // @ts-expect-error testing case insensitivity with non-standard casing
-    expect(metersPerUnit({}, "US Survey Foot")).toBe(1200 / 3937);
+    expect(TestExports.metersPerUnit({}, "US Survey Foot")).toBe(1200 / 3937);
   });
 });

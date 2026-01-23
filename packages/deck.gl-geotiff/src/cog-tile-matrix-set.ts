@@ -129,7 +129,7 @@ export async function parseCOGTileMatrixSet(
  * `geotiff-geokeys-to-proj4` doesn't have a unit defined.
  */
 // https://github.com/developmentseed/morecantile/blob/7c95a11c491303700d6e33e9c1607f2719584dec/morecantile/utils.py#L67-L90
-export function metersPerUnit(
+function metersPerUnit(
   parsedCrs: ProjectionDefinition,
   crsUnit?: SupportedCrsUnit,
 ): number {
@@ -260,3 +260,7 @@ function computeWgs84BoundingBox(
     upperRight: [maxLon, maxLat],
   };
 }
+
+export const __TEST_EXPORTS = {
+  metersPerUnit,
+};
