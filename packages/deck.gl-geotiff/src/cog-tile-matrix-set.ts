@@ -129,11 +129,11 @@ export async function parseCOGTileMatrixSet(
  * `geotiff-geokeys-to-proj4` doesn't have a unit defined.
  */
 // https://github.com/developmentseed/morecantile/blob/7c95a11c491303700d6e33e9c1607f2719584dec/morecantile/utils.py#L67-L90
-function metersPerUnit(
+export function metersPerUnit(
   parsedCrs: ProjectionDefinition,
   crsUnit?: SupportedCrsUnit,
 ): number {
-  const unit = crsUnit || parsedCrs.units;
+  const unit = (crsUnit || parsedCrs.units)?.toLowerCase();
   switch (unit) {
     case "m":
     case "metre":
@@ -142,7 +142,7 @@ function metersPerUnit(
       return 1;
     case "foot":
       return 0.3048;
-    case "US survey foot":
+    case "us survey foot":
       return 1200 / 3937;
   }
 
