@@ -6,7 +6,8 @@
   "prerelease": false,
   "packages": {
     ".": {
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": false
     },
     "packages/deck.gl-geotiff": {
       "skip-changelog": true
