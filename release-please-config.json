@@ -17,7 +17,7 @@
     "packages/deck.gl-zarr": {
       "skip-changelog": true
     },
-    "raster-reproject": {
+    "packages/raster-reproject": {
       "skip-changelog": true
     }
   },
