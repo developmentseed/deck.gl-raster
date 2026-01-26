@@ -2,14 +2,24 @@
   "release-type": "node",
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
-  "changelog-path": "CHANGELOG.md",
   "draft": false,
   "prerelease": false,
   "packages": {
-    "packages/deck.gl-geotiff": {},
-    "packages/deck.gl-raster": {},
-    "packages/deck.gl-zarr": {},
-    "raster-reproject": {}
+    ".": {
+      "changelog-path": "CHANGELOG.md"
+    },
+    "packages/deck.gl-geotiff": {
+      "skip-changelog": true
+    },
+    "packages/deck.gl-raster": {
+      "skip-changelog": true
+    },
+    "packages/deck.gl-zarr": {
+      "skip-changelog": true
+    },
+    "raster-reproject": {
+      "skip-changelog": true
+    }
   },
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
 }
