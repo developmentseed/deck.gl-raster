@@ -556,8 +556,18 @@ function sampleReferencePointsInEPSG3857(
     const geoY = minY + relY * (maxY - minY);
 
     // Reproject to Web Mercator (EPSG 3857)
-    const projected = projectTo3857([geoX, geoY]);
-    refPointPositions.push(projected);
+    const [projectedX, projectedY] = projectTo3857([geoX, geoY]);
+
+    // Handle invalid projections (e.g., latitudes beyond ±85.05° produce NaN/Infinity)
+    // Clamp Y to valid Web Mercator bounds in EPSG:3857 meters
+    //
+    // Note that whenever a NaN is created from a positive geoY, that this must
+    // be the north pole. And vice versa for negative geoY.
+    const clampedY = Number.isFinite(projectedY)
+      ? projectedY
+      : Math.sign(geoY) * EPSG_3857_HALF_CIRCUMFERENCE;
+
+    refPointPositions.push([projectedX, clampedY]);
   }
 
   return refPointPositions;
