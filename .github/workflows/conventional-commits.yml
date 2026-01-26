@@ -11,8 +11,6 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
     steps:
       - uses: ytanikin/pr-conventional-commits@1.4.0
         with:
