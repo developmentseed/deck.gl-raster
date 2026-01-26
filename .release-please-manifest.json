@@ -1,7 +1,3 @@
 {
-  ".": "0.2.0",
-  "packages/deck.gl-geotiff": "0.2.0",
-  "packages/deck.gl-raster": "0.2.0",
-  "packages/deck.gl-zarr": "0.2.0",
-  "packages/raster-reproject": "0.2.0"
+  ".": "0.2.0"
 }

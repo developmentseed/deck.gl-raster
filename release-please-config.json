@@ -7,19 +7,29 @@
   "packages": {
     ".": {
       "changelog-path": "CHANGELOG.md",
-      "include-component-in-tag": false
-    },
-    "packages/deck.gl-geotiff": {
-      "skip-changelog": true
-    },
-    "packages/deck.gl-raster": {
-      "skip-changelog": true
-    },
-    "packages/deck.gl-zarr": {
-      "skip-changelog": true
-    },
-    "packages/raster-reproject": {
-      "skip-changelog": true
+      "include-component-in-tag": false,
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "packages/deck.gl-geotiff/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/deck.gl-raster/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/deck.gl-zarr/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/raster-reproject/package.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   },
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
