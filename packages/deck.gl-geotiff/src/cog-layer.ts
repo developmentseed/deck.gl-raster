@@ -431,6 +431,7 @@ export class COGLayer<
           forwardReproject,
           inverseReproject,
         ),
+      refinementStrategy: updateTileStateDefault,
     });
   }
 
@@ -475,4 +476,79 @@ function computeTileGeotransform(
   const yCoordOffset = d * xPixelOrigin + e * yPixelOrigin + f;
 
   return [a, b, xCoordOffset, d, e, yCoordOffset];
+}
+
+// bit masks
+const TILE_STATE_VISITED = 1;
+const TILE_STATE_VISIBLE = 2;
+
+// For all the selected && pending tiles:
+// - pick the closest ancestor as placeholder
+// - if no ancestor is visible, pick the closest children as placeholder
+function updateTileStateDefault(allTiles: Tile2DHeader[]) {
+  for (const tile of allTiles) {
+    tile.state = 0;
+  }
+  for (const tile of allTiles) {
+    if (tile.isSelected && !getPlaceholderInAncestors(tile)) {
+      getPlaceholderInChildren(tile);
+    }
+  }
+  for (const tile of allTiles) {
+    tile.isVisible = Boolean(tile.state! & TILE_STATE_VISIBLE);
+  }
+}
+
+// Until a selected tile and all its selected siblings are loaded, use the closest ancestor as placeholder
+function updateTileStateReplace(allTiles: Tile2DHeader[]) {
+  for (const tile of allTiles) {
+    tile.state = 0;
+  }
+  for (const tile of allTiles) {
+    if (tile.isSelected) {
+      getPlaceholderInAncestors(tile);
+    }
+  }
+  // Always process parents first
+  const sortedTiles = Array.from(allTiles).sort((t1, t2) => t1.zoom - t2.zoom);
+  for (const tile of sortedTiles) {
+    tile.isVisible = Boolean(tile.state! & TILE_STATE_VISIBLE);
+
+    if (tile.children && (tile.isVisible || tile.state! & TILE_STATE_VISITED)) {
+      // If the tile is rendered, or if the tile has been explicitly hidden, hide all of its children
+      for (const child of tile.children) {
+        child.state = TILE_STATE_VISITED;
+      }
+    } else if (tile.isSelected) {
+      getPlaceholderInChildren(tile);
+    }
+  }
+}
+
+// Walk up the tree until we find one ancestor that is loaded. Returns true if successful.
+function getPlaceholderInAncestors(startTile: Tile2DHeader) {
+  console.log("getPlaceholderInAncestors");
+  let tile: Tile2DHeader | null = startTile;
+  while (tile) {
+    console.log("  tile", tile.id, tile.isLoaded, Boolean(tile.content));
+    console.log("should set state", Boolean(tile.isLoaded || tile.content));
+    if (tile.isLoaded || tile.content) {
+      tile.state! |= TILE_STATE_VISIBLE;
+      return true;
+    }
+    tile = tile.parent;
+    console.log("parent tile", tile);
+  }
+  return false;
+}
+
+// Recursively set children as placeholder
+function getPlaceholderInChildren(tile: Tile2DHeader) {
+  for (const child of tile.children) {
+    if (child.isLoaded || child.content) {
+      child.state |= TILE_STATE_VISIBLE;
+    } else {
+      getPlaceholderInChildren(child);
+    }
+  }
 }
