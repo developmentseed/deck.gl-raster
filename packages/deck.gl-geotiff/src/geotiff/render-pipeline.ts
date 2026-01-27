@@ -12,7 +12,6 @@ import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
 import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
 import { addAlphaChannel, parseColormap, parseGDALNoData } from "./geotiff";
 import { inferTextureFormat } from "./texture";
-import type { ImageFileDirectory } from "./types";
 import { PhotometricInterpretationT } from "./types";
 
 export type TextureDataT = {

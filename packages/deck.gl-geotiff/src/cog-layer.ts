@@ -229,7 +229,11 @@ export class COGLayer<
       images.push(await geotiff.getImage(imageIdx));
     }
 
-    const sourceProjection = await geoKeysParser(image.getGeoKeys());
+    const geoKeys = image.getGeoKeys();
+    if (geoKeys === null) {
+      throw new Error("TIFF is missing geo keys");
+    }
+    const sourceProjection = await geoKeysParser(geoKeys);
     if (!sourceProjection) {
       throw new Error(
         "Could not determine source projection from GeoTIFF geo keys",

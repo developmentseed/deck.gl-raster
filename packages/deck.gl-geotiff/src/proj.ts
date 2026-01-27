@@ -1,3 +1,4 @@
+import type { globals } from "geotiff";
 import type { ProjectionDefinition } from "proj4";
 import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
@@ -21,7 +22,7 @@ export interface ProjectionInfo {
 }
 
 export type GeoKeysParser = (
-  geoKeys: Record<string, any>,
+  geoKeys: Record<globals.GeoKeyName, any>,
 ) => Promise<ProjectionInfo | null>;
 
 /**
@@ -31,7 +32,7 @@ export type GeoKeysParser = (
  * keys.
  */
 export async function epsgIoGeoKeyParser(
-  geoKeys: Record<string, any>,
+  geoKeys: Record<globals.GeoKeyName, any>,
 ): Promise<ProjectionInfo | null> {
   const projectionCode: number | null =
     geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || null;
