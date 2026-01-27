@@ -35,7 +35,12 @@ export async function parseCOGTileMatrixSet(
   const fullImageWidth = fullResImage.getWidth();
   const fullImageHeight = fullResImage.getHeight();
 
-  const crs = await geoKeysParser(fullResImage.getGeoKeys());
+  const geoKeys = fullResImage.getGeoKeys();
+  if (geoKeys === null) {
+    throw new Error("TIFF is missing geo keys");
+  }
+
+  const crs = await geoKeysParser(geoKeys);
 
   if (crs === null) {
     throw new Error(

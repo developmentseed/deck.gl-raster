@@ -64,8 +64,8 @@ importers:
         specifier: 9.2.6
         version: 9.2.6(@luma.gl/core@9.2.6)
       geotiff:
-        specifier: ^2.1.3
-        version: 2.1.3
+        specifier: ^3.0.0
+        version: 3.0.0
       geotiff-geokeys-to-proj4:
         specifier: ^2024.4.13
         version: 2024.4.13
@@ -131,8 +131,8 @@ importers:
         specifier: 9.2.6
         version: 9.2.6(@luma.gl/core@9.2.6)
       geotiff:
-        specifier: ^2.1.3
-        version: 2.1.3
+        specifier: ^3.0.0
+        version: 3.0.0
       geotiff-geokeys-to-proj4:
         specifier: ^2024.4.13
         version: 2024.4.13
@@ -192,8 +192,8 @@ importers:
         specifier: 9.2.6
         version: 9.2.6(@luma.gl/core@9.2.6)
       geotiff:
-        specifier: ^2.1.3
-        version: 2.1.3
+        specifier: ^3.0.0
+        version: 3.0.0
       maplibre-gl:
         specifier: ^5.15.0
         version: 5.15.0
@@ -253,8 +253,8 @@ importers:
         specifier: ^4.5.0
         version: 4.5.0
       geotiff:
-        specifier: 2.1.3
-        version: 2.1.3
+        specifier: 3.0.0
+        version: 3.0.0
       proj4:
         specifier: ^2.20.2
         version: 2.20.2
@@ -1526,8 +1526,8 @@ packages:
   geotiff-geokeys-to-proj4@2024.4.13:
     resolution: {integrity: sha512-Jgtm/lcPkgB44wCqQHaVQx5/fyhmiVDRUKQcI/vMolsED8/GRWBnn5qkQo/CgutQg9xkGzig21DY9Px9mFRdvg==}
 
-  geotiff@2.1.3:
-    resolution: {integrity: sha512-PT6uoF5a1+kbC3tHmZSUsLHBp2QJlHasxxxxPW47QIY1VBKpFB+FcDvX+MxER6UzgLQZ0xDzJ9s48B9JbOCTqA==}
+  geotiff@3.0.0:
+    resolution: {integrity: sha512-skoz9vd8ovTH1BUEt4Mzg2N0rcv3lQG+f57nokoPhIISg5bbmcX5okUe30avjfEuu0Yk24KZCr45nJvkUHBH1Q==}
     engines: {node: '>=10.19'}
 
   get-stream@6.0.1:
@@ -2324,8 +2324,8 @@ packages:
   zstd-codec@0.1.5:
     resolution: {integrity: sha512-v3fyjpK8S/dpY/X5WxqTK3IoCnp/ZOLxn144GZVlNUjtwAchzrVo03h+oMATFhCIiJ5KTr4V3vDQQYz4RU684g==}
 
-  zstddec@0.1.0:
-    resolution: {integrity: sha512-w2NTI8+3l3eeltKAdK8QpiLo/flRAr2p8AGeakfMZOXBxOg9HIu4LVDxBi81sYgVhFhdJjv1OrB5ssI8uFPoLg==}
+  zstddec@0.2.0:
+    resolution: {integrity: sha512-oyPnDa1X5c13+Y7mA/FDMNJrn4S8UNBe0KCqtDmor40Re7ALrPN6npFwyYVRRh+PqozZQdeg23QtbcamZnG5rA==}
 
 snapshots:
 
@@ -3540,7 +3540,7 @@ snapshots:
 
   geotiff-geokeys-to-proj4@2024.4.13: {}
 
-  geotiff@2.1.3:
+  geotiff@3.0.0:
     dependencies:
       '@petamoriken/float16': 3.9.3
       lerc: 3.0.0
@@ -3549,7 +3549,7 @@ snapshots:
       quick-lru: 6.1.2
       web-worker: 1.5.0
       xml-utils: 1.10.2
-      zstddec: 0.1.0
+      zstddec: 0.2.0
 
   get-stream@6.0.1: {}
 
@@ -4290,4 +4290,4 @@ snapshots:
   zstd-codec@0.1.5:
     optional: true
 
-  zstddec@0.1.0: {}
+  zstddec@0.2.0: {}
