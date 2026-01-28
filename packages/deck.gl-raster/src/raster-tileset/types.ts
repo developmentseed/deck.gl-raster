@@ -32,14 +32,22 @@ export type Point = [number, number];
 
 type CRS = any;
 
+export type ProjectionFunction = (point: Point) => Point;
+
+/**
+ * Bounding box defined by two named corners
+ */
+export type CornerBounds = {
+  lowerLeft: Point;
+  upperRight: Point;
+};
+
 /**
  * Minimum bounding rectangle surrounding a 2D resource in the CRS indicated elsewhere
  */
-export interface TileMatrixSetBoundingBox {
-  lowerLeft: Point;
-  upperRight: Point;
+export type TileMatrixSetBoundingBox = CornerBounds & {
   crs?: CRS;
-}
+};
 
 /**
  * Represents a single resolution level in a raster tileset.
@@ -54,6 +62,12 @@ export interface TileMatrixSetBoundingBox {
  * This matches the natural ordering where z increases with detail.
  */
 export type TileMatrix = {
+  /**
+   * Unique identifier for this tile matrix.
+   *
+   * The ID is typically a string representation of the overview level,
+   * where lower values correspond to coarser resolutions.
+   */
   id: string;
 
   /**
@@ -70,32 +84,23 @@ export type TileMatrix = {
    */
   cellSize: number;
 
-  // /**
-  //  * Overview index in the TileMatrixSet ordering.
-  //  * - Index 0: Coarsest resolution (most zoomed out)
-  //  * - Higher indices: Progressively finer resolution
-  //  *
-  //  * This is the index in the COGMetadata.overviews array and represents
-  //  * the natural ordering from coarse to fine.
-  //  *
-  //  * Note: This is different from GeoTIFF's internal level numbering where
-  //  * level 0 is the full resolution image.
-  //  *
-  //  * @example
-  //  * // For a COG with 4 resolutions:
-  //  * index: 0  // Coarsest:  1250x1000 pixels (8x downsampled)
-  //  * index: 1  // Medium:    2500x2000 pixels (4x downsampled)
-  //  * index: 2  // Fine:      5000x4000 pixels (2x downsampled)
-  //  * index: 3  // Finest:   10000x8000 pixels (full resolution)
-  //  */
-  // z: number;
+  /**
+   * Indicates which corner of the tile matrix is the origin.
+   *
+   * Typically "upperLeft" for most raster datasets.
+   */
+  cornerOfOrigin: "lowerLeft" | "upperLeft";
 
+  /**
+   * Point of origin of this tile matrix in CRS coordinates.
+   */
   pointOfOrigin: Point;
 
   /**
    * Width of each tile of this tile matrix in pixels.
    */
   tileWidth: number;
+
   /**
    * Height of each tile of this tile matrix in pixels.
    */
@@ -128,26 +133,6 @@ export type TileMatrix = {
    * tilesY: 16  // z=3: ceil(8000 / 512)
    */
   matrixHeight: number;
-
-  // /**
-  //  * Downsampling scale factor relative to full resolution (finest level).
-  //  *
-  //  * Indicates how much this overview is downsampled compared to the finest resolution.
-  //  * - Scale factor of 1: Full resolution (finest level)
-  //  * - Scale factor of 2: Half resolution
-  //  * - Scale factor of 4: Quarter resolution
-  //  * - Scale factor of 8: Eighth resolution (coarsest in this example)
-  //  *
-  //  * Common pattern: Each overview is 2x downsampled from the next finer level,
-  //  * so scale factors are powers of 2: 8, 4, 2, 1 (from coarsest to finest)
-  //  *
-  //  * @example
-  //  * scaleFactor: 8   // z=0: 1250x1000  (8x downsampled from finest)
-  //  * scaleFactor: 4   // z=1: 2500x2000  (4x downsampled)
-  //  * scaleFactor: 2   // z=2: 5000x4000  (2x downsampled)
-  //  * scaleFactor: 1   // z=3: 10000x8000 (full resolution)
-  //  */
-  // scaleFactor: number;
 
   /**
    * Affine geotransform for this overview level.
@@ -182,13 +167,25 @@ export type TileMatrixSet = {
    * Title of this tile matrix set, normally used for display to a human
    */
   title?: string;
+
   /**
    * Brief narrative description of this tile matrix set, normally available for display to a human
    */
   description?: string;
+
+  /**
+   * Coordinate Reference System of this tile matrix set.
+   */
   crs: CRS;
 
+  /**
+   * Bounding box of this TMS.
+   *
+   * The TileMatrixSetBoundingBox can contain its own CRS, which may differ
+   * from the overall TileMatrixSet CRS.
+   */
   boundingBox?: TileMatrixSetBoundingBox;
+
   /**
    * Describes scale levels and its tile matrices
    */
@@ -197,10 +194,7 @@ export type TileMatrixSet = {
   /**
    * Bounding box of this TMS in WGS84 lon/lat.
    */
-  wgsBounds: TileMatrixSetBoundingBox;
-
-  projectToWgs84: (point: [number, number]) => [number, number];
-  projectTo3857: (point: [number, number]) => [number, number];
+  wgsBounds?: TileMatrixSetBoundingBox;
 };
 
 /**
