@@ -27,6 +27,8 @@ import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
 import type {
   Bounds,
+  CornerBounds,
+  ProjectionFunction,
   TileIndex,
   TileMatrix,
   TileMatrixSet,
@@ -138,11 +140,22 @@ export class RasterTileNode {
   /** A cache of the children of this node. */
   private _children?: RasterTileNode[] | null;
 
-  constructor(x: number, y: number, z: number, metadata: TileMatrixSet) {
+  private projectTo3857: ProjectionFunction;
+
+  constructor(
+    x: number,
+    y: number,
+    z: number,
+    {
+      metadata,
+      projectTo3857,
+    }: { metadata: TileMatrixSet; projectTo3857: ProjectionFunction },
+  ) {
     this.x = x;
     this.y = y;
     this.z = z;
     this.metadata = metadata;
+    this.projectTo3857 = projectTo3857;
   }
 
   /** Get overview info for this tile's z level */
@@ -188,9 +201,15 @@ export class RasterTileNode {
 
       const children: RasterTileNode[] = [];
 
+      const { metadata, projectTo3857 } = this;
       for (let y = minRow; y <= maxRow; y++) {
         for (let x = minCol; x <= maxCol; x++) {
-          children.push(new RasterTileNode(x, y, childZ, this.metadata));
+          children.push(
+            new RasterTileNode(x, y, childZ, {
+              metadata,
+              projectTo3857,
+            }),
+          );
         }
       }
 
@@ -364,12 +383,9 @@ export class RasterTileNode {
     const [minX, minY, maxX, maxY] = bounds;
     const [tileMinX, tileMinY, tileMaxX, tileMaxY] = commonSpaceBounds;
 
-    // console.log("bounds:", bounds);
-    // console.log("tile bounds:", commonSpaceBounds);
-
     const inside =
       tileMinX < maxX && tileMaxX > minX && tileMinY < maxY && tileMaxY > minY;
-    // console.log("insideBounds", inside);
+
     return inside;
   }
 
@@ -428,7 +444,7 @@ export class RasterTileNode {
     const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
       REF_POINTS_9,
       tileCrsBounds,
-      this.metadata.projectTo3857,
+      this.projectTo3857,
     );
 
     const commonSpacePositions = refPointsEPSG3857.map((xy) =>
@@ -546,7 +562,7 @@ function computeProjectedTileBounds({
 function sampleReferencePointsInEPSG3857(
   refPoints: [number, number][],
   tileBounds: [number, number, number, number],
-  projectTo3857: (xy: [number, number]) => [number, number],
+  projectTo3857: ProjectionFunction,
 ): [number, number][] {
   const [minX, minY, maxX, maxY] = tileBounds;
   const refPointPositions: [number, number][] = [];
@@ -675,9 +691,11 @@ export function getTileIndices(
     viewport: Viewport;
     maxZ: number;
     zRange: ZRange | null;
+    projectTo3857: ProjectionFunction;
+    wgs84Bounds: CornerBounds;
   },
 ): TileIndex[] {
-  const { viewport, maxZ, zRange } = opts;
+  const { viewport, maxZ, zRange, wgs84Bounds } = opts;
 
   // Only define `project` function for Globe viewports, same as upstream
   const project: ((xyz: number[]) => number[]) | null =
@@ -723,7 +741,7 @@ export function getTileIndices(
   // minZ to 0
   const minZ = 0;
 
-  const { lowerLeft, upperRight } = metadata.wgsBounds;
+  const { lowerLeft, upperRight } = wgs84Bounds;
   const [minLng, minLat] = lowerLeft;
   const [maxLng, maxLat] = upperRight;
   const bottomLeft = lngLatToWorld([minLng, minLat]);
@@ -744,7 +762,12 @@ export function getTileIndices(
   const roots: RasterTileNode[] = [];
   for (let y = 0; y < rootMatrix.matrixHeight; y++) {
     for (let x = 0; x < rootMatrix.matrixWidth; x++) {
-      roots.push(new RasterTileNode(x, y, 0, metadata));
+      roots.push(
+        new RasterTileNode(x, y, 0, {
+          metadata,
+          projectTo3857: opts.projectTo3857,
+        }),
+      );
     }
   }
 
@@ -758,9 +781,6 @@ export function getTileIndices(
     maxZ,
     bounds,
   };
-
-  // console.log("traversalParams", traversalParams);
-  // console.log("roots", roots);
 
   for (const root of roots) {
     root.update(traversalParams);
@@ -799,19 +819,6 @@ function getMetersPerPixelAtBoundingVolume(
   const [_lng, lat] = worldToLngLat(boundingVolume.center);
   return getMetersPerPixel(lat, zoom);
 }
-
-// function getScreenMetersPerPixel(viewport: Viewport, center: Vector3): number {
-//   const lng
-//   const p0 = viewport.projectPosition(center);
-//   const p1 = viewport.projectPosition([
-//     centerArray[0]! + 1,
-//     centerArray[1]!,
-//     centerArray[2]!,
-//   ]);
-
-//   const pixelsPerMeter = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-//   return 1 / pixelsPerMeter;
-// }
 
 /**
  * Exports only for use in testing

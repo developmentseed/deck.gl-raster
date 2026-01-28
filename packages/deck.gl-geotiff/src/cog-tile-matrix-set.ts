@@ -109,8 +109,6 @@ export async function parseCOGTileMatrixSet(
     boundingBox,
     wgsBounds: computeWgs84BoundingBox(boundingBox, projectToWgs84),
     tileMatrices,
-    projectToWgs84,
-    projectTo3857,
   };
 }
 
