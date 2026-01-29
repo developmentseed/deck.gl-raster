@@ -33,6 +33,7 @@ import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { fromGeoTransform } from "./geotiff-reprojection.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
+// Import registers EPSG:3857 with proj4
 import { epsgIoGeoKeyParser } from "./proj.js";
 
 /**
@@ -236,14 +237,19 @@ export class COGLayer<
       );
     }
 
-    const converter = proj4(sourceProjection.def, "EPSG:4326");
+    // Reproject to EPSG:3857 (Web Mercator) for proper mesh refinement
+    // on Web Mercator basemaps. The mesh positions are converted back to
+    // WGS84 by RasterLayer for deck.gl rendering.
+    const converterTo3857 = proj4(sourceProjection.def, "EPSG:3857");
     const forwardReproject = (x: number, y: number) =>
-      converter.forward<[number, number]>([x, y], false);
+      converterTo3857.forward<[number, number]>([x, y], false);
     const inverseReproject = (x: number, y: number) =>
-      converter.inverse<[number, number]>([x, y], false);
+      converterTo3857.inverse<[number, number]>([x, y], false);
 
     if (this.props.onGeoTIFFLoad) {
-      const geographicBounds = getGeographicBounds(image, converter);
+      // Use separate converter to WGS84 for geographic bounds callback
+      const converterToWgs84 = proj4(sourceProjection.def, "EPSG:4326");
+      const geographicBounds = getGeographicBounds(image, converterToWgs84);
       this.props.onGeoTIFFLoad(geotiff, {
         projection: sourceProjection,
         geographicBounds,

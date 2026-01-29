@@ -11,6 +11,24 @@ import { CreateTexture } from "./gpu-modules/create-texture";
 import type { RasterModule } from "./gpu-modules/types";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
 
+/**
+ * Earth radius in meters (WGS84 semi-major axis)
+ */
+const EARTH_RADIUS = 6378137;
+
+/**
+ * Convert EPSG:3857 (Web Mercator) coordinates to WGS84 [lon, lat] for deck.gl.
+ *
+ * Formulas:
+ * - longitude = x / EARTH_RADIUS * (180 / PI)
+ * - latitude = (2 * atan(exp(y / EARTH_RADIUS)) - PI/2) * (180 / PI)
+ */
+function webMercatorToWgs84(x: number, y: number): [number, number] {
+  const lon = (x / EARTH_RADIUS) * (180 / Math.PI);
+  const lat = (2 * Math.atan(Math.exp(y / EARTH_RADIUS)) - Math.PI / 2) * (180 / Math.PI);
+  return [lon, lat];
+}
+
 const DEFAULT_MAX_ERROR = 0.125;
 
 const DEBUG_COLORS: [number, number, number][] = [
@@ -148,7 +166,14 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       height + 1,
     );
     reprojector.run(maxError);
-    const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
+
+    // Convert mesh positions from EPSG:3857 (Web Mercator) back to WGS84
+    // for deck.gl rendering. The mesh was refined in EPSG:3857 to account
+    // for Web Mercator projection distortion on the basemap.
+    const { indices, positions, texCoords } = reprojectorToMesh(
+      reprojector,
+      webMercatorToWgs84,
+    );
 
     this.setState({
       reprojector,
@@ -191,12 +216,12 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
           const b = triangles[index * 3 + 1]!;
           const c = triangles[index * 3 + 2]!;
 
-          return [
-            [positions[a * 2]!, positions[a * 2 + 1]!],
-            [positions[b * 2]!, positions[b * 2 + 1]!],
-            [positions[c * 2]!, positions[c * 2 + 1]!],
-            [positions[a * 2]!, positions[a * 2 + 1]!],
-          ];
+          // Convert from EPSG:3857 (meters) to WGS84 (degrees) for deck.gl
+          const pa = webMercatorToWgs84(positions[a * 2]!, positions[a * 2 + 1]!);
+          const pb = webMercatorToWgs84(positions[b * 2]!, positions[b * 2 + 1]!);
+          const pc = webMercatorToWgs84(positions[c * 2]!, positions[c * 2 + 1]!);
+
+          return [pa, pb, pc, pa];
         },
         getFillColor: (
           _: any,
@@ -296,7 +321,18 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 }
 
-function reprojectorToMesh(reprojector: RasterReprojector): {
+/**
+ * Convert RasterReprojector output to mesh data for deck.gl.
+ *
+ * @param reprojector The RasterReprojector with computed mesh
+ * @param inverseReproject Optional function to convert positions from output CRS
+ *   back to WGS84 for deck.gl. If provided, positions are transformed; otherwise
+ *   they are used as-is.
+ */
+function reprojectorToMesh(
+  reprojector: RasterReprojector,
+  inverseReproject?: (x: number, y: number) => [number, number],
+): {
   indices: Uint32Array;
   positions: Float32Array;
   texCoords: Float32Array;
@@ -306,8 +342,19 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   const texCoords = new Float32Array(reprojector.uvs);
 
   for (let i = 0; i < numVertices; i++) {
-    positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
-    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
+    const x = reprojector.exactOutputPositions[i * 2]!;
+    const y = reprojector.exactOutputPositions[i * 2 + 1]!;
+
+    // Convert from output CRS (e.g., EPSG:3857) back to WGS84 for deck.gl
+    // if inverseReproject is provided
+    if (inverseReproject) {
+      const [lon, lat] = inverseReproject(x, y);
+      positions[i * 3] = lon;
+      positions[i * 3 + 1] = lat;
+    } else {
+      positions[i * 3] = x;
+      positions[i * 3 + 1] = y;
+    }
     // z (flat on the ground)
     positions[i * 3 + 2] = 0;
   }

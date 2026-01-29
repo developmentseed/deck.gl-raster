@@ -46,10 +46,18 @@
     "vitest": "^4.0.16"
   },
   "dependencies": {
+    "zarr-multiscale-metadata": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "proj4": "^2.20.2",
     "zarrita": "^0.5.4"
+  },
+  "peerDependencies": {
+    "@deck.gl/core": "^9.2.6",
+    "@deck.gl/geo-layers": "^9.2.6",
+    "@deck.gl/layers": "^9.2.6",
+    "@deck.gl/mesh-layers": "^9.2.6",
+    "@luma.gl/core": "^9.2.6"
   },
   "volta": {
     "extends": "../../package.json"

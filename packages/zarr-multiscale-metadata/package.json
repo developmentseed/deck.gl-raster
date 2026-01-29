@@ -1,0 +1,54 @@
+{
+  "name": "zarr-multiscale-metadata",
+  "version": "0.1.0",
+  "description": "Zarr metadata parsing library for geospatial applications. Parses V2/V3 multiscale formats (zarr-conventions, OME-NGFF, ndpyramid tiled) and extracts CRS, bounds, and pyramid structure.",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/developmentseed/deck.gl-raster.git",
+    "directory": "packages/zarr-multiscale-metadata"
+  },
+  "homepage": "https://github.com/developmentseed/deck.gl-raster/tree/main/packages/zarr-multiscale-metadata#readme",
+  "bugs": {
+    "url": "https://github.com/developmentseed/deck.gl-raster/issues"
+  },
+  "keywords": [
+    "zarr",
+    "geospatial",
+    "metadata",
+    "multiscale",
+    "ome-ngff",
+    "crs"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "dependencies": {
+    "zarrita": "^0.5.4"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.0.0"
+  }
+}

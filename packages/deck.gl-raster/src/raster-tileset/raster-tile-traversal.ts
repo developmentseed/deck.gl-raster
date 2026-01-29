@@ -272,9 +272,9 @@ export class RasterTileNode {
     // Only select this tile if no child is visible (prevents overlapping tiles)
     // “When pitch is low, force selection at maxZ.”
     if (!this.childVisible && this.z >= minZ) {
-      const metersPerScreenPixel = getMetersPerPixelAtBoundingVolume(
+      const metersPerScreenPixel = getScreenMetersPerPixel(
+        viewport,
         boundingVolume,
-        viewport.zoom,
       );
       // console.log("metersPerScreenPixel", metersPerScreenPixel);
 
@@ -634,16 +634,21 @@ function getOverlappingChildRange(
   const {
     tileWidth,
     tileHeight,
-    cellSize,
     matrixWidth,
     matrixHeight,
     pointOfOrigin,
+    geotransform,
   } = childMatrix;
 
-  const childTileWidthCRS = tileWidth * cellSize;
-  const childTileHeightCRS = tileHeight * cellSize;
+  // Extract X and Y cell sizes from geotransform
+  // geotransform: [xRes, 0, xOrigin, 0, yRes, yOrigin]
+  const yRes = geotransform[4];
+  const cellSizeX = Math.abs(geotransform[0]);
+  const cellSizeY = Math.abs(yRes);
 
-  // Note: we assume top left origin
+  const childTileWidthCRS = tileWidth * cellSizeX;
+  const childTileHeightCRS = tileHeight * cellSizeY;
+
   const originX = pointOfOrigin[0];
   const originY = pointOfOrigin[1];
 
@@ -651,8 +656,20 @@ function getOverlappingChildRange(
   let minCol = Math.floor((pMinX - originX) / childTileWidthCRS);
   let maxCol = Math.floor((pMaxX - originX) / childTileWidthCRS);
 
-  let minRow = Math.floor((originY - pMaxY) / childTileHeightCRS);
-  let maxRow = Math.floor((originY - pMinY) / childTileHeightCRS);
+  // Row calculation depends on Y orientation:
+  // - If yRes < 0 (north-up): origin is at NORTH, rows increase southward
+  // - If yRes > 0 (south-up): origin is at SOUTH, rows increase northward
+  let minRow: number;
+  let maxRow: number;
+  if (yRes < 0) {
+    // North-up: origin at top, rows go down (south)
+    minRow = Math.floor((originY - pMaxY) / childTileHeightCRS);
+    maxRow = Math.floor((originY - pMinY) / childTileHeightCRS);
+  } else {
+    // South-up: origin at bottom, rows go up (north)
+    minRow = Math.floor((pMinY - originY) / childTileHeightCRS);
+    maxRow = Math.floor((pMaxY - originY) / childTileHeightCRS);
+  }
 
   // Clamp to matrix bounds
   minCol = Math.max(0, Math.min(matrixWidth - 1, minCol));
@@ -776,42 +793,54 @@ export function getTileIndices(
 }
 
 /**
- * Compute the meters per pixel at a given latitude and zoom level.
+ * Compute meters per screen pixel using the viewport's projection.
  *
- * Taken from https://github.com/visgl/deck.gl/blob/b0134f025148b52b91320d16768ab5d14a745328/modules/widgets/src/scale-widget.tsx#L133C1-L144C1
+ * This uses screen-space calculations instead of geographic calculations,
+ * ensuring uniform tile sizes at all latitudes.
  *
- * @param latitude - The current latitude.
- * @param zoom - The current zoom level.
- * @returns The number of meters per pixel.
+ * @param viewport - The deck.gl viewport
+ * @param boundingVolume - The tile's oriented bounding box in common space
+ * @returns The number of meters per screen pixel
  */
-function getMetersPerPixel(latitude: number, zoom: number): number {
-  const earthCircumference = 40075016.686;
-  return (
-    (earthCircumference * Math.cos((latitude * Math.PI) / 180)) /
-    2 ** (zoom + 8)
-  );
-}
-
-function getMetersPerPixelAtBoundingVolume(
+function getScreenMetersPerPixel(
+  viewport: Viewport,
   boundingVolume: OrientedBoundingBox,
-  zoom: number,
 ): number {
-  const [_lng, lat] = worldToLngLat(boundingVolume.center);
-  return getMetersPerPixel(lat, zoom);
+  const center = boundingVolume.center;
+  const cx = center[0] as number;
+  const cy = center[1] as number;
+  const cz = center[2] as number;
+
+  // Convert from common space [0-512] to lng/lat
+  const [lng, lat] = worldToLngLat([cx, cy]);
+
+  // Project center and a point offset in screen X to get screen positions
+  // viewport.project takes [lng, lat, z] and returns [screenX, screenY, depth]
+  const p0 = viewport.project([lng, lat, cz]);
+
+  // Offset by a small delta in common space, then convert back to lng/lat
+  const delta = 1; // 1 common-space unit
+  const [lng1, lat1] = worldToLngLat([cx + delta, cy]);
+  const p1 = viewport.project([lng1, lat1, cz]);
+
+  // Compute how many screen pixels represent 1 common-space unit
+  const dx = (p1[0] ?? 0) - (p0[0] ?? 0);
+  const dy = (p1[1] ?? 0) - (p0[1] ?? 0);
+  const pixelsPerUnit = Math.hypot(dx, dy);
+
+  // Convert to meters: in deck.gl common space, 512 units = EPSG:3857 world circumference
+  // So 1 common-space unit = circumference / 512 meters
+  const metersPerUnit = EPSG_3857_CIRCUMFERENCE / TILE_SIZE;
+
+  // pixelsPerUnit / metersPerUnit = pixels per meter
+  const pixelsPerMeter = pixelsPerUnit / metersPerUnit;
+
+  // LOD bias: higher values = coarser tiles (less subdivision)
+  // A value of 2 means we tolerate 2x the tile resolution before subdividing
+  const LOD_BIAS = 2;
+
+  return pixelsPerMeter > 0 ? LOD_BIAS / pixelsPerMeter : Infinity;
 }
-
-// function getScreenMetersPerPixel(viewport: Viewport, center: Vector3): number {
-//   const lng
-//   const p0 = viewport.projectPosition(center);
-//   const p1 = viewport.projectPosition([
-//     centerArray[0]! + 1,
-//     centerArray[1]!,
-//     centerArray[2]!,
-//   ]);
-
-//   const pixelsPerMeter = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-//   return 1 / pixelsPerMeter;
-// }
 
 /**
  * Exports only for use in testing
