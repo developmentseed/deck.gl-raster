@@ -12,37 +12,61 @@ function DeckGLOverlay(props: DeckProps) {
   return null;
 }
 
-// USGS 10m DEM (zarr-conventions v3, CONUS coverage)
-const ZARR_URL =
-  "https://carbonplan-share.s3.us-west-2.amazonaws.com/zarr-layer-examples/USGS-CONUS-DEM-10m.zarr";
-const VARIABLE = "DEM";
-const DIMENSION_INDICES = {}
+interface DatasetConfig {
+  name: string;
+  description: string;
+  url: string;
+  variable: string;
+  dimensionIndices: Record<string, number>;
+  normalization: { vmin: number; vmax: number };
+}
 
-// ndpyramid 4D (monthly temperature/precipitation, ndpyramid-tiled):
-// const ZARR_URL = "https://carbonplan-maps.s3.us-west-2.amazonaws.com/v2/demo/4d/tavg-prec-month";
-// const VARIABLE = "climate";
-// const  DIMENSION_INDICES = { time: 0, band: 0 }
+const DATASETS: Record<string, DatasetConfig> = {
+  "usgs-dem": {
+    name: "USGS 10m DEM",
+    description: "zarr-conventions for multiscales, CONUS coverage",
+    url: "https://carbonplan-share.s3.us-west-2.amazonaws.com/zarr-layer-examples/USGS-CONUS-DEM-10m.zarr",
+    variable: "DEM",
+    dimensionIndices: {},
+    normalization: { vmin: 0, vmax: 3000 },
+  },
+  "ndpyramid-4d": {
+    name: "ndpyramid 4D",
+    description: "Monthly temperature/precipitation",
+    url: "https://carbonplan-maps.s3.us-west-2.amazonaws.com/v2/demo/4d/tavg-prec-month",
+    variable: "climate",
+    dimensionIndices: { time: 0, band: 0 },
+    normalization: { vmin: -40, vmax: 40 },
+  },
+  "era5-florence": {
+    name: "ERA5 Hurricane Florence",
+    description: "0-360° longitude convention, single level",
+    url: "https://atlantis-vis-o.s3-ext.jc.rl.ac.uk/hurricanes/era5/florence",
+    variable: "surface_pressure",
+    dimensionIndices: { time: 0 },
+    normalization: { vmin: 100000, vmax: 102500 },
+  },
+};
 
-// ERA5 Hurricane Florence (0-360° longitude convention, single level)
-// const ZARR_URL = "https://atlantis-vis-o.s3-ext.jc.rl.ac.uk/hurricanes/era5/florence"
-// const VARIABLE = "surface_pressure"
-// const DIMENSION_INDICES = { time: 0}
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
+  const [selectedDataset, setSelectedDataset] = useState<string>("era5-florence");
+
+  const dataset = DATASETS[selectedDataset];
 
   const zarr_layer = new ZarrLayer({
-    id: "zarr-layer",
-    source: ZARR_URL,
-    variable: VARIABLE,
-    dimensionIndices: DIMENSION_INDICES,
-    normalization: { vmin: 0, vmax: 3000 },
+    id: `zarr-layer-${selectedDataset}`,
+    source: dataset.url,
+    variable: dataset.variable,
+    dimensionIndices: dataset.dimensionIndices,
+    normalization: dataset.normalization,
     colormap: (v) => [
-      Math.round(v),                    // R: increases with elevation
-      Math.round(255 - Math.abs(v - 128) * 2), // G: peaks at mid-elevation
-      Math.round(255 - v),              // B: decreases with elevation
+      Math.round(v),
+      Math.round(255 - Math.abs(v - 128) * 2),
+      Math.round(255 - v),
       255,
     ],
     debug,
@@ -95,8 +119,40 @@ export default function App() {
             ZarrLayer Example
           </h3>
           <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
-            ERA5 Hurricane Florence - {VARIABLE}
+            {dataset.description}
           </p>
+
+          {/* Dataset Selector */}
+          <div style={{ marginBottom: "12px" }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: "12px",
+                color: "#666",
+                marginBottom: "4px",
+              }}
+            >
+              Dataset
+            </label>
+            <select
+              value={selectedDataset}
+              onChange={(e) => setSelectedDataset(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "4px",
+                border: "1px solid #ccc",
+                fontSize: "14px",
+                cursor: "pointer",
+              }}
+            >
+              {Object.entries(DATASETS).map(([key, config]) => (
+                <option key={key} value={key}>
+                  {config.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Debug Controls */}
           <div
