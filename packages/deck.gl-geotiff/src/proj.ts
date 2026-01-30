@@ -24,6 +24,8 @@ export interface ProjectionInfo {
   parsed: ProjectionDefinition;
   /** Units of the coordinate system */
   coordinatesUnits: SupportedCrsUnit;
+  /** CRS code if known (e.g., "EPSG:4326", "EPSG:3857") */
+  code?: string;
 }
 
 export type GeoKeysParser = (
@@ -53,6 +55,7 @@ export async function epsgIoGeoKeyParser(
     def: sourceProjection,
     parsed,
     coordinatesUnits: parsed.units as SupportedCrsUnit,
+    code: projectionCode ? `EPSG:${projectionCode}` : undefined,
   };
 }
 

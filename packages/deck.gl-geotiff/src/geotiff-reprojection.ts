@@ -86,12 +86,12 @@ export const OGC_84: PROJJSONDefinition = {
 // https://github.com/developmentseed/lonboard/blob/35a1f3d691604ad9e083bf10a4bfde4158171486/src/cog-tileset/claude-tileset-2d-improved.ts#L141
 //
 // TODO: return a RasterReprojector instance, given the IFD and tile of interest?
-// Note, defautl to EPSG:3857 (Web Mercator) to provide enough mesh detail for src
-// data in 4326 (WGS84)
+// Default to OGC_84 (WGS84) for deck.gl rendering.
+// For EPSG:4326/3857 source data, GPU reprojection is used instead of mesh refinement.
 export async function extractGeotiffReprojectors(
   tiff: GeoTIFF,
   sourceProjection: string | PROJJSONDefinition,
-  outputCrs: string | PROJJSONDefinition = "EPSG:3857",
+  outputCrs: string | PROJJSONDefinition = OGC_84,
 ): Promise<ReprojectionFns> {
   const image = await tiff.getImage();
 

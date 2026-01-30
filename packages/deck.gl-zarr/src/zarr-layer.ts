@@ -32,6 +32,7 @@ import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
 import type {
   RasterModule,
+  SourceCrs,
   TileMatrixSet,
 } from "@developmentseed/deck.gl-raster";
 import { RasterLayer, RasterTileset2D } from "@developmentseed/deck.gl-raster";
@@ -222,6 +223,8 @@ export class ZarrLayer<
     sortedLevels?: SortedLevel[];
     root?: zarr.Location<Readable>;
     projectionInfo?: ProjectionInfo;
+    /** Whether row 0 is south (latitude ascending) */
+    latIsAscending?: boolean;
   };
 
   override initializeState(): void {
@@ -369,6 +372,7 @@ export class ZarrLayer<
       forwardReproject,
       inverseReproject,
       projectionInfo,
+      latIsAscending,
     });
   }
 
@@ -463,6 +467,7 @@ export class ZarrLayer<
     inverseReproject: ReprojectionFns["inverseReproject"],
   ): Layer | LayersList | null {
     const { maxError, debug, debugOpacity } = this.props;
+    const { projectionInfo, latIsAscending } = this.state;
     const { tile } = props;
 
     if (!props.data) {
@@ -477,6 +482,43 @@ export class ZarrLayer<
       const { height, width } = data;
       const renderTile = this.props.renderTile || defaultRenderTile;
 
+      // Check if source CRS supports GPU reprojection bypass
+      const crsCode = projectionInfo?.code?.toUpperCase();
+      const sourceCrs: SourceCrs =
+        crsCode === "EPSG:4326" ? "EPSG:4326" :
+        crsCode === "EPSG:3857" ? "EPSG:3857" :
+        null;
+
+      // Get tile bounds for GPU reprojection
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const projectedBounds = (tile as any)?.projectedBounds;
+      let tileBounds: { west: number; south: number; east: number; north: number } | undefined;
+      let tileLatBounds: [number, number] | undefined;
+
+      if (sourceCrs && projectedBounds) {
+        const { topLeft, bottomRight } = projectedBounds;
+        if (sourceCrs === "EPSG:4326") {
+          // For EPSG:4326, coordinates are already in lon/lat
+          tileBounds = {
+            west: topLeft[0],
+            east: bottomRight[0],
+            north: topLeft[1],
+            south: bottomRight[1],
+          };
+          tileLatBounds = [tileBounds.south, tileBounds.north];
+        } else if (sourceCrs === "EPSG:3857") {
+          // For EPSG:3857, convert to WGS84 bounds for positioning
+          const topLeftWgs84 = metadata.projectToWgs84(topLeft);
+          const bottomRightWgs84 = metadata.projectToWgs84(bottomRight);
+          tileBounds = {
+            west: topLeftWgs84[0],
+            east: bottomRightWgs84[0],
+            north: topLeftWgs84[1],
+            south: bottomRightWgs84[1],
+          };
+        }
+      }
+
       layers.push(
         new RasterLayer({
           id: `${props.id}-raster`,
@@ -484,12 +526,20 @@ export class ZarrLayer<
           height,
           renderPipeline: renderTile(data),
           maxError,
-          reprojectionFns: {
-            forwardTransform,
-            inverseTransform,
-            forwardReproject,
-            inverseReproject,
-          },
+          // Only provide reprojectionFns for non-GPU modes
+          ...(sourceCrs ? {} : {
+            reprojectionFns: {
+              forwardTransform,
+              inverseTransform,
+              forwardReproject,
+              inverseReproject,
+            },
+          }),
+          // GPU reprojection props
+          sourceCrs,
+          bounds: tileBounds,
+          latBounds: tileLatBounds,
+          latIsAscending: latIsAscending ?? false,
           debug,
           debugOpacity,
         }),

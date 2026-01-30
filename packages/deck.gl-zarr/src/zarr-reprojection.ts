@@ -119,13 +119,12 @@ export function fromGeoTransform(
  * Create reprojection functions from a source CRS.
  *
  * @param sourceProjection Source CRS definition (proj4 string or PROJJSON)
- * @param outputCrs Output CRS. Defaults to EPSG:3857 (Web Mercator) which provides
- *   proper mesh refinement on Web Mercator basemaps. The mesh positions are then
- *   converted back to WGS84 by RasterLayer for deck.gl rendering.
+ * @param outputCrs Output CRS. Defaults to OGC_84 (WGS84) for deck.gl rendering.
+ *   For EPSG:4326/3857 source data, GPU reprojection is used instead of mesh refinement.
  */
 export function createReprojectionFns(
   sourceProjection: string | PROJJSONDefinition,
-  outputCrs: string | PROJJSONDefinition = "EPSG:3857",
+  outputCrs: string | PROJJSONDefinition = OGC_84,
 ): {
   forwardReproject: ReprojectionFns["forwardReproject"];
   inverseReproject: ReprojectionFns["inverseReproject"];

@@ -190,6 +190,7 @@ async function getProjectionInfo(
       def: formatDescriptor.crs.def,
       parsed,
       coordinatesUnits: (parsed.units || "degree") as SupportedCrsUnit,
+      code: formatDescriptor.crs.code,
     };
   }
 
@@ -199,6 +200,9 @@ async function getProjectionInfo(
 
 /**
  * Resolve a CRS code or proj4 string to ProjectionInfo.
+ *
+ * The code field is automatically derived for standard CRS and EPSG codes.
+ * For raw proj4 strings, code will be undefined.
  */
 async function resolveCrsToProjectionInfo(crs: string): Promise<ProjectionInfo> {
   // Check standard CRS definitions first
@@ -209,6 +213,7 @@ async function resolveCrsToProjectionInfo(crs: string): Promise<ProjectionInfo> 
       def: standard.def,
       parsed,
       coordinatesUnits: standard.units as SupportedCrsUnit,
+      code: crs.toUpperCase(),
     };
   }
 
@@ -224,6 +229,7 @@ async function resolveCrsToProjectionInfo(crs: string): Promise<ProjectionInfo> 
           def,
           parsed,
           coordinatesUnits: (parsed.units || "degree") as SupportedCrsUnit,
+          code: crs.toUpperCase(),
         };
       }
     } catch {
@@ -234,12 +240,13 @@ async function resolveCrsToProjectionInfo(crs: string): Promise<ProjectionInfo> 
     );
   }
 
-  // Assume it's already a proj4 string
+  // Assume it's already a proj4 string - no code available
   const parsed = parseCrs(crs);
   return {
     def: crs,
     parsed,
     coordinatesUnits: (parsed.units || "degree") as SupportedCrsUnit,
+    code: undefined,
   };
 }
 
