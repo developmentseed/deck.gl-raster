@@ -1,5 +1,4 @@
 export {
-  computeReproject4326Props,
   latToMercatorNorm,
   Reproject4326,
 } from "./gpu-modules/reproject-4326.js";

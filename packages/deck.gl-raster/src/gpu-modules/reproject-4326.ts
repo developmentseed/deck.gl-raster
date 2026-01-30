@@ -43,25 +43,17 @@ export function latToMercatorNorm(lat: number): number {
   );
 }
 
-/**
- * Compute the reprojection props from latitude bounds and data orientation.
- */
-export function computeReproject4326Props(
-  latMin: number,
-  latMax: number,
-  latIsAscending: boolean,
-): Reproject4326Props {
-  // Compute Mercator Y bounds from latitude
-  // mercatorYBounds[0] = north (smaller Y value), mercatorYBounds[1] = south (larger Y value)
-  const mercYNorth = latToMercatorNorm(latMax);
-  const mercYSouth = latToMercatorNorm(latMin);
+/** Module name - must match uniform block name */
+const MODULE_NAME = "reproject4326";
 
-  return {
-    latBounds: [latMin, latMax],
-    mercatorYBounds: [mercYNorth, mercYSouth],
-    latIsAscending,
-  };
-}
+/** Uniform block for luma.gl v9 pattern */
+const uniformBlock = /* glsl */ `\
+uniform ${MODULE_NAME}Uniforms {
+  vec2 latBounds;
+  vec2 mercatorYBounds;
+  int latIsAscending;
+} ${MODULE_NAME};
+`;
 
 /**
  * Reprojection shader module for EPSG:4326 source data.
@@ -73,15 +65,11 @@ export function computeReproject4326Props(
  * texture sampling module (e.g., CreateTexture).
  */
 export const Reproject4326 = {
-  name: "reproject-4326",
+  name: MODULE_NAME,
+  fs: uniformBlock,
   inject: {
     "fs:#decl": /* glsl */ `
       const float PI_REPROJECT_4326 = 3.14159265358979323846;
-
-      // Uniforms for EPSG:4326 reprojection
-      uniform vec2 reproject4326_latBounds;      // [latMin, latMax] in degrees
-      uniform vec2 reproject4326_mercatorYBounds; // [mercY_north, mercY_south] in [0,1]
-      uniform int reproject4326_latIsAscending;  // 1 = row 0 is south, 0 = row 0 is north
 
       // Invert Mercator Y to latitude in degrees
       float mercatorYToLat(float mercY) {
@@ -97,15 +85,15 @@ export const Reproject4326 = {
         float lat = mercatorYToLat(mercY);
 
         // Map latitude to texture V coordinate based on data orientation
-        float latRange = reproject4326_latBounds.y - reproject4326_latBounds.x;
+        float latRange = reproject4326.latBounds.y - reproject4326.latBounds.x;
         float texV;
 
-        if (reproject4326_latIsAscending == 1) {
+        if (reproject4326.latIsAscending == 1) {
           // Row 0 = south (latMin), row N = north (latMax)
-          texV = (lat - reproject4326_latBounds.x) / latRange;
+          texV = (lat - reproject4326.latBounds.x) / latRange;
         } else {
           // Row 0 = north (latMax), row N = south (latMin)
-          texV = (reproject4326_latBounds.y - lat) / latRange;
+          texV = (reproject4326.latBounds.y - lat) / latRange;
         }
 
         return texV;
@@ -114,36 +102,50 @@ export const Reproject4326 = {
     // Inject BEFORE DECKGL_FILTER_COLOR to modify geometry.uv before texture sampling
     // Using the fs:#main-start hook which runs at the beginning of main()
     "fs:#main-start": /* glsl */ `
-      // Only apply reprojection if mercatorYBounds are set (non-zero range)
-      float mercRange = reproject4326_mercatorYBounds.y - reproject4326_mercatorYBounds.x;
-      if (abs(mercRange) > 0.0001) {
-        // Compute current Mercator Y from UV
-        // vTexCoord.y maps linearly across the mesh, which is positioned in Mercator space
-        // We need to interpolate between the north and south Mercator Y bounds
-        float currentMercY = mix(
-          reproject4326_mercatorYBounds.x,
-          reproject4326_mercatorYBounds.y,
+      // Discard when bounds not set (prevents flash during loading)
+      float latRange = reproject4326.latBounds.y - reproject4326.latBounds.x;
+      if (abs(latRange) < 0.0001) {
+        discard;
+      }
+
+      // Compute current Mercator Y from UV
+      // vTexCoord.y maps linearly across the mesh, which is positioned in Mercator space
+      // We need to interpolate between the north and south Mercator Y bounds
+      float currentMercY;
+      if (reproject4326.latIsAscending == 1) {
+        // UV.y: 0 at south, 1 at north
+        currentMercY = mix(
+          reproject4326.mercatorYBounds.y,  // south (at y=0)
+          reproject4326.mercatorYBounds.x,  // north (at y=1)
           vTexCoord.y
         );
-
-        // Compute reprojected texture V
-        float reprojectTexV = computeReprojectTexV(currentMercY);
-
-        // Store original UV for later restoration if needed
-        // Override geometry.uv with reprojected coordinates
-        geometry.uv = vec2(vTexCoord.x, reprojectTexV);
+      } else {
+        // UV.y: 0 at north, 1 at south
+        currentMercY = mix(
+          reproject4326.mercatorYBounds.x,  // north (at y=0)
+          reproject4326.mercatorYBounds.y,  // south (at y=1)
+          vTexCoord.y
+        );
       }
+
+      // Compute reprojected texture V
+      float reprojectTexV = computeReprojectTexV(currentMercY);
+
+      // Override geometry.uv with reprojected coordinates
+      geometry.uv = vec2(vTexCoord.x, reprojectTexV);
     `,
   },
+  // Uniform types for luma.gl v9 (must match uniform block order)
+  uniformTypes: {
+    latBounds: "vec2<f32>",
+    mercatorYBounds: "vec2<f32>",
+    latIsAscending: "i32",
+  },
   getUniforms: (props: Partial<Reproject4326Props> = {}) => {
-    const latBounds = props.latBounds ?? [0, 0];
-    const mercatorYBounds = props.mercatorYBounds ?? [0, 0];
-    const latIsAscending = props.latIsAscending ?? false;
-
     return {
-      reproject4326_latBounds: latBounds,
-      reproject4326_mercatorYBounds: mercatorYBounds,
-      reproject4326_latIsAscending: latIsAscending ? 1 : 0,
+      latBounds: props.latBounds ?? [0, 0],
+      mercatorYBounds: props.mercatorYBounds ?? [0, 0],
+      latIsAscending: props.latIsAscending ? 1 : 0,
     };
   },
 } as const;

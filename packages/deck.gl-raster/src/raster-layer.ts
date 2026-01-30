@@ -10,7 +10,6 @@ import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { CreateTexture } from "./gpu-modules/create-texture";
 import { PassthroughUV } from "./gpu-modules/passthrough-uv";
 import { latToMercatorNorm, Reproject4326 } from "./gpu-modules/reproject-4326";
-import { ReprojectTexture } from "./gpu-modules/reproject-texture";
 import type { RasterModule } from "./gpu-modules/types";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
 
@@ -409,9 +408,16 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     const { useReproject4326, reproject4326Props } = this.state;
     const modules: RasterModule[] = [];
 
-    // For ImageData with EPSG:4326, use the combined ReprojectTexture module
-    // which handles both reprojection and texture sampling in a single hook
+    // Unified path: Reproject4326 or PassthroughUV, then CreateTexture (or custom modules)
+    // Add UV setup first - either reprojection or passthrough
+    modules.push(
+      useReproject4326 && reproject4326Props
+        ? { module: Reproject4326, props: reproject4326Props }
+        : { module: PassthroughUV, props: {} },
+    );
+
     if (this.props.renderPipeline instanceof ImageData) {
+      // ImageData path: create texture and sample it
       const imageData = this.props.renderPipeline;
       const texture = this.context.device.createTexture({
         format: "rgba8unorm",
@@ -420,48 +426,14 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         data: imageData.data,
       });
 
-      if (useReproject4326 && reproject4326Props) {
-        // Combined reprojection + texture sampling
-        modules.push({
-          module: PassthroughUV,
-          props: {},
-        });
-        modules.push({
-          module: ReprojectTexture,
-          props: {
-            textureName: texture,
-            latBounds: reproject4326Props.latBounds,
-            mercatorYBounds: reproject4326Props.mercatorYBounds,
-            latIsAscending: reproject4326Props.latIsAscending,
-          },
-        });
-      } else {
-        // No reprojection needed
-        modules.push({
-          module: PassthroughUV,
-          props: {},
-        });
-        modules.push({
-          module: CreateTexture,
-          props: {
-            textureName: texture,
-          },
-        });
-      }
+      modules.push({
+        module: CreateTexture,
+        props: {
+          textureName: texture,
+        },
+      });
     } else {
       // Custom render pipeline - user handles their own texture sampling
-      // Add UV setup first
-      if (useReproject4326 && reproject4326Props) {
-        modules.push({
-          module: Reproject4326,
-          props: reproject4326Props,
-        });
-      } else {
-        modules.push({
-          module: PassthroughUV,
-          props: {},
-        });
-      }
       modules.push(...this.props.renderPipeline);
     }
 
