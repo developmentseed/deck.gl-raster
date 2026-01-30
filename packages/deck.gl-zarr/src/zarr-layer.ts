@@ -188,7 +188,15 @@ export interface ZarrLayerProps<DataT extends MinimalDataT = DefaultDataT>
   onZarrLoad?: (
     metadata: ZarrMultiscaleMetadata,
     options: {
-      bounds: Bounds;
+      /**
+       * Bounds of the image in geographic coordinates (WGS84)
+       */
+      geographicBounds: {
+        west: number;
+        south: number;
+        east: number;
+        north: number;
+      };
       tileMatrixSet: TileMatrixSet;
     },
   ) => void;
@@ -368,10 +376,16 @@ export class ZarrLayer<
       ? [bbox.lowerLeft[0], bbox.lowerLeft[1], bbox.upperRight[0], bbox.upperRight[1]]
       : bounds;
 
-    // Callback
+    // Callback with WGS84 bounds (like COGLayer's geographicBounds)
     if (this.props.onZarrLoad) {
+      const wgs = tileMatrixSet.wgsBounds;
       this.props.onZarrLoad(zarrMetadata, {
-        bounds: normalizedBounds,
+        geographicBounds: {
+          west: wgs.lowerLeft[0],
+          south: wgs.lowerLeft[1],
+          east: wgs.upperRight[0],
+          north: wgs.upperRight[1],
+        },
         tileMatrixSet,
       });
     }

@@ -100,6 +100,19 @@ export default function App() {
     debug,
     debugOpacity,
     beforeId: "boundary_country_outline",
+    onZarrLoad: (_metadata, options) => {
+      const { west, south, east, north } = options.geographicBounds;
+      mapRef.current?.fitBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        {
+          padding: 40,
+          duration: 1000,
+        },
+      );
+    },
     ...(dataset.proj4def && { proj4def: dataset.proj4def }),
     ...(dataset.version && { version: dataset.version }),
     ...(dataset.spatialDimensions && {
