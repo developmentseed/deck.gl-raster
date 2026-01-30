@@ -74,6 +74,21 @@ const DATASETS: Record<string, DatasetConfig> = {
       lon: "projection_x_coordinate",
     },
   },
+  "antarctic-ice-speed": {
+    name: "Antarctic Ice Speed",
+    description: "Ice velocity near Thwaites Glacier (EPSG:3031 Polar Stereographic)",
+    url: "https://carbonplan-share.s3.us-west-2.amazonaws.com/zarr-layer-examples/polar-subset.zarr",
+    variable: "velocity",
+    dimensionIndices: {},
+    normalization: { vmin: 0, vmax: 1.5 },
+    version: 2,
+    proj4def:
+      "+proj=stere +lat_0=-90 +lat_ts=-71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
+    spatialDimensions: {
+      lat: "y",
+      lon: "x",
+    },
+  },
 };
 
 
