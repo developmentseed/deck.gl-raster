@@ -2,16 +2,16 @@
  * Internal type definitions for deck.gl-zarr
  */
 
+import type { TileMatrixSet } from "@developmentseed/deck.gl-raster";
+import type { ProjectionDefinition } from "proj4";
+import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import type {
   Bounds,
   FormatDescriptor,
   ZarrLevelMetadata,
   ZarrMultiscaleMetadata,
 } from "zarr-multiscale-metadata";
-import type { TileMatrixSet } from "@developmentseed/deck.gl-raster";
 import type { Readable } from "zarrita";
-import type { ProjectionDefinition } from "proj4";
-import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 
 export type { Bounds };
 
@@ -91,7 +91,9 @@ export interface ZarrLayerState {
 /**
  * Colormap function that maps a normalized value (0-255) to an RGBA color.
  */
-export type ColormapFunction = (normalizedValue: number) => [number, number, number, number];
+export type ColormapFunction = (
+  normalizedValue: number,
+) => [number, number, number, number];
 
 // Zarrita namespace for type imports
 import type * as zarr from "zarrita";

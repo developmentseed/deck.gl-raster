@@ -76,7 +76,8 @@ const DATASETS: Record<string, DatasetConfig> = {
   },
   "antarctic-ice-speed": {
     name: "Antarctic Ice Speed",
-    description: "Ice velocity near Thwaites Glacier (EPSG:3031 Polar Stereographic)",
+    description:
+      "Ice velocity near Thwaites Glacier (EPSG:3031 Polar Stereographic)",
     url: "https://carbonplan-share.s3.us-west-2.amazonaws.com/zarr-layer-examples/polar-subset.zarr",
     variable: "velocity",
     dimensionIndices: {},
@@ -90,7 +91,6 @@ const DATASETS: Record<string, DatasetConfig> = {
     },
   },
 };
-
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);

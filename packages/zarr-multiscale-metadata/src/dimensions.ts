@@ -4,12 +4,20 @@
  * Utilities for identifying spatial dimensions in Zarr arrays.
  */
 
-import type { SpatialDimIndices, DimensionInfo, SpatialDimensionOverrides } from './types'
-import { SPATIAL_DIMENSION_ALIASES } from './constants'
+import { SPATIAL_DIMENSION_ALIASES } from "./constants";
+import type {
+  DimensionInfo,
+  SpatialDimensionOverrides,
+  SpatialDimIndices,
+} from "./types";
 
 // Pre-computed lowercase alias Sets to avoid repeated allocations
-const LOWER_LAT_ALIASES = new Set(SPATIAL_DIMENSION_ALIASES.lat.map(a => a.toLowerCase()))
-const LOWER_LON_ALIASES = new Set(SPATIAL_DIMENSION_ALIASES.lon.map(a => a.toLowerCase()))
+const LOWER_LAT_ALIASES = new Set(
+  SPATIAL_DIMENSION_ALIASES.lat.map((a) => a.toLowerCase()),
+);
+const LOWER_LON_ALIASES = new Set(
+  SPATIAL_DIMENSION_ALIASES.lon.map((a) => a.toLowerCase()),
+);
 
 /**
  * Identify spatial (lat/lon) dimensions within an array's dimension names.
@@ -23,35 +31,35 @@ const LOWER_LON_ALIASES = new Set(SPATIAL_DIMENSION_ALIASES.lon.map(a => a.toLow
  */
 export function identifySpatialDimensions(
   dimensions: string[],
-  overrides?: SpatialDimensionOverrides
+  overrides?: SpatialDimensionOverrides,
 ): SpatialDimIndices {
-  const result: SpatialDimIndices = { x: null, y: null }
+  const result: SpatialDimIndices = { x: null, y: null };
 
   // Find lat (y) dimension
   for (let i = 0; i < dimensions.length; i++) {
-    const name = dimensions[i].toLowerCase()
+    const name = dimensions[i].toLowerCase();
     const isLat = overrides?.lat
       ? name === overrides.lat.toLowerCase()
-      : LOWER_LAT_ALIASES.has(name)
+      : LOWER_LAT_ALIASES.has(name);
     if (isLat) {
-      result.y = i
-      break
+      result.y = i;
+      break;
     }
   }
 
   // Find lon (x) dimension
   for (let i = 0; i < dimensions.length; i++) {
-    const name = dimensions[i].toLowerCase()
+    const name = dimensions[i].toLowerCase();
     const isLon = overrides?.lon
       ? name === overrides.lon.toLowerCase()
-      : LOWER_LON_ALIASES.has(name)
+      : LOWER_LON_ALIASES.has(name);
     if (isLon) {
-      result.x = i
-      break
+      result.x = i;
+      break;
     }
   }
 
-  return result
+  return result;
 }
 
 /**
@@ -63,13 +71,13 @@ export function identifySpatialDimensions(
  */
 export function buildDimensionInfo(
   dimensions: string[],
-  shape: number[]
+  shape: number[],
 ): DimensionInfo[] {
   return dimensions.map((name, index) => ({
     name,
     index,
     size: shape[index] ?? 0,
-  }))
+  }));
 }
 
 /**
@@ -79,8 +87,8 @@ export function buildDimensionInfo(
  * @returns true if the name is a known spatial dimension alias
  */
 export function isSpatialDimension(name: string): boolean {
-  const lower = name.toLowerCase()
-  return LOWER_LAT_ALIASES.has(lower) || LOWER_LON_ALIASES.has(lower)
+  const lower = name.toLowerCase();
+  return LOWER_LAT_ALIASES.has(lower) || LOWER_LON_ALIASES.has(lower);
 }
 
 /**
@@ -89,13 +97,13 @@ export function isSpatialDimension(name: string): boolean {
  * @param name - Dimension name to check
  * @returns 'lat', 'lon', or null if not a spatial dimension
  */
-export function getSpatialDimensionKey(name: string): 'lat' | 'lon' | null {
-  const lower = name.toLowerCase()
+export function getSpatialDimensionKey(name: string): "lat" | "lon" | null {
+  const lower = name.toLowerCase();
   if (LOWER_LAT_ALIASES.has(lower)) {
-    return 'lat'
+    return "lat";
   }
   if (LOWER_LON_ALIASES.has(lower)) {
-    return 'lon'
+    return "lon";
   }
-  return null
+  return null;
 }

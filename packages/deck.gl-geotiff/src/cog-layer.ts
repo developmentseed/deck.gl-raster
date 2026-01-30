@@ -358,14 +358,18 @@ export class COGLayer<
       // Check if source CRS supports GPU reprojection bypass
       const crsCode = sourceProjection?.code?.toUpperCase();
       const sourceCrs: SourceCrs =
-        crsCode === "EPSG:4326" ? "EPSG:4326" :
-        crsCode === "EPSG:3857" ? "EPSG:3857" :
-        null;
+        crsCode === "EPSG:4326"
+          ? "EPSG:4326"
+          : crsCode === "EPSG:3857"
+            ? "EPSG:3857"
+            : null;
 
       // Get tile bounds for GPU reprojection
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const projectedBounds = (tile as any)?.projectedBounds;
-      let tileBounds: { west: number; south: number; east: number; north: number } | undefined;
+      let tileBounds:
+        | { west: number; south: number; east: number; north: number }
+        | undefined;
       let tileLatBounds: [number, number] | undefined;
 
       if (sourceCrs && projectedBounds) {
@@ -400,14 +404,16 @@ export class COGLayer<
           renderPipeline: renderTile(data),
           maxError,
           // Only provide reprojectionFns for non-GPU modes
-          ...(sourceCrs ? {} : {
-            reprojectionFns: {
-              forwardTransform,
-              inverseTransform,
-              forwardReproject,
-              inverseReproject,
-            },
-          }),
+          ...(sourceCrs
+            ? {}
+            : {
+                reprojectionFns: {
+                  forwardTransform,
+                  inverseTransform,
+                  forwardReproject,
+                  inverseReproject,
+                },
+              }),
           // GPU reprojection props
           sourceCrs,
           bounds: tileBounds,

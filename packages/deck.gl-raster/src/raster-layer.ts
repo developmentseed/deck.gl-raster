@@ -8,7 +8,7 @@ import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { CreateTexture } from "./gpu-modules/create-texture";
-import { Reproject4326, latToMercatorNorm } from "./gpu-modules/reproject-4326";
+import { latToMercatorNorm, Reproject4326 } from "./gpu-modules/reproject-4326";
 import type { RasterModule } from "./gpu-modules/types";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
 
@@ -202,7 +202,9 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     // Fast path for EPSG:4326 and EPSG:3857 source data - no mesh refinement needed
     if (sourceCrs === "EPSG:4326" || sourceCrs === "EPSG:3857") {
       if (!bounds) {
-        throw new Error(`bounds prop is required when sourceCrs is '${sourceCrs}'`);
+        throw new Error(
+          `bounds prop is required when sourceCrs is '${sourceCrs}'`,
+        );
       }
 
       if (sourceCrs === "EPSG:4326") {
@@ -249,7 +251,9 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
     // Full mesh refinement for other CRS
     if (!reprojectionFns) {
-      throw new Error("reprojectionFns prop is required when sourceCrs is not set");
+      throw new Error(
+        "reprojectionFns prop is required when sourceCrs is not set",
+      );
     }
 
     // The mesh is lined up with the upper and left edges of the raster. So if
@@ -292,19 +296,25 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         this.getSubLayerProps({
           id: "polygon",
           data: { length: numTriangles },
-          getPolygon: (
-            _: unknown,
-            { index }: { index: number },
-          ) => {
+          getPolygon: (_: unknown, { index }: { index: number }) => {
             const { positions, indices } = mesh;
             const a = indices[index * 3]!;
             const b = indices[index * 3 + 1]!;
             const c = indices[index * 3 + 2]!;
 
             // Positions are already in WGS84
-            const pa: [number, number] = [positions[a * 3]!, positions[a * 3 + 1]!];
-            const pb: [number, number] = [positions[b * 3]!, positions[b * 3 + 1]!];
-            const pc: [number, number] = [positions[c * 3]!, positions[c * 3 + 1]!];
+            const pa: [number, number] = [
+              positions[a * 3]!,
+              positions[a * 3 + 1]!,
+            ];
+            const pb: [number, number] = [
+              positions[b * 3]!,
+              positions[b * 3 + 1]!,
+            ];
+            const pc: [number, number] = [
+              positions[c * 3]!,
+              positions[c * 3 + 1]!,
+            ];
 
             return [pa, pb, pc, pa];
           },
@@ -360,9 +370,18 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
           const c = triangles[index * 3 + 2]!;
 
           // Positions are already in WGS84 (we target EPSG:4326)
-          const pa: [number, number] = [positions[a * 2]!, positions[a * 2 + 1]!];
-          const pb: [number, number] = [positions[b * 2]!, positions[b * 2 + 1]!];
-          const pc: [number, number] = [positions[c * 2]!, positions[c * 2 + 1]!];
+          const pa: [number, number] = [
+            positions[a * 2]!,
+            positions[a * 2 + 1]!,
+          ];
+          const pb: [number, number] = [
+            positions[b * 2]!,
+            positions[b * 2 + 1]!,
+          ];
+          const pc: [number, number] = [
+            positions[c * 2]!,
+            positions[c * 2 + 1]!,
+          ];
 
           return [pa, pb, pc, pa];
         },
@@ -537,10 +556,18 @@ function generateSimpleQuadMesh(
 
   // 4 vertices: NW, NE, SW, SE
   const positions = new Float32Array([
-    west, north, 0,  // 0: NW
-    east, north, 0,  // 1: NE
-    west, south, 0,  // 2: SW
-    east, south, 0,  // 3: SE
+    west,
+    north,
+    0, // 0: NW
+    east,
+    north,
+    0, // 1: NE
+    west,
+    south,
+    0, // 2: SW
+    east,
+    south,
+    0, // 3: SE
   ]);
 
   // UV coordinates depend on texture orientation
@@ -548,22 +575,34 @@ function generateSimpleQuadMesh(
   // For latIsAscending=true (row 0 = south): NW=(0,1), NE=(1,1), SW=(0,0), SE=(1,0)
   const texCoords = latIsAscending
     ? new Float32Array([
-        0, 1,  // NW
-        1, 1,  // NE
-        0, 0,  // SW
-        1, 0,  // SE
+        0,
+        1, // NW
+        1,
+        1, // NE
+        0,
+        0, // SW
+        1,
+        0, // SE
       ])
     : new Float32Array([
-        0, 0,  // NW
-        1, 0,  // NE
-        0, 1,  // SW
-        1, 1,  // SE
+        0,
+        0, // NW
+        1,
+        0, // NE
+        0,
+        1, // SW
+        1,
+        1, // SE
       ]);
 
   // Two triangles: NW-SW-NE and NE-SW-SE
   const indices = new Uint32Array([
-    0, 2, 1,  // NW, SW, NE
-    1, 2, 3,  // NE, SW, SE
+    0,
+    2,
+    1, // NW, SW, NE
+    1,
+    2,
+    3, // NE, SW, SE
   ]);
 
   return {

@@ -37,110 +37,98 @@
  * @packageDocumentation
  */
 
-// Main parser
-export { parseZarrMetadata, createZarritaRoot } from './parser'
-
-// Format descriptor
-export {
-  createFormatDescriptor,
-  createExplicitFormatDescriptor,
-  isTiledDescriptor,
-  requiresProj4Reprojection,
-  isStandardCrs,
-  type FormatDescriptor,
-  type TileConvention,
-} from './format-descriptor'
-
 // Metadata cache
 export {
-  getCachedMetadata,
-  setCachedMetadata,
-  hasCachedMetadata,
   clearMetadataCache,
-} from './cache'
-
+  getCachedMetadata,
+  hasCachedMetadata,
+  setCachedMetadata,
+} from "./cache";
+// Constants
+export { SPATIAL_DIM_NAMES, SPATIAL_DIMENSION_ALIASES } from "./constants";
 // Coordinate loading utilities
 export {
-  loadCoordinateBounds,
-  findHighestResolutionLevel,
   type CoordinateBoundsResult,
+  findHighestResolutionLevel,
   type LoadCoordinateBoundsOptions,
-} from './coordinates'
-
-// Dimension utilities
-export {
-  identifySpatialDimensions,
-  buildDimensionInfo,
-  isSpatialDimension,
-  getSpatialDimensionKey,
-} from './dimensions'
-
+  loadCoordinateBounds,
+} from "./coordinates";
 // CRS utilities
 export {
-  extractCrsFromZarrConventions,
-  extractCrsFromOmeNgff,
+  createExplicitCrs,
   extractCrsFromGridMapping,
   extractCrsFromGroupAttributes,
+  extractCrsFromOmeNgff,
+  extractCrsFromZarrConventions,
   findGridMapping,
-  createExplicitCrs,
-} from './crs'
-
+} from "./crs";
+// Standard CRS definitions
+export {
+  getStandardCRS,
+  getTiledBounds,
+  STANDARD_CRS,
+  type StandardCRSDef,
+  TILED_BOUNDS,
+} from "./crs-defs";
+// Dimension utilities
+export {
+  buildDimensionInfo,
+  getSpatialDimensionKey,
+  identifySpatialDimensions,
+  isSpatialDimension,
+} from "./dimensions";
+// Format descriptor
+export {
+  createExplicitFormatDescriptor,
+  createFormatDescriptor,
+  type FormatDescriptor,
+  isStandardCrs,
+  isTiledDescriptor,
+  requiresProj4Reprojection,
+  type TileConvention,
+} from "./format-descriptor";
 // Multiscale utilities
 export {
   detectMultiscaleFormat,
-  parseZarrConventions,
-  parseOmeNgff,
-  parseNdpyramidTiled,
   getConsolidatedMetadata,
   type MultiscaleParseResult,
-} from './multiscale'
-
-// Constants
-export { SPATIAL_DIMENSION_ALIASES, SPATIAL_DIM_NAMES } from './constants'
-
-// Standard CRS definitions
-export {
-  STANDARD_CRS,
-  TILED_BOUNDS,
-  getStandardCRS,
-  getTiledBounds,
-  type StandardCRSDef,
-} from './crs-defs'
+  parseNdpyramidTiled,
+  parseOmeNgff,
+  parseZarrConventions,
+} from "./multiscale";
+// Main parser
+export { createZarritaRoot, parseZarrMetadata } from "./parser";
 
 // Type exports
 export type {
-  // Core output types
-  ZarrMultiscaleMetadata,
-  ZarrArrayMetadata,
-  ZarrLevelMetadata,
-  MultiscaleFormat,
   Bounds,
+  // CF conventions
+  CFGridMappingAttributes,
   CRSInfo,
   DimensionInfo,
-  SpatialDimIndices,
-
+  MetadataStore,
+  MultiscaleFormat,
+  NdpyramidTiledDataset,
+  NdpyramidTiledMultiscale,
+  OmeNgffAxis,
+  OmeNgffCoordinateSystem,
+  OmeNgffDataset,
+  OmeNgffMultiscale,
   // Parser options
   ParseOptions,
   SpatialDimensionOverrides,
-  MetadataStore,
-
-  // Raw Zarr metadata types
-  ZarrV2ConsolidatedMetadata,
-  ZarrV2ArrayMetadata,
-  ZarrV2Attributes,
-  ZarrV3GroupMetadata,
-  ZarrV3ArrayMetadata,
-
+  SpatialDimIndices,
+  ZarrArrayMetadata,
+  ZarrConventionsLayoutEntry,
   // Multiscale format types
   ZarrConventionsMultiscale,
-  ZarrConventionsLayoutEntry,
-  OmeNgffMultiscale,
-  OmeNgffDataset,
-  OmeNgffAxis,
-  OmeNgffCoordinateSystem,
-  NdpyramidTiledMultiscale,
-  NdpyramidTiledDataset,
-
-  // CF conventions
-  CFGridMappingAttributes,
-} from './types'
+  ZarrLevelMetadata,
+  // Core output types
+  ZarrMultiscaleMetadata,
+  ZarrV2ArrayMetadata,
+  ZarrV2Attributes,
+  // Raw Zarr metadata types
+  ZarrV2ConsolidatedMetadata,
+  ZarrV3ArrayMetadata,
+  ZarrV3GroupMetadata,
+} from "./types";

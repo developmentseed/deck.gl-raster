@@ -6,26 +6,26 @@
  * in multiple places (parsing, coordinate loading, etc).
  */
 
-import type { ZarrV2ConsolidatedMetadata, ZarrV3GroupMetadata } from './types'
+import type { ZarrV2ConsolidatedMetadata, ZarrV3GroupMetadata } from "./types";
 
-type CachedMetadata = ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata
+type CachedMetadata = ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata;
 
 // Module-level cache keyed by normalized source URL
-const metadataCache = new Map<string, CachedMetadata>()
+const metadataCache = new Map<string, CachedMetadata>();
 
 /**
  * Normalize a source URL for cache key purposes.
  */
 function normalizeUrl(source: string): string {
   // Remove trailing slash for consistency
-  return source.replace(/\/$/, '')
+  return source.replace(/\/$/, "");
 }
 
 /**
  * Get cached metadata for a source URL.
  */
 export function getCachedMetadata(source: string): CachedMetadata | undefined {
-  return metadataCache.get(normalizeUrl(source))
+  return metadataCache.get(normalizeUrl(source));
 }
 
 /**
@@ -33,21 +33,21 @@ export function getCachedMetadata(source: string): CachedMetadata | undefined {
  */
 export function setCachedMetadata(
   source: string,
-  metadata: CachedMetadata
+  metadata: CachedMetadata,
 ): void {
-  metadataCache.set(normalizeUrl(source), metadata)
+  metadataCache.set(normalizeUrl(source), metadata);
 }
 
 /**
  * Check if metadata is cached for a source URL.
  */
 export function hasCachedMetadata(source: string): boolean {
-  return metadataCache.has(normalizeUrl(source))
+  return metadataCache.has(normalizeUrl(source));
 }
 
 /**
  * Clear the metadata cache (useful for testing).
  */
 export function clearMetadataCache(): void {
-  metadataCache.clear()
+  metadataCache.clear();
 }

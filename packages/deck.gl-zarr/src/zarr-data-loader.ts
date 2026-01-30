@@ -4,17 +4,17 @@
  * Handles loading tile data from Zarr arrays using zarrita.
  */
 
+import type { TileMatrix } from "@developmentseed/deck.gl-raster";
+import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type {
   ZarrArrayMetadata,
   ZarrLevelMetadata,
   ZarrMultiscaleMetadata,
 } from "zarr-multiscale-metadata";
-import type { TileMatrix } from "@developmentseed/deck.gl-raster";
-import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import * as zarr from "zarrita";
 import type { Readable, Slice } from "zarrita";
-import { fromGeoTransform } from "./zarr-reprojection.js";
+import * as zarr from "zarrita";
 import type { SortedLevel } from "./types.js";
+import { fromGeoTransform } from "./zarr-reprojection.js";
 
 /**
  * Options for loading Zarr tile data.
@@ -45,7 +45,15 @@ export interface LoadZarrTileDataOptions {
  */
 export interface ZarrTileData {
   /** Tile data as TypedArray */
-  data: Float32Array | Float64Array | Int32Array | Uint32Array | Int16Array | Uint16Array | Int8Array | Uint8Array;
+  data:
+    | Float32Array
+    | Float64Array
+    | Int32Array
+    | Uint32Array
+    | Int16Array
+    | Uint16Array
+    | Int8Array
+    | Uint8Array;
   /** Tile width in pixels */
   width: number;
   /** Tile height in pixels */
@@ -150,8 +158,10 @@ export async function loadZarrTileData(
 
   // Compute actual tile dimensions (may be smaller at edges)
   const { tileWidth, tileHeight } = tileMatrix;
-  const xDimIndex = metadata.base.spatialDimIndices.x ?? levelMeta.shape.length - 1;
-  const yDimIndex = metadata.base.spatialDimIndices.y ?? levelMeta.shape.length - 2;
+  const xDimIndex =
+    metadata.base.spatialDimIndices.x ?? levelMeta.shape.length - 1;
+  const yDimIndex =
+    metadata.base.spatialDimIndices.y ?? levelMeta.shape.length - 2;
   const imageWidth = levelMeta.shape[xDimIndex]!;
   const imageHeight = levelMeta.shape[yDimIndex]!;
 
@@ -160,7 +170,8 @@ export async function loadZarrTileData(
 
   // Compute tile-specific geotransform (offset from level geotransform)
   const tileGeotransform = computeTileGeotransform(x, y, tileMatrix);
-  const { forwardTransform, inverseTransform } = fromGeoTransform(tileGeotransform);
+  const { forwardTransform, inverseTransform } =
+    fromGeoTransform(tileGeotransform);
 
   // Get data transform parameters
   const scaleFactor = levelMeta.scaleFactor ?? metadata.base.scaleFactor;
@@ -273,7 +284,14 @@ export function renderZarrTileToImageData(
     colormap?: (value: number) => [number, number, number, number];
   },
 ): ImageData {
-  const { data, width, height, fillValue, scaleFactor = 1, addOffset = 0 } = tileData;
+  const {
+    data,
+    width,
+    height,
+    fillValue,
+    scaleFactor = 1,
+    addOffset = 0,
+  } = tileData;
   const { vmin, vmax, colormap } = options ?? {};
 
   // Apply transforms and find range
@@ -313,7 +331,10 @@ export function renderZarrTileToImageData(
       pixels[pixelOffset + 3] = 0;
     } else {
       // Normalize to 0-255
-      const normalized = Math.max(0, Math.min(255, ((value - minVal) / range) * 255));
+      const normalized = Math.max(
+        0,
+        Math.min(255, ((value - minVal) / range) * 255),
+      );
 
       if (colormap) {
         const [r, g, b, a] = colormap(normalized);

@@ -29,12 +29,14 @@ const PI = Math.PI;
  */
 export function latToMercatorNorm(lat: number): number {
   const MERCATOR_LAT_LIMIT = 85.05112878;
-  const clamped = Math.max(-MERCATOR_LAT_LIMIT, Math.min(MERCATOR_LAT_LIMIT, lat));
+  const clamped = Math.max(
+    -MERCATOR_LAT_LIMIT,
+    Math.min(MERCATOR_LAT_LIMIT, lat),
+  );
   return (
     (1 -
       Math.log(
-        Math.tan((clamped * PI) / 180) +
-          1 / Math.cos((clamped * PI) / 180)
+        Math.tan((clamped * PI) / 180) + 1 / Math.cos((clamped * PI) / 180),
       ) /
         PI) /
     2

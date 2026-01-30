@@ -1,9 +1,9 @@
-export type { RasterModule } from "./gpu-modules/types.js";
 export {
-  Reproject4326,
   computeReproject4326Props,
   latToMercatorNorm,
+  Reproject4326,
 } from "./gpu-modules/reproject-4326.js";
+export type { RasterModule } from "./gpu-modules/types.js";
 export type { RasterLayerProps, SourceCrs } from "./raster-layer.js";
 export { RasterLayer } from "./raster-layer.js";
 export { RasterTileset2D } from "./raster-tileset/index.js";

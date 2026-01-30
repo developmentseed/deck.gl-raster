@@ -1,8 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { ZarrMultiscaleMetadata, ZarrLevelMetadata } from "zarr-multiscale-metadata";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  ZarrLevelMetadata,
+  ZarrMultiscaleMetadata,
+} from "zarr-multiscale-metadata";
 import { createFormatDescriptor } from "zarr-multiscale-metadata";
-import { parseZarrTileMatrixSet } from "../src/zarr-tile-matrix-set.js";
 import type { Bounds } from "../src/types.js";
+import { parseZarrTileMatrixSet } from "../src/zarr-tile-matrix-set.js";
 
 // Mock fetch for CRS resolution
 const mockFetch = vi.fn();
@@ -79,7 +82,12 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [-180, -90, 180, 90];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
 
       // TMS should be coarsest first
       expect(result.sortedLevels[0]?.zarrPath).toBe("coarse");
@@ -105,7 +113,12 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [-180, -90, 180, 90];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
 
       expect(result.sortedLevels[0]?.zarrPath).toBe("coarse");
       expect(result.sortedLevels[2]?.zarrPath).toBe("fine");
@@ -121,7 +134,12 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [-180, -90, 180, 90];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
 
       expect(result.sortedLevels[0]?.zarrPath).toBe("coarse");
       expect(result.sortedLevels[1]?.zarrPath).toBe("medium");
@@ -138,7 +156,12 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [-180, -90, 180, 90];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
       const geotransform = result.tileMatrixSet.tileMatrices[0]?.geotransform;
 
       // [pixelWidth, 0, xMin, 0, -pixelHeight, yMax]
@@ -158,7 +181,12 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [-180, -90, 180, 90];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, true, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        true,
+        formatDescriptor,
+      );
       const geotransform = result.tileMatrixSet.tileMatrices[0]?.geotransform;
 
       // [pixelWidth, 0, xMin, 0, pixelHeight, yMin]
@@ -185,9 +213,15 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [440720, 3721320, 470720, 3751320];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor, {
-        crs: "EPSG:32632",
-      });
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+        {
+          crs: "EPSG:32632",
+        },
+      );
 
       const geotransform = result.tileMatrixSet.tileMatrices[0]?.geotransform;
 
@@ -224,9 +258,15 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [440720, 3721320, 500720, 3751320];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor, {
-        crs: "EPSG:32632",
-      });
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+        {
+          crs: "EPSG:32632",
+        },
+      );
 
       // All levels should share the same origin (from bounds), not from their spatialTransform
       const coarseMatrix = result.tileMatrixSet.tileMatrices[0]!;
@@ -251,7 +291,12 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [-10, 40, 10, 60]; // Part of Europe
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
 
       const wgsBounds = result.tileMatrixSet.wgsBounds;
       expect(wgsBounds.lowerLeft[0]).toBeCloseTo(-10);
@@ -264,13 +309,23 @@ describe("parseZarrTileMatrixSet", () => {
   describe("tile matrix properties", () => {
     it("should compute matrixWidth and matrixHeight correctly", async () => {
       const metadata = createMockMetadata([
-        { path: "0", shape: [1000, 2000], chunks: [256, 256], resolution: [1, 1] },
+        {
+          path: "0",
+          shape: [1000, 2000],
+          chunks: [256, 256],
+          resolution: [1, 1],
+        },
       ]);
 
       const bounds: Bounds = [0, 0, 2000, 1000];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
       const tileMatrix = result.tileMatrixSet.tileMatrices[0]!;
 
       expect(tileMatrix.tileWidth).toBe(256);
@@ -281,14 +336,26 @@ describe("parseZarrTileMatrixSet", () => {
 
     it("should use tileSize for ndpyramid-tiled format", async () => {
       const metadata = createMockMetadata(
-        [{ path: "0", shape: [1000, 1000], chunks: [128, 128], resolution: [1, 1] }],
+        [
+          {
+            path: "0",
+            shape: [1000, 1000],
+            chunks: [128, 128],
+            resolution: [1, 1],
+          },
+        ],
         { tileSize: 512 },
       );
 
       const bounds: Bounds = [0, 0, 1000, 1000];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
       const tileMatrix = result.tileMatrixSet.tileMatrices[0]!;
 
       expect(tileMatrix.tileWidth).toBe(512);
@@ -303,7 +370,12 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [-180, -90, 180, 90];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
       const tileMatrix = result.tileMatrixSet.tileMatrices[0]!;
 
       // For 1 degree per pixel in WGS84
@@ -328,9 +400,7 @@ describe("parseZarrTileMatrixSet", () => {
       });
 
       // Should have called fetch with EPSG:32632
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("32632"),
-      );
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("32632"));
     });
 
     it("should use metadata CRS when no override provided", async () => {
@@ -342,7 +412,12 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [0, 0, 1000, 1000];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
 
       // EPSG:3857 has a built-in definition, so no fetch is needed
       // Just verify the CRS was used correctly by checking the projection units
@@ -358,7 +433,12 @@ describe("parseZarrTileMatrixSet", () => {
       const bounds: Bounds = [-180, -90, 180, 90];
       const formatDescriptor = createFormatDescriptor(metadata);
 
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
 
       // EPSG:4326 has a built-in definition, so no fetch is needed
       // Verify it defaulted to 4326 by checking the coordinate units
@@ -378,7 +458,12 @@ describe("parseZarrTileMatrixSet", () => {
 
       const bounds: Bounds = [-125.6, 24.75, -66.6, 49.1];
       const formatDescriptor = createFormatDescriptor(metadata);
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
 
       const boundsX = bounds[2] - bounds[0];
       const boundsY = bounds[3] - bounds[1];
@@ -410,7 +495,12 @@ describe("parseZarrTileMatrixSet", () => {
 
       const bounds: Bounds = [0, 0, 100, 50];
       const formatDescriptor = createFormatDescriptor(metadata);
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
 
       const boundsX = bounds[2] - bounds[0];
       const boundsY = bounds[3] - bounds[1];
@@ -438,7 +528,12 @@ describe("parseZarrTileMatrixSet", () => {
       const formatDescriptor = createFormatDescriptor(metadata);
 
       // Should not throw
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
       expect(result.tileMatrixSet.tileMatrices[0]).toBeDefined();
 
       const tm = result.tileMatrixSet.tileMatrices[0]!;
@@ -461,7 +556,12 @@ describe("parseZarrTileMatrixSet", () => {
 
       const bounds: Bounds = [-10, 40, 10, 50];
       const formatDescriptor = createFormatDescriptor(metadata);
-      const result = await parseZarrTileMatrixSet(metadata, bounds, false, formatDescriptor);
+      const result = await parseZarrTileMatrixSet(
+        metadata,
+        bounds,
+        false,
+        formatDescriptor,
+      );
 
       const boundsX = bounds[2] - bounds[0]; // 20
       const boundsY = bounds[3] - bounds[1]; // 10

@@ -6,20 +6,19 @@
  */
 
 import type {
+  TileMatrix,
+  TileMatrixSet,
+  TileMatrixSetBoundingBox,
+} from "@developmentseed/deck.gl-raster";
+import proj4 from "proj4";
+import type {
   Bounds,
   FormatDescriptor,
   ZarrLevelMetadata,
   ZarrMultiscaleMetadata,
 } from "zarr-multiscale-metadata";
 import { STANDARD_CRS } from "zarr-multiscale-metadata";
-import type {
-  TileMatrix,
-  TileMatrixSet,
-  TileMatrixSetBoundingBox,
-} from "@developmentseed/deck.gl-raster";
-import proj4 from "proj4";
 import Ellipsoid from "./ellipsoids.js";
-import { parseCrs } from "./zarr-reprojection.js";
 import type {
   ParseZarrTileMatrixSetOptions,
   ProjectionInfo,
@@ -27,6 +26,7 @@ import type {
   SupportedCrsUnit,
   ZarrTileMatrixSetResult,
 } from "./types.js";
+import { parseCrs } from "./zarr-reprojection.js";
 
 // 0.28 mm per pixel (OGC standard)
 // https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15
@@ -101,7 +101,10 @@ export async function parseZarrTileMatrixSet(
   options?: ParseZarrTileMatrixSetOptions,
 ): Promise<ZarrTileMatrixSetResult> {
   // Resolve CRS - user override takes precedence over formatDescriptor
-  const projectionInfo = await getProjectionInfo(formatDescriptor, options?.crs);
+  const projectionInfo = await getProjectionInfo(
+    formatDescriptor,
+    options?.crs,
+  );
 
   // Normalize longitude bounds if using geographic coordinates
   const isGeographic = projectionInfo.coordinatesUnits === "degree";
@@ -204,7 +207,9 @@ async function getProjectionInfo(
  * The code field is automatically derived for standard CRS and EPSG codes.
  * For raw proj4 strings, code will be undefined.
  */
-async function resolveCrsToProjectionInfo(crs: string): Promise<ProjectionInfo> {
+async function resolveCrsToProjectionInfo(
+  crs: string,
+): Promise<ProjectionInfo> {
   // Check standard CRS definitions first
   const standard = STANDARD_CRS[crs.toUpperCase()];
   if (standard) {
@@ -256,24 +261,25 @@ async function resolveCrsToProjectionInfo(crs: string): Promise<ProjectionInfo> 
  * For formats like ndpyramid-tiled that use placeholder resolution values [1.0, 1.0],
  * we fall back to sorting by pixel count (smaller = coarser = first).
  */
-function sortLevelsByResolution(
-  levels: ZarrLevelMetadata[],
-): SortedLevel[] {
+function sortLevelsByResolution(levels: ZarrLevelMetadata[]): SortedLevel[] {
   // Check if all levels have the same (placeholder) resolution
   const firstRes = levels[0]?.resolution;
-  const allSameResolution = firstRes && levels.every(
-    (level) =>
-      level.resolution[0] === firstRes[0] &&
-      level.resolution[1] === firstRes[1]
-  );
+  const allSameResolution =
+    firstRes &&
+    levels.every(
+      (level) =>
+        level.resolution[0] === firstRes[0] &&
+        level.resolution[1] === firstRes[1],
+    );
 
   // Create sorted array with computed sort key
   const indexed = levels.map((level) => {
     // Compute pixel count from shape (use last two dimensions as spatial)
     const shape = level.shape;
-    const pixelCount = shape.length >= 2
-      ? shape[shape.length - 1]! * shape[shape.length - 2]!
-      : 0;
+    const pixelCount =
+      shape.length >= 2
+        ? shape[shape.length - 1]! * shape[shape.length - 2]!
+        : 0;
 
     return {
       level,

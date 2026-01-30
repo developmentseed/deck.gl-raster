@@ -5,48 +5,48 @@
  * Combines V2/V3 loading, multiscale detection, and CRS extraction.
  */
 
-import * as zarr from 'zarrita'
-import type { Readable, AsyncReadable } from 'zarrita'
-import type {
-  ZarrMultiscaleMetadata,
-  ZarrArrayMetadata,
-  ZarrLevelMetadata,
-  ZarrV2ConsolidatedMetadata,
-  ZarrV2ArrayMetadata,
-  ZarrV2Attributes,
-  ZarrV3GroupMetadata,
-  ZarrV3ArrayMetadata,
-  ZarrConventionsMultiscale,
-  OmeNgffMultiscale,
-  NdpyramidTiledMultiscale,
-  ParseOptions,
-  MetadataStore,
-  CRSInfo,
-  MultiscaleFormat,
-} from './types'
-import { identifySpatialDimensions } from './dimensions'
+import type { AsyncReadable, Readable } from "zarrita";
+import * as zarr from "zarrita";
+import { getCachedMetadata, setCachedMetadata } from "./cache";
+import {
+  createExplicitCrs,
+  extractCrsFromGroupAttributes,
+  findGridMapping,
+} from "./crs";
+import { identifySpatialDimensions } from "./dimensions";
 import {
   detectMultiscaleFormat,
-  parseZarrConventions,
-  parseOmeNgff,
-  parseNdpyramidTiled,
   getConsolidatedMetadata,
-} from './multiscale'
-import {
-  findGridMapping,
-  extractCrsFromGroupAttributes,
-  createExplicitCrs,
-} from './crs'
-import { getCachedMetadata, setCachedMetadata } from './cache'
+  parseNdpyramidTiled,
+  parseOmeNgff,
+  parseZarrConventions,
+} from "./multiscale";
+import type {
+  CRSInfo,
+  MetadataStore,
+  MultiscaleFormat,
+  NdpyramidTiledMultiscale,
+  OmeNgffMultiscale,
+  ParseOptions,
+  ZarrArrayMetadata,
+  ZarrConventionsMultiscale,
+  ZarrLevelMetadata,
+  ZarrMultiscaleMetadata,
+  ZarrV2ArrayMetadata,
+  ZarrV2Attributes,
+  ZarrV2ConsolidatedMetadata,
+  ZarrV3ArrayMetadata,
+  ZarrV3GroupMetadata,
+} from "./types";
 
-const textDecoder = new TextDecoder()
+const textDecoder = new TextDecoder();
 
 /**
  * Decode bytes to JSON.
  */
 function decodeJSON(bytes: Uint8Array | undefined): unknown {
-  if (!bytes) return null
-  return JSON.parse(textDecoder.decode(bytes))
+  if (!bytes) return null;
+  return JSON.parse(textDecoder.decode(bytes));
 }
 
 /**
@@ -54,13 +54,13 @@ function decodeJSON(bytes: Uint8Array | undefined): unknown {
  */
 function getSourceUrl(
   source: string | MetadataStore,
-  options: ParseOptions
+  options: ParseOptions,
 ): string | null {
-  if (typeof source === 'string') {
-    return source
+  if (typeof source === "string") {
+    return source;
   }
   // For stores, use optional sourceUrl from options
-  return options.sourceUrl ?? null
+  return options.sourceUrl ?? null;
 }
 
 /**
@@ -78,51 +78,58 @@ function getSourceUrl(
  */
 export async function parseZarrMetadata(
   source: string | MetadataStore,
-  options: ParseOptions
+  options: ParseOptions,
 ): Promise<ZarrMultiscaleMetadata> {
-  const { variable, version, spatialDimensions, crs, proj4, preloadedMetadata } = options
-  const sourceUrl = getSourceUrl(source, options)
+  const {
+    variable,
+    version,
+    spatialDimensions,
+    crs,
+    proj4,
+    preloadedMetadata,
+  } = options;
+  const sourceUrl = getSourceUrl(source, options);
 
   // Create store from URL or use provided store
   const store =
-    typeof source === 'string' ? new zarr.FetchStore(source) : source
+    typeof source === "string" ? new zarr.FetchStore(source) : source;
 
   // Load metadata (with caching), using preloaded metadata if provided
   const { metadata: groupMetadata, detectedVersion } = await loadMetadata(
     store,
     version ?? null,
     sourceUrl,
-    preloadedMetadata
-  )
+    preloadedMetadata,
+  );
 
   // Extract multiscale attributes
-  const multiscales = extractMultiscales(groupMetadata)
-  const format = detectMultiscaleFormat(multiscales)
+  const multiscales = extractMultiscales(groupMetadata);
+  const format = detectMultiscaleFormat(multiscales);
 
   // Parse format-specific metadata
-  const consolidatedMeta = getConsolidatedMetadata(groupMetadata)
+  const consolidatedMeta = getConsolidatedMetadata(groupMetadata);
   const parseResult = parseMultiscaleByFormat(
     format,
     multiscales,
     variable,
-    consolidatedMeta
-  )
+    consolidatedMeta,
+  );
 
   // Get base level metadata
-  const basePath = parseResult.levelPaths[0] ?? ''
+  const basePath = parseResult.levelPaths[0] ?? "";
   const baseArrayMetadata = await loadArrayMetadata(
     store,
     basePath,
     variable,
     detectedVersion,
-    groupMetadata
-  )
+    groupMetadata,
+  );
 
   // Identify spatial dimensions
   const spatialDimIndices = identifySpatialDimensions(
     baseArrayMetadata.dimensions,
-    spatialDimensions
-  )
+    spatialDimensions,
+  );
 
   // Determine CRS with priority:
   // 1. User-provided explicit CRS
@@ -130,16 +137,16 @@ export async function parseZarrMetadata(
   // 3. proj:code at group level (per zarr-conventions spec)
   // 4. CF grid_mapping from array attributes
   // 5. null (consumer decides what to do)
-  let crsInfo: CRSInfo | null = null
+  let crsInfo: CRSInfo | null = null;
   if (crs) {
-    crsInfo = createExplicitCrs(crs, proj4)
+    crsInfo = createExplicitCrs(crs, proj4);
   } else if (parseResult.crs) {
-    crsInfo = parseResult.crs
+    crsInfo = parseResult.crs;
   } else {
     // Try proj:code at group level (per spec)
-    const groupLevelCrs = extractCrsFromGroupAttributes(groupMetadata)
+    const groupLevelCrs = extractCrsFromGroupAttributes(groupMetadata);
     if (groupLevelCrs) {
-      crsInfo = groupLevelCrs
+      crsInfo = groupLevelCrs;
     } else {
       // Try CF grid_mapping
       const arrayAttrs = await loadArrayAttributes(
@@ -147,9 +154,9 @@ export async function parseZarrMetadata(
         basePath,
         variable,
         detectedVersion,
-        groupMetadata
-      )
-      crsInfo = findGridMapping(arrayAttrs, groupMetadata)
+        groupMetadata,
+      );
+      crsInfo = findGridMapping(arrayAttrs, groupMetadata);
     }
   }
 
@@ -164,7 +171,7 @@ export async function parseZarrMetadata(
     spatialDimIndices,
     scaleFactor: baseArrayMetadata.scaleFactor,
     addOffset: baseArrayMetadata.addOffset,
-  }
+  };
 
   // Build level metadata with shapes
   const levels = await buildLevelMetadata(
@@ -173,8 +180,8 @@ export async function parseZarrMetadata(
     detectedVersion,
     groupMetadata,
     store,
-    base
-  )
+    base,
+  );
 
   return {
     version: detectedVersion,
@@ -185,7 +192,7 @@ export async function parseZarrMetadata(
     bounds: null, // Must be loaded separately via loadCoordinateBounds()
     latIsAscending: null, // Must be detected separately
     tileSize: parseResult.tileSize,
-  }
+  };
 }
 
 /**
@@ -197,57 +204,60 @@ async function loadMetadata(
   store: Readable | AsyncReadable<RequestInit>,
   version: 2 | 3 | null,
   sourceUrl: string | null,
-  preloadedMetadata?: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata
+  preloadedMetadata?: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata,
 ): Promise<{
-  metadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata
-  detectedVersion: 2 | 3
+  metadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata;
+  detectedVersion: 2 | 3;
 }> {
   // Use preloaded metadata if provided (avoids duplicate .zmetadata fetch)
   if (preloadedMetadata) {
-    const isV3 = 'node_type' in preloadedMetadata || ('zarr_format' in preloadedMetadata && (preloadedMetadata as { zarr_format?: number }).zarr_format === 3)
-    const detectedVersion = isV3 ? 3 : (version ?? 2)
+    const isV3 =
+      "node_type" in preloadedMetadata ||
+      ("zarr_format" in preloadedMetadata &&
+        (preloadedMetadata as { zarr_format?: number }).zarr_format === 3);
+    const detectedVersion = isV3 ? 3 : (version ?? 2);
     // Cache it for future use
-    if (sourceUrl) setCachedMetadata(sourceUrl, preloadedMetadata)
+    if (sourceUrl) setCachedMetadata(sourceUrl, preloadedMetadata);
     return {
       metadata: preloadedMetadata,
       detectedVersion: detectedVersion as 2 | 3,
-    }
+    };
   }
 
   // Check cache first
   if (sourceUrl) {
-    const cached = getCachedMetadata(sourceUrl)
+    const cached = getCachedMetadata(sourceUrl);
     if (cached) {
       // Determine version from cached metadata
-      const isV3 = 'node_type' in cached || 'zarr_format' in cached
+      const isV3 = "node_type" in cached || "zarr_format" in cached;
       return {
         metadata: cached,
         detectedVersion: isV3 ? 3 : 2,
-      }
+      };
     }
   }
 
   if (version === 3) {
-    const metadata = await loadV3Metadata(store)
-    if (sourceUrl) setCachedMetadata(sourceUrl, metadata)
-    return { metadata, detectedVersion: 3 }
+    const metadata = await loadV3Metadata(store);
+    if (sourceUrl) setCachedMetadata(sourceUrl, metadata);
+    return { metadata, detectedVersion: 3 };
   }
 
   if (version === 2) {
-    const metadata = await loadV2Metadata(store)
-    if (sourceUrl) setCachedMetadata(sourceUrl, metadata)
-    return { metadata, detectedVersion: 2 }
+    const metadata = await loadV2Metadata(store);
+    if (sourceUrl) setCachedMetadata(sourceUrl, metadata);
+    return { metadata, detectedVersion: 2 };
   }
 
   // Auto-detect: try V3 first, then V2
   try {
-    const metadata = await loadV3Metadata(store)
-    if (sourceUrl) setCachedMetadata(sourceUrl, metadata)
-    return { metadata, detectedVersion: 3 }
+    const metadata = await loadV3Metadata(store);
+    if (sourceUrl) setCachedMetadata(sourceUrl, metadata);
+    return { metadata, detectedVersion: 3 };
   } catch {
-    const metadata = await loadV2Metadata(store)
-    if (sourceUrl) setCachedMetadata(sourceUrl, metadata)
-    return { metadata, detectedVersion: 2 }
+    const metadata = await loadV2Metadata(store);
+    if (sourceUrl) setCachedMetadata(sourceUrl, metadata);
+    return { metadata, detectedVersion: 2 };
   }
 }
 
@@ -255,13 +265,13 @@ async function loadMetadata(
  * Load Zarr V2 consolidated metadata.
  */
 async function loadV2Metadata(
-  store: Readable | AsyncReadable<RequestInit>
+  store: Readable | AsyncReadable<RequestInit>,
 ): Promise<ZarrV2ConsolidatedMetadata> {
   // Try .zmetadata first (consolidated)
   try {
-    const bytes = await store.get('/.zmetadata')
+    const bytes = await store.get("/.zmetadata");
     if (bytes) {
-      return decodeJSON(bytes) as ZarrV2ConsolidatedMetadata
+      return decodeJSON(bytes) as ZarrV2ConsolidatedMetadata;
     }
   } catch {
     // Fall through
@@ -269,12 +279,12 @@ async function loadV2Metadata(
 
   // Fall back to just .zattrs
   try {
-    const zattrs = await store.get('/.zattrs')
+    const zattrs = await store.get("/.zattrs");
     return {
-      metadata: { '.zattrs': zattrs ? decodeJSON(zattrs) : {} },
-    }
+      metadata: { ".zattrs": zattrs ? decodeJSON(zattrs) : {} },
+    };
   } catch {
-    return { metadata: { '.zattrs': {} } }
+    return { metadata: { ".zattrs": {} } };
   }
 }
 
@@ -282,37 +292,37 @@ async function loadV2Metadata(
  * Load Zarr V3 metadata.
  */
 async function loadV3Metadata(
-  store: Readable | AsyncReadable<RequestInit>
+  store: Readable | AsyncReadable<RequestInit>,
 ): Promise<ZarrV3GroupMetadata> {
-  const bytes = await store.get('/zarr.json')
+  const bytes = await store.get("/zarr.json");
   if (!bytes) {
-    throw new Error('No zarr.json found')
+    throw new Error("No zarr.json found");
   }
-  return decodeJSON(bytes) as ZarrV3GroupMetadata
+  return decodeJSON(bytes) as ZarrV3GroupMetadata;
 }
 
 /**
  * Extract multiscales from group metadata.
  */
 function extractMultiscales(
-  metadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null
+  metadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null,
 ): unknown {
-  if (!metadata) return null
+  if (!metadata) return null;
 
   // V3: attributes.multiscales
-  const v3 = metadata as ZarrV3GroupMetadata
+  const v3 = metadata as ZarrV3GroupMetadata;
   if (v3.attributes?.multiscales) {
-    return v3.attributes.multiscales
+    return v3.attributes.multiscales;
   }
 
   // V2: .zattrs.multiscales
-  const v2 = metadata as ZarrV2ConsolidatedMetadata
-  const zattrs = v2.metadata?.['.zattrs'] as ZarrV2Attributes | undefined
+  const v2 = metadata as ZarrV2ConsolidatedMetadata;
+  const zattrs = v2.metadata?.[".zattrs"] as ZarrV2Attributes | undefined;
   if (zattrs?.multiscales) {
-    return zattrs.multiscales
+    return zattrs.multiscales;
   }
 
-  return null
+  return null;
 }
 
 /**
@@ -322,34 +332,34 @@ function parseMultiscaleByFormat(
   format: MultiscaleFormat,
   multiscales: unknown,
   variable: string,
-  consolidatedMeta: Record<string, ZarrV3ArrayMetadata> | null
+  consolidatedMeta: Record<string, ZarrV3ArrayMetadata> | null,
 ) {
   switch (format) {
-    case 'zarr-conventions':
+    case "zarr-conventions":
       return parseZarrConventions(
         multiscales as ZarrConventionsMultiscale,
         variable,
-        consolidatedMeta
-      )
-    case 'ome-ngff':
+        consolidatedMeta,
+      );
+    case "ome-ngff":
       return parseOmeNgff(
         multiscales as OmeNgffMultiscale[],
         variable,
-        consolidatedMeta
-      )
-    case 'ndpyramid-tiled':
+        consolidatedMeta,
+      );
+    case "ndpyramid-tiled":
       return parseNdpyramidTiled(
         multiscales as NdpyramidTiledMultiscale[],
         variable,
-        consolidatedMeta
-      )
+        consolidatedMeta,
+      );
     default:
       return {
-        format: 'single-level' as const,
-        levelPaths: [''],
+        format: "single-level" as const,
+        levelPaths: [""],
         levels: [],
         crs: null,
-      }
+      };
   }
 }
 
@@ -361,23 +371,25 @@ async function loadArrayMetadata(
   levelPath: string,
   variable: string,
   version: 2 | 3,
-  groupMetadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null
+  groupMetadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null,
 ): Promise<{
-  shape: number[]
-  chunks: number[]
-  dtype: string
-  fillValue: number | null
-  dimensions: string[]
-  scaleFactor: number | undefined
-  addOffset: number | undefined
+  shape: number[];
+  chunks: number[];
+  dtype: string;
+  fillValue: number | null;
+  dimensions: string[];
+  scaleFactor: number | undefined;
+  addOffset: number | undefined;
 }> {
   const arrayPath =
-    variable.includes('/') || !levelPath ? variable : `${levelPath}/${variable}`
+    variable.includes("/") || !levelPath
+      ? variable
+      : `${levelPath}/${variable}`;
 
   if (version === 3) {
-    return loadV3ArrayMetadata(store, arrayPath, groupMetadata)
+    return loadV3ArrayMetadata(store, arrayPath, groupMetadata);
   }
-  return loadV2ArrayMetadata(store, arrayPath, groupMetadata)
+  return loadV2ArrayMetadata(store, arrayPath, groupMetadata);
 }
 
 /**
@@ -386,42 +398,42 @@ async function loadArrayMetadata(
 async function loadV2ArrayMetadata(
   store: Readable | AsyncReadable<RequestInit>,
   arrayPath: string,
-  groupMetadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null
+  groupMetadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null,
 ): Promise<{
-  shape: number[]
-  chunks: number[]
-  dtype: string
-  fillValue: number | null
-  dimensions: string[]
-  scaleFactor: number | undefined
-  addOffset: number | undefined
+  shape: number[];
+  chunks: number[];
+  dtype: string;
+  fillValue: number | null;
+  dimensions: string[];
+  scaleFactor: number | undefined;
+  addOffset: number | undefined;
 }> {
-  const v2 = groupMetadata as ZarrV2ConsolidatedMetadata
+  const v2 = groupMetadata as ZarrV2ConsolidatedMetadata;
 
   // Try consolidated metadata first
   let zarray = v2?.metadata?.[`${arrayPath}/.zarray`] as
     | ZarrV2ArrayMetadata
-    | undefined
+    | undefined;
   let zattrs = v2?.metadata?.[`${arrayPath}/.zattrs`] as
     | ZarrV2Attributes
-    | undefined
+    | undefined;
 
   // Fall back to network requests
   if (!zarray) {
-    const bytes = await store.get(`/${arrayPath}/.zarray`)
-    zarray = bytes ? (decodeJSON(bytes) as ZarrV2ArrayMetadata) : undefined
+    const bytes = await store.get(`/${arrayPath}/.zarray`);
+    zarray = bytes ? (decodeJSON(bytes) as ZarrV2ArrayMetadata) : undefined;
   }
   if (!zattrs) {
     try {
-      const bytes = await store.get(`/${arrayPath}/.zattrs`)
-      zattrs = bytes ? (decodeJSON(bytes) as ZarrV2Attributes) : {}
+      const bytes = await store.get(`/${arrayPath}/.zattrs`);
+      zattrs = bytes ? (decodeJSON(bytes) as ZarrV2Attributes) : {};
     } catch {
-      zattrs = {}
+      zattrs = {};
     }
   }
 
   if (!zarray) {
-    throw new Error(`Array metadata not found at ${arrayPath}`)
+    throw new Error(`Array metadata not found at ${arrayPath}`);
   }
 
   return {
@@ -432,7 +444,7 @@ async function loadV2ArrayMetadata(
     dimensions: zattrs?._ARRAY_DIMENSIONS ?? [],
     scaleFactor: zattrs?.scale_factor,
     addOffset: zattrs?.add_offset,
-  }
+  };
 }
 
 /**
@@ -441,55 +453,61 @@ async function loadV2ArrayMetadata(
 async function loadV3ArrayMetadata(
   store: Readable | AsyncReadable<RequestInit>,
   arrayPath: string,
-  groupMetadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null
+  groupMetadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null,
 ): Promise<{
-  shape: number[]
-  chunks: number[]
-  dtype: string
-  fillValue: number | null
-  dimensions: string[]
-  scaleFactor: number | undefined
-  addOffset: number | undefined
+  shape: number[];
+  chunks: number[];
+  dtype: string;
+  fillValue: number | null;
+  dimensions: string[];
+  scaleFactor: number | undefined;
+  addOffset: number | undefined;
 }> {
-  const v3 = groupMetadata as ZarrV3GroupMetadata
+  const v3 = groupMetadata as ZarrV3GroupMetadata;
 
   // Try consolidated metadata first
-  let arrayMeta = v3?.consolidated_metadata?.metadata?.[arrayPath]
+  let arrayMeta = v3?.consolidated_metadata?.metadata?.[arrayPath];
 
   // Fall back to network request
   if (!arrayMeta) {
-    const bytes = await store.get(`/${arrayPath}/zarr.json`)
-    arrayMeta = bytes ? (decodeJSON(bytes) as ZarrV3ArrayMetadata) : undefined
+    const bytes = await store.get(`/${arrayPath}/zarr.json`);
+    arrayMeta = bytes ? (decodeJSON(bytes) as ZarrV3ArrayMetadata) : undefined;
   }
 
   if (!arrayMeta) {
-    throw new Error(`Array metadata not found at ${arrayPath}`)
+    throw new Error(`Array metadata not found at ${arrayPath}`);
   }
 
   // Extract chunks
-  const isSharded = arrayMeta.codecs?.[0]?.name === 'sharding_indexed'
+  const isSharded = arrayMeta.codecs?.[0]?.name === "sharding_indexed";
   const shardedChunks = isSharded
-    ? (arrayMeta.codecs?.[0]?.configuration?.chunk_shape as number[] | undefined)
-    : undefined
-  const gridChunks = arrayMeta.chunk_grid?.configuration?.chunk_shape
-  const legacyChunks = Array.isArray(arrayMeta.chunks) ? arrayMeta.chunks : undefined
-  const chunks = shardedChunks ?? gridChunks ?? legacyChunks ?? arrayMeta.shape
+    ? (arrayMeta.codecs?.[0]?.configuration?.chunk_shape as
+        | number[]
+        | undefined)
+    : undefined;
+  const gridChunks = arrayMeta.chunk_grid?.configuration?.chunk_shape;
+  const legacyChunks = Array.isArray(arrayMeta.chunks)
+    ? arrayMeta.chunks
+    : undefined;
+  const chunks = shardedChunks ?? gridChunks ?? legacyChunks ?? arrayMeta.shape;
 
   // Extract attributes
-  const attrs = arrayMeta.attributes as Record<string, unknown> | undefined
+  const attrs = arrayMeta.attributes as Record<string, unknown> | undefined;
   const legacyDims = Array.isArray(attrs?._ARRAY_DIMENSIONS)
     ? (attrs._ARRAY_DIMENSIONS as string[])
-    : []
+    : [];
 
   return {
     shape: arrayMeta.shape,
     chunks,
-    dtype: arrayMeta.data_type ?? '',
+    dtype: arrayMeta.data_type ?? "",
     fillValue: normalizeFillValue(arrayMeta.fill_value),
     dimensions: arrayMeta.dimension_names ?? legacyDims,
-    scaleFactor: typeof attrs?.scale_factor === 'number' ? attrs.scale_factor : undefined,
-    addOffset: typeof attrs?.add_offset === 'number' ? attrs.add_offset : undefined,
-  }
+    scaleFactor:
+      typeof attrs?.scale_factor === "number" ? attrs.scale_factor : undefined,
+    addOffset:
+      typeof attrs?.add_offset === "number" ? attrs.add_offset : undefined,
+  };
 }
 
 /**
@@ -500,40 +518,44 @@ async function loadArrayAttributes(
   levelPath: string,
   variable: string,
   version: 2 | 3,
-  groupMetadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null
+  groupMetadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null,
 ): Promise<ZarrV2Attributes | Record<string, unknown>> {
-  const arrayPath = levelPath ? `${levelPath}/${variable}` : variable
+  const arrayPath = levelPath ? `${levelPath}/${variable}` : variable;
 
   if (version === 3) {
-    const v3 = groupMetadata as ZarrV3GroupMetadata
-    let arrayMeta = v3?.consolidated_metadata?.metadata?.[arrayPath]
+    const v3 = groupMetadata as ZarrV3GroupMetadata;
+    let arrayMeta = v3?.consolidated_metadata?.metadata?.[arrayPath];
 
     // Fall back to network request if not in consolidated metadata
     if (!arrayMeta) {
       try {
-        const bytes = await store.get(`/${arrayPath}/zarr.json`)
-        arrayMeta = bytes ? (decodeJSON(bytes) as ZarrV3ArrayMetadata) : undefined
+        const bytes = await store.get(`/${arrayPath}/zarr.json`);
+        arrayMeta = bytes
+          ? (decodeJSON(bytes) as ZarrV3ArrayMetadata)
+          : undefined;
       } catch {
         // Ignore fetch errors
       }
     }
 
-    return arrayMeta?.attributes ?? {}
+    return arrayMeta?.attributes ?? {};
   }
 
-  const v2 = groupMetadata as ZarrV2ConsolidatedMetadata
-  let zattrs = v2?.metadata?.[`${arrayPath}/.zattrs`] as ZarrV2Attributes | undefined
+  const v2 = groupMetadata as ZarrV2ConsolidatedMetadata;
+  let zattrs = v2?.metadata?.[`${arrayPath}/.zattrs`] as
+    | ZarrV2Attributes
+    | undefined;
 
   if (!zattrs) {
     try {
-      const bytes = await store.get(`/${arrayPath}/.zattrs`)
-      zattrs = bytes ? (decodeJSON(bytes) as ZarrV2Attributes) : {}
+      const bytes = await store.get(`/${arrayPath}/.zattrs`);
+      zattrs = bytes ? (decodeJSON(bytes) as ZarrV2Attributes) : {};
     } catch {
-      zattrs = {}
+      zattrs = {};
     }
   }
 
-  return zattrs ?? {}
+  return zattrs ?? {};
 }
 
 /**
@@ -545,13 +567,13 @@ async function buildLevelMetadata(
   version: 2 | 3,
   groupMetadata: ZarrV2ConsolidatedMetadata | ZarrV3GroupMetadata | null,
   store: Readable | AsyncReadable<RequestInit>,
-  base: ZarrArrayMetadata
+  base: ZarrArrayMetadata,
 ): Promise<ZarrLevelMetadata[]> {
   // If no levels from multiscale, create single-level
   if (partialLevels.length === 0) {
     return [
       {
-        path: '',
+        path: "",
         shape: base.shape,
         chunks: base.chunks,
         resolution: [1.0, 1.0],
@@ -560,14 +582,14 @@ async function buildLevelMetadata(
         dtype: base.dtype,
         fillValue: base.fillValue,
       },
-    ]
+    ];
   }
 
   // Fill in any missing metadata
   return Promise.all(
     partialLevels.map(async (level) => {
       if (level.shape.length > 0) {
-        return level
+        return level;
       }
 
       // Load metadata for this level
@@ -577,8 +599,8 @@ async function buildLevelMetadata(
           level.path,
           variable,
           version,
-          groupMetadata
-        )
+          groupMetadata,
+        );
         return {
           ...level,
           shape: meta.shape,
@@ -587,34 +609,34 @@ async function buildLevelMetadata(
           fillValue: level.fillValue ?? meta.fillValue,
           scaleFactor: level.scaleFactor ?? meta.scaleFactor,
           addOffset: level.addOffset ?? meta.addOffset,
-        }
+        };
       } catch {
         // Use base level as fallback
         return {
           ...level,
           shape: base.shape,
           chunks: base.chunks,
-        }
+        };
       }
-    })
-  )
+    }),
+  );
 }
 
 /**
  * Normalize fill_value to number or null.
  */
 export function normalizeFillValue(value: unknown): number | null {
-  if (value === undefined || value === null) return null
-  if (typeof value === 'string') {
-    const lower = value.toLowerCase()
-    if (lower === 'nan') return Number.NaN
-    const parsed = Number(value)
-    return Number.isNaN(parsed) ? null : parsed
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string") {
+    const lower = value.toLowerCase();
+    if (lower === "nan") return Number.NaN;
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? null : parsed;
   }
-  if (typeof value === 'number') {
-    return value
+  if (typeof value === "number") {
+    return value;
   }
-  return null
+  return null;
 }
 
 /**
@@ -624,13 +646,13 @@ export function normalizeFillValue(value: unknown): number | null {
  * @returns A zarrita Location suitable for coordinate and tile data loading
  */
 export async function createZarritaRoot(
-  source: string
+  source: string,
 ): Promise<zarr.Location<Readable>> {
-  const store = new zarr.FetchStore(source)
+  const store = new zarr.FetchStore(source);
 
   // Use consolidated metadata for zarrita operations (coordinate loading, tile loading)
   // tryWithConsolidated reads .zmetadata once and serves metadata from it
   // Falls back gracefully to regular store if .zmetadata is absent
-  const consolidatedStore = await zarr.tryWithConsolidated(store)
-  return zarr.root(consolidatedStore)
+  const consolidatedStore = await zarr.tryWithConsolidated(store);
+  return zarr.root(consolidatedStore);
 }

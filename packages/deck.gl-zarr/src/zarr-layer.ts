@@ -5,18 +5,6 @@
  */
 
 import type {
-  Bounds,
-  FormatDescriptor,
-  ZarrMultiscaleMetadata,
-} from "zarr-multiscale-metadata";
-import {
-  createFormatDescriptor,
-  createZarritaRoot,
-  getCachedMetadata,
-  loadCoordinateBounds,
-  parseZarrMetadata,
-} from "zarr-multiscale-metadata";
-import type {
   CompositeLayerProps,
   Layer,
   LayersList,
@@ -39,8 +27,21 @@ import type {
 import { RasterLayer, RasterTileset2D } from "@developmentseed/deck.gl-raster";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device } from "@luma.gl/core";
-import * as zarr from "zarrita";
+import type {
+  Bounds,
+  FormatDescriptor,
+  ZarrMultiscaleMetadata,
+} from "zarr-multiscale-metadata";
+import {
+  createFormatDescriptor,
+  createZarritaRoot,
+  getCachedMetadata,
+  loadCoordinateBounds,
+  parseZarrMetadata,
+} from "zarr-multiscale-metadata";
 import type { Readable } from "zarrita";
+import * as zarr from "zarrita";
+import type { ColormapFunction, ProjectionInfo, SortedLevel } from "./types.js";
 import type { ZarrTileData } from "./zarr-data-loader.js";
 import {
   loadZarrTileData,
@@ -48,7 +49,6 @@ import {
 } from "./zarr-data-loader.js";
 import { createReprojectionFns } from "./zarr-reprojection.js";
 import { parseZarrTileMatrixSet } from "./zarr-tile-matrix-set.js";
-import type { ColormapFunction, ProjectionInfo, SortedLevel } from "./types.js";
 
 /**
  * Minimum interface that must be returned from getTileData.
@@ -278,13 +278,16 @@ export class ZarrLayer<
     } = this.props;
 
     // Create root location
-    const root = typeof source === "string"
-      ? await createZarritaRoot(source)
-      : zarr.root(source);
+    const root =
+      typeof source === "string"
+        ? await createZarritaRoot(source)
+        : zarr.root(source);
 
     // Parse metadata - only URL strings are supported for now
     if (typeof source !== "string") {
-      throw new Error("ZarrLayer currently only supports URL strings as source");
+      throw new Error(
+        "ZarrLayer currently only supports URL strings as source",
+      );
     }
 
     const zarrMetadata = await parseZarrMetadata(source, {
@@ -305,12 +308,14 @@ export class ZarrLayer<
     const formatDescriptor = createFormatDescriptor(zarrMetadata, { proj4def });
 
     // Get bounds - check explicit prop first, then FormatDescriptor
-    let bounds: Bounds | undefined = propBounds ?? formatDescriptor.bounds ?? undefined;
+    let bounds: Bounds | undefined =
+      propBounds ?? formatDescriptor.bounds ?? undefined;
     let latIsAscending = formatDescriptor.latIsAscending;
 
     if (!bounds) {
       // Try to compute bounds from spatial:transform if available
-      const boundsFromTransform = computeBoundsFromSpatialTransform(zarrMetadata);
+      const boundsFromTransform =
+        computeBoundsFromSpatialTransform(zarrMetadata);
       if (boundsFromTransform) {
         bounds = boundsFromTransform.bounds;
         latIsAscending = boundsFromTransform.latIsAscending;
@@ -324,7 +329,8 @@ export class ZarrLayer<
         }, zarrMetadata.levels[0]!);
 
         // Get cached metadata for coordinate path resolution
-        const cachedMeta = typeof source === "string" ? getCachedMetadata(source) : undefined;
+        const cachedMeta =
+          typeof source === "string" ? getCachedMetadata(source) : undefined;
 
         const coordResult = await loadCoordinateBounds({
           root,
@@ -373,7 +379,12 @@ export class ZarrLayer<
     // This ensures 0-360° longitude is converted to -180/180° for geographic CRS
     const bbox = tileMatrixSet.boundingBox;
     const normalizedBounds: Bounds = bbox
-      ? [bbox.lowerLeft[0], bbox.lowerLeft[1], bbox.upperRight[0], bbox.upperRight[1]]
+      ? [
+          bbox.lowerLeft[0],
+          bbox.lowerLeft[1],
+          bbox.upperRight[0],
+          bbox.upperRight[1],
+        ]
       : bounds;
 
     // Callback with WGS84 bounds (like COGLayer's geographicBounds)
@@ -407,9 +418,7 @@ export class ZarrLayer<
   /**
    * Inner callback passed in to the underlying TileLayer's `getTileData`.
    */
-  async _getTileData(
-    tile: TileLoadProps,
-  ): Promise<GetTileDataResult<DataT>> {
+  async _getTileData(tile: TileLoadProps): Promise<GetTileDataResult<DataT>> {
     const { signal } = tile;
     const { x, y, z } = tile.index;
     const { dimensionIndices, normalization, colormap } = this.props;
@@ -443,8 +452,10 @@ export class ZarrLayer<
     const { tileWidth, tileHeight } = tileMatrix;
     const sortedLevel = sortedLevels[z]!;
     const levelMeta = sortedLevel.level;
-    const xDimIndex = zarrMetadata.base.spatialDimIndices.x ?? levelMeta.shape.length - 1;
-    const yDimIndex = zarrMetadata.base.spatialDimIndices.y ?? levelMeta.shape.length - 2;
+    const xDimIndex =
+      zarrMetadata.base.spatialDimIndices.x ?? levelMeta.shape.length - 1;
+    const yDimIndex =
+      zarrMetadata.base.spatialDimIndices.y ?? levelMeta.shape.length - 2;
     const imageWidth = levelMeta.shape[xDimIndex]!;
     const imageHeight = levelMeta.shape[yDimIndex]!;
 
@@ -513,14 +524,18 @@ export class ZarrLayer<
       // Check if source CRS supports GPU reprojection bypass
       const crsCode = projectionInfo?.code?.toUpperCase();
       const sourceCrs: SourceCrs =
-        crsCode === "EPSG:4326" ? "EPSG:4326" :
-        crsCode === "EPSG:3857" ? "EPSG:3857" :
-        null;
+        crsCode === "EPSG:4326"
+          ? "EPSG:4326"
+          : crsCode === "EPSG:3857"
+            ? "EPSG:3857"
+            : null;
 
       // Get tile bounds for GPU reprojection
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const projectedBounds = (tile as any)?.projectedBounds;
-      let tileBounds: { west: number; south: number; east: number; north: number } | undefined;
+      let tileBounds:
+        | { west: number; south: number; east: number; north: number }
+        | undefined;
       let tileLatBounds: [number, number] | undefined;
 
       if (sourceCrs && projectedBounds) {
@@ -555,14 +570,16 @@ export class ZarrLayer<
           renderPipeline: renderTile(data),
           maxError,
           // Only provide reprojectionFns for non-GPU modes
-          ...(sourceCrs ? {} : {
-            reprojectionFns: {
-              forwardTransform,
-              inverseTransform,
-              forwardReproject,
-              inverseReproject,
-            },
-          }),
+          ...(sourceCrs
+            ? {}
+            : {
+                reprojectionFns: {
+                  forwardTransform,
+                  inverseTransform,
+                  forwardReproject,
+                  inverseReproject,
+                },
+              }),
           // GPU reprojection props
           sourceCrs,
           bounds: tileBounds,
@@ -649,11 +666,7 @@ export class ZarrLayer<
       return null;
     }
 
-    return this.renderTileLayer(
-      metadata,
-      forwardReproject,
-      inverseReproject,
-    );
+    return this.renderTileLayer(metadata, forwardReproject, inverseReproject);
   }
 }
 
@@ -686,7 +699,7 @@ function computeBoundsFromSpatialTransform(
 ): { bounds: Bounds; latIsAscending: boolean } | null {
   // Find levels that have a valid spatial:transform
   const levelsWithTransform = metadata.levels.filter(
-    (level) => level.spatialTransform && level.spatialTransform.length === 6
+    (level) => level.spatialTransform && level.spatialTransform.length === 6,
   );
 
   if (levelsWithTransform.length === 0) {
@@ -717,8 +730,10 @@ function computeBoundsFromSpatialTransform(
     [height, width] = finestLevel.spatialShape;
   } else if (finestLevel.shape.length >= 2) {
     // Use last two dimensions as spatial (Y, X)
-    const yIdx = metadata.base.spatialDimIndices.y ?? finestLevel.shape.length - 2;
-    const xIdx = metadata.base.spatialDimIndices.x ?? finestLevel.shape.length - 1;
+    const yIdx =
+      metadata.base.spatialDimIndices.y ?? finestLevel.shape.length - 2;
+    const xIdx =
+      metadata.base.spatialDimIndices.x ?? finestLevel.shape.length - 1;
     height = finestLevel.shape[yIdx]!;
     width = finestLevel.shape[xIdx]!;
   } else {

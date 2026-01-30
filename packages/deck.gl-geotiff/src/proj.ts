@@ -5,7 +5,7 @@ import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 // Register EPSG:3857 (Web Mercator) - not included in proj4 by default
 proj4.defs(
   "EPSG:3857",
-  "+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null +wktext +no_defs +type=crs"
+  "+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null +wktext +no_defs +type=crs",
 );
 
 export type SupportedCrsUnit =
