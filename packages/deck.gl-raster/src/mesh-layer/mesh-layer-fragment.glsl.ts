@@ -21,7 +21,8 @@ in vec4 vColor;
 out vec4 fragColor;
 
 void main(void) {
-  geometry.uv = vTexCoord;
+  // geometry.uv is set by shader modules (PassthroughUV or Reproject4326)
+  // at fs:#main-start injection point, before this code runs.
 
   vec3 normal;
   if (simpleMesh.flatShading) {

@@ -40,14 +40,34 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   }
 
   override draw(opts: any): void {
-    const shaderProps: { [x: string]: Partial<Record<string, unknown>> } = {};
+    // Build props object keyed by module name for shaderInputs
+    // With proper uniformTypes, setProps should handle non-texture uniforms
+    const shaderProps: Record<string, Record<string, unknown>> = {};
     for (const m of this.props.renderPipeline) {
-      // Props should be keyed by module name
       shaderProps[m.module.name] = m.props || {};
     }
 
-    for (const m of super.getModels()) {
-      m.shaderInputs.setProps(shaderProps);
+    // Collect texture bindings from modules (textures can't go in uniform blocks)
+    const textureBindings: Record<string, unknown> = {};
+    for (const m of this.props.renderPipeline) {
+      if (m.module.getUniforms && m.props) {
+        const moduleUniforms = m.module.getUniforms(m.props);
+        for (const [key, value] of Object.entries(moduleUniforms)) {
+          if (value && typeof value === "object" && "handle" in value) {
+            textureBindings[key] = value;
+          }
+        }
+      }
+    }
+
+    for (const model of super.getModels()) {
+      // setProps should handle uniform block values via uniformTypes
+      model.shaderInputs.setProps(shaderProps);
+
+      // Textures need to be set via bindings (can't be in uniform blocks)
+      if (Object.keys(textureBindings).length > 0) {
+        model.setBindings(textureBindings as Record<string, any>);
+      }
     }
 
     super.draw(opts);

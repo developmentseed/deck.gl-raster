@@ -8,15 +8,11 @@ import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { CreateTexture } from "./gpu-modules/create-texture";
+import { PassthroughUV } from "./gpu-modules/passthrough-uv";
 import { latToMercatorNorm, Reproject4326 } from "./gpu-modules/reproject-4326";
+import { ReprojectTexture } from "./gpu-modules/reproject-texture";
 import type { RasterModule } from "./gpu-modules/types";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
-
-/**
- * Default number of subdivisions for reprojection quad mesh.
- * Higher values provide better accuracy at high latitudes.
- */
-const DEFAULT_SUBDIVISIONS = 16;
 
 const DEFAULT_MAX_ERROR = 0.125;
 
@@ -208,21 +204,21 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       }
 
       if (sourceCrs === "EPSG:4326") {
-        // EPSG:4326: Need subdivided mesh + shader reprojection to handle
-        // the non-linear relationship between latitude and Mercator Y
-        const mesh = generateSubdividedQuadMesh(
-          DEFAULT_SUBDIVISIONS,
-          bounds,
-          latIsAscending,
-        );
+        // EPSG:4326: Simple quad + fragment shader reprojection.
+        // The shader uses position_commonspace to compute the fragment's
+        // relative position within the tile, then converts to latitude.
+        const mesh = generateSimpleQuadMesh(bounds, latIsAscending);
 
-        const effectiveLatBounds = latBounds ?? [bounds.south, bounds.north];
+        const effectiveLatBounds: [number, number] = latBounds ?? [
+          bounds.south,
+          bounds.north,
+        ];
         const reproject4326Props = {
           latBounds: effectiveLatBounds,
           mercatorYBounds: [
             latToMercatorNorm(effectiveLatBounds[1]), // north
             latToMercatorNorm(effectiveLatBounds[0]), // south
-          ],
+          ] as [number, number],
           latIsAscending,
         };
 
@@ -413,15 +409,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     const { useReproject4326, reproject4326Props } = this.state;
     const modules: RasterModule[] = [];
 
-    // Add reprojection module FIRST if needed (before texture sampling)
-    if (useReproject4326 && reproject4326Props) {
-      modules.push({
-        module: Reproject4326,
-        props: reproject4326Props,
-      });
-    }
-
-    // Add texture/render pipeline modules
+    // For ImageData with EPSG:4326, use the combined ReprojectTexture module
+    // which handles both reprojection and texture sampling in a single hook
     if (this.props.renderPipeline instanceof ImageData) {
       const imageData = this.props.renderPipeline;
       const texture = this.context.device.createTexture({
@@ -430,13 +419,49 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         height: imageData.height,
         data: imageData.data,
       });
-      modules.push({
-        module: CreateTexture,
-        props: {
-          textureName: texture,
-        },
-      });
+
+      if (useReproject4326 && reproject4326Props) {
+        // Combined reprojection + texture sampling
+        modules.push({
+          module: PassthroughUV,
+          props: {},
+        });
+        modules.push({
+          module: ReprojectTexture,
+          props: {
+            textureName: texture,
+            latBounds: reproject4326Props.latBounds,
+            mercatorYBounds: reproject4326Props.mercatorYBounds,
+            latIsAscending: reproject4326Props.latIsAscending,
+          },
+        });
+      } else {
+        // No reprojection needed
+        modules.push({
+          module: PassthroughUV,
+          props: {},
+        });
+        modules.push({
+          module: CreateTexture,
+          props: {
+            textureName: texture,
+          },
+        });
+      }
     } else {
+      // Custom render pipeline - user handles their own texture sampling
+      // Add UV setup first
+      if (useReproject4326 && reproject4326Props) {
+        modules.push({
+          module: Reproject4326,
+          props: reproject4326Props,
+        });
+      } else {
+        modules.push({
+          module: PassthroughUV,
+          props: {},
+        });
+      }
       modules.push(...this.props.renderPipeline);
     }
 
@@ -604,95 +629,6 @@ function generateSimpleQuadMesh(
     2,
     3, // NE, SW, SE
   ]);
-
-  return {
-    positions,
-    indices,
-    texCoords,
-  };
-}
-
-/**
- * Generate a subdivided quad mesh for shader-based reprojection.
- *
- * The mesh is positioned in WGS84 coordinates (deck.gl's native coordinate system).
- * Subdivisions provide enough vertex density for smooth interpolation across
- * the non-linear Mercator projection, especially at high latitudes.
- *
- * @param subdivisions Number of subdivisions along each axis
- * @param bounds Geographic bounds in WGS84
- * @param latIsAscending Whether texture row 0 is south (affects UV mapping)
- */
-function generateSubdividedQuadMesh(
-  subdivisions: number,
-  bounds: { west: number; south: number; east: number; north: number },
-  latIsAscending: boolean,
-): {
-  positions: Float32Array;
-  indices: Uint32Array;
-  texCoords: Float32Array;
-} {
-  const { west, south, east, north } = bounds;
-  const numVerticesPerSide = subdivisions + 1;
-  const numVertices = numVerticesPerSide * numVerticesPerSide;
-  const numTriangles = subdivisions * subdivisions * 2;
-
-  const positions = new Float32Array(numVertices * 3);
-  const texCoords = new Float32Array(numVertices * 2);
-  const indices = new Uint32Array(numTriangles * 3);
-
-  // Generate vertices in a grid
-  let vertexIndex = 0;
-  for (let row = 0; row <= subdivisions; row++) {
-    for (let col = 0; col <= subdivisions; col++) {
-      // Interpolate position in WGS84
-      const u = col / subdivisions;
-      const v = row / subdivisions;
-
-      const lon = west + u * (east - west);
-      // v=0 is top of mesh (north), v=1 is bottom (south)
-      const lat = north - v * (north - south);
-
-      positions[vertexIndex * 3] = lon;
-      positions[vertexIndex * 3 + 1] = lat;
-      positions[vertexIndex * 3 + 2] = 0;
-
-      // UV coordinates
-      // u maps directly to texture U
-      // v needs to account for texture orientation (latIsAscending)
-      texCoords[vertexIndex * 2] = u;
-      if (latIsAscending) {
-        // Row 0 = south, so flip V: top of mesh (north, v=0) -> texV=1
-        texCoords[vertexIndex * 2 + 1] = 1 - v;
-      } else {
-        // Row 0 = north, so V maps directly
-        texCoords[vertexIndex * 2 + 1] = v;
-      }
-
-      vertexIndex++;
-    }
-  }
-
-  // Generate triangle indices
-  let indexOffset = 0;
-  for (let row = 0; row < subdivisions; row++) {
-    for (let col = 0; col < subdivisions; col++) {
-      const topLeft = row * numVerticesPerSide + col;
-      const topRight = topLeft + 1;
-      const bottomLeft = topLeft + numVerticesPerSide;
-      const bottomRight = bottomLeft + 1;
-
-      // First triangle (top-left, bottom-left, top-right)
-      indices[indexOffset++] = topLeft;
-      indices[indexOffset++] = bottomLeft;
-      indices[indexOffset++] = topRight;
-
-      // Second triangle (top-right, bottom-left, bottom-right)
-      indices[indexOffset++] = topRight;
-      indices[indexOffset++] = bottomLeft;
-      indices[indexOffset++] = bottomRight;
-    }
-  }
 
   return {
     positions,
