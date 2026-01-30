@@ -8,6 +8,8 @@ import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { CreateTexture } from "./gpu-modules/create-texture";
+import { PassthroughUV } from "./gpu-modules/passthrough-uv";
+import { latToMercatorNorm, Reproject4326 } from "./gpu-modules/reproject-4326";
 import type { RasterModule } from "./gpu-modules/types";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
 
@@ -43,6 +45,13 @@ type DebugData = {
   length: number;
 };
 
+/**
+ * Source CRS type for shader-based reprojection bypass.
+ * When set to 'EPSG:4326' or 'EPSG:3857', mesh refinement is bypassed
+ * and fragment shader reprojection is used instead.
+ */
+export type SourceCrs = "EPSG:4326" | "EPSG:3857" | null;
+
 export interface RasterLayerProps extends CompositeLayerProps {
   /**
    * Width of the input raster image in pixels
@@ -55,9 +64,10 @@ export interface RasterLayerProps extends CompositeLayerProps {
   height: number;
 
   /**
-   * Reprojection functions for converting between pixel, input CRS, and output CRS coordinates
+   * Reprojection functions for converting between pixel, input CRS, and output CRS coordinates.
+   * Not required when sourceCrs is 'EPSG:4326' or 'EPSG:3857' (shader reprojection bypass).
    */
-  reprojectionFns: ReprojectionFns;
+  reprojectionFns?: ReprojectionFns;
 
   /**
    * Render pipeline for visualizing textures.
@@ -72,9 +82,42 @@ export interface RasterLayerProps extends CompositeLayerProps {
   /**
    * Maximum reprojection error in pixels for mesh refinement.
    * Lower values create denser meshes with higher accuracy.
+   * Only used when sourceCrs is not set (full mesh refinement mode).
    * @default 0.125
    */
   maxError?: number;
+
+  /**
+   * Source CRS for shader-based reprojection bypass.
+   * When set to 'EPSG:4326', uses fragment shader reprojection.
+   * When set to 'EPSG:3857', uses a simple quad (texture is already in Web Mercator).
+   * When null/undefined, uses full mesh refinement with reprojectionFns.
+   */
+  sourceCrs?: SourceCrs;
+
+  /**
+   * Latitude bounds [min, max] in degrees for shader reprojection.
+   * Required when sourceCrs is 'EPSG:4326'.
+   */
+  latBounds?: [number, number];
+
+  /**
+   * Geographic bounds in WGS84 for positioning the mesh.
+   * Required when sourceCrs is 'EPSG:4326' or 'EPSG:3857'.
+   */
+  bounds?: {
+    west: number;
+    south: number;
+    east: number;
+    north: number;
+  };
+
+  /**
+   * Whether row 0 of the texture is south (true) or north (false).
+   * Used for shader reprojection when sourceCrs is 'EPSG:4326'.
+   * @default false
+   */
+  latIsAscending?: boolean;
 
   debug?: boolean;
 
@@ -103,6 +146,14 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       indices: Uint32Array;
       texCoords: Float32Array;
     };
+    /** Whether shader-based reprojection is being used (bypassing mesh refinement) */
+    useReproject4326?: boolean;
+    /** Props for reprojection shader module */
+    reproject4326Props?: {
+      latBounds: [number, number];
+      mercatorYBounds: [number, number];
+      latIsAscending: boolean;
+    };
   };
 
   override initializeState(): void {
@@ -120,7 +171,11 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       props.width !== oldProps.width ||
       props.height !== oldProps.height ||
       props.reprojectionFns !== oldProps.reprojectionFns ||
-      props.maxError !== oldProps.maxError;
+      props.maxError !== oldProps.maxError ||
+      props.sourceCrs !== oldProps.sourceCrs ||
+      props.latBounds !== oldProps.latBounds ||
+      props.bounds !== oldProps.bounds ||
+      props.latIsAscending !== oldProps.latIsAscending;
 
     if (needsMeshUpdate) {
       this._generateMesh();
@@ -133,7 +188,68 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       height,
       reprojectionFns,
       maxError = DEFAULT_MAX_ERROR,
+      sourceCrs,
+      latBounds,
+      bounds,
+      latIsAscending = false,
     } = this.props;
+
+    // Fast path for EPSG:4326 and EPSG:3857 source data - no mesh refinement needed
+    if (sourceCrs === "EPSG:4326" || sourceCrs === "EPSG:3857") {
+      if (!bounds) {
+        throw new Error(
+          `bounds prop is required when sourceCrs is '${sourceCrs}'`,
+        );
+      }
+
+      if (sourceCrs === "EPSG:4326") {
+        // EPSG:4326: Simple quad + fragment shader reprojection.
+        // The shader uses position_commonspace to compute the fragment's
+        // relative position within the tile, then converts to latitude.
+        const mesh = generateSimpleQuadMesh(bounds, latIsAscending);
+
+        const effectiveLatBounds: [number, number] = latBounds ?? [
+          bounds.south,
+          bounds.north,
+        ];
+        const reproject4326Props = {
+          latBounds: effectiveLatBounds,
+          mercatorYBounds: [
+            latToMercatorNorm(effectiveLatBounds[1]), // north
+            latToMercatorNorm(effectiveLatBounds[0]), // south
+          ] as [number, number],
+          latIsAscending,
+        };
+
+        this.setState({
+          reprojector: undefined,
+          mesh,
+          useReproject4326: true,
+          reproject4326Props,
+        });
+      } else {
+        // EPSG:3857: Simple quad with no reprojection needed.
+        // The texture is already in Mercator space, and deck.gl displays in Mercator,
+        // so the non-linear projection deck.gl applies to WGS84 vertices matches
+        // the Mercator texture layout exactly.
+        const mesh = generateSimpleQuadMesh(bounds, latIsAscending);
+
+        this.setState({
+          reprojector: undefined,
+          mesh,
+          useReproject4326: false,
+          reproject4326Props: undefined,
+        });
+      }
+      return;
+    }
+
+    // Full mesh refinement for other CRS
+    if (!reprojectionFns) {
+      throw new Error(
+        "reprojectionFns prop is required when sourceCrs is not set",
+      );
+    }
 
     // The mesh is lined up with the upper and left edges of the raster. So if
     // we give the raster the same width and height as the number of pixels in
@@ -148,6 +264,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       height + 1,
     );
     reprojector.run(maxError);
+
+    // Mesh positions are already in WGS84 since we target EPSG:4326
     const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
 
     this.setState({
@@ -157,13 +275,68 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         indices,
         texCoords,
       },
+      useReproject4326: false,
+      reproject4326Props: undefined,
     });
   }
 
   renderDebugLayer(): Layer | null {
-    const { reprojector } = this.state;
+    const { reprojector, mesh, useReproject4326 } = this.state;
     const { debugOpacity } = this.props;
 
+    // For GPU reprojection mode, render debug using the mesh triangles
+    if (useReproject4326 && mesh) {
+      const numTriangles = mesh.indices.length / 3;
+      return new PolygonLayer(
+        this.getSubLayerProps({
+          id: "polygon",
+          data: { length: numTriangles },
+          getPolygon: (_: unknown, { index }: { index: number }) => {
+            const { positions, indices } = mesh;
+            const a = indices[index * 3]!;
+            const b = indices[index * 3 + 1]!;
+            const c = indices[index * 3 + 2]!;
+
+            // Positions are already in WGS84
+            const pa: [number, number] = [
+              positions[a * 3]!,
+              positions[a * 3 + 1]!,
+            ];
+            const pb: [number, number] = [
+              positions[b * 3]!,
+              positions[b * 3 + 1]!,
+            ];
+            const pc: [number, number] = [
+              positions[c * 3]!,
+              positions[c * 3 + 1]!,
+            ];
+
+            return [pa, pb, pc, pa];
+          },
+          getFillColor: (
+            _: unknown,
+            { index, target }: { index: number; target: number[] },
+          ) => {
+            const color = DEBUG_COLORS[index % DEBUG_COLORS.length]!;
+            target[0] = color[0];
+            target[1] = color[1];
+            target[2] = color[2];
+            target[3] = 255;
+            return target;
+          },
+          getLineColor: [0, 0, 0],
+          getLineWidth: 1,
+          lineWidthUnits: "pixels",
+          opacity:
+            debugOpacity !== undefined && Number.isFinite(debugOpacity)
+              ? Math.max(0, Math.min(1, debugOpacity))
+              : 1,
+          pickable: false,
+        }),
+      );
+    }
+
+    // Full mesh refinement mode
     if (!reprojector) {
       return null;
     }
@@ -175,7 +348,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         // This `data` gets passed into `getPolygon` with the row index.
         data: { reprojector, length: reprojector.triangles.length / 3 },
         getPolygon: (
-          _: any,
+          _: unknown,
           {
             index,
             data,
@@ -191,15 +364,24 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
           const b = triangles[index * 3 + 1]!;
           const c = triangles[index * 3 + 2]!;
 
-          return [
-            [positions[a * 2]!, positions[a * 2 + 1]!],
-            [positions[b * 2]!, positions[b * 2 + 1]!],
-            [positions[c * 2]!, positions[c * 2 + 1]!],
-            [positions[a * 2]!, positions[a * 2 + 1]!],
+          // Positions are already in WGS84 (we target EPSG:4326)
+          const pa: [number, number] = [
+            positions[a * 2]!,
+            positions[a * 2 + 1]!,
           ];
+          const pb: [number, number] = [
+            positions[b * 2]!,
+            positions[b * 2 + 1]!,
+          ];
+          const pc: [number, number] = [
+            positions[c * 2]!,
+            positions[c * 2 + 1]!,
+          ];
+
+          return [pa, pb, pc, pa];
         },
         getFillColor: (
-          _: any,
+          _: unknown,
           { index, target }: { index: number; target: number[] },
         ) => {
           const color = DEBUG_COLORS[index % DEBUG_COLORS.length]!;
@@ -223,7 +405,19 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
   /** Create assembled render pipeline from the renderPipeline prop input. */
   _createRenderPipeline(): RasterModule[] {
+    const { useReproject4326, reproject4326Props } = this.state;
+    const modules: RasterModule[] = [];
+
+    // Unified path: Reproject4326 or PassthroughUV, then CreateTexture (or custom modules)
+    // Add UV setup first - either reprojection or passthrough
+    modules.push(
+      useReproject4326 && reproject4326Props
+        ? { module: Reproject4326, props: reproject4326Props }
+        : { module: PassthroughUV, props: {} },
+    );
+
     if (this.props.renderPipeline instanceof ImageData) {
+      // ImageData path: create texture and sample it
       const imageData = this.props.renderPipeline;
       const texture = this.context.device.createTexture({
         format: "rgba8unorm",
@@ -231,16 +425,19 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         height: imageData.height,
         data: imageData.data,
       });
-      const wrapper: RasterModule = {
+
+      modules.push({
         module: CreateTexture,
         props: {
           textureName: texture,
         },
-      };
-      return [wrapper];
+      });
     } else {
-      return this.props.renderPipeline;
+      // Custom render pipeline - user handles their own texture sampling
+      modules.push(...this.props.renderPipeline);
     }
+
+    return modules;
   }
 
   renderLayers() {
@@ -296,6 +493,13 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 }
 
+/**
+ * Convert RasterReprojector output to mesh data for deck.gl.
+ *
+ * Positions are in WGS84 (EPSG:4326) since we target that CRS for reprojection.
+ *
+ * @param reprojector The RasterReprojector with computed mesh
+ */
 function reprojectorToMesh(reprojector: RasterReprojector): {
   indices: Uint32Array;
   positions: Float32Array;
@@ -306,6 +510,7 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   const texCoords = new Float32Array(reprojector.uvs);
 
   for (let i = 0; i < numVertices; i++) {
+    // Positions are already in WGS84 (we target EPSG:4326)
     positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
     positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
     // z (flat on the ground)
@@ -318,6 +523,88 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   return {
     indices,
     positions,
+    texCoords,
+  };
+}
+
+/**
+ * Generate a simple 4-vertex quad mesh for EPSG:3857 source data.
+ *
+ * For Web Mercator textures displayed on a Web Mercator map (deck.gl's default
+ * WebMercatorViewport), no reprojection is needed. GPU rasterization interpolates
+ * UVs in screen space, which is Mercator space after projection, so sampling is
+ * linear in Mercator Y - matching the Mercator texture layout.
+ *
+ * Note: This assumes WebMercatorViewport. Non-Mercator viewports (GlobeView,
+ * OrthographicView) would require different handling.
+ *
+ * @param bounds Geographic bounds in WGS84
+ * @param latIsAscending Whether texture row 0 is south (affects UV mapping)
+ */
+function generateSimpleQuadMesh(
+  bounds: { west: number; south: number; east: number; north: number },
+  latIsAscending: boolean,
+): {
+  positions: Float32Array;
+  indices: Uint32Array;
+  texCoords: Float32Array;
+} {
+  const { west, south, east, north } = bounds;
+
+  // 4 vertices: NW, NE, SW, SE
+  const positions = new Float32Array([
+    west,
+    north,
+    0, // 0: NW
+    east,
+    north,
+    0, // 1: NE
+    west,
+    south,
+    0, // 2: SW
+    east,
+    south,
+    0, // 3: SE
+  ]);
+
+  // UV coordinates depend on texture orientation
+  // For latIsAscending=false (row 0 = north): NW=(0,0), NE=(1,0), SW=(0,1), SE=(1,1)
+  // For latIsAscending=true (row 0 = south): NW=(0,1), NE=(1,1), SW=(0,0), SE=(1,0)
+  const texCoords = latIsAscending
+    ? new Float32Array([
+        0,
+        1, // NW
+        1,
+        1, // NE
+        0,
+        0, // SW
+        1,
+        0, // SE
+      ])
+    : new Float32Array([
+        0,
+        0, // NW
+        1,
+        0, // NE
+        0,
+        1, // SW
+        1,
+        1, // SE
+      ]);
+
+  // Two triangles: NW-SW-NE and NE-SW-SE
+  const indices = new Uint32Array([
+    0,
+    2,
+    1, // NW, SW, NE
+    1,
+    2,
+    3, // NE, SW, SE
+  ]);
+
+  return {
+    positions,
+    indices,
     texCoords,
   };
 }

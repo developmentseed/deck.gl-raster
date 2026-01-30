@@ -8,7 +8,6 @@ import {
 import type { GeoTIFF, GeoTIFFImage } from "geotiff";
 import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
-import type Projection from "proj4/dist/lib/Proj";
 
 export const OGC_84: PROJJSONDefinition = {
   $schema: "https://proj.org/schemas/v0.7/projjson.schema.json",
@@ -87,10 +86,12 @@ export const OGC_84: PROJJSONDefinition = {
 // https://github.com/developmentseed/lonboard/blob/35a1f3d691604ad9e083bf10a4bfde4158171486/src/cog-tileset/claude-tileset-2d-improved.ts#L141
 //
 // TODO: return a RasterReprojector instance, given the IFD and tile of interest?
+// Default to OGC_84 (WGS84) for deck.gl rendering.
+// For EPSG:4326/3857 source data, GPU reprojection is used instead of mesh refinement.
 export async function extractGeotiffReprojectors(
   tiff: GeoTIFF,
   sourceProjection: string | PROJJSONDefinition,
-  outputCrs: string | PROJJSONDefinition | Projection = OGC_84,
+  outputCrs: string | PROJJSONDefinition = OGC_84,
 ): Promise<ReprojectionFns> {
   const image = await tiff.getImage();
 

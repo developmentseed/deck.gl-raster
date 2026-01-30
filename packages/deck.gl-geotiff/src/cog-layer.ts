@@ -15,6 +15,7 @@ import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
 import type {
   RasterModule,
+  SourceCrs,
   TileMatrix,
   TileMatrixSet,
 } from "@developmentseed/deck.gl-raster";
@@ -31,8 +32,9 @@ import {
 } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
-import { fromGeoTransform } from "./geotiff-reprojection.js";
+import { fromGeoTransform, OGC_84 } from "./geotiff-reprojection.js";
 import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
+// Import registers EPSG:3857 with proj4
 import { epsgIoGeoKeyParser } from "./proj.js";
 
 /**
@@ -197,6 +199,8 @@ export class COGLayer<
     images?: GeoTIFFImage[];
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
+    /** Source projection information */
+    sourceProjection?: ProjectionInfo;
   };
 
   override initializeState(): void {
@@ -236,14 +240,18 @@ export class COGLayer<
       );
     }
 
-    const converter = proj4(sourceProjection.def, "EPSG:4326");
+    // Reproject to OGC_84 (WGS84) for deck.gl rendering.
+    // For EPSG:4326/3857 source data, GPU reprojection is used instead of mesh refinement.
+    const converterToWgs84Output = proj4(sourceProjection.def, OGC_84);
     const forwardReproject = (x: number, y: number) =>
-      converter.forward<[number, number]>([x, y], false);
+      converterToWgs84Output.forward<[number, number]>([x, y], false);
     const inverseReproject = (x: number, y: number) =>
-      converter.inverse<[number, number]>([x, y], false);
+      converterToWgs84Output.inverse<[number, number]>([x, y], false);
 
     if (this.props.onGeoTIFFLoad) {
-      const geographicBounds = getGeographicBounds(image, converter);
+      // Use separate converter to WGS84 for geographic bounds callback
+      const converterToWgs84 = proj4(sourceProjection.def, "EPSG:4326");
+      const geographicBounds = getGeographicBounds(image, converterToWgs84);
       this.props.onGeoTIFFLoad(geotiff, {
         projection: sourceProjection,
         geographicBounds,
@@ -260,6 +268,7 @@ export class COGLayer<
       images,
       defaultGetTileData,
       defaultRenderTile,
+      sourceProjection,
     });
   }
 
@@ -331,6 +340,7 @@ export class COGLayer<
     inverseReproject: ReprojectionFns["inverseReproject"],
   ): Layer | LayersList | null {
     const { maxError, debug, debugOpacity } = this.props;
+    const { sourceProjection } = this.state;
     const { tile } = props;
 
     if (!props.data) {
@@ -345,6 +355,47 @@ export class COGLayer<
       const { height, width } = data;
       const renderTile = this.props.renderTile || this.state.defaultRenderTile!;
 
+      // Check if source CRS supports GPU reprojection bypass
+      const crsCode = sourceProjection?.code?.toUpperCase();
+      const sourceCrs: SourceCrs =
+        crsCode === "EPSG:4326"
+          ? "EPSG:4326"
+          : crsCode === "EPSG:3857"
+            ? "EPSG:3857"
+            : null;
+
+      // Get tile bounds for GPU reprojection
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const projectedBounds = (tile as any)?.projectedBounds;
+      let tileBounds:
+        | { west: number; south: number; east: number; north: number }
+        | undefined;
+      let tileLatBounds: [number, number] | undefined;
+
+      if (sourceCrs && projectedBounds) {
+        const { topLeft, bottomRight } = projectedBounds;
+        if (sourceCrs === "EPSG:4326") {
+          // For EPSG:4326, coordinates are already in lon/lat
+          tileBounds = {
+            west: topLeft[0],
+            east: bottomRight[0],
+            north: topLeft[1],
+            south: bottomRight[1],
+          };
+          tileLatBounds = [tileBounds.south, tileBounds.north];
+        } else if (sourceCrs === "EPSG:3857") {
+          // For EPSG:3857, convert to WGS84 bounds for positioning
+          const topLeftWgs84 = metadata.projectToWgs84(topLeft);
+          const bottomRightWgs84 = metadata.projectToWgs84(bottomRight);
+          tileBounds = {
+            west: topLeftWgs84[0],
+            east: bottomRightWgs84[0],
+            north: topLeftWgs84[1],
+            south: bottomRightWgs84[1],
+          };
+        }
+      }
+
       layers.push(
         new RasterLayer({
           id: `${props.id}-raster`,
@@ -352,12 +403,23 @@ export class COGLayer<
           height,
           renderPipeline: renderTile(data),
           maxError,
-          reprojectionFns: {
-            forwardTransform,
-            inverseTransform,
-            forwardReproject,
-            inverseReproject,
-          },
+          // Only provide reprojectionFns for non-GPU modes
+          ...(sourceCrs
+            ? {}
+            : {
+                reprojectionFns: {
+                  forwardTransform,
+                  inverseTransform,
+                  forwardReproject,
+                  inverseReproject,
+                },
+              }),
+          // GPU reprojection props
+          sourceCrs,
+          bounds: tileBounds,
+          latBounds: tileLatBounds,
+          // GeoTIFFs typically have row 0 = north (latIsAscending = false)
+          latIsAscending: false,
           debug,
           debugOpacity,
         }),
