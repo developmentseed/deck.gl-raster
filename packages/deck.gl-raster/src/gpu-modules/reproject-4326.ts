@@ -12,8 +12,6 @@
  *
  * This module inverts the Mercator Y → latitude before texture lookup.
  */
-import type { ShaderModule } from "@luma.gl/shadertools";
-
 export type Reproject4326Props = {
   /** Latitude bounds [min, max] in degrees */
   latBounds: [number, number];
@@ -146,4 +144,4 @@ export const Reproject4326 = {
       reproject4326_latIsAscending: latIsAscending ? 1 : 0,
     };
   },
-} as const satisfies ShaderModule<Reproject4326Props>;
+} as const;
