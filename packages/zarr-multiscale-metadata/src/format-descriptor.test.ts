@@ -6,7 +6,7 @@ import {
   requiresProj4Reprojection,
   isStandardCrs,
 } from './format-descriptor'
-import type { ZarrMultiscaleMetadata, MultiscaleFormat } from './types'
+import type { ZarrMultiscaleMetadata } from './types'
 
 // Helper to create mock metadata
 function createMockMetadata(

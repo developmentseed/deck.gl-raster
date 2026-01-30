@@ -468,7 +468,7 @@ describe("parseZarrTileMatrixSet", () => {
 
       // Verify all levels cover exactly the same extent
       for (const tm of result.tileMatrixSet.tileMatrices) {
-        const levelIdx = parseInt(tm.id);
+        const levelIdx = parseInt(tm.id, 10);
         const level = result.sortedLevels[levelIdx]!;
         const width = level.level.shape[1]!;
         const height = level.level.shape[0]!;

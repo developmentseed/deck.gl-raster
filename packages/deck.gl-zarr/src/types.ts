@@ -94,4 +94,4 @@ export interface ZarrLayerState {
 export type ColormapFunction = (normalizedValue: number) => [number, number, number, number];
 
 // Zarrita namespace for type imports
-import * as zarr from "zarrita";
+import type * as zarr from "zarrita";

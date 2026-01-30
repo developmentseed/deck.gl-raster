@@ -332,7 +332,6 @@ function createTileMatrix(
   // (Using per-level spatialTransform would cause inconsistent origins due to
   // rounding errors accumulated during pyramid generation)
   let geotransform: [number, number, number, number, number, number];
-  let cellSize: number;
 
   // Compute geotransform from bounds (edge-based model)
   // pixel 0 → xMin, pixel width → xMax
@@ -353,7 +352,7 @@ function createTileMatrix(
   const xRes = baseResolution[0] * xScale;
   const yRes = baseResolution[1] * yScale;
 
-  cellSize = Math.abs(xRes);
+  const cellSize = Math.abs(xRes);
 
   // Compute geotransform (edge-based)
   // x_geo = xRes * col + xMin

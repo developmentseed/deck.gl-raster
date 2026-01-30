@@ -347,7 +347,7 @@ function parseNdpyramidTiledLevel(
 ): ZarrLevelMetadata {
   // Compute expected shape for standard slippy map pyramid
   // At level N, there are 2^N tiles per dimension, each of tileSize pixels
-  const levelSize = tileSize * Math.pow(2, levelIndex)
+  const levelSize = tileSize * 2 ** levelIndex
 
   const level: ZarrLevelMetadata = {
     path: String(dataset.path),

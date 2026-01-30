@@ -41,10 +41,10 @@ import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device } from "@luma.gl/core";
 import * as zarr from "zarrita";
 import type { Readable } from "zarrita";
+import type { ZarrTileData } from "./zarr-data-loader.js";
 import {
   loadZarrTileData,
   renderZarrTileToImageData,
-  type ZarrTileData,
 } from "./zarr-data-loader.js";
 import { createReprojectionFns } from "./zarr-reprojection.js";
 import { parseZarrTileMatrixSet } from "./zarr-tile-matrix-set.js";

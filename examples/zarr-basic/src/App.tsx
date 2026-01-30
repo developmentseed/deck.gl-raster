@@ -186,6 +186,7 @@ export default function App() {
           {/* Dataset Selector */}
           <div style={{ marginBottom: "12px" }}>
             <label
+              htmlFor="dataset-selector"
               style={{
                 display: "block",
                 fontSize: "12px",
@@ -196,6 +197,7 @@ export default function App() {
               Dataset
             </label>
             <select
+              id="dataset-selector"
               value={selectedDataset}
               onChange={(e) => setSelectedDataset(e.target.value)}
               style={{

@@ -136,7 +136,7 @@ export async function loadCoordinateBounds(
     }
 
     return result
-  } catch (err) {
+  } catch {
     return null
   }
 }
