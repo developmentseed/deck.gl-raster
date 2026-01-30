@@ -95,6 +95,7 @@ export async function loadZarrTileData(
   // For zarr-conventions: levelPath/variableName (e.g., "0/elevation")
   // For ome-ngff: levelPath (array is directly at level path)
   // For ndpyramid-tiled: levelPath/variableName (e.g., "0/climate")
+  // For single-level: use basePath directly (e.g., "2m_above_ground/TMP/2m_above_ground/TMP")
   //
   // Some datasets have OME-NGFF-style metadata but nested arrays like zarr-conventions.
   // We detect this by checking if base.path contains a "/" indicating the variable is nested.
@@ -107,7 +108,10 @@ export async function loadZarrTileData(
 
   // Construct full array path for this level
   let arrayPath: string;
-  if (metadata.format === "ome-ngff" && !isNestedStructure) {
+  if (metadata.format === "single-level") {
+    // Single-level: use the full base path directly
+    arrayPath = basePath;
+  } else if (metadata.format === "ome-ngff" && !isNestedStructure) {
     // Pure OME-NGFF: array is directly at level path
     arrayPath = levelPath;
   } else {

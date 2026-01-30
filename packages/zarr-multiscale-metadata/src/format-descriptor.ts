@@ -129,7 +129,7 @@ export function createFormatDescriptor(
 ): FormatDescriptor {
   const format = metadata.format
   const crsInfo = metadata.crs
-  const crsCode = crsInfo?.code ?? 'EPSG:4326'
+  const crsCode = crsInfo?.code ?? (options?.proj4def ? 'custom' : 'EPSG:4326')
 
   // Determine tile convention
   const tileConvention = determineTileConvention(format, crsCode)

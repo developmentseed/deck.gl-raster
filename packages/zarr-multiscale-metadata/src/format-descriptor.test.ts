@@ -101,6 +101,32 @@ describe('createFormatDescriptor', () => {
     expect(descriptor.latIsAscending).toBe(false)
   })
 
+  it('uses custom code when proj4def provided without CRS in metadata', () => {
+    const proj4def = '+proj=lcc +lat_0=38.5 +lon_0=-97.5 +lat_1=38.5 +lat_2=38.5'
+    const metadata = createMockMetadata({
+      crs: null,
+    })
+
+    const descriptor = createFormatDescriptor(metadata, { proj4def })
+
+    // Should use 'custom' code, not default to EPSG:4326
+    expect(descriptor.crs.code).toBe('custom')
+    expect(descriptor.crs.def).toBe(proj4def)
+  })
+
+  it('preserves explicit CRS code when proj4def also provided', () => {
+    const proj4def = '+proj=stere +lat_0=-90 +lon_0=0'
+    const metadata = createMockMetadata({
+      crs: { code: 'EPSG:3031', proj4def: null, source: 'explicit' },
+    })
+
+    const descriptor = createFormatDescriptor(metadata, { proj4def })
+
+    // Should keep the explicit code from metadata
+    expect(descriptor.crs.code).toBe('EPSG:3031')
+    expect(descriptor.crs.def).toBe(proj4def)
+  })
+
   it('defaults to latIsAscending=false for tiled format', () => {
     const metadata = createMockMetadata({
       format: 'ndpyramid-tiled',

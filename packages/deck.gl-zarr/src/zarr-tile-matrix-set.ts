@@ -426,48 +426,54 @@ function metersPerUnit(projectionInfo: ProjectionInfo): number {
 }
 
 /**
- * Compute WGS84 bounding box by projecting all four corners.
+ * Compute WGS84 bounding box by sampling points along all edges.
+ *
+ * For curved projections like Lambert Conformal Conic, the corners alone
+ * don't capture the full extent. We sample points along each edge to find
+ * the true min/max lat/lon values.
  */
 function computeWgs84BoundingBox(
   boundingBox: TileMatrixSetBoundingBox,
   projectToWgs84: (point: [number, number]) => [number, number],
 ): TileMatrixSetBoundingBox {
-  const lowerLeftWgs84 = projectToWgs84(boundingBox.lowerLeft);
-  const lowerRightWgs84 = projectToWgs84([
-    boundingBox.upperRight[0],
-    boundingBox.lowerLeft[1],
-  ]);
-  const upperRightWgs84 = projectToWgs84(boundingBox.upperRight);
-  const upperLeftWgs84 = projectToWgs84([
-    boundingBox.lowerLeft[0],
-    boundingBox.upperRight[1],
-  ]);
+  const [xMin, yMin] = boundingBox.lowerLeft;
+  const [xMax, yMax] = boundingBox.upperRight;
 
-  // Compute min/max lat/lon
-  const minLon = Math.min(
-    lowerLeftWgs84[0],
-    lowerRightWgs84[0],
-    upperRightWgs84[0],
-    upperLeftWgs84[0],
-  );
-  const maxLon = Math.max(
-    lowerLeftWgs84[0],
-    lowerRightWgs84[0],
-    upperRightWgs84[0],
-    upperLeftWgs84[0],
-  );
-  const minLat = Math.min(
-    lowerLeftWgs84[1],
-    lowerRightWgs84[1],
-    upperRightWgs84[1],
-    upperLeftWgs84[1],
-  );
-  const maxLat = Math.max(
-    lowerLeftWgs84[1],
-    lowerRightWgs84[1],
-    upperRightWgs84[1],
-    upperLeftWgs84[1],
-  );
+  // Sample points along edges for curved projections
+  const SAMPLES = 20;
+  const points: [number, number][] = [];
+
+  for (let i = 0; i <= SAMPLES; i++) {
+    const t = i / SAMPLES;
+
+    // Bottom edge (y = yMin)
+    points.push([xMin + t * (xMax - xMin), yMin]);
+
+    // Top edge (y = yMax)
+    points.push([xMin + t * (xMax - xMin), yMax]);
+
+    // Left edge (x = xMin)
+    points.push([xMin, yMin + t * (yMax - yMin)]);
+
+    // Right edge (x = xMax)
+    points.push([xMax, yMin + t * (yMax - yMin)]);
+  }
+
+  // Project all points to WGS84
+  const projectedPoints = points.map(projectToWgs84);
+
+  // Find min/max from all projected points
+  let minLon = Infinity;
+  let maxLon = -Infinity;
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+
+  for (const [lon, lat] of projectedPoints) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
 
   return {
     lowerLeft: [minLon, minLat],

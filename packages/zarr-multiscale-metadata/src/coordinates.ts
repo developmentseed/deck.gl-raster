@@ -86,12 +86,11 @@ export async function loadCoordinateBounds(
     const openArray = createArrayOpener(version)
 
     // Open coordinate arrays
-    const xArr = await openArray(
-      xPath ? root.resolve(xPath) : (levelPath ? root.resolve(`${levelPath}/${xDimName}`) : root.resolve(xDimName))
-    )
-    const yArr = await openArray(
-      yPath ? root.resolve(yPath) : (levelPath ? root.resolve(`${levelPath}/${yDimName}`) : root.resolve(yDimName))
-    )
+    const resolvedXPath = xPath ? xPath : (levelPath ? `${levelPath}/${xDimName}` : xDimName)
+    const resolvedYPath = yPath ? yPath : (levelPath ? `${levelPath}/${yDimName}` : yDimName)
+
+    const xArr = await openArray(root.resolve(resolvedXPath))
+    const yArr = await openArray(root.resolve(resolvedYPath))
 
     const xLen = xArr.shape[0]
     const yLen = yArr.shape[0]
@@ -131,11 +130,13 @@ export async function loadCoordinateBounds(
     const yMin = coordYMin - (Number.isFinite(dy) ? dy / 2 : 0)
     const yMax = coordYMax + (Number.isFinite(dy) ? dy / 2 : 0)
 
-    return {
-      bounds: [xMin, yMin, xMax, yMax],
+    const result = {
+      bounds: [xMin, yMin, xMax, yMax] as Bounds,
       latIsAscending,
     }
-  } catch {
+
+    return result
+  } catch (err) {
     return null
   }
 }
@@ -150,7 +151,9 @@ function findCoordinatePath(
   levelPath?: string,
   variable?: string
 ): string | null {
-  if (!metadata) return null
+  if (!metadata) {
+    return null
+  }
 
   interface CoordCandidate {
     path: string

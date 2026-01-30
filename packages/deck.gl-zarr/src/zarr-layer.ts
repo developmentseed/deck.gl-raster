@@ -12,6 +12,7 @@ import type {
 import {
   createFormatDescriptor,
   createZarritaRoot,
+  getCachedMetadata,
   loadCoordinateBounds,
   parseZarrMetadata,
 } from "zarr-multiscale-metadata";
@@ -121,6 +122,12 @@ export interface ZarrLayerProps<DataT extends MinimalDataT = DefaultDataT>
    * Fixed indices for non-spatial dimensions (e.g., { time: 0, band: 2 }).
    */
   dimensionIndices?: Record<string, number>;
+
+  /**
+   * Explicit bounds in the source CRS: [xMin, yMin, xMax, yMax].
+   * Use when bounds cannot be determined from metadata or coordinate arrays.
+   */
+  bounds?: Bounds;
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
@@ -242,6 +249,7 @@ export class ZarrLayer<
       props.variable !== oldProps.variable ||
       props.version !== oldProps.version ||
       props.crs !== oldProps.crs ||
+      props.bounds !== oldProps.bounds ||
       props.spatialDimensions !== oldProps.spatialDimensions;
 
     if (needsUpdate) {
@@ -257,6 +265,7 @@ export class ZarrLayer<
       crs,
       proj4def,
       spatialDimensions,
+      bounds: propBounds,
       signal,
     } = this.props;
 
@@ -287,8 +296,8 @@ export class ZarrLayer<
     // and crs.def for standard CRS codes
     const formatDescriptor = createFormatDescriptor(zarrMetadata, { proj4def });
 
-    // Get bounds - FormatDescriptor already handles tiled format defaults
-    let bounds = formatDescriptor.bounds;
+    // Get bounds - check explicit prop first, then FormatDescriptor
+    let bounds: Bounds | undefined = propBounds ?? formatDescriptor.bounds ?? undefined;
     let latIsAscending = formatDescriptor.latIsAscending;
 
     if (!bounds) {
@@ -306,12 +315,17 @@ export class ZarrLayer<
           return levelRes < bestRes ? level : best;
         }, zarrMetadata.levels[0]!);
 
+        // Get cached metadata for coordinate path resolution
+        const cachedMeta = typeof source === "string" ? getCachedMetadata(source) : undefined;
+
         const coordResult = await loadCoordinateBounds({
           root,
           version: zarrMetadata.version,
           dimensions: zarrMetadata.base.dimensions,
           spatialDimIndices: zarrMetadata.base.spatialDimIndices,
           levelPath: highestResLevel.path,
+          metadata: cachedMeta,
+          variable,
         });
 
         if (coordResult) {
