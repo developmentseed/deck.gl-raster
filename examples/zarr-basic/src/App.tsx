@@ -19,6 +19,19 @@ interface DatasetConfig {
   variable: string;
   dimensionIndices: Record<string, number>;
   normalization: { vmin: number; vmax: number };
+  proj4def?: string;
+  version?: 2 | 3;
+  spatialDimensions?: { lat?: string; lon?: string };
+}
+
+function getHrrrDate(): string {
+  // HRRR data is available with ~1 day lag, use yesterday's date
+  const now = new Date();
+  now.setUTCDate(now.getUTCDate() - 1);
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(now.getUTCDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
 }
 
 const DATASETS: Record<string, DatasetConfig> = {
@@ -32,7 +45,7 @@ const DATASETS: Record<string, DatasetConfig> = {
   },
   "ndpyramid-4d": {
     name: "ndpyramid 4D",
-    description: "Monthly temperature/precipitation",
+    description: "Monthly temperature/precipitation (ndpyramid-tiled)",
     url: "https://carbonplan-maps.s3.us-west-2.amazonaws.com/v2/demo/4d/tavg-prec-month",
     variable: "climate",
     dimensionIndices: { time: 0, band: 0 },
@@ -46,6 +59,21 @@ const DATASETS: Record<string, DatasetConfig> = {
     dimensionIndices: { time: 0 },
     normalization: { vmin: 100000, vmax: 102500 },
   },
+  "hrrr-temp": {
+    name: "HRRR Temperature",
+    description: "2m temperature from HRRR (Lambert Conformal Conic)",
+    url: `https://hrrrzarr.s3.amazonaws.com/sfc/${getHrrrDate()}/${getHrrrDate()}_12z_anl.zarr`,
+    variable: "2m_above_ground/TMP/2m_above_ground/TMP",
+    dimensionIndices: {},
+    normalization: { vmin: 250, vmax: 310 },
+    version: 2,
+    proj4def:
+      "+proj=lcc +lat_0=38.5 +lon_0=-97.5 +lat_1=38.5 +lat_2=38.5 +x_0=0 +y_0=0 +R=6371229 +units=m +no_defs",
+    spatialDimensions: {
+      lat: "projection_y_coordinate",
+      lon: "projection_x_coordinate",
+    },
+  },
 };
 
 
@@ -53,7 +81,7 @@ export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
-  const [selectedDataset, setSelectedDataset] = useState<string>("era5-florence");
+  const [selectedDataset, setSelectedDataset] = useState<string>("usgs-dem");
 
   const dataset = DATASETS[selectedDataset];
 
@@ -72,6 +100,11 @@ export default function App() {
     debug,
     debugOpacity,
     beforeId: "boundary_country_outline",
+    ...(dataset.proj4def && { proj4def: dataset.proj4def }),
+    ...(dataset.version && { version: dataset.version }),
+    ...(dataset.spatialDimensions && {
+      spatialDimensions: dataset.spatialDimensions,
+    }),
   });
 
   return (
