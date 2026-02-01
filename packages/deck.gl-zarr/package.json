@@ -49,7 +49,7 @@
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "proj4": "^2.20.2",
-    "zarrita": "^0.5.4"
+    "zarrita": "^0.6.1"
   },
   "volta": {
     "extends": "../../package.json"
