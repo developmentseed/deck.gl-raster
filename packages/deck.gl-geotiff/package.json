@@ -49,7 +49,7 @@
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "flatbush": "^4.5.0",
-    "geotiff": "2.1.3",
+    "geotiff": "3.0.0",
     "proj4": "^2.20.2"
   },
   "peerDependencies": {
