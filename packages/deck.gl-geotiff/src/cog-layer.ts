@@ -13,12 +13,9 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
-import type {
-  RasterModule,
-  TileMatrix,
-  TileMatrixSet,
-} from "@developmentseed/deck.gl-raster";
+import type { RasterModule } from "@developmentseed/deck.gl-raster";
 import { RasterLayer, RasterTileset2D } from "@developmentseed/deck.gl-raster";
+import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device } from "@luma.gl/core";
 import type { BaseClient, GeoTIFF, GeoTIFFImage, Pool } from "geotiff";

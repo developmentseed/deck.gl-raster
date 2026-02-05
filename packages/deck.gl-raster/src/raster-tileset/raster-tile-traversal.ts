@@ -17,6 +17,7 @@
 
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport, assert } from "@deck.gl/core";
+import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
 import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
   CullingVolume,
@@ -30,8 +31,6 @@ import type {
   CornerBounds,
   ProjectionFunction,
   TileIndex,
-  TileMatrix,
-  TileMatrixSet,
   ZRange,
 } from "./types.js";
 

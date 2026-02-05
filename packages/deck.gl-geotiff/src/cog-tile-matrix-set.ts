@@ -1,8 +1,9 @@
 import type {
+  BoundingBox,
   TileMatrix,
   TileMatrixSet,
-  TileMatrixSetBoundingBox,
-} from "@developmentseed/deck.gl-raster";
+} from "@developmentseed/morecantile";
+import { metersPerUnit } from "@developmentseed/morecantile";
 import type { GeoTIFF, GeoTIFFImage } from "geotiff";
 import proj4, { type ProjectionDefinition } from "proj4";
 import Ellipsoid from "./ellipsoids.js";
@@ -113,47 +114,6 @@ export async function parseCOGTileMatrixSet(
 }
 
 /**
- * Coefficient to convert the coordinate reference system (CRS)
- * units into meters (metersPerUnit).
- *
- * From note g in http://docs.opengeospatial.org/is/17-083r2/17-083r2.html#table_2:
- *
- * > If the CRS uses meters as units of measure for the horizontal dimensions,
- * > then metersPerUnit=1; if it has degrees, then metersPerUnit=2pa/360
- * > (a is the Earth maximum radius of the ellipsoid).
- *
- * If `crsUnit` is provided, it takes precedence over the unit defined in the
- * CRS. This exists because sometimes the parsed CRS from
- * `geotiff-geokeys-to-proj4` doesn't have a unit defined.
- */
-// https://github.com/developmentseed/morecantile/blob/7c95a11c491303700d6e33e9c1607f2719584dec/morecantile/utils.py#L67-L90
-function metersPerUnit(
-  parsedCrs: ProjectionDefinition,
-  crsUnit?: SupportedCrsUnit,
-): number {
-  const unit = (crsUnit || parsedCrs.units)?.toLowerCase();
-  switch (unit) {
-    case "m":
-    case "metre":
-    case "meter":
-    case "meters":
-      return 1;
-    case "foot":
-      return 0.3048;
-    case "us survey foot":
-      return 1200 / 3937;
-  }
-
-  if (unit === "degree") {
-    // 2 * π * ellipsoid semi-major-axis / 360
-    const { a } = Ellipsoid[parsedCrs.ellps as keyof typeof Ellipsoid];
-    return (2 * Math.PI * a) / 360;
-  }
-
-  throw new Error(`Unsupported CRS units: ${unit}`);
-}
-
-/**
  * Create tile matrix for COG overview
  */
 function createOverviewTileMatrix({
@@ -213,9 +173,9 @@ function createOverviewTileMatrix({
 }
 
 function computeWgs84BoundingBox(
-  boundingBox: TileMatrixSetBoundingBox,
+  boundingBox: BoundingBox,
   projectToWgs84: (point: [number, number]) => [number, number],
-): TileMatrixSetBoundingBox {
+): BoundingBox {
   const lowerLeftWgs84 = projectToWgs84(boundingBox.lowerLeft);
   const lowerRightWgs84 = projectToWgs84([
     boundingBox.upperRight[0],

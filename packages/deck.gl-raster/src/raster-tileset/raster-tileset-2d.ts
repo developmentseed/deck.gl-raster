@@ -8,6 +8,7 @@
 import type { Viewport } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
+import type { TileMatrixSet } from "@developmentseed/morecantile";
 import type { Matrix4 } from "@math.gl/core";
 
 import { getTileIndices } from "./raster-tile-traversal";
@@ -17,7 +18,6 @@ import type {
   Point,
   ProjectionFunction,
   TileIndex,
-  TileMatrixSet,
   ZRange,
 } from "./types";
 
