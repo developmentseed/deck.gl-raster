@@ -30,6 +30,7 @@
       "@deck.gl/layers": "9.2.6",
       "@deck.gl/mapbox": "9.2.6",
       "@deck.gl/mesh-layers": "9.2.6",
+      "@developmentseed/morecantile": "0.1.1",
       "@luma.gl/constants": "9.2.6",
       "@luma.gl/core": "9.2.6",
       "@luma.gl/engine": "9.2.6",
