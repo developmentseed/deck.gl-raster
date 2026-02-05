@@ -57,9 +57,14 @@ export default function App() {
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
 
+  const hash = window.location.hash.substring(1);
+  const params = new URLSearchParams(hash);
+  const urlParam = params.get("url");
+  const iframe = params.get("iframe");
+
   const cog_layer = new COGLayer({
     id: "cog-layer",
-    geotiff: COG_URL,
+    geotiff: urlParam || COG_URL,
     debug,
     debugOpacity,
     geoKeysParser,
@@ -99,6 +104,7 @@ export default function App() {
       {/* UI Overlay Container */}
       <div
         style={{
+          display: iframe ? "none" : "block",
           position: "absolute",
           top: 0,
           left: 0,
