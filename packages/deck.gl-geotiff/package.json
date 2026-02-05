@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "@developmentseed/deck.gl-raster": "workspace:^",
+    "@developmentseed/morecantile": "^0.1.1",
     "@developmentseed/raster-reproject": "workspace:^",
     "flatbush": "^4.5.0",
     "geotiff": "2.1.3",
