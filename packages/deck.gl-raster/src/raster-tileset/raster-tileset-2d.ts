@@ -1,5 +1,5 @@
 /**
- * RasterTileset2D - Improved Implementation with Frustum Culling
+ * TMSTileset2D - Improved Implementation with Frustum Culling
  *
  * This version properly implements frustum culling and bounding volume calculations
  * following the pattern from deck.gl's OSM tile indexing.
@@ -22,9 +22,11 @@ import type {
 } from "./types";
 
 /**
- * RasterTileset2D with proper frustum culling
+ * A generic tileset implementation organized according to the OGC
+ * [TileMatrixSet](https://docs.ogc.org/is/17-083r4/17-083r4.html)
+ * specification.
  */
-export class RasterTileset2D extends Tileset2D {
+export class TMSTileset2D extends Tileset2D {
   private metadata: TileMatrixSet;
   private wgs84Bounds: CornerBounds;
   private projectToWgs84: ProjectionFunction;
