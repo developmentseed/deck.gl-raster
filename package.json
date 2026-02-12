@@ -25,11 +25,11 @@
   },
   "pnpm": {
     "overrides": {
-      "@deck.gl/core": "file:/Users/kyle/github/visgl/deck.gl/modules/core",
-      "@deck.gl/geo-layers": "file:/Users/kyle/github/visgl/deck.gl/modules/geo-layers",
-      "@deck.gl/layers": "file:/Users/kyle/github/visgl/deck.gl/modules/layers",
-      "@deck.gl/mapbox": "file:/Users/kyle/github/visgl/deck.gl/modules/mapbox",
-      "@deck.gl/mesh-layers": "file:/Users/kyle/github/visgl/deck.gl/modules/mesh-layers",
+      "@deck.gl/core": "9.2.7",
+      "@deck.gl/geo-layers": "9.2.7",
+      "@deck.gl/layers": "9.2.7",
+      "@deck.gl/mapbox": "9.2.7",
+      "@deck.gl/mesh-layers": "9.2.7",
       "@luma.gl/constants": "9.2.6",
       "@luma.gl/core": "9.2.6",
       "@luma.gl/engine": "9.2.6",
