@@ -41,5 +41,8 @@
   },
   "volta": {
     "extends": "../../package.json"
+  },
+  "dependencies": {
+    "@cogeotiff/core": "^9.1.2"
   }
 }
