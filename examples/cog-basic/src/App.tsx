@@ -93,17 +93,7 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay
-          layers={[cog_layer]}
-          interleaved
-          deviceProps={{
-            // Vendored from
-            // https://github.com/visgl/deck.gl/pull/9971
-            // until deck.gl 9.2.7 is released
-            _cacheShaders: true,
-            _cachePipelines: true,
-          }}
-        />
+        <DeckGLOverlay layers={[cog_layer]} interleaved />
       </MaplibreMap>
 
       {/* UI Overlay Container */}

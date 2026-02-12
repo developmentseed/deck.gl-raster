@@ -374,13 +374,6 @@ export default function App() {
           layers={layers}
           interleaved
           onDeviceInitialized={setDevice}
-          deviceProps={{
-            // Vendored from
-            // https://github.com/visgl/deck.gl/pull/9971
-            // until deck.gl 9.2.7 is released
-            _cacheShaders: true,
-            _cachePipelines: true,
-          }}
         />
       </MaplibreMap>
 
