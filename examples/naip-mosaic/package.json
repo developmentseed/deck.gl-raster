@@ -16,7 +16,7 @@
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@luma.gl/core": "9.2.6",
     "@luma.gl/shadertools": "9.2.6",
-    "geotiff": "^3.0.0",
+    "geotiff": "^3.0.2",
     "maplibre-gl": "^5.17.0",
     "proj4": "^2.20.2",
     "react": "^19.2.4",

@@ -64,8 +64,8 @@ importers:
         specifier: 9.2.6
         version: 9.2.6(@luma.gl/core@9.2.6)
       geotiff:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.0.2
+        version: 3.0.2
       geotiff-geokeys-to-proj4:
         specifier: ^2024.4.13
         version: 2024.4.13
@@ -131,8 +131,8 @@ importers:
         specifier: 9.2.6
         version: 9.2.6(@luma.gl/core@9.2.6)
       geotiff:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.0.2
+        version: 3.0.2
       geotiff-geokeys-to-proj4:
         specifier: ^2024.4.13
         version: 2024.4.13
@@ -192,8 +192,8 @@ importers:
         specifier: 9.2.6
         version: 9.2.6(@luma.gl/core@9.2.6)
       geotiff:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.0.2
+        version: 3.0.2
       maplibre-gl:
         specifier: ^5.17.0
         version: 5.17.0
@@ -253,8 +253,8 @@ importers:
         specifier: ^4.5.0
         version: 4.5.0
       geotiff:
-        specifier: 3.0.0
-        version: 3.0.0
+        specifier: ^3.0.2
+        version: 3.0.2
       proj4:
         specifier: ^2.20.2
         version: 2.20.2
@@ -1648,8 +1648,8 @@ packages:
   geotiff-geokeys-to-proj4@2024.4.13:
     resolution: {integrity: sha512-Jgtm/lcPkgB44wCqQHaVQx5/fyhmiVDRUKQcI/vMolsED8/GRWBnn5qkQo/CgutQg9xkGzig21DY9Px9mFRdvg==}
 
-  geotiff@3.0.0:
-    resolution: {integrity: sha512-skoz9vd8ovTH1BUEt4Mzg2N0rcv3lQG+f57nokoPhIISg5bbmcX5okUe30avjfEuu0Yk24KZCr45nJvkUHBH1Q==}
+  geotiff@3.0.2:
+    resolution: {integrity: sha512-KZ+0YK8gW9HWitovPhfHvkyd1gsyXtY9oOrS/OSX+12M8ojAm+NJ6Vl3tUjp7ZMcPO7e7pJoqpWoMdzO0rF8IQ==}
     engines: {node: '>=10.19'}
 
   get-stream@6.0.1:
@@ -3738,7 +3738,7 @@ snapshots:
 
   geotiff-geokeys-to-proj4@2024.4.13: {}
 
-  geotiff@3.0.0:
+  geotiff@3.0.2:
     dependencies:
       '@petamoriken/float16': 3.9.3
       lerc: 3.0.0
