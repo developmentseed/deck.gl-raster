@@ -9,9 +9,9 @@
     "publish": "pnpm build && gh-pages -d dist -b gh-pages -e examples/naip-mosaic"
   },
   "dependencies": {
-    "@deck.gl/core": "^9.2.6",
-    "@deck.gl/layers": "^9.2.6",
-    "@deck.gl/mapbox": "^9.2.6",
+    "@deck.gl/core": "^9.2.7",
+    "@deck.gl/layers": "^9.2.7",
+    "@deck.gl/mapbox": "^9.2.7",
     "@developmentseed/deck.gl-geotiff": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@luma.gl/core": "9.2.6",
