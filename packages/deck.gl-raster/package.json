@@ -52,12 +52,12 @@
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
-    "@deck.gl/core": "^9.2.6",
-    "@deck.gl/geo-layers": "^9.2.6",
-    "@deck.gl/layers": "^9.2.6",
-    "@deck.gl/mesh-layers": "^9.2.6",
-    "@luma.gl/core": "^9.2.6",
-    "@luma.gl/shadertools": "^9.2.6"
+    "@deck.gl/core": "^9.2.7",
+    "@deck.gl/geo-layers": "^9.2.7",
+    "@deck.gl/layers": "^9.2.7",
+    "@deck.gl/mesh-layers": "^9.2.7",
+    "@luma.gl/core": "^9.2.7",
+    "@luma.gl/shadertools": "^9.2.7"
   },
   "dependencies": {
     "@developmentseed/raster-reproject": "workspace:^",
