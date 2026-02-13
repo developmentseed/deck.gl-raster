@@ -6,7 +6,7 @@ import { apply, invert } from "@developmentseed/affine";
  */
 export interface HasTransform {
   /** The affine transform. */
-  transform: Affine;
+  readonly transform: Affine;
 }
 
 /**
