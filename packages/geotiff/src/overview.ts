@@ -1,25 +1,11 @@
-import type { Compression, TiffImage, TiffMimeType } from "@cogeotiff/core";
+import type { TiffImage } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
-
-/** Options for fetching tile/raster data. */
-export type FetchOptions = {
-  /** AbortSignal to cancel the fetch operation. */
-  signal?: AbortSignal;
-};
-
-/** Raw tile bytes returned by fetchTile before any decoding. */
-export type TileBytes = {
-  /** Tile column index. */
-  x: number;
-  /** Tile row index. */
-  y: number;
-  /** Compressed tile bytes. */
-  bytes: ArrayBuffer;
-  /** MIME type of the compressed data (e.g. "image/jpeg"). */
-  mimeType: TiffMimeType;
-  /** Compression enum value. */
-  compression: Compression;
-};
+import { compose, scale } from "@developmentseed/affine";
+import { fetchTile } from "./fetch.js";
+import type { GeoTIFF } from "./geotiff.js";
+import type { GeoKeyDirectory } from "./ifd.js";
+import type { Tile } from "./tile.js";
+import { index, xy } from "./transform.js";
 
 /**
  * A single resolution level of a GeoTIFF — either the full-resolution image
@@ -27,108 +13,104 @@ export type TileBytes = {
  * corresponding mask IFD (if any).
  */
 export class Overview {
+  /** A reference to the parent GeoTIFF object. */
+  readonly geotiff: GeoTIFF;
+
+  /** The GeoKeyDirectory of the primary IFD. */
+  readonly gkd: GeoKeyDirectory;
+
   /** The data IFD for this resolution level. */
   readonly image: TiffImage;
-  /** The mask IFD, or null when no mask exists at this level. */
-  readonly maskImage: TiffImage | null;
-  /** Affine geotransform for this overview's pixel grid. */
-  readonly transform: Affine;
-  /** Image width in pixels. */
-  readonly width: number;
-  /** Image height in pixels. */
-  readonly height: number;
-  /** Tile width in pixels (equals image width when the image is not tiled). */
-  readonly tileWidth: number;
-  /** Tile height in pixels (equals image height when the image is not tiled). */
-  readonly tileHeight: number;
+
+  /** The IFD for the mask associated with this overview level, if any. */
+  readonly maskImage: TiffImage | null = null;
 
   constructor(
+    geotiff: GeoTIFF,
+    gkd: GeoKeyDirectory,
     image: TiffImage,
     maskImage: TiffImage | null,
-    transform: Affine,
   ) {
+    this.geotiff = geotiff;
+    this.gkd = gkd;
     this.image = image;
     this.maskImage = maskImage;
-    this.transform = transform;
+  }
 
-    const size = image.size;
-    this.width = size.width;
-    this.height = size.height;
+  get crs(): string {
+    return this.geotiff.crs;
+  }
 
-    if (image.isTiled()) {
-      const ts = image.tileSize;
-      this.tileWidth = ts.width;
-      this.tileHeight = ts.height;
-    } else {
-      this.tileWidth = this.width;
-      this.tileHeight = this.height;
-    }
+  get height(): number {
+    return this.image.size.height;
+  }
+
+  get nodata(): number | null {
+    return this.geotiff.nodata;
+  }
+
+  get tileHeight(): number {
+    return this.image.tileSize.height;
+  }
+
+  get tileWidth(): number {
+    return this.image.tileSize.width;
+  }
+
+  get transform(): Affine {
+    const fullTransform = this.geotiff.transform;
+
+    const overviewWidth = this.width;
+    const fullWidth = this.geotiff.width;
+    const overviewHeight = this.height;
+    const fullHeight = this.geotiff.height;
+
+    const scaleX = fullWidth / overviewWidth;
+    const scaleY = fullHeight / overviewHeight;
+    return compose(fullTransform, scale(scaleX, scaleY));
+  }
+
+  get width(): number {
+    return this.image.size.width;
+  }
+
+  /** Fetch a single tile from the full-resolution image. */
+  // TODO: support AbortSignal
+  // https://github.com/blacha/cogeotiff/issues/1397
+  async fetchTile(x: number, y: number): Promise<Tile> {
+    return await fetchTile(this, x, y);
   }
 
   /**
-   * Fetch a single tile's raw compressed bytes by its grid indices.
+   * Get the (row, col) pixel index containing the geographic coordinate (x, y).
    *
-   * Returns null if the tile has no data (sparse COG).
+   * @param x          x coordinate in the CRS.
+   * @param y          y coordinate in the CRS.
+   * @param op         Rounding function applied to fractional pixel indices.
+   *                   Defaults to Math.floor.
+   * @returns          [row, col] pixel indices.
    */
-  async fetchTile(
+  index(
     x: number,
     y: number,
-    _options?: FetchOptions,
-  ): Promise<TileBytes | null> {
-    const result = await this.image.getTile(x, y);
-    if (result == null) return null;
-
-    return {
-      x,
-      y,
-      bytes: result.bytes,
-      mimeType: result.mimeType,
-      compression: result.compression,
-    };
+    op: (n: number) => number = Math.floor,
+  ): [number, number] {
+    return index(this, x, y, op);
   }
 
   /**
-   * Fetch data and mask tiles in parallel for the given grid position.
+   * Get the geographic (x, y) coordinate of the pixel at (row, col).
    *
-   * Returns null if the data tile has no data (sparse COG).
+   * @param row        Pixel row.
+   * @param col        Pixel column.
+   * @param offset     Which part of the pixel to return.  Defaults to "center".
+   * @returns          [x, y] in the CRS.
    */
-  async fetchTileWithMask(
-    x: number,
-    y: number,
-    _options?: FetchOptions,
-  ): Promise<{
-    data: TileBytes;
-    mask: TileBytes | null;
-  } | null> {
-    const dataPromise = this.image.getTile(x, y);
-    const maskPromise = this.maskImage ? this.maskImage.getTile(x, y) : null;
-
-    const [dataResult, maskResult] = await Promise.all([
-      dataPromise,
-      maskPromise,
-    ]);
-
-    if (dataResult == null) return null;
-
-    const dataTile: TileBytes = {
-      x,
-      y,
-      bytes: dataResult.bytes,
-      mimeType: dataResult.mimeType,
-      compression: dataResult.compression,
-    };
-
-    let maskTile: TileBytes | null = null;
-    if (maskResult != null) {
-      maskTile = {
-        x,
-        y,
-        bytes: maskResult.bytes,
-        mimeType: maskResult.mimeType,
-        compression: maskResult.compression,
-      };
-    }
-
-    return { data: dataTile, mask: maskTile };
+  xy(
+    row: number,
+    col: number,
+    offset: "center" | "ul" | "ur" | "ll" | "lr" = "center",
+  ): [number, number] {
+    return xy(this, row, col, offset);
   }
 }

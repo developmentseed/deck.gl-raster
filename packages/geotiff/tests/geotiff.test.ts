@@ -1,6 +1,6 @@
 import { Photometric, SubFileType } from "@cogeotiff/core";
 import { describe, expect, it } from "vitest";
-import { extractGeotransform, GeoTIFF, isMaskIfd } from "../src/geotiff.js";
+import { GeoTIFF, isMaskIfd } from "../src/geotiff.js";
 import { mockImage, mockTiff } from "./helpers.js";
 
 describe("isMaskIfd", () => {
@@ -54,45 +54,13 @@ describe("isMaskIfd", () => {
   });
 });
 
-describe("extractGeotransform", () => {
-  it("extracts a basic north-up geotransform", () => {
-    const image = mockImage({
-      width: 1000,
-      height: 1000,
-      origin: [-180, 90, 0],
-      resolution: [0.1, -0.1, 0],
-    });
-
-    const gt = extractGeotransform(image);
-    expect(gt).toEqual([0.1, 0, -180, 0, -0.1, 90]);
-  });
-
-  it("extracts rotation from ModelTransformation", () => {
-    const mt = new Array(16).fill(0);
-    mt[1] = 0.01; // b (row rotation)
-    mt[4] = 0.02; // d (column rotation)
-
-    const image = mockImage({
-      width: 1000,
-      height: 1000,
-      origin: [100, 50, 0],
-      resolution: [1, -1, 0],
-      modelTransformation: mt,
-    });
-
-    const gt = extractGeotransform(image);
-    expect(gt[1]).toBe(0.01);
-    expect(gt[3]).toBe(0.02);
-  });
-});
-
 describe("GeoTIFF", () => {
-  it("throws for empty TIFF", () => {
+  it("throws for empty TIFF", async () => {
     const tiff = mockTiff([]);
-    expect(() => GeoTIFF.fromTiff(tiff)).toThrow(/does not contain/);
+    await expect(GeoTIFF.fromTiff(tiff)).rejects.toThrow(/does not contain/);
   });
 
-  it("creates a GeoTIFF from a single-image TIFF", () => {
+  it("creates a GeoTIFF from a single-image TIFF", async () => {
     const primary = mockImage({
       width: 1000,
       height: 1000,
@@ -101,7 +69,7 @@ describe("GeoTIFF", () => {
       samplesPerPixel: 3,
     });
     const tiff = mockTiff([primary]);
-    const geo = GeoTIFF.fromTiff(tiff);
+    const geo = await GeoTIFF.fromTiff(tiff);
 
     expect(geo.width).toBe(1000);
     expect(geo.height).toBe(1000);
@@ -110,7 +78,7 @@ describe("GeoTIFF", () => {
     expect(geo.transform).toEqual([1, 0, 0, 0, -1, 0]);
   });
 
-  it("classifies reduced-resolution IFDs as overviews", () => {
+  it("classifies reduced-resolution IFDs as overviews", async () => {
     const primary = mockImage({
       width: 1000,
       height: 1000,
@@ -121,12 +89,12 @@ describe("GeoTIFF", () => {
     const ov2 = mockImage({ width: 250, height: 250 });
 
     const tiff = mockTiff([primary, ov1, ov2]);
-    const geo = GeoTIFF.fromTiff(tiff);
+    const geo = await GeoTIFF.fromTiff(tiff);
 
     expect(geo.overviews).toHaveLength(2);
   });
 
-  it("sorts overviews finest-to-coarsest", () => {
+  it("sorts overviews finest-to-coarsest", async () => {
     const primary = mockImage({
       width: 1000,
       height: 1000,
@@ -139,7 +107,7 @@ describe("GeoTIFF", () => {
     const large = mockImage({ width: 500, height: 500 });
 
     const tiff = mockTiff([primary, small, medium, large]);
-    const geo = GeoTIFF.fromTiff(tiff);
+    const geo = await GeoTIFF.fromTiff(tiff);
 
     expect(geo.overviews).toHaveLength(3);
     expect(geo.overviews[0]!.width).toBe(500);
@@ -147,7 +115,7 @@ describe("GeoTIFF", () => {
     expect(geo.overviews[2]!.width).toBe(125);
   });
 
-  it("separates mask IFDs from data IFDs", () => {
+  it("separates mask IFDs from data IFDs", async () => {
     const primary = mockImage({
       width: 1000,
       height: 1000,
@@ -169,14 +137,14 @@ describe("GeoTIFF", () => {
     });
 
     const tiff = mockTiff([primary, ov, primaryMask, ovMask]);
-    const geo = GeoTIFF.fromTiff(tiff);
+    const geo = await GeoTIFF.fromTiff(tiff);
 
     // Only one data overview (the mask IFDs are paired, not listed as overviews)
     expect(geo.overviews).toHaveLength(1);
     expect(geo.overviews[0]!.maskImage).not.toBeNull();
   });
 
-  it("scales overview transforms correctly", () => {
+  it("scales overview transforms correctly", async () => {
     const primary = mockImage({
       width: 1000,
       height: 1000,
@@ -186,7 +154,7 @@ describe("GeoTIFF", () => {
     const ov = mockImage({ width: 500, height: 500 });
 
     const tiff = mockTiff([primary, ov]);
-    const geo = GeoTIFF.fromTiff(tiff);
+    const geo = await GeoTIFF.fromTiff(tiff);
 
     const ovTransform = geo.overviews[0]!.transform;
     // scale = 1000 / 500 = 2
@@ -205,7 +173,7 @@ describe("GeoTIFF", () => {
       resolution: [1, -1, 0],
     });
     const tiff = mockTiff([primary]);
-    const geo = GeoTIFF.fromTiff(tiff);
+    const geo = await GeoTIFF.fromTiff(tiff);
 
     const tile = await geo.fetchTile(0, 0);
     expect(tile).not.toBeNull();
@@ -213,7 +181,7 @@ describe("GeoTIFF", () => {
     expect(tile!.y).toBe(0);
   });
 
-  it("exposes nodata", () => {
+  it("exposes nodata", async () => {
     const primary = mockImage({
       width: 100,
       height: 100,
@@ -222,11 +190,11 @@ describe("GeoTIFF", () => {
       noData: -9999,
     });
     const tiff = mockTiff([primary]);
-    const geo = GeoTIFF.fromTiff(tiff);
+    const geo = await GeoTIFF.fromTiff(tiff);
     expect(geo.nodata).toBe(-9999);
   });
 
-  it("exposes epsg", () => {
+  it("exposes epsg", async () => {
     const primary = mockImage({
       width: 100,
       height: 100,
@@ -235,11 +203,11 @@ describe("GeoTIFF", () => {
       epsg: 4326,
     });
     const tiff = mockTiff([primary]);
-    const geo = GeoTIFF.fromTiff(tiff);
+    const geo = await GeoTIFF.fromTiff(tiff);
     expect(geo.epsg).toBe(4326);
   });
 
-  it("exposes bbox", () => {
+  it("exposes bbox", async () => {
     const primary = mockImage({
       width: 100,
       height: 100,
@@ -248,11 +216,11 @@ describe("GeoTIFF", () => {
       bbox: [-180, -90, 180, 90],
     });
     const tiff = mockTiff([primary]);
-    const geo = GeoTIFF.fromTiff(tiff);
+    const geo = await GeoTIFF.fromTiff(tiff);
     expect(geo.bbox).toEqual([-180, -90, 180, 90]);
   });
 
-  it("defaults count to 1 when SamplesPerPixel is absent", () => {
+  it("defaults count to 1 when SamplesPerPixel is absent", async () => {
     const primary = mockImage({
       width: 100,
       height: 100,
@@ -260,7 +228,7 @@ describe("GeoTIFF", () => {
       resolution: [1, -1, 0],
     });
     const tiff = mockTiff([primary]);
-    const geo = GeoTIFF.fromTiff(tiff);
+    const geo = await GeoTIFF.fromTiff(tiff);
     expect(geo.count).toBe(1);
   });
 });
