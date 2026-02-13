@@ -346,6 +346,22 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.1.0)(happy-dom@20.0.11)(jsdom@27.4.0)
 
+  packages/geotiff:
+    dependencies:
+      '@cogeotiff/core':
+        specifier: ^9.1.2
+        version: 9.1.2
+    devDependencies:
+      '@types/node':
+        specifier: ^25.1.0
+        version: 25.1.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@25.1.0)(happy-dom@20.0.11)(jsdom@27.4.0)
+
   packages/raster-reproject:
     devDependencies:
       '@types/node':
@@ -513,6 +529,10 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
+
+  '@cogeotiff/core@9.1.2':
+    resolution: {integrity: sha512-m1F9glmz8zxxfDyqVnOQibF/uIZciequ1576zy6FG1rCcXVtLhE3qERT1GcS79K/dKvf+B+imgEmV2qfl6TdJQ==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   '@csstools/color-helpers@5.1.0':
     resolution: {integrity: sha512-S11EXWJyy0Mz5SYvRmY8nJYTFFd1LCNV+7cXyAgQtOOuzb4EsgfqDufL+9esx72/eLhsRdGZwaldu/h+E4t4BA==}
@@ -2622,6 +2642,8 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.3.13':
     optional: true
+
+  '@cogeotiff/core@9.1.2': {}
 
   '@csstools/color-helpers@5.1.0': {}
 
