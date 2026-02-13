@@ -283,5 +283,60 @@ export function isMaskIfd(image: TiffImage): boolean {
 }
 
 function extractGeoKeyDirectory(image: TiffImage): GeoKeyDirectory {
-  return { modelType: image.valueGeo(TiffTagGeo.GTModelTypeGeoKey) };
+  return {
+    // Configuration keys
+    modelType: image.valueGeo(TiffTagGeo.GTModelTypeGeoKey),
+    rasterType: image.valueGeo(TiffTagGeo.GTRasterTypeGeoKey),
+    citation: image.valueGeo(TiffTagGeo.GTCitationGeoKey),
+
+    // Geographic CRS keys
+    geodeticCRS: image.valueGeo(TiffTagGeo.GeodeticCRSGeoKey),
+    geodeticCitation: image.valueGeo(TiffTagGeo.GeodeticCitationGeoKey),
+    geodeticDatum: image.valueGeo(TiffTagGeo.GeodeticDatumGeoKey),
+    primeMeridian: image.valueGeo(TiffTagGeo.PrimeMeridianGeoKey),
+    linearUnits: image.valueGeo(TiffTagGeo.GeogLinearUnitsGeoKey),
+    linearUnitSize: image.valueGeo(TiffTagGeo.GeogLinearUnitSizeGeoKey),
+    angularUnits: image.valueGeo(TiffTagGeo.GeogAngularUnitsGeoKey),
+    angularUnitSize: image.valueGeo(TiffTagGeo.GeogAngularUnitSizeGeoKey),
+    ellipsoid: image.valueGeo(TiffTagGeo.EllipsoidGeoKey),
+    ellipsoidSemiMajorAxis: image.valueGeo(TiffTagGeo.EllipsoidSemiMajorAxisGeoKey),
+    ellipsoidSemiMinorAxis: image.valueGeo(TiffTagGeo.EllipsoidSemiMinorAxisGeoKey),
+    ellipsoidInvFlattening: image.valueGeo(TiffTagGeo.EllipsoidInvFlatteningGeoKey),
+    azimuthUnits: image.valueGeo(TiffTagGeo.GeogAzimuthUnitsGeoKey),
+    primeMeridianLongitude: image.valueGeo(TiffTagGeo.PrimeMeridianLongitudeGeoKey),
+    toWGS84: image.valueGeo(TiffTagGeo.GeogTOWGS84GeoKey),
+
+    // Projected CRS keys
+    projectedCRS: image.valueGeo(TiffTagGeo.ProjectedCRSGeoKey),
+    projectedCitation: image.valueGeo(TiffTagGeo.ProjectedCitationGeoKey),
+    projection: image.valueGeo(TiffTagGeo.ProjectionGeoKey),
+    projMethod: image.valueGeo(TiffTagGeo.ProjMethodGeoKey),
+    projLinearUnits: image.valueGeo(TiffTagGeo.ProjLinearUnitsGeoKey),
+    projLinearUnitSize: image.valueGeo(TiffTagGeo.ProjLinearUnitSizeGeoKey),
+    projStdParallel1: image.valueGeo(TiffTagGeo.ProjStdParallel1GeoKey),
+    projStdParallel2: image.valueGeo(TiffTagGeo.ProjStdParallel2GeoKey),
+    projNatOriginLong: image.valueGeo(TiffTagGeo.ProjNatOriginLongGeoKey),
+    projNatOriginLat: image.valueGeo(TiffTagGeo.ProjNatOriginLatGeoKey),
+    projFalseEasting: image.valueGeo(TiffTagGeo.ProjFalseEastingGeoKey),
+    projFalseNorthing: image.valueGeo(TiffTagGeo.ProjFalseNorthingGeoKey),
+    projFalseOriginLong: image.valueGeo(TiffTagGeo.ProjFalseOriginLongGeoKey),
+    projFalseOriginLat: image.valueGeo(TiffTagGeo.ProjFalseOriginLatGeoKey),
+    projFalseOriginEasting: image.valueGeo(TiffTagGeo.ProjFalseOriginEastingGeoKey),
+    projFalseOriginNorthing: image.valueGeo(TiffTagGeo.ProjFalseOriginNorthingGeoKey),
+    projCenterLong: image.valueGeo(TiffTagGeo.ProjCenterLongGeoKey),
+    projCenterLat: image.valueGeo(TiffTagGeo.ProjCenterLatGeoKey),
+    projCenterEasting: image.valueGeo(TiffTagGeo.ProjCenterEastingGeoKey),
+    projCenterNorthing: image.valueGeo(TiffTagGeo.ProjCenterNorthingGeoKey),
+    projScaleAtNatOrigin: image.valueGeo(TiffTagGeo.ProjScaleAtNatOriginGeoKey),
+    projScaleAtCenter: image.valueGeo(TiffTagGeo.ProjScaleAtCenterGeoKey),
+    projAzimuthAngle: image.valueGeo(TiffTagGeo.ProjAzimuthAngleGeoKey),
+    projStraightVertPoleLong: image.valueGeo(TiffTagGeo.ProjStraightVertPoleLongGeoKey),
+    projRectifiedGridAngle: image.valueGeo(TiffTagGeo.ProjRectifiedGridAngleGeoKey),
+
+    // Vertical CRS keys
+    verticalCRS: image.valueGeo(TiffTagGeo.VerticalGeoKey),
+    verticalCitation: image.valueGeo(TiffTagGeo.VerticalCitationGeoKey),
+    verticalDatum: image.valueGeo(TiffTagGeo.VerticalDatumGeoKey),
+    verticalUnits: image.valueGeo(TiffTagGeo.VerticalUnitsGeoKey),
+  };
 }
