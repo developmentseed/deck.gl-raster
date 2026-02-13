@@ -1,8 +1,11 @@
 import type { TiffImage } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
+import { fetchTile } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
 import type { GeoKeyDirectory } from "./ifd.js";
+import type { Tile } from "./tile.js";
+import { index, xy } from "./transform.js";
 
 /**
  * A single resolution level of a GeoTIFF — either the full-resolution image
@@ -69,5 +72,45 @@ export class Overview {
 
   get width(): number {
     return this.image.size.width;
+  }
+
+  /** Fetch a single tile from the full-resolution image. */
+  // TODO: support AbortSignal
+  // https://github.com/blacha/cogeotiff/issues/1397
+  async fetchTile(x: number, y: number): Promise<Tile> {
+    return await fetchTile(this, x, y);
+  }
+
+  /**
+   * Get the (row, col) pixel index containing the geographic coordinate (x, y).
+   *
+   * @param x          x coordinate in the CRS.
+   * @param y          y coordinate in the CRS.
+   * @param op         Rounding function applied to fractional pixel indices.
+   *                   Defaults to Math.floor.
+   * @returns          [row, col] pixel indices.
+   */
+  index(
+    x: number,
+    y: number,
+    op: (n: number) => number = Math.floor,
+  ): [number, number] {
+    return index(this, x, y, op);
+  }
+
+  /**
+   * Get the geographic (x, y) coordinate of the pixel at (row, col).
+   *
+   * @param row        Pixel row.
+   * @param col        Pixel column.
+   * @param offset     Which part of the pixel to return.  Defaults to "center".
+   * @returns          [x, y] in the CRS.
+   */
+  xy(
+    row: number,
+    col: number,
+    offset: "center" | "ul" | "ur" | "ll" | "lr" = "center",
+  ): [number, number] {
+    return xy(this, row, col, offset);
   }
 }
