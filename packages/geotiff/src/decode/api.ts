@@ -1,5 +1,6 @@
 import { Compression, SampleFormat } from "@cogeotiff/core";
 import type { RasterTypedArray } from "../array.js";
+import { decode as decodeViaCanvas } from "../codecs/canvas.js";
 
 /** The result of a decoding process */
 export type DecodedPixels =
@@ -42,15 +43,12 @@ registry.set(Compression.DeflateOther, () =>
 // registry.set(Compression.Lzma, () =>
 //   import("../codecs/lzma.js").then((m) => m.decode),
 // );
-// registry.set(Compression.Webp, () =>
-//   import("../codecs/webp.js").then((m) => m.decode),
-// );
 // registry.set(Compression.Jp2000, () =>
 //   import("../codecs/jp2000.js").then((m) => m.decode),
 // );
-registry.set(Compression.Jpeg, () =>
-  import("../codecs/jpeg.js").then((m) => m.decode),
-);
+registry.set(Compression.Jpeg, () => Promise.resolve(decodeViaCanvas));
+registry.set(Compression.Jpeg6, () => Promise.resolve(decodeViaCanvas));
+registry.set(Compression.Webp, () => Promise.resolve(decodeViaCanvas));
 registry.set(Compression.Lerc, () =>
   import("../codecs/lerc.js").then((m) => m.decode),
 );
