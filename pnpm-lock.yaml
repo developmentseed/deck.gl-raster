@@ -370,6 +370,9 @@ importers:
         specifier: workspace:^
         version: link:../affine
     devDependencies:
+      '@chunkd/source-file':
+        specifier: ^11.0.1
+        version: 11.0.1
       '@types/node':
         specifier: ^25.1.0
         version: 25.1.0
@@ -550,6 +553,14 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
+
+  '@chunkd/source-file@11.0.1':
+    resolution: {integrity: sha512-9DoA1djozuDpUklg0CRj/GBEJzvZeqwr1EIOTcEr3igDAf+UZ3y3lOgUaIWuNeATbwQ7Pdml2S6SLLAdAe45wQ==}
+    engines: {node: '>=16.0.0'}
+
+  '@chunkd/source@11.1.0':
+    resolution: {integrity: sha512-3BcrHK4XDm3t4vDx1OisgcOZ05+EarEqwaGVIL7IMHUmkXwN/Aprlnr7aVP3BYcltgcCcfMd1pXQicbSrP563g==}
+    engines: {node: '>=16.0.0'}
 
   '@cogeotiff/core@9.1.2':
     resolution: {integrity: sha512-m1F9glmz8zxxfDyqVnOQibF/uIZciequ1576zy6FG1rCcXVtLhE3qERT1GcS79K/dKvf+B+imgEmV2qfl6TdJQ==}
@@ -2666,6 +2677,12 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.3.13':
     optional: true
+
+  '@chunkd/source-file@11.0.1':
+    dependencies:
+      '@chunkd/source': 11.1.0
+
+  '@chunkd/source@11.1.0': {}
 
   '@cogeotiff/core@9.1.2': {}
 
