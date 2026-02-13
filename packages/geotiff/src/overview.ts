@@ -59,14 +59,8 @@ export class Overview {
 
   get transform(): Affine {
     const fullTransform = this.geotiff.transform;
-
-    const overviewWidth = this.width;
-    const fullWidth = this.geotiff.width;
-    const overviewHeight = this.height;
-    const fullHeight = this.geotiff.height;
-
-    const scaleX = fullWidth / overviewWidth;
-    const scaleY = fullHeight / overviewHeight;
+    const scaleX = this.geotiff.width / this.width;
+    const scaleY = this.geotiff.height / this.height;
     return compose(fullTransform, scale(scaleX, scaleY));
   }
 

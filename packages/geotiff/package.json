@@ -35,6 +35,7 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
+    "@chunkd/source-file": "^11.0.1",
     "@types/node": "^25.1.0",
     "lerc": "^4.0.4",
     "typescript": "^5.9.3",
