@@ -1,5 +1,5 @@
 import type { Affine } from "./affine.js";
-import { forward, invert } from "./affine.js";
+import { apply, invert } from "./affine.js";
 
 /**
  * Interface for objects that have an affine transform.
@@ -25,7 +25,7 @@ export function index(
   op: (n: number) => number = Math.floor,
 ): [number, number] {
   const inv = invert(self.transform);
-  const [col, row] = forward(inv, x, y);
+  const [col, row] = apply(inv, x, y);
   return [op(row), op(col)];
 }
 
@@ -69,5 +69,5 @@ export function xy(
       break;
   }
 
-  return forward(self.transform, c, r);
+  return apply(self.transform, c, r);
 }
