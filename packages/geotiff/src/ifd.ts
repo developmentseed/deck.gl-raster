@@ -28,57 +28,83 @@ export interface PreFetchedTags {
  */
 export type GeoKeyDirectory = {
   // ── Configuration keys (1024–1026) ──────────────────────────────────
-  modelType?: TiffTagGeoType[TiffTagGeo.GTModelTypeGeoKey];
-  rasterType?: TiffTagGeoType[TiffTagGeo.GTRasterTypeGeoKey];
-  citation?: TiffTagGeoType[TiffTagGeo.GTCitationGeoKey];
+  modelType: TiffTagGeoType[TiffTagGeo.GTModelTypeGeoKey] | null;
+  rasterType: TiffTagGeoType[TiffTagGeo.GTRasterTypeGeoKey] | null;
+  citation: TiffTagGeoType[TiffTagGeo.GTCitationGeoKey] | null;
 
   // ── Geographic CRS keys (2048–2062) ─────────────────────────────────
-  geodeticCRS?: TiffTagGeoType[TiffTagGeo.GeodeticCRSGeoKey];
-  geodeticCitation?: TiffTagGeoType[TiffTagGeo.GeodeticCitationGeoKey];
-  geodeticDatum?: TiffTagGeoType[TiffTagGeo.GeodeticDatumGeoKey];
-  primeMeridian?: TiffTagGeoType[TiffTagGeo.PrimeMeridianGeoKey];
-  linearUnits?: TiffTagGeoType[TiffTagGeo.GeogLinearUnitsGeoKey];
-  linearUnitSize?: TiffTagGeoType[TiffTagGeo.GeogLinearUnitSizeGeoKey];
-  angularUnits?: TiffTagGeoType[TiffTagGeo.GeogAngularUnitsGeoKey];
-  angularUnitSize?: TiffTagGeoType[TiffTagGeo.GeogAngularUnitSizeGeoKey];
-  ellipsoid?: TiffTagGeoType[TiffTagGeo.EllipsoidGeoKey];
-  ellipsoidSemiMajorAxis?: TiffTagGeoType[TiffTagGeo.EllipsoidSemiMajorAxisGeoKey];
-  ellipsoidSemiMinorAxis?: TiffTagGeoType[TiffTagGeo.EllipsoidSemiMinorAxisGeoKey];
-  ellipsoidInvFlattening?: TiffTagGeoType[TiffTagGeo.EllipsoidInvFlatteningGeoKey];
-  azimuthUnits?: TiffTagGeoType[TiffTagGeo.GeogAzimuthUnitsGeoKey];
-  primeMeridianLongitude?: TiffTagGeoType[TiffTagGeo.PrimeMeridianLongitudeGeoKey];
-  toWGS84?: TiffTagGeoType[TiffTagGeo.GeogTOWGS84GeoKey];
+  geodeticCRS: TiffTagGeoType[TiffTagGeo.GeodeticCRSGeoKey] | null;
+  geodeticCitation: TiffTagGeoType[TiffTagGeo.GeodeticCitationGeoKey] | null;
+  geodeticDatum: TiffTagGeoType[TiffTagGeo.GeodeticDatumGeoKey] | null;
+  primeMeridian: TiffTagGeoType[TiffTagGeo.PrimeMeridianGeoKey] | null;
+  linearUnits: TiffTagGeoType[TiffTagGeo.GeogLinearUnitsGeoKey] | null;
+  linearUnitSize: TiffTagGeoType[TiffTagGeo.GeogLinearUnitSizeGeoKey] | null;
+  angularUnits: TiffTagGeoType[TiffTagGeo.GeogAngularUnitsGeoKey] | null;
+  angularUnitSize: TiffTagGeoType[TiffTagGeo.GeogAngularUnitSizeGeoKey] | null;
+  ellipsoid: TiffTagGeoType[TiffTagGeo.EllipsoidGeoKey] | null;
+  ellipsoidSemiMajorAxis:
+    | TiffTagGeoType[TiffTagGeo.EllipsoidSemiMajorAxisGeoKey]
+    | null;
+  ellipsoidSemiMinorAxis:
+    | TiffTagGeoType[TiffTagGeo.EllipsoidSemiMinorAxisGeoKey]
+    | null;
+  ellipsoidInvFlattening:
+    | TiffTagGeoType[TiffTagGeo.EllipsoidInvFlatteningGeoKey]
+    | null;
+  azimuthUnits: TiffTagGeoType[TiffTagGeo.GeogAzimuthUnitsGeoKey] | null;
+  primeMeridianLongitude:
+    | TiffTagGeoType[TiffTagGeo.PrimeMeridianLongitudeGeoKey]
+    | null;
+  toWGS84: TiffTagGeoType[TiffTagGeo.GeogTOWGS84GeoKey] | null;
 
   // ── Projected CRS keys (3072–3096) ──────────────────────────────────
-  projectedCRS?: TiffTagGeoType[TiffTagGeo.ProjectedCRSGeoKey];
-  projectedCitation?: TiffTagGeoType[TiffTagGeo.ProjectedCitationGeoKey];
-  projection?: TiffTagGeoType[TiffTagGeo.ProjectionGeoKey];
-  projMethod?: TiffTagGeoType[TiffTagGeo.ProjMethodGeoKey];
-  projLinearUnits?: TiffTagGeoType[TiffTagGeo.ProjLinearUnitsGeoKey];
-  projLinearUnitSize?: TiffTagGeoType[TiffTagGeo.ProjLinearUnitSizeGeoKey];
-  projStdParallel1?: TiffTagGeoType[TiffTagGeo.ProjStdParallel1GeoKey];
-  projStdParallel2?: TiffTagGeoType[TiffTagGeo.ProjStdParallel2GeoKey];
-  projNatOriginLong?: TiffTagGeoType[TiffTagGeo.ProjNatOriginLongGeoKey];
-  projNatOriginLat?: TiffTagGeoType[TiffTagGeo.ProjNatOriginLatGeoKey];
-  projFalseEasting?: TiffTagGeoType[TiffTagGeo.ProjFalseEastingGeoKey];
-  projFalseNorthing?: TiffTagGeoType[TiffTagGeo.ProjFalseNorthingGeoKey];
-  projFalseOriginLong?: TiffTagGeoType[TiffTagGeo.ProjFalseOriginLongGeoKey];
-  projFalseOriginLat?: TiffTagGeoType[TiffTagGeo.ProjFalseOriginLatGeoKey];
-  projFalseOriginEasting?: TiffTagGeoType[TiffTagGeo.ProjFalseOriginEastingGeoKey];
-  projFalseOriginNorthing?: TiffTagGeoType[TiffTagGeo.ProjFalseOriginNorthingGeoKey];
-  projCenterLong?: TiffTagGeoType[TiffTagGeo.ProjCenterLongGeoKey];
-  projCenterLat?: TiffTagGeoType[TiffTagGeo.ProjCenterLatGeoKey];
-  projCenterEasting?: TiffTagGeoType[TiffTagGeo.ProjCenterEastingGeoKey];
-  projCenterNorthing?: TiffTagGeoType[TiffTagGeo.ProjCenterNorthingGeoKey];
-  projScaleAtNatOrigin?: TiffTagGeoType[TiffTagGeo.ProjScaleAtNatOriginGeoKey];
-  projScaleAtCenter?: TiffTagGeoType[TiffTagGeo.ProjScaleAtCenterGeoKey];
-  projAzimuthAngle?: TiffTagGeoType[TiffTagGeo.ProjAzimuthAngleGeoKey];
-  projStraightVertPoleLong?: TiffTagGeoType[TiffTagGeo.ProjStraightVertPoleLongGeoKey];
-  projRectifiedGridAngle?: TiffTagGeoType[TiffTagGeo.ProjRectifiedGridAngleGeoKey];
+  projectedCRS: TiffTagGeoType[TiffTagGeo.ProjectedCRSGeoKey] | null;
+  projectedCitation: TiffTagGeoType[TiffTagGeo.ProjectedCitationGeoKey] | null;
+  projection: TiffTagGeoType[TiffTagGeo.ProjectionGeoKey] | null;
+  projMethod: TiffTagGeoType[TiffTagGeo.ProjMethodGeoKey] | null;
+  projLinearUnits: TiffTagGeoType[TiffTagGeo.ProjLinearUnitsGeoKey] | null;
+  projLinearUnitSize:
+    | TiffTagGeoType[TiffTagGeo.ProjLinearUnitSizeGeoKey]
+    | null;
+  projStdParallel1: TiffTagGeoType[TiffTagGeo.ProjStdParallel1GeoKey] | null;
+  projStdParallel2: TiffTagGeoType[TiffTagGeo.ProjStdParallel2GeoKey] | null;
+  projNatOriginLong: TiffTagGeoType[TiffTagGeo.ProjNatOriginLongGeoKey] | null;
+  projNatOriginLat: TiffTagGeoType[TiffTagGeo.ProjNatOriginLatGeoKey] | null;
+  projFalseEasting: TiffTagGeoType[TiffTagGeo.ProjFalseEastingGeoKey] | null;
+  projFalseNorthing: TiffTagGeoType[TiffTagGeo.ProjFalseNorthingGeoKey] | null;
+  projFalseOriginLong:
+    | TiffTagGeoType[TiffTagGeo.ProjFalseOriginLongGeoKey]
+    | null;
+  projFalseOriginLat:
+    | TiffTagGeoType[TiffTagGeo.ProjFalseOriginLatGeoKey]
+    | null;
+  projFalseOriginEasting:
+    | TiffTagGeoType[TiffTagGeo.ProjFalseOriginEastingGeoKey]
+    | null;
+  projFalseOriginNorthing:
+    | TiffTagGeoType[TiffTagGeo.ProjFalseOriginNorthingGeoKey]
+    | null;
+  projCenterLong: TiffTagGeoType[TiffTagGeo.ProjCenterLongGeoKey] | null;
+  projCenterLat: TiffTagGeoType[TiffTagGeo.ProjCenterLatGeoKey] | null;
+  projCenterEasting: TiffTagGeoType[TiffTagGeo.ProjCenterEastingGeoKey] | null;
+  projCenterNorthing:
+    | TiffTagGeoType[TiffTagGeo.ProjCenterNorthingGeoKey]
+    | null;
+  projScaleAtNatOrigin:
+    | TiffTagGeoType[TiffTagGeo.ProjScaleAtNatOriginGeoKey]
+    | null;
+  projScaleAtCenter: TiffTagGeoType[TiffTagGeo.ProjScaleAtCenterGeoKey] | null;
+  projAzimuthAngle: TiffTagGeoType[TiffTagGeo.ProjAzimuthAngleGeoKey] | null;
+  projStraightVertPoleLong:
+    | TiffTagGeoType[TiffTagGeo.ProjStraightVertPoleLongGeoKey]
+    | null;
+  projRectifiedGridAngle:
+    | TiffTagGeoType[TiffTagGeo.ProjRectifiedGridAngleGeoKey]
+    | null;
 
   // ── Vertical CRS keys (4096–4099) ───────────────────────────────────
-  verticalCRS?: TiffTagGeoType[TiffTagGeo.VerticalGeoKey];
-  verticalCitation?: TiffTagGeoType[TiffTagGeo.VerticalCitationGeoKey];
-  verticalDatum?: TiffTagGeoType[TiffTagGeo.VerticalDatumGeoKey];
-  verticalUnits?: TiffTagGeoType[TiffTagGeo.VerticalUnitsGeoKey];
+  verticalCRS: TiffTagGeoType[TiffTagGeo.VerticalGeoKey] | null;
+  verticalCitation: TiffTagGeoType[TiffTagGeo.VerticalCitationGeoKey] | null;
+  verticalDatum: TiffTagGeoType[TiffTagGeo.VerticalDatumGeoKey] | null;
+  verticalUnits: TiffTagGeoType[TiffTagGeo.VerticalUnitsGeoKey] | null;
 };

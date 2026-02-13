@@ -1,5 +1,11 @@
 import type { Source, TiffImage } from "@cogeotiff/core";
-import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
+import {
+  Photometric,
+  SubFileType,
+  Tiff,
+  TiffTag,
+  TiffTagGeo,
+} from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { fetchTile } from "./fetch.js";
 import type { GeoKeyDirectory } from "./ifd.js";
@@ -80,6 +86,7 @@ export class GeoTIFF {
     await Promise.all(images.map((image) => image.init(true)));
 
     const primaryImage = images[0]!;
+    const gkd = extractGeoKeyDirectory(primaryImage);
 
     // Classify IFDs (skipping index 0) into data and mask buckets
     // keyed by "width,height".
@@ -101,9 +108,6 @@ export class GeoTIFF {
     // Find the primary mask, if any.
     const primaryKey = `${primaryImage.size.width},${primaryImage.size.height}`;
     const primaryMask = maskIFDs.get(primaryKey) ?? null;
-
-    // Extract GeoKeyDirectory from the primary image.
-    const gkd = {} as GeoKeyDirectory;
 
     // Build reduced-resolution Overview instances, sorted by pixel count
     // descending (finest first).
@@ -276,4 +280,8 @@ export function isMaskIfd(image: TiffImage): boolean {
     (subFileType & SubFileType.Mask) !== 0 &&
     photometric === Photometric.Mask
   );
+}
+
+function extractGeoKeyDirectory(image: TiffImage): GeoKeyDirectory {
+  return { modelType: image.valueGeo(TiffTagGeo.GTModelTypeGeoKey) };
 }
