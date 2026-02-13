@@ -4,7 +4,7 @@ import { forward, invert } from "./affine.js";
 /**
  * Interface for objects that have an affine transform.
  */
-interface HasTransform {
+export interface HasTransform {
   /** The affine transform. */
   transform: Affine;
 }
