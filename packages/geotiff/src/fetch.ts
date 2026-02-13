@@ -1,9 +1,7 @@
-import type {
-  Compression,
-  Tiff,
-  TiffImage,
-  TiffMimeType,
-} from "@cogeotiff/core";
+import type { SampleFormat, Tiff, TiffImage } from "@cogeotiff/core";
+import { TiffTag } from "@cogeotiff/core";
+import { compose, translation } from "@developmentseed/affine";
+import { decode } from "./decode/api";
 import type { Tile } from "./tile";
 import type { HasTransform } from "./transform";
 
@@ -45,34 +43,74 @@ export async function fetchTile(
     throw new Error("Tile not found");
   }
 
-  throw new Error("Not implemented");
+  const { bytes, compression } = tile;
+  const sampleFormats = await self.ifd.fetch(TiffTag.SampleFormat);
+  const bitsPerSamples = await self.ifd.fetch(TiffTag.BitsPerSample);
+  const { sampleFormat, bitsPerSample } = getUniqueSampleFormat(
+    sampleFormats,
+    bitsPerSamples,
+  );
+
+  const tileTransform = compose(
+    self.transform,
+    translation(x * self.tileWidth, y * self.tileHeight),
+  );
+
+  const decodedPixels = await decode(bytes, compression, {
+    sampleFormat,
+    bitsPerSample,
+  });
+
+  if (decodedPixels.layout === "band-separate") {
+  }
+
+  const array = {
+    ...decodedPixels,
+    // https://github.com/blacha/cogeotiff/pull/1394
+    count: self.ifd.value(TiffTag.SamplesPerPixel) as number,
+    height: self.tileHeight,
+    width: self.tileWidth,
+    mask: null,
+    transform: tileTransform,
+    crs: self.crs,
+    nodata: self.nodata,
+  };
+
+  return {
+    x,
+    y,
+    array,
+  };
 }
 
-//     mask_data: AsyncTiffArray | None = None
-//     if self._mask_ifd is not None:
-//         mask_fut = self._mask_ifd.fetch_tile(x, y)
-//         tile, mask = await asyncio.gather(tile_fut, mask_fut)
-//         tile_data, mask_data = await asyncio.gather(tile.decode(), mask.decode())
-//     else:
-//         tile = await tile_fut
-//         tile_data = await tile.decode()
+function getUniqueSampleFormat(
+  sampleFormats: SampleFormat[] | null,
+  bitsPerSamples: number[] | null,
+): { sampleFormat: SampleFormat; bitsPerSample: number } {
+  if (sampleFormats === null || bitsPerSamples === null) {
+    throw new Error(
+      "SampleFormat and BitsPerSample should always exist in TIFF.",
+    );
+  }
 
-//     tile_transform = self.transform * Affine.translation(
-//         x * self.tile_width,
-//         y * self.tile_height,
-//     )
+  const uniqueSampleFormats = new Set(sampleFormats);
+  const uniqueBitsPerSample = new Set(bitsPerSamples);
 
-//     array = Array._create(  # noqa: SLF001
-//         data=tile_data,
-//         mask=mask_data,
-//         planar_configuration=self._ifd.planar_configuration,
-//         crs=self.crs,
-//         transform=tile_transform,
-//         nodata=self.nodata,
-//     )
-//     return Tile(
-//         x=x,
-//         y=y,
-//         _ifd=self._ifd,
-//         array=array,
-//     )
+  if (uniqueSampleFormats.size > 1) {
+    throw new Error("Multiple sample formats are not supported.");
+  }
+  if (uniqueBitsPerSample.size > 1) {
+    throw new Error("Multiple bits per sample values are not supported.");
+  }
+  const sampleFormat = sampleFormats[0];
+  const bitsPerSample = bitsPerSamples[0];
+
+  if (sampleFormat === undefined || bitsPerSample === undefined) {
+    throw new Error("SampleFormat and BitsPerSample arrays cannot be empty.");
+  }
+
+  return {
+    sampleFormat,
+    bitsPerSample,
+  };
+}
