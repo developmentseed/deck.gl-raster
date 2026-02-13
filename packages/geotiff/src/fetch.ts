@@ -36,16 +36,13 @@ export async function fetchTile(
   x: number,
   y: number,
 ): Promise<Tile> {
-  const tileFut = self.ifd.getTile(x, y);
-  let maskFut: Promise<{
-    mimeType: TiffMimeType;
-    bytes: ArrayBuffer;
-    compression: Compression;
-  } | null> | null = null;
   if (self.maskIfd != null) {
-    maskFut = self.maskIfd.getTile(x, y);
-    const [tile, mask] = await Promise.all([tileFut, maskFut]);
-    console.log(tile, mask);
+    throw new Error("Mask fetching not implemented yet");
+  }
+
+  const tile = await self.ifd.getTile(x, y);
+  if (tile === null) {
+    throw new Error("Tile not found");
   }
 
   throw new Error("Not implemented");
