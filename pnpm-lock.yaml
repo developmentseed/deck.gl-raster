@@ -366,6 +366,9 @@ importers:
       '@cogeotiff/core':
         specifier: ^9.1.2
         version: 9.1.2
+      '@developmentseed/affine':
+        specifier: workspace:^
+        version: link:../affine
     devDependencies:
       '@types/node':
         specifier: ^25.1.0

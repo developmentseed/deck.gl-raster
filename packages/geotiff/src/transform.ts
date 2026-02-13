@@ -1,5 +1,5 @@
-import type { Affine } from "./affine.js";
-import { apply, invert } from "./affine.js";
+import type { Affine } from "@developmentseed/affine";
+import { apply, invert } from "@developmentseed/affine";
 
 /**
  * Interface for objects that have an affine transform.

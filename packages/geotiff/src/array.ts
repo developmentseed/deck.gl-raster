@@ -1,4 +1,4 @@
-import type { Affine } from "./affine.js";
+import type { Affine } from "@developmentseed/affine";
 
 /**
  * Decoded raster data from a GeoTIFF region.
