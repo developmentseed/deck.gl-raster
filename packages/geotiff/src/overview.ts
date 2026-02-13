@@ -1,28 +1,8 @@
-import type { Compression, TiffImage, TiffMimeType } from "@cogeotiff/core";
+import type { TiffImage } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
 import type { GeoTIFF } from "./geotiff";
 import type { GeoKeyDirectory } from "./ifd";
-
-/** Options for fetching tile/raster data. */
-export type FetchOptions = {
-  /** AbortSignal to cancel the fetch operation. */
-  signal?: AbortSignal;
-};
-
-/** Raw tile bytes returned by fetchTile before any decoding. */
-export type TileBytes = {
-  /** Tile column index. */
-  x: number;
-  /** Tile row index. */
-  y: number;
-  /** Compressed tile bytes. */
-  bytes: ArrayBuffer;
-  /** MIME type of the compressed data (e.g. "image/jpeg"). */
-  mimeType: TiffMimeType;
-  /** Compression enum value. */
-  compression: Compression;
-};
 
 /**
  * A single resolution level of a GeoTIFF — either the full-resolution image
