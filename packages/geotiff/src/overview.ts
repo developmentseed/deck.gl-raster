@@ -1,5 +1,8 @@
 import type { Compression, TiffImage, TiffMimeType } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
+import { compose, scale } from "@developmentseed/affine";
+import type { GeoTIFF } from "./geotiff";
+import type { GeoKeyDirectory } from "./ifd";
 
 /** Options for fetching tile/raster data. */
 export type FetchOptions = {
@@ -27,108 +30,64 @@ export type TileBytes = {
  * corresponding mask IFD (if any).
  */
 export class Overview {
+  /** A reference to the parent GeoTIFF object. */
+  readonly geotiff: GeoTIFF;
+
+  /** The GeoKeyDirectory of the primary IFD. */
+  readonly gkd: GeoKeyDirectory;
+
   /** The data IFD for this resolution level. */
   readonly image: TiffImage;
-  /** The mask IFD, or null when no mask exists at this level. */
-  readonly maskImage: TiffImage | null;
-  /** Affine geotransform for this overview's pixel grid. */
-  readonly transform: Affine;
-  /** Image width in pixels. */
-  readonly width: number;
-  /** Image height in pixels. */
-  readonly height: number;
-  /** Tile width in pixels (equals image width when the image is not tiled). */
-  readonly tileWidth: number;
-  /** Tile height in pixels (equals image height when the image is not tiled). */
-  readonly tileHeight: number;
+
+  /** The IFD for the mask associated with this overview level, if any. */
+  readonly maskImage: TiffImage | null = null;
 
   constructor(
+    geotiff: GeoTIFF,
+    gkd: GeoKeyDirectory,
     image: TiffImage,
     maskImage: TiffImage | null,
-    transform: Affine,
   ) {
+    this.geotiff = geotiff;
+    this.gkd = gkd;
     this.image = image;
     this.maskImage = maskImage;
-    this.transform = transform;
-
-    const size = image.size;
-    this.width = size.width;
-    this.height = size.height;
-
-    if (image.isTiled()) {
-      const ts = image.tileSize;
-      this.tileWidth = ts.width;
-      this.tileHeight = ts.height;
-    } else {
-      this.tileWidth = this.width;
-      this.tileHeight = this.height;
-    }
   }
 
-  /**
-   * Fetch a single tile's raw compressed bytes by its grid indices.
-   *
-   * Returns null if the tile has no data (sparse COG).
-   */
-  async fetchTile(
-    x: number,
-    y: number,
-    _options?: FetchOptions,
-  ): Promise<TileBytes | null> {
-    const result = await this.image.getTile(x, y);
-    if (result == null) return null;
-
-    return {
-      x,
-      y,
-      bytes: result.bytes,
-      mimeType: result.mimeType,
-      compression: result.compression,
-    };
+  get crs(): string {
+    return this.geotiff.crs;
   }
 
-  /**
-   * Fetch data and mask tiles in parallel for the given grid position.
-   *
-   * Returns null if the data tile has no data (sparse COG).
-   */
-  async fetchTileWithMask(
-    x: number,
-    y: number,
-    _options?: FetchOptions,
-  ): Promise<{
-    data: TileBytes;
-    mask: TileBytes | null;
-  } | null> {
-    const dataPromise = this.image.getTile(x, y);
-    const maskPromise = this.maskImage ? this.maskImage.getTile(x, y) : null;
+  get height(): number {
+    return this.image.size.height;
+  }
 
-    const [dataResult, maskResult] = await Promise.all([
-      dataPromise,
-      maskPromise,
-    ]);
+  get nodata(): number | null {
+    return this.geotiff.nodata;
+  }
 
-    if (dataResult == null) return null;
+  get tileHeight(): number {
+    return this.image.tileSize.height;
+  }
 
-    const dataTile: TileBytes = {
-      x,
-      y,
-      bytes: dataResult.bytes,
-      mimeType: dataResult.mimeType,
-      compression: dataResult.compression,
-    };
+  get tileWidth(): number {
+    return this.image.tileSize.width;
+  }
 
-    let maskTile: TileBytes | null = null;
-    if (maskResult != null) {
-      maskTile = {
-        x,
-        y,
-        bytes: maskResult.bytes,
-        mimeType: maskResult.mimeType,
-        compression: maskResult.compression,
-      };
-    }
+  get transform(): Affine {
+    const fullTransform = this.geotiff.transform;
 
-    return { data: dataTile, mask: maskTile };
+    const overviewWidth = this.width;
+    const fullWidth = this.geotiff.width;
+    const overviewHeight = this.height;
+    const fullHeight = this.geotiff.height;
+
+    const scaleX = fullWidth / overviewWidth;
+    const scaleY = fullHeight / overviewHeight;
+    return compose(fullTransform, scale(scaleX, scaleY));
+  }
+
+  get width(): number {
+    return this.image.size.width;
   }
 }
