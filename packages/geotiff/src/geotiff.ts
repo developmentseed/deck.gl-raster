@@ -98,13 +98,12 @@ export class GeoTIFF {
       }
     }
 
-    // Build the primary Overview (full-resolution image + its mask, if any)
+    // Find the primary mask, if any.
     const primaryKey = `${primaryImage.size.width},${primaryImage.size.height}`;
-    const primary = new Overview(
-      primaryImage,
-      maskIFDs.get(primaryKey) ?? null,
-      baseTransform,
-    );
+    const primaryMask = maskIFDs.get(primaryKey) ?? null;
+
+    // Extract GeoKeyDirectory from the primary image.
+    const gkd = {} as GeoKeyDirectory;
 
     // Build reduced-resolution Overview instances, sorted by pixel count
     // descending (finest first).
@@ -115,26 +114,19 @@ export class GeoTIFF {
       return sb.width * sb.height - sa.width * sa.height;
     });
 
+    // Two-phase construction: create the GeoTIFF first (with empty overviews),
+    // then build Overviews that reference back to it.
+    const geotiff = new GeoTIFF(tiff, primaryImage, primaryMask, gkd, []);
+
     const overviews: Overview[] = dataEntries.map(([key, dataImage]) => {
       const maskImage = maskIFDs.get(key) ?? null;
-      const overviewWidth = dataImage.size.width;
-
-      // Scale the base transform for this overview level.
-      const scale = primaryWidth / overviewWidth;
-      const [a, b, c, d, e, f] = baseTransform;
-      const overviewTransform: Affine = [
-        a * scale,
-        b * scale,
-        c,
-        d * scale,
-        e * scale,
-        f,
-      ];
-
-      return new Overview(dataImage, maskImage, overviewTransform);
+      return new Overview(geotiff, gkd, dataImage, maskImage);
     });
 
-    return new GeoTIFF(tiff, primary, overviews, baseTransform, primaryImage);
+    // Mutate the readonly field — safe here because we're still in the factory.
+    (geotiff as { overviews: Overview[] }).overviews = overviews;
+
+    return geotiff;
   }
 
   // ── Properties from the primary image ─────────────────────────────────
@@ -207,11 +199,9 @@ export class GeoTIFF {
     );
 
     let b = 0; // row rotation
-    let d = 0;
+    let d = 0; // column rotation
 
     if (modelTransformation != null && modelTransformation.length >= 16) {
-      // column rotation
-
       b = modelTransformation[1]!;
       d = modelTransformation[4]!;
     }
