@@ -1,12 +1,11 @@
 import type { Affine } from "@developmentseed/affine";
 import { describe, expect, it } from "vitest";
+import type { BandRasterArray, PixelRasterArray } from "../src/array.js";
 import {
   packBandsToRGBA,
   reorderBands,
   toBandSeparate,
   toPixelInterleaved,
-  type BandRasterArray,
-  type PixelRasterArray,
 } from "../src/array.js";
 
 function baseMetadata() {

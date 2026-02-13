@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Source, Tiff, TiffImage } from "@cogeotiff/core";
-import { TiffTag } from "@cogeotiff/core";
+import { SampleFormat, TiffTag } from "@cogeotiff/core";
 import { GeoTIFF } from "../src/geotiff.js";
 
 /** File-based Source for integration tests
@@ -97,6 +97,14 @@ export function mockImage(opts: {
     tags.set(TiffTag.ModelTransformation, opts.modelTransformation);
   }
 
+  // Default SampleFormat and BitsPerSample so fetchTile works
+  if (!tags.has(TiffTag.SampleFormat)) {
+    tags.set(TiffTag.SampleFormat, [SampleFormat.Uint]);
+  }
+  if (!tags.has(TiffTag.BitsPerSample)) {
+    tags.set(TiffTag.BitsPerSample, [8]);
+  }
+
   return {
     size: { width: opts.width, height: opts.height },
     tileSize: {
@@ -109,15 +117,22 @@ export function mockImage(opts: {
     noData: opts.noData ?? null,
     epsg: opts.epsg ?? null,
     bbox: opts.bbox ?? [0, 0, 100, 100],
+    init: async () => {},
     has: (tag: number) => tags.has(tag),
     value: (tag: number) => {
       if (tags.has(tag)) return tags.get(tag);
       return null;
     },
+    valueGeo: () => null,
+    fetch: async (tag: number) => tags.get(tag) ?? null,
     getTile: async (_x: number, _y: number) => ({
-      bytes: new ArrayBuffer(8),
-      mimeType: "image/jpeg",
-      compression: 7, // JPEG
+      bytes: new ArrayBuffer(
+        (opts.tileWidth ?? 256) *
+          (opts.tileHeight ?? 256) *
+          (opts.samplesPerPixel ?? 1),
+      ),
+      mimeType: "application/octet-stream",
+      compression: 1, // None
     }),
   } as unknown as TiffImage;
 }

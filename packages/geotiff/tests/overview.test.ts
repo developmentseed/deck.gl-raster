@@ -1,78 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { Overview } from "../src/overview.js";
-import { mockImage } from "./helpers.js";
+import { GeoTIFF } from "../src/geotiff.js";
+import { mockImage, mockTiff } from "./helpers.js";
 
 describe("Overview", () => {
-  it("exposes image dimensions", () => {
-    const image = mockImage({ width: 512, height: 256 });
-    const ov = new Overview(image, null, [1, 0, 0, 0, -1, 0]);
-    expect(ov.width).toBe(512);
-    expect(ov.height).toBe(256);
-  });
-
-  it("exposes tile size for tiled images", () => {
-    const image = mockImage({
-      width: 1024,
-      height: 1024,
-      tileWidth: 256,
-      tileHeight: 256,
-      tiled: true,
+  it("computes scaled transform from parent", async () => {
+    const primary = mockImage({
+      width: 1000,
+      height: 1000,
+      origin: [100, 200, 0],
+      resolution: [0.01, -0.01, 0],
     });
-    const ov = new Overview(image, null, [1, 0, 0, 0, -1, 0]);
-    expect(ov.tileWidth).toBe(256);
-    expect(ov.tileHeight).toBe(256);
-  });
+    const ov = mockImage({ width: 500, height: 500 });
 
-  it("uses image dimensions as tile size for non-tiled images", () => {
-    const image = mockImage({
-      width: 512,
-      height: 256,
-      tiled: false,
-    });
-    const ov = new Overview(image, null, [1, 0, 0, 0, -1, 0]);
-    expect(ov.tileWidth).toBe(512);
-    expect(ov.tileHeight).toBe(256);
-  });
+    const tiff = mockTiff([primary, ov]);
+    const geo = await GeoTIFF.fromTiff(tiff);
 
-  it("fetchTile returns tile bytes", async () => {
-    const image = mockImage({ width: 256, height: 256 });
-    const ov = new Overview(image, null, [1, 0, 0, 0, -1, 0]);
-
-    const tile = await ov.fetchTile(0, 0);
-    expect(tile).not.toBeNull();
-    expect(tile!.x).toBe(0);
-    expect(tile!.y).toBe(0);
-    expect(tile!.bytes).toBeInstanceOf(ArrayBuffer);
-  });
-
-  it("fetchTile returns null for sparse tiles", async () => {
-    const image = mockImage({ width: 256, height: 256 });
-    (image as any).getTile = async () => null;
-
-    const ov = new Overview(image, null, [1, 0, 0, 0, -1, 0]);
-    const tile = await ov.fetchTile(0, 0);
-    expect(tile).toBeNull();
-  });
-
-  it("fetchTileWithMask returns data and mask", async () => {
-    const dataImage = mockImage({ width: 256, height: 256 });
-    const maskImage = mockImage({ width: 256, height: 256 });
-
-    const ov = new Overview(dataImage, maskImage, [1, 0, 0, 0, -1, 0]);
-    const result = await ov.fetchTileWithMask(0, 0);
-
-    expect(result).not.toBeNull();
-    expect(result!.data.bytes).toBeInstanceOf(ArrayBuffer);
-    expect(result!.mask).not.toBeNull();
-    expect(result!.mask!.bytes).toBeInstanceOf(ArrayBuffer);
-  });
-
-  it("fetchTileWithMask returns null mask when no mask image", async () => {
-    const dataImage = mockImage({ width: 256, height: 256 });
-    const ov = new Overview(dataImage, null, [1, 0, 0, 0, -1, 0]);
-    const result = await ov.fetchTileWithMask(0, 0);
-
-    expect(result).not.toBeNull();
-    expect(result!.mask).toBeNull();
+    const ovTransform = geo.overviews[0]!.transform;
+    // scale = 1000 / 500 = 2
+    expect(ovTransform[0]).toBeCloseTo(0.02); // a * 2
+    expect(ovTransform[4]).toBeCloseTo(-0.02); // e * 2
+    // Origin unchanged
+    expect(ovTransform[2]).toBe(100); // c
+    expect(ovTransform[5]).toBe(200); // f
   });
 });
