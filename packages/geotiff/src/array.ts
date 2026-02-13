@@ -88,7 +88,9 @@ export function toBandSeparate(array: RasterArray): BandRasterArray {
 
   const sampleCount = array.width * array.height;
   const bands: RasterTypedArray[] = new Array(array.count);
-  const Ctor = array.data.constructor as new (length: number) => RasterTypedArray;
+  const Ctor = array.data.constructor as new (
+    length: number,
+  ) => RasterTypedArray;
 
   for (let b = 0; b < array.count; b++) {
     bands[b] = new Ctor(sampleCount);
@@ -129,7 +131,9 @@ export function toPixelInterleaved(
     array.layout === "pixel-interleaved"
       ? array.data.constructor
       : array.bands[0]!.constructor
-  ) as new (length: number) => RasterTypedArray;
+  ) as new (
+    length: number,
+  ) => RasterTypedArray;
 
   const data = new Ctor(sampleCount * bandOrder.length);
   const bandSource = toBandSeparate(array).bands;
@@ -180,7 +184,9 @@ export function packBandsToRGBA(
   validateRasterShape(array);
   const src = toBandSeparate(array);
   const sampleCount = src.width * src.height;
-  const Ctor = src.bands[0]!.constructor as new (length: number) => RasterTypedArray;
+  const Ctor = src.bands[0]!.constructor as new (
+    length: number,
+  ) => RasterTypedArray;
   const data = new Ctor(sampleCount * 4);
 
   for (let i = 0; i < sampleCount; i++) {

@@ -299,11 +299,19 @@ function extractGeoKeyDirectory(image: TiffImage): GeoKeyDirectory {
     angularUnits: image.valueGeo(TiffTagGeo.GeogAngularUnitsGeoKey),
     angularUnitSize: image.valueGeo(TiffTagGeo.GeogAngularUnitSizeGeoKey),
     ellipsoid: image.valueGeo(TiffTagGeo.EllipsoidGeoKey),
-    ellipsoidSemiMajorAxis: image.valueGeo(TiffTagGeo.EllipsoidSemiMajorAxisGeoKey),
-    ellipsoidSemiMinorAxis: image.valueGeo(TiffTagGeo.EllipsoidSemiMinorAxisGeoKey),
-    ellipsoidInvFlattening: image.valueGeo(TiffTagGeo.EllipsoidInvFlatteningGeoKey),
+    ellipsoidSemiMajorAxis: image.valueGeo(
+      TiffTagGeo.EllipsoidSemiMajorAxisGeoKey,
+    ),
+    ellipsoidSemiMinorAxis: image.valueGeo(
+      TiffTagGeo.EllipsoidSemiMinorAxisGeoKey,
+    ),
+    ellipsoidInvFlattening: image.valueGeo(
+      TiffTagGeo.EllipsoidInvFlatteningGeoKey,
+    ),
     azimuthUnits: image.valueGeo(TiffTagGeo.GeogAzimuthUnitsGeoKey),
-    primeMeridianLongitude: image.valueGeo(TiffTagGeo.PrimeMeridianLongitudeGeoKey),
+    primeMeridianLongitude: image.valueGeo(
+      TiffTagGeo.PrimeMeridianLongitudeGeoKey,
+    ),
     toWGS84: image.valueGeo(TiffTagGeo.GeogTOWGS84GeoKey),
 
     // Projected CRS keys
@@ -321,8 +329,12 @@ function extractGeoKeyDirectory(image: TiffImage): GeoKeyDirectory {
     projFalseNorthing: image.valueGeo(TiffTagGeo.ProjFalseNorthingGeoKey),
     projFalseOriginLong: image.valueGeo(TiffTagGeo.ProjFalseOriginLongGeoKey),
     projFalseOriginLat: image.valueGeo(TiffTagGeo.ProjFalseOriginLatGeoKey),
-    projFalseOriginEasting: image.valueGeo(TiffTagGeo.ProjFalseOriginEastingGeoKey),
-    projFalseOriginNorthing: image.valueGeo(TiffTagGeo.ProjFalseOriginNorthingGeoKey),
+    projFalseOriginEasting: image.valueGeo(
+      TiffTagGeo.ProjFalseOriginEastingGeoKey,
+    ),
+    projFalseOriginNorthing: image.valueGeo(
+      TiffTagGeo.ProjFalseOriginNorthingGeoKey,
+    ),
     projCenterLong: image.valueGeo(TiffTagGeo.ProjCenterLongGeoKey),
     projCenterLat: image.valueGeo(TiffTagGeo.ProjCenterLatGeoKey),
     projCenterEasting: image.valueGeo(TiffTagGeo.ProjCenterEastingGeoKey),
@@ -330,8 +342,12 @@ function extractGeoKeyDirectory(image: TiffImage): GeoKeyDirectory {
     projScaleAtNatOrigin: image.valueGeo(TiffTagGeo.ProjScaleAtNatOriginGeoKey),
     projScaleAtCenter: image.valueGeo(TiffTagGeo.ProjScaleAtCenterGeoKey),
     projAzimuthAngle: image.valueGeo(TiffTagGeo.ProjAzimuthAngleGeoKey),
-    projStraightVertPoleLong: image.valueGeo(TiffTagGeo.ProjStraightVertPoleLongGeoKey),
-    projRectifiedGridAngle: image.valueGeo(TiffTagGeo.ProjRectifiedGridAngleGeoKey),
+    projStraightVertPoleLong: image.valueGeo(
+      TiffTagGeo.ProjStraightVertPoleLongGeoKey,
+    ),
+    projRectifiedGridAngle: image.valueGeo(
+      TiffTagGeo.ProjRectifiedGridAngleGeoKey,
+    ),
 
     // Vertical CRS keys
     verticalCRS: image.valueGeo(TiffTagGeo.VerticalGeoKey),

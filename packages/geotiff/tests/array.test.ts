@@ -36,18 +36,7 @@ describe("RasterArray helpers", () => {
     const interleaved = toPixelInterleaved(raster);
     expect(interleaved.layout).toBe("pixel-interleaved");
     expect(Array.from(interleaved.data)).toEqual([
-      1,
-      10,
-      100,
-      2,
-      20,
-      200,
-      3,
-      30,
-      300,
-      4,
-      40,
-      400,
+      1, 10, 100, 2, 20, 200, 3, 30, 300, 4, 40, 400,
     ]);
   });
 
@@ -56,20 +45,7 @@ describe("RasterArray helpers", () => {
       ...baseMetadata(),
       layout: "pixel-interleaved",
       count: 3,
-      data: new Uint16Array([
-        1,
-        10,
-        100,
-        2,
-        20,
-        200,
-        3,
-        30,
-        300,
-        4,
-        40,
-        400,
-      ]),
+      data: new Uint16Array([1, 10, 100, 2, 20, 200, 3, 30, 300, 4, 40, 400]),
     };
 
     const planar = toBandSeparate(raster);
@@ -118,22 +94,7 @@ describe("RasterArray helpers", () => {
     expect(packed.layout).toBe("pixel-interleaved");
     expect(packed.count).toBe(4);
     expect(Array.from(packed.data)).toEqual([
-      100,
-      10,
-      1,
-      255,
-      110,
-      20,
-      2,
-      255,
-      120,
-      30,
-      3,
-      255,
-      130,
-      40,
-      4,
-      255,
+      100, 10, 1, 255, 110, 20, 2, 255, 120, 30, 3, 255, 130, 40, 4, 255,
     ]);
   });
 });
