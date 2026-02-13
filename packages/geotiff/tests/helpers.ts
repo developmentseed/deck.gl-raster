@@ -109,6 +109,7 @@ export function mockImage(opts: {
     noData: opts.noData ?? null,
     epsg: opts.epsg ?? null,
     bbox: opts.bbox ?? [0, 0, 100, 100],
+    has: (tag: number) => tags.has(tag),
     value: (tag: number) => {
       if (tags.has(tag)) return tags.get(tag);
       return null;
