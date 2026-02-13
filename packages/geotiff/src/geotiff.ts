@@ -1,13 +1,9 @@
-import type { Source, Tiff, TiffImage } from "@cogeotiff/core";
-import {
-  Photometric,
-  SubFileType,
-  Tiff as TiffClass,
-  TiffTag,
-} from "@cogeotiff/core";
+import type { Source, TiffImage } from "@cogeotiff/core";
+import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "./affine.js";
 import type { FetchOptions, TileBytes } from "./overview.js";
 import { Overview } from "./overview.js";
+import { index, xy } from "./transform.js";
 
 /**
  * A higher-level GeoTIFF abstraction built on @cogeotiff/core.
@@ -55,7 +51,7 @@ export class GeoTIFF {
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    */
   static async open(source: Source): Promise<GeoTIFF> {
-    const tiff = await TiffClass.create(source);
+    const tiff = await Tiff.create(source);
     return GeoTIFF.fromTiff(tiff);
   }
 
@@ -104,9 +100,9 @@ export class GeoTIFF {
     // descending (finest first).
     const dataEntries = Array.from(dataIFDs.entries());
     dataEntries.sort((a, b) => {
-      const [wa, ha] = a[0].split(",").map(Number);
-      const [wb, hb] = b[0].split(",").map(Number);
-      return wb! * hb! - wa! * ha!;
+      const sa = a[1].size;
+      const sb = b[1].size;
+      return sb.width * sb.height - sa.width * sa.height;
     });
 
     const overviews: Overview[] = dataEntries.map(([key, dataImage]) => {
@@ -199,6 +195,41 @@ export class GeoTIFF {
     mask: TileBytes | null;
   } | null> {
     return this._primary.fetchTileWithMask(x, y, options);
+  }
+
+  // Transform mixin
+
+  /**
+   * Get the (row, col) pixel index containing the geographic coordinate (x, y).
+   *
+   * @param x          x coordinate in the CRS.
+   * @param y          y coordinate in the CRS.
+   * @param op         Rounding function applied to fractional pixel indices.
+   *                   Defaults to Math.floor.
+   * @returns          [row, col] pixel indices.
+   */
+  index(
+    x: number,
+    y: number,
+    op: (n: number) => number = Math.floor,
+  ): [number, number] {
+    return index(this, x, y, op);
+  }
+
+  /**
+   * Get the geographic (x, y) coordinate of the pixel at (row, col).
+   *
+   * @param row        Pixel row.
+   * @param col        Pixel column.
+   * @param offset     Which part of the pixel to return.  Defaults to "center".
+   * @returns          [x, y] in the CRS.
+   */
+  xy(
+    row: number,
+    col: number,
+    offset: "center" | "ul" | "ur" | "ll" | "lr" = "center",
+  ): [number, number] {
+    return xy(this, row, col, offset);
   }
 }
 
