@@ -7,7 +7,5 @@
   },
   "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"],
-  "references": [
-    { "path": "../affine" },
-  ]
+  "references": [{ "path": "../affine/tsconfig.build.json" }]
 }

@@ -1,5 +1,5 @@
+import type { Affine } from "@developmentseed/affine";
 import { describe, expect, it } from "vitest";
-import type { Affine } from "../src/affine.js";
 import { index, xy } from "../src/transform.js";
 
 describe("index", () => {
