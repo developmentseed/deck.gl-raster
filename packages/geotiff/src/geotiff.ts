@@ -41,16 +41,16 @@ export class GeoTIFF {
 
   private constructor(
     tiff: Tiff,
-    overviews: Overview[],
     image: TiffImage,
     maskImage: TiffImage | null,
     gkd: GeoKeyDirectory,
+    overviews: Overview[],
   ) {
     this.tiff = tiff;
-    this.overviews = overviews;
     this.image = image;
     this.maskImage = maskImage;
     this.gkd = gkd;
+    this.overviews = overviews;
   }
 
   /**
@@ -80,8 +80,6 @@ export class GeoTIFF {
     await Promise.all(images.map((image) => image.init(true)));
 
     const primaryImage = images[0]!;
-    const baseTransform = extractGeotransform(primaryImage);
-    const primaryWidth = primaryImage.size.width;
 
     // Classify IFDs (skipping index 0) into data and mask buckets
     // keyed by "width,height".

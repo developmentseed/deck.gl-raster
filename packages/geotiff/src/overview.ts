@@ -1,8 +1,8 @@
 import type { TiffImage } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
-import type { GeoTIFF } from "./geotiff";
-import type { GeoKeyDirectory } from "./ifd";
+import type { GeoTIFF } from "./geotiff.js";
+import type { GeoKeyDirectory } from "./ifd.js";
 
 /**
  * A single resolution level of a GeoTIFF — either the full-resolution image
