@@ -373,6 +373,9 @@ importers:
       '@types/node':
         specifier: ^25.1.0
         version: 25.1.0
+      lerc:
+        specifier: ^4.0.4
+        version: 4.0.4
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -1841,6 +1844,9 @@ packages:
 
   lerc@3.0.0:
     resolution: {integrity: sha512-Rm4J/WaHhRa93nCN2mwWDZFoRVF18G1f47C+kvQWyHGEZxFpTUi73p7lMVSAndyxGt6lJ2/CFbOcf9ra5p8aww==}
+
+  lerc@4.0.4:
+    resolution: {integrity: sha512-nHZH+ffiGPkgKUQtiZrljGUGV2GddvPcVTV5E345ZFncbKz+/rBIjDPrSxkiqW0EAtg1Jw7qAgRdaCwV+95Fow==}
 
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
@@ -3945,6 +3951,8 @@ snapshots:
   ktx-parse@0.7.1: {}
 
   lerc@3.0.0: {}
+
+  lerc@4.0.4: {}
 
   lie@3.3.0:
     dependencies:

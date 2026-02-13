@@ -1,7 +1,13 @@
 import { Compression } from "@cogeotiff/core";
+import type { RasterTypedArray } from "../array.js";
 import { decode as uncompressedDecode } from "../codecs/none.js";
 
-export type Decoder = (bytes: ArrayBuffer) => Promise<ArrayBuffer>;
+/** The result of a decoding process */
+export type DecodedPixels =
+  | { layout: "pixel-interleaved"; data: RasterTypedArray }
+  | { layout: "band-separate"; bands: RasterTypedArray[] };
+
+export type Decoder = (bytes: ArrayBuffer) => Promise<DecodedPixels>;
 
 export const registry = new Map<Compression, () => Promise<Decoder>>();
 
@@ -30,14 +36,14 @@ registry.set(Compression.DeflateOther, () =>
 // registry.set(Compression.Jpeg6, () =>
 //   import("../codecs/jpeg.js").then((m) => m.decode),
 // );
-// registry.set(Compression.Lerc, () =>
-//   import("../codecs/lerc.js").then((m) => m.decode),
-// );
+registry.set(Compression.Lerc, () =>
+  import("../codecs/lerc.js").then((m) => m.decode),
+);
 
 export async function decode(
   bytes: ArrayBuffer,
   compression: Compression,
-): Promise<ArrayBuffer> {
+): Promise<DecodedPixels> {
   const loader = registry.get(compression);
   if (!loader) {
     throw new Error(`Unsupported compression: ${compression}`);
