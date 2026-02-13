@@ -45,7 +45,7 @@ export async function fetchTile(
   if (self.maskIfd != null) {
     maskFut = self.maskIfd.getTile(x, y);
     const [tile, mask] = await Promise.all([tileFut, maskFut]);
-    console.log(tile, mask)
+    console.log(tile, mask);
   }
 
   throw new Error("Not implemented");
