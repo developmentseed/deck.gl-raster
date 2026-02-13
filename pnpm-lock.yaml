@@ -226,6 +226,21 @@ importers:
         specifier: ^7.3.1
         version: 7.3.1(@types/node@25.1.0)
 
+  packages/affine:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.1.0
+        version: 25.1.0
+      jsdom:
+        specifier: ^27.4.0
+        version: 27.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@25.1.0)(happy-dom@20.0.11)(jsdom@27.4.0)
+
   packages/deck.gl-geotiff:
     dependencies:
       '@deck.gl/core':
