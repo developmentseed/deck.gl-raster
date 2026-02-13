@@ -1,0 +1,3 @@
+[submodule "fixtures/geotiff-test-data"]
+	path = fixtures/geotiff-test-data
+	url = https://github.com/developmentseed/geotiff-test-data
