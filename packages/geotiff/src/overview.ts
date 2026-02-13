@@ -1,5 +1,5 @@
 import type { Compression, TiffImage, TiffMimeType } from "@cogeotiff/core";
-import type { Affine } from "./affine.js";
+import type { Affine } from "@developmentseed/affine";
 
 /** Options for fetching tile/raster data. */
 export type FetchOptions = {

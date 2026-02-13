@@ -1,4 +1,3 @@
-export * as affine from "./affine.js";
 export type { RasterArray } from "./array.js";
 export {
   extractGeotransform,

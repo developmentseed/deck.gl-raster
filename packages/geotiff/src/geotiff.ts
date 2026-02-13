@@ -1,6 +1,6 @@
 import type { Source, TiffImage } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
-import type { Affine } from "./affine.js";
+import type { Affine } from "@developmentseed/affine";
 import type { FetchOptions, TileBytes } from "./overview.js";
 import { Overview } from "./overview.js";
 import { index, xy } from "./transform.js";

@@ -1,7 +1,7 @@
 {
-  "name": "@developmentseed/geotiff",
+  "name": "@developmentseed/affine",
   "version": "0.1.0",
-  "description": "High-level GeoTIFF reading library.",
+  "description": "Port of Python `affine` package for working with affine transformations in JavaScript.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,9 +24,13 @@
   },
   "keywords": [
     "geotiff",
+    "zarr",
     "cog",
     "cloud-optimized-geotiff",
-    "raster"
+    "raster",
+    "visualization",
+    "webgl",
+    "gpu"
   ],
   "author": "Development Seed",
   "license": "MIT",
@@ -36,14 +40,13 @@
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
+    "jsdom": "^27.4.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
+  "dependencies": {},
+  "peerDependencies": {},
   "volta": {
     "extends": "../../package.json"
-  },
-  "dependencies": {
-    "@cogeotiff/core": "^9.1.2",
-    "@developmentseed/affine": "workspace:^"
   }
 }
