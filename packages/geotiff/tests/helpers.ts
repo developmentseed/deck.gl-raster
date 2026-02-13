@@ -1,5 +1,68 @@
-import type { Tiff, TiffImage } from "@cogeotiff/core";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import type { Source, Tiff, TiffImage } from "@cogeotiff/core";
 import { TiffTag } from "@cogeotiff/core";
+import { GeoTIFF } from "../src/geotiff.js";
+
+/** File-based Source for integration tests
+ *
+ * Reads a local file into memory, then serves byte-range fetches from the
+ * buffer.
+ */
+export class FileSource implements Source {
+  url: URL;
+  private data: Promise<Buffer>;
+
+  constructor(filePath: string) {
+    this.url = new URL(`file://${filePath}`);
+    this.data = readFile(filePath);
+  }
+
+  async fetch(offset: number, length?: number): Promise<ArrayBuffer> {
+    const buf = await this.data;
+    const end = length != null ? offset + length : undefined;
+    const slice = buf.subarray(offset, end);
+    const arrayBuffer = slice.buffer.slice(
+      slice.byteOffset,
+      slice.byteOffset + slice.byteLength,
+    );
+    if (arrayBuffer instanceof SharedArrayBuffer) {
+      throw new Error("Expected ArrayBuffer, got SharedArrayBuffer");
+    }
+    return arrayBuffer;
+  }
+}
+
+// ── Fixture helpers ─────────────────────────────────────────────────────
+
+const FIXTURES_DIR = resolve(
+  import.meta.dirname,
+  "../../../fixtures/geotiff-test-data",
+);
+
+/**
+ * Resolve a test fixture path.
+ * @param name - filename without extension (e.g. "uint8_rgb_deflate_block64_cog")
+ * @param variant - "rasterio" (default) or a real_data subdirectory name
+ */
+export function fixturePath(name: string, variant: string): string {
+  if (variant === "rasterio") {
+    return resolve(FIXTURES_DIR, "rasterio_generated/fixtures", `${name}.tif`);
+  }
+  return resolve(FIXTURES_DIR, "real_data", variant, `${name}.tif`);
+}
+
+/** Open a GeoTIFF test fixture by name. */
+export async function loadGeoTIFF(
+  name: string,
+  variant: string,
+): Promise<GeoTIFF> {
+  const path = fixturePath(name, variant);
+  const source = new FileSource(path);
+  return GeoTIFF.open(source);
+}
+
+// ── Mock helpers ────────────────────────────────────────────────────────
 
 /** Create a mock TiffImage with configurable properties. */
 export function mockImage(opts: {
