@@ -14,14 +14,15 @@ describe("decode", () => {
     const sampleFormat =
       (image.value(TiffTag.SampleFormat) as SampleFormat[] | null)?.[0] ??
       SampleFormat.Uint;
+    const samplesPerPixel = image.value(TiffTag.SamplesPerPixel) as number;
 
     const result = await decode(tile!.bytes, tile!.compression, {
       sampleFormat,
       bitsPerSample,
+      samplesPerPixel,
     });
 
     const { width, height } = image.tileSize;
-    const samplesPerPixel = image.value(TiffTag.SamplesPerPixel) as number;
     const bytesPerSample = bitsPerSample / 8;
     const expectedBytes = width * height * samplesPerPixel * bytesPerSample;
 
@@ -42,14 +43,15 @@ describe("decode", () => {
     const sampleFormat =
       (image.value(TiffTag.SampleFormat) as SampleFormat[] | null)?.[0] ??
       SampleFormat.Uint;
+    const samplesPerPixel = image.value(TiffTag.SamplesPerPixel) as number;
 
     const result = await decode(tile!.bytes, tile!.compression, {
       sampleFormat,
       bitsPerSample,
+      samplesPerPixel,
     });
 
     const { width, height } = image.tileSize;
-    const samplesPerPixel = image.value(TiffTag.SamplesPerPixel) as number;
     const bytesPerSample = bitsPerSample / 8;
     const expectedBytesPerBand = width * height * bytesPerSample;
 
