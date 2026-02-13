@@ -1,5 +1,5 @@
 export type { RasterArray } from "./array.js";
-export type { DecodedPixels, Decoder } from "./decode/api.js";
+export type { DecodedPixels, Decoder, DecoderMetadata } from "./decode/api.js";
 export { decode, registry } from "./decode/api.js";
 export { GeoTIFF } from "./geotiff.js";
 export { Overview } from "./overview.js";

@@ -6,6 +6,13 @@ export type DecodedPixels =
   | { layout: "pixel-interleaved"; data: RasterTypedArray }
   | { layout: "band-separate"; bands: RasterTypedArray[] };
 
+/** Metadata from the TIFF IFD, passed to decoders that need it. */
+export type DecoderMetadata = {
+  sampleFormat: SampleFormat;
+  bitsPerSample: number;
+  samplesPerPixel: number;
+};
+
 /**
  * A decoder returns either:
  * - An ArrayBuffer of raw decompressed bytes (byte-level codecs like deflate, zstd)
@@ -13,6 +20,7 @@ export type DecodedPixels =
  */
 export type Decoder = (
   bytes: ArrayBuffer,
+  metadata: DecoderMetadata,
 ) => Promise<ArrayBuffer | DecodedPixels>;
 
 async function decodeUncompressed(bytes: ArrayBuffer): Promise<ArrayBuffer> {
@@ -40,12 +48,9 @@ registry.set(Compression.DeflateOther, () =>
 // registry.set(Compression.Jp2000, () =>
 //   import("../codecs/jp2000.js").then((m) => m.decode),
 // );
-// registry.set(Compression.Jpeg, () =>
-//   import("../codecs/jpeg.js").then((m) => m.decode),
-// );
-// registry.set(Compression.Jpeg6, () =>
-//   import("../codecs/jpeg.js").then((m) => m.decode),
-// );
+registry.set(Compression.Jpeg, () =>
+  import("../codecs/jpeg.js").then((m) => m.decode),
+);
 registry.set(Compression.Lerc, () =>
   import("../codecs/lerc.js").then((m) => m.decode),
 );
@@ -56,13 +61,7 @@ registry.set(Compression.Lerc, () =>
 export async function decode(
   bytes: ArrayBuffer,
   compression: Compression,
-  {
-    sampleFormat,
-    bitsPerSample,
-  }: {
-    sampleFormat: SampleFormat;
-    bitsPerSample: number;
-  },
+  metadata: DecoderMetadata,
 ): Promise<DecodedPixels> {
   const loader = registry.get(compression);
   if (!loader) {
@@ -70,12 +69,12 @@ export async function decode(
   }
 
   const decoder = await loader();
-  const result = await decoder(bytes);
+  const result = await decoder(bytes, metadata);
 
   if (result instanceof ArrayBuffer) {
     return {
       layout: "pixel-interleaved",
-      data: toTypedArray(result, sampleFormat, bitsPerSample),
+      data: toTypedArray(result, metadata),
     };
   }
 
@@ -89,9 +88,9 @@ export async function decode(
  */
 function toTypedArray(
   buffer: ArrayBuffer,
-  sampleFormat: SampleFormat,
-  bitsPerSample: number,
+  metadata: Pick<DecoderMetadata, "sampleFormat" | "bitsPerSample">,
 ): RasterTypedArray {
+  const { sampleFormat, bitsPerSample } = metadata;
   switch (sampleFormat) {
     case SampleFormat.Uint:
       switch (bitsPerSample) {

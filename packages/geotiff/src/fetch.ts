@@ -55,18 +55,19 @@ export async function fetchTile(
     translation(x * self.tileWidth, y * self.tileHeight),
   );
 
+  // https://github.com/blacha/cogeotiff/pull/1394
+  const samplesPerPixel =
+    (self.image.value(TiffTag.SamplesPerPixel) as number) ?? 1;
+
   const decodedPixels = await decode(bytes, compression, {
     sampleFormat,
     bitsPerSample,
+    samplesPerPixel,
   });
-
-  if (decodedPixels.layout === "band-separate") {
-  }
 
   const array = {
     ...decodedPixels,
-    // https://github.com/blacha/cogeotiff/pull/1394
-    count: self.image.value(TiffTag.SamplesPerPixel) as number,
+    count: samplesPerPixel,
     height: self.tileHeight,
     width: self.tileWidth,
     mask: null,
