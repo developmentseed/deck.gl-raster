@@ -1,3 +1,3 @@
-export async function decode(bytes: Uint8Array): Promise<Uint8Array> {
+export async function decode(bytes: ArrayBuffer): Promise<ArrayBuffer> {
   return bytes;
 }
