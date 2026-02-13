@@ -1,4 +1,4 @@
-import type { SampleFormat, Tiff, TiffImage } from "@cogeotiff/core";
+import type { SampleFormat, TiffImage } from "@cogeotiff/core";
 import { TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
 import { decode } from "./decode/api";
@@ -8,44 +8,43 @@ import type { HasTransform } from "./transform";
 /** Protocol for objects that hold a TIFF reference and can request tiles. */
 interface HasTiffReference extends HasTransform {
   /** The data Image File Directory (IFD) */
-  ifd: TiffImage;
+  readonly image: TiffImage;
 
   /** The mask Image File Directory (IFD), if any. */
-  maskIfd: TiffImage | null;
-
-  /** The underlying TIFF object. */
-  tiff: Tiff;
+  readonly maskImage: TiffImage | null;
 
   /** The coordinate reference system. */
-  crs: string;
+  readonly crs: string;
 
   /** The height of tiles in pixels. */
-  tileHeight: number;
+  readonly tileHeight: number;
 
   /** The width of tiles in pixels. */
-  tileWidth: number;
+  readonly tileWidth: number;
 
   /** The nodata value for the image, if any. */
-  nodata: number | null;
+  readonly nodata: number | null;
 }
 
+// TODO: add AbortSignal support.
+// https://github.com/blacha/cogeotiff/issues/1397
 export async function fetchTile(
   self: HasTiffReference,
   x: number,
   y: number,
 ): Promise<Tile> {
-  if (self.maskIfd != null) {
+  if (self.maskImage != null) {
     throw new Error("Mask fetching not implemented yet");
   }
 
-  const tile = await self.ifd.getTile(x, y);
+  const tile = await self.image.getTile(x, y);
   if (tile === null) {
     throw new Error("Tile not found");
   }
 
   const { bytes, compression } = tile;
-  const sampleFormats = await self.ifd.fetch(TiffTag.SampleFormat);
-  const bitsPerSamples = await self.ifd.fetch(TiffTag.BitsPerSample);
+  const sampleFormats = await self.image.fetch(TiffTag.SampleFormat);
+  const bitsPerSamples = await self.image.fetch(TiffTag.BitsPerSample);
   const { sampleFormat, bitsPerSample } = getUniqueSampleFormat(
     sampleFormats,
     bitsPerSamples,
@@ -67,7 +66,7 @@ export async function fetchTile(
   const array = {
     ...decodedPixels,
     // https://github.com/blacha/cogeotiff/pull/1394
-    count: self.ifd.value(TiffTag.SamplesPerPixel) as number,
+    count: self.image.value(TiffTag.SamplesPerPixel) as number,
     height: self.tileHeight,
     width: self.tileWidth,
     mask: null,
