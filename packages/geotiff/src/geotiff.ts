@@ -14,7 +14,7 @@ import { index, xy } from "./transform.js";
  * Separates data IFDs from mask IFDs, pairs them by resolution level,
  * and exposes sorted overviews.  Mirrors the Python async-geotiff API.
  *
- * Construct via `GeoTIFF.open(source)` or `GeoTIFF.fromTiff(tiff)`.
+ * Construct via `GeoTIFF.create(source)` or `GeoTIFF.fromTiff(tiff)`.
  */
 export class GeoTIFF {
   /**
@@ -59,7 +59,7 @@ export class GeoTIFF {
    *
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    */
-  static async open(source: Source): Promise<GeoTIFF> {
+  static async create(source: Source): Promise<GeoTIFF> {
     const tiff = await Tiff.create(source);
     return GeoTIFF.fromTiff(tiff);
   }
