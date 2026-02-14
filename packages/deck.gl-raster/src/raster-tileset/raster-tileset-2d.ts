@@ -59,6 +59,9 @@ export class RasterTileset2D extends Tileset2D {
     return `${index.x}-${index.y}-${index.z}`;
   }
 
+  /** Get a list of all parents at one zoom level prior */
+  getAllNearestParentIndices(index: TileIndex): TileIndex[] {}
+
   override getParentIndex(index: TileIndex): TileIndex {
     if (index.z === 0) {
       // Already at coarsest level
