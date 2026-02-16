@@ -91,6 +91,38 @@ describe("test TMS", () => {
     const parsedCrs = wktParser(EPSG_4326);
 
     const tms = generateTileMatrixSet(geotiff, parsedCrs, { id: "test-tms" });
-    console.log(tms);
+
+    expect(tms.crs).toEqual({
+      uri: "http://www.opengis.net/def/crs/EPSG/0/4326",
+    });
+    expect(tms.boundingBox).toEqual({
+      lowerLeft: [0.0, -1.28],
+      upperRight: [1.28, 0.0],
+      crs: { uri: "http://www.opengis.net/def/crs/EPSG/0/4326" },
+    });
+    expect(tms.tileMatrices).toEqual([
+      {
+        id: "0",
+        scaleDenominator: 7951392.199519542,
+        cellSize: 0.02,
+        cornerOfOrigin: "topLeft",
+        pointOfOrigin: [0.0, 0.0],
+        tileWidth: 64,
+        tileHeight: 64,
+        matrixWidth: 1,
+        matrixHeight: 1,
+      },
+      {
+        id: "1",
+        scaleDenominator: 3975696.099759771,
+        cellSize: 0.01,
+        cornerOfOrigin: "topLeft",
+        pointOfOrigin: [0.0, 0.0],
+        tileWidth: 64,
+        tileHeight: 64,
+        matrixWidth: 2,
+        matrixHeight: 2,
+      },
+    ]);
   });
 });
