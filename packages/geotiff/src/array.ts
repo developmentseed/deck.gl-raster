@@ -38,7 +38,7 @@ type RasterArrayBase = {
    */
   transform: Affine;
 
-  crs: ProjJson;
+  crs: number | ProjJson;
 
   nodata: number | null;
 };

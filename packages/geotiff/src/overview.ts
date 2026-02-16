@@ -38,8 +38,8 @@ export class Overview {
     this.maskImage = maskImage;
   }
 
-  async crs(): Promise<ProjJson> {
-    return this.geotiff.crs();
+  get crs(): number | ProjJson {
+    return this.geotiff.crs;
   }
 
   get height(): number {

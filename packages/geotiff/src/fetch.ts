@@ -15,7 +15,7 @@ interface HasTiffReference extends HasTransform {
   readonly maskImage: TiffImage | null;
 
   /** The coordinate reference system. */
-  readonly crs: () => Promise<ProjJson>;
+  readonly crs: number | ProjJson;
 
   /** The height of tiles in pixels. */
   readonly tileHeight: number;
@@ -73,7 +73,7 @@ export async function fetchTile(
     width: self.tileWidth,
     mask: null,
     transform: tileTransform,
-    crs: await self.crs(),
+    crs: self.crs,
     nodata: self.nodata,
   };
 

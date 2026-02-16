@@ -27,8 +27,8 @@ export class GeoTIFF {
    */
   readonly overviews: Overview[];
 
-  /** A cached CRS instance. */
-  private _crs?: ProjJson;
+  /** A cached CRS value. */
+  private _crs?: number | ProjJson;
 
   /** The underlying Tiff instance. */
   readonly tiff: Tiff;
@@ -133,19 +133,16 @@ export class GeoTIFF {
   // ── Properties from the primary image ─────────────────────────────────
 
   /**
-   * Resolve the CRS as a PROJJSON object.
+   * The CRS parsed from the GeoKeyDirectory.
    *
-   * - For GeoTIFFs storing an EPSG code, this fetches the canonical PROJJSON definition from epsg.io.
-   * - For GeoTIFFs defined by a user-defined CRS, it builds PROJJSON from the GeoKeyDirectory.
+   * Returns an EPSG code (number) for EPSG-coded CRSes, or a PROJJSON object
+   * for user-defined CRSes. The result is cached after the first access.
    *
-   * The result is cached after the first call.
-   *
-   * See also {@link GeoTIFF.epsg} for synchronous access to the EPSG code from
-   * the GeoTIFF tags, if defined.
+   * See also {@link GeoTIFF.epsg} for the EPSG code directly from the TIFF tags.
    */
-  async crs(): Promise<ProjJson> {
-    if (!this._crs) {
-      this._crs = await crsFromGeoKeys(this.gkd);
+  get crs(): number | ProjJson {
+    if (this._crs === undefined) {
+      this._crs = crsFromGeoKeys(this.gkd);
     }
     return this._crs;
   }

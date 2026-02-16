@@ -142,50 +142,40 @@ const LINEAR_UNIT: Record<number, string | ProjJsonUnit> = {
 };
 
 /**
- * Parse PROJJSON from a GeoKeyDirectory.
+ * Parse a CRS from a GeoKeyDirectory.
  *
- * For EPSG-coded CRSes, fetches the canonical PROJJSON from epsg.io.
- * For user-defined CRSes, constructs PROJJSON from individual geo key
- * parameters.
+ * Returns the EPSG code as a number for EPSG-coded CRSes (letting the caller
+ * decide how to resolve it), or a PROJJSON object built from the geo keys for
+ * user-defined CRSes.
  */
-export async function crsFromGeoKeys(gkd: GeoKeyDirectory): Promise<ProjJson> {
+export function crsFromGeoKeys(gkd: GeoKeyDirectory): number | ProjJson {
   const modelType = gkd.modelType;
 
   if (modelType === MODEL_TYPE_PROJECTED) {
-    return await _projectedCrs(gkd);
+    return _projectedCrs(gkd);
   }
 
   if (modelType === MODEL_TYPE_GEOGRAPHIC) {
-    return await _geographicCrs(gkd);
+    return _geographicCrs(gkd);
   }
 
   throw new Error(`Unsupported GeoTIFF model type: ${modelType}`);
 }
 
-async function _geographicCrs(gkd: GeoKeyDirectory): Promise<GeographicCRS> {
+function _geographicCrs(gkd: GeoKeyDirectory): number | GeographicCRS {
   const epsg = gkd.geodeticCRS;
   if (epsg !== null && epsg !== USER_DEFINED) {
-    return _fetchEpsgJson(epsg) as Promise<GeographicCRS>;
+    return epsg;
   }
   return _buildGeographicCrs(gkd, PROJJSON_SCHEMA);
 }
 
-async function _projectedCrs(gkd: GeoKeyDirectory): Promise<ProjectedCRS> {
+function _projectedCrs(gkd: GeoKeyDirectory): number | ProjectedCRS {
   const epsg = gkd.projectedCRS;
   if (epsg !== null && epsg !== USER_DEFINED) {
-    return _fetchEpsgJson(epsg) as Promise<ProjectedCRS>;
+    return epsg;
   }
   return _buildProjectedCrs(gkd);
-}
-
-async function _fetchEpsgJson(epsg: number): Promise<ProjJson> {
-  const response = await fetch(`https://epsg.io/${epsg}.json`);
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch PROJJSON for EPSG:${epsg}: ${response.statusText}`,
-    );
-  }
-  return response.json() as Promise<ProjJson>;
 }
 
 function _buildGeographicCrs(
