@@ -74,6 +74,12 @@ function buildTileMatrix(
  * Produces one TileMatrix per overview (coarsest first) plus a final entry
  * for the full-resolution level. The GeoTIFF must be tiled.
  *
+ * This requires a crs definition that includes a `units` property, so that we
+ * can convert pixel sizes to physical screen units. Use [`wkt-parser`] to parse
+ * a WKT string or PROJJSON object, then pass the result as the `crs` argument.
+ *
+ * [`wkt-parser`]: https://github.com/proj4js/wkt-parser
+ *
  * @see https://docs.ogc.org/is/17-083r4/17-083r4.html
  */
 export function generateTileMatrixSet(
