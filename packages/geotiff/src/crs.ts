@@ -68,7 +68,6 @@ export interface GeographicCRS {
   datum?: ProjJsonDatum;
   datum_ensemble?: ProjJsonDatumEnsemble;
   coordinate_system: ProjJsonCoordinateSystem;
-  [key: string]: unknown;
 }
 
 export interface ProjectedCRS {
@@ -615,8 +614,18 @@ function _geographicCs(gkd: GeoKeyDirectory): ProjJsonCoordinateSystem {
   return {
     subtype: "ellipsoidal",
     axis: [
-      { name: "Geodetic latitude", abbreviation: "Lat", direction: "north", unit },
-      { name: "Geodetic longitude", abbreviation: "Lon", direction: "east", unit },
+      {
+        name: "Geodetic latitude",
+        abbreviation: "Lat",
+        direction: "north",
+        unit,
+      },
+      {
+        name: "Geodetic longitude",
+        abbreviation: "Lon",
+        direction: "east",
+        unit,
+      },
     ],
   };
 }
