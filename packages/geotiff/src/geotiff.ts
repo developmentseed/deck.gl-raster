@@ -132,6 +132,17 @@ export class GeoTIFF {
 
   // ── Properties from the primary image ─────────────────────────────────
 
+  /**
+   * Resolve the CRS as a PROJJSON object.
+   *
+   * - For GeoTIFFs storing an EPSG code, this fetches the canonical PROJJSON definition from epsg.io.
+   * - For GeoTIFFs defined by a user-defined CRS, it builds PROJJSON from the GeoKeyDirectory.
+   *
+   * The result is cached after the first call.
+   *
+   * See also {@link GeoTIFF.epsg} for synchronous access to the EPSG code from
+   * the GeoTIFF tags, if defined.
+   */
   async crs(): Promise<ProjJson> {
     if (!this._crs) {
       this._crs = await crsFromGeoKeys(this.gkd);
@@ -139,7 +150,12 @@ export class GeoTIFF {
     return this._crs;
   }
 
-  /** EPSG code from GeoTIFF tags, or null if not set. */
+  /** EPSG code from GeoTIFF tags, or null if not set.
+   *
+   * See also {@link GeoTIFF.crs} for the full PROJJSON definition, which should
+   * always be available, even when an EPSG code is not explicitly stored in the
+   * tags.
+   */
   get epsg(): number | null {
     return this.image.epsg;
   }
