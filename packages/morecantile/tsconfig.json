@@ -7,5 +7,18 @@
   },
   "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"],
+  "files": [
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/CanadianNAD83_LCC.json",
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/CDB1GlobalGrid.json",
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/EuropeanETRS89_LAEAQuad.json",
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/GNOSISGlobalGrid.json",
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/UPSAntarcticWGS84Quad.json",
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/UPSArcticWGS84Quad.json",
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/UTM31WGS84Quad.json",
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/WebMercatorQuad.json",
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/WGS1984Quad.json",
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/WorldCRS84Quad.json",
+    "spec/schemas/tms/2.0/json/examples/tilematrixset/WorldMercatorWGS84Quad.json"
+  ],
   "references": []
 }
