@@ -46,6 +46,7 @@
   },
   "dependencies": {
     "@cogeotiff/core": "^9.1.2",
-    "@developmentseed/affine": "workspace:^"
+    "@developmentseed/affine": "workspace:^",
+    "@developmentseed/morecantile": "^0.1.1"
   }
 }
