@@ -10,9 +10,21 @@ Fast, high-level GeoTIFF reader written in TypeScript for the browser, wrapping 
 
 The `.overviews` attribute on `GeoTIFF` contains an array of reduced-resolution overviews in order from highest to lowest resolution. The `Overview` class makes it easy to
 
-### Automatic NoData Mask handling
+### Automatic Nodata Mask handling
 
 With a library like `geotiff.js` or the underlying `@cogeotiff/core`, you have to do extra work to keep track of which of the internal images represent _data_ versus _masks_. We automatically handle nodata values and mask arrays.
+
+### Easy CRS handling
+
+GeoTIFFs can be defined either by an integer EPSG code or by a user-defined CRS.
+
+For integer EPSG codes, the `GeoTIFF.crs` method returns the integer directly, allowing downstream applications to decide how to resolve the EPSG code into WKT or PROJJSON formats (e.g. by querying `https://epsg.io`).
+
+For user-defined CRSes, we automatically parse the CRS into a PROJJSON object, which can be passed directly into `proj4js`. This is natively implemented **without a large cache of PROJ data**. This avoids the need for a large additional dependency like [`geotiff-geokeys-to-proj4`], which would otherwise add 1.5MB to your bundle.
+
+[`geotiff-geokeys-to-proj4`]: https://github.com/matafokka/geotiff-geokeys-to-proj4
+
+If you have an image where the CRS fails to parse, please create an issue.
 
 ### Dynamically load compressions as needed
 

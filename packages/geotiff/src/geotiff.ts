@@ -1,6 +1,8 @@
 import type { Source, TiffImage } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
+import type { ProjJson } from "./crs.js";
+import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile } from "./fetch.js";
 import type { GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory } from "./ifd.js";
@@ -25,8 +27,8 @@ export class GeoTIFF {
    */
   readonly overviews: Overview[];
 
-  /** A cached CRS instance. */
-  private _crs?: string;
+  /** A cached CRS value. */
+  private _crs?: number | ProjJson;
 
   /** The underlying Tiff instance. */
   readonly tiff: Tiff;
@@ -130,12 +132,29 @@ export class GeoTIFF {
 
   // ── Properties from the primary image ─────────────────────────────────
 
-  get crs(): string {
-    if (!this._crs) {
-      this._crs = this.image.epsg ? `EPSG:${this.image.epsg}` : "unknown";
+  /**
+   * The CRS parsed from the GeoKeyDirectory.
+   *
+   * Returns an EPSG code (number) for EPSG-coded CRSes, or a PROJJSON object
+   * for user-defined CRSes. The result is cached after the first access.
+   *
+   * See also {@link GeoTIFF.epsg} for the EPSG code directly from the TIFF tags.
+   */
+  get crs(): number | ProjJson {
+    if (this._crs === undefined) {
+      this._crs = crsFromGeoKeys(this.gkd);
     }
-
     return this._crs;
+  }
+
+  /** EPSG code from GeoTIFF tags, or null if not set.
+   *
+   * See also {@link GeoTIFF.crs} for the full PROJJSON definition, which should
+   * always be available, even when an EPSG code is not explicitly stored in the
+   * tags.
+   */
+  get epsg(): number | null {
+    return this.image.epsg;
   }
 
   /** Image width in pixels. */
@@ -171,11 +190,6 @@ export class GeoTIFF {
   /** Number of bands (samples per pixel). */
   get count(): number {
     return (this.image.value(TiffTag.SamplesPerPixel) as number) ?? 1;
-  }
-
-  /** EPSG code from GeoTIFF tags, or null if not set. */
-  get epsg(): number | null {
-    return this.image.epsg;
   }
 
   /** Bounding box [minX, minY, maxX, maxY] in the CRS. */
