@@ -17,10 +17,11 @@
   ],
   "scripts": {
     "build": "tsc --build tsconfig.build.json",
-    "test": "vitest run",
+    "generate-types": "tsx scripts/generate-types.ts",
+    "prepublishOnly": "npm run build",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "tms",
@@ -39,6 +40,8 @@
   "devDependencies": {
     "@types/node": "^25.1.0",
     "jsdom": "^27.4.0",
+    "json-schema-to-typescript": "^15.0.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

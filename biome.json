@@ -15,7 +15,8 @@
       "!!**/node_modules",
       "!!**/coverage",
       "!!**/*.log",
-      "!!**/fixtures"
+      "!!**/fixtures",
+      "!!packages/morecantile/spec"
     ]
   },
   "formatter": {
