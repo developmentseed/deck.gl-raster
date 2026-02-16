@@ -1,6 +1,8 @@
 import type { Source, TiffImage } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
+import type { ProjJson } from "./crs.js";
+import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile } from "./fetch.js";
 import type { GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory } from "./ifd.js";
@@ -26,7 +28,7 @@ export class GeoTIFF {
   readonly overviews: Overview[];
 
   /** A cached CRS instance. */
-  private _crs?: string;
+  private _crs?: ProjJson;
 
   /** The underlying Tiff instance. */
   readonly tiff: Tiff;
@@ -130,12 +132,16 @@ export class GeoTIFF {
 
   // ── Properties from the primary image ─────────────────────────────────
 
-  get crs(): string {
+  async crs(): Promise<ProjJson> {
     if (!this._crs) {
-      this._crs = this.image.epsg ? `EPSG:${this.image.epsg}` : "unknown";
+      this._crs = await crsFromGeoKeys(this.gkd);
     }
-
     return this._crs;
+  }
+
+  /** EPSG code from GeoTIFF tags, or null if not set. */
+  get epsg(): number | null {
+    return this.image.epsg;
   }
 
   /** Image width in pixels. */
@@ -171,11 +177,6 @@ export class GeoTIFF {
   /** Number of bands (samples per pixel). */
   get count(): number {
     return (this.image.value(TiffTag.SamplesPerPixel) as number) ?? 1;
-  }
-
-  /** EPSG code from GeoTIFF tags, or null if not set. */
-  get epsg(): number | null {
-    return this.image.epsg;
   }
 
   /** Bounding box [minX, minY, maxX, maxY] in the CRS. */

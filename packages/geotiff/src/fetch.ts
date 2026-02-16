@@ -1,6 +1,7 @@
 import type { SampleFormat, TiffImage } from "@cogeotiff/core";
 import { TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
+import type { ProjJson } from "./crs.js";
 import { decode } from "./decode/api";
 import type { Tile } from "./tile";
 import type { HasTransform } from "./transform";
@@ -14,7 +15,7 @@ interface HasTiffReference extends HasTransform {
   readonly maskImage: TiffImage | null;
 
   /** The coordinate reference system. */
-  readonly crs: string;
+  readonly crs: () => Promise<ProjJson>;
 
   /** The height of tiles in pixels. */
   readonly tileHeight: number;
@@ -72,7 +73,7 @@ export async function fetchTile(
     width: self.tileWidth,
     mask: null,
     transform: tileTransform,
-    crs: self.crs,
+    crs: await self.crs(),
     nodata: self.nodata,
   };
 

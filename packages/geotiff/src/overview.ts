@@ -1,6 +1,7 @@
 import type { TiffImage } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
+import type { ProjJson } from "./crs.js";
 import { fetchTile } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
 import type { GeoKeyDirectory } from "./ifd.js";
@@ -37,8 +38,8 @@ export class Overview {
     this.maskImage = maskImage;
   }
 
-  get crs(): string {
-    return this.geotiff.crs;
+  async crs(): Promise<ProjJson> {
+    return this.geotiff.crs();
   }
 
   get height(): number {
