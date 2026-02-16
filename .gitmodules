@@ -1,3 +1,6 @@
 [submodule "fixtures/geotiff-test-data"]
 	path = fixtures/geotiff-test-data
 	url = https://github.com/developmentseed/geotiff-test-data
+[submodule "packages/morecantile/spec"]
+	path = packages/morecantile/spec
+	url = https://github.com/opengeospatial/2D-Tile-Matrix-Set
