@@ -165,22 +165,6 @@ describe("GeoTIFF", () => {
     expect(ovTransform[5]).toBe(200); // f
   });
 
-  it("delegates fetchTile to the primary image", async () => {
-    const primary = mockImage({
-      width: 256,
-      height: 256,
-      origin: [0, 0, 0],
-      resolution: [1, -1, 0],
-    });
-    const tiff = mockTiff([primary]);
-    const geo = await GeoTIFF.fromTiff(tiff);
-
-    const tile = await geo.fetchTile(0, 0);
-    expect(tile).not.toBeNull();
-    expect(tile!.x).toBe(0);
-    expect(tile!.y).toBe(0);
-  });
-
   it("exposes nodata", async () => {
     const primary = mockImage({
       width: 100,

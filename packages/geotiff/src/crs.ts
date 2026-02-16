@@ -63,7 +63,7 @@ export interface ProjJsonDatumEnsemble {
 
 export interface GeographicCRS {
   type: "GeographicCRS";
-  $schema: string;
+  $schema?: string;
   name: string;
   datum?: ProjJsonDatum;
   datum_ensemble?: ProjJsonDatumEnsemble;
@@ -167,7 +167,7 @@ async function _geographicCrs(gkd: GeoKeyDirectory): Promise<GeographicCRS> {
   if (epsg !== null && epsg !== USER_DEFINED) {
     return _fetchEpsgJson(epsg) as Promise<GeographicCRS>;
   }
-  return _buildGeographicCrs(gkd);
+  return _buildGeographicCrs(gkd, PROJJSON_SCHEMA);
 }
 
 async function _projectedCrs(gkd: GeoKeyDirectory): Promise<ProjectedCRS> {
@@ -188,7 +188,10 @@ async function _fetchEpsgJson(epsg: number): Promise<ProjJson> {
   return response.json() as Promise<ProjJson>;
 }
 
-function _buildGeographicCrs(gkd: GeoKeyDirectory): GeographicCRS {
+function _buildGeographicCrs(
+  gkd: GeoKeyDirectory,
+  schema?: string,
+): GeographicCRS {
   const ellipsoid = _buildEllipsoid(gkd);
 
   let pmName = "Greenwich";
@@ -215,24 +218,31 @@ function _buildGeographicCrs(gkd: GeoKeyDirectory): GeographicCRS {
     };
   }
 
-  return {
+  const crs: GeographicCRS = {
     type: "GeographicCRS",
-    $schema: PROJJSON_SCHEMA,
     name: gkd.geodeticCitation ?? "User-defined",
     datum,
     coordinate_system: _geographicCs(gkd),
   };
+
+  if (schema !== undefined) {
+    crs.$schema = schema;
+  }
+
+  return crs;
 }
 
-async function _buildProjectedCrs(gkd: GeoKeyDirectory): Promise<ProjectedCRS> {
-  const baseCrs = await _geographicCrs(gkd);
+function _buildProjectedCrs(gkd: GeoKeyDirectory): ProjectedCRS {
+  // Always build the base CRS from geo keys — the geodeticCRS EPSG code inside
+  // a user-defined projected CRS is informational, not a fetch target.
+  const baseCrs = _buildGeographicCrs(gkd);
   const conversion = _buildConversion(gkd);
   const cs = _projectedCs(gkd);
 
   return {
     type: "ProjectedCRS",
     $schema: PROJJSON_SCHEMA,
-    name: gkd.projectedCitation ?? "User-defined",
+    name: gkd.projectedCitation ?? gkd.citation ?? "User-defined",
     base_crs: baseCrs,
     conversion,
     coordinate_system: cs,
@@ -260,7 +270,7 @@ function _buildEllipsoid(gkd: GeoKeyDirectory): ProjJsonEllipsoid {
   }
 
   const ellipsoid: ProjJsonEllipsoid = {
-    name: "User-defined",
+    name: gkd.geodeticCitation ?? "User-defined",
     semi_major_axis: gkd.ellipsoidSemiMajorAxis,
   };
 
@@ -615,8 +625,8 @@ function _geographicCs(gkd: GeoKeyDirectory): ProjJsonCoordinateSystem {
   return {
     subtype: "ellipsoidal",
     axis: [
-      { name: "Latitude", abbreviation: "lat", direction: "north", unit },
-      { name: "Longitude", abbreviation: "lon", direction: "east", unit },
+      { name: "Geodetic latitude", abbreviation: "Lat", direction: "north", unit },
+      { name: "Geodetic longitude", abbreviation: "Lon", direction: "east", unit },
     ],
   };
 }
