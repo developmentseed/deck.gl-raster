@@ -18,19 +18,18 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.10",
-    "publint": "^0.3.16",
+    "@biomejs/biome": "^2.3.13",
+    "publint": "^0.3.17",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   },
   "pnpm": {
     "overrides": {
-      "@deck.gl/core": "9.2.6",
-      "@deck.gl/geo-layers": "9.2.6",
-      "@deck.gl/layers": "9.2.6",
-      "@deck.gl/mapbox": "9.2.6",
-      "@deck.gl/mesh-layers": "9.2.6",
-      "@developmentseed/morecantile": "0.1.1",
+      "@deck.gl/core": "9.2.7",
+      "@deck.gl/geo-layers": "9.2.7",
+      "@deck.gl/layers": "9.2.7",
+      "@deck.gl/mapbox": "9.2.7",
+      "@deck.gl/mesh-layers": "9.2.7",
       "@luma.gl/constants": "9.2.6",
       "@luma.gl/core": "9.2.6",
       "@luma.gl/engine": "9.2.6",

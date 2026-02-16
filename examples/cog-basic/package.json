@@ -9,28 +9,28 @@
     "publish": "pnpm build && gh-pages -d dist -b gh-pages -e examples/cog-basic"
   },
   "dependencies": {
-    "@deck.gl/core": "^9.2.6",
-    "@deck.gl/geo-layers": "^9.2.6",
-    "@deck.gl/layers": "^9.2.6",
-    "@deck.gl/mapbox": "^9.2.6",
-    "@deck.gl/mesh-layers": "^9.2.6",
+    "@deck.gl/core": "^9.2.7",
+    "@deck.gl/geo-layers": "^9.2.7",
+    "@deck.gl/layers": "^9.2.7",
+    "@deck.gl/mapbox": "^9.2.7",
+    "@deck.gl/mesh-layers": "^9.2.7",
     "@developmentseed/deck.gl-geotiff": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@luma.gl/core": "9.2.6",
     "@luma.gl/shadertools": "9.2.6",
     "geotiff": "^2.1.3",
     "geotiff-geokeys-to-proj4": "^2024.4.13",
-    "maplibre-gl": "^5.15.0",
+    "maplibre-gl": "^5.17.0",
     "proj4": "^2.20.2",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "react-map-gl": "^8.1.0"
   },
   "devDependencies": {
-    "@types/react": "^19.2.7",
+    "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",
     "gh-pages": "^6.3.0",
-    "vite": "^7.3.0"
+    "vite": "^7.3.1"
   }
 }

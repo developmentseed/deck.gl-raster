@@ -1,7 +1,7 @@
 {
-  "name": "@developmentseed/raster-reproject",
-  "version": "0.2.0",
-  "description": "Mesh generation for client-side raster reprojection.",
+  "name": "@developmentseed/morecantile",
+  "version": "0.2.0-beta.2",
+  "description": "TypeScript port of Python morecantile — TileMatrixSet utilities.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./affine": {
-      "types": "./dist/affine/index.d.ts",
-      "default": "./dist/affine/index.js"
     }
   },
   "sideEffects": false,
@@ -21,21 +17,19 @@
   ],
   "scripts": {
     "build": "tsc --build tsconfig.build.json",
-    "test": "vitest run",
+    "generate-types": "tsx scripts/generate-types.ts",
+    "prepublishOnly": "npm run build",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
-    "deck.gl",
-    "geotiff",
-    "zarr",
-    "cog",
-    "cloud-optimized-geotiff",
-    "raster",
-    "visualization",
-    "webgl",
-    "gpu"
+    "tms",
+    "tile-matrix-set",
+    "morecantile",
+    "xyz",
+    "tiles",
+    "geospatial"
   ],
   "author": "Development Seed",
   "license": "MIT",
@@ -46,10 +40,13 @@
   "devDependencies": {
     "@types/node": "^25.1.0",
     "jsdom": "^27.4.0",
-    "proj4": "^2.20.2",
+    "json-schema-to-typescript": "^15.0.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
+  "dependencies": {},
+  "peerDependencies": {},
   "volta": {
     "extends": "../../package.json"
   }

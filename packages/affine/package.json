@@ -1,7 +1,7 @@
 {
-  "name": "@developmentseed/deck.gl-raster",
-  "version": "0.2.0",
-  "description": "Georeferenced image data visualization in deck.gl",
+  "name": "@developmentseed/affine",
+  "version": "0.1.0",
+  "description": "Port of Python `affine` package for working with affine transformations in JavaScript.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./gpu-modules": {
-      "types": "./dist/gpu-modules/index.d.ts",
-      "default": "./dist/gpu-modules/index.js"
     }
   },
   "sideEffects": false,
@@ -27,7 +23,6 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "deck.gl",
     "geotiff",
     "zarr",
     "cog",
@@ -44,28 +39,13 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@luma.gl/core": "9.2.6",
-    "@luma.gl/shadertools": "9.2.6",
     "@types/node": "^25.1.0",
     "jsdom": "^27.4.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
-  "peerDependencies": {
-    "@deck.gl/core": "^9.2.7",
-    "@deck.gl/geo-layers": "^9.2.7",
-    "@deck.gl/layers": "^9.2.7",
-    "@deck.gl/mesh-layers": "^9.2.7",
-    "@luma.gl/core": "^9.2.7",
-    "@luma.gl/shadertools": "^9.2.7"
-  },
-  "dependencies": {
-    "@developmentseed/morecantile": "^0.1.1",
-    "@developmentseed/raster-reproject": "workspace:^",
-    "@math.gl/core": "^4.1.0",
-    "@math.gl/culling": "^4.1.0",
-    "@math.gl/web-mercator": "^4.1.0"
-  },
+  "dependencies": {},
+  "peerDependencies": {},
   "volta": {
     "extends": "../../package.json"
   }

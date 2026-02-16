@@ -1,7 +1,7 @@
 {
-  "name": "@developmentseed/deck.gl-geotiff",
-  "version": "0.2.0",
-  "description": "GeoTIFF and Cloud-Optimized GeoTIFF visualization in deck.gl",
+  "name": "@developmentseed/geotiff",
+  "version": "0.1.0",
+  "description": "High-level GeoTIFF reading library.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,15 +23,10 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "deck.gl",
     "geotiff",
-    "zarr",
     "cog",
     "cloud-optimized-geotiff",
-    "raster",
-    "visualization",
-    "webgl",
-    "gpu"
+    "raster"
   ],
   "author": "Development Seed",
   "license": "MIT",
@@ -40,27 +35,20 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
+    "@chunkd/source-file": "^11.0.1",
     "@types/node": "^25.1.0",
-    "jsdom": "^27.4.0",
+    "lerc": "^4.0.4",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
-  },
-  "dependencies": {
-    "@developmentseed/deck.gl-raster": "workspace:^",
-    "@developmentseed/morecantile": "^0.1.1",
-    "@developmentseed/raster-reproject": "workspace:^",
-    "flatbush": "^4.5.0",
-    "geotiff": "2.1.3",
-    "proj4": "^2.20.2"
-  },
-  "peerDependencies": {
-    "@deck.gl/core": "^9.2.7",
-    "@deck.gl/geo-layers": "^9.2.7",
-    "@deck.gl/layers": "^9.2.7",
-    "@deck.gl/mesh-layers": "^9.2.7",
-    "@luma.gl/core": "^9.2.7"
+    "vitest": "^4.0.18",
+    "wkt-parser": "^1.5.2"
   },
   "volta": {
     "extends": "../../package.json"
+  },
+  "dependencies": {
+    "@cogeotiff/core": "^9.1.2",
+    "@developmentseed/affine": "workspace:^",
+    "@developmentseed/morecantile": "workspace:^",
+    "uuid": "^13.0.0"
   }
 }

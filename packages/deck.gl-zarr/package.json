@@ -40,16 +40,16 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^25.0.3",
+    "@types/node": "^25.1.0",
     "jsdom": "^27.4.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "proj4": "^2.20.2",
-    "zarrita": "^0.5.4"
+    "zarrita": "^0.6.1"
   },
   "volta": {
     "extends": "../../package.json"
