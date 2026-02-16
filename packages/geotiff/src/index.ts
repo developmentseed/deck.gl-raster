@@ -5,3 +5,4 @@ export { decode, registry } from "./decode/api.js";
 export { GeoTIFF } from "./geotiff.js";
 export { Overview } from "./overview.js";
 export type { Tile } from "./tile.js";
+export { generateTileMatrixSet } from "./tile-matrix-set.js";

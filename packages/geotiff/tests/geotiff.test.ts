@@ -178,19 +178,6 @@ describe("GeoTIFF", () => {
     expect(geo.nodata).toBe(-9999);
   });
 
-  it("exposes epsg", async () => {
-    const primary = mockImage({
-      width: 100,
-      height: 100,
-      origin: [0, 0, 0],
-      resolution: [1, -1, 0],
-      epsg: 4326,
-    });
-    const tiff = mockTiff([primary]);
-    const geo = await GeoTIFF.fromTiff(tiff);
-    expect(geo.epsg).toBe(4326);
-  });
-
   it("exposes bbox", async () => {
     const primary = mockImage({
       width: 100,

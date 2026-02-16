@@ -3,16 +3,13 @@ import wktParser from "wkt-parser";
 import { loadGeoTIFF } from "./helpers.js";
 
 describe("test CRS", () => {
-  it("can fetch EPSG CRS from epsg.io", async () => {
+  it("returns EPSG code", async () => {
     const geotiff = await loadGeoTIFF(
       "uint8_rgb_deflate_block64_cog",
       "rasterio",
     );
     const crs = geotiff.crs;
     expect(crs).toEqual(4326);
-
-    const epsg = geotiff.epsg;
-    expect(epsg).toBe(4326);
   });
 });
 

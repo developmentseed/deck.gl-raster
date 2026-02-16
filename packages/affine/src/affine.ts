@@ -83,3 +83,33 @@ export function invert([sa, sb, sc, sd, se, sf]: Affine): Affine {
 
   return [ra, rb, -sc * ra - sf * rb, rd, re, -sc * rd - sf * re];
 }
+
+/** Get the 'a' component of an Affine transform. */
+export function a(affine: Affine): number {
+  return affine[0];
+}
+
+/** Get the 'b' component of an Affine transform. */
+export function b(affine: Affine): number {
+  return affine[1];
+}
+
+/** Get the 'c' component of an Affine transform. */
+export function c(affine: Affine): number {
+  return affine[2];
+}
+
+/** Get the 'd' component of an Affine transform. */
+export function d(affine: Affine): number {
+  return affine[3];
+}
+
+/** Get the 'e' component of an Affine transform. */
+export function e(affine: Affine): number {
+  return affine[4];
+}
+
+/** Get the 'f' component of an Affine transform. */
+export function f(affine: Affine): number {
+  return affine[5];
+}

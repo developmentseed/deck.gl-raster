@@ -147,16 +147,6 @@ export class GeoTIFF {
     return this._crs;
   }
 
-  /** EPSG code from GeoTIFF tags, or null if not set.
-   *
-   * See also {@link GeoTIFF.crs} for the full PROJJSON definition, which should
-   * always be available, even when an EPSG code is not explicitly stored in the
-   * tags.
-   */
-  get epsg(): number | null {
-    return this.image.epsg;
-  }
-
   /** Image width in pixels. */
   get width(): number {
     return this.image.size.width;
