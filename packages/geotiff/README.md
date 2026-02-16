@@ -20,7 +20,9 @@ GeoTIFFs can be defined either by an integer EPSG code or by a user-defined CRS.
 
 For integer EPSG codes, the `GeoTIFF.crs` method returns the integer directly, allowing downstream applications to decide how to resolve the EPSG code into WKT or PROJJSON formats (e.g. by querying `https://epsg.io`).
 
-For user-defined CRSes, we automatically parse the CRS into a PROJJSON object, which can be passed directly into `proj4js`.
+For user-defined CRSes, we automatically parse the CRS into a PROJJSON object, which can be passed directly into `proj4js`. This is natively implemented **without a large cache of PROJ data**. This avoids the need for a large additional dependency like [`geotiff-geokeys-to-proj4`], which would otherwise add 1.5MB to your bundle.
+
+[`geotiff-geokeys-to-proj4`]: https://github.com/matafokka/geotiff-geokeys-to-proj4
 
 If you have an image where the CRS fails to parse, please create an issue.
 
