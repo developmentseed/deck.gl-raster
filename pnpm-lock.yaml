@@ -370,8 +370,8 @@ importers:
         specifier: workspace:^
         version: link:../affine
       '@developmentseed/morecantile':
-        specifier: ^0.2.0-beta.1
-        version: 0.2.0-beta.1
+        specifier: workspace:^
+        version: link:../morecantile
       uuid:
         specifier: ^13.0.0
         version: 13.0.0
@@ -677,10 +677,6 @@ packages:
       '@luma.gl/engine': 9.2.6
       '@luma.gl/gltf': 9.2.6
       '@luma.gl/shadertools': 9.2.6
-
-  '@developmentseed/morecantile@0.2.0-beta.1':
-    resolution: {integrity: sha512-zxYMbJIZ0ZTZvD1pI/4DRm44F1nxob/7Gk44PbTlmWNcEh3NqcdwXiFSTDJd3Y6I9s8TVyB4MgDMGNn2WUFEGg==}
-    engines: {node: '>=18'}
 
   '@esbuild/aix-ppc64@0.27.2':
     resolution: {integrity: sha512-GZMB+a0mOMZs4MpDbj8RJp4cw+w1WV5NYD6xzgvzUJ5Ek2jerwfO2eADyI6ExDSUED+1X8aMbegahsJi+8mgpw==}
@@ -2887,8 +2883,6 @@ snapshots:
       '@luma.gl/shadertools': 9.2.6(@luma.gl/core@9.2.6)
     transitivePeerDependencies:
       - '@loaders.gl/core'
-
-  '@developmentseed/morecantile@0.2.0-beta.1': {}
 
   '@esbuild/aix-ppc64@0.27.2':
     optional: true

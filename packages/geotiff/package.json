@@ -48,7 +48,7 @@
   "dependencies": {
     "@cogeotiff/core": "^9.1.2",
     "@developmentseed/affine": "workspace:^",
-    "@developmentseed/morecantile": "^0.2.0-beta.1",
+    "@developmentseed/morecantile": "workspace:^",
     "uuid": "^13.0.0"
   }
 }
