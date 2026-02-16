@@ -2,30 +2,44 @@ import type { Affine } from "@developmentseed/affine";
 import * as affine from "@developmentseed/affine";
 import type {
   BoundingBox,
+  CRS,
   TileMatrix,
   TileMatrixSet,
 } from "@developmentseed/morecantile";
 import { metersPerUnit } from "@developmentseed/morecantile";
 import { v4 as uuidv4 } from "uuid";
+import type { ProjJson } from "./crs.js";
 import type { GeoTIFF } from "./geotiff.js";
+
+/**
+ * A minimal projection definition compatible with what wkt-parser returns.
+ *
+ * This type extracts only the partial properties we need from the full
+ * wkt-parser output.
+ */
+interface ProjectionDefinition {
+  datum?: {
+    /** Semi-major axis of the ellipsoid. */
+    a: number;
+  };
+  a?: number;
+  to_meter?: number;
+  units?: string;
+}
 
 const SCREEN_PIXEL_SIZE = 0.28e-3;
 
-/**
- * Derive the CRS unit string for metersPerUnit from an EPSG CRS string.
- *
- * Geographic CRS (lat/lon) use degrees; projected CRS use metres.
- * We use a simple heuristic: well-known geographic EPSG codes (4326, 4269,
- * 4267, 4258, …) are treated as degrees; everything else is assumed metres.
- */
-function crsUnit(crs: string): "m" | "degree" {
-  const geographicEpsg = new Set([4326, 4269, 4267, 4258, 4230, 4019]);
-  const match = crs.match(/^EPSG:(\d+)$/i);
-  if (match) {
-    const code = parseInt(match[1]!, 10);
-    if (geographicEpsg.has(code)) return "degree";
+function buildCrs(crs: number | ProjJson): CRS {
+  if (typeof crs === "number") {
+    return {
+      uri: `http://www.opengis.net/def/crs/EPSG/0/${crs}`,
+    };
   }
-  return "m";
+
+  // @ts-expect-error - typing issues between different projjson definitions.
+  return {
+    wkt: crs,
+  };
 }
 
 /**
@@ -64,13 +78,29 @@ function buildTileMatrix(
  */
 export function generateTileMatrixSet(
   geotiff: GeoTIFF,
+  crs: ProjectionDefinition,
   { id = uuidv4() }: { id?: string } = {},
 ): TileMatrixSet {
   const bbox = geotiff.bbox;
-  const crs = geotiff.crs;
   const tr = geotiff.transform;
 
-  const mpu = metersPerUnit(crsUnit(crs), {});
+  // Perhaps we should allow metersPerUnit to take any string
+  const crsUnit = crs.units as
+    | "m"
+    | "metre"
+    | "meter"
+    | "meters"
+    | "foot"
+    | "us survey foot"
+    | "degree"
+    | undefined;
+
+  if (!crsUnit) {
+    throw new Error(`CRS definition must include "units" property`);
+  }
+
+  const semiMajorAxis = crs.a || crs.datum?.a;
+  const mpu = metersPerUnit(crsUnit, { semiMajorAxis });
   const cornerOfOrigin: "bottomLeft" | "topLeft" =
     affine.e(tr) > 0 ? "bottomLeft" : "topLeft";
 
@@ -113,7 +143,7 @@ export function generateTileMatrixSet(
     ),
   );
 
-  const tmsCrs = crs;
+  const tmsCrs = buildCrs(geotiff.crs);
   const boundingBox: BoundingBox = {
     lowerLeft: [bbox[0], bbox[1]],
     upperRight: [bbox[2], bbox[3]],
