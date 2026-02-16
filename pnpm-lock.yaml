@@ -369,9 +369,6 @@ importers:
       '@developmentseed/affine':
         specifier: workspace:^
         version: link:../affine
-      wkt-parser:
-        specifier: ^1.5.2
-        version: 1.5.2
     devDependencies:
       '@chunkd/source-file':
         specifier: ^11.0.1

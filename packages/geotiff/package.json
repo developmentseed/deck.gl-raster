@@ -46,7 +46,6 @@
   },
   "dependencies": {
     "@cogeotiff/core": "^9.1.2",
-    "@developmentseed/affine": "workspace:^",
-    "wkt-parser": "^1.5.2"
+    "@developmentseed/affine": "workspace:^"
   }
 }
