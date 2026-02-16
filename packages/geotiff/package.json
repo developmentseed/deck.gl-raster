@@ -39,7 +39,8 @@
     "@types/node": "^25.1.0",
     "lerc": "^4.0.4",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "wkt-parser": "^1.5.2"
   },
   "volta": {
     "extends": "../../package.json"

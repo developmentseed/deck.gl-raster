@@ -1,4 +1,5 @@
 import type { Affine } from "@developmentseed/affine";
+import type { ProjJson } from "./crs.js";
 
 /** Typed arrays supported for raster sample storage. */
 export type RasterTypedArray =
@@ -37,7 +38,7 @@ type RasterArrayBase = {
    */
   transform: Affine;
 
-  crs: string;
+  crs: number | ProjJson;
 
   nodata: number | null;
 };
