@@ -1,14 +1,6 @@
 // Utilities for interacting with geotiff.js.
 
-import type { GeoTIFF, GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
-import {
-  BaseClient,
-  fromArrayBuffer,
-  fromBlob,
-  fromCustomClient,
-  fromUrl,
-  Pool,
-} from "geotiff";
+import type { GeoTIFF, RasterArray } from "@developmentseed/geotiff";
 import type { Converter } from "proj4";
 
 /**
@@ -19,33 +11,11 @@ type ReadRasterOptions = {
   window?: [number, number, number, number];
 
   /** The optional decoder pool to use. */
-  pool?: Pool;
+  // pool?: Pool;
 
   /** An AbortSignal that may be signalled if the request is to be aborted */
   signal?: AbortSignal;
 };
-
-/**
- * A default geotiff.js decoder pool instance.
- *
- * It will be created on first call of `defaultPool`.
- */
-let DEFAULT_POOL: Pool | null = null;
-
-/**
- * Retrieve the default geotiff.js decoder Pool.
- *
- * If a Pool has not yet been created, it will be created on first call.
- *
- * The Pool will be shared between all COGLayer and GeoTIFFLayer instances.
- */
-export function defaultPool(): Pool {
-  if (DEFAULT_POOL === null) {
-    DEFAULT_POOL = new Pool();
-  }
-
-  return DEFAULT_POOL;
-}
 
 /**
  * Load an RGBA image from a GeoTIFFImage.
@@ -80,7 +50,7 @@ export async function loadRgbImage(
  * Only supports input arrays with 3 (RGB) or 4 (RGBA) channels. If the input is
  * already RGBA, it is returned unchanged.
  */
-export function addAlphaChannel(rgbImage: TypedArrayWithDimensions): ImageData {
+export function addAlphaChannel(rgbImage: RasterArray): ImageData {
   const { height, width } = rgbImage;
 
   if (rgbImage.length === height * width * 4) {
@@ -136,27 +106,8 @@ export function parseColormap(cmap: Uint16Array): ImageData {
   return new ImageData(rgba, size, 1);
 }
 
-export async function fetchGeoTIFF(
-  input: GeoTIFF | string | ArrayBuffer | Blob | BaseClient,
-): Promise<GeoTIFF> {
-  if (typeof input === "string") {
-    return fromUrl(input);
-  }
-
-  if (input instanceof ArrayBuffer) {
-    return fromArrayBuffer(input);
-  }
-
-  if (input instanceof Blob) {
-    return fromBlob(input);
-  }
-
-  // TODO: instanceof may fail here if multiple versions of geotiff.js are
-  // present
-  if (input instanceof BaseClient) {
-    return fromCustomClient(input);
-  }
-
+// TODO: restore support for string, ArrayBuffer, Blob input
+export async function fetchGeoTIFF(input: GeoTIFF): Promise<GeoTIFF> {
   return input;
 }
 
@@ -164,18 +115,12 @@ export async function fetchGeoTIFF(
  * Calculate the WGS84 bounding box of a GeoTIFF image
  */
 export function getGeographicBounds(
-  image: GeoTIFFImage,
+  geotiff: GeoTIFF,
   converter: Converter,
 ): { west: number; south: number; east: number; north: number } {
-  const projectedBbox = image.getBoundingBox() as [
-    number,
-    number,
-    number,
-    number,
-  ];
+  const [minX, minY, maxX, maxY] = geotiff.bbox;
 
   // Reproject all four corners to handle rotation/skew
-  const [minX, minY, maxX, maxY] = projectedBbox;
   const corners: [number, number][] = [
     converter.forward([minX, minY]), // bottom-left
     converter.forward([maxX, minY]), // bottom-right
@@ -194,21 +139,4 @@ export function getGeographicBounds(
 
   // Return bounds in MapLibre format: [[west, south], [east, north]]
   return { west, south, east, north };
-}
-
-/** Parse the GDAL_NODATA TIFF tag into a number. */
-export function parseGDALNoData(
-  GDAL_NODATA: string | undefined,
-): number | null {
-  if (!GDAL_NODATA) {
-    return null;
-  }
-
-  // Remove trailing null character if present
-  const noDataString =
-    GDAL_NODATA?.[GDAL_NODATA?.length - 1] === "\x00"
-      ? GDAL_NODATA.slice(0, -1)
-      : GDAL_NODATA;
-
-  return noDataString?.length > 0 ? parseFloat(noDataString) : null;
 }

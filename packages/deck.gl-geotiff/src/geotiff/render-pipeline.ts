@@ -1,3 +1,5 @@
+import type { TiffImage } from "@cogeotiff/core";
+import { TiffTag } from "@cogeotiff/core";
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
   CMYKToRGB,
@@ -7,12 +9,12 @@ import {
   FilterNoDataVal,
   YCbCrToRGB,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
 import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
-import { addAlphaChannel, parseColormap, parseGDALNoData } from "./geotiff";
+import { addAlphaChannel, parseColormap } from "./geotiff";
 import { inferTextureFormat } from "./texture";
-import type { ImageFileDirectory } from "./types";
 import { PhotometricInterpretationT } from "./types";
 
 export type TextureDataT = {
@@ -41,19 +43,22 @@ type UnresolvedRasterModule<DataT> =
     };
 
 export function inferRenderPipeline(
-  // TODO: narrow type to only used fields
-  ifd: ImageFileDirectory,
+  geotiff: GeoTIFF,
   device: Device,
 ): {
   getTileData: COGLayerProps<TextureDataT>["getTileData"];
   renderTile: COGLayerProps<TextureDataT>["renderTile"];
 } {
-  const { SampleFormat } = ifd;
+  const ifd = geotiff.image;
+  const SampleFormat = ifd.value(TiffTag.SampleFormat);
+  if (SampleFormat === null) {
+    throw new Error("SampleFormat tag is required to infer render pipeline");
+  }
 
   switch (SampleFormat[0]) {
     // Unsigned integers
     case 1:
-      return createUnormPipeline(ifd, device);
+      return createUnormPipeline(geotiff, device);
   }
 
   throw new Error(
@@ -65,12 +70,13 @@ export function inferRenderPipeline(
  * Create pipeline for visualizing unsigned-integer data.
  */
 function createUnormPipeline(
-  ifd: ImageFileDirectory,
+  geotiff: GeoTIFF,
   device: Device,
 ): {
   getTileData: COGLayerProps<TextureDataT>["getTileData"];
   renderTile: COGLayerProps<TextureDataT>["renderTile"];
 } {
+  const ifd = geotiff.image;
   const {
     BitsPerSample,
     ColorMap,
@@ -90,7 +96,7 @@ function createUnormPipeline(
   ];
 
   // Add NoData filtering if GDAL_NODATA is defined
-  const noDataVal = parseGDALNoData(GDAL_NODATA);
+  const noDataVal = geotiff.nodata;
   if (noDataVal !== null) {
     // Since values are 0-1 for unorm textures,
     const noDataScaled = noDataVal / 255.0;

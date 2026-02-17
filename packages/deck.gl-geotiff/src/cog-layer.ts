@@ -27,7 +27,7 @@ import wktParser from "wkt-parser";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
-import { fromGeoTransform } from "./geotiff-reprojection.js";
+import { fromAffine } from "./geotiff-reprojection.js";
 import type { EpsgResolver } from "./proj.js";
 import { epsgResolver } from "./proj.js";
 
@@ -76,6 +76,7 @@ export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
    * - An instance of GeoTIFF.js's GeoTIFF class
    * - An instance of GeoTIFF.js's BaseClient for custom fetching
    */
+  // TODO: restore support for string, ArrayBuffer, Blob
   geotiff: GeoTIFF;
 
   /**
@@ -95,6 +96,7 @@ export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
    * If none is provided, a default Pool will be created and shared between all
    * COGLayer and GeoTIFFLayer instances.
    */
+  // TODO: Restore a sort of worker pool with our geotiff implementation
   // pool?: Pool;
 
   /**
@@ -143,9 +145,6 @@ export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
 
   /**
    * Called when the GeoTIFF metadata has been loaded and parsed.
-   *
-   * @param   {GeoTIFF}  geotiff
-   * @param   {ProjectionInfo}  projection
    */
   onGeoTIFFLoad?: (
     geotiff: GeoTIFF,
@@ -289,7 +288,7 @@ export class COGLayer<
     const { tileWidth, tileHeight } = tileMatrix;
 
     const tileAffine = tileTransform(tileMatrix, { col: x, row: y });
-    const { forwardTransform, inverseTransform } = fromGeoTransform(tileAffine);
+    const { forwardTransform, inverseTransform } = fromAffine(tileAffine);
 
     const window: [number, number, number, number] = [
       x * tileWidth,
