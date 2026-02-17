@@ -1,4 +1,4 @@
-import { Photometric, TiffTag } from "@cogeotiff/core";
+import { Photometric, SampleFormat } from "@cogeotiff/core";
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
   CMYKToRGB,
@@ -46,15 +46,14 @@ export function inferRenderPipeline(
   getTileData: COGLayerProps<TextureDataT>["getTileData"];
   renderTile: COGLayerProps<TextureDataT>["renderTile"];
 } {
-  const ifd = geotiff.image;
-  const SampleFormat = ifd.value(TiffTag.SampleFormat);
-  if (SampleFormat === null) {
+  const { sampleFormat } = geotiff.cachedTags;
+  if (sampleFormat === null) {
     throw new Error("SampleFormat tag is required to infer render pipeline");
   }
 
-  switch (SampleFormat[0]) {
+  switch (sampleFormat[0]) {
     // Unsigned integers
-    case 1:
+    case SampleFormat.Uint:
       return createUnormPipeline(geotiff, device);
   }
 
