@@ -27,11 +27,11 @@
   "files": [],
   "references": [
     { "path": "packages/affine/tsconfig.build.json" },
-    { "path": "packages/morecantile/tsconfig.build.json" },
     { "path": "packages/deck.gl-geotiff/tsconfig.build.json" },
     { "path": "packages/deck.gl-raster/tsconfig.build.json" },
     { "path": "packages/deck.gl-zarr/tsconfig.build.json" },
     { "path": "packages/geotiff/tsconfig.build.json" },
+    { "path": "packages/morecantile/tsconfig.build.json" },
     { "path": "packages/raster-reproject/tsconfig.build.json" }
   ]
 }

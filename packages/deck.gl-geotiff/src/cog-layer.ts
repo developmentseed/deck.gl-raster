@@ -366,7 +366,12 @@ export class COGLayer<
       // Get projected bounds from tile data
       // getTileMetadata returns data that includes projectedBounds
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const projectedBounds = (tile as any)?.projectedBounds;
+      const projectedBounds: {
+        topLeft: [number, number];
+        topRight: [number, number];
+        bottomLeft: [number, number];
+        bottomRight: [number, number];
+      } = (tile as any)?.projectedBounds;
 
       if (!projectedBounds || !tms) {
         return [];
@@ -374,9 +379,6 @@ export class COGLayer<
 
       // Project bounds from image CRS to WGS84
       const { topLeft, topRight, bottomLeft, bottomRight } = projectedBounds;
-
-      // TODO: improve typing of projectedBounds shape
-      console.log("projectedBounds", projectedBounds);
 
       const topLeftWgs84 = forwardTo4326(topLeft[0], topLeft[1]);
       const topRightWgs84 = forwardTo4326(topRight[0], topRight[1]);

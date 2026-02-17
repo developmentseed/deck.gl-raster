@@ -38,7 +38,6 @@ export function addAlphaChannel(rgbImage: RasterArray): RasterArray {
 
     return {
       ...rgbImage,
-      // layout: "pixel-interleaved",
       count: 4,
       data: rgbaArray,
     };
