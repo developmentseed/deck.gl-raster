@@ -18,6 +18,7 @@
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport, assert } from "@deck.gl/core";
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
+import { xy_bounds } from "@developmentseed/morecantile";
 import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
   CullingVolume,
@@ -184,12 +185,9 @@ export class RasterTileNode {
       const childMatrix = this.metadata.tileMatrices[childZ]!;
 
       // Compute this tile's bounds in TMS' CRS
-      const parentBounds = computeProjectedTileBounds({
+      const parentBounds = computeProjectedTileBounds(parentMatrix, {
         x: this.x,
         y: this.y,
-        transform: parentMatrix.geotransform,
-        tileWidth: parentMatrix.tileWidth,
-        tileHeight: parentMatrix.tileHeight,
       });
 
       // Find overlapping child index range
@@ -429,15 +427,11 @@ export class RasterTileNode {
     commonSpaceBounds: Bounds;
   } {
     const tileMatrix = this.tileMatrix;
-    const { tileWidth, tileHeight, geotransform } = tileMatrix;
     const [minZ, maxZ] = zRange;
 
-    const tileCrsBounds = computeProjectedTileBounds({
+    const tileCrsBounds = computeProjectedTileBounds(tileMatrix, {
       x: this.x,
       y: this.y,
-      transform: geotransform,
-      tileWidth,
-      tileHeight,
     });
 
     const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
@@ -491,60 +485,22 @@ export class RasterTileNode {
  *
  * @return      The bounding box as [minX, minY, maxX, maxY] in projected CRS.
  */
-function computeProjectedTileBounds({
-  x,
-  y,
-  transform,
-  tileWidth,
-  tileHeight,
-}: {
-  x: number;
-  y: number;
-  transform: [number, number, number, number, number, number];
-  tileWidth: number;
-  tileHeight: number;
-}): [number, number, number, number] {
-  // geotransform: [a, b, c, d, e, f] where:
-  // x_geo = a * col + b * row + c
-  // y_geo = d * col + e * row + f
-  const [a, b, c, d, e, f] = transform;
-
-  // Currently only support non-rotated/non-skewed transforms
-  if (b !== 0 || d !== 0) {
-    throw new Error(
-      `Rotated/skewed geotransforms not yet supported (b=${b}, d=${d}). ` +
-        `Only north-up, non-rotated rasters are currently supported.`,
-    );
-  }
-
-  // Calculate pixel coordinates for this tile's extent
-  const pixelMinCol = x * tileWidth;
-  const pixelMinRow = y * tileHeight;
-  const pixelMaxCol = (x + 1) * tileWidth;
-  const pixelMaxRow = (y + 1) * tileHeight;
-
-  // Convert pixel coordinates to geographic coordinates using geotransform
-  const minX = a * pixelMinCol + b * pixelMinRow + c;
-  const minY = d * pixelMinCol + e * pixelMinRow + f;
-
-  const maxX = a * pixelMaxCol + b * pixelMaxRow + c;
-  const maxY = d * pixelMaxCol + e * pixelMaxRow + f;
-
-  // Note: often `e` in the geotransform is negative (for a north up image when
-  // the origin is in the **top** left, then increasing the pixel row means
-  // going down in geospatial space), so maxY < minY
-  //
-  // We want to always return an axis-aligned bbox in the form of
-  // [minX, minY, maxX, maxY], so we need to swap if necessary.
-  //
-  // For now, we just use Math.min/Math.max to ensure correct ordering, but we
-  // could remove the min/max calls if we assume that `a` and `e` are always
-  // positive/negative respectively.
+function computeProjectedTileBounds(
+  tileMatrix: TileMatrix,
+  {
+    x,
+    y,
+  }: {
+    x: number;
+    y: number;
+  },
+): [number, number, number, number] {
+  const bounds = xy_bounds(tileMatrix, { x, y });
   return [
-    Math.min(minX, maxX),
-    Math.min(minY, maxY),
-    Math.max(minX, maxX),
-    Math.max(minY, maxY),
+    bounds.lowerLeft[0],
+    bounds.lowerLeft[1],
+    bounds.upperRight[0],
+    bounds.upperRight[1],
   ];
 }
 
@@ -571,7 +527,7 @@ function sampleReferencePointsInEPSG3857(
     const geoY = minY + relY * (maxY - minY);
 
     // Reproject to Web Mercator (EPSG 3857)
-    const projected = projectTo3857([geoX, geoY]);
+    const projected = projectTo3857(geoX, geoY);
     refPointPositions.push(projected);
   }
 

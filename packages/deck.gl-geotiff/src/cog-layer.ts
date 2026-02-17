@@ -48,8 +48,11 @@ export type GetTileDataOptions = {
   /** The luma.gl Device */
   device: Device;
 
-  /** the subset to read data from in pixels. */
-  window?: [number, number, number, number];
+  /** The x coordinate of the tile within the IFD. */
+  x: number;
+
+  /** The y coordinate of the tile within the IFD. */
+  y: number;
 
   /** An AbortSignal that may be signalled if the request is to be aborted */
   signal?: AbortSignal;
