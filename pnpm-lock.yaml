@@ -240,18 +240,6 @@ importers:
 
   packages/deck.gl-geotiff:
     dependencies:
-      '@chunkd/middleware':
-        specifier: ^11.1.0
-        version: 11.1.0
-      '@chunkd/source':
-        specifier: ^11.1.0
-        version: 11.1.0
-      '@chunkd/source-http':
-        specifier: ^11.1.1
-        version: 11.1.1
-      '@chunkd/source-memory':
-        specifier: ^11.0.2
-        version: 11.0.2
       '@cogeotiff/core':
         specifier: ^9.1.2
         version: 9.1.2
@@ -390,6 +378,18 @@ importers:
 
   packages/geotiff:
     dependencies:
+      '@chunkd/middleware':
+        specifier: ^11.1.0
+        version: 11.1.0
+      '@chunkd/source':
+        specifier: ^11.1.0
+        version: 11.1.0
+      '@chunkd/source-http':
+        specifier: ^11.1.1
+        version: 11.1.1
+      '@chunkd/source-memory':
+        specifier: ^11.0.2
+        version: 11.0.2
       '@cogeotiff/core':
         specifier: ^9.1.2
         version: 9.1.2

@@ -46,10 +46,6 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@chunkd/middleware": "^11.1.0",
-    "@chunkd/source": "^11.1.0",
-    "@chunkd/source-http": "^11.1.1",
-    "@chunkd/source-memory": "^11.0.2",
     "@cogeotiff/core": "^9.1.2",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",

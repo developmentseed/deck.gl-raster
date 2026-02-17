@@ -1,3 +1,8 @@
+import { SourceCache } from "@chunkd/middleware";
+import { SourceChunk } from "@chunkd/middleware/build/src/middleware/chunk.js";
+import { SourceView } from "@chunkd/source";
+import { SourceHttp } from "@chunkd/source-http";
+import { SourceMemory } from "@chunkd/source-memory";
 import type { Source, TiffImage } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
@@ -142,6 +147,29 @@ export class GeoTIFF {
     (geotiff as { overviews: Overview[] }).overviews = overviews;
 
     return geotiff;
+  }
+
+  static async fromArrayBuffer(input: ArrayBuffer): Promise<GeoTIFF> {
+    const source = new SourceMemory("memory://input.tif", input);
+    return await GeoTIFF.create(source);
+  }
+
+  static async fromUrl(
+    url: string | URL,
+    {
+      chunkSize = 32 * 1024,
+      cacheSize = 1024 * 1024 * 1024,
+    }: { chunkSize?: number; cacheSize?: number } = {},
+  ): Promise<GeoTIFF> {
+    // read files in chunks
+    const chunk = new SourceChunk({ size: chunkSize });
+    // 1MB cache for recently accessed chunks
+    const cache = new SourceCache({ size: cacheSize });
+
+    const source = new SourceHttp(url);
+    const view = new SourceView(source, [chunk, cache]);
+
+    return await GeoTIFF.create(view);
   }
 
   // ── Properties from the primary image ─────────────────────────────────
