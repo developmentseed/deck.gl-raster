@@ -1,15 +1,7 @@
-import type {
-  BoundingBox,
-  TileMatrix,
-  TileMatrixSet,
-} from "@developmentseed/morecantile";
-import { metersPerUnit } from "@developmentseed/morecantile";
-import type { GeoTIFF, GeoTIFFImage } from "geotiff";
-import proj4, { type ProjectionDefinition } from "proj4";
-import { extractGeotransform } from "./geotiff-reprojection";
-import type { GeoKeysParser, ProjectionInfo, SupportedCrsUnit } from "./proj";
+import type { BoundingBox } from "@developmentseed/morecantile";
 
-function computeWgs84BoundingBox(
+// TODO: deduplicate with similar functions in various places in this codebase
+export function computeWgs84BoundingBox(
   boundingBox: BoundingBox,
   projectToWgs84: (point: [number, number]) => [number, number],
 ): BoundingBox {

@@ -1,4 +1,3 @@
-import type { TiffImage } from "@cogeotiff/core";
 import { TiffTag } from "@cogeotiff/core";
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
@@ -9,9 +8,8 @@ import {
   FilterNoDataVal,
   YCbCrToRGB,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
-import type { GeoTIFF } from "@developmentseed/geotiff";
+import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
-import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
 import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
 import { addAlphaChannel, parseColormap } from "./geotiff";
 import { inferTextureFormat } from "./texture";
@@ -96,10 +94,10 @@ function createUnormPipeline(
   ];
 
   // Add NoData filtering if GDAL_NODATA is defined
-  const noDataVal = geotiff.nodata;
-  if (noDataVal !== null) {
+  const nodataVal = geotiff.nodata;
+  if (nodataVal !== null) {
     // Since values are 0-1 for unorm textures,
-    const noDataScaled = noDataVal / 255.0;
+    const noDataScaled = nodataVal / 255.0;
 
     renderPipeline.push({
       module: FilterNoDataVal,
@@ -129,24 +127,24 @@ function createUnormPipeline(
         };
 
   const getTileData: COGLayerProps<TextureDataT>["getTileData"] = async (
-    image: GeoTIFFImage,
+    image: GeoTIFF | Overview,
     options: GetTileDataOptions,
   ) => {
-    const { device } = options;
-    const mergedOptions = {
-      ...options,
-      interleave: true,
-    };
+    const { device, x, y } = options;
+    // TODO: pass down signal
+    const tile = await image.fetchTile(x, y);
+    let { array } = tile;
 
-    let data: TypedArrayWithDimensions | ImageData = (await image.readRasters(
-      mergedOptions,
-    )) as TypedArrayWithDimensions;
     let numSamples = SamplesPerPixel;
 
     if (SamplesPerPixel === 3) {
       // WebGL2 doesn't have an RGB-only texture format; it requires RGBA.
-      data = addAlphaChannel(data);
+      array = addAlphaChannel(array);
       numSamples = 4;
+    }
+
+    if (array.layout === "band-separate") {
+      throw new Error("Band-separate images not yet implemented.");
     }
 
     const textureFormat = inferTextureFormat(
@@ -156,17 +154,17 @@ function createUnormPipeline(
       SampleFormat,
     );
     const texture = device.createTexture({
-      data,
+      data: array.data,
       format: textureFormat,
-      width: data.width,
-      height: data.height,
+      width: array.width,
+      height: array.height,
       sampler: samplerOptions,
     });
 
     return {
       texture,
-      height: data.height,
-      width: data.width,
+      height: array.height,
+      width: array.width,
     };
   };
   const renderTile: COGLayerProps<TextureDataT>["renderTile"] = (
