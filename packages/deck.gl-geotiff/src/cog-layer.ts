@@ -14,7 +14,10 @@ import type {
 import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
-import { RasterLayer, TMSTileset2D } from "@developmentseed/deck.gl-raster";
+import {
+  RasterLayer,
+  TileMatrixSetTileset,
+} from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import { generateTileMatrixSet } from "@developmentseed/geotiff";
 import type { TileMatrixSet } from "@developmentseed/morecantile";
@@ -419,7 +422,7 @@ export class COGLayer<
     geotiff: GeoTIFF,
   ): TileLayer {
     // Create a factory class that wraps COGTileset2D with the metadata
-    class TMSTileset2DFactory extends TMSTileset2D {
+    class TileMatrixSetTilesetFactory extends TileMatrixSetTileset {
       constructor(opts: Tileset2DProps) {
         super(opts, tms, {
           projectTo4326: forwardTo4326,
@@ -430,7 +433,7 @@ export class COGLayer<
 
     return new TileLayer<GetTileDataResult<DataT>>({
       id: `cog-tile-layer-${this.id}`,
-      TilesetClass: TMSTileset2DFactory,
+      TilesetClass: TileMatrixSetTilesetFactory,
       getTileData: async (tile) => this._getTileData(tile, geotiff, tms),
       renderSubLayers: (props) =>
         this._renderSubLayers(props, tms, forwardTo4326, inverseFrom4326),
