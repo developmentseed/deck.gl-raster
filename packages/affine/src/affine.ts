@@ -81,7 +81,11 @@ export function invert([sa, sb, sc, sd, se, sf]: Affine): Affine {
   const rd = -sd * idet;
   const re = sa * idet;
 
-  return [ra, rb, -sc * ra - sf * rb, rd, re, -sc * rd - sf * re];
+  // biome-ignore format: array
+  return [
+    ra, rb, -sc * ra - sf * rb,
+    rd, re, -sc * rd - sf * re
+  ];
 }
 
 /** Get the 'a' component of an Affine transform. */
