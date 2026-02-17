@@ -90,6 +90,18 @@ export function generateTileMatrixSet(
   const bbox = geotiff.bbox;
   const tr = geotiff.transform;
 
+  // Full-resolution level is appended last.
+  if (!geotiff.isTiled) {
+    throw new Error("GeoTIFF must be tiled to generate a TMS.");
+  }
+
+  if (tr[1] !== 0 || tr[3] !== 0) {
+    // TileMatrixSet assumes orthogonal axes
+    throw new Error(
+      "COG TileMatrixSet with rotation/skewed geotransform is not supported",
+    );
+  }
+
   // Perhaps we should allow metersPerUnit to take any string
   const crsUnit = crs.units as
     | "m"
@@ -129,11 +141,6 @@ export function generateTileMatrixSet(
         overview.height,
       ),
     );
-  }
-
-  // Full-resolution level is appended last.
-  if (!geotiff.isTiled) {
-    throw new Error("GeoTIFF must be tiled to generate a TMS.");
   }
 
   tileMatrices.push(
