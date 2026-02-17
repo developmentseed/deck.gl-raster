@@ -4,7 +4,7 @@ import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile } from "./fetch.js";
-import type { GeoKeyDirectory } from "./ifd.js";
+import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { Tile } from "./tile.js";
@@ -29,6 +29,9 @@ export class GeoTIFF {
 
   /** A cached CRS value. */
   private _crs?: number | ProjJson;
+
+  /** Cached TIFF tags that are pre-fetched when opening the GeoTIFF. */
+  readonly cachedTags: CachedTags;
 
   /** The underlying Tiff instance. */
   readonly tiff: Tiff;

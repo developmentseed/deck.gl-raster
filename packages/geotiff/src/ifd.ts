@@ -6,14 +6,20 @@ import type {
 } from "@cogeotiff/core";
 import { TiffTagGeo } from "@cogeotiff/core";
 
-/** Subset of TIFF tags that are pre-fetched in {@link TiffImage.init}. */
-export interface PreFetchedTags {
+/** Subset of TIFF tags that we pre-fetch for easier visualization. */
+export interface CachedTags {
+  bitsPerSample: Uint16Array;
+  colorMap?: Uint16Array; // TiffTagType[TiffTag.ColorMap];
+  nodata: number | null;
   compression: TiffTagType[TiffTag.Compression];
   imageHeight: TiffTagType[TiffTag.ImageHeight];
   imageWidth: TiffTagType[TiffTag.ImageWidth];
   modelPixelScale?: TiffTagType[TiffTag.ModelPixelScale];
   modelTiePoint?: TiffTagType[TiffTag.ModelTiePoint];
   modelTransformation?: TiffTagType[TiffTag.ModelTransformation];
+  photometric: TiffTagType[TiffTag.Photometric];
+  sampleFormat: TiffTagType[TiffTag.SampleFormat];
+  samplesPerPixel: number; // TiffTagType[TiffTag.SamplesPerPixel];
   tileHeight?: TiffTagType[TiffTag.TileHeight];
   tileWidth?: TiffTagType[TiffTag.TileWidth];
 }

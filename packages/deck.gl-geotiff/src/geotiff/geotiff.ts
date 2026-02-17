@@ -4,53 +4,12 @@ import type { GeoTIFF, RasterArray } from "@developmentseed/geotiff";
 import type { Converter } from "proj4";
 
 /**
- * Options that may be passed when reading image data from geotiff.js
- */
-type ReadRasterOptions = {
-  /** the subset to read data from in pixels. */
-  window?: [number, number, number, number];
-
-  /** The optional decoder pool to use. */
-  // pool?: Pool;
-
-  /** An AbortSignal that may be signalled if the request is to be aborted */
-  signal?: AbortSignal;
-};
-
-/**
- * Load an RGBA image from a GeoTIFFImage.
- */
-export async function loadRgbImage(
-  image: GeoTIFFImage,
-  options?: ReadRasterOptions,
-): Promise<{ texture: ImageData; height: number; width: number }> {
-  const mergedOptions = {
-    ...options,
-    interleave: true,
-    enableAlpha: true,
-  };
-  // Since we set interleave: true, the result is a single array with all
-  // samples, so we cast to TypedArrayWithDimensions
-  // https://github.com/geotiffjs/geotiff.js/issues/486
-  const rgbImage = (await image.readRGB(
-    mergedOptions,
-  )) as TypedArrayWithDimensions;
-  const imageData = addAlphaChannel(rgbImage);
-
-  return {
-    texture: imageData,
-    height: rgbImage.height,
-    width: rgbImage.width,
-  };
-}
-
-/**
  * Add an alpha channel to an RGB image array.
  *
  * Only supports input arrays with 3 (RGB) or 4 (RGBA) channels. If the input is
  * already RGBA, it is returned unchanged.
  */
-export function addAlphaChannel(rgbImage: RasterArray): ImageData {
+export function addAlphaChannel(rgbImage: RasterArray): RasterArray {
   const { height, width } = rgbImage;
 
   if (rgbImage.length === height * width * 4) {
