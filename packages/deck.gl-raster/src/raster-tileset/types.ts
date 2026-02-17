@@ -32,7 +32,7 @@ export type Point = [number, number];
 
 type CRS = any;
 
-export type ProjectionFunction = (point: Point) => Point;
+export type ProjectionFunction = (x: number, y: number) => Point;
 
 /**
  * Bounding box defined by two named corners
