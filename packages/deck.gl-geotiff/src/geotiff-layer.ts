@@ -1,18 +1,15 @@
 import type { CompositeLayerProps, UpdateParameters } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { RasterLayer } from "@developmentseed/deck.gl-raster";
+import type { GeoTIFF } from "@developmentseed/geotiff";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { BaseClient, GeoTIFF, Pool } from "geotiff";
 import proj4 from "proj4";
-import {
-  defaultPool,
-  fetchGeoTIFF,
-  getGeographicBounds,
-  loadRgbImage,
-} from "./geotiff/geotiff.js";
+import type { ProjectionDefinition } from "wkt-parser";
+import wktParser from "wkt-parser";
+import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
-import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
-import { epsgIoGeoKeyParser } from "./proj.js";
+import type { EpsgResolver } from "./proj.js";
+import { epsgResolver } from "./proj.js";
 
 export interface GeoTIFFLayerProps extends CompositeLayerProps {
   /**
@@ -24,17 +21,19 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
    * - An instance of GeoTIFF.js's GeoTIFF class
    * - An instance of GeoTIFF.js's BaseClient for custom fetching
    */
-  geotiff: GeoTIFF | string | ArrayBuffer | Blob | BaseClient;
+  // TODO: restore support for string, ArrayBuffer, Blob
+  geotiff: GeoTIFF;
 
   /**
-   * A function callback for parsing GeoTIFF geo keys to a Proj4 compatible
-   * definition.
+   * A function callback for parsing numeric EPSG codes to projection
+   * information (as returned by `wkt-parser`).
    *
-   * By default, uses epsg.io to resolve EPSG codes found in the GeoTIFF.
-   * Alternatively, you may want to use `geotiff-geokeys-to-proj4`, which is
-   * more extensive but adds 1.5MB to your bundle size.
+   * The default implementation:
+   * - makes a request to epsg.io to resolve EPSG codes found in the GeoTIFF.
+   * - caches any previous requests
+   * - parses PROJJSON response with `wkt-parser`
    */
-  geoKeysParser?: GeoKeysParser;
+  epsgResolver?: EpsgResolver;
 
   /**
    * GeoTIFF.js Pool for decoding image chunks.
@@ -42,7 +41,8 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
    * If none is provided, a default Pool will be created and shared between all
    * COGLayer and GeoTIFFLayer instances.
    */
-  pool?: Pool;
+  // TODO: Restore a sort of worker pool with our geotiff implementation
+  // pool?: Pool;
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
@@ -65,14 +65,11 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
 
   /**
    * Called when the GeoTIFF metadata has been loaded and parsed.
-   *
-   * @param   {GeoTIFF}  geotiff
-   * @param   {ProjectionInfo}  projection
    */
   onGeoTIFFLoad?: (
     geotiff: GeoTIFF,
     options: {
-      projection: ProjectionInfo;
+      projection: ProjectionDefinition;
       /**
        * Bounds of the image in geographic coordinates (WGS84) [minLon, minLat,
        * maxLon, maxLat]
@@ -88,7 +85,7 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
 }
 
 const defaultProps = {
-  geoKeysParser: epsgIoGeoKeyParser,
+  epsgResolver,
 };
 
 /**
@@ -130,40 +127,41 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
 
   async _parseGeoTIFF(): Promise<void> {
     const geotiff = await fetchGeoTIFF(this.props.geotiff);
-    const image = await geotiff.getImage();
+    const crs = geotiff.crs;
+    const sourceProjection =
+      typeof crs === "number"
+        ? await this.props.epsgResolver!(crs)
+        : wktParser(crs);
 
-    const geoKeysParser = this.props.geoKeysParser!;
-    const sourceProjection = await geoKeysParser(image.getGeoKeys());
-    if (!sourceProjection) {
-      throw new Error(
-        "Could not determine source projection from GeoTIFF geo keys",
-      );
-    }
-
-    const converter = proj4(sourceProjection.def, "EPSG:4326");
+    // @ts-expect-error proj4 has incomplete types that don't support wkt-parser
+    // output
+    const converter = proj4(sourceProjection, "EPSG:4326");
 
     if (this.props.onGeoTIFFLoad) {
-      const geographicBounds = getGeographicBounds(image, converter);
+      const geographicBounds = getGeographicBounds(geotiff, converter);
       this.props.onGeoTIFFLoad(geotiff, {
         projection: sourceProjection,
         geographicBounds,
       });
     }
 
+    // biome-ignore lint/correctness/noUnusedVariables: not implemented
     const reprojectionFns = await extractGeotiffReprojectors(
       geotiff,
-      sourceProjection.def,
+      sourceProjection,
     );
-    const { texture, height, width } = await loadRgbImage(image, {
-      pool: this.props.pool || defaultPool(),
-    });
 
-    this.setState({
-      reprojectionFns,
-      imageData: texture,
-      height,
-      width,
-    });
+    // Our GeoTIFF implementation doesn't currently support reading the full
+    // image; it only supports reading tiles.
+    throw new Error("Loading GeoTIFF image data not yet implemented");
+    // const { texture, height, width } = await loadRgbImage(image);
+
+    // this.setState({
+    //   reprojectionFns,
+    //   imageData: texture,
+    //   height,
+    //   width,
+    // });
   }
 
   renderLayers() {
