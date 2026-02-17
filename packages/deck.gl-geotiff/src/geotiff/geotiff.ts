@@ -1,6 +1,11 @@
 // Utilities for interacting with geotiff.js.
 
-import type { GeoTIFF, RasterArray } from "@developmentseed/geotiff";
+import { SourceCache, SourceChunk } from "@chunkd/middleware";
+import { SourceView } from "@chunkd/source";
+import { SourceHttp } from "@chunkd/source-http";
+import { SourceMemory } from "@chunkd/source-memory";
+import type { RasterArray } from "@developmentseed/geotiff";
+import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Converter } from "proj4";
 
 /**
@@ -78,8 +83,26 @@ export function parseColormap(cmap: Uint16Array): ImageData {
   return new ImageData(rgba, size, 1);
 }
 
-// TODO: restore support for string, ArrayBuffer, Blob input
-export async function fetchGeoTIFF(input: GeoTIFF): Promise<GeoTIFF> {
+export async function fetchGeoTIFF(
+  input: GeoTIFF | string | URL | ArrayBuffer,
+): Promise<GeoTIFF> {
+  if (typeof input === "string" || input instanceof URL) {
+    // read files in 32KB chunks
+    const chunk = new SourceChunk({ size: 32 * 1024 });
+    // 1MB cache for recently accessed chunks
+    const cache = new SourceCache({ size: 1024 * 1024 * 1024 });
+
+    const source = new SourceHttp(input);
+    const view = new SourceView(source, [chunk, cache]);
+
+    return await GeoTIFF.create(view);
+  }
+
+  if (input instanceof ArrayBuffer) {
+    const source = new SourceMemory("memory://input.tif", input);
+    return await GeoTIFF.create(source);
+  }
+
   return input;
 }
 

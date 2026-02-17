@@ -1,7 +1,6 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
-import { toProj4 } from "geotiff-geokeys-to-proj4";
+import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -11,18 +10,6 @@ function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
   overlay.setProps(props);
   return null;
-}
-
-async function geoKeysParser(
-  geoKeys: Record<string, any>,
-): Promise<proj.ProjectionInfo> {
-  const projDefinition = toProj4(geoKeys as any);
-
-  return {
-    def: projDefinition.proj4,
-    parsed: proj.parseCrs(projDefinition.proj4),
-    coordinatesUnits: projDefinition.coordinatesUnits as proj.SupportedCrsUnit,
-  };
 }
 
 // const COG_URL =
@@ -62,7 +49,6 @@ export default function App() {
     geotiff: COG_URL,
     debug,
     debugOpacity,
-    geoKeysParser,
     onGeoTIFFLoad: (tiff, options) => {
       (window as any).tiff = tiff;
       const { west, south, east, north } = options.geographicBounds;

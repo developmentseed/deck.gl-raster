@@ -79,8 +79,7 @@ export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
    * - An instance of GeoTIFF.js's GeoTIFF class
    * - An instance of GeoTIFF.js's BaseClient for custom fetching
    */
-  // TODO: restore support for string, ArrayBuffer, Blob
-  geotiff: GeoTIFF;
+  geotiff: GeoTIFF | string | URL | ArrayBuffer;
 
   /**
    * A function callback for parsing numeric EPSG codes to projection
