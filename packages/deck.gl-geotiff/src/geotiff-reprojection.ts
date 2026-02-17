@@ -15,14 +15,10 @@ export async function extractGeotiffReprojectors(
   sourceProjection: string | PROJJSONDefinition | ProjectionDefinition,
   outputCrs: string | PROJJSONDefinition | Projection = "EPSG:4326",
 ): Promise<ReprojectionFns> {
-  // Extract geotransform from full-resolution image
-  // Only the top-level IFD has geo keys, so we'll derive overviews from this
-  const baseGeotransform = geotiff.transform;
-
   // @ts-expect-error - proj4 type definitions are incomplete and don't include
   // support for wkt-parser output
   const converter = proj4(sourceProjection, outputCrs);
-  const { forwardTransform, inverseTransform } = fromAffine(baseGeotransform);
+  const { forwardTransform, inverseTransform } = fromAffine(geotiff.transform);
 
   return {
     forwardTransform,
