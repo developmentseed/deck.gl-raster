@@ -25,7 +25,7 @@ export function metersPerUnit(
     | "foot"
     | "us survey foot"
     | "degree",
-  { semiMajorAxis }: { semiMajorAxis?: number },
+  { semiMajorAxis }: { semiMajorAxis?: number } = {},
 ): number {
   unit = unit.toLowerCase() as typeof unit;
   switch (unit) {

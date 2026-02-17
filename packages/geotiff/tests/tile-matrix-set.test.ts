@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import wktParser from "wkt-parser";
+import { GeoTIFF } from "../src/geotiff.js";
 import { generateTileMatrixSet } from "../src/tile-matrix-set.js";
 import { loadGeoTIFF } from "./helpers.js";
 
@@ -124,5 +125,87 @@ describe("test TMS", () => {
         matrixHeight: 2,
       },
     ]);
+  });
+});
+
+describe("create TileMatrixSet from COG", () => {
+  it("creates TMS", async () => {
+    const url =
+      "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
+
+    const geotiff = await GeoTIFF.fromUrl(url);
+
+    const tms = generateTileMatrixSet(geotiff, { units: "m" });
+
+    const expectedTileMatrices = [
+      {
+        id: "0",
+        scaleDenominator: 68684.95742667928,
+        cellSize: 19.231788079470196,
+        pointOfOrigin: [647118, 4533600],
+        tileWidth: 512,
+        tileHeight: 512,
+        matrixWidth: 1,
+        matrixHeight: 1,
+        cornerOfOrigin: "topLeft",
+      },
+      {
+        id: "1",
+        scaleDenominator: 34285.71428571429,
+        cellSize: 9.6,
+        pointOfOrigin: [647118, 4533600],
+        tileWidth: 512,
+        tileHeight: 512,
+        matrixWidth: 2,
+        matrixHeight: 2,
+        cornerOfOrigin: "topLeft",
+      },
+      {
+        id: "2",
+        scaleDenominator: 17142.857142857145,
+        cellSize: 4.8,
+        pointOfOrigin: [647118, 4533600],
+        tileWidth: 512,
+        tileHeight: 512,
+        matrixWidth: 3,
+        matrixHeight: 4,
+        cornerOfOrigin: "topLeft",
+      },
+      {
+        id: "3",
+        scaleDenominator: 8571.428571428572,
+        cellSize: 2.4,
+        pointOfOrigin: [647118, 4533600],
+        tileWidth: 512,
+        tileHeight: 512,
+        matrixWidth: 5,
+        matrixHeight: 7,
+        cornerOfOrigin: "topLeft",
+      },
+      {
+        id: "4",
+        scaleDenominator: 4285.714285714286,
+        cellSize: 1.2,
+        pointOfOrigin: [647118, 4533600],
+        tileWidth: 512,
+        tileHeight: 512,
+        matrixWidth: 10,
+        matrixHeight: 13,
+        cornerOfOrigin: "topLeft",
+      },
+      {
+        id: "5",
+        scaleDenominator: 2142.857142857143,
+        cellSize: 0.6,
+        pointOfOrigin: [647118, 4533600],
+        tileWidth: 512,
+        tileHeight: 512,
+        matrixWidth: 19,
+        matrixHeight: 25,
+        cornerOfOrigin: "topLeft",
+      },
+    ];
+
+    expect(tms.tileMatrices).toStrictEqual(expectedTileMatrices);
   });
 });
