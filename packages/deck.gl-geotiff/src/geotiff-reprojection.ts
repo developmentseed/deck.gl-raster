@@ -10,79 +10,6 @@ import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import type Projection from "proj4/dist/lib/Proj";
 
-export const OGC_84: PROJJSONDefinition = {
-  $schema: "https://proj.org/schemas/v0.7/projjson.schema.json",
-  type: "GeographicCRS",
-  name: "WGS 84 (CRS84)",
-  datum_ensemble: {
-    name: "World Geodetic System 1984 ensemble",
-    members: [
-      {
-        name: "World Geodetic System 1984 (Transit)",
-        id: { authority: "EPSG", code: 1166 },
-      },
-      {
-        name: "World Geodetic System 1984 (G730)",
-        id: { authority: "EPSG", code: 1152 },
-      },
-      {
-        name: "World Geodetic System 1984 (G873)",
-        id: { authority: "EPSG", code: 1153 },
-      },
-      {
-        name: "World Geodetic System 1984 (G1150)",
-        id: { authority: "EPSG", code: 1154 },
-      },
-      {
-        name: "World Geodetic System 1984 (G1674)",
-        id: { authority: "EPSG", code: 1155 },
-      },
-      {
-        name: "World Geodetic System 1984 (G1762)",
-        id: { authority: "EPSG", code: 1156 },
-      },
-      {
-        name: "World Geodetic System 1984 (G2139)",
-        id: { authority: "EPSG", code: 1309 },
-      },
-    ],
-    ellipsoid: {
-      name: "WGS 84",
-      semi_major_axis: 6378137,
-      inverse_flattening: 298.257223563,
-    },
-    accuracy: "2.0",
-    id: { authority: "EPSG", code: 6326 },
-  },
-  coordinate_system: {
-    subtype: "ellipsoidal",
-    axis: [
-      {
-        name: "Geodetic longitude",
-        abbreviation: "Lon",
-        direction: "east",
-        unit: "degree",
-      },
-      {
-        name: "Geodetic latitude",
-        abbreviation: "Lat",
-        direction: "north",
-        unit: "degree",
-      },
-    ],
-  },
-  scope: "Not known.",
-  area: "World.",
-  bbox: {
-    south_latitude: -90,
-    west_longitude: -180,
-    north_latitude: 90,
-    east_longitude: 180,
-  },
-  // @ts-expect-error - proj4 types are incomplete
-  id: { authority: "OGC", code: "CRS84" },
-};
-
 // Derived from existing work here:
 // https://github.com/developmentseed/lonboard/blob/35a1f3d691604ad9e083bf10a4bfde4158171486/src/cog-tileset/claude-tileset-2d-improved.ts#L141
 //
@@ -90,7 +17,7 @@ export const OGC_84: PROJJSONDefinition = {
 export async function extractGeotiffReprojectors(
   tiff: GeoTIFF,
   sourceProjection: string | PROJJSONDefinition,
-  outputCrs: string | PROJJSONDefinition | Projection = OGC_84,
+  outputCrs: string | PROJJSONDefinition | Projection = "EPSG:4326",
 ): Promise<ReprojectionFns> {
   const image = await tiff.getImage();
 
