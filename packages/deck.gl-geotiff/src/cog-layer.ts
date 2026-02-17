@@ -284,21 +284,11 @@ export class COGLayer<
     //   geotiff.overviews[geotiff.overviews.length - 1 - z]!;
     const images = [geotiff, ...geotiff.overviews];
     const image = images[images.length - 1 - z]!;
-    const imageHeight = image.height;
-    const imageWidth = image.width;
 
     const tileMatrix = tms.tileMatrices[z]!;
-    const { tileWidth, tileHeight } = tileMatrix;
 
     const tileAffine = tileTransform(tileMatrix, { col: x, row: y });
     const { forwardTransform, inverseTransform } = fromAffine(tileAffine);
-
-    const window: [number, number, number, number] = [
-      x * tileWidth,
-      y * tileHeight,
-      Math.min((x + 1) * tileWidth, imageWidth),
-      Math.min((y + 1) * tileHeight, imageHeight),
-    ];
 
     const getTileData =
       this.props.getTileData || this.state.defaultGetTileData!;
@@ -311,7 +301,8 @@ export class COGLayer<
 
     const data = await getTileData(image, {
       device: this.context.device,
-      window,
+      x,
+      y,
       signal: combinedSignal,
       // TODO: restore pool
       // pool: this.props.pool || defaultPool(),

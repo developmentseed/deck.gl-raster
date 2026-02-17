@@ -145,6 +145,7 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
       });
     }
 
+    // @ts-expect-error unused variable
     // biome-ignore lint/correctness/noUnusedVariables: not implemented
     const reprojectionFns = await extractGeotiffReprojectors(
       geotiff,
