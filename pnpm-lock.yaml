@@ -243,6 +243,9 @@ importers:
 
   packages/deck.gl-geotiff:
     dependencies:
+      '@cogeotiff/core':
+        specifier: ^9.1.2
+        version: 9.1.2
       '@deck.gl/core':
         specifier: 9.2.7
         version: 9.2.7
@@ -279,6 +282,9 @@ importers:
       proj4:
         specifier: ^2.20.2
         version: 2.20.2
+      wkt-parser:
+        specifier: ^1.5.2
+        version: 1.5.2
     devDependencies:
       '@types/node':
         specifier: ^25.1.0
