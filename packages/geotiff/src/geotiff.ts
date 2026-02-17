@@ -5,7 +5,7 @@ import type { ProjJson } from "./crs.js";
 import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile } from "./fetch.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
-import { extractGeoKeyDirectory } from "./ifd.js";
+import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { Tile } from "./tile.js";
 import { index, xy } from "./transform.js";
@@ -51,12 +51,14 @@ export class GeoTIFF {
     maskImage: TiffImage | null,
     gkd: GeoKeyDirectory,
     overviews: Overview[],
+    cachedTags: CachedTags,
   ) {
     this.tiff = tiff;
     this.image = image;
     this.maskImage = maskImage;
     this.gkd = gkd;
     this.overviews = overviews;
+    this.cachedTags = cachedTags;
   }
 
   /**
@@ -118,9 +120,18 @@ export class GeoTIFF {
       return sb.width * sb.height - sa.width * sa.height;
     });
 
+    const cachedTags = await prefetchTags(primaryImage);
+
     // Two-phase construction: create the GeoTIFF first (with empty overviews),
     // then build Overviews that reference back to it.
-    const geotiff = new GeoTIFF(tiff, primaryImage, primaryMask, gkd, []);
+    const geotiff = new GeoTIFF(
+      tiff,
+      primaryImage,
+      primaryMask,
+      gkd,
+      [],
+      cachedTags,
+    );
 
     const overviews: Overview[] = dataEntries.map(([key, dataImage]) => {
       const maskImage = maskIFDs.get(key) ?? null;

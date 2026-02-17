@@ -1,27 +1,54 @@
-import type {
-  TiffImage,
-  TiffTag,
-  TiffTagGeoType,
-  TiffTagType,
-} from "@cogeotiff/core";
-import { TiffTagGeo } from "@cogeotiff/core";
+import type { TiffImage, TiffTagGeoType, TiffTagType } from "@cogeotiff/core";
+import { TiffTag, TiffTagGeo } from "@cogeotiff/core";
 
 /** Subset of TIFF tags that we pre-fetch for easier visualization. */
 export interface CachedTags {
   bitsPerSample: Uint16Array;
   colorMap?: Uint16Array; // TiffTagType[TiffTag.ColorMap];
-  nodata: number | null;
   compression: TiffTagType[TiffTag.Compression];
-  imageHeight: TiffTagType[TiffTag.ImageHeight];
-  imageWidth: TiffTagType[TiffTag.ImageWidth];
-  modelPixelScale?: TiffTagType[TiffTag.ModelPixelScale];
-  modelTiePoint?: TiffTagType[TiffTag.ModelTiePoint];
-  modelTransformation?: TiffTagType[TiffTag.ModelTransformation];
+  nodata: number | null;
   photometric: TiffTagType[TiffTag.Photometric];
   sampleFormat: TiffTagType[TiffTag.SampleFormat];
   samplesPerPixel: number; // TiffTagType[TiffTag.SamplesPerPixel];
-  tileHeight?: TiffTagType[TiffTag.TileHeight];
-  tileWidth?: TiffTagType[TiffTag.TileWidth];
+}
+
+/** Pre-fetch TIFF tags for easier visualization. */
+export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
+  // Compression is pre-fetched in init
+  const compression = image.value(TiffTag.Compression);
+  if (compression === null) {
+    throw new Error("Compression tag should always exist.");
+  }
+
+  const nodata = image.noData;
+
+  const [bitsPerSample, colorMap, photometric, sampleFormat, samplesPerPixel] =
+    await Promise.all([
+      image.fetch(TiffTag.BitsPerSample),
+      image.fetch(TiffTag.ColorMap),
+      image.fetch(TiffTag.Photometric),
+      image.fetch(TiffTag.SampleFormat),
+      image.fetch(TiffTag.SamplesPerPixel),
+    ]);
+
+  if (bitsPerSample === null) {
+    throw new Error("BitsPerSample tag should always exist.");
+  }
+
+  if (samplesPerPixel === null) {
+    throw new Error("SamplesPerPixel tag should always exist.");
+  }
+
+  return {
+    bitsPerSample: new Uint16Array(bitsPerSample),
+    colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
+    compression,
+    nodata,
+    photometric: photometric ?? 1, // Default to 1 (BlackIsZero) per spec
+    sampleFormat: sampleFormat ?? [1], // Default to 1 (unsigned int) per spec
+    // Waiting for release with https://github.com/blacha/cogeotiff/pull/1394
+    samplesPerPixel: samplesPerPixel as number,
+  };
 }
 
 /**
