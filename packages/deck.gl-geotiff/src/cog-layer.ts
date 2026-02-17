@@ -280,7 +280,7 @@ export class COGLayer<
     // If z=0, use the coarsest overview (which is the last in the array)
     // If z=max, use the full-resolution image (which is the first in the array)
 
-    // TODO: should be able to optimize this to not create the array
+    // TODO: should be able to (micro) optimize this to not create the array
     // Something like:
     // const image = z === geotiff.overviews.length - 1 ? geotiff :
     //   geotiff.overviews[geotiff.overviews.length - 1 - z]!;
