@@ -12,25 +12,38 @@ import type { Converter } from "proj4";
 export function addAlphaChannel(rgbImage: RasterArray): RasterArray {
   const { height, width } = rgbImage;
 
-  if (rgbImage.length === height * width * 4) {
+  if (rgbImage.layout === "band-separate") {
+    // This should be pretty easy to do by just returning an additional array of
+    // 255s
+    // But not sure if we'll want to do that, because it's fine to upload 3
+    // separate textures.
+    throw new Error("Band-separate images not yet implemented.");
+  }
+
+  if (rgbImage.data.length === height * width * 4) {
     // Already has alpha channel
-    return new ImageData(new Uint8ClampedArray(rgbImage), width, height);
-  } else if (rgbImage.length === height * width * 3) {
+    return rgbImage;
+  } else if (rgbImage.data.length === height * width * 3) {
     // Need to add alpha channel
 
-    const rgbaLength = (rgbImage.length / 3) * 4;
+    const rgbaLength = (rgbImage.data.length / 3) * 4;
     const rgbaArray = new Uint8ClampedArray(rgbaLength);
-    for (let i = 0; i < rgbImage.length / 3; ++i) {
-      rgbaArray[i * 4] = rgbImage[i * 3]!;
-      rgbaArray[i * 4 + 1] = rgbImage[i * 3 + 1]!;
-      rgbaArray[i * 4 + 2] = rgbImage[i * 3 + 2]!;
+    for (let i = 0; i < rgbImage.data.length / 3; ++i) {
+      rgbaArray[i * 4] = rgbImage.data[i * 3]!;
+      rgbaArray[i * 4 + 1] = rgbImage.data[i * 3 + 1]!;
+      rgbaArray[i * 4 + 2] = rgbImage.data[i * 3 + 2]!;
       rgbaArray[i * 4 + 3] = 255;
     }
 
-    return new ImageData(rgbaArray, width, height);
+    return {
+      ...rgbImage,
+      // layout: "pixel-interleaved",
+      count: 4,
+      data: rgbaArray,
+    };
   } else {
     throw new Error(
-      `Unexpected number of channels in raster data: ${rgbImage.length / (height * width)}`,
+      `Unexpected number of channels in raster data: ${rgbImage.data.length / (height * width)}`,
     );
   }
 }
