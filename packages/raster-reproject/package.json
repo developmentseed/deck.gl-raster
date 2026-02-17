@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./affine": {
-      "types": "./dist/affine/index.d.ts",
-      "default": "./dist/affine/index.js"
     }
   },
   "sideEffects": false,
