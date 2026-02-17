@@ -449,6 +449,9 @@ importers:
 
   packages/raster-reproject:
     devDependencies:
+      '@developmentseed/affine':
+        specifier: workspace:^
+        version: link:../affine
       '@types/node':
         specifier: ^25.1.0
         version: 25.1.0

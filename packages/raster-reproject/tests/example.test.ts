@@ -1,11 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import * as affine from "@developmentseed/affine";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
-import {
-  applyAffine,
-  invertGeoTransform,
-} from "@developmentseed/raster-reproject/affine";
 import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import { describe, it } from "vitest";
@@ -25,17 +22,18 @@ type FixtureJSON = {
 };
 
 // Note: this is copied from deck.gl-geotiff
-function fromGeoTransform(
+function fromAffine(
   geotransform: [number, number, number, number, number, number],
 ): {
   forwardTransform: (x: number, y: number) => [number, number];
   inverseTransform: (x: number, y: number) => [number, number];
 } {
-  const inverseGeotransform = invertGeoTransform(geotransform);
+  const inverseGeotransform = affine.invert(geotransform);
   return {
-    forwardTransform: (x: number, y: number) => applyAffine(x, y, geotransform),
+    forwardTransform: (x: number, y: number) =>
+      affine.apply(geotransform, x, y),
     inverseTransform: (x: number, y: number) =>
-      applyAffine(x, y, inverseGeotransform),
+      affine.apply(inverseGeotransform, x, y),
   };
 }
 
@@ -66,8 +64,7 @@ function parseFixture(fixturePath: string): RasterReprojector {
     affineGeotransform = geotransform;
   }
 
-  const { inverseTransform, forwardTransform } =
-    fromGeoTransform(affineGeotransform);
+  const { inverseTransform, forwardTransform } = fromAffine(affineGeotransform);
   const converter = proj4(projjson || wkt2, "EPSG:4326");
 
   const reprojectionFns = {
