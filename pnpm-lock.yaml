@@ -279,9 +279,6 @@ importers:
       flatbush:
         specifier: ^4.5.0
         version: 4.5.0
-      geotiff:
-        specifier: 2.1.3
-        version: 2.1.3
       proj4:
         specifier: ^2.20.2
         version: 2.20.2
@@ -417,6 +414,10 @@ importers:
         version: 1.5.2
 
   packages/morecantile:
+    dependencies:
+      '@developmentseed/affine':
+        specifier: workspace:^
+        version: link:../affine
     devDependencies:
       '@types/node':
         specifier: ^25.1.0
