@@ -34,7 +34,7 @@ Until you try to load an image compressed with, say, [LERC], you don't pay for t
 
 [LERC]: https://github.com/Esri/lerc
 
-### Transparent caching and chunking
+### Full user control over caching and chunking
 
 There are a lot of great utilities in [`chunkd`](https://github.com/blacha/chunkd) that work out of the box here.
 
