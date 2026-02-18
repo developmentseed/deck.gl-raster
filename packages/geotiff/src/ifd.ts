@@ -1,5 +1,5 @@
 import type { TiffImage, TiffTagGeoType, TiffTagType } from "@cogeotiff/core";
-import { TiffTag, TiffTagGeo } from "@cogeotiff/core";
+import { SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
 
 /** Subset of TIFF tags that we pre-fetch for easier visualization. */
 export interface CachedTags {
@@ -39,13 +39,19 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     throw new Error("SamplesPerPixel tag should always exist.");
   }
 
+  if (photometric === null) {
+    throw new Error("Photometric tag should always exist.");
+  }
+
   return {
     bitsPerSample: new Uint16Array(bitsPerSample),
     colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
     compression,
     nodata,
-    photometric: photometric ?? 1, // Default to 1 (BlackIsZero) per spec
-    sampleFormat: sampleFormat ?? [1], // Default to 1 (unsigned int) per spec
+    photometric,
+    // Uint is the default sample format according to the spec
+    // https://web.archive.org/web/20240329145340/https://www.awaresystems.be/imaging/tiff/tifftags/sampleformat.html
+    sampleFormat: sampleFormat ?? [SampleFormat.Uint],
     // Waiting for release with https://github.com/blacha/cogeotiff/pull/1394
     samplesPerPixel: samplesPerPixel as number,
   };
