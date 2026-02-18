@@ -27,18 +27,17 @@ interface HasTiffReference extends HasTransform {
   readonly nodata: number | null;
 }
 
-// TODO: add AbortSignal support.
-// https://github.com/blacha/cogeotiff/issues/1397
 export async function fetchTile(
   self: HasTiffReference,
   x: number,
   y: number,
+  options: { signal?: AbortSignal } = {},
 ): Promise<Tile> {
   if (self.maskImage != null) {
     throw new Error("Mask fetching not implemented yet");
   }
 
-  const tile = await self.image.getTile(x, y);
+  const tile = await self.image.getTile(x, y, options);
   if (tile === null) {
     throw new Error("Tile not found");
   }
