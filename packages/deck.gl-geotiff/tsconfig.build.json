@@ -8,8 +8,9 @@
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"],
   "references": [
+    { "path": "../deck.gl-raster/tsconfig.build.json" },
     { "path": "../geotiff/tsconfig.build.json" },
-    { "path": "../raster-reproject/tsconfig.build.json" },
-    { "path": "../deck.gl-raster/tsconfig.build.json" }
+    { "path": "../morecantile/tsconfig.build.json" },
+    { "path": "../raster-reproject/tsconfig.build.json" }
   ]
 }
