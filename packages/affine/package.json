@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/affine",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "description": "Port of Python `affine` package for working with affine transformations in JavaScript.",
   "type": "module",
   "main": "./dist/index.js",
