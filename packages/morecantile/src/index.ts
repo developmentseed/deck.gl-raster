@@ -1,4 +1,4 @@
-export type { Affine } from "./transform.js";
+export { xy_bounds } from "./tile.js";
 export { matrixTransform, tileTransform } from "./transform.js";
 export type {
   BoundingBox,

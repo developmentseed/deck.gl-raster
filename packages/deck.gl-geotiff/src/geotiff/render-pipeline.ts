@@ -1,3 +1,4 @@
+import { Photometric, SampleFormat } from "@cogeotiff/core";
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
   CMYKToRGB,
@@ -7,13 +8,11 @@ import {
   FilterNoDataVal,
   YCbCrToRGB,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
-import type { GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
 import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
-import { addAlphaChannel, parseColormap, parseGDALNoData } from "./geotiff";
+import { addAlphaChannel, parseColormap } from "./geotiff";
 import { inferTextureFormat } from "./texture";
-import type { ImageFileDirectory } from "./types";
-import { PhotometricInterpretationT } from "./types";
 
 export type TextureDataT = {
   height: number;
@@ -41,19 +40,21 @@ type UnresolvedRasterModule<DataT> =
     };
 
 export function inferRenderPipeline(
-  // TODO: narrow type to only used fields
-  ifd: ImageFileDirectory,
+  geotiff: GeoTIFF,
   device: Device,
 ): {
   getTileData: COGLayerProps<TextureDataT>["getTileData"];
   renderTile: COGLayerProps<TextureDataT>["renderTile"];
 } {
-  const { SampleFormat } = ifd;
+  const { sampleFormat } = geotiff.cachedTags;
+  if (sampleFormat === null) {
+    throw new Error("SampleFormat tag is required to infer render pipeline");
+  }
 
-  switch (SampleFormat[0]) {
+  switch (sampleFormat[0]) {
     // Unsigned integers
-    case 1:
-      return createUnormPipeline(ifd, device);
+    case SampleFormat.Uint:
+      return createUnormPipeline(geotiff, device);
   }
 
   throw new Error(
@@ -65,20 +66,21 @@ export function inferRenderPipeline(
  * Create pipeline for visualizing unsigned-integer data.
  */
 function createUnormPipeline(
-  ifd: ImageFileDirectory,
+  geotiff: GeoTIFF,
   device: Device,
 ): {
   getTileData: COGLayerProps<TextureDataT>["getTileData"];
   renderTile: COGLayerProps<TextureDataT>["renderTile"];
 } {
+  const tags = geotiff.cachedTags;
   const {
-    BitsPerSample,
-    ColorMap,
-    GDAL_NODATA,
-    PhotometricInterpretation,
-    SampleFormat,
-    SamplesPerPixel,
-  } = ifd;
+    bitsPerSample,
+    colorMap,
+    photometric,
+    sampleFormat,
+    samplesPerPixel,
+    nodata,
+  } = tags;
 
   const renderPipeline: UnresolvedRasterModule<TextureDataT>[] = [
     {
@@ -89,11 +91,9 @@ function createUnormPipeline(
     },
   ];
 
-  // Add NoData filtering if GDAL_NODATA is defined
-  const noDataVal = parseGDALNoData(GDAL_NODATA);
-  if (noDataVal !== null) {
+  if (nodata !== null) {
     // Since values are 0-1 for unorm textures,
-    const noDataScaled = noDataVal / 255.0;
+    const noDataScaled = nodata / 255.0;
 
     renderPipeline.push({
       module: FilterNoDataVal,
@@ -102,9 +102,9 @@ function createUnormPipeline(
   }
 
   const toRGBModule = photometricInterpretationToRGB(
-    PhotometricInterpretation,
+    photometric,
     device,
-    ColorMap,
+    colorMap,
   );
   if (toRGBModule) {
     renderPipeline.push(toRGBModule);
@@ -112,7 +112,7 @@ function createUnormPipeline(
 
   // For palette images, use nearest-neighbor sampling
   const samplerOptions: SamplerProps =
-    PhotometricInterpretation === PhotometricInterpretationT.Palette
+    photometric === Photometric.Palette
       ? {
           magFilter: "nearest",
           minFilter: "nearest",
@@ -123,44 +123,44 @@ function createUnormPipeline(
         };
 
   const getTileData: COGLayerProps<TextureDataT>["getTileData"] = async (
-    image: GeoTIFFImage,
+    image: GeoTIFF | Overview,
     options: GetTileDataOptions,
   ) => {
-    const { device } = options;
-    const mergedOptions = {
-      ...options,
-      interleave: true,
-    };
+    const { device, x, y } = options;
+    // TODO: pass down signal
+    const tile = await image.fetchTile(x, y);
+    let { array } = tile;
 
-    let data: TypedArrayWithDimensions | ImageData = (await image.readRasters(
-      mergedOptions,
-    )) as TypedArrayWithDimensions;
-    let numSamples = SamplesPerPixel;
+    let numSamples = samplesPerPixel;
 
-    if (SamplesPerPixel === 3) {
+    if (samplesPerPixel === 3) {
       // WebGL2 doesn't have an RGB-only texture format; it requires RGBA.
-      data = addAlphaChannel(data);
+      array = addAlphaChannel(array);
       numSamples = 4;
+    }
+
+    if (array.layout === "band-separate") {
+      throw new Error("Band-separate images not yet implemented.");
     }
 
     const textureFormat = inferTextureFormat(
       // Add one sample for added alpha channel
       numSamples,
-      BitsPerSample,
-      SampleFormat,
+      bitsPerSample,
+      sampleFormat,
     );
     const texture = device.createTexture({
-      data,
+      data: array.data,
       format: textureFormat,
-      width: data.width,
-      height: data.height,
+      width: array.width,
+      height: array.height,
       sampler: samplerOptions,
     });
 
     return {
       texture,
-      height: data.height,
-      width: data.width,
+      height: array.height,
+      width: array.width,
     };
   };
   const renderTile: COGLayerProps<TextureDataT>["renderTile"] = (
@@ -173,14 +173,14 @@ function createUnormPipeline(
 }
 
 function photometricInterpretationToRGB(
-  PhotometricInterpretation: number,
+  photometric: Photometric,
   device: Device,
   ColorMap?: Uint16Array,
 ): RasterModule | null {
-  switch (PhotometricInterpretation) {
-    case PhotometricInterpretationT.RGB:
+  switch (photometric) {
+    case Photometric.Rgb:
       return null;
-    case PhotometricInterpretationT.Palette: {
+    case Photometric.Palette: {
       if (!ColorMap) {
         throw new Error(
           "ColorMap is required for PhotometricInterpretation Palette",
@@ -207,22 +207,21 @@ function photometricInterpretationToRGB(
       };
     }
 
-    case PhotometricInterpretationT.CMYK:
+    // Not sure why cogeotiff calls this "Separated", but it means CMYK
+    case Photometric.Separated:
       return {
         module: CMYKToRGB,
       };
-    case PhotometricInterpretationT.YCbCr:
+    case Photometric.Ycbcr:
       return {
         module: YCbCrToRGB,
       };
-    case PhotometricInterpretationT.CIELab:
+    case Photometric.Cielab:
       return {
         module: cieLabToRGB,
       };
     default:
-      throw new Error(
-        `Unsupported PhotometricInterpretation ${PhotometricInterpretation}`,
-      );
+      throw new Error(`Unsupported PhotometricInterpretation ${photometric}`);
   }
 }
 

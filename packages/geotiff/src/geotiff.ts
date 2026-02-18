@@ -1,11 +1,16 @@
+import { SourceCache } from "@chunkd/middleware";
+import { SourceChunk } from "@chunkd/middleware/build/src/middleware/chunk.js";
+import { SourceView } from "@chunkd/source";
+import { SourceHttp } from "@chunkd/source-http";
+import { SourceMemory } from "@chunkd/source-memory";
 import type { Source, TiffImage } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile } from "./fetch.js";
-import type { GeoKeyDirectory } from "./ifd.js";
-import { extractGeoKeyDirectory } from "./ifd.js";
+import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
+import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { Tile } from "./tile.js";
 import { index, xy } from "./transform.js";
@@ -30,6 +35,9 @@ export class GeoTIFF {
   /** A cached CRS value. */
   private _crs?: number | ProjJson;
 
+  /** Cached TIFF tags that are pre-fetched when opening the GeoTIFF. */
+  readonly cachedTags: CachedTags;
+
   /** The underlying Tiff instance. */
   readonly tiff: Tiff;
 
@@ -48,12 +56,14 @@ export class GeoTIFF {
     maskImage: TiffImage | null,
     gkd: GeoKeyDirectory,
     overviews: Overview[],
+    cachedTags: CachedTags,
   ) {
     this.tiff = tiff;
     this.image = image;
     this.maskImage = maskImage;
     this.gkd = gkd;
     this.overviews = overviews;
+    this.cachedTags = cachedTags;
   }
 
   /**
@@ -115,9 +125,18 @@ export class GeoTIFF {
       return sb.width * sb.height - sa.width * sa.height;
     });
 
+    const cachedTags = await prefetchTags(primaryImage);
+
     // Two-phase construction: create the GeoTIFF first (with empty overviews),
     // then build Overviews that reference back to it.
-    const geotiff = new GeoTIFF(tiff, primaryImage, primaryMask, gkd, []);
+    const geotiff = new GeoTIFF(
+      tiff,
+      primaryImage,
+      primaryMask,
+      gkd,
+      [],
+      cachedTags,
+    );
 
     const overviews: Overview[] = dataEntries.map(([key, dataImage]) => {
       const maskImage = maskIFDs.get(key) ?? null;
@@ -128,6 +147,29 @@ export class GeoTIFF {
     (geotiff as { overviews: Overview[] }).overviews = overviews;
 
     return geotiff;
+  }
+
+  static async fromArrayBuffer(input: ArrayBuffer): Promise<GeoTIFF> {
+    const source = new SourceMemory("memory://input.tif", input);
+    return await GeoTIFF.create(source);
+  }
+
+  static async fromUrl(
+    url: string | URL,
+    {
+      chunkSize = 32 * 1024,
+      cacheSize = 1024 * 1024 * 1024,
+    }: { chunkSize?: number; cacheSize?: number } = {},
+  ): Promise<GeoTIFF> {
+    // read files in chunks
+    const chunk = new SourceChunk({ size: chunkSize });
+    // 1MB cache for recently accessed chunks
+    const cache = new SourceCache({ size: cacheSize });
+
+    const source = new SourceHttp(url);
+    const view = new SourceView(source, [chunk, cache]);
+
+    return await GeoTIFF.create(view);
   }
 
   // ── Properties from the primary image ─────────────────────────────────

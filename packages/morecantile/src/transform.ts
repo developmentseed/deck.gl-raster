@@ -1,27 +1,5 @@
+import type { Affine } from "@developmentseed/affine";
 import type { TileMatrix } from "./types/index.js";
-
-/**
- * A 2-D affine transform as a six-element tuple in row-major order:
- *
- *   x_crs = a * col_px + b * row_px + c
- *   y_crs = d * col_px + e * row_px + f
- *
- * For the north-up, axis-aligned grids produced by OGC TileMatrices,
- * b and d are always zero, but the type does not enforce that.
- *
- * Note: the meaning of the two output axes depends on the
- * `orderedAxes` field of the parent TileMatrixSet, which these
- * helpers do not consult.  Axis 0 of pointOfOrigin is axis 0 of the
- * transform output, whatever that axis happens to be.
- */
-export type Affine = [
-  a: number,
-  b: number,
-  c: number,
-  d: number,
-  e: number,
-  f: number,
-];
 
 /**
  * Construct a single affine transform that maps pixel coordinates

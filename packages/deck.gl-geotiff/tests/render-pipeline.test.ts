@@ -1,8 +1,9 @@
+import { Photometric, SampleFormat } from "@cogeotiff/core";
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
-import { globals } from "geotiff";
+import type { GeoTIFF } from "@developmentseed/geotiff";
 import { describe, expect, it } from "vitest";
+import type { CachedTags } from "../../geotiff/dist/ifd";
 import { inferRenderPipeline } from "../src/geotiff/render-pipeline";
-import type { ImageFileDirectory } from "../src/geotiff/types";
 
 const MOCK_DEVICE = {
   createTexture: (x: any) => x,
@@ -11,21 +12,20 @@ const MOCK_RENDER_TILE_DATA = {
   texture: {},
 };
 
-// import {} from "@"
 type RelevantImageFileDirectory = Pick<
-  ImageFileDirectory,
-  | "BitsPerSample"
-  | "ColorMap"
-  | "GDAL_NODATA"
-  | "PhotometricInterpretation"
-  | "SampleFormat"
-  | "SamplesPerPixel"
+  CachedTags,
+  | "bitsPerSample"
+  | "colorMap"
+  | "nodata"
+  | "photometric"
+  | "sampleFormat"
+  | "samplesPerPixel"
 >;
 
 describe("land cover, single-band uint8", () => {
   const ifd: RelevantImageFileDirectory = {
-    BitsPerSample: new Uint16Array([8]),
-    ColorMap: new Uint16Array([
+    bitsPerSample: new Uint16Array([8]),
+    colorMap: new Uint16Array([
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17990, 53713, 0, 0, 0, 0, 0, 0, 0, 0,
       57054, 55769, 60395, 43947, 0, 0, 0, 0, 0, 0, 46003, 0, 0, 0, 0, 0, 0, 0,
       0, 0, 26728, 7196, 46517, 0, 0, 0, 0, 0, 0, 0, 0, 52428, 0, 0, 0, 0, 0, 0,
@@ -61,14 +61,17 @@ describe("land cover, single-band uint8", () => {
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ]),
-    GDAL_NODATA: "250\u0000",
-    PhotometricInterpretation: globals.photometricInterpretations.Palette,
-    SampleFormat: new Uint16Array([1]),
-    SamplesPerPixel: 1,
+    nodata: 250,
+    photometric: Photometric.Palette,
+    sampleFormat: [SampleFormat.Uint],
+    samplesPerPixel: 1,
   };
+  const geotiff = {
+    cachedTags: ifd,
+  } as unknown as GeoTIFF;
 
   const { getTileData: _, renderTile } = inferRenderPipeline(
-    ifd as ImageFileDirectory,
+    geotiff,
     MOCK_DEVICE as any,
   );
   const renderPipeline = renderTile(

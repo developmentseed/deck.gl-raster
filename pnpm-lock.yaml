@@ -57,18 +57,15 @@ importers:
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../../packages/deck.gl-raster
+      '@developmentseed/geotiff':
+        specifier: workspace:^
+        version: link:../../packages/geotiff
       '@luma.gl/core':
         specifier: 9.2.6
         version: 9.2.6
       '@luma.gl/shadertools':
         specifier: 9.2.6
         version: 9.2.6(@luma.gl/core@9.2.6)
-      geotiff:
-        specifier: ^2.1.3
-        version: 2.1.3
-      geotiff-geokeys-to-proj4:
-        specifier: ^2024.4.13
-        version: 2024.4.13
       maplibre-gl:
         specifier: ^5.17.0
         version: 5.17.0
@@ -243,6 +240,9 @@ importers:
 
   packages/deck.gl-geotiff:
     dependencies:
+      '@cogeotiff/core':
+        specifier: ^9.1.2
+        version: 9.1.2
       '@deck.gl/core':
         specifier: 9.2.7
         version: 9.2.7
@@ -255,9 +255,18 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: 9.2.7
         version: 9.2.7(@deck.gl/core@9.2.7)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))
+      '@developmentseed/affine':
+        specifier: workspace:^
+        version: link:../affine
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../deck.gl-raster
+      '@developmentseed/geotiff':
+        specifier: workspace:^
+        version: link:../geotiff
+      '@developmentseed/morecantile':
+        specifier: workspace:^
+        version: link:../morecantile
       '@developmentseed/raster-reproject':
         specifier: workspace:^
         version: link:../raster-reproject
@@ -267,12 +276,12 @@ importers:
       flatbush:
         specifier: ^4.5.0
         version: 4.5.0
-      geotiff:
-        specifier: 2.1.3
-        version: 2.1.3
       proj4:
         specifier: ^2.20.2
         version: 2.20.2
+      wkt-parser:
+        specifier: ^1.5.2
+        version: 1.5.2
     devDependencies:
       '@types/node':
         specifier: ^25.1.0
@@ -301,6 +310,12 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: 9.2.7
         version: 9.2.7(@deck.gl/core@9.2.7)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))
+      '@developmentseed/affine':
+        specifier: workspace:^
+        version: link:../affine
+      '@developmentseed/morecantile':
+        specifier: workspace:^
+        version: link:../morecantile
       '@developmentseed/raster-reproject':
         specifier: workspace:^
         version: link:../raster-reproject
@@ -363,6 +378,18 @@ importers:
 
   packages/geotiff:
     dependencies:
+      '@chunkd/middleware':
+        specifier: ^11.1.0
+        version: 11.1.0
+      '@chunkd/source':
+        specifier: ^11.1.0
+        version: 11.1.0
+      '@chunkd/source-http':
+        specifier: ^11.1.1
+        version: 11.1.1
+      '@chunkd/source-memory':
+        specifier: ^11.0.2
+        version: 11.0.2
       '@cogeotiff/core':
         specifier: ^9.1.2
         version: 9.1.2
@@ -396,6 +423,10 @@ importers:
         version: 1.5.2
 
   packages/morecantile:
+    dependencies:
+      '@developmentseed/affine':
+        specifier: workspace:^
+        version: link:../affine
     devDependencies:
       '@types/node':
         specifier: ^25.1.0
@@ -418,6 +449,9 @@ importers:
 
   packages/raster-reproject:
     devDependencies:
+      '@developmentseed/affine':
+        specifier: workspace:^
+        version: link:../affine
       '@types/node':
         specifier: ^25.1.0
         version: 25.1.0
@@ -588,8 +622,20 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@chunkd/middleware@11.1.0':
+    resolution: {integrity: sha512-xLEoDWDG3djf/plcsEsm0q6eAD3fFC/nJ6QV9234a+DE4iN8xuaqdHqtk9CRC877YfCpWZ1RDw3T62OUeqyWqQ==}
+    engines: {node: '>=16.0.0'}
+
   '@chunkd/source-file@11.0.1':
     resolution: {integrity: sha512-9DoA1djozuDpUklg0CRj/GBEJzvZeqwr1EIOTcEr3igDAf+UZ3y3lOgUaIWuNeATbwQ7Pdml2S6SLLAdAe45wQ==}
+    engines: {node: '>=16.0.0'}
+
+  '@chunkd/source-http@11.1.1':
+    resolution: {integrity: sha512-cJPPYQ8JB9y+zWvv6NKOLdOp+jXYejTuzLa9bCtwFunlKML7a4PuOZVAQp8xlke6+HOq4w6Dzednq7mhgzHKaA==}
+    engines: {node: '>=18.0.0'}
+
+  '@chunkd/source-memory@11.0.2':
+    resolution: {integrity: sha512-K2yJTvLv+Z49YKGz43Gb2Q1/6ARtnUUh9EgVgqKZS/Ce9ND9IXkgmfyrYShY2/d9iJ4B7Nq1LZIJubDBhoYtww==}
     engines: {node: '>=16.0.0'}
 
   '@chunkd/source@11.1.0':
@@ -2762,7 +2808,19 @@ snapshots:
   '@biomejs/cli-win32-x64@2.3.13':
     optional: true
 
+  '@chunkd/middleware@11.1.0':
+    dependencies:
+      '@chunkd/source': 11.1.0
+
   '@chunkd/source-file@11.0.1':
+    dependencies:
+      '@chunkd/source': 11.1.0
+
+  '@chunkd/source-http@11.1.1':
+    dependencies:
+      '@chunkd/source': 11.1.0
+
+  '@chunkd/source-memory@11.0.2':
     dependencies:
       '@chunkd/source': 11.1.0
 

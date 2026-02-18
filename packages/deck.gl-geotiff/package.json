@@ -46,11 +46,15 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@cogeotiff/core": "^9.1.2",
+    "@developmentseed/affine": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
+    "@developmentseed/geotiff": "workspace:^",
+    "@developmentseed/morecantile": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "flatbush": "^4.5.0",
-    "geotiff": "2.1.3",
-    "proj4": "^2.20.2"
+    "proj4": "^2.20.2",
+    "wkt-parser": "^1.5.2"
   },
   "peerDependencies": {
     "@deck.gl/core": "^9.2.7",

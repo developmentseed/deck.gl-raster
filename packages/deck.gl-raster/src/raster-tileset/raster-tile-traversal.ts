@@ -17,6 +17,8 @@
 
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport, assert } from "@deck.gl/core";
+import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
+import { xy_bounds } from "@developmentseed/morecantile";
 import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
   CullingVolume,
@@ -27,9 +29,9 @@ import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
 import type {
   Bounds,
+  CornerBounds,
+  ProjectionFunction,
   TileIndex,
-  TileMatrix,
-  TileMatrixSet,
   ZRange,
 } from "./types.js";
 
@@ -138,11 +140,22 @@ export class RasterTileNode {
   /** A cache of the children of this node. */
   private _children?: RasterTileNode[] | null;
 
-  constructor(x: number, y: number, z: number, metadata: TileMatrixSet) {
+  private projectTo3857: ProjectionFunction;
+
+  constructor(
+    x: number,
+    y: number,
+    z: number,
+    {
+      metadata,
+      projectTo3857,
+    }: { metadata: TileMatrixSet; projectTo3857: ProjectionFunction },
+  ) {
     this.x = x;
     this.y = y;
     this.z = z;
     this.metadata = metadata;
+    this.projectTo3857 = projectTo3857;
   }
 
   /** Get overview info for this tile's z level */
@@ -172,12 +185,9 @@ export class RasterTileNode {
       const childMatrix = this.metadata.tileMatrices[childZ]!;
 
       // Compute this tile's bounds in TMS' CRS
-      const parentBounds = computeProjectedTileBounds({
+      const parentBounds = computeProjectedTileBounds(parentMatrix, {
         x: this.x,
         y: this.y,
-        transform: parentMatrix.geotransform,
-        tileWidth: parentMatrix.tileWidth,
-        tileHeight: parentMatrix.tileHeight,
       });
 
       // Find overlapping child index range
@@ -188,9 +198,15 @@ export class RasterTileNode {
 
       const children: RasterTileNode[] = [];
 
+      const { metadata, projectTo3857 } = this;
       for (let y = minRow; y <= maxRow; y++) {
         for (let x = minCol; x <= maxCol; x++) {
-          children.push(new RasterTileNode(x, y, childZ, this.metadata));
+          children.push(
+            new RasterTileNode(x, y, childZ, {
+              metadata,
+              projectTo3857,
+            }),
+          );
         }
       }
 
@@ -364,12 +380,9 @@ export class RasterTileNode {
     const [minX, minY, maxX, maxY] = bounds;
     const [tileMinX, tileMinY, tileMaxX, tileMaxY] = commonSpaceBounds;
 
-    // console.log("bounds:", bounds);
-    // console.log("tile bounds:", commonSpaceBounds);
-
     const inside =
       tileMinX < maxX && tileMaxX > minX && tileMinY < maxY && tileMaxY > minY;
-    // console.log("insideBounds", inside);
+
     return inside;
   }
 
@@ -414,21 +427,17 @@ export class RasterTileNode {
     commonSpaceBounds: Bounds;
   } {
     const tileMatrix = this.tileMatrix;
-    const { tileWidth, tileHeight, geotransform } = tileMatrix;
     const [minZ, maxZ] = zRange;
 
-    const tileCrsBounds = computeProjectedTileBounds({
+    const tileCrsBounds = computeProjectedTileBounds(tileMatrix, {
       x: this.x,
       y: this.y,
-      transform: geotransform,
-      tileWidth,
-      tileHeight,
     });
 
     const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
       REF_POINTS_9,
       tileCrsBounds,
-      this.metadata.projectTo3857,
+      this.projectTo3857,
     );
 
     const commonSpacePositions = refPointsEPSG3857.map((xy) =>
@@ -476,60 +485,22 @@ export class RasterTileNode {
  *
  * @return      The bounding box as [minX, minY, maxX, maxY] in projected CRS.
  */
-function computeProjectedTileBounds({
-  x,
-  y,
-  transform,
-  tileWidth,
-  tileHeight,
-}: {
-  x: number;
-  y: number;
-  transform: [number, number, number, number, number, number];
-  tileWidth: number;
-  tileHeight: number;
-}): [number, number, number, number] {
-  // geotransform: [a, b, c, d, e, f] where:
-  // x_geo = a * col + b * row + c
-  // y_geo = d * col + e * row + f
-  const [a, b, c, d, e, f] = transform;
-
-  // Currently only support non-rotated/non-skewed transforms
-  if (b !== 0 || d !== 0) {
-    throw new Error(
-      `Rotated/skewed geotransforms not yet supported (b=${b}, d=${d}). ` +
-        `Only north-up, non-rotated rasters are currently supported.`,
-    );
-  }
-
-  // Calculate pixel coordinates for this tile's extent
-  const pixelMinCol = x * tileWidth;
-  const pixelMinRow = y * tileHeight;
-  const pixelMaxCol = (x + 1) * tileWidth;
-  const pixelMaxRow = (y + 1) * tileHeight;
-
-  // Convert pixel coordinates to geographic coordinates using geotransform
-  const minX = a * pixelMinCol + b * pixelMinRow + c;
-  const minY = d * pixelMinCol + e * pixelMinRow + f;
-
-  const maxX = a * pixelMaxCol + b * pixelMaxRow + c;
-  const maxY = d * pixelMaxCol + e * pixelMaxRow + f;
-
-  // Note: often `e` in the geotransform is negative (for a north up image when
-  // the origin is in the **top** left, then increasing the pixel row means
-  // going down in geospatial space), so maxY < minY
-  //
-  // We want to always return an axis-aligned bbox in the form of
-  // [minX, minY, maxX, maxY], so we need to swap if necessary.
-  //
-  // For now, we just use Math.min/Math.max to ensure correct ordering, but we
-  // could remove the min/max calls if we assume that `a` and `e` are always
-  // positive/negative respectively.
+function computeProjectedTileBounds(
+  tileMatrix: TileMatrix,
+  {
+    x,
+    y,
+  }: {
+    x: number;
+    y: number;
+  },
+): [number, number, number, number] {
+  const bounds = xy_bounds(tileMatrix, { x, y });
   return [
-    Math.min(minX, maxX),
-    Math.min(minY, maxY),
-    Math.max(minX, maxX),
-    Math.max(minY, maxY),
+    bounds.lowerLeft[0],
+    bounds.lowerLeft[1],
+    bounds.upperRight[0],
+    bounds.upperRight[1],
   ];
 }
 
@@ -546,7 +517,7 @@ function computeProjectedTileBounds({
 function sampleReferencePointsInEPSG3857(
   refPoints: [number, number][],
   tileBounds: [number, number, number, number],
-  projectTo3857: (xy: [number, number]) => [number, number],
+  projectTo3857: ProjectionFunction,
 ): [number, number][] {
   const [minX, minY, maxX, maxY] = tileBounds;
   const refPointPositions: [number, number][] = [];
@@ -556,7 +527,7 @@ function sampleReferencePointsInEPSG3857(
     const geoY = minY + relY * (maxY - minY);
 
     // Reproject to Web Mercator (EPSG 3857)
-    const projected = projectTo3857([geoX, geoY]);
+    const projected = projectTo3857(geoX, geoY);
     refPointPositions.push(projected);
   }
 
@@ -675,9 +646,11 @@ export function getTileIndices(
     viewport: Viewport;
     maxZ: number;
     zRange: ZRange | null;
+    projectTo3857: ProjectionFunction;
+    wgs84Bounds: CornerBounds;
   },
 ): TileIndex[] {
-  const { viewport, maxZ, zRange } = opts;
+  const { viewport, maxZ, zRange, wgs84Bounds } = opts;
 
   // Only define `project` function for Globe viewports, same as upstream
   const project: ((xyz: number[]) => number[]) | null =
@@ -723,7 +696,7 @@ export function getTileIndices(
   // minZ to 0
   const minZ = 0;
 
-  const { lowerLeft, upperRight } = metadata.wgsBounds;
+  const { lowerLeft, upperRight } = wgs84Bounds;
   const [minLng, minLat] = lowerLeft;
   const [maxLng, maxLat] = upperRight;
   const bottomLeft = lngLatToWorld([minLng, minLat]);
@@ -744,7 +717,12 @@ export function getTileIndices(
   const roots: RasterTileNode[] = [];
   for (let y = 0; y < rootMatrix.matrixHeight; y++) {
     for (let x = 0; x < rootMatrix.matrixWidth; x++) {
-      roots.push(new RasterTileNode(x, y, 0, metadata));
+      roots.push(
+        new RasterTileNode(x, y, 0, {
+          metadata,
+          projectTo3857: opts.projectTo3857,
+        }),
+      );
     }
   }
 
@@ -758,9 +736,6 @@ export function getTileIndices(
     maxZ,
     bounds,
   };
-
-  // console.log("traversalParams", traversalParams);
-  // console.log("roots", roots);
 
   for (const root of roots) {
     root.update(traversalParams);
@@ -799,19 +774,6 @@ function getMetersPerPixelAtBoundingVolume(
   const [_lng, lat] = worldToLngLat(boundingVolume.center);
   return getMetersPerPixel(lat, zoom);
 }
-
-// function getScreenMetersPerPixel(viewport: Viewport, center: Vector3): number {
-//   const lng
-//   const p0 = viewport.projectPosition(center);
-//   const p1 = viewport.projectPosition([
-//     centerArray[0]! + 1,
-//     centerArray[1]!,
-//     centerArray[2]!,
-//   ]);
-
-//   const pixelsPerMeter = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-//   return 1 / pixelsPerMeter;
-// }
 
 /**
  * Exports only for use in testing

@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./affine": {
-      "types": "./dist/affine/index.d.ts",
-      "default": "./dist/affine/index.js"
     }
   },
   "sideEffects": false,
@@ -44,6 +40,7 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
+    "@developmentseed/affine": "workspace:^",
     "@types/node": "^25.1.0",
     "jsdom": "^27.4.0",
     "proj4": "^2.20.2",

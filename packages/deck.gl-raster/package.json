@@ -60,6 +60,8 @@
     "@luma.gl/shadertools": "^9.2.7"
   },
   "dependencies": {
+    "@developmentseed/affine": "workspace:^",
+    "@developmentseed/morecantile": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "@math.gl/core": "^4.1.0",
     "@math.gl/culling": "^4.1.0",
