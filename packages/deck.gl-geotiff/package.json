@@ -46,7 +46,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@cogeotiff/core": "^9.1.2",
+    "@cogeotiff/core": "^9.2.0",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/geotiff": "workspace:^",

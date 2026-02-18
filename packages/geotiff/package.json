@@ -50,7 +50,7 @@
     "@chunkd/source": "^11.1.0",
     "@chunkd/source-http": "^11.1.1",
     "@chunkd/source-memory": "^11.0.2",
-    "@cogeotiff/core": "^9.1.2",
+    "@cogeotiff/core": "^9.2.0",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/morecantile": "workspace:^",
     "uuid": "^13.0.0"

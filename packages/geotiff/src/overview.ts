@@ -70,10 +70,12 @@ export class Overview {
   }
 
   /** Fetch a single tile from the full-resolution image. */
-  // TODO: support AbortSignal
-  // https://github.com/blacha/cogeotiff/issues/1397
-  async fetchTile(x: number, y: number): Promise<Tile> {
-    return await fetchTile(this, x, y);
+  async fetchTile(
+    x: number,
+    y: number,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<Tile> {
+    return await fetchTile(this, x, y, options);
   }
 
   /**
