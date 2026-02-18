@@ -9,7 +9,7 @@ export interface CachedTags {
   nodata: number | null;
   photometric: TiffTagType[TiffTag.Photometric];
   sampleFormat: TiffTagType[TiffTag.SampleFormat];
-  samplesPerPixel: number; // TiffTagType[TiffTag.SamplesPerPixel];
+  samplesPerPixel: TiffTagType[TiffTag.SamplesPerPixel];
 }
 
 /** Pre-fetch TIFF tags for easier visualization. */
@@ -52,8 +52,7 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     // Uint is the default sample format according to the spec
     // https://web.archive.org/web/20240329145340/https://www.awaresystems.be/imaging/tiff/tifftags/sampleformat.html
     sampleFormat: sampleFormat ?? [SampleFormat.Uint],
-    // Waiting for release with https://github.com/blacha/cogeotiff/pull/1394
-    samplesPerPixel: samplesPerPixel as number,
+    samplesPerPixel,
   };
 }
 
