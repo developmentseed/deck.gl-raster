@@ -221,7 +221,7 @@ export class GeoTIFF {
 
   /** Number of bands (samples per pixel). */
   get count(): number {
-    return (this.image.value(TiffTag.SamplesPerPixel) as number) ?? 1;
+    return this.image.value(TiffTag.SamplesPerPixel) ?? 1;
   }
 
   /** Bounding box [minX, minY, maxX, maxY] in the CRS. */

@@ -14,7 +14,7 @@ describe("decode", () => {
     const sampleFormat =
       (image.value(TiffTag.SampleFormat) as SampleFormat[] | null)?.[0] ??
       SampleFormat.Uint;
-    const samplesPerPixel = image.value(TiffTag.SamplesPerPixel) as number;
+    const samplesPerPixel = image.value(TiffTag.SamplesPerPixel) ?? 1;
 
     const result = await decode(tile!.bytes, tile!.compression, {
       sampleFormat,
@@ -43,7 +43,7 @@ describe("decode", () => {
     const sampleFormat =
       (image.value(TiffTag.SampleFormat) as SampleFormat[] | null)?.[0] ??
       SampleFormat.Uint;
-    const samplesPerPixel = image.value(TiffTag.SamplesPerPixel) as number;
+    const samplesPerPixel = image.value(TiffTag.SamplesPerPixel) ?? 1;
 
     const result = await decode(tile!.bytes, tile!.compression, {
       sampleFormat,
