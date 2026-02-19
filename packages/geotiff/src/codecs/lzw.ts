@@ -1,5 +1,5 @@
 import { decompress } from "@developmentseed/lzw-tiff-decoder";
-import type { DecoderMetadata } from "../decode/api.js";
+import type { DecoderMetadata } from "../decode.js";
 
 export async function decode(
   bytes: ArrayBuffer,

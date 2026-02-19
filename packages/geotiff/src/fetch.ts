@@ -2,7 +2,7 @@ import type { SampleFormat, TiffImage } from "@cogeotiff/core";
 import { TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
-import { decode } from "./decode/api";
+import { decode } from "./decode.js";
 import type { CachedTags } from "./ifd.js";
 import type { Tile } from "./tile";
 import type { HasTransform } from "./transform";

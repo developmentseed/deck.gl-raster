@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decode } from "../src/decode/api.js";
+import { decode } from "../src/decode.js";
 import { loadGeoTIFF } from "./helpers.js";
 
 describe("decode", () => {
@@ -9,8 +9,13 @@ describe("decode", () => {
     const tile = await image.getTile(0, 0);
     expect(tile).not.toBeNull();
 
-    const { bitsPerSample, sampleFormat, samplesPerPixel, predictor, planarConfiguration } =
-      tiff.cachedTags;
+    const {
+      bitsPerSample,
+      sampleFormat,
+      samplesPerPixel,
+      predictor,
+      planarConfiguration,
+    } = tiff.cachedTags;
     const { width, height } = image.tileSize;
 
     const result = await decode(tile!.bytes, tile!.compression, {
@@ -39,8 +44,13 @@ describe("decode", () => {
     const tile = await image.getTile(0, 0);
     expect(tile).not.toBeNull();
 
-    const { bitsPerSample, sampleFormat, samplesPerPixel, predictor, planarConfiguration } =
-      tiff.cachedTags;
+    const {
+      bitsPerSample,
+      sampleFormat,
+      samplesPerPixel,
+      predictor,
+      planarConfiguration,
+    } = tiff.cachedTags;
     const { width, height } = image.tileSize;
 
     const result = await decode(tile!.bytes, tile!.compression, {
