@@ -1,6 +1,7 @@
 import type { TiffImage, TiffTagGeoType, TiffTagType } from "@cogeotiff/core";
 import { SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
 
+// TODO: use upstream: https://github.com/blacha/cogeotiff/pull/1412
 export enum Predictor {
   None = 1,
   /** Horizontal differencing */
