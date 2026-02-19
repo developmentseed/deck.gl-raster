@@ -12,5 +12,5 @@ export async function decode(
   return result.buffer.slice(
     result.byteOffset,
     result.byteOffset + result.byteLength,
-  );
+  ) as ArrayBuffer;
 }
