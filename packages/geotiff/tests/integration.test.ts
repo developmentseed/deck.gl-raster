@@ -27,6 +27,10 @@ const FIXTURES = [
   // float32_1band_lerc_deflate_block32: geotiff.js does not support LERC_DEFLATE
 ] as const;
 
+// The unaligned fixture: 265×266, 128×128 tiles — right edge is 9px, bottom is 10px.
+const UNALIGNED_EDGE_W = 265 % 128; // 9
+const UNALIGNED_EDGE_H = 266 % 128; // 10
+
 /** Open the same file with geotiff.js. */
 async function loadGeoTiffJs(
   name: string,
@@ -117,4 +121,38 @@ describe("integration vs geotiff.js", () => {
       });
     });
   }
+});
+
+describe("boundless=false edge tile pixel values", () => {
+  let ours: GeoTIFF;
+  let ref: GeotiffJs;
+  let refImage: GeoTIFFImage;
+
+  beforeAll(async () => {
+    ours = await loadGeoTIFF("uint8_1band_deflate_block128_unaligned", "rasterio");
+    ref = await loadGeoTiffJs("uint8_1band_deflate_block128_unaligned", "rasterio");
+    refImage = await ref.getImage();
+  });
+
+  afterAll(() => ref.close());
+
+  it("corner tile (2,2) pixel values match geotiff.js readRasters window", async () => {
+    const tile = await ours.fetchTile(2, 2, { boundless: false });
+    const { array } = tile;
+
+    expect(array.width).toBe(UNALIGNED_EDGE_W);
+    expect(array.height).toBe(UNALIGNED_EDGE_H);
+
+    const left = 2 * ours.tileWidth;
+    const top = 2 * ours.tileHeight;
+    const right = left + UNALIGNED_EDGE_W;
+    const bottom = top + UNALIGNED_EDGE_H;
+
+    const refData = await refImage.readRasters({ window: [left, top, right, bottom] });
+    const oursBandSep = toBandSeparate(array);
+
+    for (let b = 0; b < ours.count; b++) {
+      expect(oursBandSep.bands[b]).toEqual(refData[b] as ArrayLike<number>);
+    }
+  });
 });

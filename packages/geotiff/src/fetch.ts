@@ -1,6 +1,7 @@
 import type { SampleFormat, TiffImage } from "@cogeotiff/core";
 import { TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
+import type { RasterArray } from "./array.js";
 import type { ProjJson } from "./crs.js";
 import { decode } from "./decode.js";
 import type { CachedTags } from "./ifd.js";
@@ -74,7 +75,7 @@ export async function fetchTile(
     planarConfiguration,
   });
 
-  const array = {
+  const array: RasterArray = {
     ...decodedPixels,
     count: samplesPerPixel,
     height: self.tileHeight,
@@ -88,7 +89,82 @@ export async function fetchTile(
   return {
     x,
     y,
-    array,
+    array:
+      options.boundless === false
+        ? clipToImageBounds(self, x, y, array)
+        : array,
+  };
+}
+
+/**
+ * Clip a decoded tile array to the valid image bounds.
+ *
+ * Edge tiles in a COG are always encoded at the full tile size, with the
+ * out-of-bounds region zero-padded. When `boundless=false` is requested, this
+ * function copies only the valid pixel sub-rectangle into a new typed array,
+ * returning a `RasterArray` whose `width`/`height` match the actual image
+ * content rather than the tile dimensions.
+ *
+ * Interior tiles (where the tile fits entirely within the image) are returned
+ * unchanged.
+ */
+function clipToImageBounds(
+  self: HasTiffReference,
+  x: number,
+  y: number,
+  array: RasterArray,
+): RasterArray {
+  const { width: clippedWidth, height: clippedHeight } =
+    self.image.getTileBounds(x, y);
+
+  // Interior tile — nothing to clip.
+  if (clippedWidth === self.tileWidth && clippedHeight === self.tileHeight) {
+    return array;
+  }
+
+  if (array.layout === "pixel-interleaved") {
+    const { count, data } = array;
+    const Ctor = data.constructor as new (n: number) => typeof data;
+    const clipped = new Ctor(clippedWidth * clippedHeight * count);
+    for (let r = 0; r < clippedHeight; r++) {
+      const srcOffset = r * self.tileWidth * count;
+      const dstOffset = r * clippedWidth * count;
+      clipped.set(
+        data.subarray(srcOffset, srcOffset + clippedWidth * count),
+        dstOffset,
+      );
+    }
+    return {
+      ...array,
+      width: clippedWidth,
+      height: clippedHeight,
+      data: clipped,
+    };
+  }
+
+  // band-separate
+  const { bands } = array;
+  const Ctor = bands[0]!.constructor as new (
+    n: number,
+  ) => (typeof bands)[number];
+  const clippedBands = bands.map((band) => {
+    const clipped = new Ctor(clippedWidth * clippedHeight);
+    for (let r = 0; r < clippedHeight; r++) {
+      const srcOffset = r * self.tileWidth;
+      const dstOffset = r * clippedWidth;
+      clipped.set(
+        band.subarray(srcOffset, srcOffset + clippedWidth),
+        dstOffset,
+      );
+    }
+    return clipped;
+  });
+
+  return {
+    ...array,
+    width: clippedWidth,
+    height: clippedHeight,
+    bands: clippedBands,
   };
 }
 
