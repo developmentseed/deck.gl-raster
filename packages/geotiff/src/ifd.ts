@@ -1,6 +1,14 @@
 import type { TiffImage, TiffTagGeoType, TiffTagType } from "@cogeotiff/core";
 import { SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
 
+export enum Predictor {
+  None = 1,
+  /** Horizontal differencing */
+  Horizontal = 2,
+  /** Floating point */
+  FloatingPoint = 3,
+}
+
 /** Subset of TIFF tags that we pre-fetch for easier visualization. */
 export interface CachedTags {
   bitsPerSample: Uint16Array;
@@ -8,6 +16,9 @@ export interface CachedTags {
   compression: TiffTagType[TiffTag.Compression];
   nodata: number | null;
   photometric: TiffTagType[TiffTag.Photometric];
+  /** https://web.archive.org/web/20240329145322/https://www.awaresystems.be/imaging/tiff/tifftags/photometricinterpretation.html */
+  planarConfiguration: TiffTagType[TiffTag.PlanarConfiguration];
+  predictor: Predictor;
   sampleFormat: TiffTagType[TiffTag.SampleFormat];
   samplesPerPixel: TiffTagType[TiffTag.SamplesPerPixel];
 }
@@ -22,25 +33,42 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
 
   const nodata = image.noData;
 
-  const [bitsPerSample, colorMap, photometric, sampleFormat, samplesPerPixel] =
-    await Promise.all([
-      image.fetch(TiffTag.BitsPerSample),
-      image.fetch(TiffTag.ColorMap),
-      image.fetch(TiffTag.Photometric),
-      image.fetch(TiffTag.SampleFormat),
-      image.fetch(TiffTag.SamplesPerPixel),
-    ]);
+  const [
+    bitsPerSample,
+    colorMap,
+    photometric,
+    planarConfiguration,
+    predictor,
+    sampleFormat,
+    samplesPerPixel,
+  ] = await Promise.all([
+    image.fetch(TiffTag.BitsPerSample),
+    image.fetch(TiffTag.ColorMap),
+    image.fetch(TiffTag.Photometric),
+    image.fetch(TiffTag.PlanarConfiguration),
+    image.fetch(TiffTag.Predictor),
+    image.fetch(TiffTag.SampleFormat),
+    image.fetch(TiffTag.SamplesPerPixel),
+  ]);
+
+  const missingTag: (tagName: string) => never = (tagName: string) => {
+    throw new Error(`${tagName} tag should always exist.`);
+  };
 
   if (bitsPerSample === null) {
-    throw new Error("BitsPerSample tag should always exist.");
+    missingTag("BitsPerSample");
   }
 
   if (samplesPerPixel === null) {
-    throw new Error("SamplesPerPixel tag should always exist.");
+    missingTag("SamplesPerPixel");
+  }
+
+  if (planarConfiguration === null) {
+    missingTag("PlanarConfiguration");
   }
 
   if (photometric === null) {
-    throw new Error("Photometric tag should always exist.");
+    missingTag("Photometric");
   }
 
   return {
@@ -49,6 +77,8 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     compression,
     nodata,
     photometric,
+    planarConfiguration,
+    predictor: (predictor as Predictor) ?? Predictor.None,
     // Uint is the default sample format according to the spec
     // https://web.archive.org/web/20240329145340/https://www.awaresystems.be/imaging/tiff/tifftags/sampleformat.html
     sampleFormat: sampleFormat ?? [SampleFormat.Uint],
