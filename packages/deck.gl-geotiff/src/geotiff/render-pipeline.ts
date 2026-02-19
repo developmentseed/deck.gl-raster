@@ -6,7 +6,6 @@ import {
   CreateTexture,
   cieLabToRGB,
   FilterNoDataVal,
-  YCbCrToRGB,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
@@ -212,9 +211,10 @@ function photometricInterpretationToRGB(
         module: CMYKToRGB,
       };
     case Photometric.Ycbcr:
-      return {
-        module: YCbCrToRGB,
-      };
+      // @developmentseed/geotiff currently uses canvas to parse JPEG-compressed
+      // YCbCr images, which means the YCbCr->RGB conversion is already done by
+      // the browser's image decoder
+      return null;
     case Photometric.Cielab:
       return {
         module: cieLabToRGB,
