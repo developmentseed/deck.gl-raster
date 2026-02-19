@@ -9,7 +9,10 @@ import { Predictor } from "../ifd.js";
  */
 
 /** Undo horizontal differencing for integer samples (predictor 2). */
-function decodeRowAcc(row: Uint8Array | Uint16Array | Uint32Array, stride: number): void {
+function decodeRowAcc(
+  row: Uint8Array | Uint16Array | Uint32Array,
+  stride: number,
+): void {
   const r = row as Uint32Array;
   let offset = 0;
   let length = row.length - stride;
@@ -23,7 +26,11 @@ function decodeRowAcc(row: Uint8Array | Uint16Array | Uint32Array, stride: numbe
 }
 
 /** Undo floating-point horizontal differencing (predictor 3). */
-function decodeRowFloatingPoint(row: Uint8Array, stride: number, bytesPerSample: number): void {
+function decodeRowFloatingPoint(
+  row: Uint8Array,
+  stride: number,
+  bytesPerSample: number,
+): void {
   let index = 0;
   let count = row.length;
   const wc = count / bytesPerSample;
@@ -69,7 +76,8 @@ export function applyPredictor(
   }
 
   const bytesPerSample = bitsPerSample / 8;
-  const stride = planarConfiguration === PlanarConfiguration.Separate ? 1 : samplesPerPixel;
+  const stride =
+    planarConfiguration === PlanarConfiguration.Separate ? 1 : samplesPerPixel;
 
   for (let i = 0; i < height; i++) {
     const byteOffset = i * stride * width * bytesPerSample;
@@ -91,11 +99,17 @@ export function applyPredictor(
           row = new Uint32Array(block, byteOffset, length);
           break;
         default:
-          throw new Error(`Predictor 2 not supported for ${bitsPerSample} bits per sample.`);
+          throw new Error(
+            `Predictor 2 not supported for ${bitsPerSample} bits per sample.`,
+          );
       }
       decodeRowAcc(row, stride);
     } else if (predictor === Predictor.FloatingPoint) {
-      const row = new Uint8Array(block, byteOffset, stride * width * bytesPerSample);
+      const row = new Uint8Array(
+        block,
+        byteOffset,
+        stride * width * bytesPerSample,
+      );
       decodeRowFloatingPoint(row, stride, bytesPerSample);
     }
   }
