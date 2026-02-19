@@ -406,6 +406,9 @@ importers:
       '@chunkd/source-file':
         specifier: ^11.0.1
         version: 11.0.1
+      '@developmentseed/lzw-tiff-decoder':
+        specifier: ^0.2.1
+        version: 0.2.1
       '@types/node':
         specifier: ^25.1.0
         version: 25.1.0
@@ -726,6 +729,9 @@ packages:
       '@luma.gl/engine': 9.2.6
       '@luma.gl/gltf': 9.2.6
       '@luma.gl/shadertools': 9.2.6
+
+  '@developmentseed/lzw-tiff-decoder@0.2.1':
+    resolution: {integrity: sha512-KXHXy2re5dMfBDe1TY1Wy8Avo1BbYLcSyO5+IJncCnZ64SJNLYW6QSbBfb/f67ewUD3hALlB7DnlHmv8t/EwVQ==}
 
   '@esbuild/aix-ppc64@0.27.2':
     resolution: {integrity: sha512-GZMB+a0mOMZs4MpDbj8RJp4cw+w1WV5NYD6xzgvzUJ5Ek2jerwfO2eADyI6ExDSUED+1X8aMbegahsJi+8mgpw==}
@@ -2944,6 +2950,8 @@ snapshots:
       '@luma.gl/shadertools': 9.2.6(@luma.gl/core@9.2.6)
     transitivePeerDependencies:
       - '@loaders.gl/core'
+
+  '@developmentseed/lzw-tiff-decoder@0.2.1': {}
 
   '@esbuild/aix-ppc64@0.27.2':
     optional: true
