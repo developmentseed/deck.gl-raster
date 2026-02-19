@@ -1,4 +1,4 @@
-import type { DecodedPixels, DecoderMetadata } from "../decode/api.js";
+import type { DecodedPixels, DecoderMetadata } from "../decode.js";
 
 // TODO: in the future, have an API that returns an ImageBitmap directly from
 // the decoder, to avoid copying pixel data from GPU -> CPU memory

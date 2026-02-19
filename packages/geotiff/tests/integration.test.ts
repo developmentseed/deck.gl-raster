@@ -20,6 +20,10 @@ const FIXTURES = [
   { variant: "rasterio", name: "uint8_rgb_deflate_block64_cog" },
   { variant: "rasterio", name: "uint8_1band_deflate_block128_unaligned" },
   { variant: "rasterio", name: "float32_1band_lerc_block32" },
+  { variant: "rasterio", name: "uint16_1band_lzw_block128_predictor2" },
+  { variant: "rasterio", name: "uint8_1band_lzw_block64_predictor2" },
+  { variant: "nlcd", name: "nlcd_landcover" },
+  // sydney_airport_GEC: no ModelTiepoint/ModelPixelScale/ModelTransformation — geo transform stored as GCPs, not readable by @cogeotiff/core
   // float32_1band_lerc_deflate_block32: geotiff.js does not support LERC_DEFLATE
 ] as const;
 

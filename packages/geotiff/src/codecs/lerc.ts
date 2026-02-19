@@ -1,4 +1,4 @@
-import type { DecodedPixels } from "../decode/api.js";
+import type { DecodedPixels } from "../decode.js";
 
 let wasmInitialized = false;
 

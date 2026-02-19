@@ -4,7 +4,7 @@ import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { fetchTile } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
-import type { GeoKeyDirectory } from "./ifd.js";
+import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import type { Tile } from "./tile.js";
 import { index, xy } from "./transform.js";
 
@@ -14,6 +14,8 @@ import { index, xy } from "./transform.js";
  * corresponding mask IFD (if any).
  */
 export class Overview {
+  readonly cachedTags: CachedTags;
+
   /** A reference to the parent GeoTIFF object. */
   readonly geotiff: GeoTIFF;
 
@@ -31,11 +33,13 @@ export class Overview {
     gkd: GeoKeyDirectory,
     image: TiffImage,
     maskImage: TiffImage | null,
+    cachedTags: CachedTags,
   ) {
     this.geotiff = geotiff;
     this.gkd = gkd;
     this.image = image;
     this.maskImage = maskImage;
+    this.cachedTags = cachedTags;
   }
 
   get crs(): number | ProjJson {

@@ -140,7 +140,7 @@ export class GeoTIFF {
 
     const overviews: Overview[] = dataEntries.map(([key, dataImage]) => {
       const maskImage = maskIFDs.get(key) ?? null;
-      return new Overview(geotiff, gkd, dataImage, maskImage);
+      return new Overview(geotiff, gkd, dataImage, maskImage, cachedTags);
     });
 
     // Mutate the readonly field — safe here because we're still in the factory.

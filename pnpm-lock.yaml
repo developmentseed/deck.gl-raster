@@ -396,6 +396,9 @@ importers:
       '@developmentseed/affine':
         specifier: workspace:^
         version: link:../affine
+      '@developmentseed/lzw-tiff-decoder':
+        specifier: ^0.2.2
+        version: 0.2.2
       '@developmentseed/morecantile':
         specifier: workspace:^
         version: link:../morecantile
@@ -726,6 +729,9 @@ packages:
       '@luma.gl/engine': 9.2.6
       '@luma.gl/gltf': 9.2.6
       '@luma.gl/shadertools': 9.2.6
+
+  '@developmentseed/lzw-tiff-decoder@0.2.2':
+    resolution: {integrity: sha512-bsBIdV1LyqcrtnYtIYu3C/297X2wxeYkmmhHzR02OOX823sGxT8GLGdenTmwoXvNWkozk3b+ptXtJeSUmNPaTA==}
 
   '@esbuild/aix-ppc64@0.27.2':
     resolution: {integrity: sha512-GZMB+a0mOMZs4MpDbj8RJp4cw+w1WV5NYD6xzgvzUJ5Ek2jerwfO2eADyI6ExDSUED+1X8aMbegahsJi+8mgpw==}
@@ -2944,6 +2950,8 @@ snapshots:
       '@luma.gl/shadertools': 9.2.6(@luma.gl/core@9.2.6)
     transitivePeerDependencies:
       - '@loaders.gl/core'
+
+  '@developmentseed/lzw-tiff-decoder@0.2.2': {}
 
   '@esbuild/aix-ppc64@0.27.2':
     optional: true

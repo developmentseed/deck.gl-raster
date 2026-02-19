@@ -1,6 +1,9 @@
+import type { PlanarConfiguration } from "@cogeotiff/core";
 import { Compression, SampleFormat } from "@cogeotiff/core";
-import type { RasterTypedArray } from "../array.js";
-import { decode as decodeViaCanvas } from "../codecs/canvas.js";
+import type { RasterTypedArray } from "./array.js";
+import { decode as decodeViaCanvas } from "./codecs/canvas.js";
+import { applyPredictor } from "./codecs/predictor.js";
+import type { Predictor } from "./ifd.js";
 
 /** The result of a decoding process */
 export type DecodedPixels =
@@ -12,6 +15,10 @@ export type DecoderMetadata = {
   sampleFormat: SampleFormat;
   bitsPerSample: number;
   samplesPerPixel: number;
+  width: number;
+  height: number;
+  predictor: Predictor;
+  planarConfiguration: PlanarConfiguration;
 };
 
 /**
@@ -32,10 +39,13 @@ export const registry = new Map<Compression, () => Promise<Decoder>>();
 
 registry.set(Compression.None, () => Promise.resolve(decodeUncompressed));
 registry.set(Compression.Deflate, () =>
-  import("../codecs/deflate.js").then((m) => m.decode),
+  import("./codecs/deflate.js").then((m) => m.decode),
 );
 registry.set(Compression.DeflateOther, () =>
-  import("../codecs/deflate.js").then((m) => m.decode),
+  import("./codecs/deflate.js").then((m) => m.decode),
+);
+registry.set(Compression.Lzw, () =>
+  import("./codecs/lzw.js").then((m) => m.decode),
 );
 // registry.set(Compression.Zstd, () =>
 //   import("../codecs/zstd.js").then((m) => m.decode),
@@ -50,7 +60,7 @@ registry.set(Compression.Jpeg, () => Promise.resolve(decodeViaCanvas));
 registry.set(Compression.Jpeg6, () => Promise.resolve(decodeViaCanvas));
 registry.set(Compression.Webp, () => Promise.resolve(decodeViaCanvas));
 registry.set(Compression.Lerc, () =>
-  import("../codecs/lerc.js").then((m) => m.decode),
+  import("./codecs/lerc.js").then((m) => m.decode),
 );
 
 /**
@@ -70,9 +80,26 @@ export async function decode(
   const result = await decoder(bytes, metadata);
 
   if (result instanceof ArrayBuffer) {
+    const {
+      predictor,
+      width,
+      height,
+      bitsPerSample,
+      samplesPerPixel,
+      planarConfiguration,
+    } = metadata;
+    const predicted = applyPredictor(
+      result,
+      predictor,
+      width,
+      height,
+      bitsPerSample,
+      samplesPerPixel,
+      planarConfiguration,
+    );
     return {
       layout: "pixel-interleaved",
-      data: toTypedArray(result, metadata),
+      data: toTypedArray(predicted, metadata),
     };
   }
 

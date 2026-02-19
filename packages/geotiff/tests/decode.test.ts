@@ -1,6 +1,5 @@
-import { SampleFormat, TiffTag } from "@cogeotiff/core";
 import { describe, expect, it } from "vitest";
-import { decode } from "../src/decode/api.js";
+import { decode } from "../src/decode.js";
 import { loadGeoTIFF } from "./helpers.js";
 
 describe("decode", () => {
@@ -10,20 +9,26 @@ describe("decode", () => {
     const tile = await image.getTile(0, 0);
     expect(tile).not.toBeNull();
 
-    const bitsPerSample = (image.value(TiffTag.BitsPerSample) as number[])[0]!;
-    const sampleFormat =
-      (image.value(TiffTag.SampleFormat) as SampleFormat[] | null)?.[0] ??
-      SampleFormat.Uint;
-    const samplesPerPixel = image.value(TiffTag.SamplesPerPixel) ?? 1;
+    const {
+      bitsPerSample,
+      sampleFormat,
+      samplesPerPixel,
+      predictor,
+      planarConfiguration,
+    } = tiff.cachedTags;
+    const { width, height } = image.tileSize;
 
     const result = await decode(tile!.bytes, tile!.compression, {
-      sampleFormat,
-      bitsPerSample,
+      sampleFormat: sampleFormat[0]!,
+      bitsPerSample: bitsPerSample[0]!,
       samplesPerPixel,
+      width,
+      height,
+      predictor,
+      planarConfiguration,
     });
 
-    const { width, height } = image.tileSize;
-    const bytesPerSample = bitsPerSample / 8;
+    const bytesPerSample = bitsPerSample[0]! / 8;
     const expectedBytes = width * height * samplesPerPixel * bytesPerSample;
 
     expect(result.layout).toBe("pixel-interleaved");
@@ -39,20 +44,26 @@ describe("decode", () => {
     const tile = await image.getTile(0, 0);
     expect(tile).not.toBeNull();
 
-    const bitsPerSample = (image.value(TiffTag.BitsPerSample) as number[])[0]!;
-    const sampleFormat =
-      (image.value(TiffTag.SampleFormat) as SampleFormat[] | null)?.[0] ??
-      SampleFormat.Uint;
-    const samplesPerPixel = image.value(TiffTag.SamplesPerPixel) ?? 1;
+    const {
+      bitsPerSample,
+      sampleFormat,
+      samplesPerPixel,
+      predictor,
+      planarConfiguration,
+    } = tiff.cachedTags;
+    const { width, height } = image.tileSize;
 
     const result = await decode(tile!.bytes, tile!.compression, {
-      sampleFormat,
-      bitsPerSample,
+      sampleFormat: sampleFormat[0]!,
+      bitsPerSample: bitsPerSample[0]!,
       samplesPerPixel,
+      width,
+      height,
+      predictor,
+      planarConfiguration,
     });
 
-    const { width, height } = image.tileSize;
-    const bytesPerSample = bitsPerSample / 8;
+    const bytesPerSample = bitsPerSample[0]! / 8;
     const expectedBytesPerBand = width * height * bytesPerSample;
 
     expect(result.layout).toBe("band-separate");
