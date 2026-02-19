@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0-beta.2](https://github.com/developmentseed/deck.gl-raster/compare/geotiff-v0.3.0-beta.1...geotiff-v0.3.0-beta.2) (2026-02-19)
+
+
+### Features
+
+* feat: Add AbortSignal support to GeoTIFF.fetchTile ([9d133b8](https://github.com/developmentseed/deck.gl-raster/commit/9d133b801f181470357c39621dcac68508e4a6fe))
+
 ## 0.3.0-beta.1 (2026-02-18)
 
 
