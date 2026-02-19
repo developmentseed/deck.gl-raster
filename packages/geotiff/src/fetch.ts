@@ -34,7 +34,7 @@ export async function fetchTile(
   self: HasTiffReference,
   x: number,
   y: number,
-  options: { signal?: AbortSignal } = {},
+  options: { boundless?: boolean; signal?: AbortSignal } = {},
 ): Promise<Tile> {
   if (self.maskImage != null) {
     throw new Error("Mask fetching not implemented yet");

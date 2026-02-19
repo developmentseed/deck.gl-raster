@@ -126,7 +126,7 @@ function createUnormPipeline(
     options: GetTileDataOptions,
   ) => {
     const { device, x, y, signal } = options;
-    const tile = await image.fetchTile(x, y, { signal });
+    const tile = await image.fetchTile(x, y, { signal, boundless: false });
     let { array } = tile;
 
     let numSamples = samplesPerPixel;
