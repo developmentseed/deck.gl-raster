@@ -129,8 +129,14 @@ describe("boundless=false edge tile pixel values", () => {
   let refImage: GeoTIFFImage;
 
   beforeAll(async () => {
-    ours = await loadGeoTIFF("uint8_1band_deflate_block128_unaligned", "rasterio");
-    ref = await loadGeoTiffJs("uint8_1band_deflate_block128_unaligned", "rasterio");
+    ours = await loadGeoTIFF(
+      "uint8_1band_deflate_block128_unaligned",
+      "rasterio",
+    );
+    ref = await loadGeoTiffJs(
+      "uint8_1band_deflate_block128_unaligned",
+      "rasterio",
+    );
     refImage = await ref.getImage();
   });
 
@@ -148,7 +154,9 @@ describe("boundless=false edge tile pixel values", () => {
     const right = left + UNALIGNED_EDGE_W;
     const bottom = top + UNALIGNED_EDGE_H;
 
-    const refData = await refImage.readRasters({ window: [left, top, right, bottom] });
+    const refData = await refImage.readRasters({
+      window: [left, top, right, bottom],
+    });
     const oursBandSep = toBandSeparate(array);
 
     for (let b = 0; b < ours.count; b++) {
