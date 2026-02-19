@@ -3,11 +3,14 @@ import { TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { decode } from "./decode/api";
+import type { CachedTags } from "./ifd.js";
 import type { Tile } from "./tile";
 import type { HasTransform } from "./transform";
 
 /** Protocol for objects that hold a TIFF reference and can request tiles. */
 interface HasTiffReference extends HasTransform {
+  readonly cachedTags: CachedTags;
+
   /** The data Image File Directory (IFD) */
   readonly image: TiffImage;
 
@@ -42,9 +45,13 @@ export async function fetchTile(
     throw new Error("Tile not found");
   }
 
+  const {
+    bitsPerSample: bitsPerSamples,
+    predictor,
+    planarConfiguration,
+    sampleFormat: sampleFormats,
+  } = self.cachedTags;
   const { bytes, compression } = tile;
-  const sampleFormats = await self.image.fetch(TiffTag.SampleFormat);
-  const bitsPerSamples = await self.image.fetch(TiffTag.BitsPerSample);
   const { sampleFormat, bitsPerSample } = getUniqueSampleFormat(
     sampleFormats,
     bitsPerSamples,
@@ -63,6 +70,8 @@ export async function fetchTile(
     samplesPerPixel,
     width: self.tileWidth,
     height: self.tileHeight,
+    predictor,
+    planarConfiguration,
   });
 
   const array = {
@@ -84,15 +93,9 @@ export async function fetchTile(
 }
 
 function getUniqueSampleFormat(
-  sampleFormats: SampleFormat[] | null,
-  bitsPerSamples: number[] | null,
+  sampleFormats: SampleFormat[],
+  bitsPerSamples: Uint16Array,
 ): { sampleFormat: SampleFormat; bitsPerSample: number } {
-  if (sampleFormats === null || bitsPerSamples === null) {
-    throw new Error(
-      "SampleFormat and BitsPerSample should always exist in TIFF.",
-    );
-  }
-
   const uniqueSampleFormats = new Set(sampleFormats);
   const uniqueBitsPerSample = new Set(bitsPerSamples);
 

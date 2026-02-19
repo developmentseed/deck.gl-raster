@@ -1,6 +1,9 @@
+import type { PlanarConfiguration } from "@cogeotiff/core";
 import { Compression, SampleFormat } from "@cogeotiff/core";
 import type { RasterTypedArray } from "../array.js";
 import { decode as decodeViaCanvas } from "../codecs/canvas.js";
+import { applyPredictor } from "../codecs/predictor.js";
+import type { Predictor } from "../ifd.js";
 
 /** The result of a decoding process */
 export type DecodedPixels =
@@ -14,6 +17,8 @@ export type DecoderMetadata = {
   samplesPerPixel: number;
   width: number;
   height: number;
+  predictor: Predictor;
+  planarConfiguration: PlanarConfiguration;
 };
 
 /**
@@ -75,9 +80,26 @@ export async function decode(
   const result = await decoder(bytes, metadata);
 
   if (result instanceof ArrayBuffer) {
+    const {
+      predictor,
+      width,
+      height,
+      bitsPerSample,
+      samplesPerPixel,
+      planarConfiguration,
+    } = metadata;
+    const predicted = applyPredictor(
+      result,
+      predictor,
+      width,
+      height,
+      bitsPerSample,
+      samplesPerPixel,
+      planarConfiguration,
+    );
     return {
       layout: "pixel-interleaved",
-      data: toTypedArray(result, metadata),
+      data: toTypedArray(predicted, metadata),
     };
   }
 
