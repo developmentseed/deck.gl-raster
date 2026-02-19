@@ -53,7 +53,7 @@
     "@chunkd/source-memory": "^11.0.2",
     "@cogeotiff/core": "^9.2.0",
     "@developmentseed/affine": "workspace:^",
-    "@developmentseed/lzw-tiff-decoder": "^0.2.1",
+    "@developmentseed/lzw-tiff-decoder": "^0.2.2",
     "@developmentseed/morecantile": "workspace:^",
     "uuid": "^13.0.0"
   }
