@@ -17,7 +17,8 @@ export async function decode(
   ctx.drawImage(imageBitmap, 0, 0);
   imageBitmap.close();
 
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { width, height } = canvas;
+  const imageData = ctx.getImageData(0, 0, width, height);
   const rgba = imageData.data;
 
   const samplesPerPixel = metadata.samplesPerPixel;
@@ -26,7 +27,7 @@ export async function decode(
   }
 
   if (samplesPerPixel === 3) {
-    const pixelCount = imageBitmap.width * imageBitmap.height;
+    const pixelCount = width * height;
     const rgb = new Uint8ClampedArray(pixelCount * 3);
     for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) {
       rgb[i] = rgba[j]!;
