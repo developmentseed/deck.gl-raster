@@ -20,6 +20,7 @@ const FIXTURES = [
   { variant: "rasterio", name: "uint8_rgb_deflate_block64_cog" },
   { variant: "rasterio", name: "uint8_1band_deflate_block128_unaligned" },
   { variant: "rasterio", name: "float32_1band_lerc_block32" },
+  { variant: "rasterio", name: "uint16_1band_lzw_block128_predictor2" },
   // float32_1band_lerc_deflate_block32: geotiff.js does not support LERC_DEFLATE
 ] as const;
 

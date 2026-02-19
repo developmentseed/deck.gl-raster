@@ -12,6 +12,8 @@ export type DecoderMetadata = {
   sampleFormat: SampleFormat;
   bitsPerSample: number;
   samplesPerPixel: number;
+  width: number;
+  height: number;
 };
 
 /**
@@ -36,6 +38,9 @@ registry.set(Compression.Deflate, () =>
 );
 registry.set(Compression.DeflateOther, () =>
   import("../codecs/deflate.js").then((m) => m.decode),
+);
+registry.set(Compression.Lzw, () =>
+  import("../codecs/lzw.js").then((m) => m.decode),
 );
 // registry.set(Compression.Zstd, () =>
 //   import("../codecs/zstd.js").then((m) => m.decode),

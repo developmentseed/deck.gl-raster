@@ -396,6 +396,9 @@ importers:
       '@developmentseed/affine':
         specifier: workspace:^
         version: link:../affine
+      '@developmentseed/lzw-tiff-decoder':
+        specifier: ^0.2.1
+        version: 0.2.1
       '@developmentseed/morecantile':
         specifier: workspace:^
         version: link:../morecantile
@@ -406,9 +409,6 @@ importers:
       '@chunkd/source-file':
         specifier: ^11.0.1
         version: 11.0.1
-      '@developmentseed/lzw-tiff-decoder':
-        specifier: ^0.2.1
-        version: 0.2.1
       '@types/node':
         specifier: ^25.1.0
         version: 25.1.0

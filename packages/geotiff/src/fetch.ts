@@ -61,6 +61,8 @@ export async function fetchTile(
     sampleFormat,
     bitsPerSample,
     samplesPerPixel,
+    width: self.tileWidth,
+    height: self.tileHeight,
   });
 
   const array = {
