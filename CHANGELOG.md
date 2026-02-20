@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0-beta.3](https://github.com/developmentseed/deck.gl-raster/compare/v0.3.0-beta.3...v0.4.0-beta.3) (2026-02-20)
+
+
+### Features
+
+* **geotiff:** Add tileCount property to GeoTIFF and Overview ([#254](https://github.com/developmentseed/deck.gl-raster/issues/254)) ([c8ef424](https://github.com/developmentseed/deck.gl-raster/commit/c8ef4249f622b8e5c82960d7328241760e6ee4ff))
+* **geotiff:** User-specified prefetch size ([#256](https://github.com/developmentseed/deck.gl-raster/issues/256)) ([1794bc3](https://github.com/developmentseed/deck.gl-raster/commit/1794bc3d446e24d8aaef96f4002afbc1c38ed7cc))
+
 ## [0.3.0-beta.2](https://github.com/developmentseed/deck.gl-raster/compare/v0.3.0-beta.1...v0.3.0-beta.2) (2026-02-19)
 
 

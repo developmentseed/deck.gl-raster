@@ -1,6 +1,6 @@
 {
-  ".": "0.3.0-beta.3",
-  "packages/affine": "0.3.0-beta.3",
-  "packages/geotiff": "0.3.0-beta.3",
-  "packages/morecantile": "0.3.0-beta.3"
+  ".": "0.4.0-beta.3",
+  "packages/affine": "0.3.0-beta.1",
+  "packages/geotiff": "0.3.0-beta.2",
+  "packages/morecantile": "0.3.0-beta.1"
 }
