@@ -13,6 +13,7 @@ import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { Tile } from "./tile.js";
+import { tileCount } from "./tile.js";
 import { index, xy } from "./transform.js";
 
 /**
@@ -270,6 +271,13 @@ export class GeoTIFF {
     options: { boundless?: boolean; signal?: AbortSignal } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
+  }
+
+  // TiledMixin
+
+  /** The number of tiles in the x and y directions */
+  get tileCount(): [number, number] {
+    return tileCount(this);
   }
 
   // Transform mixin

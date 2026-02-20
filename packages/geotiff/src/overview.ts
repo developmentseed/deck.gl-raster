@@ -6,6 +6,7 @@ import { fetchTile } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import type { Tile } from "./tile.js";
+import { tileCount } from "./tile.js";
 import { index, xy } from "./transform.js";
 
 /**
@@ -81,6 +82,15 @@ export class Overview {
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }
+
+  // TiledMixin
+
+  /** The number of tiles in the x and y directions */
+  get tileCount(): [number, number] {
+    return tileCount(this);
+  }
+
+  // Transform mixin
 
   /**
    * Get the (row, col) pixel index containing the geographic coordinate (x, y).
