@@ -73,8 +73,16 @@ export class GeoTIFF {
    *
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    */
-  static async open(source: Source): Promise<GeoTIFF> {
-    const tiff = await Tiff.create(source);
+  static async open(
+    source: Source,
+    { prefetch = 32 * 1024 }: { prefetch?: number } = {},
+  ): Promise<GeoTIFF> {
+    const tiff = new Tiff(source);
+
+    // Set the initial read size before initializing the header
+    tiff.defaultReadSize = prefetch;
+    await tiff.init();
+
     return GeoTIFF.fromTiff(tiff);
   }
 
