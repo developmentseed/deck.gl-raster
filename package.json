@@ -1,7 +1,7 @@
 {
   "name": "monorepo",
   "private": true,
-  "version": "0.3.0-beta.2",
+  "version": "0.3.0-beta.3",
   "description": "GPU-accelerated COG and Zarr visualization in deck.gl",
   "scripts": {
     "build": "tsc --build",
