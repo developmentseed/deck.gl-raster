@@ -1,4 +1,5 @@
 import type { TiffImage } from "@cogeotiff/core";
+import type { TiffImageTileCount } from "@cogeotiff/core/build/tiff.image.js";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
@@ -54,6 +55,11 @@ export class Overview {
     return this.geotiff.nodata;
   }
 
+  /** The number of tiles in the x and y directions */
+  get tileCount(): TiffImageTileCount {
+    return this.image.tileCount;
+  }
+
   get tileHeight(): number {
     return this.image.tileSize.height;
   }
@@ -81,6 +87,10 @@ export class Overview {
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }
+
+  // TiledMixin
+
+  // Transform mixin
 
   /**
    * Get the (row, col) pixel index containing the geographic coordinate (x, y).

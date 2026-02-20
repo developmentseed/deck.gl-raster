@@ -49,22 +49,21 @@ function buildTileMatrix(
   id: string,
   transform: Affine,
   mpu: number,
-  cornerOfOrigin: "bottomLeft" | "topLeft",
   tileWidth: number,
   tileHeight: number,
-  width: number,
-  height: number,
+  matrixWidth: number,
+  matrixHeight: number,
 ): TileMatrix {
   return {
     id,
     scaleDenominator: (affine.a(transform) * mpu) / SCREEN_PIXEL_SIZE,
     cellSize: affine.a(transform),
-    cornerOfOrigin,
+    cornerOfOrigin: affine.e(transform) > 0 ? "bottomLeft" : "topLeft",
     pointOfOrigin: [affine.c(transform), affine.f(transform)],
     tileWidth,
     tileHeight,
-    matrixWidth: Math.ceil(width / tileWidth),
-    matrixHeight: Math.ceil(height / tileHeight),
+    matrixWidth,
+    matrixHeight,
   };
 }
 
@@ -88,18 +87,10 @@ export function generateTileMatrixSet(
   { id = uuidv4() }: { id?: string } = {},
 ): TileMatrixSet {
   const bbox = geotiff.bbox;
-  const tr = geotiff.transform;
 
   // Full-resolution level is appended last.
   if (!geotiff.isTiled) {
     throw new Error("GeoTIFF must be tiled to generate a TMS.");
-  }
-
-  if (tr[1] !== 0 || tr[3] !== 0) {
-    // TileMatrixSet assumes orthogonal axes
-    throw new Error(
-      "COG TileMatrixSet with rotation/skewed geotransform is not supported",
-    );
   }
 
   // Perhaps we should allow metersPerUnit to take any string
@@ -119,8 +110,6 @@ export function generateTileMatrixSet(
 
   const semiMajorAxis = crs.a || crs.datum?.a;
   const mpu = metersPerUnit(crsUnit, { semiMajorAxis });
-  const cornerOfOrigin: "bottomLeft" | "topLeft" =
-    affine.e(tr) > 0 ? "bottomLeft" : "topLeft";
 
   const tileMatrices: TileMatrix[] = [];
 
@@ -129,30 +118,38 @@ export function generateTileMatrixSet(
 
   for (let idx = 0; idx < overviewsCoarseFirst.length; idx++) {
     const overview = overviewsCoarseFirst[idx]!;
+    const { x: matrixWidth, y: matrixHeight } = overview.tileCount;
     tileMatrices.push(
       buildTileMatrix(
         String(idx),
         overview.transform,
         mpu,
-        cornerOfOrigin,
         overview.tileWidth,
         overview.tileHeight,
-        overview.width,
-        overview.height,
+        matrixWidth,
+        matrixHeight,
       ),
     );
   }
 
+  if (geotiff.transform[1] !== 0 || geotiff.transform[3] !== 0) {
+    // TileMatrixSet assumes orthogonal axes
+    throw new Error(
+      "COG TileMatrixSet with rotation/skewed geotransform is not supported",
+    );
+  }
+
+  const { x: matrixWidth, y: matrixHeight } = geotiff.tileCount;
+
   tileMatrices.push(
     buildTileMatrix(
       String(geotiff.overviews.length),
-      tr,
+      geotiff.transform,
       mpu,
-      cornerOfOrigin,
       geotiff.tileWidth,
       geotiff.tileHeight,
-      geotiff.width,
-      geotiff.height,
+      matrixWidth,
+      matrixHeight,
     ),
   );
 
