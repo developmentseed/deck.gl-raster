@@ -213,7 +213,14 @@ export class COGLayer<
       Boolean(changeFlags.dataChanged) || props.geotiff !== oldProps.geotiff;
 
     if (needsUpdate) {
-      this._parseGeoTIFF();
+      try {
+        this._parseGeoTIFF();
+      } catch (error) {
+        if (error instanceof Error) {
+          this.props.onError?.(error);
+        }
+        throw error;
+      }
     }
   }
 
