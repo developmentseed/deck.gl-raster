@@ -8,9 +8,10 @@ import {
   FilterNoDataVal,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
+import { parseColormap } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
-import { addAlphaChannel, parseColormap } from "./geotiff";
+import { addAlphaChannel } from "./geotiff";
 import { inferTextureFormat } from "./texture";
 
 export type TextureDataT = {

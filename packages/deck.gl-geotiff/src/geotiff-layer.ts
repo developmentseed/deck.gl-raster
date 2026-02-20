@@ -15,11 +15,9 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
   /**
    * GeoTIFF input.
    *
-   * - URL string pointing to a GeoTIFF
-   * - ArrayBuffer containing the GeoTIFF data
-   * - Blob containing the GeoTIFF data
-   * - An instance of GeoTIFF.js's GeoTIFF class
-   * - An instance of GeoTIFF.js's BaseClient for custom fetching
+   * - {@link URL} or `string` pointing to a GeoTIFF
+   * - {@link ArrayBuffer} containing the GeoTIFF data
+   * - An instance of the {@link GeoTIFF} class.
    */
   geotiff: GeoTIFF | string | URL | ArrayBuffer;
 
