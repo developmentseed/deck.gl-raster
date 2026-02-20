@@ -227,8 +227,6 @@ export class COGLayer<
 
     const tms = generateTileMatrixSet(geotiff, sourceProjection);
 
-    console.log(tms);
-
     // @ts-expect-error - proj4 typings are incomplete and don't support
     // wkt-parser input
     const converter4326 = proj4(sourceProjection, "EPSG:4326");
