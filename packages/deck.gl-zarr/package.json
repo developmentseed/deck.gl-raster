@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/deck.gl-zarr",
-  "version": "0.3.0-beta.2",
+  "version": "0.3.0-beta.3",
   "description": "Zarr visualization in deck.gl.",
   "type": "module",
   "main": "./dist/index.js",
