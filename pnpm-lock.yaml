@@ -5,21 +5,21 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@deck.gl/aggregation-layers': 9.2.8
-  '@deck.gl/core': 9.2.8
-  '@deck.gl/extensions': 9.2.8
-  '@deck.gl/geo-layers': 9.2.8
-  '@deck.gl/layers': 9.2.8
-  '@deck.gl/mapbox': 9.2.8
-  '@deck.gl/mesh-layers': 9.2.8
-  '@deck.gl/widgets': 9.2.8
+  '@deck.gl/aggregation-layers': ^9.2.8
+  '@deck.gl/core': ^9.2.8
+  '@deck.gl/extensions': ^9.2.8
+  '@deck.gl/geo-layers': ^9.2.8
+  '@deck.gl/layers': ^9.2.8
+  '@deck.gl/mapbox': ^9.2.8
+  '@deck.gl/mesh-layers': ^9.2.8
+  '@deck.gl/widgets': ^9.2.8
   '@loaders.gl/core': ^4.3.4
   '@luma.gl/constants': ^9.2.6
   '@luma.gl/core': ^9.2.6
   '@luma.gl/engine': ^9.2.6
-  '@luma.gl/gltf': 9.2.6
+  '@luma.gl/gltf': ^9.2.6
   '@luma.gl/shadertools': ^9.2.6
-  '@luma.gl/webgl': 9.2.6
+  '@luma.gl/webgl': ^9.2.6
 
 importers:
 
@@ -41,19 +41,19 @@ importers:
   examples/cog-basic:
     dependencies:
       '@deck.gl/core':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8
       '@deck.gl/geo-layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@deck.gl/extensions@9.2.5(@deck.gl/core@9.2.8)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/mesh-layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@loaders.gl/core@4.3.4)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
       '@deck.gl/layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
       '@deck.gl/mapbox':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@math.gl/web-mercator@4.1.0)
       '@deck.gl/mesh-layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
@@ -105,19 +105,19 @@ importers:
   examples/land-cover:
     dependencies:
       '@deck.gl/core':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8
       '@deck.gl/geo-layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@deck.gl/extensions@9.2.5(@deck.gl/core@9.2.8)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/mesh-layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@loaders.gl/core@4.3.4)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
       '@deck.gl/layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
       '@deck.gl/mapbox':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@math.gl/web-mercator@4.1.0)
       '@deck.gl/mesh-layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
@@ -172,13 +172,13 @@ importers:
   examples/naip-mosaic:
     dependencies:
       '@deck.gl/core':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8
       '@deck.gl/layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
       '@deck.gl/mapbox':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@math.gl/web-mercator@4.1.0)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
@@ -248,16 +248,16 @@ importers:
         specifier: ^9.2.0
         version: 9.2.0
       '@deck.gl/core':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8
       '@deck.gl/geo-layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@deck.gl/extensions@9.2.5(@deck.gl/core@9.2.8)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/mesh-layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@loaders.gl/core@4.3.4)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
       '@deck.gl/layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
       '@deck.gl/mesh-layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))
       '@developmentseed/affine':
         specifier: workspace:^
@@ -303,16 +303,16 @@ importers:
   packages/deck.gl-raster:
     dependencies:
       '@deck.gl/core':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8
       '@deck.gl/geo-layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@deck.gl/extensions@9.2.5(@deck.gl/core@9.2.8)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/mesh-layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@loaders.gl/core@4.3.4)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
       '@deck.gl/layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
       '@deck.gl/mesh-layers':
-        specifier: 9.2.8
+        specifier: ^9.2.8
         version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))
       '@developmentseed/affine':
         specifier: workspace:^
@@ -694,17 +694,17 @@ packages:
   '@deck.gl/extensions@9.2.5':
     resolution: {integrity: sha512-GJRPmG+GD1tdblpplQlb4jlNywRb8aQYPEowPLKxglXSGRzgpOrqJYI1PcJhCowdL7/S8bCY1ay8nkXE3gRsgw==}
     peerDependencies:
-      '@deck.gl/core': 9.2.8
+      '@deck.gl/core': ^9.2.8
       '@luma.gl/core': ^9.2.6
       '@luma.gl/engine': ^9.2.6
 
   '@deck.gl/geo-layers@9.2.8':
     resolution: {integrity: sha512-WEiPbDM6bqXityfFGplsKNTpYKzfUyj/mpnQpaNJ5qJ6Cl2W7SDnP+0K/UisbZ8m8eXYCiiu+ykb4+YwvOFc8g==}
     peerDependencies:
-      '@deck.gl/core': 9.2.8
-      '@deck.gl/extensions': 9.2.8
-      '@deck.gl/layers': 9.2.8
-      '@deck.gl/mesh-layers': 9.2.8
+      '@deck.gl/core': ^9.2.8
+      '@deck.gl/extensions': ^9.2.8
+      '@deck.gl/layers': ^9.2.8
+      '@deck.gl/mesh-layers': ^9.2.8
       '@loaders.gl/core': ^4.3.4
       '@luma.gl/core': ^9.2.6
       '@luma.gl/engine': ^9.2.6
@@ -712,7 +712,7 @@ packages:
   '@deck.gl/layers@9.2.8':
     resolution: {integrity: sha512-LnIZ07jKuFRTYulBjyS2z1VHMkGXTUs8C0iSxJR8GsCBBI8d/1zEIT1xbkGaArai50OjsrCDuG2KKKLbG8ME3w==}
     peerDependencies:
-      '@deck.gl/core': 9.2.8
+      '@deck.gl/core': ^9.2.8
       '@loaders.gl/core': ^4.3.4
       '@luma.gl/core': ^9.2.6
       '@luma.gl/engine': ^9.2.6
@@ -720,7 +720,7 @@ packages:
   '@deck.gl/mapbox@9.2.8':
     resolution: {integrity: sha512-kWeu4C4USPwT1vf/I/6xZFSzuAxCeQM79FfJ2WOcoNWn5AI7MegCjgumYLR7RR555Trk1qM2adztIW2DXh3IqQ==}
     peerDependencies:
-      '@deck.gl/core': 9.2.8
+      '@deck.gl/core': ^9.2.8
       '@luma.gl/constants': ^9.2.6
       '@luma.gl/core': ^9.2.6
       '@math.gl/web-mercator': ^4.1.0
@@ -728,10 +728,10 @@ packages:
   '@deck.gl/mesh-layers@9.2.8':
     resolution: {integrity: sha512-Ax0Y4bb+288myWUu4fa+uXIPHQP3cSgRPMVi6HsPzWovv2E7wtfVzyGGWChs3DmdttGY/ooM6R7aNpwC1ZzEyQ==}
     peerDependencies:
-      '@deck.gl/core': 9.2.8
+      '@deck.gl/core': ^9.2.8
       '@luma.gl/core': ^9.2.6
       '@luma.gl/engine': ^9.2.6
-      '@luma.gl/gltf': 9.2.6
+      '@luma.gl/gltf': ^9.2.6
       '@luma.gl/shadertools': ^9.2.6
 
   '@developmentseed/lzw-tiff-decoder@0.2.2':
