@@ -6,9 +6,50 @@ Fast, high-level GeoTIFF reader written in TypeScript for the browser, wrapping 
 
 ## Features
 
+### Easy access to COG tiles
+
+Use `GeoTIFF.fetchTile` to load `Tile` instances.
+
+```ts
+import { GeoTIFF } from "@developmentseed/geotiff";
+
+// RGB Sentinel-2 image over NYC
+const url = "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif"
+const geotiff = await GeoTIFF.fromUrl(url);
+
+// Read full-resolution tile from bottom right of image.
+// tile ordering starts at top left.
+const tile = await geotiff.fetchTile(10, 10);
+const {
+    x, // 10
+    y, // 10
+} = tile;
+
+// tile.array holds data & relevant metadata
+const {
+    data, // Uint8Array(3145728) [49,  51,  46,  42, ...]
+    count, // 3 (RGB)
+    height, // 1024
+    width, // 1024
+    transform, // [ 10, 0, 602380, 0, -10, 4497620 ]
+    crs, // 32618 (EPSG code)
+    mask, // null
+    nodata, // 0
+} = tile.array;
+```
+
 ### Convenient access to overviews
 
-The `.overviews` attribute on `GeoTIFF` contains an array of reduced-resolution overviews in order from highest to lowest resolution. The `Overview` class makes it easy to
+The `.overviews` attribute on `GeoTIFF` contains an array of reduced-resolution overviews, ordered from highest to lowest resolution. Use these to fetch tiles at your desired resolution.
+
+```ts
+const geotiff = await GeoTIFF.fromUrl("https://example.com/image.tif");
+// Read from the first overview
+// (the next-highest resolution after the full-resolution image)
+const overview = geotiff.overviews[0];
+// Read top-left tile of the overview
+const tile = await overview.fetchTile(0, 0);
+```
 
 ### Automatic Nodata Mask handling
 
@@ -55,7 +96,7 @@ const httpSource = new SourceHttp('https://blayne.chard.com/world.webp.google.co
 
 // HTTP source with chunking and caching
 const tiffSource = new SourceView(httpSource, [chunk, cache]);
-const geotiff = await GeoTIFF.create(tiffSource);
+const geotiff = await GeoTIFF.open(tiffSource);
 const tile = await geotiff.fetchTile(0, 0);
 ```
 

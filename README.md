@@ -62,26 +62,42 @@ See [Examples](#examples) for complete working demos.
 
 ## Packages
 
-This monorepo contains four packages, each published independently to NPM:
+This monorepo contains several packages, each published independently to NPM:
 
 | Package                               | Description                          | Version                                                    |
 | ------------------------------------- | ------------------------------------ | ---------------------------------------------------------- |
+| [`@developmentseed/affine`]  | TypeScript port of [`Affine`] for working with affine transformations. | [![npm][affine-npm-badge]][affine-npm]   |
 | [`@developmentseed/deck.gl-geotiff`]  | High-level GeoTIFF/COG visualization | [![npm][deck.gl-geotiff-npm-badge]][deck.gl-geotiff-npm]   |
 | [`@developmentseed/deck.gl-zarr`]     | Zarr support (_soon_)                | -                                                          |
 | [`@developmentseed/deck.gl-raster`]   | Core raster rendering primitives     | [![npm][deck.gl-raster-npm-badge]][deck.gl-raster-npm]     |
+| [`@developmentseed/geotiff`]  | Fast, high-level GeoTIFF reader written in TypeScript | [![npm][geotiff-npm-badge]][geotiff-npm]   |
+| [`@developmentseed/morecantile`] | Typescript port of [Morecantile] for working with OGC [TileMatrixSets] | [![npm][morecantile-npm-badge]][morecantile-npm]   |
 | [`@developmentseed/raster-reproject`] | Standalone reprojection utilities    | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
 
+[`@developmentseed/affine`]: #developmentseedaffine
 [`@developmentseed/deck.gl-geotiff`]: #developmentseeddeckgl-geotiff
 [`@developmentseed/deck.gl-zarr`]: #developmentseeddeckgl-zarr
 [`@developmentseed/deck.gl-raster`]: #developmentseeddeckgl-raster
+[`@developmentseed/geotiff`]: #developmentseedgeotiff
+[`@developmentseed/morecantile`]: #developmentseedmorecantile
 [`@developmentseed/raster-reproject`]: #developmentseedraster-reproject
 
+[`Affine`]: https://github.com/rasterio/affine
+[Morecantile]: https://github.com/developmentseed/morecantile
+[TileMatrixSets]: https://docs.ogc.org/is/17-083r4/17-083r4.html
+
+[affine-npm-badge]: https://img.shields.io/npm/v/@developmentseed/affine
 [deck.gl-geotiff-npm-badge]: https://img.shields.io/npm/v/@developmentseed/deck.gl-geotiff
 [deck.gl-raster-npm-badge]: https://img.shields.io/npm/v/@developmentseed/deck.gl-raster
+[geotiff-npm-badge]: https://img.shields.io/npm/v/@developmentseed/geotiff
+[morecantile-npm-badge]: https://img.shields.io/npm/v/@developmentseed/morecantile
 [raster-reproject-npm-badge]: https://img.shields.io/npm/v/@developmentseed/raster-reproject
 
+[affine-npm]: https://www.npmjs.com/package/@developmentseed/affine
 [deck.gl-geotiff-npm]: https://www.npmjs.com/package/@developmentseed/deck.gl-geotiff
 [deck.gl-raster-npm]: https://www.npmjs.com/package/@developmentseed/deck.gl-raster
+[geotiff-npm]: https://www.npmjs.com/package/@developmentseed/geotiff
+[morecantile-npm]: https://www.npmjs.com/package/@developmentseed/morecantile
 [raster-reproject-npm]: https://www.npmjs.com/package/@developmentseed/raster-reproject
 
 ---

@@ -74,13 +74,11 @@ type GetTileDataResult<DataT> = {
 export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
   extends CompositeLayerProps {
   /**
-   * GeoTIFF input.
+   * Cloud-optimized GeoTIFF input.
    *
-   * - URL string pointing to a COG
-   * - ArrayBuffer containing the COG data
-   * - Blob containing the COG data
-   * - An instance of GeoTIFF.js's GeoTIFF class
-   * - An instance of GeoTIFF.js's BaseClient for custom fetching
+   * - {@link URL} or `string` pointing to a COG
+   * - {@link ArrayBuffer} containing the COG data
+   * - An instance of the {@link GeoTIFF} class.
    */
   geotiff: GeoTIFF | string | URL | ArrayBuffer;
 
@@ -114,8 +112,8 @@ export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
   /**
    * User-defined method to load data for a tile.
    *
-   * The default implementation loads an RGBA image using geotiff.js's readRGB
-   * method, returning an ImageData object.
+   * The default implementation loads an RGBA image, returning an ImageData
+   * object.
    *
    * For more customizability, you can also return a Texture object from
    * luma.gl, along with optional custom shaders for the RasterLayer.
@@ -228,6 +226,8 @@ export class COGLayer<
         : wktParser(crs);
 
     const tms = generateTileMatrixSet(geotiff, sourceProjection);
+
+    console.log(tms);
 
     // @ts-expect-error - proj4 typings are incomplete and don't support
     // wkt-parser input
