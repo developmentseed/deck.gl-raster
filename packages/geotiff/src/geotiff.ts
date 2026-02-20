@@ -5,6 +5,8 @@ import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
 import type { Source, TiffImage } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
+// https://github.com/blacha/cogeotiff/issues/1417
+import type { TiffImageTileCount } from "@cogeotiff/core/build/tiff.image.js";
 import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { crsFromGeoKeys } from "./crs.js";
@@ -13,7 +15,6 @@ import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { Tile } from "./tile.js";
-import { tileCount } from "./tile.js";
 import { index, xy } from "./transform.js";
 
 /**
@@ -200,6 +201,11 @@ export class GeoTIFF {
     return this.image.size.height;
   }
 
+  /** The number of tiles in the x and y directions */
+  get tileCount(): TiffImageTileCount {
+    return this.image.tileCount;
+  }
+
   /** Tile width in pixels. */
   get tileWidth(): number {
     return this.image.tileSize.width;
@@ -271,13 +277,6 @@ export class GeoTIFF {
     options: { boundless?: boolean; signal?: AbortSignal } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
-  }
-
-  // TiledMixin
-
-  /** The number of tiles in the x and y directions */
-  get tileCount(): [number, number] {
-    return tileCount(this);
   }
 
   // Transform mixin

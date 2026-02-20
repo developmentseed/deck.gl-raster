@@ -1,4 +1,5 @@
 import type { TiffImage } from "@cogeotiff/core";
+import type { TiffImageTileCount } from "@cogeotiff/core/build/tiff.image.js";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
@@ -6,7 +7,6 @@ import { fetchTile } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import type { Tile } from "./tile.js";
-import { tileCount } from "./tile.js";
 import { index, xy } from "./transform.js";
 
 /**
@@ -55,6 +55,11 @@ export class Overview {
     return this.geotiff.nodata;
   }
 
+  /** The number of tiles in the x and y directions */
+  get tileCount(): TiffImageTileCount {
+    return this.image.tileCount;
+  }
+
   get tileHeight(): number {
     return this.image.tileSize.height;
   }
@@ -84,11 +89,6 @@ export class Overview {
   }
 
   // TiledMixin
-
-  /** The number of tiles in the x and y directions */
-  get tileCount(): [number, number] {
-    return tileCount(this);
-  }
 
   // Transform mixin
 

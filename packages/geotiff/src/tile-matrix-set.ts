@@ -118,7 +118,7 @@ export function generateTileMatrixSet(
 
   for (let idx = 0; idx < overviewsCoarseFirst.length; idx++) {
     const overview = overviewsCoarseFirst[idx]!;
-    const [matrixWidth, matrixHeight] = overview.tileCount;
+    const { x: matrixWidth, y: matrixHeight } = overview.tileCount;
     tileMatrices.push(
       buildTileMatrix(
         String(idx),
@@ -139,7 +139,7 @@ export function generateTileMatrixSet(
     );
   }
 
-  const [matrixWidth, matrixHeight] = geotiff.tileCount;
+  const { x: matrixWidth, y: matrixHeight } = geotiff.tileCount;
 
   tileMatrices.push(
     buildTileMatrix(
