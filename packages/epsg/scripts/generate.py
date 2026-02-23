@@ -47,6 +47,11 @@ def main(epsg_zip_path: str, output_path: str) -> None:
             with zf.open(entry) as f:
                 crs_content = f.read().decode("utf-8")
 
+            if "\n" in crs_content:
+                raise ValueError(
+                    f"CRS content for EPSG code {epsg_code} contains a newline"
+                )
+
             crs_mapping[epsg_code] = crs_content
 
     csv_string = format_csv(crs_mapping)
