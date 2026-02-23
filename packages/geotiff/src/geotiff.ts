@@ -77,12 +77,9 @@ export class GeoTIFF {
     source: Source,
     { prefetch = 32 * 1024 }: { prefetch?: number } = {},
   ): Promise<GeoTIFF> {
-    const tiff = new Tiff(source);
-
-    // Set the initial read size before initializing the header
-    tiff.defaultReadSize = prefetch;
-    await tiff.init();
-
+    const tiff = await Tiff.create(source, {
+      defaultReadSize: prefetch,
+    });
     return GeoTIFF.fromTiff(tiff);
   }
 
