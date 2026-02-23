@@ -3,12 +3,10 @@
   "version": "0.1.0",
   "description": "Compressed, bundled EPSG code definitions.",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+    "./all": {
+      "types": "./dist/all.d.ts",
+      "default": "./dist/all.js"
     }
   },
   "sideEffects": false,
@@ -16,7 +14,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc --build tsconfig.build.json",
+    "build": "tsc --build tsconfig.build.json && cp scripts/epsg.csv.gz dist/epsg.csv.gz",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
