@@ -56,4 +56,4 @@ def main(epsg_zip_path: str, output_path: str) -> None:
 
 
 if __name__ == "__main__":
-    main("EPSG-v12_049-WKT.Zip", "../src/epsg.csv.gz")
+    main("EPSG-v12_049-WKT.Zip", "../data/epsg.csv.gz")
