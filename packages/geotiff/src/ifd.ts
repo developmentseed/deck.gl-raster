@@ -1,14 +1,5 @@
 import type { TiffImage, TiffTagGeoType, TiffTagType } from "@cogeotiff/core";
-import { SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
-
-// TODO: use upstream: https://github.com/blacha/cogeotiff/pull/1412
-export enum Predictor {
-  None = 1,
-  /** Horizontal differencing */
-  Horizontal = 2,
-  /** Floating point */
-  FloatingPoint = 3,
-}
+import { Predictor, SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
 
 /** Subset of TIFF tags that we pre-fetch for easier visualization. */
 export interface CachedTags {

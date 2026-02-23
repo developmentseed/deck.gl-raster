@@ -1,9 +1,8 @@
-import type { PlanarConfiguration } from "@cogeotiff/core";
+import type { PlanarConfiguration, Predictor } from "@cogeotiff/core";
 import { Compression, SampleFormat } from "@cogeotiff/core";
 import type { RasterTypedArray } from "./array.js";
 import { decode as decodeViaCanvas } from "./codecs/canvas.js";
 import { applyPredictor } from "./codecs/predictor.js";
-import type { Predictor } from "./ifd.js";
 
 /** The result of a decoding process */
 export type DecodedPixels =

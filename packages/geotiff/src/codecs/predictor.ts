@@ -1,5 +1,4 @@
-import { PlanarConfiguration } from "@cogeotiff/core";
-import { Predictor } from "../ifd.js";
+import { PlanarConfiguration, Predictor } from "@cogeotiff/core";
 
 /**
  * Undo TIFF horizontal differencing (predictor 2) or floating-point
