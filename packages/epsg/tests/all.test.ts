@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import proj4 from "proj4";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import loadEPSG from "../src/all.js";
 
 // Node's fetch does not support file:// URLs, so we stub it to read from disk.
@@ -27,12 +27,22 @@ describe("loadEPSG", async () => {
     expect(wkt4326).toBeDefined();
     expect(wkt3857).toBeDefined();
 
+    // Python code used to generate expected values:
+    // import pyproj
+    // from pyproj import CRS
+
+    // epsg_4326 = CRS.from_epsg(4326)
+    // epsg_3857 = CRS.from_epsg(3857)
+    // transformer = pyproj.Transformer.from_crs(epsg_4326, epsg_3857, always_xy=True)
+    // transformer.transform(1, 52)
+    // (111319.49079327357, 6800125.454397307)
+
     const converter = proj4(wkt4326, wkt3857);
-    // London: lon=-0.1276, lat=51.5074
-    const [x, y] = converter.forward([-0.1276, 51.5074]);
+    const source = [1, 52];
+    const [x, y] = converter.forward(source);
 
     // Expected Web Mercator coords (metres), tolerance of 100m
-    expect(x).toBeCloseTo(-14209, -2);
-    expect(y).toBeCloseTo(6678078, -2);
+    expect(x).toBeCloseTo(111319.49079327357, 2);
+    expect(y).toBeCloseTo(6800125.454397307, 2);
   });
 });
