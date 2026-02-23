@@ -24,6 +24,7 @@ async function parseStream(
   let buffer = "";
 
   while (true) {
+    // Read the next chunk from the stream
     const { value, done } = await reader.read();
     if (done) {
       break;
@@ -31,15 +32,25 @@ async function parseStream(
 
     buffer += value;
 
-    let newlineIndex: number;
-    while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, newlineIndex);
-      buffer = buffer.slice(newlineIndex + 1);
+    // The position of the newline character
+    let newlineIndex = buffer.indexOf("\n");
 
-      if (!line) continue;
+    // Iterate over each line in the buffer
+    while (newlineIndex !== -1) {
+      const line = buffer.slice(0, newlineIndex);
+
+      // Update buffer range and search for next newline
+      buffer = buffer.slice(newlineIndex + 1);
+      newlineIndex = buffer.indexOf("\n");
+
+      if (!line) {
+        continue;
+      }
 
       const sep = line.indexOf(SEP);
-      if (sep === -1) continue; // defensive
+      if (sep === -1) {
+        throw new Error(`Invalid line, missing separator: ${line}`);
+      }
 
       const code = Number.parseInt(line.slice(0, sep), 10);
       const wkt = line.slice(sep + 1);
@@ -48,15 +59,15 @@ async function parseStream(
     }
   }
 
-  // handle trailing line (no newline at EOF)
-  if (buffer.length > 0) {
-    const sep = buffer.indexOf(SEP);
-    if (sep !== -1) {
-      const code = Number.parseInt(buffer.slice(0, sep), 10);
-      const wkt = buffer.slice(sep + 1);
-      map.set(code, wkt);
-    }
-  }
+  // // handle trailing line (no newline at EOF)
+  // if (buffer.length > 0) {
+  //   const sep = buffer.indexOf(SEP);
+  //   if (sep !== -1) {
+  //     const code = Number.parseInt(buffer.slice(0, sep), 10);
+  //     const wkt = buffer.slice(sep + 1);
+  //     map.set(code, wkt);
+  //   }
+  // }
 
   return map;
 }
