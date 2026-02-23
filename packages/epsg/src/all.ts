@@ -59,15 +59,5 @@ async function parseStream(
     }
   }
 
-  // // handle trailing line (no newline at EOF)
-  // if (buffer.length > 0) {
-  //   const sep = buffer.indexOf(SEP);
-  //   if (sep !== -1) {
-  //     const code = Number.parseInt(buffer.slice(0, sep), 10);
-  //     const wkt = buffer.slice(sep + 1);
-  //     map.set(code, wkt);
-  //   }
-  // }
-
   return map;
 }
