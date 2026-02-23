@@ -1,3 +1,13 @@
+"""A script to generate a compressed CSV of EPSG code definitions.
+
+The EPSG dataset can be downloaded from <https://epsg.org/download-dataset.html>. You'll
+need to create an account to download it. Download the WKT version of the file.
+
+Then run this script with the path to the downloaded zip file.
+
+As of February 2026, this uses EPSG version 12.049.
+"""
+
 from __future__ import annotations
 import gzip
 from io import StringIO
@@ -46,4 +56,4 @@ def main(epsg_zip_path: str, output_path: str) -> None:
 
 
 if __name__ == "__main__":
-    main("../EPSG-v12_049-WKT.Zip", "epsg.csv.gz")
+    main("EPSG-v12_049-WKT.Zip", "../src/epsg.csv.gz")
