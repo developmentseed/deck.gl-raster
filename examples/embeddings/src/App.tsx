@@ -11,7 +11,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 
 const NUM_BANDS = 64;
-const COG_URL = "flipped.tif";
+const COG_URL = import.meta.env.VITE_COG_URL ?? "flipped.tif";
 
 type TileData = {
   device: Device;
