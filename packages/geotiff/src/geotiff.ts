@@ -279,7 +279,7 @@ export class GeoTIFF {
   async fetchTile(
     x: number,
     y: number,
-    options: { boundless?: boolean; signal?: AbortSignal } = {},
+    options: { boundless?: boolean; signal?: AbortSignal; band?: number } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }

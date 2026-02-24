@@ -79,11 +79,11 @@ export class Overview {
     return this.image.size.width;
   }
 
-  /** Fetch a single tile from the full-resolution image. */
+  /** Fetch a single tile from this overview level. */
   async fetchTile(
     x: number,
     y: number,
-    options: { boundless?: boolean; signal?: AbortSignal } = {},
+    options: { boundless?: boolean; signal?: AbortSignal; band?: number } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }

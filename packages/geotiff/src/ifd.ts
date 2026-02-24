@@ -1,5 +1,10 @@
 import type { TiffImage, TiffTagGeoType, TiffTagType } from "@cogeotiff/core";
-import { Predictor, SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
+import {
+  Predictor,
+  SampleFormat,
+  TiffTag,
+  TiffTagGeo,
+} from "@cogeotiff/core";
 
 /** Subset of TIFF tags that we pre-fetch for easier visualization. */
 export interface CachedTags {
@@ -23,8 +28,6 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     throw new Error("Compression tag should always exist.");
   }
 
-  const nodata = image.noData;
-
   const [
     bitsPerSample,
     colorMap,
@@ -41,7 +44,12 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     image.fetch(TiffTag.Predictor),
     image.fetch(TiffTag.SampleFormat),
     image.fetch(TiffTag.SamplesPerPixel),
+    image.fetch(TiffTag.GdalNoData),
   ]);
+
+  // Access noData after fetching the GdalNoData tag, since the getter is
+  // synchronous and throws if the tag exists but hasn't been loaded yet.
+  const nodata = image.noData;
 
   const missingTag: (tagName: string) => never = (tagName: string) => {
     throw new Error(`${tagName} tag should always exist.`);

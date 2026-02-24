@@ -102,6 +102,70 @@ importers:
         specifier: ^7.3.1
         version: 7.3.1(@types/node@25.1.0)(tsx@4.21.0)
 
+  examples/embeddings:
+    dependencies:
+      '@deck.gl/core':
+        specifier: ^9.2.8
+        version: 9.2.8
+      '@deck.gl/geo-layers':
+        specifier: ^9.2.8
+        version: 9.2.8(@deck.gl/core@9.2.8)(@deck.gl/extensions@9.2.5(@deck.gl/core@9.2.8)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/mesh-layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@loaders.gl/core@4.3.4)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
+      '@deck.gl/layers':
+        specifier: ^9.2.8
+        version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
+      '@deck.gl/mapbox':
+        specifier: ^9.2.8
+        version: 9.2.8(@deck.gl/core@9.2.8)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@math.gl/web-mercator@4.1.0)
+      '@deck.gl/mesh-layers':
+        specifier: ^9.2.8
+        version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))
+      '@developmentseed/deck.gl-geotiff':
+        specifier: workspace:^
+        version: link:../../packages/deck.gl-geotiff
+      '@developmentseed/deck.gl-raster':
+        specifier: workspace:^
+        version: link:../../packages/deck.gl-raster
+      '@developmentseed/geotiff':
+        specifier: workspace:^
+        version: link:../../packages/geotiff
+      '@luma.gl/core':
+        specifier: ^9.2.6
+        version: 9.2.6
+      '@luma.gl/shadertools':
+        specifier: ^9.2.6
+        version: 9.2.6(@luma.gl/core@9.2.6)
+      maplibre-gl:
+        specifier: ^5.17.0
+        version: 5.17.0
+      proj4:
+        specifier: ^2.20.2
+        version: 2.20.2
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
+      react-map-gl:
+        specifier: ^8.1.0
+        version: 8.1.0(maplibre-gl@5.17.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.10
+        version: 19.2.10
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.10)
+      '@vitejs/plugin-react':
+        specifier: ^5.1.2
+        version: 5.1.2(vite@7.3.1(@types/node@25.1.0)(tsx@4.21.0))
+      gh-pages:
+        specifier: ^6.3.0
+        version: 6.3.0
+      vite:
+        specifier: ^7.3.1
+        version: 7.3.1(@types/node@25.1.0)(tsx@4.21.0)
+
   examples/land-cover:
     dependencies:
       '@deck.gl/core':
@@ -245,8 +309,8 @@ importers:
   packages/deck.gl-geotiff:
     dependencies:
       '@cogeotiff/core':
-        specifier: ^9.3.0
-        version: 9.3.0
+        specifier: file:/Users/gadomski/Code/blacha/cogeotiff/packages/core
+        version: file:../../blacha/cogeotiff/packages/core
       '@deck.gl/core':
         specifier: ^9.2.8
         version: 9.2.8
@@ -395,8 +459,8 @@ importers:
         specifier: ^11.0.2
         version: 11.0.2
       '@cogeotiff/core':
-        specifier: ^9.3.0
-        version: 9.3.0
+        specifier: file:/Users/gadomski/Code/blacha/cogeotiff/packages/core
+        version: file:../../blacha/cogeotiff/packages/core
       '@developmentseed/affine':
         specifier: workspace:^
         version: link:../affine
@@ -406,6 +470,9 @@ importers:
       '@developmentseed/morecantile':
         specifier: workspace:^
         version: link:../morecantile
+      fzstd:
+        specifier: ^0.1.1
+        version: 0.1.1
       uuid:
         specifier: ^13.0.0
         version: 13.0.0
@@ -652,8 +719,8 @@ packages:
     resolution: {integrity: sha512-3BcrHK4XDm3t4vDx1OisgcOZ05+EarEqwaGVIL7IMHUmkXwN/Aprlnr7aVP3BYcltgcCcfMd1pXQicbSrP563g==}
     engines: {node: '>=16.0.0'}
 
-  '@cogeotiff/core@9.3.0':
-    resolution: {integrity: sha512-TrJ0s/MwNxEUym2uRHOrNh6gF50zhfiNvdAdi3Ec7tNFWmdw4CKQqbYtHIryOunUG18xa1senLUIGB3N+pCBGg==}
+  '@cogeotiff/core@file:../../blacha/cogeotiff/packages/core':
+    resolution: {directory: ../../blacha/cogeotiff/packages/core, type: directory}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   '@csstools/color-helpers@5.1.0':
@@ -1798,6 +1865,9 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
+  fzstd@0.1.1:
+    resolution: {integrity: sha512-dkuVSOKKwh3eas5VkJy1AW1vFpet8TA/fGmVA5krThl8YcOVE/8ZIoEA1+U1vEn5ckxxhLirSdY837azmbaNHA==}
+
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
@@ -2839,7 +2909,7 @@ snapshots:
 
   '@chunkd/source@11.1.0': {}
 
-  '@cogeotiff/core@9.3.0': {}
+  '@cogeotiff/core@file:../../blacha/cogeotiff/packages/core': {}
 
   '@csstools/color-helpers@5.1.0': {}
 
@@ -3961,6 +4031,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  fzstd@0.1.1: {}
 
   gensync@1.0.0-beta.2: {}
 

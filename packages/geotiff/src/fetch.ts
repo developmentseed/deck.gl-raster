@@ -1,5 +1,5 @@
 import type { SampleFormat, TiffImage } from "@cogeotiff/core";
-import { TiffTag } from "@cogeotiff/core";
+import { PlanarConfiguration, TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
 import type { RasterArray } from "./array.js";
 import type { ProjJson } from "./crs.js";
@@ -35,13 +35,13 @@ export async function fetchTile(
   self: HasTiffReference,
   x: number,
   y: number,
-  options: { boundless?: boolean; signal?: AbortSignal } = {},
+  options: { boundless?: boolean; signal?: AbortSignal; band?: number } = {},
 ): Promise<Tile> {
   if (self.maskImage != null) {
     throw new Error("Mask fetching not implemented yet");
   }
 
-  const tile = await self.image.getTile(x, y, options);
+  const tile = await getTileForBand(self.image, x, y, options.band, options);
   if (tile === null) {
     throw new Error("Tile not found");
   }
@@ -65,10 +65,14 @@ export async function fetchTile(
 
   const samplesPerPixel = self.image.value(TiffTag.SamplesPerPixel) ?? 1;
 
+  // For band-separate images, each tile contains a single band's data.
+  const isBandSeparate = planarConfiguration === PlanarConfiguration.Separate;
+  const tileSamplesPerPixel = isBandSeparate ? 1 : samplesPerPixel;
+
   const decodedPixels = await decode(bytes, compression, {
     sampleFormat,
     bitsPerSample,
-    samplesPerPixel,
+    samplesPerPixel: tileSamplesPerPixel,
     width: self.tileWidth,
     height: self.tileHeight,
     predictor,
@@ -77,7 +81,7 @@ export async function fetchTile(
 
   const array: RasterArray = {
     ...decodedPixels,
-    count: samplesPerPixel,
+    count: tileSamplesPerPixel,
     height: self.tileHeight,
     width: self.tileWidth,
     mask: null,
@@ -166,6 +170,40 @@ function clipToImageBounds(
     height: clippedHeight,
     bands: clippedBands,
   };
+}
+
+/**
+ * Fetch a tile, optionally for a specific band in band-separate images.
+ *
+ * For band-separate (PlanarConfiguration=Separate) TIFFs, tile offsets are
+ * laid out as all spatial tiles for band 0, then band 1, etc. cogeotiff's
+ * `getTile(x, y)` always fetches band 0. This helper computes the correct
+ * flat tile index to fetch an arbitrary band.
+ */
+async function getTileForBand(
+  image: TiffImage,
+  x: number,
+  y: number,
+  band: number | undefined,
+  options?: { signal?: AbortSignal },
+) {
+  if (band == null || band === 0) {
+    return image.getTile(x, y, options);
+  }
+
+  const size = image.size;
+  const tiles = image.tileSize;
+  if (tiles == null) {
+    throw new Error("Tiff is not tiled");
+  }
+
+  const nxTiles = Math.ceil(size.width / tiles.width);
+  const nyTiles = Math.ceil(size.height / tiles.height);
+  const spatialTileCount = nxTiles * nyTiles;
+  const idx = band * spatialTileCount + y * nxTiles + x;
+
+  const { offset, imageSize } = await image.getTileSize(idx);
+  return image.getBytes(offset, imageSize, options);
 }
 
 function getUniqueSampleFormat(
