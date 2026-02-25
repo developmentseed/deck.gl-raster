@@ -21,7 +21,10 @@ const COG_URL =
 export default function App() {
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
-  const [viewState, setViewState] = useState({
+
+  // Use initialViewState (uncontrolled) so deck.gl manages view state internally.
+  // Updating the object reference triggers deck.gl to transition to the new view.
+  const [initialViewState, setInitialViewState] = useState({
     longitude: 0,
     latitude: 0,
     zoom: 1,
@@ -40,11 +43,15 @@ export default function App() {
       },
     ) => {
       const { west, south, east, north } = options.geographicBounds;
-      console.log("onGeoTIFFLoad fired:", { west, south, east, north });
-      setViewState({
+      const lonSpan = east - west;
+      const latSpan = north - south;
+      const maxSpan = Math.max(lonSpan, latSpan);
+      // At zoom N, ~360/2^N degrees are visible; subtract 1 for padding
+      const zoom = Math.log2(360 / maxSpan) - 1;
+      setInitialViewState({
         longitude: (west + east) / 2,
         latitude: (south + north) / 2,
-        zoom: 3,
+        zoom,
       });
     },
     [],
@@ -92,10 +99,7 @@ export default function App() {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <DeckGL
         views={new GlobeView()}
-        viewState={viewState}
-        onViewStateChange={({ viewState: vs }) =>
-          setViewState(vs as typeof viewState)
-        }
+        initialViewState={initialViewState}
         controller={true}
         layers={layers}
       />
