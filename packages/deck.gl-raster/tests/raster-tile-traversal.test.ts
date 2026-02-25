@@ -11,6 +11,7 @@ const {
   getMetersPerPixel,
   rescaleEPSG3857ToCommonSpace,
   sampleReferencePointsInEPSG3857,
+  sampleReferencePointsInWgs84,
   RasterTileNode,
 } = __TEST_EXPORTS;
 
@@ -214,6 +215,7 @@ describe("RasterTileNode.insideBounds", () => {
     return new RasterTileNode(x, y, z, {
       metadata: WebMercator,
       projectTo3857: identity,
+      projectTo4326: identity,
     });
   }
 
@@ -258,6 +260,7 @@ describe("RasterTileNode.getBoundingVolume (Mercator)", () => {
     const node = new RasterTileNode(0, 0, 0, {
       metadata: WebMercator,
       projectTo3857: identity,
+      projectTo4326: identity,
     });
 
     const zRange: [number, number] = [0, 0];
@@ -283,10 +286,12 @@ describe("RasterTileNode.getBoundingVolume (Mercator)", () => {
     const nodeZ0 = new RasterTileNode(0, 0, 0, {
       metadata: WebMercator,
       projectTo3857: identity,
+      projectTo4326: identity,
     });
     const nodeZ1 = new RasterTileNode(0, 0, 1, {
       metadata: WebMercator,
       projectTo3857: identity,
+      projectTo4326: identity,
     });
 
     const zRange: [number, number] = [0, 0];
@@ -308,6 +313,7 @@ describe("RasterTileNode.children", () => {
     const node = new RasterTileNode(0, 0, 0, {
       metadata: WebMercator,
       projectTo3857: identity,
+      projectTo4326: identity,
     });
 
     const children = node.children;
@@ -333,8 +339,121 @@ describe("RasterTileNode.children", () => {
     const node = new RasterTileNode(0, 0, maxZ, {
       metadata: WebMercator,
       projectTo3857: identity,
+      projectTo4326: identity,
     });
 
     expect(node.children).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sampleReferencePointsInWgs84
+// ---------------------------------------------------------------------------
+describe("sampleReferencePointsInWgs84", () => {
+  it("identity projection returns input coordinates unchanged", () => {
+    const identity: ProjectionFunction = (x, y) => [x, y];
+    const tileBounds: [number, number, number, number] = [100, 200, 300, 400];
+    const refPoints: [number, number][] = [
+      [0, 0],
+      [1, 1],
+      [0.5, 0.5],
+    ];
+    const result = sampleReferencePointsInWgs84(
+      refPoints,
+      tileBounds,
+      identity,
+    );
+    expect(result).toHaveLength(3);
+    expect(result[0]![0]).toBeCloseTo(100, 5);
+    expect(result[0]![1]).toBeCloseTo(200, 5);
+    expect(result[1]![0]).toBeCloseTo(300, 5);
+    expect(result[1]![1]).toBeCloseTo(400, 5);
+    expect(result[2]![0]).toBeCloseTo(200, 5);
+    expect(result[2]![1]).toBeCloseTo(300, 5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RasterTileNode — getBoundingVolume (Globe path)
+// ---------------------------------------------------------------------------
+describe("RasterTileNode.getBoundingVolume (Globe)", () => {
+  it("computes a bounding volume using the project function", () => {
+    const identity: ProjectionFunction = (x, y) => [x, y];
+
+    // Mock globe project function that maps [lng, lat, z] to 3D common space
+    // Simple sphere: x = cos(lat)*cos(lng), y = cos(lat)*sin(lng), z = sin(lat)
+    // But for testing, a simple linear transform is sufficient to verify
+    // the plumbing works
+    const mockProject = (xyz: number[]): number[] => {
+      return [xyz[0]! * 10, xyz[1]! * 10, xyz[2]! || 0];
+    };
+
+    const node = new RasterTileNode(0, 0, 0, {
+      metadata: WebMercator,
+      projectTo3857: identity,
+      projectTo4326: identity,
+    });
+
+    const zRange: [number, number] = [0, 0];
+    const { boundingVolume, commonSpaceBounds, centerLatitude } =
+      node.getBoundingVolume(zRange, mockProject);
+
+    // Should have a valid OrientedBoundingBox
+    expect(boundingVolume).toBeDefined();
+    expect(boundingVolume.center).toBeDefined();
+    expect(boundingVolume.halfAxes).toBeDefined();
+
+    // Common space bounds should be defined
+    const [minX, minY, maxX, maxY] = commonSpaceBounds;
+    expect(Number.isFinite(minX)).toBe(true);
+    expect(Number.isFinite(minY)).toBe(true);
+    expect(maxX).toBeGreaterThan(minX);
+    expect(maxY).toBeGreaterThan(minY);
+
+    // Center latitude should be finite
+    expect(Number.isFinite(centerLatitude)).toBe(true);
+  });
+
+  it("produces different bounding volumes than the Mercator path", () => {
+    const identity: ProjectionFunction = (x, y) => [x, y];
+    const mockProject = (xyz: number[]): number[] => {
+      return [xyz[0]! * 5, xyz[1]! * 5, 0];
+    };
+
+    const node = new RasterTileNode(0, 0, 0, {
+      metadata: WebMercator,
+      projectTo3857: identity,
+      projectTo4326: identity,
+    });
+
+    const zRange: [number, number] = [0, 0];
+    const mercator = node.getBoundingVolume(zRange, null);
+    const globe = node.getBoundingVolume(zRange, mockProject);
+
+    // The bounding volumes should differ because the common spaces differ
+    expect(globe.commonSpaceBounds[0]).not.toBeCloseTo(
+      mercator.commonSpaceBounds[0],
+      1,
+    );
+  });
+
+  it("returns centerLatitude from WGS84 reference points", () => {
+    // projectTo4326 that always returns lng=0, lat=45
+    const mockTo4326: ProjectionFunction = (_x, _y) => [0, 45];
+    const identity: ProjectionFunction = (x, y) => [x, y];
+    const mockProject = (xyz: number[]): number[] => [
+      xyz[0]!,
+      xyz[1]!,
+      xyz[2]! || 0,
+    ];
+
+    const node = new RasterTileNode(0, 0, 0, {
+      metadata: WebMercator,
+      projectTo3857: identity,
+      projectTo4326: mockTo4326,
+    });
+
+    const { centerLatitude } = node.getBoundingVolume([0, 0], mockProject);
+    expect(centerLatitude).toBeCloseTo(45, 5);
   });
 });
