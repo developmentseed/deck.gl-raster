@@ -61,7 +61,7 @@
     "@deck.gl/geo-layers": "^9.2.7",
     "@deck.gl/layers": "^9.2.7",
     "@deck.gl/mesh-layers": "^9.2.7",
-    "@luma.gl/core": "^9.2.7"
+    "@luma.gl/core": "^9.2.6"
   },
   "volta": {
     "extends": "../../package.json"
