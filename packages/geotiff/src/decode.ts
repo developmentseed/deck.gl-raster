@@ -46,15 +46,9 @@ registry.set(Compression.DeflateOther, () =>
 registry.set(Compression.Lzw, () =>
   import("./codecs/lzw.js").then((m) => m.decode),
 );
-// registry.set(Compression.Zstd, () =>
-//   import("../codecs/zstd.js").then((m) => m.decode),
-// );
-// registry.set(Compression.Lzma, () =>
-//   import("../codecs/lzma.js").then((m) => m.decode),
-// );
-// registry.set(Compression.Jp2000, () =>
-//   import("../codecs/jp2000.js").then((m) => m.decode),
-// );
+registry.set(Compression.Zstd, () =>
+  import("./codecs/zstd.js").then((m) => m.decode),
+);
 registry.set(Compression.Jpeg, () => Promise.resolve(decodeViaCanvas));
 registry.set(Compression.Jpeg6, () => Promise.resolve(decodeViaCanvas));
 registry.set(Compression.Webp, () => Promise.resolve(decodeViaCanvas));

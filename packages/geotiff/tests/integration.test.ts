@@ -5,8 +5,8 @@
  * JavaScript, so we use it as a ground truth for pixel values, dimensions, and
  * georeferencing.
  *
- * Fixtures that require unsupported codecs (WebP, JPEG, LZW, LZMA, JXL,
- * zstd) are intentionally omitted here.
+ * Fixtures that require unsupported codecs (WebP, JPEG, LZW, LZMA, JXL)
+ * or band-separate planar configuration are intentionally omitted here.
  */
 
 import type { GeoTIFFImage, GeoTIFF as GeotiffJs } from "geotiff";
