@@ -18,6 +18,7 @@
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@luma.gl/core": "9.2.6",
     "@luma.gl/shadertools": "9.2.6",
+    "@luma.gl/webgl": "9.2.6",
     "proj4": "^2.20.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"

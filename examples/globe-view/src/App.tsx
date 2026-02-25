@@ -1,8 +1,14 @@
 import { _GlobeView as GlobeView } from "@deck.gl/core";
-import { SolidPolygonLayer } from "@deck.gl/layers";
+import { GeoJsonLayer, SolidPolygonLayer } from "@deck.gl/layers";
 import { DeckGL } from "@deck.gl/react";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
-import { useState } from "react";
+import { luma } from "@luma.gl/core";
+import { webgl2Adapter } from "@luma.gl/webgl";
+import { useCallback, useState } from "react";
+
+// Register WebGL adapter — required when DeckGL creates its own context
+// (unlike MapboxOverlay which reuses MaplibreGL's existing context)
+luma.registerAdapters([webgl2Adapter]);
 
 // New Zealand imagery (NZTM2000 projection)
 const COG_URL =
@@ -12,15 +18,37 @@ const COG_URL =
 // const COG_URL =
 //   "https://data.source.coop/ausantarctic/ghrsst-mur-v2/2020/12/12/20201212090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-v02.0-fv04.1_sea_ice_fraction.tif";
 
-const INITIAL_VIEW_STATE = {
-  longitude: 170,
-  latitude: -42,
-  zoom: 3,
-};
-
 export default function App() {
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
+  const [viewState, setViewState] = useState({
+    longitude: 0,
+    latitude: 0,
+    zoom: 1,
+  });
+
+  const onGeoTIFFLoad = useCallback(
+    (
+      _tiff: unknown,
+      options: {
+        geographicBounds: {
+          west: number;
+          south: number;
+          east: number;
+          north: number;
+        };
+      },
+    ) => {
+      const { west, south, east, north } = options.geographicBounds;
+      console.log("onGeoTIFFLoad fired:", { west, south, east, north });
+      setViewState({
+        longitude: (west + east) / 2,
+        latitude: (south + north) / 2,
+        zoom: 3,
+      });
+    },
+    [],
+  );
 
   const layers = [
     // Dark background sphere
@@ -41,11 +69,22 @@ export default function App() {
       filled: true,
       getFillColor: [10, 20, 40],
     }),
+    // Land masses basemap (Natural Earth via deck.gl CDN)
+    new GeoJsonLayer({
+      id: "basemap",
+      data: "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_scale_rank.geojson",
+      stroked: true,
+      filled: true,
+      lineWidthMinPixels: 1,
+      getLineColor: [40, 60, 90],
+      getFillColor: [25, 40, 70],
+    }),
     new COGLayer({
       id: "cog-layer",
       geotiff: COG_URL,
       debug,
       debugOpacity,
+      onGeoTIFFLoad,
     }),
   ];
 
@@ -53,7 +92,10 @@ export default function App() {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <DeckGL
         views={new GlobeView()}
-        initialViewState={INITIAL_VIEW_STATE}
+        viewState={viewState}
+        onViewStateChange={({ viewState: vs }) =>
+          setViewState(vs as typeof viewState)
+        }
         controller={true}
         layers={layers}
       />
