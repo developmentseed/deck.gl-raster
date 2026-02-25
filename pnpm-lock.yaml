@@ -134,6 +134,9 @@ importers:
       '@luma.gl/shadertools':
         specifier: ^9.2.6
         version: 9.2.6(@luma.gl/core@9.2.6)
+      '@luma.gl/webgl':
+        specifier: ^9.2.6
+        version: 9.2.6(@luma.gl/core@9.2.6)
       proj4:
         specifier: ^2.20.2
         version: 2.20.2
