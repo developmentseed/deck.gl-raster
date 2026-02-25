@@ -23,16 +23,10 @@ function makeReprojectionFns(
   const wrap = opts?.wrapLongitude ?? false;
   return {
     forwardTransform(pixelX: number, pixelY: number): [number, number] {
-      return [
-        originX + pixelX * pixelSizeX,
-        originY + pixelY * pixelSizeY,
-      ];
+      return [originX + pixelX * pixelSizeX, originY + pixelY * pixelSizeY];
     },
     inverseTransform(crsX: number, crsY: number): [number, number] {
-      return [
-        (crsX - originX) / pixelSizeX,
-        (crsY - originY) / pixelSizeY,
-      ];
+      return [(crsX - originX) / pixelSizeX, (crsY - originY) / pixelSizeY];
     },
     forwardReproject(x: number, y: number): [number, number] {
       // Simulate proj4 behavior: wrap longitude to [-180, 180]

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import _WebMercator from "../../morecantile/spec/schemas/tms/2.0/json/examples/tilematrixset/WebMercatorQuad.json";
 import _UTM31 from "../../morecantile/spec/schemas/tms/2.0/json/examples/tilematrixset/UTM31WGS84Quad.json";
-import type { TileMatrix, TileMatrixSet } from "../../morecantile/src/types/index";
-import { __TEST_EXPORTS, getTileIndices } from "../src/raster-tileset/raster-tile-traversal";
+import _WebMercator from "../../morecantile/spec/schemas/tms/2.0/json/examples/tilematrixset/WebMercatorQuad.json";
+import type {
+  TileMatrix,
+  TileMatrixSet,
+} from "../../morecantile/src/types/index";
+import { __TEST_EXPORTS } from "../src/raster-tileset/raster-tile-traversal";
 import type { ProjectionFunction } from "../src/raster-tileset/types";
 
 const {
@@ -211,7 +214,11 @@ describe("getMetersPerPixel", () => {
 // ---------------------------------------------------------------------------
 describe("RasterTileNode.insideBounds", () => {
   const identity: ProjectionFunction = (x, y) => [x, y];
-  function makeNode(x: number, y: number, z: number): InstanceType<typeof RasterTileNode> {
+  function makeNode(
+    x: number,
+    y: number,
+    z: number,
+  ): InstanceType<typeof RasterTileNode> {
     return new RasterTileNode(x, y, z, {
       metadata: WebMercator,
       projectTo3857: identity,
@@ -222,14 +229,24 @@ describe("RasterTileNode.insideBounds", () => {
   it("returns true for overlapping bounds", () => {
     const node = makeNode(0, 0, 0);
     const bounds = [0, 0, 300, 300] as [number, number, number, number];
-    const commonSpaceBounds = [100, 100, 400, 400] as [number, number, number, number];
+    const commonSpaceBounds = [100, 100, 400, 400] as [
+      number,
+      number,
+      number,
+      number,
+    ];
     expect(node.insideBounds(bounds, commonSpaceBounds)).toBe(true);
   });
 
   it("returns false for non-overlapping bounds", () => {
     const node = makeNode(0, 0, 0);
     const bounds = [0, 0, 50, 50] as [number, number, number, number];
-    const commonSpaceBounds = [100, 100, 400, 400] as [number, number, number, number];
+    const commonSpaceBounds = [100, 100, 400, 400] as [
+      number,
+      number,
+      number,
+      number,
+    ];
     expect(node.insideBounds(bounds, commonSpaceBounds)).toBe(false);
   });
 
@@ -237,7 +254,12 @@ describe("RasterTileNode.insideBounds", () => {
     const node = makeNode(0, 0, 0);
     // Bounds touch at x=100: bounds goes up to 100, tile starts at 99
     const bounds = [0, 0, 100, 100] as [number, number, number, number];
-    const commonSpaceBounds = [99, 0, 200, 200] as [number, number, number, number];
+    const commonSpaceBounds = [99, 0, 200, 200] as [
+      number,
+      number,
+      number,
+      number,
+    ];
     expect(node.insideBounds(bounds, commonSpaceBounds)).toBe(true);
   });
 
@@ -245,7 +267,12 @@ describe("RasterTileNode.insideBounds", () => {
     const node = makeNode(0, 0, 0);
     // tile starts exactly where bounds end — no overlap (< not <=)
     const bounds = [0, 0, 100, 100] as [number, number, number, number];
-    const commonSpaceBounds = [100, 0, 200, 200] as [number, number, number, number];
+    const commonSpaceBounds = [100, 0, 200, 200] as [
+      number,
+      number,
+      number,
+      number,
+    ];
     expect(node.insideBounds(bounds, commonSpaceBounds)).toBe(false);
   });
 });
