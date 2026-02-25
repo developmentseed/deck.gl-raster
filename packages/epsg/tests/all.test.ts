@@ -27,22 +27,15 @@ describe("loadEPSG", async () => {
     expect(wkt4326).toBeDefined();
     expect(wkt3857).toBeDefined();
 
-    // Python code used to generate expected values:
-    // import pyproj
-    // from pyproj import CRS
-
-    // epsg_4326 = CRS.from_epsg(4326)
-    // epsg_3857 = CRS.from_epsg(3857)
-    // transformer = pyproj.Transformer.from_crs(epsg_4326, epsg_3857, always_xy=True)
-    // transformer.transform(1, 52)
-    // (111319.49079327357, 6800125.454397307)
-
-    const converter = proj4(wkt4326, wkt3857);
+    const wktConverter = proj4(wkt4326, wkt3857);
     const source = [1, 52];
-    const [x, y] = converter.forward(source);
+    const [x, y] = wktConverter.forward(source);
+
+    const builtinConverter = proj4("EPSG:4326", "EPSG:3857");
+    const [x_builtin, y_builtin] = builtinConverter.forward(source);
 
     // Expected Web Mercator coords (metres), tolerance of 100m
-    expect(x).toBeCloseTo(111319.49079327357, 2);
-    expect(y).toBeCloseTo(6800125.454397307, 2);
+    expect(x).toBeCloseTo(x_builtin, 2);
+    expect(y).toBeCloseTo(y_builtin, 2);
   });
 });
