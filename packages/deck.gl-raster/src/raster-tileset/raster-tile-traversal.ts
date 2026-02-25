@@ -780,5 +780,10 @@ function getMetersPerPixelAtBoundingVolume(
  */
 export const __TEST_EXPORTS = {
   computeProjectedTileBounds,
+  getOverlappingChildRange,
+  getMetersPerPixel,
+  getMetersPerPixelAtBoundingVolume,
+  rescaleEPSG3857ToCommonSpace,
+  sampleReferencePointsInEPSG3857,
   RasterTileNode,
 };
