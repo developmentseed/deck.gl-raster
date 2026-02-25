@@ -85,6 +85,14 @@ export class RasterReprojector {
   crossesAntimeridian: boolean = false;
 
   /**
+   * Whether this tile contains or is very near a geographic pole.
+   * When true, the tile's WGS84 output positions have extreme latitude
+   * values (|lat| > 85°) and the longitude range is very wide, indicating
+   * the pole-centered geometry that requires more mesh refinement.
+   */
+  containsPole: boolean = false;
+
+  /**
    * Longitude offset applied to normalize antimeridian-crossing tiles.
    * When `crossesAntimeridian` is true, this is 360 (negative longitudes
    * are shifted by +360). Otherwise 0.
@@ -149,19 +157,38 @@ export class RasterReprojector {
     // vertices exceeds 180°, the tile crosses the ±180° meridian.
     this._detectAntimeridian();
 
+    // Detect polar tiles: vertices near ±90° latitude with wide longitude
+    // spread indicate a tile at or near a geographic pole.
+    this._detectPole();
+
     // add initial two triangles
     const t0 = this._addTriangle(p3, p0, p2, -1, -1, -1);
     this._addTriangle(p0, p3, p1, t0, -1, -1);
     this._flush();
   }
 
-  // refine the mesh until its maximum error gets below the given one
-  run(maxError: number = DEFAULT_MAX_ERROR): void {
+  /**
+   * Refine the mesh until its maximum error gets below the given one.
+   *
+   * @param maxError - Maximum allowed reprojection error in pixels.
+   * @param opts.maxTriangles - Safety cap on triangle count. Refinement
+   *   stops when this limit is reached even if maxError hasn't been met.
+   *   Useful for polar tiles where convergence is slow due to extreme
+   *   longitude variation near the pole.
+   */
+  run(
+    maxError: number = DEFAULT_MAX_ERROR,
+    opts?: { maxTriangles?: number },
+  ): void {
     if (maxError <= 0) {
       throw new Error("maxError must be positive");
     }
 
-    while (this.getMaxError() > maxError) {
+    const maxTriangles = opts?.maxTriangles ?? Infinity;
+    while (
+      this.getMaxError() > maxError &&
+      this.triangles.length / 3 < maxTriangles
+    ) {
       this.refine();
     }
   }
@@ -215,6 +242,27 @@ export class RasterReprojector {
         if (lng < 0) {
           this.exactOutputPositions[i * 2] = lng + 360;
         }
+      }
+    }
+  }
+
+  /**
+   * Detect whether this tile contains or is very near a geographic pole.
+   *
+   * A tile is considered polar if it crosses the antimeridian (wide
+   * longitude spread) and any vertex has |latitude| > 75°. The
+   * combination of these conditions uniquely identifies tiles in polar
+   * projections — non-polar antimeridian tiles (e.g., UTM zone 1) have
+   * much narrower longitude ranges that don't exceed 180°.
+   */
+  private _detectPole(): void {
+    if (!this.crossesAntimeridian) return;
+
+    for (let i = 0; i < 4; i++) {
+      const lat = this.exactOutputPositions[i * 2 + 1]!;
+      if (Math.abs(lat) > 75) {
+        this.containsPole = true;
+        return;
       }
     }
   }
