@@ -1,7 +1,7 @@
 import type { SampleFormat, TiffImage } from "@cogeotiff/core";
-import { TiffTag } from "@cogeotiff/core";
+import { PlanarConfiguration, TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
-import type { RasterArray } from "./array.js";
+import type { RasterArray, RasterTypedArray } from "./array.js";
 import type { ProjJson } from "./crs.js";
 import { decode } from "./decode.js";
 import type { CachedTags } from "./ifd.js";
@@ -41,18 +41,12 @@ export async function fetchTile(
     throw new Error("Mask fetching not implemented yet");
   }
 
-  const tile = await self.image.getTile(x, y, options);
-  if (tile === null) {
-    throw new Error("Tile not found");
-  }
-
   const {
     bitsPerSample: bitsPerSamples,
     predictor,
     planarConfiguration,
     sampleFormat: sampleFormats,
   } = self.cachedTags;
-  const { bytes, compression } = tile;
   const { sampleFormat, bitsPerSample } = getUniqueSampleFormat(
     sampleFormats,
     bitsPerSamples,
@@ -65,26 +59,49 @@ export async function fetchTile(
 
   const samplesPerPixel = self.image.value(TiffTag.SamplesPerPixel) ?? 1;
 
-  const decodedPixels = await decode(bytes, compression, {
-    sampleFormat,
-    bitsPerSample,
-    samplesPerPixel,
-    width: self.tileWidth,
-    height: self.tileHeight,
-    predictor,
-    planarConfiguration,
-  });
+  let array: RasterArray;
 
-  const array: RasterArray = {
-    ...decodedPixels,
-    count: samplesPerPixel,
-    height: self.tileHeight,
-    width: self.tileWidth,
-    mask: null,
-    transform: tileTransform,
-    crs: self.crs,
-    nodata: self.nodata,
-  };
+  if (
+    planarConfiguration === PlanarConfiguration.Separate &&
+    samplesPerPixel > 1
+  ) {
+    array = await fetchBandSeparateTile(self, x, y, {
+      sampleFormat,
+      bitsPerSample,
+      samplesPerPixel,
+      predictor,
+      planarConfiguration,
+      tileTransform,
+      signal: options.signal,
+    });
+  } else {
+    const tile = await self.image.getTile(x, y, options);
+    if (tile === null) {
+      throw new Error("Tile not found");
+    }
+
+    const { bytes, compression } = tile;
+    const decodedPixels = await decode(bytes, compression, {
+      sampleFormat,
+      bitsPerSample,
+      samplesPerPixel,
+      width: self.tileWidth,
+      height: self.tileHeight,
+      predictor,
+      planarConfiguration,
+    });
+
+    array = {
+      ...decodedPixels,
+      count: samplesPerPixel,
+      height: self.tileHeight,
+      width: self.tileWidth,
+      mask: null,
+      transform: tileTransform,
+      crs: self.crs,
+      nodata: self.nodata,
+    };
+  }
 
   return {
     x,
@@ -93,6 +110,71 @@ export async function fetchTile(
       options.boundless === false
         ? clipToImageBounds(self, x, y, array)
         : array,
+  };
+}
+
+async function fetchBandSeparateTile(
+  self: HasTiffReference,
+  x: number,
+  y: number,
+  opts: {
+    sampleFormat: SampleFormat;
+    bitsPerSample: number;
+    samplesPerPixel: number;
+    predictor: CachedTags["predictor"];
+    planarConfiguration: CachedTags["planarConfiguration"];
+    tileTransform: RasterArray["transform"];
+    signal?: AbortSignal;
+  },
+): Promise<RasterArray> {
+  const { samplesPerPixel, planarConfiguration } = opts;
+  const nxTiles = self.image.tileCount.x;
+  const nyTiles = self.image.tileCount.y;
+  const tilesPerBand = nxTiles * nyTiles;
+  const baseTileIndex = y * nxTiles + x;
+
+  const bandPromises: Promise<RasterTypedArray>[] = [];
+  for (let b = 0; b < samplesPerPixel; b++) {
+    const tileIndex = b * tilesPerBand + baseTileIndex;
+    bandPromises.push(
+      self.image.getTileSize(tileIndex).then(async ({ offset, imageSize }) => {
+        const result = await self.image.getBytes(offset, imageSize, {
+          signal: opts.signal,
+        });
+        if (result === null) {
+          throw new Error(
+            `Band ${b} tile not found at index ${tileIndex}`,
+          );
+        }
+        const decoded = await decode(result.bytes, result.compression, {
+          sampleFormat: opts.sampleFormat,
+          bitsPerSample: opts.bitsPerSample,
+          samplesPerPixel: 1,
+          width: self.tileWidth,
+          height: self.tileHeight,
+          predictor: opts.predictor,
+          planarConfiguration,
+        });
+        if (decoded.layout === "band-separate") {
+          return decoded.bands[0]!;
+        }
+        return decoded.data;
+      }),
+    );
+  }
+
+  const bands = await Promise.all(bandPromises);
+
+  return {
+    layout: "band-separate",
+    bands,
+    count: samplesPerPixel,
+    height: self.tileHeight,
+    width: self.tileWidth,
+    mask: null,
+    transform: opts.tileTransform,
+    crs: self.crs,
+    nodata: self.nodata,
   };
 }
 
