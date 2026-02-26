@@ -31,8 +31,16 @@ describe("loadEPSG", async () => {
     const source = [1, 52];
     const [x, y] = wktConverter.forward(source);
 
+    console.log("wkt4326", wkt4326);
+    console.log("wkt3857", wkt3857);
+    console.log("proj4.defs(4326)", proj4.defs("EPSG:4326"));
+    console.log("proj4.defs(3857)", proj4.defs("EPSG:3857"));
+
     const builtinConverter = proj4("EPSG:4326", "EPSG:3857");
     const [x_builtin, y_builtin] = builtinConverter.forward(source);
+
+    console.log("y from WKT", y);
+    console.log("y from built-in", y_builtin);
 
     // Expected Web Mercator coords (metres), tolerance of 100m
     expect(x).toBeCloseTo(x_builtin, 2);
