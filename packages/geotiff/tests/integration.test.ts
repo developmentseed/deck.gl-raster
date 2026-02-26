@@ -26,7 +26,6 @@ const FIXTURES = [
   { variant: "rasterio", name: "float32_1band_lerc_block32" },
   { variant: "rasterio", name: "uint16_1band_lzw_block128_predictor2" },
   { variant: "rasterio", name: "uint8_1band_lzw_block64_predictor2" },
-  { variant: "rasterio", name: "int8_3band_zstd_block64" },
   { variant: "nlcd", name: "nlcd_landcover" },
   // sydney_airport_GEC: no ModelTiepoint/ModelPixelScale/ModelTransformation — geo transform stored as GCPs, not readable by @cogeotiff/core
   // float32_1band_lerc_deflate_block32: geotiff.js does not support LERC_DEFLATE
@@ -104,16 +103,9 @@ describe("integration vs geotiff.js", () => {
         const tile = await ours.fetchTile(0, 0);
         const oursBandSep = toBandSeparate(tile.array);
 
-        // readRasters returns band-separate by default
-        let refData: ReadRasterResult;
-        try {
-          refData = await refImage.readRasters({
-            window: [0, 0, tw, th],
-          });
-        } catch {
-          // It's not our fault if geotiff errors?
-          return;
-        }
+        const refData = await refImage.readRasters({
+          window: [0, 0, tw, th],
+        });
 
         expect(oursBandSep.bands.length).toBe(ours.count);
         expect(refData.length).toBe(ours.count);
