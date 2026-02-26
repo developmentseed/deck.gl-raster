@@ -1,7 +1,7 @@
 import type { Predictor, SampleFormat, TiffImage } from "@cogeotiff/core";
 import { PlanarConfiguration, TiffTag } from "@cogeotiff/core";
-import { compose, translation } from "@developmentseed/affine";
 import type { Affine } from "@developmentseed/affine";
+import { compose, translation } from "@developmentseed/affine";
 import type { RasterArray, RasterTypedArray } from "./array.js";
 import type { ProjJson } from "./crs.js";
 import { decode } from "./decode.js";
