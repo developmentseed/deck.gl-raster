@@ -142,9 +142,7 @@ async function fetchBandSeparateTile(
           signal: opts.signal,
         });
         if (result === null) {
-          throw new Error(
-            `Band ${b} tile not found at index ${tileIndex}`,
-          );
+          throw new Error(`Band ${b} tile not found at index ${tileIndex}`);
         }
         const decoded = await decode(result.bytes, result.compression, {
           sampleFormat: opts.sampleFormat,

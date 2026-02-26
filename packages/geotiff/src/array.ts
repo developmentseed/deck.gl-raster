@@ -132,7 +132,9 @@ export function toPixelInterleaved(
     array.layout === "pixel-interleaved"
       ? array.data.constructor
       : array.bands[0]!.constructor
-  ) as new (length: number) => RasterTypedArray;
+  ) as new (
+    length: number,
+  ) => RasterTypedArray;
 
   const data = new Ctor(sampleCount * bandOrder.length);
   const bandSource = toBandSeparate(array).bands;
