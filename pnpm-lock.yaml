@@ -102,6 +102,61 @@ importers:
         specifier: ^7.3.1
         version: 7.3.1(@types/node@25.1.0)(tsx@4.21.0)
 
+  examples/globe-view:
+    dependencies:
+      '@deck.gl/core':
+        specifier: ^9.2.8
+        version: 9.2.8
+      '@deck.gl/geo-layers':
+        specifier: ^9.2.8
+        version: 9.2.8(@deck.gl/core@9.2.8)(@deck.gl/extensions@9.2.5(@deck.gl/core@9.2.8)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/mesh-layers@9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@loaders.gl/core@4.3.4)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
+      '@deck.gl/layers':
+        specifier: ^9.2.8
+        version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
+      '@deck.gl/mesh-layers':
+        specifier: ^9.2.8
+        version: 9.2.8(@deck.gl/core@9.2.8)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))
+      '@deck.gl/react':
+        specifier: ^9.2.7
+        version: 9.2.9(@deck.gl/core@9.2.8)(@deck.gl/widgets@9.2.9(@deck.gl/core@9.2.8)(@luma.gl/core@9.2.6))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@developmentseed/deck.gl-geotiff':
+        specifier: workspace:^
+        version: link:../../packages/deck.gl-geotiff
+      '@developmentseed/deck.gl-raster':
+        specifier: workspace:^
+        version: link:../../packages/deck.gl-raster
+      '@developmentseed/geotiff':
+        specifier: workspace:^
+        version: link:../../packages/geotiff
+      '@luma.gl/core':
+        specifier: ^9.2.6
+        version: 9.2.6
+      '@luma.gl/shadertools':
+        specifier: ^9.2.6
+        version: 9.2.6(@luma.gl/core@9.2.6)
+      proj4:
+        specifier: ^2.20.2
+        version: 2.20.2
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.10
+        version: 19.2.10
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.10)
+      '@vitejs/plugin-react':
+        specifier: ^5.1.2
+        version: 5.1.2(vite@7.3.1(@types/node@25.1.0)(tsx@4.21.0))
+      vite:
+        specifier: ^7.3.1
+        version: 7.3.1(@types/node@25.1.0)(tsx@4.21.0)
+
   examples/land-cover:
     dependencies:
       '@deck.gl/core':
@@ -733,6 +788,20 @@ packages:
       '@luma.gl/engine': ^9.2.6
       '@luma.gl/gltf': ^9.2.6
       '@luma.gl/shadertools': ^9.2.6
+
+  '@deck.gl/react@9.2.9':
+    resolution: {integrity: sha512-ZADiRJhT8dI1z6NfC3cJ62j8nt4j/5AfUmXSHNn6hnOTJFJB1YScERnmM2lz9LYBwjlWTWEeTDIxQ66S4nClYg==}
+    peerDependencies:
+      '@deck.gl/core': ^9.2.8
+      '@deck.gl/widgets': ^9.2.8
+      react: '>=16.3.0'
+      react-dom: '>=16.3.0'
+
+  '@deck.gl/widgets@9.2.9':
+    resolution: {integrity: sha512-dFIT1sJZ8gxZE7l+b62TY5LH/92ABcsukK7jH3L3T6PYlbFOnNCby6dkZRySYbhWPE77lykXXsx1V/NQQlqs8Q==}
+    peerDependencies:
+      '@deck.gl/core': ^9.2.8
+      '@luma.gl/core': ^9.2.6
 
   '@developmentseed/lzw-tiff-decoder@0.2.2':
     resolution: {integrity: sha512-bsBIdV1LyqcrtnYtIYu3C/297X2wxeYkmmhHzR02OOX823sGxT8GLGdenTmwoXvNWkozk3b+ptXtJeSUmNPaTA==}
@@ -2178,6 +2247,9 @@ packages:
   potpack@2.1.0:
     resolution: {integrity: sha512-pcaShQc1Shq0y+E7GqJqvZj8DTthWV1KeHGdi0Z6IAin2Oi3JnLCOfwnCo84qc+HAp52wT9nK9H7FAJp5a44GQ==}
 
+  preact@10.28.4:
+    resolution: {integrity: sha512-uKFfOHWuSNpRFVTnljsCluEFq57OKT+0QdOiQo8XWnQ/pSvg7OpX5eNOejELXJMWy+BwM2nobz0FkvzmnpCNsQ==}
+
   prettier@3.8.1:
     resolution: {integrity: sha512-UOnG6LftzbdaHZcKoPFtOcCKztrQ57WkHDeRD9t/PTQtmT0NHSeWWepj6pS0z/N7+08BHFDQVUrfmfMRcZwbMg==}
     engines: {node: '>=14'}
@@ -2954,6 +3026,19 @@ snapshots:
       '@luma.gl/shadertools': 9.2.6(@luma.gl/core@9.2.6)
     transitivePeerDependencies:
       - '@loaders.gl/core'
+
+  '@deck.gl/react@9.2.9(@deck.gl/core@9.2.8)(@deck.gl/widgets@9.2.9(@deck.gl/core@9.2.8)(@luma.gl/core@9.2.6))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@deck.gl/core': 9.2.8
+      '@deck.gl/widgets': 9.2.9(@deck.gl/core@9.2.8)(@luma.gl/core@9.2.6)
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+
+  '@deck.gl/widgets@9.2.9(@deck.gl/core@9.2.8)(@luma.gl/core@9.2.6)':
+    dependencies:
+      '@deck.gl/core': 9.2.8
+      '@luma.gl/core': 9.2.6
+      preact: 10.28.4
 
   '@developmentseed/lzw-tiff-decoder@0.2.2': {}
 
@@ -4341,6 +4426,8 @@ snapshots:
       source-map-js: 1.2.1
 
   potpack@2.1.0: {}
+
+  preact@10.28.4: {}
 
   prettier@3.8.1: {}
 

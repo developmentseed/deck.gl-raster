@@ -32,6 +32,7 @@ export class TileMatrixSetTileset extends Tileset2D {
   private tms: TileMatrixSet;
   private wgs84Bounds: CornerBounds;
   private projectTo3857: ProjectionFunction;
+  private projectTo4326: ProjectionFunction;
 
   constructor(
     opts: Tileset2DProps,
@@ -47,6 +48,7 @@ export class TileMatrixSetTileset extends Tileset2D {
     super(opts);
     this.tms = tms;
     this.projectTo3857 = projectTo3857;
+    this.projectTo4326 = projectTo4326;
 
     if (!tms.boundingBox) {
       throw new Error(
@@ -86,6 +88,7 @@ export class TileMatrixSetTileset extends Tileset2D {
       zRange: opts.zRange ?? null,
       wgs84Bounds: this.wgs84Bounds,
       projectTo3857: this.projectTo3857,
+      projectTo4326: this.projectTo4326,
     });
 
     return tileIndices;
