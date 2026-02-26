@@ -9,7 +9,11 @@
  * are intentionally omitted here.
  */
 
-import type { GeoTIFFImage, GeoTIFF as GeotiffJs } from "geotiff";
+import type {
+  GeoTIFFImage,
+  GeoTIFF as GeotiffJs,
+  ReadRasterResult,
+} from "geotiff";
 import { fromFile } from "geotiff";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { toBandSeparate } from "../src/array.js";
@@ -101,7 +105,7 @@ describe("integration vs geotiff.js", () => {
         const oursBandSep = toBandSeparate(tile.array);
 
         // readRasters returns band-separate by default
-        let refData;
+        let refData: ReadRasterResult;
         try {
           refData = await refImage.readRasters({
             window: [0, 0, tw, th],
