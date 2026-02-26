@@ -478,8 +478,7 @@ export class RasterTileNode {
     }
 
     const commonSpaceBounds: Bounds = [minX, minY, maxX, maxY];
-    const boundingVolume =
-      makeOrientedBoundingBoxFromPoints(refPointPositions);
+    const boundingVolume = makeOrientedBoundingBoxFromPoints(refPointPositions);
     const [, centerLatitude] = worldToLngLat(boundingVolume.center);
 
     return {

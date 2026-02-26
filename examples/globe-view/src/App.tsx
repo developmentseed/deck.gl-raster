@@ -1,6 +1,6 @@
 import { _GlobeView as GlobeView } from "@deck.gl/core";
-import { DeckGL } from "@deck.gl/react";
 import { SolidPolygonLayer } from "@deck.gl/layers";
+import { DeckGL } from "@deck.gl/react";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import { useState } from "react";
 
@@ -122,9 +122,7 @@ export default function App() {
                   max="1"
                   step="0.01"
                   value={debugOpacity}
-                  onChange={(e) =>
-                    setDebugOpacity(parseFloat(e.target.value))
-                  }
+                  onChange={(e) => setDebugOpacity(parseFloat(e.target.value))}
                   style={{ width: "100%", cursor: "pointer" }}
                 />
               </label>
