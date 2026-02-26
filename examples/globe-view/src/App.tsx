@@ -2,13 +2,7 @@ import { _GlobeView as GlobeView } from "@deck.gl/core";
 import { GeoJsonLayer, SolidPolygonLayer } from "@deck.gl/layers";
 import { DeckGL } from "@deck.gl/react";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
-import { luma } from "@luma.gl/core";
-import { webgl2Adapter } from "@luma.gl/webgl";
 import { useCallback, useState } from "react";
-
-// Register WebGL adapter — required when DeckGL creates its own context
-// (unlike MapboxOverlay which reuses MaplibreGL's existing context)
-luma.registerAdapters([webgl2Adapter]);
 
 // New Zealand imagery (NZTM2000 projection)
 const COG_URL =
