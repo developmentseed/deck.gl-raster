@@ -9,11 +9,7 @@
  * are intentionally omitted here.
  */
 
-import type {
-  GeoTIFFImage,
-  GeoTIFF as GeotiffJs,
-  ReadRasterResult,
-} from "geotiff";
+import type { GeoTIFFImage, GeoTIFF as GeotiffJs } from "geotiff";
 import { fromFile } from "geotiff";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { toBandSeparate } from "../src/array.js";
