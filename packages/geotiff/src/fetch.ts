@@ -1,6 +1,7 @@
-import type { SampleFormat, TiffImage } from "@cogeotiff/core";
+import type { Predictor, SampleFormat, TiffImage } from "@cogeotiff/core";
 import { PlanarConfiguration, TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
+import type { Affine } from "@developmentseed/affine";
 import type { RasterArray, RasterTypedArray } from "./array.js";
 import type { ProjJson } from "./crs.js";
 import { decode } from "./decode.js";
@@ -121,9 +122,9 @@ async function fetchBandSeparateTile(
     sampleFormat: SampleFormat;
     bitsPerSample: number;
     samplesPerPixel: number;
-    predictor: CachedTags["predictor"];
-    planarConfiguration: CachedTags["planarConfiguration"];
-    tileTransform: RasterArray["transform"];
+    predictor: Predictor;
+    planarConfiguration: PlanarConfiguration;
+    tileTransform: Affine;
     signal?: AbortSignal;
   },
 ): Promise<RasterArray> {
