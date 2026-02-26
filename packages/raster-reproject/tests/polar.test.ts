@@ -24,16 +24,10 @@ function makePolarReprojectionFns(
 ): ReprojectionFns {
   return {
     forwardTransform(pixelX: number, pixelY: number): [number, number] {
-      return [
-        originX + pixelX * pixelSizeX,
-        originY + pixelY * pixelSizeY,
-      ];
+      return [originX + pixelX * pixelSizeX, originY + pixelY * pixelSizeY];
     },
     inverseTransform(crsX: number, crsY: number): [number, number] {
-      return [
-        (crsX - originX) / pixelSizeX,
-        (crsY - originY) / pixelSizeY,
-      ];
+      return [(crsX - originX) / pixelSizeX, (crsY - originY) / pixelSizeY];
     },
     forwardReproject(x: number, y: number): [number, number] {
       // Polar stereographic → WGS84
