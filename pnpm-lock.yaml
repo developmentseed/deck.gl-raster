@@ -245,8 +245,8 @@ importers:
   packages/deck.gl-geotiff:
     dependencies:
       '@cogeotiff/core':
-        specifier: ^9.3.0
-        version: 9.3.0
+        specifier: ^9.4.0
+        version: 9.4.0
       '@deck.gl/core':
         specifier: ^9.2.8
         version: 9.2.8
@@ -395,8 +395,8 @@ importers:
         specifier: ^11.0.2
         version: 11.0.2
       '@cogeotiff/core':
-        specifier: ^9.3.0
-        version: 9.3.0
+        specifier: ^9.4.0
+        version: 9.4.0
       '@developmentseed/affine':
         specifier: workspace:^
         version: link:../affine
@@ -652,8 +652,8 @@ packages:
     resolution: {integrity: sha512-3BcrHK4XDm3t4vDx1OisgcOZ05+EarEqwaGVIL7IMHUmkXwN/Aprlnr7aVP3BYcltgcCcfMd1pXQicbSrP563g==}
     engines: {node: '>=16.0.0'}
 
-  '@cogeotiff/core@9.3.0':
-    resolution: {integrity: sha512-TrJ0s/MwNxEUym2uRHOrNh6gF50zhfiNvdAdi3Ec7tNFWmdw4CKQqbYtHIryOunUG18xa1senLUIGB3N+pCBGg==}
+  '@cogeotiff/core@9.4.0':
+    resolution: {integrity: sha512-2aI7NHN2XMLTJx4LXghhYY2jMyJLJe4rnWTmnA6RuwaYjiZPhLc6PSmzNcaOebtraklucmJHXgfhTi3s+/XVaQ==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   '@csstools/color-helpers@5.1.0':
@@ -2839,7 +2839,7 @@ snapshots:
 
   '@chunkd/source@11.1.0': {}
 
-  '@cogeotiff/core@9.3.0': {}
+  '@cogeotiff/core@9.4.0': {}
 
   '@csstools/color-helpers@5.1.0': {}
 
