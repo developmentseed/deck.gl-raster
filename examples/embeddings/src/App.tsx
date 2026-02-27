@@ -11,8 +11,9 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 
 const NUM_BANDS = 64;
-const COG_URL =
-  "https://data.source.coop/tge-labs/aef/v1/annual/2024/13N/x2ui4lsatulad51m6-0000008192-0000008192.tiff";
+const DEFAULT_COG_URL =
+  // "https://data.source.coop/tge-labs/aef/v1/annual/2024/13N/xjejfvrbm1fbu1ecw-0000000000-0000008192.tiff";
+  "http://devseed-gadomski-demo.s3-website-us-east-1.amazonaws.com/xjejfvrbm1fbu1ecw-0000000000-0000008192.flipped.tif";
 
 type TileData = {
   device: Device;
@@ -104,6 +105,7 @@ function BandSelector({
 }
 
 export default function App() {
+  const [cogUrl, setCogUrl] = useState(DEFAULT_COG_URL);
   const [r, setR] = useState(0);
   const [g, setG] = useState(1);
   const [b, setB] = useState(2);
@@ -114,8 +116,8 @@ export default function App() {
   );
 
   const layer = new COGLayer<TileData>({
-    id: `embeddings-layer-${r}-${g}-${b}`,
-    geotiff: COG_URL,
+    id: `embeddings-layer-${cogUrl}-${r}-${g}-${b}`,
+    geotiff: cogUrl,
     getTileData: getTileData(),
     renderTile,
   });
@@ -149,6 +151,21 @@ export default function App() {
           gap: 6,
         }}
       >
+        <input
+          type="text"
+          value={cogUrl}
+          onChange={(e) => setCogUrl(e.target.value)}
+          placeholder="COG URL"
+          style={{
+            width: 360,
+            padding: "4px 6px",
+            fontSize: 13,
+            background: "rgba(255,255,255,0.1)",
+            color: "#fff",
+            border: "1px solid rgba(255,255,255,0.3)",
+            borderRadius: 4,
+          }}
+        />
         <BandSelector label="R" value={r} onChange={setR} />
         <BandSelector label="G" value={g} onChange={setG} />
         <BandSelector label="B" value={b} onChange={setB} />
