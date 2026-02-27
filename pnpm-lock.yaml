@@ -309,8 +309,8 @@ importers:
   packages/deck.gl-geotiff:
     dependencies:
       '@cogeotiff/core':
-        specifier: file:/Users/gadomski/Code/blacha/cogeotiff/packages/core
-        version: file:../../blacha/cogeotiff/packages/core
+        specifier: ^9.4.0
+        version: 9.4.0
       '@deck.gl/core':
         specifier: ^9.2.8
         version: 9.2.8
@@ -718,6 +718,10 @@ packages:
   '@chunkd/source@11.1.0':
     resolution: {integrity: sha512-3BcrHK4XDm3t4vDx1OisgcOZ05+EarEqwaGVIL7IMHUmkXwN/Aprlnr7aVP3BYcltgcCcfMd1pXQicbSrP563g==}
     engines: {node: '>=16.0.0'}
+
+  '@cogeotiff/core@9.4.0':
+    resolution: {integrity: sha512-2aI7NHN2XMLTJx4LXghhYY2jMyJLJe4rnWTmnA6RuwaYjiZPhLc6PSmzNcaOebtraklucmJHXgfhTi3s+/XVaQ==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   '@cogeotiff/core@file:../../blacha/cogeotiff/packages/core':
     resolution: {directory: ../../blacha/cogeotiff/packages/core, type: directory}
@@ -2908,6 +2912,8 @@ snapshots:
       '@chunkd/source': 11.1.0
 
   '@chunkd/source@11.1.0': {}
+
+  '@cogeotiff/core@9.4.0': {}
 
   '@cogeotiff/core@file:../../blacha/cogeotiff/packages/core': {}
 
