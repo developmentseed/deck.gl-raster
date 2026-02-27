@@ -46,7 +46,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@cogeotiff/core": "file:/Users/gadomski/Code/blacha/cogeotiff/packages/core",
+    "@cogeotiff/core": "^9.4.0",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/geotiff": "workspace:^",
