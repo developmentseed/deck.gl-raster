@@ -99,6 +99,7 @@ export function InfoPanel({
               gap: "8px",
               fontSize: "12px",
               cursor: "pointer",
+              color: "#666",
             }}
           >
             <input
@@ -151,7 +152,7 @@ export function InfoPanel({
               htmlFor="mesh-max-error"
               style={{
                 fontSize: "12px",
-                // color: "#666",
+                color: "#666",
               }}
             >
               Mesh Max Error: {meshMaxError.toFixed(3)}
