@@ -4,8 +4,10 @@ import { Legend } from "./Legend";
 interface InfoPanelProps {
   debug: boolean;
   debugOpacity: number;
+  meshMaxError: number;
   onDebugChange: (checked: boolean) => void;
   onDebugOpacityChange: (opacity: number) => void;
+  onMeshMaxErrorChange: (error: number) => void;
 }
 
 const helpIconTooltip = `
@@ -17,8 +19,10 @@ Triangles depict the GPU-based reprojection. Instead of per-pixel reprojection, 
 export function InfoPanel({
   debug,
   debugOpacity,
+  meshMaxError,
   onDebugChange,
   onDebugOpacityChange,
+  onMeshMaxErrorChange,
 }: InfoPanelProps) {
   return (
     <div
@@ -127,6 +131,28 @@ export function InfoPanel({
             </label>
           </div>
         )}
+
+        <div style={{ marginTop: "8px" }}>
+          <label
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#666",
+              marginBottom: "4px",
+            }}
+          >
+            Mesh Max Error: {meshMaxError.toFixed(3)}
+            <input
+              type="range"
+              min="0.01"
+              max="5"
+              step="0.01"
+              value={meshMaxError}
+              onChange={(e) => onMeshMaxErrorChange(parseFloat(e.target.value))}
+              style={{ width: "100%", cursor: "pointer" }}
+            />
+          </label>
+        </div>
       </div>
     </div>
   );
