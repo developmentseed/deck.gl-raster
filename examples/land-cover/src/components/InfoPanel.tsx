@@ -16,6 +16,12 @@ Red squares depict the underlying COG tile structure.
 Triangles depict the GPU-based reprojection. Instead of per-pixel reprojection, we generate an adaptive triangular mesh. Each triangle locally approximates the non-linear reprojection function, ensuring minimal distortion.
 `;
 
+const meshMaxErrorTooltip = `
+Controls the maximum allowed reprojection error (in source pixels) for the adaptive triangular mesh.
+
+Lower values produce more triangles and higher accuracy at the cost of performance. Higher values use fewer triangles and render faster but with less precise reprojection.
+`;
+
 export function InfoPanel({
   debug,
   debugOpacity,
@@ -91,7 +97,7 @@ export function InfoPanel({
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              fontSize: "14px",
+              fontSize: "12px",
               cursor: "pointer",
             }}
           >
@@ -133,25 +139,35 @@ export function InfoPanel({
         )}
 
         <div style={{ marginTop: "8px" }}>
-          <label
+          <div
             style={{
-              display: "block",
-              fontSize: "12px",
-              color: "#666",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
               marginBottom: "4px",
             }}
           >
-            Mesh Max Error: {meshMaxError.toFixed(3)}
-            <input
-              type="range"
-              min="0.01"
-              max="5"
-              step="0.01"
-              value={meshMaxError}
-              onChange={(e) => onMeshMaxErrorChange(parseFloat(e.target.value))}
-              style={{ width: "100%", cursor: "pointer" }}
-            />
-          </label>
+            <label
+              htmlFor="mesh-max-error"
+              style={{
+                fontSize: "12px",
+                // color: "#666",
+              }}
+            >
+              Mesh Max Error: {meshMaxError.toFixed(3)}
+            </label>
+            <HelpIcon tooltip={meshMaxErrorTooltip} />
+          </div>
+          <input
+            id="mesh-max-error"
+            type="range"
+            min="0.01"
+            max="5"
+            step="0.01"
+            value={meshMaxError}
+            onChange={(e) => onMeshMaxErrorChange(parseFloat(e.target.value))}
+            style={{ width: "100%", cursor: "pointer" }}
+          />
         </div>
       </div>
     </div>
