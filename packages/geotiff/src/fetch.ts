@@ -5,6 +5,7 @@ import type { RasterArray } from "./array.js";
 import type { ProjJson } from "./crs.js";
 import { decode } from "./decode.js";
 import type { CachedTags } from "./ifd.js";
+import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile";
 import type { HasTransform } from "./transform";
 
@@ -35,7 +36,7 @@ export async function fetchTile(
   self: HasTiffReference,
   x: number,
   y: number,
-  options: { boundless?: boolean; signal?: AbortSignal } = {},
+  options: { boundless?: boolean; signal?: AbortSignal; pool?: DecoderPool } = {},
 ): Promise<Tile> {
   if (self.maskImage != null) {
     throw new Error("Mask fetching not implemented yet");
@@ -65,7 +66,7 @@ export async function fetchTile(
 
   const samplesPerPixel = self.image.value(TiffTag.SamplesPerPixel) ?? 1;
 
-  const decodedPixels = await decode(bytes, compression, {
+  const decoderMetadata = {
     sampleFormat,
     bitsPerSample,
     samplesPerPixel,
@@ -73,7 +74,10 @@ export async function fetchTile(
     height: self.tileHeight,
     predictor,
     planarConfiguration,
-  });
+  };
+  const decodedPixels = await (options.pool != null
+    ? options.pool.decode(bytes, compression, decoderMetadata)
+    : decode(bytes, compression, decoderMetadata));
 
   const array: RasterArray = {
     ...decodedPixels,

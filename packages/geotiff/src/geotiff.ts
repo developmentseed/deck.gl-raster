@@ -12,6 +12,8 @@ import type { ProjJson } from "./crs.js";
 import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile } from "./fetch.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
+import type { DecoderPool } from "./pool/pool.js";
+
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { Tile } from "./tile.js";
@@ -279,7 +281,7 @@ export class GeoTIFF {
   async fetchTile(
     x: number,
     y: number,
-    options: { boundless?: boolean; signal?: AbortSignal } = {},
+    options: { boundless?: boolean; signal?: AbortSignal; pool?: DecoderPool } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }

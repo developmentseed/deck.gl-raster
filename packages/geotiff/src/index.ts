@@ -5,5 +5,7 @@ export type { DecodedPixels, Decoder, DecoderMetadata } from "./decode.js";
 export { decode, registry } from "./decode.js";
 export { GeoTIFF } from "./geotiff.js";
 export { Overview } from "./overview.js";
+export type { DecoderPoolOptions } from "./pool/pool.js";
+export { DecoderPool, defaultPool } from "./pool/pool.js";
 export type { Tile } from "./tile.js";
 export { generateTileMatrixSet } from "./tile-matrix-set.js";
