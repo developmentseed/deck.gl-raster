@@ -75,6 +75,19 @@ Until you try to load an image compressed with, say, [LERC], you don't pay for t
 
 [LERC]: https://github.com/Esri/lerc
 
+You can also override the built-in decoders with your own by using `registry`. For example, to use a custom zstd decoder:
+
+```ts
+import { Compression } from "@cogeotiff/core";
+import { registry } from "@developmentseed/geotiff";
+
+registry.set(Compression.Zstd, () =>
+  import("your-zstd-module").then((m) => m.decode),
+);
+```
+
+A decoder is a function that takes an `ArrayBuffer` and a `DecoderMetadata` object and returns a `Promise<ArrayBuffer>`. See [decode.ts](./src/decode.ts) for the full type definitions.
+
 ### Full user control over caching and chunking
 
 There are a lot of great utilities in [`chunkd`](https://github.com/blacha/chunkd) that work out of the box here.

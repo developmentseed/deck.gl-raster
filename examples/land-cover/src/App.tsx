@@ -34,12 +34,14 @@ export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
+  const [meshMaxError, setMeshMaxError] = useState(0.125);
 
   const cog_layer = new COGLayer({
     id: "cog-layer",
     geotiff: COG_URL,
     debug,
     debugOpacity,
+    maxError: meshMaxError,
     geoKeysParser,
     onGeoTIFFLoad: (tiff, options) => {
       // For debugging
@@ -79,8 +81,10 @@ export default function App() {
         <InfoPanel
           debug={debug}
           debugOpacity={debugOpacity}
+          meshMaxError={meshMaxError}
           onDebugChange={setDebug}
           onDebugOpacityChange={setDebugOpacity}
+          onMeshMaxErrorChange={setMeshMaxError}
         />
       </UIOverlay>
     </div>

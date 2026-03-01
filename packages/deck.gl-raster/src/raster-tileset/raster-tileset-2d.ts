@@ -124,17 +124,12 @@ export class TileMatrixSetTileset extends Tileset2D {
     const { tileHeight, tileWidth } = tileMatrix;
     const tileAffine = tileTransform(tileMatrix, { col: x, row: y });
 
-    // Calculate pixel coordinates for this tile's extent
-    const pixelMinCol = x * tileWidth;
-    const pixelMinRow = y * tileHeight;
-    const pixelMaxCol = (x + 1) * tileWidth;
-    const pixelMaxRow = (y + 1) * tileHeight;
-
-    // Calculate the four corners of the tile in geographic coordinates
-    const topLeft = affine.apply(tileAffine, pixelMinCol, pixelMinRow);
-    const topRight = affine.apply(tileAffine, pixelMaxCol, pixelMinRow);
-    const bottomLeft = affine.apply(tileAffine, pixelMinCol, pixelMaxRow);
-    const bottomRight = affine.apply(tileAffine, pixelMaxCol, pixelMaxRow);
+    // tileAffine maps pixel (0,0) → top-left corner of this tile, so use
+    // local pixel coordinates (0..tileWidth, 0..tileHeight).
+    const topLeft = affine.apply(tileAffine, 0, 0);
+    const topRight = affine.apply(tileAffine, tileWidth, 0);
+    const bottomLeft = affine.apply(tileAffine, 0, tileHeight);
+    const bottomRight = affine.apply(tileAffine, tileWidth, tileHeight);
 
     // Return the projected bounds as four corners
     // This preserves rotation/skew information
