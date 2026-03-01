@@ -47,7 +47,7 @@
     "@luma.gl/core": "9.2.6",
     "@luma.gl/shadertools": "9.2.6",
     "@types/node": "^25.1.0",
-    "jsdom": "^27.4.0",
+    "jsdom": "^28.1.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
