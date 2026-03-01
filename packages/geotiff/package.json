@@ -55,6 +55,7 @@
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/lzw-tiff-decoder": "^0.2.2",
     "@developmentseed/morecantile": "workspace:^",
+    "fzstd": "^0.1.1",
     "uuid": "^13.0.0"
   }
 }

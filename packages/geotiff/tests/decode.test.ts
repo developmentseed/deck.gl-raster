@@ -1,3 +1,4 @@
+import { PlanarConfiguration } from "@cogeotiff/core";
 import { describe, expect, it } from "vitest";
 import { decode } from "../src/decode.js";
 import { loadGeoTIFF } from "./helpers.js";
@@ -34,6 +35,42 @@ describe("decode", () => {
     expect(result.layout).toBe("pixel-interleaved");
     if (result.layout === "pixel-interleaved") {
       expect(result.data).toBeInstanceOf(Uint8Array);
+      expect(result.data.byteLength).toBe(expectedBytes);
+    }
+  });
+
+  it("can decompress zstd-compressed tile data", async () => {
+    const tiff = await loadGeoTIFF("int8_3band_zstd_block64", "rasterio");
+    const image = tiff.tiff.images[0]!;
+    const tile = await image.getTile(0, 0);
+    expect(tile).not.toBeNull();
+
+    const { bitsPerSample, sampleFormat, predictor, planarConfiguration } =
+      tiff.cachedTags;
+    const { width, height } = image.tileSize;
+
+    // This fixture is band-separate, so each raw tile contains a single band.
+    const tileSamplesPerPixel =
+      planarConfiguration === PlanarConfiguration.Separate
+        ? 1
+        : tiff.cachedTags.samplesPerPixel;
+
+    const result = await decode(tile!.bytes, tile!.compression, {
+      sampleFormat: sampleFormat[0]!,
+      bitsPerSample: bitsPerSample[0]!,
+      samplesPerPixel: tileSamplesPerPixel,
+      width,
+      height,
+      predictor,
+      planarConfiguration,
+    });
+
+    const bytesPerSample = bitsPerSample[0]! / 8;
+    const expectedBytes = width * height * tileSamplesPerPixel * bytesPerSample;
+
+    expect(result.layout).toBe("pixel-interleaved");
+    if (result.layout === "pixel-interleaved") {
+      expect(result.data).toBeInstanceOf(Int8Array);
       expect(result.data.byteLength).toBe(expectedBytes);
     }
   });
