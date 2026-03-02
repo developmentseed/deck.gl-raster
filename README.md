@@ -62,29 +62,29 @@ See [Examples](#examples) for complete working demos.
 
 ## Packages
 
-This monorepo contains several packages, each published independently to NPM:
+This monorepo contains several packages, each published independently to NPM under the `@developmentseed` namespace:
 
 | Package                               | Description                          | Version                                                    |
 | ------------------------------------- | ------------------------------------ | ---------------------------------------------------------- |
-| [`@developmentseed/affine`]  | TypeScript port of [`Affine`] for working with affine transformations. | [![npm][affine-npm-badge]][affine-npm]   |
-| [`@developmentseed/deck.gl-geotiff`]  | High-level GeoTIFF/COG visualization | [![npm][deck.gl-geotiff-npm-badge]][deck.gl-geotiff-npm]   |
-| [`@developmentseed/deck.gl-zarr`]     | Zarr support (_soon_)                | -                                                          |
-| [`@developmentseed/deck.gl-raster`]   | Core raster rendering primitives     | [![npm][deck.gl-raster-npm-badge]][deck.gl-raster-npm]     |
-| [`@developmentseed/epsg`]  | The full EPSG projection database, compressed for the web. | [![npm][epsg-npm-badge]][epsg-npm]   |
-| [`@developmentseed/geotiff`]  | Fast, high-level GeoTIFF reader written in TypeScript | [![npm][geotiff-npm-badge]][geotiff-npm]   |
-| [`@developmentseed/morecantile`] | Typescript port of [Morecantile] for working with OGC [TileMatrixSets] | [![npm][morecantile-npm-badge]][morecantile-npm]   |
-| [`@developmentseed/raster-reproject`] | Standalone reprojection utilities    | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
+| [`affine`]  | TypeScript port of [`Affine`][rasterio_affine] for working with affine transformations. | [![npm][affine-npm-badge]][affine-npm]   |
+| [`deck.gl-geotiff`]  | High-level GeoTIFF/COG visualization | [![npm][deck.gl-geotiff-npm-badge]][deck.gl-geotiff-npm]   |
+| [`deck.gl-zarr`]     | Zarr support (_soon_)                | -                                                          |
+| [`deck.gl-raster`]   | Core raster rendering primitives     | [![npm][deck.gl-raster-npm-badge]][deck.gl-raster-npm]     |
+| [`epsg`]  | The full EPSG projection database, compressed for the web. | [![npm][epsg-npm-badge]][epsg-npm]   |
+| [`geotiff`]  | Fast, high-level GeoTIFF reader written in TypeScript | [![npm][geotiff-npm-badge]][geotiff-npm]   |
+| [`morecantile`] | Typescript port of [Morecantile] for working with OGC [TileMatrixSets] | [![npm][morecantile-npm-badge]][morecantile-npm]   |
+| [`raster-reproject`] | Standalone reprojection utilities    | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
 
-[`@developmentseed/affine`]: #developmentseedaffine
-[`@developmentseed/deck.gl-geotiff`]: #developmentseeddeckgl-geotiff
-[`@developmentseed/deck.gl-zarr`]: #developmentseeddeckgl-zarr
-[`@developmentseed/deck.gl-raster`]: #developmentseeddeckgl-raster
-[`@developmentseed/epsg`]: #developmentseedepsg
-[`@developmentseed/geotiff`]: #developmentseedgeotiff
-[`@developmentseed/morecantile`]: #developmentseedmorecantile
-[`@developmentseed/raster-reproject`]: #developmentseedraster-reproject
+[`affine`]: #developmentseedaffine
+[`deck.gl-geotiff`]: #developmentseeddeckgl-geotiff
+[`deck.gl-zarr`]: #developmentseeddeckgl-zarr
+[`deck.gl-raster`]: #developmentseeddeckgl-raster
+[`epsg`]: #developmentseedepsg
+[`geotiff`]: #developmentseedgeotiff
+[`morecantile`]: #developmentseedmorecantile
+[`raster-reproject`]: #developmentseedraster-reproject
 
-[`Affine`]: https://github.com/rasterio/affine
+[rasterio_affine]: https://github.com/rasterio/affine
 [Morecantile]: https://github.com/developmentseed/morecantile
 [TileMatrixSets]: https://docs.ogc.org/is/17-083r4/17-083r4.html
 
