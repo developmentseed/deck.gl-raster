@@ -15,7 +15,7 @@ import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { Tile } from "./tile.js";
-import { index, xy } from "./transform.js";
+import { createTransform, index, xy } from "./transform.js";
 
 /**
  * A higher-level GeoTIFF abstraction built on @cogeotiff/core.
@@ -245,32 +245,14 @@ export class GeoTIFF {
    * Return the dataset's georeferencing transformation matrix.
    */
   get transform(): Affine {
-    const origin = this.image.origin;
-    const resolution = this.image.resolution;
-
-    // Check for rotation via ModelTransformation.
-    // This tag is pre-fetched by @cogeotiff/core during initialization,
-    // so value() is safe to call synchronously.
-    const modelTransformation: number[] | null = this.image.value(
-      TiffTag.ModelTransformation,
-    );
-
-    let b = 0; // row rotation
-    let d = 0; // column rotation
-
-    if (modelTransformation != null && modelTransformation.length >= 16) {
-      b = modelTransformation[1]!;
-      d = modelTransformation[4]!;
-    }
-
-    return [
-      resolution[0], // a: pixel width (x per col)
-      b, // b: row rotation
-      origin[0], // c: x origin
-      d, // d: column rotation
-      resolution[1], // e: pixel height (negative = north-up)
-      origin[1], // f: y origin
-    ];
+    const { modelPixelScale, modelTiepoint, modelTransformation } =
+      this.cachedTags;
+    return createTransform({
+      modelTiepoint,
+      modelPixelScale,
+      modelTransformation,
+      rasterType: this.gkd.rasterType,
+    });
   }
 
   // Mixins
