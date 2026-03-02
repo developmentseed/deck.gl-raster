@@ -48,7 +48,7 @@
   "dependencies": {
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
-    "proj4": "^2.20.2",
+    "proj4": "^2.20.3",
     "zarrita": "^0.6.1"
   },
   "volta": {

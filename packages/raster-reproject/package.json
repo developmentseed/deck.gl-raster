@@ -43,7 +43,7 @@
     "@developmentseed/affine": "workspace:^",
     "@types/node": "^25.1.0",
     "jsdom": "^28.1.0",
-    "proj4": "^2.20.2",
+    "proj4": "^2.20.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

@@ -53,7 +53,7 @@
     "@developmentseed/morecantile": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "flatbush": "^4.5.0",
-    "proj4": "^2.20.2",
+    "proj4": "^2.20.3",
     "wkt-parser": "^1.5.2"
   },
   "peerDependencies": {
