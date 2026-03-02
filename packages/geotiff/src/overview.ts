@@ -84,7 +84,11 @@ export class Overview {
   async fetchTile(
     x: number,
     y: number,
-    options: { boundless?: boolean; signal?: AbortSignal; pool?: DecoderPool } = {},
+    options: {
+      boundless?: boolean;
+      signal?: AbortSignal;
+      pool?: DecoderPool;
+    } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }
