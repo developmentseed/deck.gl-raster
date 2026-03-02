@@ -1,6 +1,5 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { proj } from "@developmentseed/deck.gl-geotiff";
 import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
 import {
@@ -9,16 +8,16 @@ import {
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
-import type { GeoTIFF, GeoTIFFImage, TypedArrayWithDimensions } from "geotiff";
-import { fromUrl } from "geotiff";
 import "maplibre-gl/dist/maplibre-gl.css";
-import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer";
 import "./proj";
+import type { Overview } from "@developmentseed/geotiff";
+import { GeoTIFF } from "@developmentseed/geotiff";
 import colormap from "./cfastie";
+import { epsgResolver } from "./proj";
 
 /** Bounding box query passed to Microsoft Planetary Computer STAC API */
 const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];
@@ -27,26 +26,6 @@ function DeckGLOverlay(props: DeckProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
   overlay.setProps(props);
   return null;
-}
-
-async function epsgLookup(
-  geoKeys: Record<string, any>,
-): Promise<proj.ProjectionInfo> {
-  const projectionCode: number | null =
-    geoKeys.ProjectedCSTypeGeoKey || geoKeys.GeographicTypeGeoKey || null;
-
-  if (projectionCode === null) {
-    throw new Error("No projection code found in geoKeys");
-  }
-
-  const crsString = `EPSG:${projectionCode}`;
-  const crs = proj4.defs(crsString);
-
-  return {
-    def: crsString,
-    parsed: crs,
-    coordinatesUnits: crs.units as proj.SupportedCrsUnit,
-  };
 }
 
 type STACItem = {
@@ -70,30 +49,30 @@ type TextureDataT = {
 
 /** Custom tile loader that creates a GPU texture from the GeoTIFF image data. */
 async function getTileData(
-  image: GeoTIFFImage,
+  image: GeoTIFF | Overview,
   options: GetTileDataOptions,
 ): Promise<TextureDataT> {
-  const { device } = options;
-  const mergedOptions = {
-    ...options,
-    interleave: true,
-  };
+  const { device, x, y, signal } = options;
+  const tile = await image.fetchTile(x, y, { signal, boundless: false });
+  const { array } = tile;
 
-  const data = (await image.readRasters(
-    mergedOptions,
-  )) as TypedArrayWithDimensions;
+  if (array.layout === "band-separate") {
+    throw new Error("naip data is pixel interleaved");
+  }
+
+  const { width, height, data } = array;
 
   const texture = device.createTexture({
     data,
     format: "rgba8unorm",
-    width: data.width,
-    height: data.height,
+    width: width,
+    height: height,
   });
 
   return {
     texture,
-    height: data.height,
-    width: data.width,
+    height: height,
+    width: width,
   };
 }
 
@@ -324,15 +303,15 @@ export default function App() {
       // mechanisms.
       getSource: async (source, { signal }) => {
         const url = source.assets.image.href;
-        const tiff = await fromUrl(url, {}, signal);
+        const tiff = await GeoTIFF.fromUrl(url);
         return tiff;
       },
       renderSource: (source, { data, signal }) => {
         const url = source.assets.image.href;
         return new COGLayer<TextureDataT>({
           id: `cog-${url}`,
+          epsgResolver,
           geotiff: data,
-          geoKeysParser: epsgLookup,
           getTileData,
           renderTile:
             renderMode === "trueColor"
