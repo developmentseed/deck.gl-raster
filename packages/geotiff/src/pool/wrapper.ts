@@ -71,7 +71,7 @@ export class WorkerWrapper {
   }
 
   submitJob(
-    request: WorkerRequest,
+    request: Omit<WorkerRequest, "jobId">,
     transferables: ArrayBuffer[],
   ): Promise<DecodedPixels> {
     const jobId = this.jobIdCounter++;

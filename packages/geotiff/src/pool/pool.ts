@@ -76,18 +76,9 @@ export class DecoderPool {
     }
 
     const worker = this.leastLoaded();
-    const request: WorkerRequest = {
-      jobId: 0, // overwritten by WorkerWrapper.submitJob
+    const request: Omit<WorkerRequest, "jobId"> = {
       compression: compression as number,
-      metadata: {
-        sampleFormat: metadata.sampleFormat as number,
-        bitsPerSample: metadata.bitsPerSample,
-        samplesPerPixel: metadata.samplesPerPixel,
-        width: metadata.width,
-        height: metadata.height,
-        predictor: metadata.predictor as number,
-        planarConfiguration: metadata.planarConfiguration as number,
-      },
+      metadata,
       buffer: bytes,
     };
     const array = await worker.submitJob(request, [bytes]);
