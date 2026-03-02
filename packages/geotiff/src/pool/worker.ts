@@ -14,26 +14,19 @@
  *   import "@developmentseed/geotiff/pool/worker";
  */
 
-import type { Compression, PlanarConfiguration, Predictor } from "@cogeotiff/core";
-import type { SampleFormat } from "@cogeotiff/core";
-import { collectTransferables } from "./wrapper.js";
-import type { WorkerErrorResponse, WorkerRequest, WorkerResponse } from "./wrapper.js";
 import { decode } from "../decode.js";
+import type {
+  WorkerErrorResponse,
+  WorkerRequest,
+  WorkerResponse,
+} from "./wrapper.js";
+import { collectTransferables } from "./wrapper.js";
 
 self.addEventListener("message", async (e: MessageEvent<WorkerRequest>) => {
   const { jobId, compression, metadata, buffer } = e.data;
 
   try {
-    const array = await decode(buffer, compression as Compression, {
-      sampleFormat: metadata.sampleFormat as SampleFormat,
-      bitsPerSample: metadata.bitsPerSample,
-      samplesPerPixel: metadata.samplesPerPixel,
-      width: metadata.width,
-      height: metadata.height,
-      predictor: metadata.predictor as Predictor,
-      planarConfiguration: metadata.planarConfiguration as PlanarConfiguration,
-    });
-
+    const array = await decode(buffer, compression, metadata);
     const transferables = collectTransferables(array);
     const response: WorkerResponse = { jobId, pixels: array };
     self.postMessage(response, { transfer: transferables });

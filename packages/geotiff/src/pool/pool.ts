@@ -1,6 +1,6 @@
 import type { Compression } from "@cogeotiff/core";
-import { decode } from "../decode.js";
 import type { DecodedPixels, DecoderMetadata } from "../decode.js";
+import { decode } from "../decode.js";
 import type { WorkerRequest } from "./wrapper.js";
 import { WorkerWrapper } from "./wrapper.js";
 

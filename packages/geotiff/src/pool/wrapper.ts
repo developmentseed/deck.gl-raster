@@ -1,17 +1,23 @@
+import type {
+  Compression,
+  PlanarConfiguration,
+  Predictor,
+  SampleFormat,
+} from "@cogeotiff/core";
 import type { DecodedPixels } from "../decode.js";
 
 /** Message sent from main thread to worker. */
 export type WorkerRequest = {
   jobId: number;
-  compression: number;
+  compression: Compression;
   metadata: {
-    sampleFormat: number;
+    sampleFormat: SampleFormat;
     bitsPerSample: number;
     samplesPerPixel: number;
     width: number;
     height: number;
-    predictor: number;
-    planarConfiguration: number;
+    predictor: Predictor;
+    planarConfiguration: PlanarConfiguration;
   };
   buffer: ArrayBuffer;
 };
@@ -84,7 +90,10 @@ export class WorkerWrapper {
     const jobId = this.jobIdCounter++;
     return new Promise((resolve, reject) => {
       this.jobs.set(jobId, { resolve, reject });
-      this.worker.postMessage({ ...request, jobId }, { transfer: transferables });
+      this.worker.postMessage(
+        { ...request, jobId },
+        { transfer: transferables },
+      );
     });
   }
 
