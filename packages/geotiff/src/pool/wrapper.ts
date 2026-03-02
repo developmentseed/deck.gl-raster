@@ -1,24 +1,11 @@
-import type {
-  Compression,
-  PlanarConfiguration,
-  Predictor,
-  SampleFormat,
-} from "@cogeotiff/core";
-import type { DecodedPixels } from "../decode.js";
+import type { Compression } from "@cogeotiff/core";
+import type { DecodedPixels, DecoderMetadata } from "../decode.js";
 
 /** Message sent from main thread to worker. */
 export type WorkerRequest = {
   jobId: number;
   compression: Compression;
-  metadata: {
-    sampleFormat: SampleFormat;
-    bitsPerSample: number;
-    samplesPerPixel: number;
-    width: number;
-    height: number;
-    predictor: Predictor;
-    planarConfiguration: PlanarConfiguration;
-  };
+  metadata: DecoderMetadata;
   buffer: ArrayBuffer;
 };
 
@@ -37,11 +24,11 @@ export type WorkerErrorResponse = {
 };
 
 /** Collect the transferable ArrayBuffers from a DecodedPixels. */
-export function collectTransferables(pixels: DecodedPixels): ArrayBuffer[] {
+export function collectTransferables(pixels: DecodedPixels): ArrayBufferLike[] {
   if (pixels.layout === "pixel-interleaved") {
-    return [pixels.data.buffer as ArrayBuffer];
+    return [pixels.data.buffer];
   }
-  return pixels.bands.map((b) => b.buffer as ArrayBuffer);
+  return pixels.bands.map((b) => b.buffer);
 }
 
 type PendingJob = {
