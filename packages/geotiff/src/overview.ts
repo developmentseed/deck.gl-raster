@@ -1,5 +1,4 @@
-import type { TiffImage } from "@cogeotiff/core";
-import type { TiffImageTileCount } from "@cogeotiff/core/build/tiff.image.js";
+import type { TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
