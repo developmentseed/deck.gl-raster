@@ -54,7 +54,7 @@
     "@developmentseed/raster-reproject": "workspace:^",
     "flatbush": "^4.5.0",
     "proj4": "^2.20.3",
-    "wkt-parser": "^1.5.2"
+    "wkt-parser": "^1.5.3"
   },
   "peerDependencies": {
     "@deck.gl/core": "^9.2.7",
