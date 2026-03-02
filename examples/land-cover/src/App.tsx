@@ -1,11 +1,13 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer, proj } from "@developmentseed/deck.gl-geotiff";
-import { toProj4 } from "geotiff-geokeys-to-proj4";
+import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import "maplibre-gl/dist/maplibre-gl.css";
+import loadEpsg from "@developmentseed/epsg/all";
+import epsgCsvUrl from "@developmentseed/epsg/all.csv.gz?url";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import wktParser from "wkt-parser";
 import { InfoPanel } from "./components/InfoPanel";
 import { UIOverlay } from "./components/UIOverlay";
 
@@ -15,16 +17,20 @@ function DeckGLOverlay(props: DeckProps) {
   return null;
 }
 
-async function geoKeysParser(
-  geoKeys: Record<string, any>,
-): Promise<proj.ProjectionInfo> {
-  const projDefinition = toProj4(geoKeys as any);
+/** An example for embedded EPSG code resolution.
+ *
+ * Since this image is described by a custom Projection in the GeoTIFF keys,
+ * this will never actually get called anyways.
+ */
+async function epsgResolver(epsg: number) {
+  const epsgDb = await loadEpsg(epsgCsvUrl);
 
-  return {
-    def: projDefinition.proj4,
-    parsed: proj.parseCrs(projDefinition.proj4),
-    coordinatesUnits: projDefinition.coordinatesUnits as proj.SupportedCrsUnit,
-  };
+  const wkt = epsgDb.get(epsg);
+  if (!wkt) {
+    throw new Error(`EPSG code ${epsg} not found in database`);
+  }
+
+  return wktParser(wkt);
 }
 
 const COG_URL =
@@ -42,7 +48,7 @@ export default function App() {
     debug,
     debugOpacity,
     maxError: meshMaxError,
-    geoKeysParser,
+    epsgResolver,
     onGeoTIFFLoad: (tiff, options) => {
       // For debugging
       (window as any).tiff = tiff;

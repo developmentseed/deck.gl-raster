@@ -110,6 +110,9 @@ importers:
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
+      '@developmentseed/epsg':
+        specifier: workspace:^
+        version: link:../../packages/epsg
       '@luma.gl/core':
         specifier: ^9.2.6
         version: 9.2.6
@@ -128,6 +131,9 @@ importers:
       react-map-gl:
         specifier: ^8.1.0
         version: 8.1.0(maplibre-gl@5.17.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      wkt-parser:
+        specifier: ^1.5.3
+        version: 1.5.3
     devDependencies:
       '@types/react':
         specifier: ^19.2.10

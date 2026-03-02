@@ -7,7 +7,8 @@
     "./all": {
       "types": "./dist/all.d.ts",
       "default": "./dist/all.js"
-    }
+    },
+    "./all.csv.gz": "./dist/all.csv.gz"
   },
   "sideEffects": false,
   "files": [

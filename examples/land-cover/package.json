@@ -15,12 +15,14 @@
     "@deck.gl/mapbox": "^9.2.7",
     "@deck.gl/mesh-layers": "^9.2.7",
     "@developmentseed/deck.gl-geotiff": "workspace:^",
+    "@developmentseed/epsg": "workspace:^",
     "@luma.gl/core": "9.2.6",
     "geotiff-geokeys-to-proj4": "^2024.4.13",
     "maplibre-gl": "^5.17.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-map-gl": "^8.1.0"
+    "react-map-gl": "^8.1.0",
+    "wkt-parser": "^1.5.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.10",
