@@ -148,8 +148,14 @@ function createUnormPipeline(
       bitsPerSample,
       sampleFormat,
     );
+    const bytesPerPixel = (bitsPerSample[0]! / 8) * numSamples;
     const texture = device.createTexture({
-      data: array.data,
+      data: padToAlignment(
+        array.data,
+        array.width,
+        array.height,
+        bytesPerPixel,
+      ),
       format: textureFormat,
       width: array.width,
       height: array.height,
@@ -245,4 +251,36 @@ function resolveModule<T>(m: UnresolvedRasterModule<T>, data: T): RasterModule {
   }
 
   return { module, props: resolvedProps };
+}
+
+/**
+ * WebGL's default `UNPACK_ALIGNMENT` is 4, meaning each row of pixel data must
+ * start on a 4-byte boundary.
+ *
+ * For textures with widths not divisible by 4, we need to pad each row to the
+ * next multiple of 4 bytes so WebGL doesn't reject the buffer as "too small".
+ *
+ * Returns the original array unchanged when no padding is needed.
+ */
+function padToAlignment(
+  data: ArrayBufferView,
+  width: number,
+  height: number,
+  bytesPerPixel: number,
+): Uint8Array {
+  const src = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  const rowBytes = width * bytesPerPixel;
+  const alignedRowBytes = Math.ceil(rowBytes / 4) * 4;
+  if (alignedRowBytes === rowBytes) {
+    return src;
+  }
+
+  const dst = new Uint8Array(alignedRowBytes * height);
+  for (let r = 0; r < height; r++) {
+    dst.set(
+      src.subarray(r * rowBytes, (r + 1) * rowBytes),
+      r * alignedRowBytes,
+    );
+  }
+  return dst;
 }
