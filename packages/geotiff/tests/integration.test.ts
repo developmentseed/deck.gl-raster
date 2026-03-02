@@ -5,8 +5,8 @@
  * JavaScript, so we use it as a ground truth for pixel values, dimensions, and
  * georeferencing.
  *
- * Fixtures that require unsupported codecs (WebP, JPEG, LZW, LZMA, JXL,
- * zstd) are intentionally omitted here.
+ * Fixtures that require unsupported codecs (WebP, JPEG, LZW, LZMA, JXL)
+ * are intentionally omitted here.
  */
 
 import type { GeoTIFFImage, GeoTIFF as GeotiffJs } from "geotiff";
@@ -99,8 +99,9 @@ describe("integration vs geotiff.js", () => {
         const tile = await ours.fetchTile(0, 0);
         const oursBandSep = toBandSeparate(tile.array);
 
-        // readRasters returns band-separate by default
-        const refData = await refImage.readRasters({ window: [0, 0, tw, th] });
+        const refData = await refImage.readRasters({
+          window: [0, 0, tw, th],
+        });
 
         expect(oursBandSep.bands.length).toBe(ours.count);
         expect(refData.length).toBe(ours.count);

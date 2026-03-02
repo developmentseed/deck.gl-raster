@@ -35,7 +35,7 @@ export function HelpIcon({ tooltip }: HelpIconProps) {
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        aria-label="Show debug overlay help"
+        aria-label="Show help"
       >
         ?
       </button>

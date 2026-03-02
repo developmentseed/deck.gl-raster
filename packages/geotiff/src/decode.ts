@@ -46,9 +46,9 @@ registry.set(Compression.DeflateOther, () =>
 registry.set(Compression.Lzw, () =>
   import("./codecs/lzw.js").then((m) => m.decode),
 );
-// registry.set(Compression.Zstd, () =>
-//   import("../codecs/zstd.js").then((m) => m.decode),
-// );
+registry.set(Compression.Zstd, () =>
+  import("./codecs/zstd.js").then((m) => m.decode),
+);
 // registry.set(Compression.Lzma, () =>
 //   import("../codecs/lzma.js").then((m) => m.decode),
 // );

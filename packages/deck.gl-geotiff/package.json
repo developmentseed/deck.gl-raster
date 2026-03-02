@@ -41,12 +41,12 @@
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
-    "jsdom": "^27.4.0",
+    "jsdom": "^28.1.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@cogeotiff/core": "^9.3.0",
+    "@cogeotiff/core": "^9.4.0",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/geotiff": "workspace:^",
@@ -61,7 +61,7 @@
     "@deck.gl/geo-layers": "^9.2.7",
     "@deck.gl/layers": "^9.2.7",
     "@deck.gl/mesh-layers": "^9.2.7",
-    "@luma.gl/core": "^9.2.7"
+    "@luma.gl/core": "^9.2.6"
   },
   "volta": {
     "extends": "../../package.json"
