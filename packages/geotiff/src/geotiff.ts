@@ -3,10 +3,8 @@ import { SourceChunk } from "@chunkd/middleware/build/src/middleware/chunk.js";
 import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
-import type { Source, TiffImage } from "@cogeotiff/core";
+import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
-// https://github.com/blacha/cogeotiff/issues/1417
-import type { TiffImageTileCount } from "@cogeotiff/core/build/tiff.image.js";
 import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { crsFromGeoKeys } from "./crs.js";
