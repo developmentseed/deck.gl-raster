@@ -1,7 +1,7 @@
 const SEP = "|";
 
 export default async function loadEPSG(): Promise<Map<number, string>> {
-  const url = new URL("./epsg.csv.gz", import.meta.url);
+  const url = new URL("./all.csv.gz", import.meta.url);
   const response = await fetch(url);
 
   if (!response.body) {
