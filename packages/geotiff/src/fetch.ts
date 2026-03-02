@@ -102,10 +102,7 @@ export async function fetchTile(
   return {
     x,
     y,
-    array:
-      boundless === false
-        ? clipToImageBounds(self, x, y, array)
-        : array,
+    array: boundless === false ? clipToImageBounds(self, x, y, array) : array,
   };
 }
 
