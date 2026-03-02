@@ -70,6 +70,7 @@ export async function fetchTile(
 
   const samplesPerPixel = self.image.value(TiffTag.SamplesPerPixel) ?? 1;
 
+  const { pool } = options;
   const decoderMetadata = {
     sampleFormat,
     bitsPerSample,
@@ -79,8 +80,8 @@ export async function fetchTile(
     predictor,
     planarConfiguration,
   };
-  const decodedPixels = await (options.pool != null
-    ? options.pool.decode(bytes, compression, decoderMetadata)
+  const decodedPixels = await (pool != null
+    ? pool.decode(bytes, compression, decoderMetadata)
     : decode(bytes, compression, decoderMetadata));
 
   const array: RasterArray = {
