@@ -6,6 +6,7 @@ import type { ProjJson } from "./crs.js";
 import { decode } from "./decode.js";
 import type { CachedTags } from "./ifd.js";
 import type { DecoderPool } from "./pool/pool.js";
+import { defaultPool } from "./pool/pool.js";
 import type { Tile } from "./tile";
 import type { HasTransform } from "./transform";
 
@@ -36,7 +37,11 @@ export async function fetchTile(
   self: HasTiffReference,
   x: number,
   y: number,
-  options: {
+  {
+    boundless,
+    pool = defaultPool,
+    signal,
+  }: {
     boundless?: boolean;
     pool?: DecoderPool;
     signal?: AbortSignal;
@@ -46,7 +51,7 @@ export async function fetchTile(
     throw new Error("Mask fetching not implemented yet");
   }
 
-  const tile = await self.image.getTile(x, y, options);
+  const tile = await self.image.getTile(x, y, { signal });
   if (tile === null) {
     throw new Error("Tile not found");
   }
@@ -70,7 +75,6 @@ export async function fetchTile(
 
   const samplesPerPixel = self.image.value(TiffTag.SamplesPerPixel) ?? 1;
 
-  const { pool } = options;
   const decoderMetadata = {
     sampleFormat,
     bitsPerSample,
@@ -99,7 +103,7 @@ export async function fetchTile(
     x,
     y,
     array:
-      options.boundless === false
+      boundless === false
         ? clipToImageBounds(self, x, y, array)
         : array,
   };
