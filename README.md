@@ -70,6 +70,7 @@ This monorepo contains several packages, each published independently to NPM:
 | [`@developmentseed/deck.gl-geotiff`]  | High-level GeoTIFF/COG visualization | [![npm][deck.gl-geotiff-npm-badge]][deck.gl-geotiff-npm]   |
 | [`@developmentseed/deck.gl-zarr`]     | Zarr support (_soon_)                | -                                                          |
 | [`@developmentseed/deck.gl-raster`]   | Core raster rendering primitives     | [![npm][deck.gl-raster-npm-badge]][deck.gl-raster-npm]     |
+| [`@developmentseed/epsg`]  | The full EPSG projection database, compressed for the web. | [![npm][epsg-npm-badge]][epsg-npm]   |
 | [`@developmentseed/geotiff`]  | Fast, high-level GeoTIFF reader written in TypeScript | [![npm][geotiff-npm-badge]][geotiff-npm]   |
 | [`@developmentseed/morecantile`] | Typescript port of [Morecantile] for working with OGC [TileMatrixSets] | [![npm][morecantile-npm-badge]][morecantile-npm]   |
 | [`@developmentseed/raster-reproject`] | Standalone reprojection utilities    | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
@@ -78,6 +79,7 @@ This monorepo contains several packages, each published independently to NPM:
 [`@developmentseed/deck.gl-geotiff`]: #developmentseeddeckgl-geotiff
 [`@developmentseed/deck.gl-zarr`]: #developmentseeddeckgl-zarr
 [`@developmentseed/deck.gl-raster`]: #developmentseeddeckgl-raster
+[`@developmentseed/epsg`]: #developmentseedepsg
 [`@developmentseed/geotiff`]: #developmentseedgeotiff
 [`@developmentseed/morecantile`]: #developmentseedmorecantile
 [`@developmentseed/raster-reproject`]: #developmentseedraster-reproject
@@ -89,6 +91,7 @@ This monorepo contains several packages, each published independently to NPM:
 [affine-npm-badge]: https://img.shields.io/npm/v/@developmentseed/affine
 [deck.gl-geotiff-npm-badge]: https://img.shields.io/npm/v/@developmentseed/deck.gl-geotiff
 [deck.gl-raster-npm-badge]: https://img.shields.io/npm/v/@developmentseed/deck.gl-raster
+[epsg-npm-badge]: https://img.shields.io/npm/v/@developmentseed/epsg
 [geotiff-npm-badge]: https://img.shields.io/npm/v/@developmentseed/geotiff
 [morecantile-npm-badge]: https://img.shields.io/npm/v/@developmentseed/morecantile
 [raster-reproject-npm-badge]: https://img.shields.io/npm/v/@developmentseed/raster-reproject
@@ -96,6 +99,7 @@ This monorepo contains several packages, each published independently to NPM:
 [affine-npm]: https://www.npmjs.com/package/@developmentseed/affine
 [deck.gl-geotiff-npm]: https://www.npmjs.com/package/@developmentseed/deck.gl-geotiff
 [deck.gl-raster-npm]: https://www.npmjs.com/package/@developmentseed/deck.gl-raster
+[epsg-npm]: https://www.npmjs.com/package/@developmentseed/epsg
 [geotiff-npm]: https://www.npmjs.com/package/@developmentseed/geotiff
 [morecantile-npm]: https://www.npmjs.com/package/@developmentseed/morecantile
 [raster-reproject-npm]: https://www.npmjs.com/package/@developmentseed/raster-reproject

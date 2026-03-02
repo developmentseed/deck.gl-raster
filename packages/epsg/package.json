@@ -1,7 +1,7 @@
 {
   "name": "@developmentseed/epsg",
   "version": "0.1.0",
-  "description": "Compressed, bundled EPSG code definitions.",
+  "description": "The full EPSG projection database, compressed to 309kb for the web.",
   "type": "module",
   "exports": {
     "./all": {
