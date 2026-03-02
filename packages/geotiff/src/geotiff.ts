@@ -3,24 +3,21 @@ import { SourceChunk } from "@chunkd/middleware/build/src/middleware/chunk.js";
 import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
-import type { Source, TiffImage } from "@cogeotiff/core";
+import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
-// https://github.com/blacha/cogeotiff/issues/1417
-import type { TiffImageTileCount } from "@cogeotiff/core/build/tiff.image.js";
 import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile } from "./fetch.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
-import type { DecoderPool } from "./pool/pool.js";
-
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
+import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 
 /**
- * A higher-level GeoTIFF abstraction built on @cogeotiff/core.
+ * A high-level GeoTIFF abstraction built on @cogeotiff/core.
  *
  * Separates data IFDs from mask IFDs, pairs them by resolution level,
  * and exposes sorted overviews.  Mirrors the Python async-geotiff API.
@@ -263,7 +260,11 @@ export class GeoTIFF {
   async fetchTile(
     x: number,
     y: number,
-    options: { boundless?: boolean; signal?: AbortSignal; pool?: DecoderPool } = {},
+    options: {
+      boundless?: boolean;
+      signal?: AbortSignal;
+      pool?: DecoderPool;
+    } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }
