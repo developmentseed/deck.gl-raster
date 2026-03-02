@@ -1,5 +1,65 @@
+import { RasterTypeKey } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
-import { apply, invert } from "@developmentseed/affine";
+import { apply, compose, invert, translation } from "@developmentseed/affine";
+
+export function createTransform({
+  modelTiepoint,
+  modelPixelScale,
+  modelTransformation,
+  rasterType,
+}: {
+  modelTiepoint: number[] | null;
+  modelPixelScale: number[] | null;
+  modelTransformation: number[] | null;
+  rasterType: RasterTypeKey | null;
+}): Affine {
+  let transform: Affine;
+  if (modelTiepoint && modelPixelScale) {
+    transform = createFromModelTiepointAndPixelScale(
+      modelTiepoint,
+      modelPixelScale,
+    );
+  } else if (modelTransformation) {
+    transform = createFromModelTransformation(modelTransformation);
+  } else {
+    throw new Error("The image does not have an affine transformation.");
+  }
+
+  // Offset transform by half pixel for point-interpreted rasters.
+  if (rasterType === RasterTypeKey.PixelIsPoint) {
+    transform = compose(transform, translation(-0.5, -0.5));
+  }
+
+  return transform;
+}
+
+function createFromModelTiepointAndPixelScale(
+  modelTiepoint: number[],
+  modelPixelScale: number[],
+): Affine {
+  const xOrigin = modelTiepoint[3]!;
+  const yOrigin = modelTiepoint[4]!;
+  const xResolution = modelPixelScale[0]!;
+  const yResolution = -modelPixelScale[1]!;
+
+  return [xResolution, 0, xOrigin, 0, yResolution, yOrigin];
+}
+
+function createFromModelTransformation(modelTransformation: number[]): Affine {
+  // ModelTransformation is a 4x4 matrix in row-major order
+  // [0  1  2  3 ]   [a  b  0  c]
+  // [4  5  6  7 ] = [d  e  0  f]
+  // [8  9  10 11]   [0  0  1  0]
+  // [12 13 14 15]   [0  0  0  1]
+  const xOrigin = modelTransformation[3]!;
+  const yOrigin = modelTransformation[7]!;
+  const rowRotation = modelTransformation[1]!;
+  const colRotation = modelTransformation[4]!;
+  const xResolution = modelTransformation[0]!;
+  const yResolution = modelTransformation[5]!;
+
+  return [xResolution, rowRotation, xOrigin, colRotation, yResolution, yOrigin];
+}
 
 /**
  * Interface for objects that have an affine transform.

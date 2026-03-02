@@ -1,29 +1,28 @@
 {
-  "name": "@developmentseed/raster-reproject",
-  "version": "0.3.0-beta.3",
-  "description": "Mesh generation for client-side raster reprojection.",
+  "name": "@developmentseed/epsg",
+  "version": "0.1.0",
+  "description": "The full EPSG projection database, compressed to 309kb for the web.",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
+    "./all": {
+      "types": "./dist/all.d.ts",
+      "default": "./dist/all.js"
+    },
+    "./all.csv.gz": "./dist/all.csv.gz"
   },
   "sideEffects": false,
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc --build tsconfig.build.json",
+    "build": "tsc --build tsconfig.build.json && cp src/all.csv.gz dist/all.csv.gz",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "deck.gl",
+    "proj4",
     "geotiff",
     "zarr",
     "cog",
@@ -40,9 +39,8 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@developmentseed/affine": "workspace:^",
     "@types/node": "^25.3.3",
-    "jsdom": "^28.1.0",
+    "jsdom": "^27.4.0",
     "proj4": "^2.20.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
