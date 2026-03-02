@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import loadEPSG from "../src/all.js";
 
 // Node's fetch does not support file:// URLs, so we stub it to read from disk.
-const csvGzPath = resolve(import.meta.dirname, "../src/epsg.csv.gz");
+const csvGzPath = resolve(import.meta.dirname, "../src/all.csv.gz");
 vi.stubGlobal("fetch", async () => new Response(readFileSync(csvGzPath)));
 
 describe("loadEPSG", async () => {
