@@ -105,6 +105,64 @@ export async function fetchTile(
   };
 }
 
+type GetBytesResponse = Awaited<ReturnType<TiffImage["getBytes"]>>;
+type ByteRange = Awaited<ReturnType<TiffImage["getTileSize"]>>;
+
+/** Fetch bytes from a COG, handling whether pixel/band interleaving. */
+async function fetchCogBytes(
+  self: HasTiffReference,
+  x: number,
+  y: number,
+  {
+    signal,
+  }: {
+    signal?: AbortSignal;
+  } = {},
+): Promise<GetBytesResponse | GetBytesResponse[] | null> {
+  switch (self.cachedTags.planarConfiguration) {
+    case PlanarConfiguration.Contig:
+      return await self.image.getTile(x, y, { signal });
+    case PlanarConfiguration.Separate:
+      return await fetchBandSeparateTileBytes(self, x, y, { signal });
+    default:
+      throw new Error(
+        `Unsupported PlanarConfiguration: ${self.cachedTags.planarConfiguration}`,
+      );
+  }
+}
+
+async function findBandSeparateTileByteRanges(
+  self: HasTiffReference,
+  x: number,
+  y: number,
+): Promise<ByteRange[]> {
+  const { x: tilesPerRow, y: tilesPerColumn } = self.image.tileCount;
+  const tilesPerBand = tilesPerRow * tilesPerColumn;
+  const numBands = self.cachedTags.samplesPerPixel;
+  const tileSizes = [...Array(numBands).keys()].map((band) => {
+    const bandIdx = band * tilesPerBand + y * tilesPerRow + x;
+    return self.image.getTileSize(bandIdx);
+  });
+  return Promise.all(tileSizes);
+}
+
+async function fetchBandSeparateTileBytes(
+  self: HasTiffReference,
+  x: number,
+  y: number,
+  {
+    signal,
+  }: {
+    signal?: AbortSignal;
+  } = {},
+): Promise<GetBytesResponse[] | null> {
+  const byteRanges = await findBandSeparateTileByteRanges(self, x, y);
+  const buffers = byteRanges.map(({ offset, imageSize }) => {
+    return self.image.getBytes(offset, imageSize, { signal });
+  });
+  return Promise.all(buffers);
+}
+
 /**
  * Clip a decoded tile array to the valid image bounds.
  *
