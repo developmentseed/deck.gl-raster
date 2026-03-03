@@ -105,8 +105,12 @@ export class DecoderPool {
 }
 
 function defaultCreateWorker() {
-  return new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+  return new Worker(new URL("./worker.js", import.meta.url), {
+    type: "module",
+  });
 }
 
 /** Default pool instance. Uses a built-in worker for off-main-thread decoding. */
-export const defaultPool = new DecoderPool({ createWorker: defaultCreateWorker });
+export const defaultPool = new DecoderPool({
+  createWorker: defaultCreateWorker,
+});
