@@ -249,8 +249,12 @@ export class COGLayer<
       });
     }
 
-    let defaultGetTileData: COGLayerProps<TextureDataT>["getTileData"] | undefined;
-    let defaultRenderTile: COGLayerProps<TextureDataT>["renderTile"] | undefined;
+    let defaultGetTileData:
+      | COGLayerProps<TextureDataT>["getTileData"]
+      | undefined;
+    let defaultRenderTile:
+      | COGLayerProps<TextureDataT>["renderTile"]
+      | undefined;
     if (!this.props.getTileData || !this.props.renderTile) {
       ({ getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
         inferRenderPipeline(geotiff, this.context.device));

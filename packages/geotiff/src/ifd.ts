@@ -1,10 +1,5 @@
 import type { TiffImage, TiffTagGeoType, TiffTagType } from "@cogeotiff/core";
-import {
-  Predictor,
-  SampleFormat,
-  TiffTag,
-  TiffTagGeo,
-} from "@cogeotiff/core";
+import { Predictor, SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
 
 /** Subset of TIFF tags that we pre-fetch for easier visualization. */
 export interface CachedTags {
