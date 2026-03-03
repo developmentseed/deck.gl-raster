@@ -1,7 +1,7 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type { GetTileDataOptions } from "@developmentseed/deck.gl-geotiff";
+import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
 import { CreateTexture } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
