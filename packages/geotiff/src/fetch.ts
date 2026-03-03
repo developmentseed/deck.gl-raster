@@ -226,7 +226,7 @@ async function getTile(
   image: TiffImage,
   x: number,
   y: number,
-  { fetch }: Pick<Source, "fetch">,
+  source: Pick<Source, "fetch">,
   options?: { signal?: AbortSignal },
 ): Promise<{
   bytes: ArrayBuffer;
@@ -255,7 +255,7 @@ async function getTile(
 
   const { offset, imageSize } = await image.getTileSize(idx);
 
-  return getBytes(image, offset, imageSize, { fetch }, options);
+  return getBytes(image, offset, imageSize, source, options);
 }
 
 /** Read image bytes at the given offset.
@@ -272,7 +272,7 @@ async function getBytes(
   image: TiffImage,
   offset: number,
   byteCount: number,
-  { fetch }: Pick<Source, "fetch">,
+  source: Pick<Source, "fetch">,
   options?: { signal?: AbortSignal },
 ): Promise<{
   bytes: ArrayBuffer;
@@ -280,7 +280,7 @@ async function getBytes(
 } | null> {
   if (byteCount === 0) return null;
 
-  const bytes = await fetch(offset, byteCount, options);
+  const bytes = await source.fetch(offset, byteCount, options);
   if (bytes.byteLength < byteCount) {
     throw new Error(
       `Failed to fetch bytes from offset:${offset} wanted:${byteCount} got:${bytes.byteLength}`,
