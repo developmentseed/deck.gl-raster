@@ -380,17 +380,17 @@ importers:
   packages/geotiff:
     dependencies:
       '@chunkd/middleware':
-        specifier: ^11.1.0
-        version: 11.1.0
+        specifier: ^11.2.0
+        version: 11.2.0
       '@chunkd/source':
-        specifier: ^11.1.0
-        version: 11.1.0
+        specifier: ^11.2.0
+        version: 11.2.0
       '@chunkd/source-http':
-        specifier: ^11.1.1
-        version: 11.1.1
+        specifier: ^11.2.0
+        version: 11.2.0
       '@chunkd/source-memory':
-        specifier: ^11.0.2
-        version: 11.0.2
+        specifier: ^11.0.3
+        version: 11.0.3
       '@cogeotiff/core':
         specifier: ^9.4.0
         version: 9.4.0
@@ -411,8 +411,8 @@ importers:
         version: 13.0.0
     devDependencies:
       '@chunkd/source-file':
-        specifier: ^11.0.1
-        version: 11.0.1
+        specifier: ^11.0.2
+        version: 11.0.2
       '@types/node':
         specifier: ^25.3.3
         version: 25.3.3
@@ -640,24 +640,24 @@ packages:
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
 
-  '@chunkd/middleware@11.1.0':
-    resolution: {integrity: sha512-xLEoDWDG3djf/plcsEsm0q6eAD3fFC/nJ6QV9234a+DE4iN8xuaqdHqtk9CRC877YfCpWZ1RDw3T62OUeqyWqQ==}
+  '@chunkd/middleware@11.2.0':
+    resolution: {integrity: sha512-YYPiectjXehGwLbeKyKz0f8lV+lm2RBkroYICIQUxRRR1qDxOVlzxiUTTlkeCpYcBTRL0/lFvpjOWl3JtMQh7g==}
     engines: {node: '>=16.0.0'}
 
-  '@chunkd/source-file@11.0.1':
-    resolution: {integrity: sha512-9DoA1djozuDpUklg0CRj/GBEJzvZeqwr1EIOTcEr3igDAf+UZ3y3lOgUaIWuNeATbwQ7Pdml2S6SLLAdAe45wQ==}
+  '@chunkd/source-file@11.0.2':
+    resolution: {integrity: sha512-kr903UKgxd1fMoS6YccOoTyWtfyHapstMWN+hGoOev+YQmiLIZt/nLtDXaXXBLe9cv1brmoHTS6SfVA2EWNgjg==}
     engines: {node: '>=16.0.0'}
 
-  '@chunkd/source-http@11.1.1':
-    resolution: {integrity: sha512-cJPPYQ8JB9y+zWvv6NKOLdOp+jXYejTuzLa9bCtwFunlKML7a4PuOZVAQp8xlke6+HOq4w6Dzednq7mhgzHKaA==}
+  '@chunkd/source-http@11.2.0':
+    resolution: {integrity: sha512-LyufrRAx5g0JUxdTGeLx/Vz3XXJOPC3xnv/+VaxLBhbxCaHEE7mxyQsYWjlJwEiO6r1wsNQdtQKG/ZCFqGdSAg==}
     engines: {node: '>=18.0.0'}
 
-  '@chunkd/source-memory@11.0.2':
-    resolution: {integrity: sha512-K2yJTvLv+Z49YKGz43Gb2Q1/6ARtnUUh9EgVgqKZS/Ce9ND9IXkgmfyrYShY2/d9iJ4B7Nq1LZIJubDBhoYtww==}
+  '@chunkd/source-memory@11.0.3':
+    resolution: {integrity: sha512-J8VX4hnWf1yZZOxc822zg0XJtsR+nxN3XdYEqM4AH5Fey/3Nvn1IfKTEFU6v8zz5L/sHaT6IajId4V3WgJrOfA==}
     engines: {node: '>=16.0.0'}
 
-  '@chunkd/source@11.1.0':
-    resolution: {integrity: sha512-3BcrHK4XDm3t4vDx1OisgcOZ05+EarEqwaGVIL7IMHUmkXwN/Aprlnr7aVP3BYcltgcCcfMd1pXQicbSrP563g==}
+  '@chunkd/source@11.2.0':
+    resolution: {integrity: sha512-GnxGHpGgvEeU2xuZFbwzJpvqDjEYRwdGKe6u1sQWW7qv6a+OlfM2WnRfeSlk41MNWMH9Xgy3V6/9vrqI3j+w/w==}
     engines: {node: '>=16.0.0'}
 
   '@cogeotiff/core@9.4.0':
@@ -2879,23 +2879,23 @@ snapshots:
     dependencies:
       css-tree: 3.1.0
 
-  '@chunkd/middleware@11.1.0':
+  '@chunkd/middleware@11.2.0':
     dependencies:
-      '@chunkd/source': 11.1.0
+      '@chunkd/source': 11.2.0
 
-  '@chunkd/source-file@11.0.1':
+  '@chunkd/source-file@11.0.2':
     dependencies:
-      '@chunkd/source': 11.1.0
+      '@chunkd/source': 11.2.0
 
-  '@chunkd/source-http@11.1.1':
+  '@chunkd/source-http@11.2.0':
     dependencies:
-      '@chunkd/source': 11.1.0
+      '@chunkd/source': 11.2.0
 
-  '@chunkd/source-memory@11.0.2':
+  '@chunkd/source-memory@11.0.3':
     dependencies:
-      '@chunkd/source': 11.1.0
+      '@chunkd/source': 11.2.0
 
-  '@chunkd/source@11.1.0': {}
+  '@chunkd/source@11.2.0': {}
 
   '@cogeotiff/core@9.4.0': {}
 
