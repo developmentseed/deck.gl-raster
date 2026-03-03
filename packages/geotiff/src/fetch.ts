@@ -6,6 +6,7 @@ import type { RasterArray, RasterTypedArray } from "./array.js";
 import type { ProjJson } from "./crs.js";
 import { decode } from "./decode.js";
 import type { CachedTags } from "./ifd.js";
+import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile";
 import type { HasTransform } from "./transform";
 
@@ -36,10 +37,23 @@ export async function fetchTile(
   self: HasTiffReference,
   x: number,
   y: number,
-  options: { boundless?: boolean; signal?: AbortSignal } = {},
+  {
+    boundless,
+    pool,
+    signal,
+  }: {
+    boundless?: boolean;
+    pool?: DecoderPool;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<Tile> {
   if (self.maskImage != null) {
     throw new Error("Mask fetching not implemented yet");
+  }
+
+  const tile = await self.image.getTile(x, y, { signal });
+  if (tile === null) {
+    throw new Error("Tile not found");
   }
 
   const {
@@ -60,8 +74,20 @@ export async function fetchTile(
 
   const samplesPerPixel = self.image.value(TiffTag.SamplesPerPixel) ?? 1;
 
-  let array: RasterArray;
+  const decoderMetadata = {
+    sampleFormat,
+    bitsPerSample,
+    samplesPerPixel,
+    width: self.tileWidth,
+    height: self.tileHeight,
+    predictor,
+    planarConfiguration,
+  };
+  const decodedPixels = await (pool
+    ? pool.decode(bytes, compression, decoderMetadata)
+    : decode(bytes, compression, decoderMetadata));
 
+  let array: RasterArray;
   if (
     planarConfiguration === PlanarConfiguration.Separate &&
     samplesPerPixel > 1
@@ -107,10 +133,7 @@ export async function fetchTile(
   return {
     x,
     y,
-    array:
-      options.boundless === false
-        ? clipToImageBounds(self, x, y, array)
-        : array,
+    array: boundless === false ? clipToImageBounds(self, x, y, array) : array,
   };
 }
 

@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./pool/worker": {
+      "types": "./dist/pool/worker.d.ts",
+      "default": "./dist/pool/worker.js"
     }
   },
   "sideEffects": false,

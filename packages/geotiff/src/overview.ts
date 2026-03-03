@@ -1,11 +1,11 @@
-import type { TiffImage } from "@cogeotiff/core";
-import type { TiffImageTileCount } from "@cogeotiff/core/build/tiff.image.js";
+import type { TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { fetchTile } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
+import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
 import { index, xy } from "./transform.js";
 
@@ -83,7 +83,11 @@ export class Overview {
   async fetchTile(
     x: number,
     y: number,
-    options: { boundless?: boolean; signal?: AbortSignal } = {},
+    options: {
+      boundless?: boolean;
+      pool?: DecoderPool;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }

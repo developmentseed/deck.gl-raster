@@ -126,8 +126,12 @@ function createUnormPipeline(
     image: GeoTIFF | Overview,
     options: GetTileDataOptions,
   ) => {
-    const { device, x, y, signal } = options;
-    const tile = await image.fetchTile(x, y, { signal, boundless: false });
+    const { device, x, y, signal, pool } = options;
+    const tile = await image.fetchTile(x, y, {
+      boundless: false,
+      pool,
+      signal,
+    });
     let { array } = tile;
 
     let numSamples = samplesPerPixel;

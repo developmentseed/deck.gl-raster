@@ -1,12 +1,9 @@
 import { SourceCache } from "@chunkd/middleware";
-import { SourceChunk } from "@chunkd/middleware/build/src/middleware/chunk.js";
 import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
-import type { Source, TiffImage } from "@cogeotiff/core";
+import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
-// https://github.com/blacha/cogeotiff/issues/1417
-import type { TiffImageTileCount } from "@cogeotiff/core/build/tiff.image.js";
 import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { crsFromGeoKeys } from "./crs.js";
@@ -14,11 +11,12 @@ import { fetchTile } from "./fetch.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
+import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 
 /**
- * A higher-level GeoTIFF abstraction built on @cogeotiff/core.
+ * A high-level GeoTIFF abstraction built on @cogeotiff/core.
  *
  * Separates data IFDs from mask IFDs, pairs them by resolution level,
  * and exposes sorted overviews.  Mirrors the Python async-geotiff API.
@@ -164,17 +162,22 @@ export class GeoTIFF {
   static async fromUrl(
     url: string | URL,
     {
-      chunkSize = 32 * 1024,
+      // chunkSize = 32 * 1024,
       cacheSize = 1024 * 1024 * 1024,
     }: { chunkSize?: number; cacheSize?: number } = {},
   ): Promise<GeoTIFF> {
+    // Figure out optimal defaults in light of
+    // https://github.com/blacha/cogeotiff/issues/1431
+    // Defaulting to 32KB chunks is too small for tile data.
+    // https://github.com/developmentseed/deck.gl-raster/issues/294
+
     // read files in chunks
-    const chunk = new SourceChunk({ size: chunkSize });
+    // const chunk = new SourceChunk({ size: chunkSize });
     // 1MB cache for recently accessed chunks
     const cache = new SourceCache({ size: cacheSize });
 
     const source = new SourceHttp(url);
-    const view = new SourceView(source, [chunk, cache]);
+    const view = new SourceView(source, [/*chunk,*/ cache]);
 
     return await GeoTIFF.open(view);
   }
@@ -261,7 +264,11 @@ export class GeoTIFF {
   async fetchTile(
     x: number,
     y: number,
-    options: { boundless?: boolean; signal?: AbortSignal } = {},
+    options: {
+      boundless?: boolean;
+      pool?: DecoderPool;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }

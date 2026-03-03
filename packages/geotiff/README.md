@@ -67,6 +67,12 @@ For user-defined CRSes, we automatically parse the CRS into a PROJJSON object, w
 
 If you have an image where the CRS fails to parse, please create an issue.
 
+### Configurable Web Worker pool for image decoding
+
+The `DecoderPool` allows for decoding image data off the main thread.
+
+By default workers are created up to `navigator.hardwareConcurrency`, but you can customize how large the web worker pool is by passing options to the `DecoderPool` constructor.
+
 ### Dynamically load compressions as needed
 
 Instead of bundling support for all compressions out of the box, dynamically load the decompressors as required.
