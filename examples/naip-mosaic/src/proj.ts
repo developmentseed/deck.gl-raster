@@ -10,3 +10,12 @@ const utmDef = (zone: number) =>
 for (let zone = 10; zone <= 20; zone++) {
   proj4.defs(`EPSG:269${zone}`, utmDef(zone));
 }
+
+export async function epsgResolver(epsg: number) {
+  const code = `EPSG:${epsg}`;
+  const proj = proj4.defs(code);
+  if (!proj) {
+    throw new Error(`EPSG code ${code} not found in proj4 definitions`);
+  }
+  return proj;
+}

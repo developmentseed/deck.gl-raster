@@ -11,6 +11,9 @@ export interface CachedTags {
   bitsPerSample: Uint16Array;
   colorMap?: Uint16Array; // TiffTagType[TiffTag.ColorMap];
   compression: TiffTagType[TiffTag.Compression];
+  modelTiepoint: TiffTagType[TiffTag.ModelTiePoint] | null;
+  modelPixelScale: TiffTagType[TiffTag.ModelPixelScale] | null;
+  modelTransformation: TiffTagType[TiffTag.ModelTransformation] | null;
   nodata: number | null;
   photometric: TiffTagType[TiffTag.Photometric];
   /** https://web.archive.org/web/20240329145322/https://www.awaresystems.be/imaging/tiff/tifftags/photometricinterpretation.html */
@@ -31,6 +34,9 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
   const [
     bitsPerSample,
     colorMap,
+    modelTiepoint,
+    modelPixelScale,
+    modelTransformation,
     photometric,
     planarConfiguration,
     predictor,
@@ -39,6 +45,9 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
   ] = await Promise.all([
     image.fetch(TiffTag.BitsPerSample),
     image.fetch(TiffTag.ColorMap),
+    image.fetch(TiffTag.ModelTiePoint),
+    image.fetch(TiffTag.ModelPixelScale),
+    image.fetch(TiffTag.ModelTransformation),
     image.fetch(TiffTag.Photometric),
     image.fetch(TiffTag.PlanarConfiguration),
     image.fetch(TiffTag.Predictor),
@@ -75,6 +84,9 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     bitsPerSample: new Uint16Array(bitsPerSample),
     colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
     compression,
+    modelTiepoint,
+    modelPixelScale,
+    modelTransformation,
     nodata,
     photometric,
     planarConfiguration,
