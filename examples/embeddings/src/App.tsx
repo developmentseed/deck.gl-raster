@@ -28,6 +28,9 @@ function DeckGLOverlay(props: DeckProps) {
   return null;
 }
 
+type FetchedTile = Awaited<ReturnType<GeoTIFF["fetchTile"]>>;
+const bandCache = new Map<string, FetchedTile>();
+
 function makeTileDataFetcher(bands: [number, number, number]) {
   return async function getTileData(
     image: GeoTIFF | Overview,
@@ -35,9 +38,18 @@ function makeTileDataFetcher(bands: [number, number, number]) {
   ): Promise<TileData> {
     const { device, x, y, signal } = options;
     const tiles = await Promise.all(
-      bands.map((b) =>
-        image.fetchTile(x, y, { signal, boundless: false, band: b }),
-      ),
+      bands.map((b) => {
+        const key = `${x}-${y}-${b}`;
+        const cached = bandCache.get(key);
+        if (cached) return cached;
+        const result = image
+          .fetchTile(x, y, { signal, boundless: false, band: b })
+          .then((tile) => {
+            bandCache.set(key, tile);
+            return tile;
+          });
+        return result;
+      }),
     );
 
     const { width, height } = tiles[0]!.array;
