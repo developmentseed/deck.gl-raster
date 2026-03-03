@@ -8,6 +8,39 @@
 import { describe, expect, it } from "vitest";
 import { loadGeoTIFF } from "./helpers.js";
 
+describe("fetchTile band-separate", () => {
+  it("returns band-separate layout for a multi-band planar TIFF", async () => {
+    const tiff = await loadGeoTIFF("int8_3band_zstd_block64", "rasterio");
+    const tile = await tiff.fetchTile(0, 0);
+    expect(tile.array.layout).toBe("band-separate");
+    expect(tile.array.count).toBe(3);
+    if (tile.array.layout === "band-separate") {
+      expect(tile.array.bands).toHaveLength(3);
+      for (const band of tile.array.bands) {
+        expect(band.length).toBe(tiff.tileWidth * tiff.tileHeight);
+      }
+    }
+  });
+
+  it("returns correct tile dimensions", async () => {
+    const tiff = await loadGeoTIFF("int8_3band_zstd_block64", "rasterio");
+    const tile = await tiff.fetchTile(0, 0);
+    expect(tile.array.width).toBe(tiff.tileWidth);
+    expect(tile.array.height).toBe(tiff.tileHeight);
+  });
+
+  it("returns different data per band", async () => {
+    const tiff = await loadGeoTIFF("int8_3band_zstd_block64", "rasterio");
+    const tile = await tiff.fetchTile(0, 0);
+    expect(tile.array.layout).toBe("band-separate");
+    if (tile.array.layout === "band-separate") {
+      const [b0, b1, b2] = tile.array.bands;
+      expect(b0).not.toEqual(b1);
+      expect(b0).not.toEqual(b2);
+    }
+  });
+});
+
 describe("fetchTile boundless option", () => {
   describe("boundless=true (default)", () => {
     it("returns the full tile dimensions for an interior tile", async () => {

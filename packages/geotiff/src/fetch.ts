@@ -52,10 +52,6 @@ export async function fetchTile(
   }
 
   const tile = await fetchCogBytes(self, x, y, { signal });
-  if (tile === null) {
-    throw new Error("Tile not found");
-  }
-
   const {
     bitsPerSample: bitsPerSamples,
     predictor,
