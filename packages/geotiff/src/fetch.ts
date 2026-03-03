@@ -62,6 +62,7 @@ export async function fetchTile(
     planarConfiguration,
     sampleFormat: sampleFormats,
   } = self.cachedTags;
+  const { bytes, compression } = tile;
   const { sampleFormat, bitsPerSample } = getUniqueSampleFormat(
     sampleFormats,
     bitsPerSamples,
