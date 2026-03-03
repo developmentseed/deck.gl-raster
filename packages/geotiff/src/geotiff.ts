@@ -1,5 +1,4 @@
 import { SourceCache } from "@chunkd/middleware";
-import { SourceChunk } from "@chunkd/middleware/build/src/middleware/chunk.js";
 import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
@@ -163,17 +162,22 @@ export class GeoTIFF {
   static async fromUrl(
     url: string | URL,
     {
-      chunkSize = 32 * 1024,
+      // chunkSize = 32 * 1024,
       cacheSize = 1024 * 1024 * 1024,
     }: { chunkSize?: number; cacheSize?: number } = {},
   ): Promise<GeoTIFF> {
+    // Figure out optimal defaults in light of
+    // https://github.com/blacha/cogeotiff/issues/1431
+    // Defaulting to 32KB chunks is too small for tile data.
+    // https://github.com/developmentseed/deck.gl-raster/issues/294
+
     // read files in chunks
-    const chunk = new SourceChunk({ size: chunkSize });
+    // const chunk = new SourceChunk({ size: chunkSize });
     // 1MB cache for recently accessed chunks
     const cache = new SourceCache({ size: cacheSize });
 
     const source = new SourceHttp(url);
-    const view = new SourceView(source, [chunk, cache]);
+    const view = new SourceView(source, [/*chunk,*/ cache]);
 
     return await GeoTIFF.open(view);
   }

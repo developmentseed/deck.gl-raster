@@ -16,7 +16,8 @@
       "!!**/coverage",
       "!!**/*.log",
       "!!**/fixtures",
-      "!!packages/morecantile/spec"
+      "!!packages/morecantile/spec",
+      "!!**/minimal_stac.json"
     ]
   },
   "formatter": {
