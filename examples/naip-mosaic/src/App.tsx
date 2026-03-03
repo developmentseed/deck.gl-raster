@@ -17,6 +17,7 @@ import "./proj";
 import type { Overview } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import colormap from "./cfastie";
+import STAC_DATA from "./minimal_stac.json";
 import { epsgResolver } from "./proj";
 
 /** Bounding box query passed to Microsoft Planetary Computer STAC API */
@@ -224,6 +225,32 @@ const RENDER_MODE_OPTIONS: { value: RenderMode; label: string }[] = [
   { value: "ndvi", label: "NDVI" },
 ];
 
+// biome-ignore lint/correctness/noUnusedVariables: For now we hard-code our STAC results instead of fetching from the API. We keep this function around for reference and future use.
+async function fetchSTACItems(): Promise<STACFeatureCollection> {
+  const params = {
+    collections: "naip",
+    bbox: STAC_BBOX.join(","),
+    filter: JSON.stringify({
+      op: "=",
+      args: [{ property: "naip:state" }, "co"],
+    }),
+    "filter-lang": "cql2-json",
+    datetime: "2023-01-01T00:00:00Z/2023-12-31T23:59:59Z",
+    limit: "1000",
+  };
+
+  const queryString = new URLSearchParams(params).toString();
+  const url = `https://planetarycomputer.microsoft.com/api/stac/v1/search?${queryString}`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`STAC API error: ${response.statusText}`);
+  }
+
+  const data: STACFeatureCollection = await response.json();
+  return data;
+}
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [stacItems, setStacItems] = useState<STACItem[]>([]);
@@ -236,29 +263,10 @@ export default function App() {
 
   // Fetch STAC items on mount
   useEffect(() => {
-    async function fetchSTACItems() {
+    async function wrappedFetchSTACItems() {
       try {
-        const params = {
-          collections: "naip",
-          bbox: STAC_BBOX.join(","),
-          filter: JSON.stringify({
-            op: "=",
-            args: [{ property: "naip:state" }, "co"],
-          }),
-          "filter-lang": "cql2-json",
-          datetime: "2023-01-01T00:00:00Z/2023-12-31T23:59:59Z",
-          limit: "1000",
-        };
-
-        const queryString = new URLSearchParams(params).toString();
-        const url = `https://planetarycomputer.microsoft.com/api/stac/v1/search?${queryString}`;
-
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`STAC API error: ${response.statusText}`);
-        }
-
-        const data: STACFeatureCollection = await response.json();
+        // const data: STACFeatureCollection = await fetchSTACItems();
+        const data = STAC_DATA as unknown as STACFeatureCollection;
         (window as any).data = data;
         setStacItems(data.features);
       } catch (err) {
@@ -271,7 +279,7 @@ export default function App() {
       }
     }
 
-    fetchSTACItems();
+    wrappedFetchSTACItems();
   }, []);
 
   useEffect(() => {
@@ -303,6 +311,8 @@ export default function App() {
       // mechanisms.
       getSource: async (source, { signal }) => {
         const url = source.assets.image.href;
+        // TODO: restore passing down signal
+        // https://github.com/developmentseed/deck.gl-raster/issues/292
         const tiff = await GeoTIFF.fromUrl(url);
         return tiff;
       },
