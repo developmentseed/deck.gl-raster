@@ -24,7 +24,7 @@ export type WorkerErrorResponse = {
 };
 
 /** Collect the transferable ArrayBuffers from a DecodedPixels. */
-export function collectTransferables(pixels: DecodedPixels): ArrayBufferLike[] {
+export function collectTransferables(pixels: DecodedPixels): Transferable[] {
   if (pixels.layout === "pixel-interleaved") {
     return [pixels.data.buffer];
   }
@@ -72,7 +72,7 @@ export class WorkerWrapper {
 
   submitJob(
     request: Omit<WorkerRequest, "jobId">,
-    transferables: ArrayBuffer[],
+    transferables: Transferable[],
   ): Promise<DecodedPixels> {
     const jobId = this.jobIdCounter++;
     return new Promise((resolve, reject) => {

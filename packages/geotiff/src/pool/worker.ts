@@ -1,9 +1,8 @@
 /**
  * Default worker entry point for DecoderPool.
  *
- * This file is intended to be used as a Web Worker via:
- *
- *   new Worker(new URL("./pool/worker.js", import.meta.url), { type: "module" })
+ * In most cases you don't need to reference this file directly — call
+ * `defaultDecoderPool()` instead, which creates a pool backed by this worker.
  *
  * To override codecs (e.g. swap in a WASM zstd decoder), create your own
  * worker file that mutates `registry` before importing this handler:
@@ -12,6 +11,13 @@
  *   import { Compression } from "@cogeotiff/core";
  *   registry.set(Compression.Zstd, () => import("./my-wasm-zstd.js").then(m => m.decode));
  *   import "@developmentseed/geotiff/pool/worker";
+ *
+ * Then pass a custom `createWorker` factory to `DecoderPool`:
+ *
+ *   new DecoderPool({
+ *     createWorker: () =>
+ *       new Worker(new URL("./my-worker.js", import.meta.url), { type: "module" }),
+ *   });
  */
 
 import { decode } from "../decode.js";
