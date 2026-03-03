@@ -19,7 +19,10 @@ import {
   TileMatrixSetTileset,
 } from "@developmentseed/deck.gl-raster";
 import type { DecoderPool, GeoTIFF, Overview } from "@developmentseed/geotiff";
-import { defaultPool, generateTileMatrixSet } from "@developmentseed/geotiff";
+import {
+  defaultDecoderPool,
+  generateTileMatrixSet,
+} from "@developmentseed/geotiff";
 import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { tileTransform } from "@developmentseed/morecantile";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
@@ -302,7 +305,7 @@ export class COGLayer<
       x,
       y,
       signal: combinedSignal,
-      pool: this.props.pool || defaultPool,
+      pool: this.props.pool ?? defaultDecoderPool(),
     });
 
     return {

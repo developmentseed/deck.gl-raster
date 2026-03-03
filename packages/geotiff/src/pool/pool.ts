@@ -104,13 +104,33 @@ export class DecoderPool {
   }
 }
 
-function defaultCreateWorker() {
-  return new Worker(new URL("./worker.js", import.meta.url), {
-    type: "module",
-  });
-}
+/**
+ * A default DecoderPool instance.
+ *
+ * It will be created on first call of `defaultDecoderPool`.
+ */
+let DEFAULT_POOL: DecoderPool | null = null;
 
-/** Default pool instance. Uses a built-in worker for off-main-thread decoding. */
-export const defaultPool = new DecoderPool({
-  createWorker: defaultCreateWorker,
-});
+/**
+ * Create a default `DecoderPool` backed by the built-in worker.
+ *
+ * Call this once and reuse the returned pool. Creating it lazily (rather than
+ * as a module-level singleton) keeps the `new URL(…, import.meta.url)` out of
+ * the module's static initialisation, so bundlers that build IIFE/UMD outputs
+ * don't try to inline the worker at build time.
+ *
+ * ```ts
+ * const pool = defaultDecoderPool();
+ * ```
+ */
+export function defaultDecoderPool(): DecoderPool {
+  if (DEFAULT_POOL !== null) {
+    return DEFAULT_POOL;
+  }
+
+  DEFAULT_POOL = new DecoderPool({
+    createWorker: () =>
+      new Worker(new URL("./worker.js", import.meta.url), { type: "module" }),
+  });
+  return DEFAULT_POOL;
+}

@@ -6,7 +6,6 @@ import type { ProjJson } from "./crs.js";
 import { decode } from "./decode.js";
 import type { CachedTags } from "./ifd.js";
 import type { DecoderPool } from "./pool/pool.js";
-import { defaultPool } from "./pool/pool.js";
 import type { Tile } from "./tile";
 import type { HasTransform } from "./transform";
 
@@ -39,7 +38,7 @@ export async function fetchTile(
   y: number,
   {
     boundless,
-    pool = defaultPool,
+    pool,
     signal,
   }: {
     boundless?: boolean;
