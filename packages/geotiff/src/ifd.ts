@@ -16,6 +16,8 @@ export interface CachedTags {
   predictor: Predictor;
   sampleFormat: TiffTagType[TiffTag.SampleFormat];
   samplesPerPixel: TiffTagType[TiffTag.SamplesPerPixel];
+  tileByteCounts: TiffTagType[TiffTag.TileByteCounts] | null;
+  tileOffsets: TiffTagType[TiffTag.TileOffsets] | null;
 }
 
 /** Pre-fetch TIFF tags for easier visualization. */
@@ -39,6 +41,8 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     predictor,
     sampleFormat,
     samplesPerPixel,
+    tileByteCounts,
+    tileOffsets,
   ] = await Promise.all([
     image.fetch(TiffTag.BitsPerSample),
     image.fetch(TiffTag.ColorMap),
@@ -50,6 +54,11 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     image.fetch(TiffTag.Predictor),
     image.fetch(TiffTag.SampleFormat),
     image.fetch(TiffTag.SamplesPerPixel),
+    // Pre-fetch tile offsets and byte counts. If we don't prefetch them,
+    // TiffImage.getTileSize will have to fetch them for each tile, which
+    // results in many redundant requests.
+    image.fetch(TiffTag.TileByteCounts),
+    image.fetch(TiffTag.TileOffsets),
   ]);
 
   const missingTag: (tagName: string) => never = (tagName: string) => {
@@ -87,6 +96,8 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     // https://web.archive.org/web/20240329145340/https://www.awaresystems.be/imaging/tiff/tifftags/sampleformat.html
     sampleFormat: sampleFormat ?? [SampleFormat.Uint],
     samplesPerPixel,
+    tileByteCounts,
+    tileOffsets,
   };
 }
 

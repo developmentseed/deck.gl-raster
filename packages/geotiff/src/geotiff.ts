@@ -1,4 +1,4 @@
-import { SourceCache } from "@chunkd/middleware";
+import { SourceCache, SourceChunk } from "@chunkd/middleware";
 import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
@@ -38,6 +38,14 @@ export class GeoTIFF {
   /** Cached TIFF tags that are pre-fetched when opening the GeoTIFF. */
   readonly cachedTags: CachedTags;
 
+  /** The data source used for fetching tile data.
+   *
+   * This is typically the raw source (e.g. HTTP or memory) rather than a
+   * layered source with caching and chunking, to avoid unnecessary copying of
+   * tile data through cache layers.
+   */
+  readonly dataSource: Pick<Source, "fetch">;
+
   /** The underlying Tiff instance. */
   readonly tiff: Tiff;
 
@@ -57,6 +65,7 @@ export class GeoTIFF {
     gkd: GeoKeyDirectory,
     overviews: Overview[],
     cachedTags: CachedTags,
+    dataSource: Pick<Source, "fetch">,
   ) {
     this.tiff = tiff;
     this.image = image;
@@ -64,6 +73,7 @@ export class GeoTIFF {
     this.gkd = gkd;
     this.overviews = overviews;
     this.cachedTags = cachedTags;
+    this.dataSource = dataSource;
   }
 
   /**
@@ -71,14 +81,19 @@ export class GeoTIFF {
    *
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    */
-  static async open(
-    source: Source,
-    { prefetch = 32 * 1024 }: { prefetch?: number } = {},
-  ): Promise<GeoTIFF> {
-    const tiff = await Tiff.create(source, {
+  static async open({
+    dataSource,
+    headerSource,
+    prefetch = 32 * 1024,
+  }: {
+    dataSource: Pick<Source, "fetch">;
+    headerSource: Source;
+    prefetch?: number;
+  }): Promise<GeoTIFF> {
+    const tiff = await Tiff.create(headerSource, {
       defaultReadSize: prefetch,
     });
-    return GeoTIFF.fromTiff(tiff);
+    return GeoTIFF.fromTiff(tiff, dataSource);
   }
 
   /**
@@ -87,7 +102,10 @@ export class GeoTIFF {
    * All IFDs are walked; mask IFDs are matched to data IFDs by matching
    * (width, height).  Overviews are sorted from finest to coarsest resolution.
    */
-  static async fromTiff(tiff: Tiff): Promise<GeoTIFF> {
+  static async fromTiff(
+    tiff: Tiff,
+    dataSource: Pick<Source, "fetch">,
+  ): Promise<GeoTIFF> {
     const images = tiff.images;
     if (images.length === 0) {
       throw new Error("TIFF does not contain any IFDs");
@@ -141,11 +159,19 @@ export class GeoTIFF {
       gkd,
       [],
       cachedTags,
+      dataSource,
     );
 
     const overviews: Overview[] = dataEntries.map(([key, dataImage]) => {
       const maskImage = maskIFDs.get(key) ?? null;
-      return new Overview(geotiff, gkd, dataImage, maskImage, cachedTags);
+      return new Overview(
+        geotiff,
+        gkd,
+        dataImage,
+        maskImage,
+        cachedTags,
+        dataSource,
+      );
     });
 
     // Mutate the readonly field — safe here because we're still in the factory.
@@ -156,30 +182,39 @@ export class GeoTIFF {
 
   static async fromArrayBuffer(input: ArrayBuffer): Promise<GeoTIFF> {
     const source = new SourceMemory("memory://input.tif", input);
-    return await GeoTIFF.open(source);
+    return await GeoTIFF.open({
+      dataSource: source,
+      headerSource: source,
+    });
   }
 
   static async fromUrl(
     url: string | URL,
     {
-      // chunkSize = 32 * 1024,
-      cacheSize = 1024 * 1024 * 1024,
+      chunkSize = 1024 * 1024,
+      cacheSize = 10 * 1024 * 1024,
     }: { chunkSize?: number; cacheSize?: number } = {},
   ): Promise<GeoTIFF> {
+    const source = new SourceHttp(url);
+
     // Figure out optimal defaults in light of
     // https://github.com/blacha/cogeotiff/issues/1431
     // Defaulting to 32KB chunks is too small for tile data.
     // https://github.com/developmentseed/deck.gl-raster/issues/294
 
     // read files in chunks
-    // const chunk = new SourceChunk({ size: chunkSize });
-    // 1MB cache for recently accessed chunks
+    const chunk = new SourceChunk({ size: chunkSize });
+    // 10MB cache for recently accessed chunks
     const cache = new SourceCache({ size: cacheSize });
 
-    const source = new SourceHttp(url);
-    const view = new SourceView(source, [/*chunk,*/ cache]);
+    const view = new SourceView(source, [chunk, cache]);
 
-    return await GeoTIFF.open(view);
+    return await GeoTIFF.open({
+      // Use raw source for tile data to avoid unnecessary copying through the
+      // cache and chunk layers.
+      dataSource: source,
+      headerSource: view,
+    });
   }
 
   // ── Properties from the primary image ─────────────────────────────────

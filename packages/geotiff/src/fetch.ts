@@ -1,5 +1,5 @@
-import type { Compression, SampleFormat, TiffImage } from "@cogeotiff/core";
-import { PlanarConfiguration, TiffTag } from "@cogeotiff/core";
+import type { SampleFormat, Source, TiffImage } from "@cogeotiff/core";
+import { Compression, PlanarConfiguration, TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
 import type { RasterArray } from "./array.js";
 import type { ProjJson } from "./crs.js";
@@ -13,6 +13,8 @@ import type { HasTransform } from "./transform";
 /** Protocol for objects that hold a TIFF reference and can request tiles. */
 interface HasTiffReference extends HasTransform {
   readonly cachedTags: CachedTags;
+
+  readonly dataSource: Pick<Source, "fetch">;
 
   /** The data Image File Directory (IFD) */
   readonly image: TiffImage;
@@ -149,7 +151,7 @@ async function fetchCogBytes(
 ): Promise<GetBytesResponse | GetBytesResponse[]> {
   switch (self.cachedTags.planarConfiguration) {
     case PlanarConfiguration.Contig: {
-      const tile = await self.image.getTile(x, y, { signal });
+      const tile = await getTile(self.image, x, y, self.dataSource, { signal });
       if (tile === null) {
         throw new Error(`Tile at (${x}, ${y}) not found`);
       }
@@ -192,13 +194,107 @@ async function fetchBandSeparateTileBytes(
 ): Promise<GetBytesResponse[]> {
   const byteRanges = await findBandSeparateTileByteRanges(self, x, y);
   const buffers = byteRanges.map(async ({ offset, imageSize }) => {
-    const tile = await self.image.getBytes(offset, imageSize, { signal });
+    const tile = await getBytes(
+      self.image,
+      offset,
+      imageSize,
+      self.dataSource,
+      { signal },
+    );
     if (tile === null) {
       throw new Error(`Tile at (${x}, ${y}) not found`);
     }
     return tile;
   });
   return Promise.all(buffers);
+}
+
+/**
+ * Load a tile into a ArrayBuffer
+ *
+ * if the tile compression is JPEG, This will also apply the JPEG compression tables to the resulting ArrayBuffer see {@link getJpegHeader}
+ *
+ * Though this function lives upstream in @cogeotiff/core, we vendor it here so
+ * that we can use a custom fetch.
+ *
+ * This is to separate the source used for fetching header/IFD data (which is
+ * typically small and benefits from caching) from the source used for fetching
+ * tile data (which can be large and should avoid unnecessary copying through
+ * cache layers).
+ */
+async function getTile(
+  image: TiffImage,
+  x: number,
+  y: number,
+  { fetch }: Pick<Source, "fetch">,
+  options?: { signal?: AbortSignal },
+): Promise<{
+  bytes: ArrayBuffer;
+  compression: Compression;
+} | null> {
+  const { size, tileSize: tiles } = image;
+
+  if (tiles == null) throw new Error("Tiff is not tiled");
+
+  // TODO support GhostOptionTileOrder
+  const nyTiles = Math.ceil(size.height / tiles.height);
+  const nxTiles = Math.ceil(size.width / tiles.width);
+
+  if (x >= nxTiles || y >= nyTiles) {
+    throw new Error(
+      `Tile index is outside of range x:${x} >= ${nxTiles} or y:${y} >= ${nyTiles}`,
+    );
+  }
+
+  const idx = y * nxTiles + x;
+  const totalTiles = nxTiles * nyTiles;
+  if (idx >= totalTiles)
+    throw new Error(
+      `Tile index is outside of tile range: ${idx} >= ${totalTiles}`,
+    );
+
+  const { offset, imageSize } = await image.getTileSize(idx);
+
+  return getBytes(image, offset, imageSize, { fetch }, options);
+}
+
+/** Read image bytes at the given offset.
+ *
+ * Though this function lives upstream in @cogeotiff/core, we vendor it here so
+ * that we can use a custom fetch.
+ *
+ * This is to separate the source used for fetching header/IFD data (which is
+ * typically small and benefits from caching) from the source used for fetching
+ * tile data (which can be large and should avoid unnecessary copying through
+ * cache layers).
+ */
+async function getBytes(
+  image: TiffImage,
+  offset: number,
+  byteCount: number,
+  { fetch }: Pick<Source, "fetch">,
+  options?: { signal?: AbortSignal },
+): Promise<{
+  bytes: ArrayBuffer;
+  compression: Compression;
+} | null> {
+  if (byteCount === 0) return null;
+
+  const bytes = await fetch(offset, byteCount, options);
+  if (bytes.byteLength < byteCount) {
+    throw new Error(
+      `Failed to fetch bytes from offset:${offset} wanted:${byteCount} got:${bytes.byteLength}`,
+    );
+  }
+
+  const compression = image.value(TiffTag.Compression) ?? Compression.None;
+  if (compression === Compression.Jpeg) {
+    return {
+      bytes: image.getJpegHeader(bytes),
+      compression,
+    };
+  }
+  return { bytes, compression };
 }
 
 /**

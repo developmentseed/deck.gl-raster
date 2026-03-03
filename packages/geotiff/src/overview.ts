@@ -1,4 +1,4 @@
-import type { TiffImage, TiffImageTileCount } from "@cogeotiff/core";
+import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
@@ -16,6 +16,8 @@ import { index, xy } from "./transform.js";
  */
 export class Overview {
   readonly cachedTags: CachedTags;
+
+  readonly dataSource: Pick<Source, "fetch">;
 
   /** A reference to the parent GeoTIFF object. */
   readonly geotiff: GeoTIFF;
@@ -35,12 +37,14 @@ export class Overview {
     image: TiffImage,
     maskImage: TiffImage | null,
     cachedTags: CachedTags,
+    dataSource: Pick<Source, "fetch">,
   ) {
     this.geotiff = geotiff;
     this.gkd = gkd;
     this.image = image;
     this.maskImage = maskImage;
     this.cachedTags = cachedTags;
+    this.dataSource = dataSource;
   }
 
   get crs(): number | ProjJson {
