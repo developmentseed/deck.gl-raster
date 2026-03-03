@@ -83,7 +83,7 @@ export async function fetchTile(
     predictor,
     planarConfiguration,
   };
-  const decodedPixels = await (pool != null
+  const decodedPixels = await (pool
     ? pool.decode(bytes, compression, decoderMetadata)
     : decode(bytes, compression, decoderMetadata));
 
