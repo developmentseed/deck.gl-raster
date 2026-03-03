@@ -80,6 +80,10 @@ export class GeoTIFF {
    * Open a GeoTIFF from a @cogeotiff/core Source.
    *
    * This creates and initialises the underlying Tiff, then classifies IFDs.
+   *
+   * @param dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
+   * @param headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs.
+   * @param prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
    */
   static async open({
     dataSource,
@@ -101,6 +105,8 @@ export class GeoTIFF {
    *
    * All IFDs are walked; mask IFDs are matched to data IFDs by matching
    * (width, height).  Overviews are sorted from finest to coarsest resolution.
+   *
+   * @param dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
    */
   static async fromTiff(
     tiff: Tiff,
@@ -188,11 +194,20 @@ export class GeoTIFF {
     });
   }
 
+  /**
+   * Create a new GeoTIFF from a URL.
+   *
+   * @param url The URL of the GeoTIFF to open.
+   * @param options Optional parameters for chunk size and cache size.
+   * @param options.chunkSize The minimum size for each request made to the source while reading header metadata. Defaults to 32KB.
+   * @param options.cacheSize The size of the cache for recently accessed header chunks. Currently no caching is applied to data fetches. Defaults to 1MB.
+   * @returns A Promise that resolves to a GeoTIFF instance.
+   */
   static async fromUrl(
     url: string | URL,
     {
-      chunkSize = 1024 * 1024,
-      cacheSize = 10 * 1024 * 1024,
+      chunkSize = 32 * 1024,
+      cacheSize = 1024 * 1024,
     }: { chunkSize?: number; cacheSize?: number } = {},
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url);
