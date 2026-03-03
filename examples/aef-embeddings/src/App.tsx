@@ -29,7 +29,31 @@ function DeckGLOverlay(props: DeckProps) {
 }
 
 type FetchedTile = Awaited<ReturnType<GeoTIFF["fetchTile"]>>;
-const bandCache = new Map<string, FetchedTile>();
+
+class LRUCache<K, V> {
+  private cache = new Map<K, V>();
+  constructor(private maxSize: number) {}
+
+  get(key: K): V | undefined {
+    const value = this.cache.get(key);
+    if (value !== undefined) {
+      this.cache.delete(key);
+      this.cache.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: K, value: V): void {
+    this.cache.delete(key);
+    if (this.cache.size >= this.maxSize) {
+      const oldest = this.cache.keys().next().value!;
+      this.cache.delete(oldest);
+    }
+    this.cache.set(key, value);
+  }
+}
+
+const bandCache = new LRUCache<string, FetchedTile>(512);
 
 function makeTileDataFetcher(bands: [number, number, number]) {
   return async function getTileData(
