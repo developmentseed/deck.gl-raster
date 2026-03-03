@@ -28,5 +28,5 @@ export async function loadGeoTIFF(
 ): Promise<GeoTIFF> {
   const path = fixturePath(name, variant);
   const source = new SourceFile(path);
-  return GeoTIFF.open(source);
+  return GeoTIFF.open({ dataSource: source, headerSource: source });
 }
