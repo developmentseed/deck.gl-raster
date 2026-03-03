@@ -14,6 +14,7 @@ import type { HasTransform } from "./transform";
 interface HasTiffReference extends HasTransform {
   readonly cachedTags: CachedTags;
 
+  /** The data source used for fetching tile data. */
   readonly dataSource: Pick<Source, "fetch">;
 
   /** The data Image File Directory (IFD) */

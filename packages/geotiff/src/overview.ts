@@ -17,6 +17,7 @@ import { index, xy } from "./transform.js";
 export class Overview {
   readonly cachedTags: CachedTags;
 
+  /** The data source used for fetching tile data. */
   readonly dataSource: Pick<Source, "fetch">;
 
   /** A reference to the parent GeoTIFF object. */
