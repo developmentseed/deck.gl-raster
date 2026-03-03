@@ -41,7 +41,7 @@
   "devDependencies": {
     "@chunkd/source-file": "^11.0.1",
     "@types/node": "^25.3.3",
-    "geotiff": "^2.1.3",
+    "geotiff": "^3.0.4",
     "lerc": "^4.0.4",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
