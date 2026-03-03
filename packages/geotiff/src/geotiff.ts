@@ -11,11 +11,12 @@ import { fetchTile } from "./fetch.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
+import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 
 /**
- * A higher-level GeoTIFF abstraction built on @cogeotiff/core.
+ * A high-level GeoTIFF abstraction built on @cogeotiff/core.
  *
  * Separates data IFDs from mask IFDs, pairs them by resolution level,
  * and exposes sorted overviews.  Mirrors the Python async-geotiff API.
@@ -263,7 +264,11 @@ export class GeoTIFF {
   async fetchTile(
     x: number,
     y: number,
-    options: { boundless?: boolean; signal?: AbortSignal } = {},
+    options: {
+      boundless?: boolean;
+      pool?: DecoderPool;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }

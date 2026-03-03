@@ -1,7 +1,7 @@
 import type { CompositeLayerProps, UpdateParameters } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { RasterLayer } from "@developmentseed/deck.gl-raster";
-import type { GeoTIFF } from "@developmentseed/geotiff";
+import type { DecoderPool, GeoTIFF } from "@developmentseed/geotiff";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import proj4 from "proj4";
 import type { ProjectionDefinition } from "wkt-parser";
@@ -33,13 +33,12 @@ export interface GeoTIFFLayerProps extends CompositeLayerProps {
   epsgResolver?: EpsgResolver;
 
   /**
-   * GeoTIFF.js Pool for decoding image chunks.
+   * Decoder pool for decoding image chunks.
    *
-   * If none is provided, a default Pool will be created and shared between all
-   * COGLayer and GeoTIFFLayer instances.
+   * If none is provided, a default DecoderPool will be created and shared
+   * between all COGLayer and GeoTIFFLayer instances.
    */
-  // TODO: Restore a sort of worker pool with our geotiff implementation
-  // pool?: Pool;
+  pool?: DecoderPool;
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
