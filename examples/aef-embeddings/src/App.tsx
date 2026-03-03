@@ -162,8 +162,8 @@ export default function App() {
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <MaplibreMap
         initialViewState={{
-          longitude: -105.48481514871036,
-          latitude: 40.33030130607851,
+          longitude: -105.484815,
+          latitude: 40.330301,
           zoom: 10,
         }}
         style={{ width: "100%", height: "100%" }}
