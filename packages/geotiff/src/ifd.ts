@@ -6,6 +6,7 @@ export interface CachedTags {
   bitsPerSample: Uint16Array;
   colorMap?: Uint16Array; // TiffTagType[TiffTag.ColorMap];
   compression: TiffTagType[TiffTag.Compression];
+  gdalMetadata: TiffTagType[TiffTag.GdalMetadata] | null;
   modelTiepoint: TiffTagType[TiffTag.ModelTiePoint] | null;
   modelPixelScale: TiffTagType[TiffTag.ModelPixelScale] | null;
   modelTransformation: TiffTagType[TiffTag.ModelTransformation] | null;
@@ -31,8 +32,10 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
   const [
     bitsPerSample,
     colorMap,
-    modelTiepoint,
+    gdalNoData,
+    gdalMetadata,
     modelPixelScale,
+    modelTiepoint,
     modelTransformation,
     photometric,
     planarConfiguration,
@@ -45,8 +48,10 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
   ] = await Promise.all([
     image.fetch(TiffTag.BitsPerSample),
     image.fetch(TiffTag.ColorMap),
-    image.fetch(TiffTag.ModelTiePoint),
+    image.fetch(TiffTag.GdalNoData),
+    image.fetch(TiffTag.GdalMetadata),
     image.fetch(TiffTag.ModelPixelScale),
+    image.fetch(TiffTag.ModelTiePoint),
     image.fetch(TiffTag.ModelTransformation),
     image.fetch(TiffTag.Photometric),
     image.fetch(TiffTag.PlanarConfiguration),
@@ -85,10 +90,11 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     bitsPerSample: new Uint16Array(bitsPerSample),
     colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
     compression,
+    gdalMetadata,
     modelTiepoint,
     modelPixelScale,
     modelTransformation,
-    nodata: Number(nodata),
+    nodata: gdalNoData !== null ? Number(gdalNoData) : null,
     photometric,
     planarConfiguration,
     predictor: (predictor as Predictor) ?? Predictor.None,
