@@ -61,39 +61,31 @@ function makeTileDataFetcher(bands: [number, number, number]) {
     options: GetTileDataOptions,
   ): Promise<TileData> {
     const { device, x, y, signal } = options;
-    const tiles = await Promise.all(
-      bands.map((b) => {
-        const key = `${x}-${y}-${b}`;
-        const cached = bandCache.get(key);
-        if (cached) return cached;
-        const result = image
-          .fetchTile(x, y, { signal, boundless: false, band: b })
-          .then((tile) => {
-            bandCache.set(key, tile);
-            return tile;
-          });
-        return result;
-      }),
-    );
+    const tile = await image.fetchTile(x, y, { signal, boundless: false });
 
-    const { width, height } = tiles[0]!.array;
-    const pixelCount = width * height;
+    const pixelCount = tile.array.width * tile.array.height;
+    console.log(tile.array);
     const uint8Data = new Uint8Array(pixelCount * 4);
 
     for (let i = 0; i < pixelCount; i++) {
       const outBase = i * 4;
       for (let c = 0; c < 3; c++) {
-        const tile = tiles[c]!;
-        const value =
-          tile.array.layout === "pixel-interleaved"
-            ? (tile.array.data[i] as number)
-            : (tile.array.bands[0]![i] as number);
-        uint8Data[outBase + c] = value + 128;
+        if (tile.array.layout === "band-separate") {
+          throw new Error("band-separate layout is not supported");
+        } else {
+          const value = tile.array.data[i * tile.array.count + bands[c]] as number;
+          uint8Data[outBase + c] = value + 128;
+        }
       }
       uint8Data[outBase + 3] = 255;
     }
 
-    return { device, data: uint8Data, height, width };
+    return {
+      device,
+      data: uint8Data,
+      height: tile.array.height,
+      width: tile.array.width,
+    };
   };
 }
 
