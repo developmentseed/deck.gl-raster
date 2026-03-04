@@ -6,6 +6,7 @@ import {
   CreateTexture,
   cieLabToRGB,
   FilterNoDataVal,
+  MaskTexture,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import { parseColormap } from "@developmentseed/geotiff";
@@ -18,6 +19,7 @@ export type TextureDataT = {
   height: number;
   width: number;
   texture: Texture;
+  mask?: Texture;
 };
 
 /**
@@ -106,6 +108,15 @@ function createUnormPipeline(
     });
   }
 
+  if (geotiff.maskImage !== null) {
+    renderPipeline.push({
+      module: MaskTexture,
+      props: {
+        maskTexture: (data: TextureDataT) => data.mask as Texture,
+      },
+    });
+  }
+
   const toRGBModule = photometricInterpretationToRGB(
     photometric,
     device,
@@ -157,22 +168,31 @@ function createUnormPipeline(
       bitsPerSample,
       sampleFormat,
     );
+    const { width, height } = array;
     const bytesPerPixel = (bitsPerSample[0]! / 8) * numSamples;
     const texture = device.createTexture({
-      data: padToAlignment(
-        array.data,
-        array.width,
-        array.height,
-        bytesPerPixel,
-      ),
+      data: padToAlignment(array.data, width, height, bytesPerPixel),
       format: textureFormat,
-      width: array.width,
-      height: array.height,
+      width,
+      height,
       sampler: samplerOptions,
     });
 
+    let mask: Texture | undefined;
+    if (array.mask !== null) {
+      mask = device.createTexture({
+        data: padToAlignment(array.mask, width, height, bytesPerPixel),
+        // Single-channel 8-bit texture for the mask
+        format: "r8unorm",
+        width,
+        height,
+        sampler: samplerOptions,
+      });
+    }
+
     return {
       texture,
+      mask,
       height: array.height,
       width: array.width,
     };
