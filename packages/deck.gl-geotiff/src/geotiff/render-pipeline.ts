@@ -10,7 +10,7 @@ import {
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import { parseColormap } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
-import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
+import type { GetTileDataOptions } from "../cog-layer";
 import { addAlphaChannel } from "./geotiff";
 import { inferTextureFormat } from "./texture";
 
@@ -43,8 +43,8 @@ export function inferRenderPipeline(
   geotiff: GeoTIFF,
   device: Device,
 ): {
-  getTileData: COGLayerProps<TextureDataT>["getTileData"];
-  renderTile: COGLayerProps<TextureDataT>["renderTile"];
+  getTileData: (image: GeoTIFF | Overview, options: GetTileDataOptions) => Promise<TextureDataT>;
+  renderTile: (data: TextureDataT) => ImageData | RasterModule[];
 } {
   const { sampleFormat } = geotiff.cachedTags;
   if (sampleFormat === null) {
@@ -69,10 +69,9 @@ function createUnormPipeline(
   geotiff: GeoTIFF,
   device: Device,
 ): {
-  getTileData: COGLayerProps<TextureDataT>["getTileData"];
-  renderTile: COGLayerProps<TextureDataT>["renderTile"];
+  getTileData: (image: GeoTIFF | Overview, options: GetTileDataOptions) => Promise<TextureDataT>;
+  renderTile: (data: TextureDataT) => ImageData | RasterModule[];
 } {
-  const tags = geotiff.cachedTags;
   const {
     bitsPerSample,
     colorMap,
@@ -80,7 +79,7 @@ function createUnormPipeline(
     sampleFormat,
     samplesPerPixel,
     nodata,
-  } = tags;
+  } = geotiff.cachedTags;
 
   const renderPipeline: UnresolvedRasterModule<TextureDataT>[] = [
     {
@@ -122,7 +121,7 @@ function createUnormPipeline(
           minFilter: "linear",
         };
 
-  const getTileData: COGLayerProps<TextureDataT>["getTileData"] = async (
+  const getTileData = async (
     image: GeoTIFF | Overview,
     options: GetTileDataOptions,
   ) => {
@@ -172,7 +171,7 @@ function createUnormPipeline(
       width: array.width,
     };
   };
-  const renderTile: COGLayerProps<TextureDataT>["renderTile"] = (
+  const renderTile = (
     tileData: TextureDataT,
   ): RasterModule[] => {
     return renderPipeline.map((m, _i) => resolveModule(m, tileData));

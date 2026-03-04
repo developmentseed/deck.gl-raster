@@ -26,7 +26,7 @@ import {
 import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { tileTransform } from "@developmentseed/morecantile";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { Device } from "@luma.gl/core";
+import type { Device, Texture } from "@luma.gl/core";
 import proj4 from "proj4";
 import type { ProjectionDefinition } from "wkt-parser";
 import wktParser from "wkt-parser";
@@ -46,7 +46,7 @@ export type MinimalDataT = {
 };
 
 export type DefaultDataT = MinimalDataT & {
-  texture: ImageData;
+  texture: Texture;
 };
 
 /** Options passed to `getTileData`. */
@@ -73,108 +73,111 @@ type GetTileDataResult<DataT> = {
   inverseTransform: ReprojectionFns["inverseTransform"];
 };
 
-export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
-  extends CompositeLayerProps {
-  /**
-   * Cloud-optimized GeoTIFF input.
-   *
-   * - {@link URL} or `string` pointing to a COG
-   * - {@link ArrayBuffer} containing the COG data
-   * - An instance of the {@link GeoTIFF} class.
-   */
-  geotiff: GeoTIFF | string | URL | ArrayBuffer;
-
-  /**
-   * A function callback for parsing numeric EPSG codes to projection
-   * information (as returned by `wkt-parser`).
-   *
-   * The default implementation:
-   * - makes a request to epsg.io to resolve EPSG codes found in the GeoTIFF.
-   * - caches any previous requests
-   * - parses PROJJSON response with `wkt-parser`
-   */
-  epsgResolver?: EpsgResolver;
-
-  /**
-   * Worker pool for decoding image chunks.
-   *
-   * If none is provided, a default Pool will be created and shared between all
-   * COGLayer and GeoTIFFLayer instances.
-   */
-  pool?: DecoderPool;
-
-  /**
-   * Maximum reprojection error in pixels for mesh refinement.
-   * Lower values create denser meshes with higher accuracy.
-   * @default 0.125
-   */
-  maxError?: number;
-
-  /**
-   * User-defined method to load data for a tile.
-   *
-   * The default implementation loads an RGBA image, returning an ImageData
-   * object.
-   *
-   * For more customizability, you can also return a Texture object from
-   * luma.gl, along with optional custom shaders for the RasterLayer.
-   */
-  getTileData?: (
-    image: GeoTIFF | Overview,
-    options: GetTileDataOptions,
-  ) => Promise<DataT>;
-
-  /**
-   * User-defined method to render data for a tile.
-   *
-   * This receives the data returned by getTileData and must return a render
-   * pipeline.
-   *
-   * The default implementation returns an object with a `texture` property,
-   * assuming that this texture is already renderable.
-   */
-  renderTile: (data: DataT) => ImageData | RasterModule[];
-
-  /**
-   * Enable debug visualization showing the triangulation mesh
-   * @default false
-   */
-  debug?: boolean;
-
-  /**
-   * Opacity of the debug mesh overlay (0-1)
-   * @default 0.5
-   */
-  debugOpacity?: number;
-
-  /**
-   * Called when the GeoTIFF metadata has been loaded and parsed.
-   */
-  onGeoTIFFLoad?: (
-    geotiff: GeoTIFF,
-    options: {
-      projection: ProjectionDefinition;
+type COGLayerDataProps<DataT extends MinimalDataT> =
+  | {
       /**
-       * Bounds of the image in geographic coordinates (WGS84) [minLon, minLat,
-       * maxLon, maxLat]
+       * User-defined method to load data for a tile.
+       *
+       * Must be provided together with `renderTile`. If neither is provided,
+       * the default pipeline is used, which fetches the tile, uploads it as a
+       * GPU texture, and renders it using an inferred shader pipeline.
        */
-      geographicBounds: {
-        west: number;
-        south: number;
-        east: number;
-        north: number;
-      };
-    },
-  ) => void;
+      getTileData: (
+        image: GeoTIFF | Overview,
+        options: GetTileDataOptions,
+      ) => Promise<DataT>;
 
-  /** A user-provided AbortSignal to cancel loading.
-   *
-   * This can be useful in combination with the MosaicLayer, so that when a
-   * mosaic source is out of the viewport, all of its tile requests are
-   * automatically aborted.
-   */
-  signal?: AbortSignal;
-}
+      /**
+       * User-defined method to render data for a tile.
+       *
+       * Must be provided together with `getTileData`. Receives the value
+       * returned by `getTileData` and must return a render pipeline.
+       */
+      renderTile: (data: DataT) => ImageData | RasterModule[];
+    }
+  | {
+      getTileData?: undefined;
+      renderTile?: undefined;
+    };
+
+export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> =
+  CompositeLayerProps &
+    COGLayerDataProps<DataT> & {
+      /**
+       * Cloud-optimized GeoTIFF input.
+       *
+       * - {@link URL} or `string` pointing to a COG
+       * - {@link ArrayBuffer} containing the COG data
+       * - An instance of the {@link GeoTIFF} class.
+       */
+      geotiff: GeoTIFF | string | URL | ArrayBuffer;
+
+      /**
+       * A function callback for parsing numeric EPSG codes to projection
+       * information (as returned by `wkt-parser`).
+       *
+       * The default implementation:
+       * - makes a request to epsg.io to resolve EPSG codes found in the GeoTIFF.
+       * - caches any previous requests
+       * - parses PROJJSON response with `wkt-parser`
+       */
+      epsgResolver?: EpsgResolver;
+
+      /**
+       * Worker pool for decoding image chunks.
+       *
+       * If none is provided, a default Pool will be created and shared between all
+       * COGLayer and GeoTIFFLayer instances.
+       */
+      pool?: DecoderPool;
+
+      /**
+       * Maximum reprojection error in pixels for mesh refinement.
+       * Lower values create denser meshes with higher accuracy.
+       * @default 0.125
+       */
+      maxError?: number;
+
+      /**
+       * Enable debug visualization showing the triangulation mesh
+       * @default false
+       */
+      debug?: boolean;
+
+      /**
+       * Opacity of the debug mesh overlay (0-1)
+       * @default 0.5
+       */
+      debugOpacity?: number;
+
+      /**
+       * Called when the GeoTIFF metadata has been loaded and parsed.
+       */
+      onGeoTIFFLoad?: (
+        geotiff: GeoTIFF,
+        options: {
+          projection: ProjectionDefinition;
+          /**
+           * Bounds of the image in geographic coordinates (WGS84) [minLon, minLat,
+           * maxLon, maxLat]
+           */
+          geographicBounds: {
+            west: number;
+            south: number;
+            east: number;
+            north: number;
+          };
+        },
+      ) => void;
+
+      /** A user-provided AbortSignal to cancel loading.
+       *
+       * This can be useful in combination with the MosaicLayer, so that when a
+       * mosaic source is out of the viewport, all of its tile requests are
+       * automatically aborted.
+       */
+      signal?: AbortSignal;
+    };
 
 const defaultProps: Partial<COGLayerProps> = {
   epsgResolver,
@@ -250,8 +253,13 @@ export class COGLayer<
       });
     }
 
-    const { getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
-      inferRenderPipeline(geotiff, this.context.device);
+    // Only create a default render pipeline if the user did not provide a
+    // custom one
+    if (!this.props.getTileData || !this.props.renderTile) {
+      const { getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
+        inferRenderPipeline(geotiff, this.context.device);
+      this.setState({ defaultGetTileData, defaultRenderTile });
+    }
 
     this.setState({
       geotiff,
@@ -259,8 +267,6 @@ export class COGLayer<
       forwardTo4326,
       inverseFrom4326,
       forwardTo3857,
-      defaultGetTileData,
-      defaultRenderTile,
     });
   }
 
@@ -291,25 +297,35 @@ export class COGLayer<
     const tileAffine = tileTransform(tileMatrix, { col: x, row: y });
     const { forwardTransform, inverseTransform } = fromAffine(tileAffine);
 
-    const getTileData =
-      this.props.getTileData || this.state.defaultGetTileData!;
-
     // Combine abort signals if both are defined
     const combinedSignal =
       signal && this.props.signal
         ? AbortSignal.any([signal, this.props.signal])
         : signal || this.props.signal;
 
-    const data = await getTileData(image, {
+    const getTileDataProps = {
       device: this.context.device,
       x,
       y,
       signal: combinedSignal,
       pool: this.props.pool ?? defaultDecoderPool(),
-    });
+    };
+
+    let data: DataT;
+    if (this.props.getTileData) {
+      // In the case that the user passed in a custom `getTileData`, TS knows
+      // that `DataT` is the return type of that function
+      data = await this.props.getTileData(image, getTileDataProps);
+    } else {
+      // In the case where the user did not pass in a custom `getTileData`, we
+      // have to tell TS that `DefaultDataT` is assignable to `DataT`
+      data = (await this.state.defaultGetTileData!(
+        image,
+        getTileDataProps,
+      )) as unknown as DataT;
+    }
 
     return {
-      // @ts-expect-error type mismatch when using provided getTileData
       data,
       forwardTransform,
       inverseTransform,
@@ -342,14 +358,27 @@ export class COGLayer<
 
     if (data) {
       const { height, width } = data;
-      const renderTile = this.props.renderTile || this.state.defaultRenderTile!;
+
+      let renderPipeline: ImageData | RasterModule[];
+      if (this.props.getTileData) {
+        // In the case that the user passed in a custom `getTileData`, TS knows
+        // that `data` can be passed in to `renderTile`.
+        renderPipeline = this.props.renderTile(data);
+      } else {
+        // In the default case, `data` is `DefaultDataT` — cast required because
+        // TS can't prove that `DataT` (which defaults to `DefaultDataT`) is
+        // `DefaultDataT` at this point.
+        renderPipeline = this.state.defaultRenderTile!(
+          data as unknown as DefaultDataT,
+        );
+      }
 
       layers.push(
         new RasterLayer({
           id: `${props.id}-raster`,
           width,
           height,
-          renderPipeline: renderTile(data),
+          renderPipeline,
           maxError,
           reprojectionFns: {
             forwardTransform,
