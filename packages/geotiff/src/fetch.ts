@@ -88,13 +88,7 @@ export async function fetchTile(
   const [decodedPixels, mask] = await Promise.all([
     decodeTile(tileBytes, decoderMetadata, pool),
     maskBytes != null && self.maskImage != null
-      ? decodeMask(
-          maskBytes,
-          self.maskImage,
-          self.tileWidth,
-          self.tileHeight,
-          pool,
-        )
+      ? decodeMask(maskBytes, self.maskImage, pool)
       : Promise.resolve(null),
   ]);
 
@@ -122,8 +116,6 @@ type ByteRange = Awaited<ReturnType<TiffImage["getTileSize"]>>;
 async function decodeMask(
   mask: GetBytesResponse,
   maskImage: TiffImage,
-  width: number,
-  height: number,
   pool: DecoderPool | undefined,
 ): Promise<Uint8Array> {
   const maskSampleFormats = maskImage.value(TiffTag.SampleFormat) ?? [1];
@@ -132,6 +124,7 @@ async function decodeMask(
     maskSampleFormats as SampleFormat[],
     new Uint16Array(maskBitsPerSample as number[]),
   );
+  const { width, height } = maskImage.tileSize;
   const metadata: DecoderMetadata = {
     sampleFormat,
     bitsPerSample,
@@ -140,7 +133,8 @@ async function decodeMask(
     height,
     predictor: maskImage.value(TiffTag.Predictor) ?? 1,
     planarConfiguration:
-      maskImage.value(TiffTag.PlanarConfiguration) ?? PlanarConfiguration.Contig,
+      maskImage.value(TiffTag.PlanarConfiguration) ??
+      PlanarConfiguration.Contig,
   };
 
   const decoderFn = (
@@ -155,9 +149,7 @@ async function decodeMask(
   const { bytes, compression } = mask;
   const decoded = await decoderFn(bytes, compression, metadata);
   const data =
-    decoded.layout === "pixel-interleaved"
-      ? decoded.data
-      : decoded.bands[0]!;
+    decoded.layout === "pixel-interleaved" ? decoded.data : decoded.bands[0]!;
   return data instanceof Uint8Array
     ? data
     : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
