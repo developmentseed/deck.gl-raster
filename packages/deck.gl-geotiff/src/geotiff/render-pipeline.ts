@@ -43,7 +43,10 @@ export function inferRenderPipeline(
   geotiff: GeoTIFF,
   device: Device,
 ): {
-  getTileData: (image: GeoTIFF | Overview, options: GetTileDataOptions) => Promise<TextureDataT>;
+  getTileData: (
+    image: GeoTIFF | Overview,
+    options: GetTileDataOptions,
+  ) => Promise<TextureDataT>;
   renderTile: (data: TextureDataT) => ImageData | RasterModule[];
 } {
   const { sampleFormat } = geotiff.cachedTags;
@@ -69,7 +72,10 @@ function createUnormPipeline(
   geotiff: GeoTIFF,
   device: Device,
 ): {
-  getTileData: (image: GeoTIFF | Overview, options: GetTileDataOptions) => Promise<TextureDataT>;
+  getTileData: (
+    image: GeoTIFF | Overview,
+    options: GetTileDataOptions,
+  ) => Promise<TextureDataT>;
   renderTile: (data: TextureDataT) => ImageData | RasterModule[];
 } {
   const {
@@ -171,9 +177,7 @@ function createUnormPipeline(
       width: array.width,
     };
   };
-  const renderTile = (
-    tileData: TextureDataT,
-  ): RasterModule[] => {
+  const renderTile = (tileData: TextureDataT): RasterModule[] => {
     return renderPipeline.map((m, _i) => resolveModule(m, tileData));
   };
 
