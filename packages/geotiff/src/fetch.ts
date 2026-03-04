@@ -50,11 +50,14 @@ export async function fetchTile(
     signal?: AbortSignal;
   } = {},
 ): Promise<Tile> {
-  if (self.maskImage != null) {
-    throw new Error("Mask fetching not implemented yet");
-  }
+  const tileFetch = fetchCogBytes(self, x, y, { signal });
+  const maskFetch =
+    self.maskImage != null
+      ? getTile(self.maskImage, x, y, self.dataSource, { signal })
+      : Promise.resolve(null);
 
-  const tile = await fetchCogBytes(self, x, y, { signal });
+  const [tileBytes, maskBytes] = await Promise.all([tileFetch, maskFetch]);
+
   const {
     bitsPerSample: bitsPerSamples,
     predictor,
@@ -89,7 +92,7 @@ export async function fetchTile(
     count: samplesPerPixel,
     height: self.tileHeight,
     width: self.tileWidth,
-    mask: null,
+    mask,
     transform: tileTransform,
     crs: self.crs,
     nodata: self.nodata,
@@ -104,6 +107,32 @@ export async function fetchTile(
 
 type GetBytesResponse = { bytes: ArrayBuffer; compression: Compression };
 type ByteRange = Awaited<ReturnType<TiffImage["getTileSize"]>>;
+
+async function decodeMask(
+  mask: GetBytesResponse,
+  metadata: DecoderMetadata,
+  pool: DecoderPool | undefined,
+): Promise<DecodedPixelInterleaved> {
+  const decoderFn = (
+    bytes: ArrayBuffer,
+    compression: Compression,
+    meta: DecoderMetadata,
+  ): Promise<DecodedPixels> =>
+    pool
+      ? pool.decode(bytes, compression, meta)
+      : decode(bytes, compression, meta);
+
+  const { bytes, compression } = mask;
+  const decoded = await decoderFn(bytes, compression, metadata);
+  if (decoded.layout === "pixel-interleaved") {
+    return decoded;
+  }
+
+  return {
+    layout: "pixel-interleaved",
+    data: decoded.bands[0]!,
+  };
+}
 
 async function decodeTile(
   tile: GetBytesResponse | GetBytesResponse[],
