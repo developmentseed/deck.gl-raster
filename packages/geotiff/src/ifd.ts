@@ -28,8 +28,6 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     throw new Error("Compression tag should always exist.");
   }
 
-  const nodata = image.noData;
-
   const [
     bitsPerSample,
     colorMap,
@@ -43,6 +41,7 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     samplesPerPixel,
     tileByteCounts,
     tileOffsets,
+    nodata,
   ] = await Promise.all([
     image.fetch(TiffTag.BitsPerSample),
     image.fetch(TiffTag.ColorMap),
@@ -59,6 +58,7 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     // results in many redundant requests.
     image.fetch(TiffTag.TileByteCounts),
     image.fetch(TiffTag.TileOffsets),
+    image.fetch(TiffTag.GdalNoData),
   ]);
 
   const missingTag: (tagName: string) => never = (tagName: string) => {
@@ -88,7 +88,7 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     modelTiepoint,
     modelPixelScale,
     modelTransformation,
-    nodata,
+    nodata: Number(nodata),
     photometric,
     planarConfiguration,
     predictor: (predictor as Predictor) ?? Predictor.None,

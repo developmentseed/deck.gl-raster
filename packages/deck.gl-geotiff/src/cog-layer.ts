@@ -73,8 +73,9 @@ type GetTileDataResult<DataT> = {
   inverseTransform: ReprojectionFns["inverseTransform"];
 };
 
-export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
-  extends CompositeLayerProps {
+export interface COGLayerProps<
+  DataT extends MinimalDataT = DefaultDataT,
+> extends CompositeLayerProps {
   /**
    * Cloud-optimized GeoTIFF input.
    *
@@ -250,8 +251,16 @@ export class COGLayer<
       });
     }
 
-    const { getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
-      inferRenderPipeline(geotiff, this.context.device);
+    let defaultGetTileData:
+      | COGLayerProps<TextureDataT>["getTileData"]
+      | undefined;
+    let defaultRenderTile:
+      | COGLayerProps<TextureDataT>["renderTile"]
+      | undefined;
+    if (!this.props.getTileData || !this.props.renderTile) {
+      ({ getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
+        inferRenderPipeline(geotiff, this.context.device));
+    }
 
     this.setState({
       geotiff,

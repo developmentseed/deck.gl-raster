@@ -53,7 +53,7 @@ class LRUCache<K, V> {
   }
 }
 
-const bandCache = new LRUCache<string, FetchedTile>(512);
+const tileCache = new LRUCache<string, FetchedTile>(512);
 
 function makeTileDataFetcher(bands: [number, number, number]) {
   return async function getTileData(
@@ -61,20 +61,24 @@ function makeTileDataFetcher(bands: [number, number, number]) {
     options: GetTileDataOptions,
   ): Promise<TileData> {
     const { device, x, y, signal } = options;
-    const tile = await image.fetchTile(x, y, { signal, boundless: false });
+    const key = `${x}-${y}`;
+    let tile = tileCache.get(key);
+    if (!tile) {
+      tile = await image.fetchTile(x, y, { signal, boundless: false });
+      tileCache.set(key, tile);
+    }
 
     const pixelCount = tile.array.width * tile.array.height;
-    console.log(tile.array);
     const uint8Data = new Uint8Array(pixelCount * 4);
 
     for (let i = 0; i < pixelCount; i++) {
       const outBase = i * 4;
       for (let c = 0; c < 3; c++) {
         if (tile.array.layout === "band-separate") {
-          throw new Error("band-separate layout is not supported");
-        } else {
-          const value = tile.array.data[i * tile.array.count + bands[c]] as number;
+          const value = tile.array.bands[bands[c]][i] as number;
           uint8Data[outBase + c] = value + 128;
+        } else {
+          throw new Error("pixel-interleaved layout is not supported");
         }
       }
       uint8Data[outBase + 3] = 255;
