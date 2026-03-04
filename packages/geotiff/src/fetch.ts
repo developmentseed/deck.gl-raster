@@ -85,7 +85,18 @@ export async function fetchTile(
     predictor,
     planarConfiguration,
   };
-  const decodedPixels = await decodeTile(tile, decoderMetadata, pool);
+  const [decodedPixels, mask] = await Promise.all([
+    decodeTile(tileBytes, decoderMetadata, pool),
+    maskBytes != null && self.maskImage != null
+      ? decodeMask(
+          maskBytes,
+          self.maskImage,
+          self.tileWidth,
+          self.tileHeight,
+          pool,
+        )
+      : Promise.resolve(null),
+  ]);
 
   const array: RasterArray = {
     ...decodedPixels,
@@ -110,9 +121,28 @@ type ByteRange = Awaited<ReturnType<TiffImage["getTileSize"]>>;
 
 async function decodeMask(
   mask: GetBytesResponse,
-  metadata: DecoderMetadata,
+  maskImage: TiffImage,
+  width: number,
+  height: number,
   pool: DecoderPool | undefined,
-): Promise<DecodedPixelInterleaved> {
+): Promise<Uint8Array> {
+  const maskSampleFormats = maskImage.value(TiffTag.SampleFormat) ?? [1];
+  const maskBitsPerSample = maskImage.value(TiffTag.BitsPerSample) ?? [8];
+  const { sampleFormat, bitsPerSample } = getUniqueSampleFormat(
+    maskSampleFormats as SampleFormat[],
+    new Uint16Array(maskBitsPerSample as number[]),
+  );
+  const metadata: DecoderMetadata = {
+    sampleFormat,
+    bitsPerSample,
+    samplesPerPixel: maskImage.value(TiffTag.SamplesPerPixel) ?? 1,
+    width,
+    height,
+    predictor: maskImage.value(TiffTag.Predictor) ?? 1,
+    planarConfiguration:
+      maskImage.value(TiffTag.PlanarConfiguration) ?? PlanarConfiguration.Contig,
+  };
+
   const decoderFn = (
     bytes: ArrayBuffer,
     compression: Compression,
@@ -124,14 +154,13 @@ async function decodeMask(
 
   const { bytes, compression } = mask;
   const decoded = await decoderFn(bytes, compression, metadata);
-  if (decoded.layout === "pixel-interleaved") {
-    return decoded;
-  }
-
-  return {
-    layout: "pixel-interleaved",
-    data: decoded.bands[0]!,
-  };
+  const data =
+    decoded.layout === "pixel-interleaved"
+      ? decoded.data
+      : decoded.bands[0]!;
+  return data instanceof Uint8Array
+    ? data
+    : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }
 
 async function decodeTile(
