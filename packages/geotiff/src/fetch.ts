@@ -73,22 +73,33 @@ export async function fetchTile(
 
   const samplesPerPixel = self.image.value(TiffTag.SamplesPerPixel) ?? 1;
 
+  const { width: clippedWidth, height: clippedHeight } =
+    self.image.getTileBounds(x, y);
+  const clip =
+    boundless === false &&
+    (clippedWidth !== self.tileWidth || clippedHeight !== self.tileHeight);
+
   const decoderMetadata = {
     sampleFormat,
     bitsPerSample,
     samplesPerPixel,
     width: self.tileWidth,
     height: self.tileHeight,
+    clippedWidth: clip ? clippedWidth : self.tileWidth,
+    clippedHeight: clip ? clippedHeight : self.tileHeight,
     predictor,
     planarConfiguration,
   };
   const decodedPixels = await decodeTile(tile, decoderMetadata, pool);
 
+  const outWidth = clip ? clippedWidth : self.tileWidth;
+  const outHeight = clip ? clippedHeight : self.tileHeight;
+
   const array: RasterArray = {
     ...decodedPixels,
     count: samplesPerPixel,
-    height: self.tileHeight,
-    width: self.tileWidth,
+    height: outHeight,
+    width: outWidth,
     mask: null,
     transform: tileTransform,
     crs: self.crs,
@@ -98,7 +109,7 @@ export async function fetchTile(
   return {
     x,
     y,
-    array: boundless === false ? clipToImageBounds(self, x, y, array) : array,
+    array: clip ? clipToImageBounds(self, x, y, array) : array,
   };
 }
 
@@ -321,6 +332,12 @@ function clipToImageBounds(
 
   // Interior tile — nothing to clip.
   if (clippedWidth === self.tileWidth && clippedHeight === self.tileHeight) {
+    return array;
+  }
+
+  if (array.layout === "image-bitmap") {
+    // We pre-clip the bitmap during decoding in `canvas.ts`, so this should
+    // never happen
     return array;
   }
 
