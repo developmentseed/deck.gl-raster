@@ -44,7 +44,6 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     samplesPerPixel,
     tileByteCounts,
     tileOffsets,
-    nodata,
   ] = await Promise.all([
     image.fetch(TiffTag.BitsPerSample),
     image.fetch(TiffTag.ColorMap),
@@ -63,7 +62,6 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     // results in many redundant requests.
     image.fetch(TiffTag.TileByteCounts),
     image.fetch(TiffTag.TileOffsets),
-    image.fetch(TiffTag.GdalNoData),
   ]);
 
   const missingTag: (tagName: string) => never = (tagName: string) => {
