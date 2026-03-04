@@ -127,18 +127,42 @@ export async function decode(
 }
 
 /**
+ * Unpack a 1-bit packed mask buffer (MSB-first) into a Uint8Array of 0/255.
+ * Each input byte holds 8 pixels; bit 7 is the first pixel in that byte.
+ */
+export function unpackBitPacked(
+  buffer: ArrayBuffer,
+  pixelCount: number,
+): Uint8Array {
+  const packed = new Uint8Array(buffer);
+  const out = new Uint8Array(pixelCount);
+  for (let i = 0; i < pixelCount; i++) {
+    out[i] = (packed[i >> 3]! >> (7 - (i & 7))) & 1 ? 255 : 0;
+  }
+  return out;
+}
+
+/**
  * Convert a raw ArrayBuffer of pixel data into a typed array based on the
  * sample format and bits per sample. This is used for codecs that return raw
  * bytes.
  */
 function toTypedArray(
   buffer: ArrayBuffer,
-  metadata: Pick<DecoderMetadata, "sampleFormat" | "bitsPerSample">,
+  metadata: Pick<
+    DecoderMetadata,
+    "sampleFormat" | "bitsPerSample" | "width" | "height" | "samplesPerPixel"
+  >,
 ): RasterTypedArray {
   const { sampleFormat, bitsPerSample } = metadata;
   switch (sampleFormat) {
     case SampleFormat.Uint:
       switch (bitsPerSample) {
+        case 1:
+          return unpackBitPacked(
+            buffer,
+            metadata.width * metadata.height * metadata.samplesPerPixel,
+          );
         case 8:
           return new Uint8Array(buffer);
         case 16:
