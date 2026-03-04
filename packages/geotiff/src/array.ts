@@ -1,5 +1,10 @@
 import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
+import type {
+  DecodedBandInterleaved,
+  DecodedPixelInterleaved,
+  DecodedPixels,
+} from "./decode.js";
 
 /** Typed arrays supported for raster sample storage. */
 export type RasterTypedArray =
@@ -44,30 +49,13 @@ type RasterArrayBase = {
 };
 
 /** Raster stored in one typed array per band (band-major / planar). */
-export type BandRasterArray = RasterArrayBase & {
-  layout: "band-separate";
-  /**
-   * One typed array per band, each length = width * height.
-   *
-   * This is the preferred representation when uploading one texture per band.
-   */
-  bands: RasterTypedArray[];
-};
+export type BandRasterArray = RasterArrayBase & DecodedBandInterleaved;
 
 /** Raster stored in one pixel-interleaved typed array. */
-export type PixelRasterArray = RasterArrayBase & {
-  layout: "pixel-interleaved";
-  /**
-   * Pixel-interleaved raster data:
-   * [p00_band0, p00_band1, ..., p01_band0, ...]
-   *
-   * Length = width * height * count.
-   */
-  data: RasterTypedArray;
-};
+export type PixelRasterArray = RasterArrayBase & DecodedPixelInterleaved;
 
 /** Decoded raster data from a GeoTIFF region. */
-export type RasterArray = BandRasterArray | PixelRasterArray;
+export type RasterArray = RasterArrayBase & DecodedPixels;
 
 /** Options for packing band data to a 4-channel pixel-interleaved array. */
 export type PackBandsToRGBAOptions = {
@@ -85,6 +73,10 @@ export function toBandSeparate(array: RasterArray): BandRasterArray {
   validateRasterShape(array);
   if (array.layout === "band-separate") {
     return array;
+  }
+
+  if (array.layout === "image-bitmap") {
+    throw new Error("Not implemented; should probably remove this helper fn");
   }
 
   const sampleCount = array.width * array.height;
@@ -126,6 +118,10 @@ export function toPixelInterleaved(
 
   if (array.layout === "pixel-interleaved" && isIdentityOrder(bandOrder)) {
     return array;
+  }
+
+  if (array.layout === "image-bitmap") {
+    throw new Error("Not implemented; should probably remove this helper fn");
   }
 
   const Ctor = (
@@ -254,6 +250,11 @@ function validateRasterShape(array: RasterArray): void {
         );
       }
     }
+    return;
+  }
+
+  if (array.layout === "image-bitmap") {
+    // Validated in ImageBitmap construction
     return;
   }
 

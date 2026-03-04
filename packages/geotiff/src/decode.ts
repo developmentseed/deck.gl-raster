@@ -4,18 +4,72 @@ import type { RasterTypedArray } from "./array.js";
 import { decode as decodeViaCanvas } from "./codecs/canvas.js";
 import { applyPredictor } from "./codecs/predictor.js";
 
+/** Raster data stored in an ImageBitmap.
+ *
+ * This is a common result type for image codecs like JPEG or WebP that are
+ * decoded via a canvas.
+ */
+export type DecodedImageBitmap = {
+  layout: "image-bitmap";
+  /** A pixel-interleaved ImageBitmap. */
+  data: ImageBitmap;
+};
+
+/** Raster stored in one pixel-interleaved typed array. */
+export type DecodedPixelInterleaved = {
+  layout: "pixel-interleaved";
+  /**
+   * Pixel-interleaved raster data:
+   * [p00_band0, p00_band1, ..., p01_band0, ...]
+   *
+   * Length = width * height * count.
+   */
+  data: RasterTypedArray;
+};
+
+/** Raster stored in one typed array per band (band-major / planar). */
+export type DecodedBandInterleaved = {
+  layout: "band-separate";
+  /**
+   * One typed array per band, each length = width * height.
+   *
+   * This is the preferred representation when uploading one texture per band.
+   */
+  bands: RasterTypedArray[];
+};
+
 /** The result of a decoding process */
 export type DecodedPixels =
-  | { layout: "pixel-interleaved"; data: RasterTypedArray }
-  | { layout: "band-separate"; bands: RasterTypedArray[] };
+  | DecodedImageBitmap
+  | DecodedPixelInterleaved
+  | DecodedBandInterleaved;
 
 /** Metadata from the TIFF IFD, passed to decoders that need it. */
 export type DecoderMetadata = {
   sampleFormat: SampleFormat;
   bitsPerSample: number;
   samplesPerPixel: number;
+  /** Full encoded tile width in pixels. */
   width: number;
+  /** Full encoded tile height in pixels. */
   height: number;
+  /**
+   * Clipped width for edge tiles when boundless=false.
+   * 
+   * Equals `width` for interior tiles.
+   * 
+   * Image-bitmap decoders use this to produce a pre-clipped bitmap.
+   */
+  clippedWidth: number;
+  /**
+   * 
+   * Clipped height for edge tiles when boundless=false.
+   * 
+   * Equals `height` for interior tiles.
+   * 
+   * Image-bitmap decoders use this to produce a pre-clipped bitmap.
+   */
+  clippedHeight: number;
   predictor: Predictor;
   planarConfiguration: PlanarConfiguration;
 };

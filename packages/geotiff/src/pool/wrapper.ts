@@ -25,9 +25,14 @@ export type WorkerErrorResponse = {
 
 /** Collect the transferable ArrayBuffers from a DecodedPixels. */
 export function collectTransferables(pixels: DecodedPixels): Transferable[] {
+  if (pixels.layout === "image-bitmap") {
+    return [pixels.data];
+  }
+
   if (pixels.layout === "pixel-interleaved") {
     return [pixels.data.buffer];
   }
+
   return pixels.bands.map((b) => b.buffer);
 }
 

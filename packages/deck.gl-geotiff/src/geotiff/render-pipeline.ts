@@ -146,6 +146,14 @@ function createUnormPipeline(
       throw new Error("Band-separate images not yet implemented.");
     }
 
+    if (array.layout === "image-bitmap") {
+      return {
+        texture: array.data,
+        height: array.height,
+        width: array.width,
+      };
+    }
+
     const textureFormat = inferTextureFormat(
       // Add one sample for added alpha channel
       numSamples,
