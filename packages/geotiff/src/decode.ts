@@ -4,10 +4,31 @@ import type { RasterTypedArray } from "./array.js";
 import { decode as decodeViaCanvas } from "./codecs/canvas.js";
 import { applyPredictor } from "./codecs/predictor.js";
 
+/** Raster stored in one pixel-interleaved typed array. */
+export type DecodedPixelInterleaved = {
+  layout: "pixel-interleaved";
+  /**
+   * Pixel-interleaved raster data:
+   * [p00_band0, p00_band1, ..., p01_band0, ...]
+   *
+   * Length = width * height * count.
+   */
+  data: RasterTypedArray;
+};
+
+/** Raster stored in one typed array per band (band-major / planar). */
+export type DecodedBandSeparate = {
+  layout: "band-separate";
+  /**
+   * One typed array per band, each length = width * height.
+   *
+   * This is the preferred representation when uploading one texture per band.
+   */
+  bands: RasterTypedArray[];
+};
+
 /** The result of a decoding process */
-export type DecodedPixels =
-  | { layout: "pixel-interleaved"; data: RasterTypedArray }
-  | { layout: "band-separate"; bands: RasterTypedArray[] };
+export type DecodedPixels = DecodedPixelInterleaved | DecodedBandSeparate;
 
 /** Metadata from the TIFF IFD, passed to decoders that need it. */
 export type DecoderMetadata = {

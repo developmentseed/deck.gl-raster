@@ -1,5 +1,10 @@
 import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
+import type {
+  DecodedBandSeparate,
+  DecodedPixelInterleaved,
+  DecodedPixels,
+} from "./decode.js";
 
 /** Typed arrays supported for raster sample storage. */
 export type RasterTypedArray =
@@ -38,36 +43,22 @@ type RasterArrayBase = {
    */
   transform: Affine;
 
+  /** Coordinate reference system information. */
   crs: number | ProjJson;
 
+  /** Nodata value from `GDAL_NODATA` TIFF tag. */
   nodata: number | null;
 };
 
 /** Raster stored in one typed array per band (band-major / planar). */
-export type BandRasterArray = RasterArrayBase & {
-  layout: "band-separate";
-  /**
-   * One typed array per band, each length = width * height.
-   *
-   * This is the preferred representation when uploading one texture per band.
-   */
-  bands: RasterTypedArray[];
-};
+export type RasterArrayBandSeparate = RasterArrayBase & DecodedBandSeparate;
 
 /** Raster stored in one pixel-interleaved typed array. */
-export type PixelRasterArray = RasterArrayBase & {
-  layout: "pixel-interleaved";
-  /**
-   * Pixel-interleaved raster data:
-   * [p00_band0, p00_band1, ..., p01_band0, ...]
-   *
-   * Length = width * height * count.
-   */
-  data: RasterTypedArray;
-};
+export type RasterArrayPixelInterleaved = RasterArrayBase &
+  DecodedPixelInterleaved;
 
 /** Decoded raster data from a GeoTIFF region. */
-export type RasterArray = BandRasterArray | PixelRasterArray;
+export type RasterArray = RasterArrayBase & DecodedPixels;
 
 /** Options for packing band data to a 4-channel pixel-interleaved array. */
 export type PackBandsToRGBAOptions = {
@@ -81,7 +72,7 @@ export type PackBandsToRGBAOptions = {
 };
 
 /** Convert any raster layout to a band-separate representation. */
-export function toBandSeparate(array: RasterArray): BandRasterArray {
+export function toBandSeparate(array: RasterArray): RasterArrayBandSeparate {
   validateRasterShape(array);
   if (array.layout === "band-separate") {
     return array;
@@ -115,7 +106,7 @@ export function toBandSeparate(array: RasterArray): BandRasterArray {
 export function toPixelInterleaved(
   array: RasterArray,
   order?: readonly number[],
-): PixelRasterArray {
+): RasterArrayPixelInterleaved {
   validateRasterShape(array);
 
   const defaultOrder = Array.from({ length: array.count }, (_, i) => i);
@@ -158,7 +149,7 @@ export function toPixelInterleaved(
 export function reorderBands(
   array: RasterArray,
   order: readonly number[],
-): BandRasterArray {
+): RasterArrayBandSeparate {
   validateRasterShape(array);
   validateBandOrder(order, array.count);
   const src = toBandSeparate(array);
@@ -178,7 +169,7 @@ export function reorderBands(
 export function packBandsToRGBA(
   array: RasterArray,
   options: PackBandsToRGBAOptions = {},
-): PixelRasterArray {
+): RasterArrayPixelInterleaved {
   const order = options.order ?? [0, 1, 2, null];
   const fillValue = options.fillValue ?? 0;
 
