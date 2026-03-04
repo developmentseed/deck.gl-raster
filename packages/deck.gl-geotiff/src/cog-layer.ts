@@ -18,8 +18,11 @@ import {
   RasterLayer,
   TileMatrixSetTileset,
 } from "@developmentseed/deck.gl-raster";
-import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
-import { generateTileMatrixSet } from "@developmentseed/geotiff";
+import type { DecoderPool, GeoTIFF, Overview } from "@developmentseed/geotiff";
+import {
+  defaultDecoderPool,
+  generateTileMatrixSet,
+} from "@developmentseed/geotiff";
 import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { tileTransform } from "@developmentseed/morecantile";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
@@ -61,8 +64,7 @@ export type GetTileDataOptions = {
   signal?: AbortSignal;
 
   /** The decoder pool to use. */
-  // TODO: restore pool with new GeoTIFF backend
-  // pool: Pool;
+  pool: DecoderPool;
 };
 
 type GetTileDataResult<DataT> = {
@@ -94,13 +96,12 @@ export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
   epsgResolver?: EpsgResolver;
 
   /**
-   * GeoTIFF.js Pool for decoding image chunks.
+   * Worker pool for decoding image chunks.
    *
    * If none is provided, a default Pool will be created and shared between all
    * COGLayer and GeoTIFFLayer instances.
    */
-  // TODO: Restore a sort of worker pool with our geotiff implementation
-  // pool?: Pool;
+  pool?: DecoderPool;
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
@@ -249,16 +250,8 @@ export class COGLayer<
       });
     }
 
-    let defaultGetTileData:
-      | COGLayerProps<TextureDataT>["getTileData"]
-      | undefined;
-    let defaultRenderTile:
-      | COGLayerProps<TextureDataT>["renderTile"]
-      | undefined;
-    if (!this.props.getTileData || !this.props.renderTile) {
-      ({ getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
-        inferRenderPipeline(geotiff, this.context.device));
-    }
+    const { getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
+      inferRenderPipeline(geotiff, this.context.device);
 
     this.setState({
       geotiff,
@@ -312,8 +305,7 @@ export class COGLayer<
       x,
       y,
       signal: combinedSignal,
-      // TODO: restore pool
-      // pool: this.props.pool || defaultPool(),
+      pool: this.props.pool ?? defaultDecoderPool(),
     });
 
     return {
