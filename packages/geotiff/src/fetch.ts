@@ -63,6 +63,7 @@ export async function fetchTile(
     predictor,
     planarConfiguration,
     sampleFormat: sampleFormats,
+    lercParameters,
   } = self.cachedTags;
   const { sampleFormat, bitsPerSample } = getUniqueSampleFormat(
     sampleFormats,
@@ -84,6 +85,7 @@ export async function fetchTile(
     height: self.tileHeight,
     predictor,
     planarConfiguration,
+    lercParameters,
   };
   const [decodedPixels, mask] = await Promise.all([
     decodeTile(tileBytes, decoderMetadata, pool),

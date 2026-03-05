@@ -39,6 +39,7 @@ export type DecoderMetadata = {
   height: number;
   predictor: Predictor;
   planarConfiguration: PlanarConfiguration;
+  lercParameters?: number[] | null;
 };
 
 /**

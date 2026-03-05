@@ -7,6 +7,7 @@ export interface CachedTags {
   colorMap?: Uint16Array; // TiffTagType[TiffTag.ColorMap];
   compression: TiffTagType[TiffTag.Compression];
   gdalMetadata: TiffTagType[TiffTag.GdalMetadata] | null;
+  lercParameters: TiffTagType[TiffTag.LercParameters] | null;
   modelTiepoint: TiffTagType[TiffTag.ModelTiePoint] | null;
   modelPixelScale: TiffTagType[TiffTag.ModelPixelScale] | null;
   modelTransformation: TiffTagType[TiffTag.ModelTransformation] | null;
@@ -34,6 +35,7 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     colorMap,
     gdalNoData,
     gdalMetadata,
+    lercParameters,
     modelPixelScale,
     modelTiepoint,
     modelTransformation,
@@ -49,6 +51,7 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     image.fetch(TiffTag.ColorMap),
     image.fetch(TiffTag.GdalNoData),
     image.fetch(TiffTag.GdalMetadata),
+    image.fetch(TiffTag.LercParameters),
     image.fetch(TiffTag.ModelPixelScale),
     image.fetch(TiffTag.ModelTiePoint),
     image.fetch(TiffTag.ModelTransformation),
@@ -89,6 +92,7 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
     compression,
     gdalMetadata,
+    lercParameters,
     modelTiepoint,
     modelPixelScale,
     modelTransformation,
