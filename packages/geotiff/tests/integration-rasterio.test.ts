@@ -6,7 +6,9 @@
  * generates NPY files from the same source GeoTIFFs
  */
 
+import assert from "node:assert";
 import { readFile } from "node:fs/promises";
+import { TiffTag } from "@cogeotiff/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { RasterArray, RasterTypedArray } from "../src/array.js";
 import { toBandSeparate } from "../src/array.js";
@@ -136,4 +138,39 @@ describe("tile data matches", () => {
       });
     });
   }
+});
+
+// A custom test suite for maxar_opendata_yellowstone_visual because we can't
+// decode JPEG data in Node. This is only for testing the mask data.
+describe("Single-bit mask data", () => {
+  describe(`maxar_opendata_yellowstone_visual`, async () => {
+    const name = "maxar_opendata_yellowstone_visual";
+    const variant = "vantor";
+    const geotiff = await loadGeoTIFF(name, variant);
+
+    const bitsPerSample = await geotiff.maskImage?.fetch(TiffTag.BitsPerSample);
+    expect(bitsPerSample![0]).toEqual(1);
+
+    it("tile mask data matches", async () => {
+      const { x: xTiles, y: yTiles } = geotiff.tileCount;
+      for (let y = 0; y < yTiles; y++) {
+        for (let x = 0; x < xTiles; x++) {
+          const tile = await geotiff.fetchTile(x, y);
+
+          const mask = tile.array.mask;
+          assert(mask !== null, "Expected mask to be present in this file");
+
+          const referenceMask = await loadNpy(name, variant, {
+            mask: true,
+            z: 0,
+            x,
+            y,
+          });
+
+          expect(mask.length).toBe(referenceMask.data.length);
+          expect(mask).toEqual(referenceMask.data);
+        }
+      }
+    });
+  });
 });
