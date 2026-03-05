@@ -19,8 +19,7 @@ const FIXTURES = [
   { variant: "eox", name: "eox_cloudless" },
   { variant: "nlcd", name: "nlcd_landcover" },
   { variant: "rasterio", name: "cog_uint8_rgb_nodata" },
-  // Mask not yet supported
-  // { variant: "rasterio", name: "cog_uint8_rgb_mask" },
+  { variant: "rasterio", name: "cog_uint8_rgb_mask" },
   { variant: "rasterio", name: "cog_uint8_rgba" },
   { variant: "rasterio", name: "float32_1band_lerc_block32" },
   // TODO: support LERC + Deflate
@@ -48,8 +47,7 @@ const FIXTURES = [
   // { variant: "rasterio", name: "uint8_rgb_webp_block64_cog" },
   // WebP parsing uses canvas and is web-only
   // { variant: "rasterio", name: "uint8_rgba_webp_block64_cog" },
-
-  // Mask fetching not yet supported
+  // JPEG parsing uses canvas and is web-only
   // { variant: "vantor", name: "maxar_opendata_yellowstone_visual" },
 ] as const;
 
@@ -58,16 +56,19 @@ async function loadNpy(
   name: string,
   variant: string,
   {
+    mask = false,
     z,
     x,
     y,
   }: {
+    mask?: boolean;
     z: number;
     x: number;
     y: number;
   },
 ): Promise<NPYTile> {
-  const suffix = `/${z}-${x}-${y}.npy`;
+  const maskString = mask ? "mask-" : "";
+  const suffix = `/${maskString}${z}-${x}-${y}.npy`;
   const path = fixturePath(name, variant, suffix);
   const buffer = await readFile(path);
   const arrayBuffer = buffer.buffer.slice(
@@ -110,12 +111,26 @@ describe("tile data matches", () => {
         for (let y = 0; y < yTiles; y++) {
           for (let x = 0; x < xTiles; x++) {
             const tile = await ours.fetchTile(x, y);
-            const refTile = await loadNpy(name, variant, { z: 0, x, y });
 
-            const rasterOrdered = reshapeAsRaster(tile.array);
+            const referenceData = await loadNpy(name, variant, { z: 0, x, y });
 
-            expect(rasterOrdered.length).toBe(refTile.data.length);
-            expect(rasterOrdered).toEqual(refTile.data);
+            const rasterOrderedData = reshapeAsRaster(tile.array);
+
+            expect(rasterOrderedData.length).toBe(referenceData.data.length);
+            expect(rasterOrderedData).toEqual(referenceData.data);
+
+            const mask = tile.array.mask;
+            if (mask !== null) {
+              const referenceMask = await loadNpy(name, variant, {
+                mask: true,
+                z: 0,
+                x,
+                y,
+              });
+
+              expect(mask.length).toBe(referenceMask.data.length);
+              expect(mask).toEqual(referenceMask.data);
+            }
           }
         }
       });
