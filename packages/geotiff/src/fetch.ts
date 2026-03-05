@@ -150,9 +150,10 @@ async function decodeMask(
   const decoded = await decoderFn(bytes, compression, metadata);
   const data =
     decoded.layout === "pixel-interleaved" ? decoded.data : decoded.bands[0]!;
-  return data instanceof Uint8Array
-    ? data
-    : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  if (data instanceof Uint8Array) {
+    return data;
+  }
+  throw new Error("Expected mask data to decode to Uint8Array");
 }
 
 async function decodeTile(
