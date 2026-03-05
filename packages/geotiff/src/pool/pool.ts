@@ -67,12 +67,15 @@ export class DecoderPool {
    * normal `decode()` path.
    */
   async decode(
+    // Note: this worker param takes in an ArrayBuffer to ensure we're
+    // transferring the underlying buffer to the worker, rather than serializing the view
+    // https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects#transferring_objects_between_threads
     bytes: ArrayBuffer,
     compression: Compression,
     metadata: DecoderMetadata,
   ): Promise<DecodedPixels> {
     if (!this.hasWorkers) {
-      return decode(bytes, compression, metadata);
+      return decode(new Uint8Array(bytes), compression, metadata);
     }
 
     const worker = this.leastLoaded();

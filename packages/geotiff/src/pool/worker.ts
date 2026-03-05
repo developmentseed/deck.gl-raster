@@ -32,7 +32,7 @@ self.addEventListener("message", async (e: MessageEvent<WorkerRequest>) => {
   const { jobId, compression, metadata, buffer } = e.data;
 
   try {
-    const array = await decode(buffer, compression, metadata);
+    const array = await decode(new Uint8Array(buffer), compression, metadata);
     const transferables = collectTransferables(array);
     const response: WorkerResponse = { jobId, pixels: array };
     self.postMessage(response, { transfer: transferables });
