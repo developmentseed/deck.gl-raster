@@ -295,6 +295,36 @@ export class GeoTIFF {
     return this.image.isTiled();
   }
 
+  /**
+   * The pre-existing statistics for each band, if available.
+   *
+   * Extracted from the GDALMetadata TIFF tag; never computed on demand.
+   * Keys are **1-based** band indices to match GDAL's convention.
+   * Returns null if no statistics are stored in the file.
+   */
+  get storedStats(): ReadonlyMap<number, BandStatistics> | null {
+    const stats = this.gdalMetadata?.bandStatistics;
+    return stats && stats.size > 0 ? stats : null;
+  }
+
+  /**
+   * The offset for each band (0-indexed), defaulting to 0.
+   *
+   * Extracted from the GDALMetadata TIFF tag.
+   */
+  get offsets(): number[] {
+    return this.gdalMetadata?.offsets ?? Array<number>(this.count).fill(0);
+  }
+
+  /**
+   * The scale for each band (0-indexed), defaulting to 1.
+   *
+   * Extracted from the GDALMetadata TIFF tag.
+   */
+  get scales(): number[] {
+    return this.gdalMetadata?.scales ?? Array<number>(this.count).fill(1);
+  }
+
   /** Number of bands (samples per pixel). */
   get count(): number {
     return this.image.value(TiffTag.SamplesPerPixel) ?? 1;
