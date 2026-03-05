@@ -142,29 +142,15 @@ export async function decode(
 // TODO: check for FillOrder tag and reverse bit order if needed
 // https://web.archive.org/web/20240329145342/https://www.awaresystems.be/imaging/tiff/tifftags/fillorder.html
 export function unpackBitPacked(
-  packed: Uint8Array,
+  buffer: ArrayBuffer,
   pixelCount: number,
 ): Uint8Array {
+  const packed = new Uint8Array(buffer);
   const out = new Uint8Array(pixelCount);
   for (let i = 0; i < pixelCount; i++) {
     out[i] = (packed[i >> 3]! >> (7 - (i & 7))) & 1 ? 255 : 0;
   }
   return out;
-}
-
-/**
- * Return a Uint8Array whose byteOffset is aligned to `align` bytes.
- *
- * If the input is already aligned, it is returned as-is (no copy).
- */
-function alignedBytes(buf: Uint8Array, align: number): Uint8Array {
-  if (buf.byteOffset % align === 0) {
-    return buf;
-  }
-
-  const copy = new Uint8Array(buf.byteLength);
-  copy.set(buf);
-  return copy;
 }
 
 /**
@@ -175,7 +161,7 @@ function alignedBytes(buf: Uint8Array, align: number): Uint8Array {
  * when possible, so multi-byte samples are interpreted correctly.
  */
 function toTypedArray(
-  buffer: Uint8Array,
+  buffer: ArrayBuffer,
   metadata: DecoderMetadata,
 ): RasterTypedArray {
   const { sampleFormat, bitsPerSample } = metadata;
@@ -188,44 +174,34 @@ function toTypedArray(
             metadata.width * metadata.height * metadata.samplesPerPixel,
           );
         case 8:
-          return buffer;
+          return new Uint8Array(buffer);
         case 16: {
-          const b = alignedBytes(buffer, 2);
-          return new Uint16Array(b.buffer, b.byteOffset, b.byteLength / 2);
+          return new Uint16Array(buffer);
         }
         case 32: {
-          const b = alignedBytes(buffer, 4);
-          return new Uint32Array(b.buffer, b.byteOffset, b.byteLength / 4);
+          return new Uint32Array(buffer);
         }
       }
       break;
     case SampleFormat.Int:
       switch (bitsPerSample) {
         case 8:
-          return new Int8Array(
-            buffer.buffer,
-            buffer.byteOffset,
-            buffer.byteLength,
-          );
+          return new Int8Array(buffer);
         case 16: {
-          const b = alignedBytes(buffer, 2);
-          return new Int16Array(b.buffer, b.byteOffset, b.byteLength / 2);
+          return new Int16Array(buffer);
         }
         case 32: {
-          const b = alignedBytes(buffer, 4);
-          return new Int32Array(b.buffer, b.byteOffset, b.byteLength / 4);
+          return new Int32Array(buffer);
         }
       }
       break;
     case SampleFormat.Float:
       switch (bitsPerSample) {
         case 32: {
-          const b = alignedBytes(buffer, 4);
-          return new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4);
+          return new Float32Array(buffer);
         }
         case 64: {
-          const b = alignedBytes(buffer, 8);
-          return new Float64Array(b.buffer, b.byteOffset, b.byteLength / 8);
+          return new Float64Array(buffer);
         }
       }
       break;
