@@ -27,21 +27,21 @@ export async function decode(
   bytes: ArrayBuffer,
   metadata: DecoderMetadata,
 ): Promise<DecodedPixels> {
-  const compressionType: LercCompression =
+  const lercCompressionType: LercCompression =
     (metadata.lercParameters?.[1] as LercCompression | undefined) ??
     LercCompression.None;
 
-  let lercInput: ArrayBuffer | Uint8Array = bytes;
+  let lercInput: ArrayBuffer = bytes;
   if (
-    compressionType === LercCompression.Deflate ||
-    compressionType === LercCompression.Zstd
+    lercCompressionType === LercCompression.Deflate ||
+    lercCompressionType === LercCompression.Zstd
   ) {
     const innerCompression =
-      compressionType === LercCompression.Deflate
+      lercCompressionType === LercCompression.Deflate
         ? Compression.Deflate
         : Compression.Zstd;
-    const loader = DECODER_REGISTRY.get(innerCompression)!;
-    const decoder = await loader();
+    const decoderEntry = DECODER_REGISTRY.get(innerCompression)!;
+    const decoder = await decoderEntry();
     lercInput = (await decoder(bytes, metadata)) as ArrayBuffer;
   }
 
