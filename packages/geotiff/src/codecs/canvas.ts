@@ -10,7 +10,9 @@ export async function decode(
   metadata: DecoderMetadata,
 ): Promise<DecodedPixels> {
   if (bytes.buffer instanceof SharedArrayBuffer) {
-    throw new Error("Decoding JPEGs from SharedArrayBuffers not supported.");
+    throw new Error(
+      "Decoding JPEG/WebP from SharedArrayBuffers not supported.",
+    );
   }
 
   const blob = new Blob([bytes as Uint8Array<ArrayBuffer>]);
