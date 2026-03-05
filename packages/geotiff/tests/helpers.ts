@@ -14,11 +14,19 @@ const FIXTURES_DIR = resolve(
  * @param name - filename without extension (e.g. "uint8_rgb_deflate_block64_cog")
  * @param variant - "rasterio" (default) or a real_data subdirectory name
  */
-export function fixturePath(name: string, variant: string): string {
+export function fixturePath(
+  name: string,
+  variant: string,
+  suffix: string = ".tif",
+): string {
   if (variant === "rasterio") {
-    return resolve(FIXTURES_DIR, "rasterio_generated/fixtures", `${name}.tif`);
+    return resolve(
+      FIXTURES_DIR,
+      "rasterio_generated/fixtures",
+      `${name}${suffix}`,
+    );
   }
-  return resolve(FIXTURES_DIR, "real_data", variant, `${name}.tif`);
+  return resolve(FIXTURES_DIR, "real_data", variant, `${name}${suffix}`);
 }
 
 /** Open a GeoTIFF test fixture by name. */
