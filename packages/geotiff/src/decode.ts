@@ -153,10 +153,7 @@ export function unpackBitPacked(
  */
 function toTypedArray(
   buffer: ArrayBuffer,
-  metadata: Pick<
-    DecoderMetadata,
-    "sampleFormat" | "bitsPerSample" | "width" | "height" | "samplesPerPixel"
-  >,
+  metadata: DecoderMetadata,
 ): RasterTypedArray {
   const { sampleFormat, bitsPerSample } = metadata;
   switch (sampleFormat) {
