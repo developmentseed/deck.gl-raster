@@ -1,11 +1,28 @@
 import type { TiffImage, TiffTagGeoType, TiffTagType } from "@cogeotiff/core";
 import { Predictor, SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
 
+/**
+ * Description of extra components.
+ *
+ * Specifies that each pixel has N extra components whose interpretation is
+ * defined by one of the values listed below. When this field is used, the
+ * SamplesPerPixel field has a value greater than the PhotometricInterpretation
+ * field suggests.
+ *
+ * @see https://web.archive.org/web/20240329145321/https://www.awaresystems.be/imaging/tiff/tifftags/extrasamples.html
+ */
+enum ExtraSample {
+  Unspecified = 0,
+  AssociatedAlpha = 1,
+  UnassociatedAlpha = 2,
+}
+
 /** Subset of TIFF tags that we pre-fetch for easier visualization. */
 export interface CachedTags {
   bitsPerSample: Uint16Array;
   colorMap?: Uint16Array; // TiffTagType[TiffTag.ColorMap];
   compression: TiffTagType[TiffTag.Compression];
+  extraSamples: [ExtraSample] | null;
   gdalMetadata: TiffTagType[TiffTag.GdalMetadata] | null;
   lercParameters: TiffTagType[TiffTag.LercParameters] | null;
   modelTiepoint: TiffTagType[TiffTag.ModelTiePoint] | null;
@@ -33,6 +50,7 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
   const [
     bitsPerSample,
     colorMap,
+    extraSamples,
     gdalNoData,
     gdalMetadata,
     lercParameters,
@@ -49,6 +67,7 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
   ] = await Promise.all([
     image.fetch(TiffTag.BitsPerSample),
     image.fetch(TiffTag.ColorMap),
+    image.fetch(TiffTag.ExtraSamples),
     image.fetch(TiffTag.GdalNoData),
     image.fetch(TiffTag.GdalMetadata),
     image.fetch(TiffTag.LercParameters),
@@ -91,6 +110,7 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     bitsPerSample: new Uint16Array(bitsPerSample),
     colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
     compression,
+    extraSamples: (extraSamples as [ExtraSample] | null) ?? null,
     gdalMetadata,
     lercParameters,
     modelTiepoint,
