@@ -10,11 +10,7 @@ export async function decode(
     width * height * samplesPerPixel * (bitsPerSample / 8);
   const decompressed = decompress(bytes, maxUncompressedSize);
 
-  // decompressed is a view over WebAssembly memory. In order to avoid problems
-  // with memory management (especially around transferring the backing buffer,
-  // which is actually the Wasm memory space), we copy the data into a fresh
-  // Uint8Array
-  const copy = new Uint8Array(decompressed.byteLength);
-  copy.set(decompressed);
-  return copy;
+  // Note: decompressed is **not** a view over WebAssembly memory. wasm-bindgen
+  // has already copied out of Rust memory into JS
+  return decompressed;
 }
