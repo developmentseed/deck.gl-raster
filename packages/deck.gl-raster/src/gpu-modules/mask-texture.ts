@@ -10,6 +10,9 @@ export type MaskTextureProps = {
  * A shader module that injects a unorm texture and uses a sampler2D to assign
  * to a color.
  */
+// Note, we compare directly against 0.0 because we use nearest neighbor
+// sampling for the mask texture. So there will never be any interpolated values
+// between 0 and 1.
 export const MaskTexture = {
   name: "mask-texture",
   inject: {
