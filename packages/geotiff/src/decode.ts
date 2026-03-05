@@ -55,31 +55,33 @@ async function decodeUncompressed(bytes: ArrayBuffer): Promise<ArrayBuffer> {
   return bytes;
 }
 
-export const registry = new Map<Compression, () => Promise<Decoder>>();
+export const DECODER_REGISTRY = new Map<Compression, () => Promise<Decoder>>();
 
-registry.set(Compression.None, () => Promise.resolve(decodeUncompressed));
-registry.set(Compression.Deflate, () =>
+DECODER_REGISTRY.set(Compression.None, () =>
+  Promise.resolve(decodeUncompressed),
+);
+DECODER_REGISTRY.set(Compression.Deflate, () =>
   import("./codecs/deflate.js").then((m) => m.decode),
 );
-registry.set(Compression.DeflateOther, () =>
+DECODER_REGISTRY.set(Compression.DeflateOther, () =>
   import("./codecs/deflate.js").then((m) => m.decode),
 );
-registry.set(Compression.Lzw, () =>
+DECODER_REGISTRY.set(Compression.Lzw, () =>
   import("./codecs/lzw.js").then((m) => m.decode),
 );
-registry.set(Compression.Zstd, () =>
+DECODER_REGISTRY.set(Compression.Zstd, () =>
   import("./codecs/zstd.js").then((m) => m.decode),
 );
-// registry.set(Compression.Lzma, () =>
+// DECODER_REGISTRY.set(Compression.Lzma, () =>
 //   import("../codecs/lzma.js").then((m) => m.decode),
 // );
-// registry.set(Compression.Jp2000, () =>
+// DECODER_REGISTRY.set(Compression.Jp2000, () =>
 //   import("../codecs/jp2000.js").then((m) => m.decode),
 // );
-registry.set(Compression.Jpeg, () => Promise.resolve(decodeViaCanvas));
-registry.set(Compression.Jpeg6, () => Promise.resolve(decodeViaCanvas));
-registry.set(Compression.Webp, () => Promise.resolve(decodeViaCanvas));
-registry.set(Compression.Lerc, () =>
+DECODER_REGISTRY.set(Compression.Jpeg, () => Promise.resolve(decodeViaCanvas));
+DECODER_REGISTRY.set(Compression.Jpeg6, () => Promise.resolve(decodeViaCanvas));
+DECODER_REGISTRY.set(Compression.Webp, () => Promise.resolve(decodeViaCanvas));
+DECODER_REGISTRY.set(Compression.Lerc, () =>
   import("./codecs/lerc.js").then((m) => m.decode),
 );
 
@@ -91,7 +93,7 @@ export async function decode(
   compression: Compression,
   metadata: DecoderMetadata,
 ): Promise<DecodedPixels> {
-  const loader = registry.get(compression);
+  const loader = DECODER_REGISTRY.get(compression);
   if (!loader) {
     throw new Error(`Unsupported compression: ${compression}`);
   }
@@ -130,6 +132,8 @@ export async function decode(
  * Unpack a 1-bit packed mask buffer (MSB-first) into a Uint8Array of 0/255.
  * Each input byte holds 8 pixels; bit 7 is the first pixel in that byte.
  */
+// TODO: check for FillOrder tag and reverse bit order if needed
+// https://web.archive.org/web/20240329145342/https://www.awaresystems.be/imaging/tiff/tifftags/fillorder.html
 export function unpackBitPacked(
   buffer: ArrayBuffer,
   pixelCount: number,
