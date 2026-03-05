@@ -1,6 +1,8 @@
 import { resolve } from "node:path";
 import { SourceFile } from "@chunkd/source-file";
-import { GeoTIFF } from "../src/geotiff.js";
+// We import from the published package name so that other packages in this
+// monorepo can import this helpers file.
+import { GeoTIFF } from "@developmentseed/geotiff";
 
 // ── Fixture helpers ─────────────────────────────────────────────────────
 
