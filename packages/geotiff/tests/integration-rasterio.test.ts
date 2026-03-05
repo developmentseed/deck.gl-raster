@@ -6,9 +6,9 @@
  * generates NPY files from the same source GeoTIFFs
  */
 
-import assert from "node:assert";
 import { readFile } from "node:fs/promises";
 import { beforeAll, describe, expect, it } from "vitest";
+import type { RasterArray, RasterTypedArray } from "../src/array.js";
 import { toBandSeparate } from "../src/array.js";
 import type { GeoTIFF } from "../src/geotiff.js";
 import { fixturePath, loadGeoTIFF } from "./helpers.js";
@@ -51,23 +51,26 @@ async function loadNpy(
   return parseNPY(arrayBuffer);
 }
 
-/** Assert two typed arrays are element-wise close (for floats). */
-function expectArraysClose(
-  a: ArrayLike<number>,
-  b: ArrayLike<number>,
-  tolerance = 1e-5,
-): void {
-  expect(a.length).toBe(b.length);
-  for (let i = 0; i < a.length; i++) {
-    if (Math.abs((a[i] ?? 0) - (b[i] ?? 0)) > tolerance) {
-      throw new Error(
-        `Arrays differ at index ${i}: ${a[i]} vs ${b[i]} (tolerance ${tolerance})`,
-      );
-    }
+/**
+ * Convert pixel-interleaved `(height, width, bands)` to a flat band-major array
+ * `(bands, height, width)`.
+ *
+ * This is equivalent to rasterio's `reshape_as_raster` function.
+ */
+function reshapeAsRaster(array: RasterArray): RasterTypedArray {
+  const bandSep = toBandSeparate(array);
+  const pixelCount = array.width * array.height;
+  const Ctor = bandSep.bands[0]!.constructor as new (
+    length: number,
+  ) => RasterTypedArray;
+  const out = new Ctor(array.count * pixelCount);
+  for (let b = 0; b < array.count; b++) {
+    out.set(bandSep.bands[b]!, b * pixelCount);
   }
+  return out;
 }
 
-describe("pixel-interleaved data", () => {
+describe("tile data matches", () => {
   for (const { variant, name } of FIXTURES) {
     describe(`${variant}/${name}`, () => {
       let ours: GeoTIFF;
@@ -76,25 +79,19 @@ describe("pixel-interleaved data", () => {
         ours = await loadGeoTIFF(name, variant);
       });
 
-      it("tile (0,0) pixel data matches", async () => {
-        const tile = await ours.fetchTile(0, 0);
-        const refTile = await loadNpy(name, variant, { z: 0, x: 0, y: 0 });
+      it("tile pixel data matches", async () => {
+        const { x: xTiles, y: yTiles } = ours.tileCount;
+        for (let y = 0; y < yTiles; y++) {
+          for (let x = 0; x < xTiles; x++) {
+            const tile = await ours.fetchTile(x, y);
+            const refTile = await loadNpy(name, variant, { z: 0, x, y });
 
-        assert(tile.array.layout === "pixel-interleaved");
-        tile.array.data;
+            const rasterOrdered = reshapeAsRaster(tile.array);
 
-        expect(tile.array.data.length).toEqual(refTile.data.length);
-        expect(tile.array.data).toEqual(refTile.data);
-
-        // for (let b = 0; b < ours.count; b++) {
-        //   const ourBand = oursBandSep.bands[b]!;
-        //   const refBand = refData[b] as ArrayLike<number>;
-        //   if (isFloat) {
-        //     expectArraysClose(ourBand, refBand);
-        //   } else {
-        //     expect(ourBand).toEqual(refBand);
-        //   }
-        // }
+            expect(rasterOrdered.length).toBe(refTile.data.length);
+            expect(rasterOrdered).toEqual(refTile.data);
+          }
+        }
       });
     });
   }
