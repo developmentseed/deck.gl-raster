@@ -19,14 +19,16 @@ jobs:
         with:
           submodules: true
 
-      - uses: prefix-dev/setup-pixi@v0.9.3
+      - uses: prefix-dev/setup-pixi@v0.9.4
         with:
           pixi-version: v0.63.2
+          working-directory: ./fixtures/geotiff-test-data
 
       # NPY fixtures are generated from the GeoTIFF fixtures on demand with
       # rasterio
       - name: Create npy fixtures
-        run: cd fixtures/geotiff-test-data && pixi run generate-npy
+        working-directory: ./fixtures/geotiff-test-data
+        run: pixi run generate-npy
 
       - uses: pnpm/action-setup@v4
       - run: |
