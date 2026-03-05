@@ -112,6 +112,7 @@ function createUnormPipeline(
     renderPipeline.push({
       module: MaskTexture,
       props: {
+        // TODO: how to handle if mask failed to load and is undefined here
         maskTexture: (data: TextureDataT) => data.mask as Texture,
       },
     });
