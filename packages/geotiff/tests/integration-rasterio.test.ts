@@ -24,10 +24,8 @@ const FIXTURES = [
   { variant: "rasterio", name: "cog_uint8_rgb_mask" },
   { variant: "rasterio", name: "cog_uint8_rgba" },
   { variant: "rasterio", name: "float32_1band_lerc_block32" },
-  // TODO: support LERC + Deflate
-  // { variant: "rasterio", name: "float32_1band_lerc_deflate_block32" },
-  // TODO: support LERC + ZSTD
-  // { variant: "rasterio", name: "float32_1band_lerc_zstd_block32" },
+  { variant: "rasterio", name: "float32_1band_lerc_deflate_block32" },
+  { variant: "rasterio", name: "float32_1band_lerc_zstd_block32" },
 
   { variant: "rasterio", name: "int8_3band_zstd_block64" },
 
