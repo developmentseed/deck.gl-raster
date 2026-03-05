@@ -11,7 +11,7 @@ import { Predictor, SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
  *
  * @see https://web.archive.org/web/20240329145321/https://www.awaresystems.be/imaging/tiff/tifftags/extrasamples.html
  */
-enum ExtraSample {
+export enum ExtraSample {
   Unspecified = 0,
   AssociatedAlpha = 1,
   UnassociatedAlpha = 2,
