@@ -374,50 +374,56 @@ function clipToImageBounds(
     return array;
   }
 
+  const clippedMask = array.mask
+    ? clipRows(array.mask, self.tileWidth, clippedWidth, clippedHeight, 1)
+    : array.mask;
+
   if (array.layout === "pixel-interleaved") {
     const { count, data } = array;
-    const Ctor = data.constructor as new (n: number) => typeof data;
-    const clipped = new Ctor(clippedWidth * clippedHeight * count);
-    for (let r = 0; r < clippedHeight; r++) {
-      const srcOffset = r * self.tileWidth * count;
-      const dstOffset = r * clippedWidth * count;
-      clipped.set(
-        data.subarray(srcOffset, srcOffset + clippedWidth * count),
-        dstOffset,
-      );
-    }
+    const clipped = clipRows(data, self.tileWidth, clippedWidth, clippedHeight, count);
     return {
       ...array,
       width: clippedWidth,
       height: clippedHeight,
-      data: clipped,
+      data: clipped as typeof data,
+      mask: clippedMask,
     };
   }
 
   // band-separate
   const { bands } = array;
-  const Ctor = bands[0]!.constructor as new (
-    n: number,
-  ) => (typeof bands)[number];
-  const clippedBands = bands.map((band) => {
-    const clipped = new Ctor(clippedWidth * clippedHeight);
-    for (let r = 0; r < clippedHeight; r++) {
-      const srcOffset = r * self.tileWidth;
-      const dstOffset = r * clippedWidth;
-      clipped.set(
-        band.subarray(srcOffset, srcOffset + clippedWidth),
-        dstOffset,
-      );
-    }
-    return clipped;
-  });
+  const clippedBands = bands.map((band) =>
+    clipRows(band, self.tileWidth, clippedWidth, clippedHeight, 1) as typeof band,
+  );
 
   return {
     ...array,
     width: clippedWidth,
     height: clippedHeight,
     bands: clippedBands,
+    mask: clippedMask,
   };
+}
+
+/**
+ * Copy rows from a strided typed array, keeping only `clippedWidth * samplesPerPixel`
+ * values per row out of `tileWidth * samplesPerPixel`.
+ */
+function clipRows<T extends { subarray(s: number, e: number): T; set(src: T, offset: number): void }>(
+  src: T,
+  tileWidth: number,
+  clippedWidth: number,
+  clippedHeight: number,
+  samplesPerPixel: number,
+): T {
+  const srcStride = tileWidth * samplesPerPixel;
+  const dstStride = clippedWidth * samplesPerPixel;
+  // @ts-expect-error — typed array constructors are not in a common interface
+  const dst: T = new src.constructor(dstStride * clippedHeight);
+  for (let r = 0; r < clippedHeight; r++) {
+    dst.set(src.subarray(r * srcStride, r * srcStride + dstStride), r * dstStride);
+  }
+  return dst;
 }
 
 function getUniqueSampleFormat(
