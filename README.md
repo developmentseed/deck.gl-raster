@@ -30,7 +30,57 @@ Fully client-side with direct image loading, no server required.
 
 [^1]: The raster reprojection has not been tested on polar projections or when spanning the antimeridian.
 
-## Quick Start
+## Examples
+
+- **[Land Cover](https://developmentseed.org/deck.gl-raster/examples/land-cover/)**: 1.3GB NLCD land cover COG with custom colormap
+- **[NAIP Client-side Mosaic](https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/)**: Client-side mosaic of [NAIP](https://www.usgs.gov/centers/eros/science/usgs-eros-archive-aerial-photography-national-agriculture-imagery-program-naip) COGs, loaded directly from [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/dataset/naip). No server involved. Switch between true color, false color infrared, and NDVI renderings
+- **[COG Basic](https://developmentseed.org/deck.gl-raster/examples/cog-basic/)**: RGB aerial imagery with automatic reprojection
+
+## Packages
+
+We're building a new, modular raster data ecosystem for the web; this monorepo contains several packages, each published independently to NPM under the `@developmentseed` namespace:
+
+| Package              | Description                                                     | Version                                                    |
+| -------------------- | --------------------------------------------------------------- | ---------------------------------------------------------- |
+| [`affine`]           | Port of [`rasterio/affine`] for managing affine transformations | [![npm][affine-npm-badge]][affine-npm]                     |
+| [`deck.gl-geotiff`]  | High-level deck.gl layers for GeoTIFF & COG visualization       | [![npm][deck.gl-geotiff-npm-badge]][deck.gl-geotiff-npm]   |
+| [`deck.gl-zarr`]     | High-level deck.gl layers for Zarr visualization (_soon_)       | -                                                          |
+| [`deck.gl-raster`]   | Core georeferenced raster rendering primitives                  | [![npm][deck.gl-raster-npm-badge]][deck.gl-raster-npm]     |
+| [`epsg`]             | The full EPSG projection database, compressed for the web       | [![npm][epsg-npm-badge]][epsg-npm]                         |
+| [`geotiff`]          | Fast, high-level, fully-typed GeoTIFF & COG reader              | [![npm][geotiff-npm-badge]][geotiff-npm]                   |
+| [`morecantile`]      | Port of [Morecantile] for working with OGC [TileMatrixSets]     | [![npm][morecantile-npm-badge]][morecantile-npm]           |
+| [`raster-reproject`] | Standalone mesh-based image reprojection utilities              | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
+
+[`affine`]: #developmentseedaffine
+[`deck.gl-geotiff`]: #developmentseeddeckgl-geotiff
+[`deck.gl-zarr`]: #developmentseeddeckgl-zarr
+[`deck.gl-raster`]: #developmentseeddeckgl-raster
+[`epsg`]: #developmentseedepsg
+[`geotiff`]: #developmentseedgeotiff
+[`morecantile`]: #developmentseedmorecantile
+[`raster-reproject`]: #developmentseedraster-reproject
+
+[`rasterio/affine`]: https://github.com/rasterio/affine
+[Morecantile]: https://github.com/developmentseed/morecantile
+[TileMatrixSets]: https://docs.ogc.org/is/17-083r4/17-083r4.html
+
+[affine-npm-badge]: https://img.shields.io/npm/v/@developmentseed/affine
+[deck.gl-geotiff-npm-badge]: https://img.shields.io/npm/v/@developmentseed/deck.gl-geotiff
+[deck.gl-raster-npm-badge]: https://img.shields.io/npm/v/@developmentseed/deck.gl-raster
+[epsg-npm-badge]: https://img.shields.io/npm/v/@developmentseed/epsg
+[geotiff-npm-badge]: https://img.shields.io/npm/v/@developmentseed/geotiff
+[morecantile-npm-badge]: https://img.shields.io/npm/v/@developmentseed/morecantile
+[raster-reproject-npm-badge]: https://img.shields.io/npm/v/@developmentseed/raster-reproject
+
+[affine-npm]: https://www.npmjs.com/package/@developmentseed/affine
+[deck.gl-geotiff-npm]: https://www.npmjs.com/package/@developmentseed/deck.gl-geotiff
+[deck.gl-raster-npm]: https://www.npmjs.com/package/@developmentseed/deck.gl-raster
+[epsg-npm]: https://www.npmjs.com/package/@developmentseed/epsg
+[geotiff-npm]: https://www.npmjs.com/package/@developmentseed/geotiff
+[morecantile-npm]: https://www.npmjs.com/package/@developmentseed/morecantile
+[raster-reproject-npm]: https://www.npmjs.com/package/@developmentseed/raster-reproject
+
+## deck.gl Quick Start
 
 ```typescript
 import { Deck } from '@deck.gl/core';
@@ -53,30 +103,6 @@ new Deck({
 ```
 
 See [Examples](#examples) for complete working demos.
-
-## Packages
-
-This monorepo contains four packages, each published independently to NPM:
-
-| Package                               | Description                          | Version                                                    |
-| ------------------------------------- | ------------------------------------ | ---------------------------------------------------------- |
-| [`@developmentseed/deck.gl-geotiff`]  | High-level GeoTIFF/COG visualization | [![npm][deck.gl-geotiff-npm-badge]][deck.gl-geotiff-npm]   |
-| [`@developmentseed/deck.gl-zarr`]     | Zarr support (_soon_)                | -                                                          |
-| [`@developmentseed/deck.gl-raster`]   | Core raster rendering primitives     | [![npm][deck.gl-raster-npm-badge]][deck.gl-raster-npm]     |
-| [`@developmentseed/raster-reproject`] | Standalone reprojection utilities    | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
-
-[`@developmentseed/deck.gl-geotiff`]: #developmentseeddeckgl-geotiff
-[`@developmentseed/deck.gl-zarr`]: #developmentseeddeckgl-zarr
-[`@developmentseed/deck.gl-raster`]: #developmentseeddeckgl-raster
-[`@developmentseed/raster-reproject`]: #developmentseedraster-reproject
-
-[deck.gl-geotiff-npm-badge]: https://img.shields.io/npm/v/@developmentseed/deck.gl-geotiff
-[deck.gl-raster-npm-badge]: https://img.shields.io/npm/v/@developmentseed/deck.gl-raster
-[raster-reproject-npm-badge]: https://img.shields.io/npm/v/@developmentseed/raster-reproject
-
-[deck.gl-geotiff-npm]: https://www.npmjs.com/package/@developmentseed/deck.gl-geotiff
-[deck.gl-raster-npm]: https://www.npmjs.com/package/@developmentseed/deck.gl-raster
-[raster-reproject-npm]: https://www.npmjs.com/package/@developmentseed/raster-reproject
 
 ---
 

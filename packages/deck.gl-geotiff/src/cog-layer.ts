@@ -9,34 +9,33 @@ import type {
   _Tile2DHeader as Tile2DHeader,
   TileLayerProps,
   _TileLoadProps as TileLoadProps,
+  _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
-import type {
-  RasterModule,
-  TileMatrix,
-  TileMatrixSet,
-} from "@developmentseed/deck.gl-raster";
-import { RasterLayer, RasterTileset2D } from "@developmentseed/deck.gl-raster";
-import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { Device } from "@luma.gl/core";
-import type { BaseClient, GeoTIFF, GeoTIFFImage, Pool } from "geotiff";
-import proj4 from "proj4";
-import { parseCOGTileMatrixSet } from "./cog-tile-matrix-set.js";
+import type { RasterModule } from "@developmentseed/deck.gl-raster";
 import {
-  defaultPool,
-  fetchGeoTIFF,
-  getGeographicBounds,
-} from "./geotiff/geotiff.js";
+  RasterLayer,
+  TileMatrixSetTileset,
+} from "@developmentseed/deck.gl-raster";
+import type { DecoderPool, GeoTIFF, Overview } from "@developmentseed/geotiff";
+import {
+  defaultDecoderPool,
+  generateTileMatrixSet,
+} from "@developmentseed/geotiff";
+import type { TileMatrixSet } from "@developmentseed/morecantile";
+import { tileTransform } from "@developmentseed/morecantile";
+import type { ReprojectionFns } from "@developmentseed/raster-reproject";
+import type { Device, Texture } from "@luma.gl/core";
+import proj4 from "proj4";
+import type { ProjectionDefinition } from "wkt-parser";
+import wktParser from "wkt-parser";
+import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
-import { fromGeoTransform } from "./geotiff-reprojection.js";
-import type { GeoKeysParser, ProjectionInfo } from "./proj.js";
-import { epsgIoGeoKeyParser } from "./proj.js";
-
-// Workaround until upstream exposes props
-// https://github.com/visgl/deck.gl/pull/9917
-type Tileset2DProps = any;
+import { fromAffine } from "./geotiff-reprojection.js";
+import type { EpsgResolver } from "./proj.js";
+import { epsgResolver } from "./proj.js";
 
 /**
  * Minimum interface that **must** be returned from getTileData.
@@ -47,7 +46,7 @@ export type MinimalDataT = {
 };
 
 export type DefaultDataT = MinimalDataT & {
-  texture: ImageData;
+  texture: Texture;
 };
 
 /** Options passed to `getTileData`. */
@@ -55,14 +54,17 @@ export type GetTileDataOptions = {
   /** The luma.gl Device */
   device: Device;
 
-  /** the subset to read data from in pixels. */
-  window?: [number, number, number, number];
+  /** The x coordinate of the tile within the IFD. */
+  x: number;
+
+  /** The y coordinate of the tile within the IFD. */
+  y: number;
 
   /** An AbortSignal that may be signalled if the request is to be aborted */
   signal?: AbortSignal;
 
   /** The decoder pool to use. */
-  pool: Pool;
+  pool: DecoderPool;
 };
 
 type GetTileDataResult<DataT> = {
@@ -71,107 +73,114 @@ type GetTileDataResult<DataT> = {
   inverseTransform: ReprojectionFns["inverseTransform"];
 };
 
-export interface COGLayerProps<DataT extends MinimalDataT = DefaultDataT>
-  extends CompositeLayerProps {
-  /**
-   * GeoTIFF input.
-   *
-   * - URL string pointing to a COG
-   * - ArrayBuffer containing the COG data
-   * - Blob containing the COG data
-   * - An instance of GeoTIFF.js's GeoTIFF class
-   * - An instance of GeoTIFF.js's BaseClient for custom fetching
-   */
-  geotiff: GeoTIFF | string | ArrayBuffer | Blob | BaseClient;
-
-  /**
-   * A function callback for parsing GeoTIFF geo keys to a Proj4 compatible
-   * definition.
-   *
-   * By default, uses epsg.io to resolve EPSG codes found in the GeoTIFF.
-   * Alternatively, you may want to use `geotiff-geokeys-to-proj4`, which is
-   * more extensive but adds 1.5MB to your bundle size.
-   */
-  geoKeysParser?: GeoKeysParser;
-
-  /**
-   * GeoTIFF.js Pool for decoding image chunks.
-   *
-   * If none is provided, a default Pool will be created and shared between all
-   * COGLayer and GeoTIFFLayer instances.
-   */
-  pool?: Pool;
-
-  /**
-   * Maximum reprojection error in pixels for mesh refinement.
-   * Lower values create denser meshes with higher accuracy.
-   * @default 0.125
-   */
-  maxError?: number;
-
-  /**
-   * User-defined method to load data for a tile.
-   *
-   * The default implementation loads an RGBA image using geotiff.js's readRGB
-   * method, returning an ImageData object.
-   *
-   * For more customizability, you can also return a Texture object from
-   * luma.gl, along with optional custom shaders for the RasterLayer.
-   */
-  getTileData?: (
-    image: GeoTIFFImage,
-    options: GetTileDataOptions,
-  ) => Promise<DataT>;
-
-  /**
-   * User-defined method to render data for a tile.
-   *
-   * This receives the data returned by getTileData and must return a render
-   * pipeline.
-   *
-   * The default implementation returns an object with a `texture` property,
-   * assuming that this texture is already renderable.
-   */
-  renderTile: (data: DataT) => ImageData | RasterModule[];
-
-  /**
-   * Enable debug visualization showing the triangulation mesh
-   * @default false
-   */
-  debug?: boolean;
-
-  /**
-   * Opacity of the debug mesh overlay (0-1)
-   * @default 0.5
-   */
-  debugOpacity?: number;
-
-  /**
-   * Called when the GeoTIFF metadata has been loaded and parsed.
-   *
-   * @param   {GeoTIFF}  geotiff
-   * @param   {ProjectionInfo}  projection
-   */
-  onGeoTIFFLoad?: (
-    geotiff: GeoTIFF,
-    options: {
-      projection: ProjectionInfo;
+type COGLayerDataProps<DataT extends MinimalDataT> =
+  | {
       /**
-       * Bounds of the image in geographic coordinates (WGS84) [minLon, minLat,
-       * maxLon, maxLat]
+       * User-defined method to load data for a tile.
+       *
+       * Must be provided together with `renderTile`. If neither is provided,
+       * the default pipeline is used, which fetches the tile, uploads it as a
+       * GPU texture, and renders it using an inferred shader pipeline.
        */
-      geographicBounds: {
-        west: number;
-        south: number;
-        east: number;
-        north: number;
-      };
-    },
-  ) => void;
-}
+      getTileData: (
+        image: GeoTIFF | Overview,
+        options: GetTileDataOptions,
+      ) => Promise<DataT>;
+
+      /**
+       * User-defined method to render data for a tile.
+       *
+       * Must be provided together with `getTileData`. Receives the value
+       * returned by `getTileData` and must return a render pipeline.
+       */
+      renderTile: (data: DataT) => ImageData | RasterModule[];
+    }
+  | {
+      getTileData?: undefined;
+      renderTile?: undefined;
+    };
+
+export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> =
+  CompositeLayerProps &
+    COGLayerDataProps<DataT> & {
+      /**
+       * Cloud-optimized GeoTIFF input.
+       *
+       * - {@link URL} or `string` pointing to a COG
+       * - {@link ArrayBuffer} containing the COG data
+       * - An instance of the {@link GeoTIFF} class.
+       */
+      geotiff: GeoTIFF | string | URL | ArrayBuffer;
+
+      /**
+       * A function callback for parsing numeric EPSG codes to projection
+       * information (as returned by `wkt-parser`).
+       *
+       * The default implementation:
+       * - makes a request to epsg.io to resolve EPSG codes found in the GeoTIFF.
+       * - caches any previous requests
+       * - parses PROJJSON response with `wkt-parser`
+       */
+      epsgResolver?: EpsgResolver;
+
+      /**
+       * Worker pool for decoding image chunks.
+       *
+       * If none is provided, a default Pool will be created and shared between all
+       * COGLayer and GeoTIFFLayer instances.
+       */
+      pool?: DecoderPool;
+
+      /**
+       * Maximum reprojection error in pixels for mesh refinement.
+       * Lower values create denser meshes with higher accuracy.
+       * @default 0.125
+       */
+      maxError?: number;
+
+      /**
+       * Enable debug visualization showing the triangulation mesh
+       * @default false
+       */
+      debug?: boolean;
+
+      /**
+       * Opacity of the debug mesh overlay (0-1)
+       * @default 0.5
+       */
+      debugOpacity?: number;
+
+      /**
+       * Called when the GeoTIFF metadata has been loaded and parsed.
+       */
+      onGeoTIFFLoad?: (
+        geotiff: GeoTIFF,
+        options: {
+          projection: ProjectionDefinition;
+          /**
+           * Bounds of the image in geographic coordinates (WGS84) [minLon, minLat,
+           * maxLon, maxLat]
+           */
+          geographicBounds: {
+            west: number;
+            south: number;
+            east: number;
+            north: number;
+          };
+        },
+      ) => void;
+
+      /** A user-provided AbortSignal to cancel loading.
+       *
+       * This can be useful in combination with the MosaicLayer, so that when a
+       * mosaic source is out of the viewport, all of its tile requests are
+       * automatically aborted.
+       */
+      signal?: AbortSignal;
+    };
 
 const defaultProps: Partial<COGLayerProps> = {
-  geoKeysParser: epsgIoGeoKeyParser,
+  epsgResolver,
   debug: false,
   debugOpacity: 0.5,
 };
@@ -186,10 +195,11 @@ export class COGLayer<
   static override defaultProps = defaultProps;
 
   declare state: {
-    forwardReproject?: ReprojectionFns["forwardReproject"];
-    inverseReproject?: ReprojectionFns["inverseReproject"];
-    metadata?: TileMatrixSet;
-    images?: GeoTIFFImage[];
+    geotiff: GeoTIFF;
+    forwardTo4326?: ReprojectionFns["forwardReproject"];
+    inverseFrom4326?: ReprojectionFns["inverseReproject"];
+    forwardTo3857?: ReprojectionFns["forwardReproject"];
+    tms?: TileMatrixSet;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
   };
@@ -213,48 +223,50 @@ export class COGLayer<
 
   async _parseGeoTIFF(): Promise<void> {
     const geotiff = await fetchGeoTIFF(this.props.geotiff);
+    const crs = geotiff.crs;
+    const sourceProjection =
+      typeof crs === "number"
+        ? await this.props.epsgResolver!(crs)
+        : wktParser(crs);
 
-    const geoKeysParser = this.props.geoKeysParser!;
-    const metadata = await parseCOGTileMatrixSet(geotiff, geoKeysParser);
+    const tms = generateTileMatrixSet(geotiff, sourceProjection);
 
-    const image = await geotiff.getImage();
-    const imageCount = await geotiff.getImageCount();
-    const images: GeoTIFFImage[] = [];
-    for (let imageIdx = 0; imageIdx < imageCount; imageIdx++) {
-      images.push(await geotiff.getImage(imageIdx));
-    }
+    // @ts-expect-error - proj4 typings are incomplete and don't support
+    // wkt-parser input
+    const converter4326 = proj4(sourceProjection, "EPSG:4326");
+    const forwardTo4326 = (x: number, y: number) =>
+      converter4326.forward<[number, number]>([x, y], false);
+    const inverseFrom4326 = (x: number, y: number) =>
+      converter4326.inverse<[number, number]>([x, y], false);
 
-    const sourceProjection = await geoKeysParser(image.getGeoKeys());
-    if (!sourceProjection) {
-      throw new Error(
-        "Could not determine source projection from GeoTIFF geo keys",
-      );
-    }
-
-    const converter = proj4(sourceProjection.def, "EPSG:4326");
-    const forwardReproject = (x: number, y: number) =>
-      converter.forward<[number, number]>([x, y], false);
-    const inverseReproject = (x: number, y: number) =>
-      converter.inverse<[number, number]>([x, y], false);
+    // @ts-expect-error - proj4 typings are incomplete and don't support
+    // wkt-parser input
+    const converter3857 = proj4(sourceProjection, "EPSG:3857");
+    const forwardTo3857 = (x: number, y: number) =>
+      converter3857.forward<[number, number]>([x, y], false);
 
     if (this.props.onGeoTIFFLoad) {
-      const geographicBounds = getGeographicBounds(image, converter);
+      const geographicBounds = getGeographicBounds(geotiff, converter4326);
       this.props.onGeoTIFFLoad(geotiff, {
         projection: sourceProjection,
         geographicBounds,
       });
     }
 
-    const { getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
-      inferRenderPipeline(image.fileDirectory, this.context.device);
+    // Only create a default render pipeline if the user did not provide a
+    // custom one
+    if (!this.props.getTileData || !this.props.renderTile) {
+      const { getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
+        inferRenderPipeline(geotiff, this.context.device);
+      this.setState({ defaultGetTileData, defaultRenderTile });
+    }
 
     this.setState({
-      metadata,
-      forwardReproject,
-      inverseReproject,
-      images,
-      defaultGetTileData,
-      defaultRenderTile,
+      geotiff,
+      tms,
+      forwardTo4326,
+      inverseFrom4326,
+      forwardTo3857,
     });
   }
 
@@ -263,43 +275,57 @@ export class COGLayer<
    */
   async _getTileData(
     tile: TileLoadProps,
-    images: GeoTIFFImage[],
-    metadata: TileMatrixSet,
+    geotiff: GeoTIFF,
+    tms: TileMatrixSet,
   ): Promise<GetTileDataResult<DataT>> {
     const { signal } = tile;
     const { x, y, z } = tile.index;
 
     // Select overview image
-    const geotiffImage = images[images.length - 1 - z]!;
-    const imageHeight = geotiffImage.getHeight();
-    const imageWidth = geotiffImage.getWidth();
+    // If z=0, use the coarsest overview (which is the last in the array)
+    // If z=max, use the full-resolution image (which is the first in the array)
 
-    const tileMatrix = metadata.tileMatrices[z]!;
-    const { tileWidth, tileHeight } = tileMatrix;
+    // TODO: should be able to (micro) optimize this to not create the array
+    // Something like:
+    // const image = z === geotiff.overviews.length - 1 ? geotiff :
+    //   geotiff.overviews[geotiff.overviews.length - 1 - z]!;
+    const images = [geotiff, ...geotiff.overviews];
+    const image = images[images.length - 1 - z]!;
 
-    const tileGeotransform = computeTileGeotransform(x, y, tileMatrix);
-    const { forwardTransform, inverseTransform } =
-      fromGeoTransform(tileGeotransform);
+    const tileMatrix = tms.tileMatrices[z]!;
 
-    const window: [number, number, number, number] = [
-      x * tileWidth,
-      y * tileHeight,
-      Math.min((x + 1) * tileWidth, imageWidth),
-      Math.min((y + 1) * tileHeight, imageHeight),
-    ];
+    const tileAffine = tileTransform(tileMatrix, { col: x, row: y });
+    const { forwardTransform, inverseTransform } = fromAffine(tileAffine);
 
-    const getTileData =
-      this.props.getTileData || this.state.defaultGetTileData!;
+    // Combine abort signals if both are defined
+    const combinedSignal =
+      signal && this.props.signal
+        ? AbortSignal.any([signal, this.props.signal])
+        : signal || this.props.signal;
 
-    const data = await getTileData(geotiffImage, {
+    const getTileDataProps = {
       device: this.context.device,
-      window,
-      signal,
-      pool: this.props.pool || defaultPool(),
-    });
+      x,
+      y,
+      signal: combinedSignal,
+      pool: this.props.pool ?? defaultDecoderPool(),
+    };
+
+    let data: DataT;
+    if (this.props.getTileData) {
+      // In the case that the user passed in a custom `getTileData`, TS knows
+      // that `DataT` is the return type of that function
+      data = await this.props.getTileData(image, getTileDataProps);
+    } else {
+      // In the case where the user did not pass in a custom `getTileData`, we
+      // have to tell TS that `DefaultDataT` is assignable to `DataT`
+      data = (await this.state.defaultGetTileData!(
+        image,
+        getTileDataProps,
+      )) as unknown as DataT;
+    }
 
     return {
-      // @ts-expect-error type mismatch when using provided getTileData
       data,
       forwardTransform,
       inverseTransform,
@@ -315,9 +341,9 @@ export class COGLayer<
       _offset: number;
       tile: Tile2DHeader<GetTileDataResult<DataT>>;
     },
-    metadata: TileMatrixSet,
-    forwardReproject: ReprojectionFns["forwardReproject"],
-    inverseReproject: ReprojectionFns["inverseReproject"],
+    tms: TileMatrixSet,
+    forwardTo4326: ReprojectionFns["forwardReproject"],
+    inverseFrom4326: ReprojectionFns["inverseReproject"],
   ): Layer | LayersList | null {
     const { maxError, debug, debugOpacity } = this.props;
     const { tile } = props;
@@ -332,20 +358,33 @@ export class COGLayer<
 
     if (data) {
       const { height, width } = data;
-      const renderTile = this.props.renderTile || this.state.defaultRenderTile!;
+
+      let renderPipeline: ImageData | RasterModule[];
+      if (this.props.getTileData) {
+        // In the case that the user passed in a custom `getTileData`, TS knows
+        // that `data` can be passed in to `renderTile`.
+        renderPipeline = this.props.renderTile(data);
+      } else {
+        // In the default case, `data` is `DefaultDataT` — cast required because
+        // TS can't prove that `DataT` (which defaults to `DefaultDataT`) is
+        // `DefaultDataT` at this point.
+        renderPipeline = this.state.defaultRenderTile!(
+          data as unknown as DefaultDataT,
+        );
+      }
 
       layers.push(
         new RasterLayer({
           id: `${props.id}-raster`,
           width,
           height,
-          renderPipeline: renderTile(data),
+          renderPipeline,
           maxError,
           reprojectionFns: {
             forwardTransform,
             inverseTransform,
-            forwardReproject,
-            inverseReproject,
+            forwardReproject: forwardTo4326,
+            inverseReproject: inverseFrom4326,
           },
           debug,
           debugOpacity,
@@ -357,19 +396,24 @@ export class COGLayer<
       // Get projected bounds from tile data
       // getTileMetadata returns data that includes projectedBounds
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const projectedBounds = (tile as any)?.projectedBounds;
+      const projectedBounds: {
+        topLeft: [number, number];
+        topRight: [number, number];
+        bottomLeft: [number, number];
+        bottomRight: [number, number];
+      } = (tile as any)?.projectedBounds;
 
-      if (!projectedBounds || !metadata) {
+      if (!projectedBounds || !tms) {
         return [];
       }
 
       // Project bounds from image CRS to WGS84
       const { topLeft, topRight, bottomLeft, bottomRight } = projectedBounds;
 
-      const topLeftWgs84 = metadata.projectToWgs84(topLeft);
-      const topRightWgs84 = metadata.projectToWgs84(topRight);
-      const bottomRightWgs84 = metadata.projectToWgs84(bottomRight);
-      const bottomLeftWgs84 = metadata.projectToWgs84(bottomLeft);
+      const topLeftWgs84 = forwardTo4326(topLeft[0], topLeft[1]);
+      const topRightWgs84 = forwardTo4326(topRight[0], topRight[1]);
+      const bottomRightWgs84 = forwardTo4326(bottomRight[0], bottomRight[1]);
+      const bottomLeftWgs84 = forwardTo4326(bottomLeft[0], bottomLeft[1]);
 
       // Create a closed path around the tile bounds
       const path = [
@@ -382,9 +426,9 @@ export class COGLayer<
 
       layers.push(
         new PathLayer({
-          id: `${tile.id}-bounds`,
-          data: [{ path }],
-          getPath: (d) => d.path,
+          id: `${this.id}-${tile.id}-bounds`,
+          data: [path],
+          getPath: (d) => d,
           getColor: [255, 0, 0, 255], // Red
           getWidth: 2,
           widthUnits: "pixels",
@@ -396,37 +440,44 @@ export class COGLayer<
     return layers;
   }
 
+  /** Define the underlying deck.gl TileLayer. */
   renderTileLayer(
-    metadata: TileMatrixSet,
-    forwardReproject: ReprojectionFns["forwardReproject"],
-    inverseReproject: ReprojectionFns["inverseReproject"],
-    images: GeoTIFFImage[],
+    tms: TileMatrixSet,
+    forwardTo4326: ReprojectionFns["forwardReproject"],
+    inverseFrom4326: ReprojectionFns["inverseReproject"],
+    forwardTo3857: ReprojectionFns["forwardReproject"],
+    geotiff: GeoTIFF,
   ): TileLayer {
     // Create a factory class that wraps COGTileset2D with the metadata
-    class RasterTileset2DFactory extends RasterTileset2D {
+    class TileMatrixSetTilesetFactory extends TileMatrixSetTileset {
       constructor(opts: Tileset2DProps) {
-        super(metadata, opts);
+        super(opts, tms, {
+          projectTo4326: forwardTo4326,
+          projectTo3857: forwardTo3857,
+        });
       }
     }
 
     return new TileLayer<GetTileDataResult<DataT>>({
       id: `cog-tile-layer-${this.id}`,
-      TilesetClass: RasterTileset2DFactory,
-      getTileData: async (tile) => this._getTileData(tile, images, metadata),
+      TilesetClass: TileMatrixSetTilesetFactory,
+      getTileData: async (tile) => this._getTileData(tile, geotiff, tms),
       renderSubLayers: (props) =>
-        this._renderSubLayers(
-          props,
-          metadata,
-          forwardReproject,
-          inverseReproject,
-        ),
+        this._renderSubLayers(props, tms, forwardTo4326, inverseFrom4326),
     });
   }
 
   renderLayers() {
-    const { forwardReproject, inverseReproject, metadata, images } = this.state;
+    const { forwardTo4326, inverseFrom4326, forwardTo3857, tms, geotiff } =
+      this.state;
 
-    if (!forwardReproject || !inverseReproject || !metadata || !images) {
+    if (
+      !forwardTo4326 ||
+      !inverseFrom4326 ||
+      !forwardTo3857 ||
+      !tms ||
+      !geotiff
+    ) {
       return null;
     }
 
@@ -434,34 +485,11 @@ export class COGLayer<
     // nullable in any part of function scope, the tileset factory wrapper gives
     // a type error
     return this.renderTileLayer(
-      metadata,
-      forwardReproject,
-      inverseReproject,
-      images,
+      tms,
+      forwardTo4326,
+      inverseFrom4326,
+      forwardTo3857,
+      geotiff,
     );
   }
-}
-
-/**
- * Compute the affine geotransform for this tile.
- *
- * We need to offset the geotransform for the matrix level by the tile's pixel
- * origin.
- */
-function computeTileGeotransform(
-  x: number,
-  y: number,
-  tileMatrix: TileMatrix,
-): [number, number, number, number, number, number] {
-  const { tileWidth, tileHeight } = tileMatrix;
-
-  const xPixelOrigin = x * tileWidth;
-  const yPixelOrigin = y * tileHeight;
-
-  const [a, b, c, d, e, f] = tileMatrix.geotransform;
-
-  const xCoordOffset = a * xPixelOrigin + b * yPixelOrigin + c;
-  const yCoordOffset = d * xPixelOrigin + e * yPixelOrigin + f;
-
-  return [a, b, xCoordOffset, d, e, yCoordOffset];
 }

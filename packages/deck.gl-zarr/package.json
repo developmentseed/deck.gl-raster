@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/deck.gl-zarr",
-  "version": "0.1.0",
+  "version": "0.3.0-beta.3",
   "description": "Zarr visualization in deck.gl.",
   "type": "module",
   "main": "./dist/index.js",
@@ -40,16 +40,16 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^25.0.3",
-    "jsdom": "^27.4.0",
+    "@types/node": "^25.3.3",
+    "jsdom": "^28.1.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
-    "proj4": "^2.20.2",
-    "zarrita": "^0.5.4"
+    "proj4": "^2.20.3",
+    "zarrita": "^0.6.1"
   },
   "volta": {
     "extends": "../../package.json"

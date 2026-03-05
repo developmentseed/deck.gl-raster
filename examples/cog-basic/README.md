@@ -2,6 +2,8 @@
 
 This example demonstrates how to use the `COGLayer` to visualize a Cloud-Optimized GeoTIFF (COG) in deck.gl.
 
+Deployed to <https://developmentseed.org/deck.gl-raster/examples/cog-basic/>.
+
 ## Features
 
 - Loads and displays RGB imagery from a GeoTIFF file

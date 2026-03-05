@@ -1,22 +1,21 @@
-import type { TextureFormat, TextureProps } from "@luma.gl/core";
-import type { GeoTIFFImage, TypedArray } from "geotiff";
-import type { ImageFileDirectory } from "./types";
+import { SampleFormat } from "@cogeotiff/core";
+import type { GeoTIFF } from "@developmentseed/geotiff";
+import type { TextureFormat, TextureProps, TypedArray } from "@luma.gl/core";
 
 /**
  * Infers texture properties from a GeoTIFF image and its associated data.
  */
 export function createTextureProps(
-  image: GeoTIFFImage,
+  geotiff: GeoTIFF,
   data: TypedArray,
   options: { width: number; height: number },
 ): TextureProps {
-  const ifd = image.getFileDirectory() as ImageFileDirectory;
-  const samplesPerPixel = ifd.SamplesPerPixel;
+  const { samplesPerPixel, bitsPerSample, sampleFormat } = geotiff.cachedTags;
 
   const textureFormat = inferTextureFormat(
     samplesPerPixel,
-    ifd.BitsPerSample,
-    ifd.SampleFormat,
+    bitsPerSample,
+    sampleFormat,
   );
 
   return {
@@ -33,7 +32,7 @@ export function createTextureProps(
 export function inferTextureFormat(
   samplesPerPixel: number,
   bitsPerSample: Uint16Array,
-  sampleFormat: Uint16Array,
+  sampleFormat: SampleFormat[],
 ): TextureFormat {
   const channelCount = verifySamplesPerPixel(samplesPerPixel);
   const bitWidth = verifyIdenticalBitsPerSample(bitsPerSample);
@@ -94,7 +93,7 @@ function verifyIdenticalBitsPerSample(bitsPerSample: Uint16Array): BitWidth {
 /**
  * Map the geotiff tag SampleFormat to known kinds of scalars
  */
-function inferScalarKind(sampleFormat: Uint16Array): ScalarKind {
+function inferScalarKind(sampleFormat: SampleFormat[]): ScalarKind {
   // Only support identical SampleFormats for all samples
   const first = sampleFormat[0]!;
 
@@ -107,11 +106,11 @@ function inferScalarKind(sampleFormat: Uint16Array): ScalarKind {
   }
 
   switch (first) {
-    case 1:
+    case SampleFormat.Uint:
       return "unorm";
-    case 2:
+    case SampleFormat.Int:
       return "sint";
-    case 3:
+    case SampleFormat.Float:
       return "float";
     default:
       throw new Error(`Unsupported SampleFormat ${sampleFormat}`);
