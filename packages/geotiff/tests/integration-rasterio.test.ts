@@ -1,0 +1,103 @@
+/**
+ * Integration tests with Rasterio.
+ *
+ * Since rasterio is a Python library, we compare data indirectly via Numpy NPY
+ * files. `geotiff-test-data` has a Pixi command named `generate-npy` that
+ * generates NPY files from the same source GeoTIFFs
+ */
+
+import assert from "node:assert";
+import { readFile } from "node:fs/promises";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { toBandSeparate } from "../src/array.js";
+import type { GeoTIFF } from "../src/geotiff.js";
+import { fixturePath, loadGeoTIFF } from "./helpers.js";
+import type { NPYTile } from "./utils/parse-npy.js";
+import { parseNPY } from "./utils/parse-npy.js";
+
+const FIXTURES = [
+  // { variant: "rasterio", name: "float32_1band_lerc_block32" },
+  // { variant: "rasterio", name: "int8_3band_zstd_block64" },
+  // { variant: "rasterio", name: "uint16_1band_lzw_block128_predictor2" },
+  // { variant: "rasterio", name: "uint8_1band_deflate_block128_unaligned" },
+  // { variant: "rasterio", name: "uint8_1band_lzw_block64_predictor2" },
+  { variant: "rasterio", name: "uint8_rgb_deflate_block64_cog" },
+  // { variant: "nlcd", name: "nlcd_landcover" },
+  // sydney_airport_GEC: no ModelTiepoint/ModelPixelScale/ModelTransformation — geo transform stored as GCPs, not readable by @cogeotiff/core
+  // { variant: "rasterio", name: "float32_1band_lerc_deflate_block32" }, // geotiff.js does not support LERC_DEFLATE
+] as const;
+
+/** Open the same file with geotiff.js. */
+async function loadNpy(
+  name: string,
+  variant: string,
+  {
+    z,
+    x,
+    y,
+  }: {
+    z: number;
+    x: number;
+    y: number;
+  },
+): Promise<NPYTile> {
+  const suffix = `/${z}-${x}-${y}.npy`;
+  const path = fixturePath(name, variant, suffix);
+  const buffer = await readFile(path);
+  const arrayBuffer = buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength,
+  );
+
+  const numpyData = parseNPY(arrayBuffer);
+  return numpyData;
+}
+
+/** Assert two typed arrays are element-wise close (for floats). */
+function expectArraysClose(
+  a: ArrayLike<number>,
+  b: ArrayLike<number>,
+  tolerance = 1e-5,
+): void {
+  expect(a.length).toBe(b.length);
+  for (let i = 0; i < a.length; i++) {
+    if (Math.abs((a[i] ?? 0) - (b[i] ?? 0)) > tolerance) {
+      throw new Error(
+        `Arrays differ at index ${i}: ${a[i]} vs ${b[i]} (tolerance ${tolerance})`,
+      );
+    }
+  }
+}
+
+describe("pixel-interleaved data", () => {
+  for (const { variant, name } of FIXTURES) {
+    describe(`${variant}/${name}`, () => {
+      let ours: GeoTIFF;
+
+      beforeAll(async () => {
+        ours = await loadGeoTIFF(name, variant);
+      });
+
+      it("tile (0,0) pixel data matches", async () => {
+        const tile = await ours.fetchTile(0, 0);
+        const refTile = await loadNpy(name, variant, { z: 0, x: 0, y: 0 });
+
+        assert(tile.array.layout === "pixel-interleaved");
+        tile.array.data;
+
+        expect(tile.array.data.length).toEqual(refTile.data.length);
+        expect(tile.array.data).toEqual(refTile.data);
+
+        // for (let b = 0; b < ours.count; b++) {
+        //   const ourBand = oursBandSep.bands[b]!;
+        //   const refBand = refData[b] as ArrayLike<number>;
+        //   if (isFloat) {
+        //     expectArraysClose(ourBand, refBand);
+        //   } else {
+        //     expect(ourBand).toEqual(refBand);
+        //   }
+        // }
+      });
+    });
+  }
+});
