@@ -380,7 +380,13 @@ function clipToImageBounds(
 
   if (array.layout === "pixel-interleaved") {
     const { count, data } = array;
-    const clipped = clipRows(data, self.tileWidth, clippedWidth, clippedHeight, count);
+    const clipped = clipRows(
+      data,
+      self.tileWidth,
+      clippedWidth,
+      clippedHeight,
+      count,
+    );
     return {
       ...array,
       width: clippedWidth,
@@ -392,8 +398,15 @@ function clipToImageBounds(
 
   // band-separate
   const { bands } = array;
-  const clippedBands = bands.map((band) =>
-    clipRows(band, self.tileWidth, clippedWidth, clippedHeight, 1) as typeof band,
+  const clippedBands = bands.map(
+    (band) =>
+      clipRows(
+        band,
+        self.tileWidth,
+        clippedWidth,
+        clippedHeight,
+        1,
+      ) as typeof band,
   );
 
   return {
@@ -409,7 +422,12 @@ function clipToImageBounds(
  * Copy rows from a strided typed array, keeping only `clippedWidth * samplesPerPixel`
  * values per row out of `tileWidth * samplesPerPixel`.
  */
-function clipRows<T extends { subarray(s: number, e: number): T; set(src: T, offset: number): void }>(
+function clipRows<
+  T extends {
+    subarray(s: number, e: number): T;
+    set(src: T, offset: number): void;
+  },
+>(
   src: T,
   tileWidth: number,
   clippedWidth: number,
@@ -421,7 +439,10 @@ function clipRows<T extends { subarray(s: number, e: number): T; set(src: T, off
   // @ts-expect-error — typed array constructors are not in a common interface
   const dst: T = new src.constructor(dstStride * clippedHeight);
   for (let r = 0; r < clippedHeight; r++) {
-    dst.set(src.subarray(r * srcStride, r * srcStride + dstStride), r * dstStride);
+    dst.set(
+      src.subarray(r * srcStride, r * srcStride + dstStride),
+      r * dstStride,
+    );
   }
   return dst;
 }
