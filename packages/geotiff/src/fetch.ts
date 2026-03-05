@@ -144,7 +144,7 @@ async function decodeMask(
   ): Promise<DecodedPixels> =>
     pool
       ? pool.decode(bytes, compression, meta)
-      : decode(new Uint8Array(bytes), compression, meta);
+      : decode(bytes, compression, meta);
 
   const { bytes, compression } = mask;
   const decoded = await decoderFn(bytes, compression, metadata);
@@ -168,7 +168,7 @@ async function decodeTile(
   ): Promise<DecodedPixels> =>
     pool
       ? pool.decode(bytes, compression, meta)
-      : decode(new Uint8Array(bytes), compression, meta);
+      : decode(bytes, compression, meta);
 
   if (Array.isArray(tile)) {
     // Band-separate: each element is one band's compressed tile

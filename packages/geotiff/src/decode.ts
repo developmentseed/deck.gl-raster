@@ -154,11 +154,9 @@ export function unpackBitPacked(
 }
 
 /**
- * Convert raw pixel data into a typed array based on the sample format and bits
- * per sample. This is used for codecs that return raw bytes.
- *
- * Creates a view over the underlying ArrayBuffer rather than copying elements,
- * when possible, so multi-byte samples are interpreted correctly.
+ * Convert a raw ArrayBuffer of pixel data into a typed array based on the
+ * sample format and bits per sample. This is used for codecs that return raw
+ * bytes.
  */
 function toTypedArray(
   buffer: ArrayBuffer,
@@ -177,7 +175,6 @@ function toTypedArray(
           return new Uint8Array(buffer);
         case 16:
           return new Uint16Array(buffer);
-
         case 32:
           return new Uint32Array(buffer);
       }
@@ -188,7 +185,6 @@ function toTypedArray(
           return new Int8Array(buffer);
         case 16:
           return new Int16Array(buffer);
-
         case 32:
           return new Int32Array(buffer);
       }
@@ -197,7 +193,6 @@ function toTypedArray(
       switch (bitsPerSample) {
         case 32:
           return new Float32Array(buffer);
-
         case 64:
           return new Float64Array(buffer);
       }
