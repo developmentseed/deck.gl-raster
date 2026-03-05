@@ -75,7 +75,7 @@ export class DecoderPool {
     metadata: DecoderMetadata,
   ): Promise<DecodedPixels> {
     if (!this.hasWorkers) {
-      return decode(new Uint8Array(bytes), compression, metadata);
+      return decode(bytes, compression, metadata);
     }
 
     const worker = this.leastLoaded();

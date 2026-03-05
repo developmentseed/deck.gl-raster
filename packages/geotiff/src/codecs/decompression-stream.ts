@@ -8,12 +8,13 @@ export function assert(
 }
 
 export async function decompressWithDecompressionStream(
-  data: Uint8Array,
+  data: ArrayBuffer | Uint8Array,
   { format, signal }: { format: CompressionFormat; signal?: AbortSignal },
-): Promise<Uint8Array> {
+): Promise<ArrayBuffer> {
+  const array = data instanceof Uint8Array ? data : new Uint8Array(data);
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(data);
+      controller.enqueue(array);
       controller.close();
     },
   });
@@ -23,5 +24,5 @@ export async function decompressWithDecompressionStream(
   ) as unknown as ReadableWritablePair<Uint8Array, Uint8Array>;
 
   const decompressed = new Response(stream.pipeThrough(transform, { signal }));
-  return new Uint8Array(await decompressed.arrayBuffer());
+  return await decompressed.arrayBuffer();
 }

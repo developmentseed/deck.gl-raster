@@ -3,6 +3,7 @@ import { Compression, SampleFormat } from "@cogeotiff/core";
 import type { RasterTypedArray } from "./array.js";
 import { decode as decodeViaCanvas } from "./codecs/canvas.js";
 import { applyPredictor } from "./codecs/predictor.js";
+import { copyIfNeeded } from "./codecs/utils.js";
 
 /** Raster stored in one pixel-interleaved typed array. */
 export type DecodedPixelInterleaved = {
@@ -47,11 +48,17 @@ export type DecoderMetadata = {
  * - A DecodedPixels with typed pixel data (image codecs like LERC, JPEG)
  */
 export type Decoder = (
-  bytes: Uint8Array,
+  bytes: ArrayBuffer | Uint8Array,
   metadata: DecoderMetadata,
-) => Promise<Uint8Array | DecodedPixels>;
+) => Promise<ArrayBuffer | DecodedPixels>;
 
-async function decodeUncompressed(bytes: Uint8Array): Promise<Uint8Array> {
+async function decodeUncompressed(
+  bytes: ArrayBuffer | Uint8Array,
+): Promise<ArrayBuffer> {
+  if (bytes instanceof Uint8Array) {
+    return copyIfNeeded(bytes);
+  }
+
   return bytes;
 }
 
@@ -89,7 +96,7 @@ DECODER_REGISTRY.set(Compression.Lerc, () =>
  * Decode a tile's bytes according to its compression and image metadata.
  */
 export async function decode(
-  bytes: Uint8Array,
+  bytes: ArrayBuffer | Uint8Array,
   compression: Compression,
   metadata: DecoderMetadata,
 ): Promise<DecodedPixels> {
@@ -101,7 +108,7 @@ export async function decode(
   const decoder = await loader();
   const result = await decoder(bytes, metadata);
 
-  if (result instanceof Uint8Array) {
+  if (result instanceof ArrayBuffer) {
     const {
       predictor,
       width,
