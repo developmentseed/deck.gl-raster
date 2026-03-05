@@ -8,6 +8,8 @@ import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile } from "./fetch.js";
+import type { BandStatistics, GDALMetadata } from "./gdal_metadata.js";
+import { parseGDALMetadata } from "./gdal_metadata.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
@@ -58,6 +60,9 @@ export class GeoTIFF {
   /** The GeoKeyDirectory of the primary IFD. */
   readonly gkd: GeoKeyDirectory;
 
+  /** Parsed GDALMetadata tag, if present. */
+  readonly gdalMetadata: GDALMetadata | null;
+
   private constructor(
     tiff: Tiff,
     image: TiffImage,
@@ -66,6 +71,7 @@ export class GeoTIFF {
     overviews: Overview[],
     cachedTags: CachedTags,
     dataSource: Pick<Source, "fetch">,
+    gdalMetadata: GDALMetadata | null,
   ) {
     this.tiff = tiff;
     this.image = image;
@@ -74,6 +80,7 @@ export class GeoTIFF {
     this.overviews = overviews;
     this.cachedTags = cachedTags;
     this.dataSource = dataSource;
+    this.gdalMetadata = gdalMetadata;
   }
 
   /**
@@ -155,6 +162,9 @@ export class GeoTIFF {
     });
 
     const cachedTags = await prefetchTags(primaryImage);
+    const gdalMetadata = parseGDALMetadata(cachedTags.gdalMetadata, {
+      count: cachedTags.samplesPerPixel,
+    });
 
     // Two-phase construction: create the GeoTIFF first (with empty overviews),
     // then build Overviews that reference back to it.
@@ -166,6 +176,7 @@ export class GeoTIFF {
       [],
       cachedTags,
       dataSource,
+      gdalMetadata,
     );
 
     const overviews: Overview[] = dataEntries.map(([key, dataImage]) => {
