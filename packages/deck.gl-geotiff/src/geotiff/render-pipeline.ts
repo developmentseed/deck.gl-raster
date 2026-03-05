@@ -149,6 +149,7 @@ function createUnormPipeline(
       signal,
     });
     let { array } = tile;
+    const { width, height, mask } = array;
 
     let numSamples = samplesPerPixel;
 
@@ -168,7 +169,6 @@ function createUnormPipeline(
       bitsPerSample,
       sampleFormat,
     );
-    const { width, height } = array;
     const bytesPerPixel = (bitsPerSample[0]! / 8) * numSamples;
     const texture = device.createTexture({
       data: padToAlignment(array.data, width, height, bytesPerPixel),
@@ -182,10 +182,11 @@ function createUnormPipeline(
       },
     });
 
-    let mask: Texture | undefined;
-    if (array.mask !== null) {
-      mask = device.createTexture({
-        data: padToAlignment(array.mask, width, height, bytesPerPixel),
+    let maskTexture: Texture | undefined;
+    if (mask !== null) {
+      maskTexture = device.createTexture({
+        // Mask is single-channel 8-bit, so bytesPerPixel must be 1
+        data: padToAlignment(mask, width, height, 1),
         // Single-channel 8-bit texture for the mask
         format: "r8unorm",
         width,
@@ -196,7 +197,7 @@ function createUnormPipeline(
 
     return {
       texture,
-      mask,
+      mask: maskTexture,
       height: array.height,
       width: array.width,
     };
