@@ -175,34 +175,31 @@ function toTypedArray(
           );
         case 8:
           return new Uint8Array(buffer);
-        case 16: {
+        case 16:
           return new Uint16Array(buffer);
-        }
-        case 32: {
+
+        case 32:
           return new Uint32Array(buffer);
-        }
       }
       break;
     case SampleFormat.Int:
       switch (bitsPerSample) {
         case 8:
           return new Int8Array(buffer);
-        case 16: {
+        case 16:
           return new Int16Array(buffer);
-        }
-        case 32: {
+
+        case 32:
           return new Int32Array(buffer);
-        }
       }
       break;
     case SampleFormat.Float:
       switch (bitsPerSample) {
-        case 32: {
+        case 32:
           return new Float32Array(buffer);
-        }
-        case 64: {
+
+        case 64:
           return new Float64Array(buffer);
-        }
       }
       break;
   }
