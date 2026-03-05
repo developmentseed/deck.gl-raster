@@ -1,6 +1,5 @@
 import { decompress } from "fzstd";
 
-export async function decode(bytes: ArrayBuffer): Promise<ArrayBuffer> {
-  const result = decompress(new Uint8Array(bytes));
-  return result.buffer as ArrayBuffer;
+export async function decode(bytes: Uint8Array): Promise<Uint8Array> {
+  return decompress(bytes);
 }

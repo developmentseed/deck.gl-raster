@@ -8,19 +8,20 @@ export function assert(
 }
 
 export async function decompressWithDecompressionStream(
-  data: ArrayBuffer | Response,
+  data: Uint8Array,
   { format, signal }: { format: CompressionFormat; signal?: AbortSignal },
-): Promise<ArrayBuffer> {
-  const response = data instanceof Response ? data : new Response(data);
-  assert(response.body, "Response does not contain body.");
-  try {
-    const decompressedResponse = new Response(
-      response.body.pipeThrough(new DecompressionStream(format), { signal }),
-    );
-    const buffer = await decompressedResponse.arrayBuffer();
-    return buffer;
-  } catch {
-    signal?.throwIfAborted();
-    throw new Error(`Failed to decode ${format}`);
-  }
+): Promise<Uint8Array> {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(data);
+      controller.close();
+    },
+  });
+
+  const transform = new DecompressionStream(
+    format,
+  ) as unknown as ReadableWritablePair<Uint8Array, Uint8Array>;
+
+  const decompressed = new Response(stream.pipeThrough(transform, { signal }));
+  return new Uint8Array(await decompressed.arrayBuffer());
 }

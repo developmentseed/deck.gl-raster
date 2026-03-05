@@ -62,14 +62,14 @@ function decodeRowFloatingPoint(
  * @param planarConfiguration  PlanarConfiguration enum value.
  */
 export function applyPredictor(
-  block: ArrayBuffer,
+  block: Uint8Array,
   predictor: Predictor,
   width: number,
   height: number,
   bitsPerSample: number,
   samplesPerPixel: number,
   planarConfiguration: PlanarConfiguration,
-): ArrayBuffer {
+): Uint8Array {
   if (predictor === Predictor.None) {
     return block;
   }
@@ -79,8 +79,8 @@ export function applyPredictor(
     planarConfiguration === PlanarConfiguration.Separate ? 1 : samplesPerPixel;
 
   for (let i = 0; i < height; i++) {
-    const byteOffset = i * stride * width * bytesPerSample;
-    if (byteOffset >= block.byteLength) {
+    const byteOffset = block.byteOffset + i * stride * width * bytesPerSample;
+    if (byteOffset >= block.byteOffset + block.byteLength) {
       break;
     }
 
@@ -89,13 +89,13 @@ export function applyPredictor(
       const length = stride * width;
       switch (bitsPerSample) {
         case 8:
-          row = new Uint8Array(block, byteOffset, length);
+          row = new Uint8Array(block.buffer, byteOffset, length);
           break;
         case 16:
-          row = new Uint16Array(block, byteOffset, length);
+          row = new Uint16Array(block.buffer, byteOffset, length);
           break;
         case 32:
-          row = new Uint32Array(block, byteOffset, length);
+          row = new Uint32Array(block.buffer, byteOffset, length);
           break;
         default:
           throw new Error(
@@ -105,7 +105,7 @@ export function applyPredictor(
       decodeRowAcc(row, stride);
     } else if (predictor === Predictor.FloatingPoint) {
       const row = new Uint8Array(
-        block,
+        block.buffer,
         byteOffset,
         stride * width * bytesPerSample,
       );

@@ -47,11 +47,11 @@ export type DecoderMetadata = {
  * - A DecodedPixels with typed pixel data (image codecs like LERC, JPEG)
  */
 export type Decoder = (
-  bytes: ArrayBuffer,
+  bytes: Uint8Array,
   metadata: DecoderMetadata,
-) => Promise<ArrayBuffer | DecodedPixels>;
+) => Promise<Uint8Array | DecodedPixels>;
 
-async function decodeUncompressed(bytes: ArrayBuffer): Promise<ArrayBuffer> {
+async function decodeUncompressed(bytes: Uint8Array): Promise<Uint8Array> {
   return bytes;
 }
 
@@ -89,7 +89,7 @@ DECODER_REGISTRY.set(Compression.Lerc, () =>
  * Decode a tile's bytes according to its compression and image metadata.
  */
 export async function decode(
-  bytes: ArrayBuffer,
+  bytes: Uint8Array,
   compression: Compression,
   metadata: DecoderMetadata,
 ): Promise<DecodedPixels> {
@@ -101,7 +101,7 @@ export async function decode(
   const decoder = await loader();
   const result = await decoder(bytes, metadata);
 
-  if (result instanceof ArrayBuffer) {
+  if (result instanceof Uint8Array) {
     const {
       predictor,
       width,
@@ -135,10 +135,9 @@ export async function decode(
 // TODO: check for FillOrder tag and reverse bit order if needed
 // https://web.archive.org/web/20240329145342/https://www.awaresystems.be/imaging/tiff/tifftags/fillorder.html
 export function unpackBitPacked(
-  buffer: ArrayBuffer,
+  packed: Uint8Array,
   pixelCount: number,
 ): Uint8Array {
-  const packed = new Uint8Array(buffer);
   const out = new Uint8Array(pixelCount);
   for (let i = 0; i < pixelCount; i++) {
     out[i] = (packed[i >> 3]! >> (7 - (i & 7))) & 1 ? 255 : 0;
@@ -152,7 +151,7 @@ export function unpackBitPacked(
  * bytes.
  */
 function toTypedArray(
-  buffer: ArrayBuffer,
+  buffer: Uint8Array,
   metadata: DecoderMetadata,
 ): RasterTypedArray {
   const { sampleFormat, bitsPerSample } = metadata;

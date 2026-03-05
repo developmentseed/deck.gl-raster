@@ -14,7 +14,7 @@ async function getLerc() {
   return lerc;
 }
 
-export async function decode(bytes: ArrayBuffer): Promise<DecodedPixels> {
+export async function decode(bytes: Uint8Array): Promise<DecodedPixels> {
   const lerc = await getLerc();
   const result = lerc.decode(bytes);
   return { layout: "band-separate", bands: result.pixels };

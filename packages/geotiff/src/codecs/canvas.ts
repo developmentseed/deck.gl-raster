@@ -6,10 +6,14 @@ import type { DecodedPixels, DecoderMetadata } from "../decode.js";
 // copying again from CPU -> GPU memory
 // https://github.com/developmentseed/deck.gl-raster/issues/228
 export async function decode(
-  bytes: ArrayBuffer,
+  bytes: Uint8Array,
   metadata: DecoderMetadata,
 ): Promise<DecodedPixels> {
-  const blob = new Blob([bytes]);
+  if (bytes.buffer instanceof SharedArrayBuffer) {
+    throw new Error("Decoding JPEGs from SharedArrayBuffers not supported.");
+  }
+
+  const blob = new Blob([bytes as Uint8Array<ArrayBuffer>]);
   const imageBitmap = await createImageBitmap(blob);
 
   const canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
