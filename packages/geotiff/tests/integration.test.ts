@@ -25,7 +25,8 @@ const FIXTURES = [
   { variant: "rasterio", name: "uint8_rgb_deflate_block64_cog" },
   { variant: "nlcd", name: "nlcd_landcover" },
   // sydney_airport_GEC: no ModelTiepoint/ModelPixelScale/ModelTransformation — geo transform stored as GCPs, not readable by @cogeotiff/core
-  // float32_1band_lerc_deflate_block32: geotiff.js does not support LERC_DEFLATE
+  { variant: "rasterio", name: "float32_1band_lerc_deflate_block32" },
+  { variant: "rasterio", name: "float32_1band_lerc_zstd_block32" },
 ] as const;
 
 // The unaligned fixture: 265×266, 128×128 tiles — right edge is 9px, bottom is 10px.

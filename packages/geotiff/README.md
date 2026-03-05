@@ -4,6 +4,13 @@ Fast, high-level GeoTIFF reader written in TypeScript for the browser, wrapping 
 
 [cogeotiff-lib]: https://github.com/blacha/cogeotiff
 
+- Easy access to COG tiles and reduced-resolution overviews.
+- Automatic nodata mask handling.
+- Image decoding off the main thread.
+- Supported compressions:
+    - Deflate, LERC, LERC+Deflate, LERC+ZSTD, LZW, JPEG (browser-only), WebP (browser-only), ZSTD
+    - Support for user-defined decompression algorithms.
+
 ## Features
 
 ### Easy access to COG tiles
