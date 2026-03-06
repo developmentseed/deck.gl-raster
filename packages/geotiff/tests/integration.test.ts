@@ -9,11 +9,11 @@
  * are intentionally omitted here.
  */
 
+import type { GeoTIFF } from "@developmentseed/geotiff";
 import type { GeoTIFFImage, GeoTIFF as GeotiffJs } from "geotiff";
 import { fromFile } from "geotiff";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { toBandSeparate } from "../src/array.js";
-import type { GeoTIFF } from "../src/geotiff.js";
 import { fixturePath, loadGeoTIFF } from "./helpers.js";
 
 const FIXTURES = [
@@ -165,5 +165,44 @@ describe("boundless=false edge tile pixel values", () => {
     for (let b = 0; b < ours.count; b++) {
       expect(oursBandSep.bands[b]).toEqual(refData[b] as ArrayLike<number>);
     }
+  });
+});
+
+describe("flipped y (positive Y resolution / bottom-left origin)", () => {
+  let ours: GeoTIFF;
+  let ref: GeotiffJs;
+  let refImage: GeoTIFFImage;
+
+  beforeAll(async () => {
+    ours = await loadGeoTIFF(
+      "xjejfvrbm1fbu1ecw-0000000000-0000008192",
+      "source-coop-alpha-earth",
+    );
+    ref = await loadGeoTiffJs(
+      "xjejfvrbm1fbu1ecw-0000000000-0000008192",
+      "source-coop-alpha-earth",
+    );
+    refImage = await ref.getImage();
+  });
+
+  afterAll(() => ref.close());
+
+  it("transform has positive Y resolution (south-up file)", () => {
+    const [, , , , e] = ours.transform;
+    expect(e).toBeGreaterThan(0);
+  });
+
+  it("bbox matches geotiff.js getBoundingBox", () => {
+    // geotiff.js getBoundingBox returns [minX, minY, maxX, maxY]
+    const [minX, minY, maxX, maxY] = refImage.getBoundingBox();
+    expect(ours.bbox[0]).toBeCloseTo(minX!, 3);
+    expect(ours.bbox[1]).toBeCloseTo(minY!, 3);
+    expect(ours.bbox[2]).toBeCloseTo(maxX!, 3);
+    expect(ours.bbox[3]).toBeCloseTo(maxY!, 3);
+  });
+
+  it("bbox minY < maxY (Y increases upward)", () => {
+    const [, minY, , maxY] = ours.bbox;
+    expect(minY).toBeLessThan(maxY);
   });
 });
