@@ -217,8 +217,23 @@ export class COGLayer<
       Boolean(changeFlags.dataChanged) || props.geotiff !== oldProps.geotiff;
 
     if (needsUpdate) {
+      // Clear stale state so renderLayers returns null until the new GeoTIFF is
+      // ready
+      this.clearState();
       this._parseGeoTIFF();
     }
+  }
+
+  clearState() {
+    this.setState({
+      geotiff: undefined,
+      tms: undefined,
+      forwardTo4326: undefined,
+      inverseFrom4326: undefined,
+      forwardTo3857: undefined,
+      defaultGetTileData: undefined,
+      defaultRenderTile: undefined,
+    });
   }
 
   async _parseGeoTIFF(): Promise<void> {
