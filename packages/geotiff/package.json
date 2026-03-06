@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/geotiff",
-  "version": "0.3.0-beta.3",
+  "version": "0.3.0-beta.2",
   "description": "High-level GeoTIFF reading library.",
   "type": "module",
   "main": "./dist/index.js",
