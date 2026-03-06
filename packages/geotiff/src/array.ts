@@ -31,7 +31,7 @@ type RasterArrayBase = {
 
   /**
    * Optional validity mask.  Length = height * width.
-   * 1 = valid pixel, 0 = nodata.  null when no mask IFD is present.
+   * Non-zero = valid pixel, 0 = nodata (transparent).  null when no mask IFD is present.
    */
   mask: Uint8Array | null;
 

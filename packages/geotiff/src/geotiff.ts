@@ -8,6 +8,8 @@ import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile } from "./fetch.js";
+import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";
+import { parseGDALMetadata } from "./gdal-metadata.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
@@ -58,6 +60,9 @@ export class GeoTIFF {
   /** The GeoKeyDirectory of the primary IFD. */
   readonly gkd: GeoKeyDirectory;
 
+  /** Parsed GDALMetadata tag, if present. */
+  readonly gdalMetadata: GDALMetadata | null;
+
   private constructor(
     tiff: Tiff,
     image: TiffImage,
@@ -66,6 +71,7 @@ export class GeoTIFF {
     overviews: Overview[],
     cachedTags: CachedTags,
     dataSource: Pick<Source, "fetch">,
+    gdalMetadata: GDALMetadata | null,
   ) {
     this.tiff = tiff;
     this.image = image;
@@ -74,6 +80,7 @@ export class GeoTIFF {
     this.overviews = overviews;
     this.cachedTags = cachedTags;
     this.dataSource = dataSource;
+    this.gdalMetadata = gdalMetadata;
   }
 
   /**
@@ -155,6 +162,9 @@ export class GeoTIFF {
     });
 
     const cachedTags = await prefetchTags(primaryImage);
+    const gdalMetadata = parseGDALMetadata(cachedTags.gdalMetadata, {
+      count: cachedTags.samplesPerPixel,
+    });
 
     // Two-phase construction: create the GeoTIFF first (with empty overviews),
     // then build Overviews that reference back to it.
@@ -166,6 +176,7 @@ export class GeoTIFF {
       [],
       cachedTags,
       dataSource,
+      gdalMetadata,
     );
 
     const overviews: Overview[] = dataEntries.map(([key, dataImage]) => {
@@ -282,6 +293,36 @@ export class GeoTIFF {
   /** Whether the primary image is tiled. */
   get isTiled(): boolean {
     return this.image.isTiled();
+  }
+
+  /**
+   * The pre-existing statistics for each band, if available.
+   *
+   * Extracted from the GDALMetadata TIFF tag; never computed on demand.
+   * Keys are **1-based** band indices to match GDAL's convention.
+   * Returns null if no statistics are stored in the file.
+   */
+  get storedStats(): ReadonlyMap<number, BandStatistics> | null {
+    const stats = this.gdalMetadata?.bandStatistics;
+    return stats && stats.size > 0 ? stats : null;
+  }
+
+  /**
+   * The offset for each band (0-indexed), defaulting to 0.
+   *
+   * Extracted from the GDALMetadata TIFF tag.
+   */
+  get offsets(): number[] {
+    return this.gdalMetadata?.offsets ?? Array<number>(this.count).fill(0);
+  }
+
+  /**
+   * The scale for each band (0-indexed), defaulting to 1.
+   *
+   * Extracted from the GDALMetadata TIFF tag.
+   */
+  get scales(): number[] {
+    return this.gdalMetadata?.scales ?? Array<number>(this.count).fill(1);
   }
 
   /** Number of bands (samples per pixel). */

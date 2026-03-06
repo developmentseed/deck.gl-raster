@@ -28,12 +28,16 @@ export function addAlphaChannel(rgbImage: RasterArray): RasterArray {
     // Need to add alpha channel
 
     const rgbaLength = (rgbImage.data.length / 3) * 4;
-    const rgbaArray = new Uint8ClampedArray(rgbaLength);
+    const isUint16 = rgbImage.data instanceof Uint16Array;
+    const rgbaArray = isUint16
+      ? new Uint16Array(rgbaLength)
+      : new Uint8ClampedArray(rgbaLength);
+    const maxAlpha = isUint16 ? 65535 : 255;
     for (let i = 0; i < rgbImage.data.length / 3; ++i) {
       rgbaArray[i * 4] = rgbImage.data[i * 3]!;
       rgbaArray[i * 4 + 1] = rgbImage.data[i * 3 + 1]!;
       rgbaArray[i * 4 + 2] = rgbImage.data[i * 3 + 2]!;
-      rgbaArray[i * 4 + 3] = 255;
+      rgbaArray[i * 4 + 3] = maxAlpha;
     }
 
     return {

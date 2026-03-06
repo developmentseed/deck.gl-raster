@@ -50,16 +50,20 @@ export async function fetchTile(
     signal?: AbortSignal;
   } = {},
 ): Promise<Tile> {
-  if (self.maskImage != null) {
-    throw new Error("Mask fetching not implemented yet");
-  }
+  const tileFetch = fetchCogBytes(self, x, y, { signal });
+  const maskFetch =
+    self.maskImage != null
+      ? getTile(self.maskImage, x, y, self.dataSource, { signal })
+      : Promise.resolve(null);
 
-  const tile = await fetchCogBytes(self, x, y, { signal });
+  const [tileBytes, maskBytes] = await Promise.all([tileFetch, maskFetch]);
+
   const {
     bitsPerSample: bitsPerSamples,
     predictor,
     planarConfiguration,
     sampleFormat: sampleFormats,
+    lercParameters,
   } = self.cachedTags;
   const { sampleFormat, bitsPerSample } = getUniqueSampleFormat(
     sampleFormats,
@@ -81,15 +85,21 @@ export async function fetchTile(
     height: self.tileHeight,
     predictor,
     planarConfiguration,
+    lercParameters,
   };
-  const decodedPixels = await decodeTile(tile, decoderMetadata, pool);
+  const [decodedPixels, mask] = await Promise.all([
+    decodeTile(tileBytes, decoderMetadata, pool),
+    maskBytes != null && self.maskImage != null
+      ? decodeMask(maskBytes, self.maskImage, pool)
+      : Promise.resolve(null),
+  ]);
 
   const array: RasterArray = {
     ...decodedPixels,
     count: samplesPerPixel,
     height: self.tileHeight,
     width: self.tileWidth,
-    mask: null,
+    mask,
     transform: tileTransform,
     crs: self.crs,
     nodata: self.nodata,
@@ -104,6 +114,49 @@ export async function fetchTile(
 
 type GetBytesResponse = { bytes: ArrayBuffer; compression: Compression };
 type ByteRange = Awaited<ReturnType<TiffImage["getTileSize"]>>;
+
+async function decodeMask(
+  mask: GetBytesResponse,
+  maskImage: TiffImage,
+  pool: DecoderPool | undefined,
+): Promise<Uint8Array> {
+  const maskSampleFormats = maskImage.value(TiffTag.SampleFormat) ?? [1];
+  const maskBitsPerSample = maskImage.value(TiffTag.BitsPerSample) ?? [8];
+  const { sampleFormat, bitsPerSample } = getUniqueSampleFormat(
+    maskSampleFormats as SampleFormat[],
+    new Uint16Array(maskBitsPerSample as number[]),
+  );
+  const { width, height } = maskImage.tileSize;
+  const metadata: DecoderMetadata = {
+    sampleFormat,
+    bitsPerSample,
+    samplesPerPixel: maskImage.value(TiffTag.SamplesPerPixel) ?? 1,
+    width,
+    height,
+    predictor: maskImage.value(TiffTag.Predictor) ?? 1,
+    planarConfiguration:
+      maskImage.value(TiffTag.PlanarConfiguration) ??
+      PlanarConfiguration.Contig,
+  };
+
+  const decoderFn = (
+    bytes: ArrayBuffer,
+    compression: Compression,
+    meta: DecoderMetadata,
+  ): Promise<DecodedPixels> =>
+    pool
+      ? pool.decode(bytes, compression, meta)
+      : decode(bytes, compression, meta);
+
+  const { bytes, compression } = mask;
+  const decoded = await decoderFn(bytes, compression, metadata);
+  const data =
+    decoded.layout === "pixel-interleaved" ? decoded.data : decoded.bands[0]!;
+  if (data instanceof Uint8Array) {
+    return data;
+  }
+  throw new Error("Expected mask data to decode to Uint8Array");
+}
 
 async function decodeTile(
   tile: GetBytesResponse | GetBytesResponse[],
@@ -324,50 +377,77 @@ function clipToImageBounds(
     return array;
   }
 
+  const clippedMask = array.mask
+    ? clipRows(array.mask, self.tileWidth, clippedWidth, clippedHeight, 1)
+    : array.mask;
+
   if (array.layout === "pixel-interleaved") {
     const { count, data } = array;
-    const Ctor = data.constructor as new (n: number) => typeof data;
-    const clipped = new Ctor(clippedWidth * clippedHeight * count);
-    for (let r = 0; r < clippedHeight; r++) {
-      const srcOffset = r * self.tileWidth * count;
-      const dstOffset = r * clippedWidth * count;
-      clipped.set(
-        data.subarray(srcOffset, srcOffset + clippedWidth * count),
-        dstOffset,
-      );
-    }
+    const clipped = clipRows(
+      data,
+      self.tileWidth,
+      clippedWidth,
+      clippedHeight,
+      count,
+    );
     return {
       ...array,
       width: clippedWidth,
       height: clippedHeight,
-      data: clipped,
+      data: clipped as typeof data,
+      mask: clippedMask,
     };
   }
 
   // band-separate
   const { bands } = array;
-  const Ctor = bands[0]!.constructor as new (
-    n: number,
-  ) => (typeof bands)[number];
-  const clippedBands = bands.map((band) => {
-    const clipped = new Ctor(clippedWidth * clippedHeight);
-    for (let r = 0; r < clippedHeight; r++) {
-      const srcOffset = r * self.tileWidth;
-      const dstOffset = r * clippedWidth;
-      clipped.set(
-        band.subarray(srcOffset, srcOffset + clippedWidth),
-        dstOffset,
-      );
-    }
-    return clipped;
-  });
+  const clippedBands = bands.map(
+    (band) =>
+      clipRows(
+        band,
+        self.tileWidth,
+        clippedWidth,
+        clippedHeight,
+        1,
+      ) as typeof band,
+  );
 
   return {
     ...array,
     width: clippedWidth,
     height: clippedHeight,
     bands: clippedBands,
+    mask: clippedMask,
   };
+}
+
+/**
+ * Copy rows from a strided typed array, keeping only `clippedWidth * samplesPerPixel`
+ * values per row out of `tileWidth * samplesPerPixel`.
+ */
+function clipRows<
+  T extends {
+    subarray(s: number, e: number): T;
+    set(src: T, offset: number): void;
+  },
+>(
+  src: T,
+  tileWidth: number,
+  clippedWidth: number,
+  clippedHeight: number,
+  samplesPerPixel: number,
+): T {
+  const srcStride = tileWidth * samplesPerPixel;
+  const dstStride = clippedWidth * samplesPerPixel;
+  // @ts-expect-error — typed array constructors are not in a common interface
+  const dst: T = new src.constructor(dstStride * clippedHeight);
+  for (let r = 0; r < clippedHeight; r++) {
+    dst.set(
+      src.subarray(r * srcStride, r * srcStride + dstStride),
+      r * dstStride,
+    );
+  }
+  return dst;
 }
 
 function getUniqueSampleFormat(
