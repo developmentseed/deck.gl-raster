@@ -40,28 +40,28 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^25.1.0",
-    "jsdom": "^27.4.0",
+    "@types/node": "^25.3.3",
+    "jsdom": "^28.1.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@cogeotiff/core": "^9.3.0",
+    "@cogeotiff/core": "^9.4.0",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/geotiff": "workspace:^",
     "@developmentseed/morecantile": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "flatbush": "^4.5.0",
-    "proj4": "^2.20.2",
-    "wkt-parser": "^1.5.2"
+    "proj4": "^2.20.3",
+    "wkt-parser": "^1.5.3"
   },
   "peerDependencies": {
     "@deck.gl/core": "^9.2.7",
     "@deck.gl/geo-layers": "^9.2.7",
     "@deck.gl/layers": "^9.2.7",
     "@deck.gl/mesh-layers": "^9.2.7",
-    "@luma.gl/core": "^9.2.7"
+    "@luma.gl/core": "^9.2.6"
   },
   "volta": {
     "extends": "../../package.json"

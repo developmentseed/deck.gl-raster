@@ -1,6 +1,8 @@
 import { resolve } from "node:path";
 import { SourceFile } from "@chunkd/source-file";
-import { GeoTIFF } from "../src/geotiff.js";
+// We import from the published package name so that other packages in this
+// monorepo can import this helpers file.
+import { GeoTIFF } from "@developmentseed/geotiff";
 
 // ── Fixture helpers ─────────────────────────────────────────────────────
 
@@ -14,11 +16,19 @@ const FIXTURES_DIR = resolve(
  * @param name - filename without extension (e.g. "uint8_rgb_deflate_block64_cog")
  * @param variant - "rasterio" (default) or a real_data subdirectory name
  */
-export function fixturePath(name: string, variant: string): string {
+export function fixturePath(
+  name: string,
+  variant: string,
+  suffix: string = ".tif",
+): string {
   if (variant === "rasterio") {
-    return resolve(FIXTURES_DIR, "rasterio_generated/fixtures", `${name}.tif`);
+    return resolve(
+      FIXTURES_DIR,
+      "rasterio_generated/fixtures",
+      `${name}${suffix}`,
+    );
   }
-  return resolve(FIXTURES_DIR, "real_data", variant, `${name}.tif`);
+  return resolve(FIXTURES_DIR, "real_data", variant, `${name}${suffix}`);
 }
 
 /** Open a GeoTIFF test fixture by name. */
@@ -28,5 +38,5 @@ export async function loadGeoTIFF(
 ): Promise<GeoTIFF> {
   const path = fixturePath(name, variant);
   const source = new SourceFile(path);
-  return GeoTIFF.open(source);
+  return GeoTIFF.open({ dataSource: source, headerSource: source });
 }

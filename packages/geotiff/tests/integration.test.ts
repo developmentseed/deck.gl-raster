@@ -5,8 +5,8 @@
  * JavaScript, so we use it as a ground truth for pixel values, dimensions, and
  * georeferencing.
  *
- * Fixtures that require unsupported codecs (WebP, JPEG, LZW, LZMA, JXL,
- * zstd) are intentionally omitted here.
+ * Fixtures that require unsupported codecs (WebP, JPEG, LZW, LZMA, JXL)
+ * are intentionally omitted here.
  */
 
 import type { GeoTIFFImage, GeoTIFF as GeotiffJs } from "geotiff";
@@ -17,14 +17,16 @@ import type { GeoTIFF } from "../src/geotiff.js";
 import { fixturePath, loadGeoTIFF } from "./helpers.js";
 
 const FIXTURES = [
-  { variant: "rasterio", name: "uint8_rgb_deflate_block64_cog" },
-  { variant: "rasterio", name: "uint8_1band_deflate_block128_unaligned" },
   { variant: "rasterio", name: "float32_1band_lerc_block32" },
+  { variant: "rasterio", name: "int8_3band_zstd_block64" },
   { variant: "rasterio", name: "uint16_1band_lzw_block128_predictor2" },
+  { variant: "rasterio", name: "uint8_1band_deflate_block128_unaligned" },
   { variant: "rasterio", name: "uint8_1band_lzw_block64_predictor2" },
+  { variant: "rasterio", name: "uint8_rgb_deflate_block64_cog" },
   { variant: "nlcd", name: "nlcd_landcover" },
   // sydney_airport_GEC: no ModelTiepoint/ModelPixelScale/ModelTransformation — geo transform stored as GCPs, not readable by @cogeotiff/core
-  // float32_1band_lerc_deflate_block32: geotiff.js does not support LERC_DEFLATE
+  { variant: "rasterio", name: "float32_1band_lerc_deflate_block32" },
+  { variant: "rasterio", name: "float32_1band_lerc_zstd_block32" },
 ] as const;
 
 // The unaligned fixture: 265×266, 128×128 tiles — right edge is 9px, bottom is 10px.
@@ -99,8 +101,9 @@ describe("integration vs geotiff.js", () => {
         const tile = await ours.fetchTile(0, 0);
         const oursBandSep = toBandSeparate(tile.array);
 
-        // readRasters returns band-separate by default
-        const refData = await refImage.readRasters({ window: [0, 0, tw, th] });
+        const refData = await refImage.readRasters({
+          window: [0, 0, tw, th],
+        });
 
         expect(oursBandSep.bands.length).toBe(ours.count);
         expect(refData.length).toBe(ours.count);

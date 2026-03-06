@@ -1,11 +1,11 @@
-import type { TiffImage } from "@cogeotiff/core";
-import type { TiffImageTileCount } from "@cogeotiff/core/build/tiff.image.js";
+import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "./crs.js";
 import { fetchTile } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
+import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
 import { index, xy } from "./transform.js";
 
@@ -16,6 +16,9 @@ import { index, xy } from "./transform.js";
  */
 export class Overview {
   readonly cachedTags: CachedTags;
+
+  /** The data source used for fetching tile data. */
+  readonly dataSource: Pick<Source, "fetch">;
 
   /** A reference to the parent GeoTIFF object. */
   readonly geotiff: GeoTIFF;
@@ -35,12 +38,14 @@ export class Overview {
     image: TiffImage,
     maskImage: TiffImage | null,
     cachedTags: CachedTags,
+    dataSource: Pick<Source, "fetch">,
   ) {
     this.geotiff = geotiff;
     this.gkd = gkd;
     this.image = image;
     this.maskImage = maskImage;
     this.cachedTags = cachedTags;
+    this.dataSource = dataSource;
   }
 
   get crs(): number | ProjJson {
@@ -83,7 +88,11 @@ export class Overview {
   async fetchTile(
     x: number,
     y: number,
-    options: { boundless?: boolean; signal?: AbortSignal } = {},
+    options: {
+      boundless?: boolean;
+      pool?: DecoderPool;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
   }

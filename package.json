@@ -4,7 +4,7 @@
   "version": "0.3.0-beta.3",
   "description": "GPU-accelerated COG and Zarr visualization in deck.gl",
   "scripts": {
-    "build": "tsc --build",
+    "build": "pnpm --recursive build",
     "build:watch": "tsc --build --watch",
     "clean": "pnpm --recursive exec rm -rf dist",
     "format": "biome format .",
@@ -18,21 +18,21 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.13",
-    "publint": "^0.3.17",
+    "@biomejs/biome": "^2.4.5",
+    "publint": "^0.3.18",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   },
   "pnpm": {
     "overrides": {
-      "@deck.gl/aggregation-layers": "^9.2.8",
-      "@deck.gl/core": "^9.2.8",
-      "@deck.gl/extensions": "^9.2.8",
-      "@deck.gl/geo-layers": "^9.2.8",
-      "@deck.gl/layers": "^9.2.8",
-      "@deck.gl/mapbox": "^9.2.8",
-      "@deck.gl/mesh-layers": "^9.2.8",
-      "@deck.gl/widgets": "^9.2.8",
+      "@deck.gl/aggregation-layers": "^9.2.10",
+      "@deck.gl/core": "^9.2.10",
+      "@deck.gl/extensions": "^9.2.10",
+      "@deck.gl/geo-layers": "^9.2.10",
+      "@deck.gl/layers": "^9.2.10",
+      "@deck.gl/mapbox": "^9.2.10",
+      "@deck.gl/mesh-layers": "^9.2.10",
+      "@deck.gl/widgets": "^9.2.10",
       "@loaders.gl/core": "^4.3.4",
       "@luma.gl/constants": "^9.2.6",
       "@luma.gl/core": "^9.2.6",

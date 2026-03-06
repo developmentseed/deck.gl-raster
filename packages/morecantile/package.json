@@ -38,8 +38,8 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^25.1.0",
-    "jsdom": "^27.4.0",
+    "@types/node": "^25.3.3",
+    "jsdom": "^28.1.0",
     "json-schema-to-typescript": "^15.0.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

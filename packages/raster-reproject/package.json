@@ -41,9 +41,9 @@
   },
   "devDependencies": {
     "@developmentseed/affine": "workspace:^",
-    "@types/node": "^25.1.0",
-    "jsdom": "^27.4.0",
-    "proj4": "^2.20.2",
+    "@types/node": "^25.3.3",
+    "jsdom": "^28.1.0",
+    "proj4": "^2.20.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

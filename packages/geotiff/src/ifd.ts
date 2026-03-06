@@ -6,6 +6,11 @@ export interface CachedTags {
   bitsPerSample: Uint16Array;
   colorMap?: Uint16Array; // TiffTagType[TiffTag.ColorMap];
   compression: TiffTagType[TiffTag.Compression];
+  gdalMetadata: TiffTagType[TiffTag.GdalMetadata] | null;
+  lercParameters: TiffTagType[TiffTag.LercParameters] | null;
+  modelTiepoint: TiffTagType[TiffTag.ModelTiePoint] | null;
+  modelPixelScale: TiffTagType[TiffTag.ModelPixelScale] | null;
+  modelTransformation: TiffTagType[TiffTag.ModelTransformation] | null;
   nodata: number | null;
   photometric: TiffTagType[TiffTag.Photometric];
   /** https://web.archive.org/web/20240329145322/https://www.awaresystems.be/imaging/tiff/tifftags/photometricinterpretation.html */
@@ -13,6 +18,8 @@ export interface CachedTags {
   predictor: Predictor;
   sampleFormat: TiffTagType[TiffTag.SampleFormat];
   samplesPerPixel: TiffTagType[TiffTag.SamplesPerPixel];
+  tileByteCounts: TiffTagType[TiffTag.TileByteCounts] | null;
+  tileOffsets: TiffTagType[TiffTag.TileOffsets] | null;
 }
 
 /** Pre-fetch TIFF tags for easier visualization. */
@@ -23,24 +30,41 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     throw new Error("Compression tag should always exist.");
   }
 
-  const nodata = image.noData;
-
   const [
     bitsPerSample,
     colorMap,
+    gdalNoData,
+    gdalMetadata,
+    lercParameters,
+    modelPixelScale,
+    modelTiepoint,
+    modelTransformation,
     photometric,
     planarConfiguration,
     predictor,
     sampleFormat,
     samplesPerPixel,
+    tileByteCounts,
+    tileOffsets,
   ] = await Promise.all([
     image.fetch(TiffTag.BitsPerSample),
     image.fetch(TiffTag.ColorMap),
+    image.fetch(TiffTag.GdalNoData),
+    image.fetch(TiffTag.GdalMetadata),
+    image.fetch(TiffTag.LercParameters),
+    image.fetch(TiffTag.ModelPixelScale),
+    image.fetch(TiffTag.ModelTiePoint),
+    image.fetch(TiffTag.ModelTransformation),
     image.fetch(TiffTag.Photometric),
     image.fetch(TiffTag.PlanarConfiguration),
     image.fetch(TiffTag.Predictor),
     image.fetch(TiffTag.SampleFormat),
     image.fetch(TiffTag.SamplesPerPixel),
+    // Pre-fetch tile offsets and byte counts. If we don't prefetch them,
+    // TiffImage.getTileSize will have to fetch them for each tile, which
+    // results in many redundant requests.
+    image.fetch(TiffTag.TileByteCounts),
+    image.fetch(TiffTag.TileOffsets),
   ]);
 
   const missingTag: (tagName: string) => never = (tagName: string) => {
@@ -67,7 +91,12 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     bitsPerSample: new Uint16Array(bitsPerSample),
     colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
     compression,
-    nodata,
+    gdalMetadata,
+    lercParameters,
+    modelTiepoint,
+    modelPixelScale,
+    modelTransformation,
+    nodata: gdalNoData !== null ? Number(gdalNoData) : null,
     photometric,
     planarConfiguration,
     predictor: (predictor as Predictor) ?? Predictor.None,
@@ -75,6 +104,8 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     // https://web.archive.org/web/20240329145340/https://www.awaresystems.be/imaging/tiff/tifftags/sampleformat.html
     sampleFormat: sampleFormat ?? [SampleFormat.Uint],
     samplesPerPixel,
+    tileByteCounts,
+    tileOffsets,
   };
 }
 

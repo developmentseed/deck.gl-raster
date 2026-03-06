@@ -4,6 +4,13 @@ Fast, high-level GeoTIFF reader written in TypeScript for the browser, wrapping 
 
 [cogeotiff-lib]: https://github.com/blacha/cogeotiff
 
+- Easy access to COG tiles and reduced-resolution overviews.
+- Automatic nodata mask handling.
+- Image decoding off the main thread.
+- Supported compressions:
+    - Deflate, LERC, LERC+Deflate, LERC+ZSTD, LZW, JPEG (browser-only), WebP (browser-only), ZSTD
+    - Support for user-defined decompression algorithms.
+
 ## Features
 
 ### Easy access to COG tiles
@@ -67,6 +74,12 @@ For user-defined CRSes, we automatically parse the CRS into a PROJJSON object, w
 
 If you have an image where the CRS fails to parse, please create an issue.
 
+### Configurable Web Worker pool for image decoding
+
+The `DecoderPool` allows for decoding image data off the main thread.
+
+By default workers are created up to `navigator.hardwareConcurrency`, but you can customize how large the web worker pool is by passing options to the `DecoderPool` constructor.
+
 ### Dynamically load compressions as needed
 
 Instead of bundling support for all compressions out of the box, dynamically load the decompressors as required.
@@ -74,6 +87,19 @@ Instead of bundling support for all compressions out of the box, dynamically loa
 Until you try to load an image compressed with, say, [LERC], you don't pay for the bundle size of the dependency.
 
 [LERC]: https://github.com/Esri/lerc
+
+You can also override the built-in decoders with your own by using `registry`. For example, to use a custom zstd decoder:
+
+```ts
+import { Compression } from "@cogeotiff/core";
+import { registry } from "@developmentseed/geotiff";
+
+registry.set(Compression.Zstd, () =>
+  import("your-zstd-module").then((m) => m.decode),
+);
+```
+
+A decoder is a function that takes an `ArrayBuffer` and a `DecoderMetadata` object and returns a `Promise<ArrayBuffer>`. See [decode.ts](./src/decode.ts) for the full type definitions.
 
 ### Full user control over caching and chunking
 
