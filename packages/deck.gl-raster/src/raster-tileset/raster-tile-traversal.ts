@@ -614,7 +614,6 @@ function getOverlappingChildRange(
   const childTileWidthCRS = tileWidth * cellSize;
   const childTileHeightCRS = tileHeight * cellSize;
 
-  // Note: we assume top left origin
   const originX = pointOfOrigin[0];
   const originY = pointOfOrigin[1];
 
@@ -622,8 +621,18 @@ function getOverlappingChildRange(
   let minCol = Math.floor((pMinX - originX) / childTileWidthCRS);
   let maxCol = Math.floor((pMaxX - originX) / childTileWidthCRS);
 
-  let minRow = Math.floor((originY - pMaxY) / childTileHeightCRS);
-  let maxRow = Math.floor((originY - pMinY) / childTileHeightCRS);
+  // Row direction depends on cornerOfOrigin:
+  // - topLeft:    row 0 is at originY (max Y), rows increase downward (lower Y)
+  // - bottomLeft: row 0 is at originY (min Y), rows increase upward (higher Y)
+  let minRow: number;
+  let maxRow: number;
+  if (childMatrix.cornerOfOrigin === "bottomLeft") {
+    minRow = Math.floor((pMinY - originY) / childTileHeightCRS);
+    maxRow = Math.floor((pMaxY - originY) / childTileHeightCRS);
+  } else {
+    minRow = Math.floor((originY - pMaxY) / childTileHeightCRS);
+    maxRow = Math.floor((originY - pMinY) / childTileHeightCRS);
+  }
 
   // Clamp to matrix bounds
   minCol = Math.max(0, Math.min(matrixWidth - 1, minCol));
