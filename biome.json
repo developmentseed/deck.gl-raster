@@ -12,7 +12,6 @@
     "includes": [
       "**",
       "!!**/dist",
-      "!!**/docs/api-sidebars",
       "!!**/node_modules",
       "!!**/coverage",
       "!!**/*.log",
