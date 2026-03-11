@@ -75,7 +75,7 @@ const contentDocsPlugins = packages.map((pkg) => [
 
 const config: Config = {
   title: "deck.gl-raster",
-  tagline: "Raster visualization layers for deck.gl",
+  tagline: "Client-side, GPU-accelerated Cloud-Optimized GeoTIFF (and soon Zarr) visualization in deck.gl",
   favicon: "img/favicon.ico",
 
   future: {
@@ -173,8 +173,8 @@ const config: Config = {
               href: "https://github.com/developmentseed/deck.gl-raster",
             },
             {
-              label: "npm",
-              href: "https://www.npmjs.com/search?q=%40developmentseed",
+              label: "LinkedIn",
+              href: "https://www.linkedin.com/company/development-seed",
             },
           ],
         },
