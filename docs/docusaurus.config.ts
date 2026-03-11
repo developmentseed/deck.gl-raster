@@ -95,6 +95,7 @@ const config: Config = {
   organizationName: "developmentseed",
   projectName: "deck.gl-raster",
 
+  trailingSlash: true,
   onBrokenLinks: "warn",
   onBrokenMarkdownLinks: "warn",
 
