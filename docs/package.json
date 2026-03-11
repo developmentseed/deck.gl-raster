@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
+    "generate-api": "docusaurus generate-typedoc",
     "start": "docusaurus start",
-    "build": "docusaurus build",
+    "build": "docusaurus generate-typedoc && docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",

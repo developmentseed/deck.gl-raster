@@ -16,9 +16,10 @@
     "publint": "pnpm --recursive --filter=\"./packages/**\" exec publint",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "docs": "pnpm --filter docs start",
+    "docs": "pnpm --filter docs generate-api && pnpm --filter docs start",
     "docs:build": "pnpm --filter docs build",
-    "docs:serve": "pnpm --filter docs serve"
+    "docs:serve": "pnpm --filter docs serve",
+    "docs:generate-api": "pnpm --filter docs generate-api"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.5",

@@ -52,6 +52,7 @@ const typedocPlugins = packages.map((pkg) => [
     entryPoints: [pkg.entry],
     tsconfig: "../tsconfig.json",
     out: `api/${pkg.id}`,
+    docsPath: `api/${pkg.id}`,
     excludePrivate: true,
     excludeInternal: true,
     readme: "none",
@@ -66,7 +67,7 @@ const contentDocsPlugins = packages.map((pkg) => [
     id: pkg.id,
     path: `api/${pkg.id}`,
     routeBasePath: `api/${pkg.id}`,
-    sidebarPath: `./api/${pkg.id}/typedoc-sidebar.cjs`,
+    sidebarPath: `./api-sidebars/${pkg.id}.cjs`,
     editUrl:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/",
   },
@@ -88,11 +89,7 @@ const config: Config = {
   projectName: "deck.gl-raster",
 
   onBrokenLinks: "warn",
-  markdown: {
-    hooks: {
-      onBrokenMarkdownLinks: "warn",
-    },
-  },
+  onBrokenMarkdownLinks: "warn",
 
   i18n: {
     defaultLocale: "en",
@@ -107,7 +104,7 @@ const config: Config = {
       {
         docs: {
           // Narrative docs: guides, getting started, etc.
-          path: "docs/guides",
+          path: "guides",
           routeBasePath: "docs",
           sidebarPath: "./sidebars.ts",
           editUrl:

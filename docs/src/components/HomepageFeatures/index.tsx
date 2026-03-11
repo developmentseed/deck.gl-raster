@@ -11,32 +11,35 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Easy to Use',
+    title: 'GPU-Accelerated Raster Rendering',
     Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
     description: (
       <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
+        Render large raster datasets at interactive framerates using WebGL2 via
+        deck.gl and luma.gl. Shader-based color mapping, compositing, and
+        reprojection happen entirely on the GPU.
       </>
     ),
   },
   {
-    title: 'Focus on What Matters',
+    title: 'Cloud-Optimized Formats',
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
+        Stream Cloud-Optimized GeoTIFFs (COG) and Zarr arrays directly from
+        object storage with range requests — no tiling server required. Works
+        with any HTTP-accessible data source.
       </>
     ),
   },
   {
-    title: 'Powered by React',
+    title: 'Flexible Visualization Pipeline',
     Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
     description: (
       <>
-        Extend or customize your website layout by reusing React. Docusaurus can
-        be extended while reusing the same header and footer.
+        Compose raster modules for band math, colormapping, and multi-source
+        mosaicking. Bring your own GLSL or use the built-in modules for common
+        scientific visualization patterns.
       </>
     ),
   },
