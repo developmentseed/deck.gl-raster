@@ -29,28 +29,6 @@ pnpm format
 pnpm typecheck
 ```
 
-
-## Documentation
-
-The docs site lives in `docs/` and is built with [Docusaurus](https://docusaurus.io/). API reference is auto-generated from source using TypeDoc.
-
-```bash
-# Start dev server (generates API docs, then starts Docusaurus)
-pnpm docs
-
-# Build for production
-pnpm docs:build
-
-# Preview the production build
-pnpm docs:serve
-
-# Regenerate API docs only (without starting the dev server)
-pnpm docs:generate-api
-```
-
-Narrative docs (guides, getting started) live in `docs/guides/`.
-API reference is generated into `docs/api/` (gitignored — regenerated on each build).
-
 ## Publishing
 
 Publishing happens automatically when a new tag is pushed to the `main` branch with format `v*`.

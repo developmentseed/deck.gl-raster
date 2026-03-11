@@ -15,11 +15,7 @@
     "check:fix": "biome check --write .",
     "publint": "pnpm --recursive --filter=\"./packages/**\" exec publint",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck",
-    "docs": "pnpm --filter docs generate-api && pnpm --filter docs start",
-    "docs:build": "pnpm --filter docs build",
-    "docs:serve": "pnpm --filter docs serve",
-    "docs:generate-api": "pnpm --filter docs generate-api"
+    "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.5",
