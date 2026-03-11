@@ -1,6 +1,9 @@
 import type { Affine } from "@developmentseed/affine";
 import { describe, expect, it } from "vitest";
-import type { BandRasterArray, PixelRasterArray } from "../src/array.js";
+import type {
+  RasterArrayBandSeparate,
+  RasterArrayPixelInterleaved,
+} from "../src/array.js";
 import {
   packBandsToRGBA,
   reorderBands,
@@ -89,7 +92,7 @@ function baseMetadata() {
 
 describe("RasterArray helpers", () => {
   it("converts band-separate data to pixel-interleaved", () => {
-    const raster: BandRasterArray = {
+    const raster: RasterArrayBandSeparate = {
       ...baseMetadata(),
       layout: "band-separate",
       count: 3,
@@ -108,7 +111,7 @@ describe("RasterArray helpers", () => {
   });
 
   it("converts pixel-interleaved data to band-separate", () => {
-    const raster: PixelRasterArray = {
+    const raster: RasterArrayPixelInterleaved = {
       ...baseMetadata(),
       layout: "pixel-interleaved",
       count: 3,
@@ -123,7 +126,7 @@ describe("RasterArray helpers", () => {
   });
 
   it("reorders bands without repacking to pixel layout", () => {
-    const raster: BandRasterArray = {
+    const raster: RasterArrayBandSeparate = {
       ...baseMetadata(),
       layout: "band-separate",
       count: 3,
@@ -142,7 +145,7 @@ describe("RasterArray helpers", () => {
   });
 
   it("packs selected bands to RGBA", () => {
-    const raster: BandRasterArray = {
+    const raster: RasterArrayBandSeparate = {
       ...baseMetadata(),
       layout: "band-separate",
       count: 3,

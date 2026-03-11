@@ -459,6 +459,9 @@ importers:
       '@chunkd/source-file':
         specifier: ^11.0.2
         version: 11.0.2
+      '@developmentseed/geotiff':
+        specifier: workspace:^
+        version: 'link:'
       '@types/node':
         specifier: ^25.3.3
         version: 25.3.3

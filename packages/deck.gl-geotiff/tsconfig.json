@@ -8,7 +8,8 @@
   "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"],
   "references": [
-    { "path": "../raster-reproject" },
-    { "path": "../deck.gl-raster" }
+    { "path": "../deck.gl-raster" },
+    { "path": "../geotiff" },
+    { "path": "../raster-reproject" }
   ]
 }

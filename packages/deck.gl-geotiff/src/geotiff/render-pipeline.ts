@@ -1,16 +1,23 @@
 import { Photometric, SampleFormat } from "@cogeotiff/core";
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
+  BlackIsZero,
   CMYKToRGB,
   Colormap,
   CreateTexture,
   cieLabToRGB,
   FilterNoDataVal,
+  MaskTexture,
+  WhiteIsZero,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
-import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
+import type {
+  GeoTIFF,
+  Overview,
+  RasterTypedArray,
+} from "@developmentseed/geotiff";
 import { parseColormap } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
-import type { COGLayerProps, GetTileDataOptions } from "../cog-layer";
+import type { GetTileDataOptions } from "../cog-layer";
 import { addAlphaChannel } from "./geotiff";
 import { inferTextureFormat } from "./texture";
 
@@ -18,6 +25,7 @@ export type TextureDataT = {
   height: number;
   width: number;
   texture: Texture;
+  mask?: Texture;
 };
 
 /**
@@ -43,8 +51,11 @@ export function inferRenderPipeline(
   geotiff: GeoTIFF,
   device: Device,
 ): {
-  getTileData: COGLayerProps<TextureDataT>["getTileData"];
-  renderTile: COGLayerProps<TextureDataT>["renderTile"];
+  getTileData: (
+    image: GeoTIFF | Overview,
+    options: GetTileDataOptions,
+  ) => Promise<TextureDataT>;
+  renderTile: (data: TextureDataT) => ImageData | RasterModule[];
 } {
   const { sampleFormat } = geotiff.cachedTags;
   if (sampleFormat === null) {
@@ -58,7 +69,7 @@ export function inferRenderPipeline(
   }
 
   throw new Error(
-    `Inferring render pipeline for non-unsigned integers not yet supported. Found SampleFormat: ${SampleFormat}`,
+    `Inferring render pipeline for non-unsigned integers not yet supported. Found SampleFormat: ${sampleFormat}`,
   );
 }
 
@@ -69,10 +80,12 @@ function createUnormPipeline(
   geotiff: GeoTIFF,
   device: Device,
 ): {
-  getTileData: COGLayerProps<TextureDataT>["getTileData"];
-  renderTile: COGLayerProps<TextureDataT>["renderTile"];
+  getTileData: (
+    image: GeoTIFF | Overview,
+    options: GetTileDataOptions,
+  ) => Promise<TextureDataT>;
+  renderTile: (data: TextureDataT) => ImageData | RasterModule[];
 } {
-  const tags = geotiff.cachedTags;
   const {
     bitsPerSample,
     colorMap,
@@ -80,7 +93,7 @@ function createUnormPipeline(
     sampleFormat,
     samplesPerPixel,
     nodata,
-  } = tags;
+  } = geotiff.cachedTags;
 
   const renderPipeline: UnresolvedRasterModule<TextureDataT>[] = [
     {
@@ -92,8 +105,9 @@ function createUnormPipeline(
   ];
 
   if (nodata !== null) {
-    // Since values are 0-1 for unorm textures,
-    const noDataScaled = nodata / 255.0;
+    // Since values are 0-1 for unorm textures, scale nodata to [0, 1]
+    const maxVal = 2 ** bitsPerSample[0]! - 1;
+    const noDataScaled = nodata / maxVal;
 
     renderPipeline.push({
       module: FilterNoDataVal,
@@ -101,11 +115,22 @@ function createUnormPipeline(
     });
   }
 
-  const toRGBModule = photometricInterpretationToRGB(
+  if (geotiff.maskImage !== null) {
+    renderPipeline.push({
+      module: MaskTexture,
+      props: {
+        // TODO: how to handle if mask failed to load and is undefined here
+        maskTexture: (data: TextureDataT) => data.mask as Texture,
+      },
+    });
+  }
+
+  const toRGBModule = photometricInterpretationToRGB({
+    count: samplesPerPixel,
     photometric,
     device,
     colorMap,
-  );
+  });
   if (toRGBModule) {
     renderPipeline.push(toRGBModule);
   }
@@ -122,7 +147,7 @@ function createUnormPipeline(
           minFilter: "linear",
         };
 
-  const getTileData: COGLayerProps<TextureDataT>["getTileData"] = async (
+  const getTileData = async (
     image: GeoTIFF | Overview,
     options: GetTileDataOptions,
   ) => {
@@ -133,6 +158,7 @@ function createUnormPipeline(
       signal,
     });
     let { array } = tile;
+    const { width, height, mask } = array;
 
     let numSamples = samplesPerPixel;
 
@@ -153,49 +179,86 @@ function createUnormPipeline(
       sampleFormat,
     );
     const bytesPerPixel = (bitsPerSample[0]! / 8) * numSamples;
-    const texture = device.createTexture({
-      data: padToAlignment(
-        array.data,
-        array.width,
-        array.height,
-        bytesPerPixel,
-      ),
-      format: textureFormat,
-      width: array.width,
-      height: array.height,
-      sampler: samplerOptions,
+    const textureData = enforceAlignment(array.data, {
+      width,
+      height,
+      bytesPerPixel,
     });
+    const texture = device.createTexture({
+      data: textureData,
+      format: textureFormat,
+      width,
+      height,
+      // Use nearest filtering for the mask to avoid interpolated edges/halos
+      sampler: {
+        minFilter: "nearest",
+        magFilter: "nearest",
+      },
+    });
+
+    let maskTexture: Texture | undefined;
+    if (mask !== null) {
+      maskTexture = device.createTexture({
+        // Mask is single-channel 8-bit, so bytesPerPixel must be 1
+        data: padToAlignment(mask, width, height, 1),
+        // Single-channel 8-bit texture for the mask
+        format: "r8unorm",
+        width,
+        height,
+        sampler: samplerOptions,
+      });
+    }
 
     return {
       texture,
+      mask: maskTexture,
       height: array.height,
       width: array.width,
     };
   };
-  const renderTile: COGLayerProps<TextureDataT>["renderTile"] = (
-    tileData: TextureDataT,
-  ): RasterModule[] => {
+  const renderTile = (tileData: TextureDataT): RasterModule[] => {
     return renderPipeline.map((m, _i) => resolveModule(m, tileData));
   };
 
   return { getTileData, renderTile };
 }
 
-function photometricInterpretationToRGB(
-  photometric: Photometric,
-  device: Device,
-  ColorMap?: Uint16Array,
-): RasterModule | null {
+function photometricInterpretationToRGB({
+  count,
+  colorMap,
+  device,
+  photometric,
+}: {
+  count: number;
+  colorMap?: Uint16Array;
+  device: Device;
+  photometric: Photometric;
+}): RasterModule | null {
+  if (count === 3 || count === 4) {
+    // Always interpret 3-band or 4-band images as RGB/RGBA
+    return null;
+  }
+
   switch (photometric) {
+    case Photometric.MinIsWhite: {
+      return {
+        module: WhiteIsZero,
+      };
+    }
+    case Photometric.MinIsBlack: {
+      return {
+        module: BlackIsZero,
+      };
+    }
     case Photometric.Rgb:
       return null;
     case Photometric.Palette: {
-      if (!ColorMap) {
+      if (!colorMap) {
         throw new Error(
           "ColorMap is required for PhotometricInterpretation Palette",
         );
       }
-      const { data, width, height } = parseColormap(ColorMap);
+      const { data, width, height } = parseColormap(colorMap);
       const cmapTexture = device.createTexture({
         data,
         format: "rgba8unorm",
@@ -230,6 +293,7 @@ function photometricInterpretationToRGB(
       return {
         module: cieLabToRGB,
       };
+
     default:
       throw new Error(`Unsupported PhotometricInterpretation ${photometric}`);
   }
@@ -261,30 +325,55 @@ function resolveModule<T>(m: UnresolvedRasterModule<T>, data: T): RasterModule {
  * WebGL's default `UNPACK_ALIGNMENT` is 4, meaning each row of pixel data must
  * start on a 4-byte boundary.
  *
- * For textures with widths not divisible by 4, we need to pad each row to the
- * next multiple of 4 bytes so WebGL doesn't reject the buffer as "too small".
+ * For all array types, we must match our typed array type to what WebGL
+ * expects, so this must return the same array type as what was passed in.
+ */
+function enforceAlignment<T extends RasterTypedArray>(
+  data: T,
+  {
+    width,
+    height,
+    bytesPerPixel,
+  }: { width: number; height: number; bytesPerPixel: number },
+): T {
+  return data instanceof Uint8Array ||
+    data instanceof Int8Array ||
+    data instanceof Uint16Array ||
+    data instanceof Int16Array
+    ? padToAlignment(data, width, height, bytesPerPixel)
+    : data;
+}
+
+/**
+ * WebGL's default `UNPACK_ALIGNMENT` is 4, meaning each row of pixel data must
+ * start on a 4-byte boundary.
+ *
+ * For 8-bit and 16-bit data, rows may not be 4-byte aligned. For 32-bit+ data,
+ * each element is already 4 bytes so rows are always aligned.
  *
  * Returns the original array unchanged when no padding is needed.
  */
-function padToAlignment(
-  data: ArrayBufferView,
-  width: number,
-  height: number,
-  bytesPerPixel: number,
-): Uint8Array {
-  const src = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+function padToAlignment<
+  T extends Uint8Array | Int8Array | Uint16Array | Int16Array,
+>(data: T, width: number, height: number, bytesPerPixel: number): T {
   const rowBytes = width * bytesPerPixel;
   const alignedRowBytes = Math.ceil(rowBytes / 4) * 4;
   if (alignedRowBytes === rowBytes) {
-    return src;
+    return data;
   }
 
-  const dst = new Uint8Array(alignedRowBytes * height);
+  const src = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  const dstBytes = new Uint8Array(alignedRowBytes * height);
   for (let r = 0; r < height; r++) {
-    dst.set(
+    dstBytes.set(
       src.subarray(r * rowBytes, (r + 1) * rowBytes),
       r * alignedRowBytes,
     );
   }
-  return dst;
+
+  // Return the same typed array type as the input
+  if (data instanceof Int8Array) return new Int8Array(dstBytes.buffer) as T;
+  if (data instanceof Uint16Array) return new Uint16Array(dstBytes.buffer) as T;
+  if (data instanceof Int16Array) return new Int16Array(dstBytes.buffer) as T;
+  return dstBytes as T;
 }

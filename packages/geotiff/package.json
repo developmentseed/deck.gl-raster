@@ -40,6 +40,7 @@
   },
   "devDependencies": {
     "@chunkd/source-file": "^11.0.2",
+    "@developmentseed/geotiff": "workspace:^",
     "@types/node": "^25.3.3",
     "geotiff": "^3.0.4",
     "lerc": "^4.0.4",
