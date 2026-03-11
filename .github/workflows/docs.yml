@@ -32,6 +32,18 @@ jobs:
 
       - run: pnpm install
 
+      - name: Build packages
+        run: pnpm build
+
+      - name: Build examples
+        run: |
+          for dir in examples/*/; do
+            example=$(basename "$dir")
+            pnpm --filter "$example" build
+            mkdir -p "docs/static/examples/$example"
+            cp -r "$dir/dist/." "docs/static/examples/$example/"
+          done
+
       - name: Build docs
         working-directory: docs
         run: pnpm build
