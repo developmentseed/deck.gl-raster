@@ -1,18 +1,18 @@
-import type {ReactNode} from 'react';
-import clsx from 'clsx';
-import Heading from '@theme/Heading';
-import styles from './styles.module.css';
+import Heading from "@theme/Heading";
+import clsx from "clsx";
+import type { ReactNode } from "react";
+import styles from "./styles.module.css";
 
 type FeatureItem = {
   title: string;
-  Svg: React.ComponentType<React.ComponentProps<'svg'>>;
+  Svg: React.ComponentType<React.ComponentProps<"svg">>;
   description: ReactNode;
 };
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'GPU-Accelerated Raster Rendering',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    title: "GPU-Accelerated Raster Rendering",
+    Svg: require("@site/static/img/undraw_docusaurus_mountain.svg").default,
     description: (
       <>
         Render large raster datasets at interactive framerates using WebGL2 via
@@ -22,8 +22,8 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Cloud-Optimized Formats',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    title: "Cloud-Optimized Formats",
+    Svg: require("@site/static/img/undraw_docusaurus_tree.svg").default,
     description: (
       <>
         Stream Cloud-Optimized GeoTIFFs (COG) and Zarr arrays directly from
@@ -33,8 +33,8 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Flexible Visualization Pipeline',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    title: "Flexible Visualization Pipeline",
+    Svg: require("@site/static/img/undraw_docusaurus_react.svg").default,
     description: (
       <>
         Compose raster modules for band math, colormapping, and multi-source
@@ -45,9 +45,9 @@ const FeatureList: FeatureItem[] = [
   },
 ];
 
-function Feature({title, Svg, description}: FeatureItem) {
+function Feature({ title, Svg, description }: FeatureItem) {
   return (
-    <div className={clsx('col col--4')}>
+    <div className={clsx("col col--4")}>
       <div className="text--center">
         <Svg className={styles.featureSvg} role="img" />
       </div>

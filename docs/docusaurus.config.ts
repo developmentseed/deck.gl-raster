@@ -9,7 +9,12 @@ import { themes as prismThemes } from "prism-react-renderer";
  * This output is committed so that `plugin-content-docs` can find it at startup.
  */
 const packages = [
-  { id: "affine", label: "affine", entry: "../packages/affine/src/index.ts", readme: "../packages/affine/README.md" },
+  {
+    id: "affine",
+    label: "affine",
+    entry: "../packages/affine/src/index.ts",
+    readme: "../packages/affine/README.md",
+  },
   {
     id: "deck-gl-geotiff",
     label: "deck.gl-geotiff",
@@ -28,7 +33,12 @@ const packages = [
     entry: "../packages/deck.gl-zarr/src/index.ts",
     readme: "../packages/deck.gl-zarr/README.md",
   },
-  { id: "epsg", label: "epsg", entry: "../packages/epsg/src/all.ts", readme: "../packages/epsg/README.md" },
+  {
+    id: "epsg",
+    label: "epsg",
+    entry: "../packages/epsg/src/all.ts",
+    readme: "../packages/epsg/README.md",
+  },
   {
     id: "geotiff",
     label: "geotiff",
@@ -75,14 +85,14 @@ const contentDocsPlugins = packages.map((pkg) => [
     path: `api/${pkg.id}`,
     routeBasePath: `api/${pkg.id}`,
     sidebarPath: `./api-sidebars/${pkg.id}.cjs`,
-    editUrl:
-      "https://github.com/developmentseed/deck.gl-raster/tree/main/",
+    editUrl: "https://github.com/developmentseed/deck.gl-raster/tree/main/",
   },
 ]);
 
 const config: Config = {
   title: "deck.gl-raster",
-  tagline: "Client-side, GPU-accelerated Cloud-Optimized GeoTIFF (and soon Zarr) visualization in deck.gl",
+  tagline:
+    "Client-side, GPU-accelerated Cloud-Optimized GeoTIFF (and soon Zarr) visualization in deck.gl",
   favicon: "img/favicon.ico",
 
   future: {
