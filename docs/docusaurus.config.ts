@@ -9,37 +9,43 @@ import { themes as prismThemes } from "prism-react-renderer";
  * This output is committed so that `plugin-content-docs` can find it at startup.
  */
 const packages = [
-  { id: "affine", label: "affine", entry: "../packages/affine/src/index.ts" },
+  { id: "affine", label: "affine", entry: "../packages/affine/src/index.ts", readme: "../packages/affine/README.md" },
   {
     id: "deck-gl-geotiff",
     label: "deck.gl-geotiff",
     entry: "../packages/deck.gl-geotiff/src/index.ts",
+    readme: "../packages/deck.gl-geotiff/README.md",
   },
   {
     id: "deck-gl-raster",
     label: "deck.gl-raster",
     entry: "../packages/deck.gl-raster/src/index.ts",
+    readme: "../packages/deck.gl-raster/README.md",
   },
   {
     id: "deck-gl-zarr",
     label: "deck.gl-zarr",
     entry: "../packages/deck.gl-zarr/src/index.ts",
+    readme: "../packages/deck.gl-zarr/README.md",
   },
-  { id: "epsg", label: "epsg", entry: "../packages/epsg/src/all.ts" },
+  { id: "epsg", label: "epsg", entry: "../packages/epsg/src/all.ts", readme: "../packages/epsg/README.md" },
   {
     id: "geotiff",
     label: "geotiff",
     entry: "../packages/geotiff/src/index.ts",
+    readme: "../packages/geotiff/README.md",
   },
   {
     id: "morecantile",
     label: "morecantile",
     entry: "../packages/morecantile/src/index.ts",
+    readme: "../packages/morecantile/README.md",
   },
   {
     id: "raster-reproject",
     label: "raster-reproject",
     entry: "../packages/raster-reproject/src/index.ts",
+    readme: "../packages/raster-reproject/README.md",
   },
 ];
 
@@ -55,7 +61,8 @@ const typedocPlugins = packages.map((pkg) => [
     docsPath: `api/${pkg.id}`,
     excludePrivate: true,
     excludeInternal: true,
-    readme: "none",
+    readme: pkg.readme,
+    mergeReadme: true,
   },
 ]);
 

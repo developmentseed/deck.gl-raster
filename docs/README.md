@@ -4,7 +4,7 @@ Built with [Docusaurus](https://docusaurus.io/). API reference is auto-generated
 
 ```bash
 # Start dev server (generates API docs, then starts Docusaurus)
-pnpm generate-api && pnpm start
+pnpm start
 
 # Build for production
 pnpm build
