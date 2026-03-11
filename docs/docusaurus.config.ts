@@ -128,7 +128,10 @@ const config: Config = {
           editUrl:
             "https://github.com/developmentseed/deck.gl-raster/tree/main/docs/",
         },
-        blog: false,
+        blog: {
+          showReadingTime: true,
+          feedOptions: { type: ["rss", "atom"] },
+        },
         theme: {
           customCss: "./src/css/custom.css",
         },
@@ -153,6 +156,7 @@ const config: Config = {
           position: "left",
           label: "Docs",
         },
+        { to: "/blog", label: "Blog", position: "left" },
         {
           type: "dropdown",
           label: "API",

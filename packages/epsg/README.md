@@ -40,7 +40,7 @@ const outputPoint = converter.forward(inputPoint);
 
 ## Generate new EPSG definitions
 
-First, download the latest EPSG definitions in WKT format. Go to <https://epsg.org/download-dataset.html>, create an account or log in, then download the `WKT File` version.
+First, download the latest EPSG definitions in WKT format. Go to [epsg.org/download-dataset.html](https://epsg.org/download-dataset.html), create an account or log in, then download the `WKT File` version.
 
 Then, from this directory, run
 
