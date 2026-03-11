@@ -389,21 +389,23 @@ export class COGLayer<
       }
 
       layers.push(
-        new RasterLayer({
-          id: `${props.id}-raster`,
-          width,
-          height,
-          renderPipeline,
-          maxError,
-          reprojectionFns: {
-            forwardTransform,
-            inverseTransform,
-            forwardReproject: forwardTo4326,
-            inverseReproject: inverseFrom4326,
-          },
-          debug,
-          debugOpacity,
-        }),
+        new RasterLayer(
+          this.getSubLayerProps({
+            id: `${props.id}-raster`,
+            width,
+            height,
+            renderPipeline,
+            maxError,
+            reprojectionFns: {
+              forwardTransform,
+              inverseTransform,
+              forwardReproject: forwardTo4326,
+              inverseReproject: inverseFrom4326,
+            },
+            debug,
+            debugOpacity,
+          }),
+        ),
       );
     }
 
