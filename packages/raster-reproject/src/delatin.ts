@@ -70,8 +70,34 @@ export class RasterReprojector {
 
   /**
    * XY Positions in output CRS, computed via exact forward reprojection.
+   *
+   * When the tile crosses the antimeridian, longitude values are normalized
+   * to a continuous range (e.g., [170, 190] instead of [170, -170]) by
+   * applying `_lngOffset` to negative longitudes.
    */
   exactOutputPositions: number[];
+
+  /**
+   * Whether this tile's output positions cross the antimeridian (±180°).
+   * When true, longitudes in `exactOutputPositions` have been shifted
+   * to maintain continuity.
+   */
+  crossesAntimeridian: boolean = false;
+
+  /**
+   * Whether this tile contains or is very near a geographic pole.
+   * When true, the tile's WGS84 output positions have extreme latitude
+   * values (|lat| > 85°) and the longitude range is very wide, indicating
+   * the pole-centered geometry that requires more mesh refinement.
+   */
+  containsPole: boolean = false;
+
+  /**
+   * Longitude offset applied to normalize antimeridian-crossing tiles.
+   * When `crossesAntimeridian` is true, this is 360 (negative longitudes
+   * are shifted by +360). Otherwise 0.
+   */
+  private _lngOffset: number = 0;
 
   /**
    * triangle vertex indices
@@ -127,19 +153,42 @@ export class RasterReprojector {
     const p2 = this._addPoint(0, v1);
     const p3 = this._addPoint(u1, v1);
 
+    // Detect antimeridian crossing: if the longitude range of the 4 corner
+    // vertices exceeds 180°, the tile crosses the ±180° meridian.
+    this._detectAntimeridian();
+
+    // Detect polar tiles: vertices near ±90° latitude with wide longitude
+    // spread indicate a tile at or near a geographic pole.
+    this._detectPole();
+
     // add initial two triangles
     const t0 = this._addTriangle(p3, p0, p2, -1, -1, -1);
     this._addTriangle(p0, p3, p1, t0, -1, -1);
     this._flush();
   }
 
-  // refine the mesh until its maximum error gets below the given one
-  run(maxError: number = DEFAULT_MAX_ERROR): void {
+  /**
+   * Refine the mesh until its maximum error gets below the given one.
+   *
+   * @param maxError - Maximum allowed reprojection error in pixels.
+   * @param opts.maxTriangles - Safety cap on triangle count. Refinement
+   *   stops when this limit is reached even if maxError hasn't been met.
+   *   Useful for polar tiles where convergence is slow due to extreme
+   *   longitude variation near the pole.
+   */
+  run(
+    maxError: number = DEFAULT_MAX_ERROR,
+    opts?: { maxTriangles?: number },
+  ): void {
     if (maxError <= 0) {
       throw new Error("maxError must be positive");
     }
 
-    while (this.getMaxError() > maxError) {
+    const maxTriangles = opts?.maxTriangles ?? Infinity;
+    while (
+      this.getMaxError() > maxError &&
+      this.triangles.length / 3 < maxTriangles
+    ) {
       this.refine();
     }
   }
@@ -162,6 +211,60 @@ export class RasterReprojector {
       this._findReprojectionCandidate(t);
     }
     this._pendingLen = 0;
+  }
+
+  /**
+   * Detect antimeridian crossing from the initial 4 corner vertices.
+   *
+   * If the longitude range exceeds 180°, the tile crosses the antimeridian.
+   * In that case, shift all negative longitudes by +360 to create a
+   * continuous range (e.g., [170, 190] instead of [170, -170]).
+   *
+   * deck.gl handles longitudes outside [-180, 180] correctly.
+   */
+  private _detectAntimeridian(): void {
+    // Check longitude range of the 4 initial vertices
+    let minLng = Infinity;
+    let maxLng = -Infinity;
+    for (let i = 0; i < 4; i++) {
+      const lng = this.exactOutputPositions[i * 2]!;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+
+    if (maxLng - minLng > 180) {
+      this.crossesAntimeridian = true;
+      this._lngOffset = 360;
+
+      // Retroactively fix the initial 4 vertices
+      for (let i = 0; i < 4; i++) {
+        const lng = this.exactOutputPositions[i * 2]!;
+        if (lng < 0) {
+          this.exactOutputPositions[i * 2] = lng + 360;
+        }
+      }
+    }
+  }
+
+  /**
+   * Detect whether this tile contains or is very near a geographic pole.
+   *
+   * A tile is considered polar if it crosses the antimeridian (wide
+   * longitude spread) and any vertex has |latitude| > 75°. The
+   * combination of these conditions uniquely identifies tiles in polar
+   * projections — non-polar antimeridian tiles (e.g., UTM zone 1) have
+   * much narrower longitude ranges that don't exceed 180°.
+   */
+  private _detectPole(): void {
+    if (!this.crossesAntimeridian) return;
+
+    for (let i = 0; i < 4; i++) {
+      const lat = this.exactOutputPositions[i * 2 + 1]!;
+      if (Math.abs(lat) > 75) {
+        this.containsPole = true;
+        return;
+      }
+    }
   }
 
   /**
@@ -248,6 +351,10 @@ export class RasterReprojector {
       // Reproject these linearly-interpolated coordinates **from target CRS
       // to input CRS**. This gives us the **exact position in input space**
       // of the linearly interpolated sample point in output space.
+      //
+      // When the tile crosses the antimeridian, the interpolated longitude
+      // may be >180° due to the longitude offset. proj4 handles extended
+      // longitudes correctly, so we pass them through directly.
       const inputCRSSampled = this.reprojectors.inverseReproject(
         outSampleX,
         outSampleY,
@@ -353,10 +460,14 @@ export class RasterReprojector {
       inputPosition[0],
       inputPosition[1],
     );
-    this.exactOutputPositions.push(
-      exactOutputPosition[0]!,
-      exactOutputPosition[1]!,
-    );
+
+    let lng = exactOutputPosition[0]!;
+    // Normalize longitude for antimeridian-crossing tiles
+    if (this._lngOffset !== 0 && lng < 0) {
+      lng += this._lngOffset;
+    }
+
+    this.exactOutputPositions.push(lng, exactOutputPosition[1]!);
 
     return i;
   }
