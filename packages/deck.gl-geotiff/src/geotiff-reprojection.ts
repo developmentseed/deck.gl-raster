@@ -1,3 +1,4 @@
+import type { Affine } from "@developmentseed/affine";
 import * as affine from "@developmentseed/affine";
 import type { GeoTIFF } from "@developmentseed/geotiff";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
@@ -30,9 +31,7 @@ export async function extractGeotiffReprojectors(
   };
 }
 
-export function fromAffine(
-  geotransform: [number, number, number, number, number, number],
-): {
+export function fromAffine(geotransform: Affine): {
   forwardTransform: (x: number, y: number) => [number, number];
   inverseTransform: (x: number, y: number) => [number, number];
 } {

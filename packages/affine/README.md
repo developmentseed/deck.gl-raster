@@ -1,5 +1,5 @@
 # @developmentseed/affine
 
-A TypeScript port of [rasterio/affine][affine].
+A TypeScript port of [rasterio/affine] for working with affine transformation matrices.
 
-[affine]: https://github.com/rasterio/affine
+[rasterio/affine]: https://github.com/rasterio/affine
