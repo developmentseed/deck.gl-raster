@@ -119,13 +119,20 @@ export function generateTileMatrixSet(
   for (let idx = 0; idx < overviewsCoarseFirst.length; idx++) {
     const overview = overviewsCoarseFirst[idx]!;
     const { x: matrixWidth, y: matrixHeight } = overview.tileCount;
+    // Clamp tile dimensions to the actual image size. When an overview is
+    // smaller than the tile block size (e.g. a 1×1 pixel image with a 1024
+    // block), using the raw block size as tileWidth would make tileTransform
+    // project pixel (1024,1024) to a CRS coordinate far outside the image
+    // extent, causing proj4 to return null for out-of-range inputs.
+    const tileWidth = Math.min(overview.tileWidth, overview.width);
+    const tileHeight = Math.min(overview.tileHeight, overview.height);
     tileMatrices.push(
       buildTileMatrix(
         String(idx),
         overview.transform,
         mpu,
-        overview.tileWidth,
-        overview.tileHeight,
+        tileWidth,
+        tileHeight,
         matrixWidth,
         matrixHeight,
       ),
@@ -146,8 +153,8 @@ export function generateTileMatrixSet(
       String(geotiff.overviews.length),
       geotiff.transform,
       mpu,
-      geotiff.tileWidth,
-      geotiff.tileHeight,
+      Math.min(geotiff.tileWidth, geotiff.width),
+      Math.min(geotiff.tileHeight, geotiff.height),
       matrixWidth,
       matrixHeight,
     ),
