@@ -102,6 +102,7 @@ type COGLayerDataProps<DataT extends MinimalDataT> =
 
 export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> =
   CompositeLayerProps &
+    Pick<TileLayerProps, "maxRequests"> &
     COGLayerDataProps<DataT> & {
       /**
        * Cloud-optimized GeoTIFF input.
@@ -481,6 +482,7 @@ export class COGLayer<
       getTileData: async (tile) => this._getTileData(tile, geotiff, tms),
       renderSubLayers: (props) =>
         this._renderSubLayers(props, tms, forwardTo4326, inverseFrom4326),
+      maxRequests: this.props.maxRequests,
     });
   }
 
