@@ -27,12 +27,12 @@ const packages = [
     entry: "../packages/deck.gl-raster/src/index.ts",
     readme: "../packages/deck.gl-raster/README.md",
   },
-  {
-    id: "deck-gl-zarr",
-    label: "deck.gl-zarr",
-    entry: "../packages/deck.gl-zarr/src/index.ts",
-    readme: "../packages/deck.gl-zarr/README.md",
-  },
+  // {
+  //   id: "deck-gl-zarr",
+  //   label: "deck.gl-zarr",
+  //   entry: "../packages/deck.gl-zarr/src/index.ts",
+  //   readme: "../packages/deck.gl-zarr/README.md",
+  // },
   {
     id: "epsg",
     label: "epsg",
@@ -61,10 +61,11 @@ const packages = [
 
 const BASE = "/deck.gl-raster";
 const BASE_AFFINE = `${BASE}/api/affine`;
+const BASE_DECK_GL = "https://deck.gl/docs/api-reference";
+const BASE_DECK_GL_RASTER = `${BASE}/api/deck-gl-raster`;
 const BASE_GEOTIFF = `${BASE}/api/geotiff`;
 const BASE_MORECANTILE = `${BASE}/api/morecantile`;
 const BASE_RASTER_REPROJECT = `${BASE}/api/raster-reproject`;
-const BASE_DECK_GL_RASTER = `${BASE}/api/deck-gl-raster`;
 
 /**
  * Cross-package symbol link mappings for TypeDoc's externalSymbolLinkMappings.
@@ -104,6 +105,11 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
   },
   "@developmentseed/deck.gl-raster": {
     "*": `${BASE_DECK_GL_RASTER}/`,
+  },
+  "deck.gl": {
+    Layer: `${BASE_DECK_GL}/core/layer/`,
+    SimpleMeshLayer: `${BASE_DECK_GL}/mesh-layers/simple-mesh-layer/`,
+    TileLayer: `${BASE_DECK_GL}/geo-layers/tile-layer/`,
   },
 };
 
