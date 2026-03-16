@@ -59,6 +59,54 @@ const packages = [
   },
 ];
 
+const BASE = "/deck.gl-raster";
+const BASE_AFFINE = `${BASE}/api/affine`;
+const BASE_GEOTIFF = `${BASE}/api/geotiff`;
+const BASE_MORECANTILE = `${BASE}/api/morecantile`;
+const BASE_RASTER_REPROJECT = `${BASE}/api/raster-reproject`;
+const BASE_DECK_GL_RASTER = `${BASE}/api/deck-gl-raster`;
+
+/**
+ * Cross-package symbol link mappings for TypeDoc's externalSymbolLinkMappings.
+ * Keys are npm package names; values map symbol names to their doc URLs.
+ * The "*" wildcard is a fallback for any symbol not explicitly listed.
+ */
+const crossPackageLinks: Record<string, Record<string, string>> = {
+  "@developmentseed/affine": {
+    Affine: `${BASE_AFFINE}/type-aliases/Affine/`,
+    "*": `${BASE_AFFINE}/`,
+  },
+  "@developmentseed/geotiff": {
+    GeoTIFF: `${BASE_GEOTIFF}/classes/GeoTIFF/`,
+    Overview: `${BASE_GEOTIFF}/classes/Overview/`,
+    DecoderPool: `${BASE_GEOTIFF}/classes/DecoderPool/`,
+    RasterArray: `${BASE_GEOTIFF}/type-aliases/RasterArray/`,
+    RasterTypedArray: `${BASE_GEOTIFF}/type-aliases/RasterTypedArray/`,
+    Tile: `${BASE_GEOTIFF}/type-aliases/Tile/`,
+    Decoder: `${BASE_GEOTIFF}/type-aliases/Decoder/`,
+    DecoderMetadata: `${BASE_GEOTIFF}/type-aliases/DecoderMetadata/`,
+    DecoderPoolOptions: `${BASE_GEOTIFF}/type-aliases/DecoderPoolOptions/`,
+    ProjJson: `${BASE_GEOTIFF}/type-aliases/ProjJson/`,
+    parseColormap: `${BASE_GEOTIFF}/functions/parseColormap/`,
+    "*": `${BASE_GEOTIFF}/`,
+  },
+  "@developmentseed/morecantile": {
+    TileMatrixSet: `${BASE_MORECANTILE}/interfaces/TileMatrixSet/`,
+    TileMatrix: `${BASE_MORECANTILE}/interfaces/TileMatrix/`,
+    BoundingBox: `${BASE_MORECANTILE}/interfaces/BoundingBox/`,
+    CRS: `${BASE_MORECANTILE}/type-aliases/CRS/`,
+    "*": `${BASE_MORECANTILE}/`,
+  },
+  "@developmentseed/raster-reproject": {
+    RasterReprojector: `${BASE_RASTER_REPROJECT}/classes/RasterReprojector/`,
+    ReprojectionFns: `${BASE_RASTER_REPROJECT}/interfaces/ReprojectionFns/`,
+    "*": `${BASE_RASTER_REPROJECT}/`,
+  },
+  "@developmentseed/deck.gl-raster": {
+    "*": `${BASE_DECK_GL_RASTER}/`,
+  },
+};
+
 // One docusaurus-plugin-typedoc per package.
 // These generate markdown into docs/api/<id>/ when `generate-typedoc` is run.
 const typedocPlugins = packages.map((pkg) => [
@@ -74,6 +122,7 @@ const typedocPlugins = packages.map((pkg) => [
     readme: pkg.readme,
     mergeReadme: true,
     plugin: ["typedoc-plugin-mdn-links"],
+    externalSymbolLinkMappings: crossPackageLinks,
   },
 ]);
 
