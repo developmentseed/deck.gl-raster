@@ -233,10 +233,11 @@ const config: Config = {
           position: "left",
           label: "Docs",
         },
+        { to: "/examples", label: "Examples", position: "left" },
         { to: "/blog", label: "Blog", position: "left" },
         {
           type: "dropdown",
-          label: "API",
+          label: "API Reference",
           position: "left",
           items: packages.map((pkg) => ({
             label: pkg.label,
@@ -255,14 +256,10 @@ const config: Config = {
       links: [
         {
           title: "Docs",
-          items: [{ label: "Getting Started", to: "/docs/intro" }],
-        },
-        {
-          title: "API Reference",
-          items: packages.map((pkg) => ({
-            label: pkg.label,
-            to: `api/${pkg.id}`,
-          })),
+          items: [
+            { label: "Getting Started", to: "/docs/intro" },
+            { label: "Examples", to: "/examples" },
+          ],
         },
         {
           title: "More",
