@@ -170,7 +170,7 @@ const config: Config = {
   title: "deck.gl-raster",
   tagline:
     "Client-side, GPU-accelerated Cloud-Optimized GeoTIFF (and soon Zarr) visualization in deck.gl",
-  favicon: "img/favicon.ico",
+  favicon: "img/ds_favicon.png",
 
   future: {
     v4: true,
@@ -224,7 +224,7 @@ const config: Config = {
       title: "deck.gl-raster",
       logo: {
         alt: "deck.gl-raster logo",
-        src: "img/logo.svg",
+        src: "img/ds-logo-symbol--pos-neg.svg",
       },
       items: [
         {
