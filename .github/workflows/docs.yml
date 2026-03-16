@@ -41,7 +41,8 @@ jobs:
         run: |
           for dir in examples/*/; do
             example=$(basename "$dir")
-            pnpm --filter "$example" build
+            pkg_name=$(node -p "require('./$dir/package.json').name")
+            pnpm --filter "$pkg_name" build
             mkdir -p "docs/static/examples/$example"
             cp -r "$dir/dist/." "docs/static/examples/$example/"
           done
