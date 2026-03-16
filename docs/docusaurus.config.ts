@@ -73,6 +73,7 @@ const typedocPlugins = packages.map((pkg) => [
     excludeInternal: true,
     readme: pkg.readme,
     mergeReadme: true,
+    plugin: ["typedoc-plugin-mdn-links"],
   },
 ]);
 

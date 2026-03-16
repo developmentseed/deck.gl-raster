@@ -61,6 +61,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.4(react@19.2.4)
+      typedoc-plugin-mdn-links:
+        specifier: ^5.1.1
+        version: 5.1.1(typedoc@0.28.17(typescript@5.6.3))
     devDependencies:
       '@docusaurus/module-type-aliases':
         specifier: 3.9.2
@@ -6935,6 +6938,11 @@ packages:
     engines: {node: '>= 18'}
     peerDependencies:
       typedoc: 0.28.x
+
+  typedoc-plugin-mdn-links@5.1.1:
+    resolution: {integrity: sha512-fLlYudnlGkE9uspOEm/SBXwr+G0RbxoDZiHAVsCg+5NwKe2aUxjZK1YyQfleNZydImanzkX2oUJF29xbEeOSWw==}
+    peerDependencies:
+      typedoc: 0.27.x || 0.28.x
 
   typedoc@0.28.17:
     resolution: {integrity: sha512-ZkJ2G7mZrbxrKxinTQMjFqsCoYY6a5Luwv2GKbTnBCEgV2ihYm5CflA9JnJAwH0pZWavqfYxmDkFHPt4yx2oDQ==}
@@ -15363,6 +15371,10 @@ snapshots:
       typedoc-plugin-markdown: 4.10.0(typedoc@0.28.17(typescript@5.6.3))
 
   typedoc-plugin-markdown@4.10.0(typedoc@0.28.17(typescript@5.6.3)):
+    dependencies:
+      typedoc: 0.28.17(typescript@5.6.3)
+
+  typedoc-plugin-mdn-links@5.1.1(typedoc@0.28.17(typescript@5.6.3)):
     dependencies:
       typedoc: 0.28.17(typescript@5.6.3)
 
