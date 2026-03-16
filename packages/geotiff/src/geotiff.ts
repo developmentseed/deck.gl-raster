@@ -18,19 +18,26 @@ import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 
 /**
- * A high-level GeoTIFF abstraction built on @cogeotiff/core.
+ * A high-level GeoTIFF abstraction built on
+ * {@link https://github.com/blacha/cogeotiff | @cogeotiff/core}'s `Tiff` and
+ * `TiffImage` classes.
  *
- * Separates data IFDs from mask IFDs, pairs them by resolution level,
- * and exposes sorted overviews.  Mirrors the Python async-geotiff API.
+ * This class separates data IFDs from mask IFDs, pairs them by resolution
+ * level, and exposes sorted overviews. Intentionally mirrors the Python
+ * {@link https://github.com/developmentseed/async-geotiff | async-geotiff} API
+ * as closely as possible.
  *
- * Construct via `GeoTIFF.open(source)` or `GeoTIFF.fromTiff(tiff)`.
+ * Construct via {@link GeoTIFF.fromUrl}, {@link GeoTIFF.fromArrayBuffer},
+ * {@link GeoTIFF.open} or {@link GeoTIFF.fromTiff}.
+ *
+ * @see {@link Overview} for reduced-resolution overview images.
  */
 export class GeoTIFF {
   /**
    * Reduced-resolution overview levels, sorted finest-to-coarsest.
    *
-   * Does not include the full-resolution image — use `fetchTile` / methods
-   * on the GeoTIFF instance itself for that.
+   * Does not include the full-resolution image — use {@link fetchTile} on the
+   * GeoTIFF instance itself for that.
    */
   readonly overviews: Overview[];
 
@@ -197,6 +204,17 @@ export class GeoTIFF {
     return geotiff;
   }
 
+  /**
+   * Create a GeoTIFF from an ArrayBuffer containing the entire file.
+   *
+   * This is a convenience method that wraps the ArrayBuffer in a memory source
+   * and calls {@link GeoTIFF.open}. For large files, consider using
+   * {@link GeoTIFF.fromUrl} or {@link GeoTIFF.open} with a chunked HTTP source
+   * to avoid loading the entire file into memory at once.
+   *
+   * @param input The ArrayBuffer containing the GeoTIFF file data.
+   * @returns A Promise that resolves to a GeoTIFF instance.
+   */
   static async fromArrayBuffer(input: ArrayBuffer): Promise<GeoTIFF> {
     const source = new SourceMemory("memory://input.tif", input);
     return await GeoTIFF.open({
@@ -300,7 +318,8 @@ export class GeoTIFF {
    *
    * Extracted from the GDALMetadata TIFF tag; never computed on demand.
    * Keys are **1-based** band indices to match GDAL's convention.
-   * Returns null if no statistics are stored in the file.
+   *
+   * Returns `null` if no statistics are stored in the file.
    */
   get storedStats(): ReadonlyMap<number, BandStatistics> | null {
     const stats = this.gdalMetadata?.bandStatistics;
@@ -351,7 +370,15 @@ export class GeoTIFF {
 
   // Mixins
 
-  /** Fetch a single tile from the full-resolution image. */
+  /** Fetch a single tile from the full-resolution image.
+   *
+   * @param x The tile column index (0-based).
+   * @param y The tile row index (0-based).
+   * @param options Optional parameters for fetching the tile.
+   * @param options.boundless Whether to clip tiles that are partially outside the image bounds. When `true`, no clipping is applied. Defaults to `true`.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tile data. If not provided, a new decoder will be created for each tile.
+   * @param options.signal An optional {@link AbortSignal} to cancel the fetch request.
+   */
   async fetchTile(
     x: number,
     y: number,

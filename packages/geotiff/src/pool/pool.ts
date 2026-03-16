@@ -33,6 +33,9 @@ const defaultSize =
 /**
  * Manages a pool of Web Workers for off-main-thread tile decoding.
  *
+ * Use {@link defaultDecoderPool} to create a pool backed by the built-in,
+ * default decompressors.
+ *
  * When no `createWorker` factory is provided, decoding falls back to the main
  * thread. This lets the pool be constructed unconditionally and wired up with
  * a worker later (or never, for SSR / Node environments).
@@ -114,12 +117,16 @@ let DEFAULT_POOL: DecoderPool | null = null;
 /**
  * Create a default `DecoderPool` backed by the built-in worker.
  *
- * Call this once and reuse the returned pool. Creating it lazily (rather than
- * as a module-level singleton) keeps the `new URL(…, import.meta.url)` out of
- * the module's static initialisation, so bundlers that build IIFE/UMD outputs
- * don't try to inline the worker at build time.
+ * A cached decoder pool instance is returned on subsequent calls.
  *
- * ```ts
+ * You may want to create it lazily (rather than as a module-level singleton)
+ * to keep the `new URL(…, import.meta.url)` out of the module's static
+ * initialisation, so bundlers that build IIFE/UMD outputs don't try to inline
+ * the worker at build time.
+ *
+ * @example
+ * Create a default decoder pool:
+ * ```
  * const pool = defaultDecoderPool();
  * ```
  */
