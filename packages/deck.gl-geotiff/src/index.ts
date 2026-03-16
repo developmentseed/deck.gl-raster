@@ -1,4 +1,8 @@
-export type { COGLayerProps } from "./cog-layer.js";
+export type {
+  COGLayerProps,
+  GetTileDataOptions,
+  MinimalDataT,
+} from "./cog-layer.js";
 export { COGLayer } from "./cog-layer.js";
 export * as texture from "./geotiff/texture.js";
 // Don't export GeoTIFF Layer for now; nudge people towards COGLayer
