@@ -303,7 +303,7 @@ export class GeoTIFF {
     return this.image.tileSize.height;
   }
 
-  /** The NoData value, or null if not set. */
+  /** The no data value, or null if not set. */
   get nodata(): number | null {
     return this.image.noData;
   }
