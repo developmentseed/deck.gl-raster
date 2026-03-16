@@ -67,6 +67,7 @@ const BASE_DECK_GL_RASTER = `${BASE}/api/deck-gl-raster`;
 const BASE_GEOTIFF = `${BASE}/api/geotiff`;
 const BASE_MORECANTILE = `${BASE}/api/morecantile`;
 const BASE_RASTER_REPROJECT = `${BASE}/api/raster-reproject`;
+const BASE_LUMA_GL = "https://luma.gl/docs/api-reference";
 
 /**
  * Cross-package symbol link mappings for TypeDoc's externalSymbolLinkMappings.
@@ -116,6 +117,20 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     Layer: `${BASE_DECK_GL}/core/layer/`,
     SimpleMeshLayer: `${BASE_DECK_GL}/mesh-layers/simple-mesh-layer/`,
     TileLayer: `${BASE_DECK_GL}/geo-layers/tile-layer/`,
+  },
+  "@deck.gl/core": {
+    Layer: `${BASE_DECK_GL}/core/layer/`,
+  },
+  "@deck.gl/mesh-layers": {
+    SimpleMeshLayer: `${BASE_DECK_GL}/mesh-layers/simple-mesh-layer/`,
+  },
+  "@deck.gl/geo-layers": {
+    TileLayer: `${BASE_DECK_GL}/geo-layers/tile-layer/`,
+  },
+  "@luma.gl/core": {
+    Device: `${BASE_LUMA_GL}/core/device/`,
+    RenderPipeline: `${BASE_LUMA_GL}/core/resources/render-pipeline/`,
+    Texture: `${BASE_LUMA_GL}/core/resources/texture/`,
   },
 };
 
