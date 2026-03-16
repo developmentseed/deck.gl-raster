@@ -80,67 +80,6 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 [morecantile-npm]: https://www.npmjs.com/package/@developmentseed/morecantile
 [raster-reproject-npm]: https://www.npmjs.com/package/@developmentseed/raster-reproject
 
-## deck.gl Quick Start
-
-```typescript
-import { Deck } from '@deck.gl/core';
-import { COGLayer } from '@developmentseed/deck.gl-geotiff';
-
-new Deck({
-  initialViewState: {
-    longitude: 0,
-    latitude: 0,
-    zoom: 2
-  },
-  controller: true,
-  layers: [
-    new COGLayer({
-      id: 'cog-layer',
-      geotiff: 'https://example.com/my-cog.tif'
-    })
-  ]
-});
-```
-
-See [Examples](#examples) for complete working demos.
-
----
-
-### `@developmentseed/deck.gl-geotiff`
-
-High-level API for rendering GeoTIFFs and Cloud-Optimized GeoTIFFs in deck.gl.
-
-#### `COGLayer`
-
-Recommended layer for Cloud-Optimized GeoTIFFs. Leverages deck.gl's [`TileLayer`] to match the internal COG structure, automatically fetching appropriate overviews based on zoom level.
-
-[`TileLayer`]: https://deck.gl/docs/api-reference/geo-layers/tile-layer
-
-**Basic Usage**:
-
-```typescript
-import { COGLayer } from "@developmentseed/deck.gl-geotiff";
-
-new COGLayer({
-  id: "cog-layer",
-  geotiff: "https://example.com/my-cog.tif"
-});
-```
-
-**Props**:
-
-| Prop            | Type                                                     | Description                                               |
-| --------------- | -------------------------------------------------------- | --------------------------------------------------------- |
-| `geotiff`       | `string \| ArrayBuffer \| Blob \| GeoTIFF \| BaseClient` | GeoTIFF source (URL, binary data, or geotiff.js instance) |
-| `geoKeysParser` | `GeoKeysParser`                                          | Custom parser for GeoTIFF geo keys (default: epsg.io)     |
-| `getTileData`   | `Function`                                               | Custom tile data loader (overrides default)               |
-| `renderTile`    | `Function`                                               | Custom render pipeline (overrides inferred pipeline)      |
-
-
-## Examples
-
-- **[Land Cover](https://developmentseed.org/deck.gl-raster/examples/land-cover/)**: 1.3GB NLCD land cover COG with custom colormap
-- **[COG Basic](https://developmentseed.org/deck.gl-raster/examples/cog-basic/)**: RGB aerial imagery with automatic reprojection
 
 ## How It Works
 
@@ -166,7 +105,7 @@ new COGLayer({
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
 │  Data Layer                                                 │
-│  ├─ geotiff.js (COG parsing & streaming)                    │
+│  ├─ @developmentseed/geotiff (COG parsing & streaming).     │
 │  └─ HTTP range requests                                     │
 └─────────────────────────────────────────────────────────────┘
 ```
