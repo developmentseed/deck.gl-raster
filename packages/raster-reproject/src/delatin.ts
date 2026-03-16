@@ -55,9 +55,22 @@ export interface ReprojectionFns {
   inverseReproject(x: number, y: number): [number, number];
 }
 
+/**
+ * RasterReprojector performs a Delaunay triangulation-based reprojection of a
+ * raster image.
+ *
+ * It takes as input a set of functions to associate pixel positions with
+ * coordinates in the input and output CRS, as well as the dimensions of the
+ * output image, and it produces a triangulated mesh that can be used to
+ * reproject the input raster onto the output raster with bounded error.
+ */
 export class RasterReprojector {
   reprojectors: ReprojectionFns;
+
+  /** Width of the image in pixels */
   width: number;
+
+  /** Height of the image in pixels */
   height: number;
 
   /**
@@ -167,9 +180,9 @@ export class RasterReprojector {
   /**
    * Conversion of upstream's `_findCandidate` for reprojection error handling.
    *
-   * @param   {number}  t  The index (into `this.triangles`) of the pending triangle to process.
+   * @param t The index (into `this.triangles`) of the pending triangle to process.
    *
-   * @return  {void}    Doesn't return; instead modifies internal state.
+   * @return Doesn't return; instead modifies internal state.
    */
   private _findReprojectionCandidate(t: number): void {
     // Find the three vertices of this triangle
@@ -362,7 +375,7 @@ export class RasterReprojector {
   }
 
   // add or update a triangle in the mesh
-  _addTriangle(
+  private _addTriangle(
     a: number,
     b: number,
     c: number,
