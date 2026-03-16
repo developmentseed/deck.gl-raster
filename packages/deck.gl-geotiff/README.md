@@ -1,6 +1,35 @@
-GeoTIFF and Cloud-Optimized GeoTIFF visualization in deck.gl.
+# @developmentseed/deck.gl-geotiff
 
-There are two layers exported:
+High-level API for rendering [Cloud-Optimized GeoTIFFs] in deck.gl.
 
-- `COGLayer` uses a `TileLayer` to individually render each internal tile of a COG. This relies on the input geotiff being tiled and having overviews.
-- `GeoTIFFLayer` **doesn't use a `TileLayer`**. It just fetches the highest resolution image of a `GeoTIFF` and renders it using a `RasterLayer`. This should work for more generic GeoTIFF images, including those that don't have overviews and those that are laid out in strips instead of in tiles.
+[Cloud-Optimized GeoTIFFs]: https://cogeo.org/
+
+This uses `@developmentseed/geotiff` and [`@cogeotiff/core`] to efficiently read Cloud-Optimized GeoTIFFs from the browser.
+
+[`@cogeotiff/core`]: https://github.com/blacha/cogeotiff
+
+## Quick Start
+
+```typescript
+import { Deck } from '@deck.gl/core';
+import { COGLayer } from '@developmentseed/deck.gl-geotiff';
+
+new Deck({
+  initialViewState: {
+    longitude: 0,
+    latitude: 0,
+    zoom: 2
+  },
+  controller: true,
+  layers: [
+    new COGLayer({
+      id: 'cog-layer',
+      geotiff: 'https://example.com/my-cog.tif'
+    })
+  ]
+});
+```
+
+The {@link COGLayer} is the recommended layer for rendering Cloud-Optimized GeoTIFFs. It leverages deck.gl's [`TileLayer`] to match the internal COG structure, automatically fetching appropriate overviews based on zoom level.
+
+[`TileLayer`]: https://deck.gl/docs/api-reference/geo-layers/tile-layer

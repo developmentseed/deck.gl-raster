@@ -79,8 +79,10 @@ export interface RasterLayerProps extends CompositeLayerProps {
    */
   maxError?: number;
 
+  /** If set, enables debug mode for visualizing the mesh and reprojection process. */
   debug?: boolean;
 
+  /** Opacity of the debug overlay. */
   debugOpacity?: number;
 }
 

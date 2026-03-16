@@ -27,6 +27,8 @@ import type {
  * A generic tileset implementation organized according to the OGC
  * [TileMatrixSet](https://docs.ogc.org/is/17-083r4/17-083r4.html)
  * specification.
+ *
+ * Handles tile lifecycle, caching, and viewport-based loading.
  */
 export class TileMatrixSetTileset extends Tileset2D {
   private tms: TileMatrixSet;

@@ -62,6 +62,7 @@ const packages = [
 const BASE = "/deck.gl-raster";
 const BASE_AFFINE = `${BASE}/api/affine`;
 const BASE_DECK_GL = "https://deck.gl/docs/api-reference";
+const BASE_DECK_GL_GEOTIFF = `${BASE}/api/deck-gl-geotiff`;
 const BASE_DECK_GL_RASTER = `${BASE}/api/deck-gl-raster`;
 const BASE_GEOTIFF = `${BASE}/api/geotiff`;
 const BASE_MORECANTILE = `${BASE}/api/morecantile`;
@@ -76,6 +77,14 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
   "@developmentseed/affine": {
     Affine: `${BASE_AFFINE}/type-aliases/Affine/`,
     "*": `${BASE_AFFINE}/`,
+  },
+  "@developmentseed/deck.gl-geotiff": {
+    COGLayer: `${BASE_DECK_GL_GEOTIFF}/classes/COGLayer/`,
+    "*": `${BASE_DECK_GL_GEOTIFF}/`,
+  },
+  "@developmentseed/deck.gl-raster": {
+    RasterLayer: `${BASE_DECK_GL_RASTER}/classes/RasterLayer/`,
+    "*": `${BASE_DECK_GL_RASTER}/`,
   },
   "@developmentseed/geotiff": {
     GeoTIFF: `${BASE_GEOTIFF}/classes/GeoTIFF/`,
@@ -102,9 +111,6 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     RasterReprojector: `${BASE_RASTER_REPROJECT}/classes/RasterReprojector/`,
     ReprojectionFns: `${BASE_RASTER_REPROJECT}/interfaces/ReprojectionFns/`,
     "*": `${BASE_RASTER_REPROJECT}/`,
-  },
-  "@developmentseed/deck.gl-raster": {
-    "*": `${BASE_DECK_GL_RASTER}/`,
   },
   "deck.gl": {
     Layer: `${BASE_DECK_GL}/core/layer/`,

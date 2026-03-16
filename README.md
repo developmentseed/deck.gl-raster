@@ -136,58 +136,6 @@ new COGLayer({
 | `getTileData`   | `Function`                                               | Custom tile data loader (overrides default)               |
 | `renderTile`    | `Function`                                               | Custom render pipeline (overrides inferred pipeline)      |
 
-#### `GeoTIFFLayer`
-
-Alternative layer that loads the entire full-resolution image without tiling. Suitable for small, non-tiled GeoTIFFs.
-
-**Note**: For most COGs, use `COGLayer` instead for better performance.
-
-**When to Use**:
-- Small images that fit in memory
-- Strip-based (non-tiled) GeoTIFFs
-- Images without overviews
-
-
----
-
-### `@developmentseed/deck.gl-raster`
-
-Core primitives for rendering georeferenced raster data from any source.
-
-Most users should use the higher-level `@developmentseed/deck.gl-geotiff` package instead.
-
-#### `RasterLayer`
-
-Generic deck.gl layer for rendering geospatial raster data with GPU-based reprojection and custom processing pipelines.
-
-#### `RasterTileset2D`
-
-Tileset management for raster data sources. Handles tile lifecycle, caching, and viewport-based loading.
-
----
-
-### `@developmentseed/raster-reproject`
-
-Standalone reprojection utilities for client-side raster transformation.
-
-#### `RasterReprojector`
-
-Generates adaptive meshes for GPU-based raster reprojection.
-
-**Features**:
-
-- Zero dependencies (not tied to deck.gl)
-- Optimized for WebGL rendering
-
----
-
-### `@developmentseed/deck.gl-zarr`
-
-> **Status**: Work in progress. [Create an issue](https://github.com/developmentseed/deck.gl-raster/issues) to help implement this.
-
-Planned compatibility layer for rendering tiled [Zarr] datasets, connecting [zarrita.js] to the existing raster infrastructure.
-
-[zarrita.js]: https://zarrita.dev/
 
 ## Examples
 

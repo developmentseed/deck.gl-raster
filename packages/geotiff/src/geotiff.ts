@@ -95,19 +95,16 @@ export class GeoTIFF {
    *
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    *
-   * @param dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
-   * @param headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs.
-   * @param prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
+   * @param options.dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
+   * @param options.headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs.
+   * @param options.prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
    */
-  static async open({
-    dataSource,
-    headerSource,
-    prefetch = 32 * 1024,
-  }: {
+  static async open(options: {
     dataSource: Pick<Source, "fetch">;
     headerSource: Source;
     prefetch?: number;
   }): Promise<GeoTIFF> {
+    const { dataSource, headerSource, prefetch = 32 * 1024 } = options;
     const tiff = await Tiff.create(headerSource, {
       defaultReadSize: prefetch,
     });
