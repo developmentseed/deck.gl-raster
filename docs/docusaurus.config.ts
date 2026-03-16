@@ -191,7 +191,11 @@ const config: Config = {
     locales: ["en"],
   },
 
-  plugins: [...typedocPlugins, ...contentDocsPlugins],
+  plugins: [
+    ...typedocPlugins,
+    ...contentDocsPlugins,
+    "@cmfcmf/docusaurus-search-local",
+  ],
 
   presets: [
     [
