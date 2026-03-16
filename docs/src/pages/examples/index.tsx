@@ -60,13 +60,16 @@ function ExampleCard({ title, description, href, image }: Example): ReactNode {
 
 export default function Examples(): ReactNode {
   return (
-    <Layout title="Examples" description="Interactive examples for deck.gl-raster">
+    <Layout
+      title="Examples"
+      description="Interactive examples for deck.gl-raster"
+    >
       <main className={styles.main}>
         <div className="container">
           <Heading as="h1">Examples</Heading>
           <p className={styles.intro}>
-            Interactive demos built with deck.gl-raster. Each example opens as
-            a standalone application.
+            Interactive demos built with deck.gl-raster. Each example opens as a
+            standalone application.
           </p>
           <div className={styles.grid}>
             {examples.map((ex) => (
