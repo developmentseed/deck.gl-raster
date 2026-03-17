@@ -77,15 +77,14 @@ const BASE_LUMA_GL = "https://luma.gl/docs/api-reference";
 const crossPackageLinks: Record<string, Record<string, string>> = {
   "@developmentseed/affine": {
     Affine: `${BASE_AFFINE}/type-aliases/Affine/`,
-    "*": `${BASE_AFFINE}/`,
   },
   "@developmentseed/deck.gl-geotiff": {
     COGLayer: `${BASE_DECK_GL_GEOTIFF}/classes/COGLayer/`,
-    "*": `${BASE_DECK_GL_GEOTIFF}/`,
+    MosaicLayer: `${BASE_DECK_GL_GEOTIFF}/classes/MosaicLayer/`,
+    MosaicTileset2D: `${BASE_DECK_GL_GEOTIFF}/classes/MosaicTileset2D/`,
   },
   "@developmentseed/deck.gl-raster": {
     RasterLayer: `${BASE_DECK_GL_RASTER}/classes/RasterLayer/`,
-    "*": `${BASE_DECK_GL_RASTER}/`,
   },
   "@developmentseed/geotiff": {
     GeoTIFF: `${BASE_GEOTIFF}/classes/GeoTIFF/`,
@@ -99,19 +98,16 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     DecoderPoolOptions: `${BASE_GEOTIFF}/type-aliases/DecoderPoolOptions/`,
     ProjJson: `${BASE_GEOTIFF}/type-aliases/ProjJson/`,
     parseColormap: `${BASE_GEOTIFF}/functions/parseColormap/`,
-    "*": `${BASE_GEOTIFF}/`,
   },
   "@developmentseed/morecantile": {
     TileMatrixSet: `${BASE_MORECANTILE}/interfaces/TileMatrixSet/`,
     TileMatrix: `${BASE_MORECANTILE}/interfaces/TileMatrix/`,
     BoundingBox: `${BASE_MORECANTILE}/interfaces/BoundingBox/`,
     CRS: `${BASE_MORECANTILE}/type-aliases/CRS/`,
-    "*": `${BASE_MORECANTILE}/`,
   },
   "@developmentseed/raster-reproject": {
     RasterReprojector: `${BASE_RASTER_REPROJECT}/classes/RasterReprojector/`,
     ReprojectionFns: `${BASE_RASTER_REPROJECT}/interfaces/ReprojectionFns/`,
-    "*": `${BASE_RASTER_REPROJECT}/`,
   },
   "deck.gl": {
     Layer: `${BASE_DECK_GL}/core/layer/`,
