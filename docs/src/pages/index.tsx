@@ -26,6 +26,16 @@ function HomepageHeader() {
           </Link>
         </div>
       </div>
+      <p className={styles.photoCredit}>
+        Photo by{" "}
+        <a href="https://unsplash.com/@usgs?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText">
+          USGS
+        </a>{" "}
+        on{" "}
+        <a href="https://unsplash.com/photos/floating-icebergs-in-dark-blue-water-from-above-m4BDhFKm6hU?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText">
+          Unsplash
+        </a>
+      </p>
     </header>
   );
 }

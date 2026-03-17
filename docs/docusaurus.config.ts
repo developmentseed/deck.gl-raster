@@ -169,7 +169,7 @@ const contentDocsPlugins = packages.map((pkg) => [
 const config: Config = {
   title: "deck.gl-raster",
   tagline:
-    "Client-side, GPU-accelerated Cloud-Optimized GeoTIFF (and soon Zarr) visualization in deck.gl",
+    "Client-side Cloud-Optimized GeoTIFF (and soon Zarr) visualization in deck.gl.",
   favicon: "img/ds_favicon.png",
 
   future: {
