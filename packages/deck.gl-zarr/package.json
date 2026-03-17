@@ -1,57 +1,57 @@
 {
-    "name": "@developmentseed/deck.gl-zarr",
-    "version": "0.3.0",
-    "description": "Zarr visualization in deck.gl.",
-    "type": "module",
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "default": "./dist/index.js"
-        }
-    },
-    "sideEffects": false,
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "tsc --build tsconfig.build.json",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "typecheck": "tsc --noEmit",
-        "prepublishOnly": "npm run build"
-    },
-    "keywords": [
-        "deck.gl",
-        "geotiff",
-        "zarr",
-        "cog",
-        "cloud-optimized-geotiff",
-        "raster",
-        "visualization",
-        "webgl",
-        "gpu"
-    ],
-    "author": "Development Seed",
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
-    },
-    "devDependencies": {
-        "@types/node": "^25.3.3",
-        "jsdom": "^28.1.0",
-        "typescript": "^5.9.3",
-        "vitest": "^4.0.18"
-    },
-    "dependencies": {
-        "@developmentseed/deck.gl-raster": "workspace:^",
-        "@developmentseed/raster-reproject": "workspace:^",
-        "proj4": "^2.20.3",
-        "zarrita": "^0.6.1"
-    },
-    "volta": {
-        "extends": "../../package.json"
+  "name": "@developmentseed/deck.gl-zarr",
+  "version": "0.3.0",
+  "description": "Zarr visualization in deck.gl.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "deck.gl",
+    "geotiff",
+    "zarr",
+    "cog",
+    "cloud-optimized-geotiff",
+    "raster",
+    "visualization",
+    "webgl",
+    "gpu"
+  ],
+  "author": "Development Seed",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "jsdom": "^28.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@developmentseed/deck.gl-raster": "workspace:^",
+    "@developmentseed/raster-reproject": "workspace:^",
+    "proj4": "^2.20.3",
+    "zarrita": "^0.6.1"
+  },
+  "volta": {
+    "extends": "../../package.json"
+  }
 }
