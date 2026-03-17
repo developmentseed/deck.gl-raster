@@ -5,8 +5,12 @@ slug: /intro
 
 # Introduction
 
-deck.gl-raster is a collection of deck.gl layers and utilities for visualizing raster data on the web.
+deck.gl-raster is a collection of TypeScript modules to enable loading [GeoTIFF][geotiff] and [Cloud-Optimized GeoTIFF][cogeo] (COG) data in the browser and interactively visualizing it in [deck.gl].
 
+[geotiff]: https://en.wikipedia.org/wiki/GeoTIFF
+[cogeo]: https://cogeo.org/
+[deck.gl]: https://deck.gl/
+[Zarr]: https://zarr.dev/
 
 ## Features
 
