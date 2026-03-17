@@ -236,7 +236,15 @@ export class GeoTIFF {
       cacheSize = 1024 * 1024,
     }: { chunkSize?: number; cacheSize?: number } = {},
   ): Promise<GeoTIFF> {
-    const source = new SourceHttp(url);
+    // Bypass Chrome disk cache, which serializes multiple range requests to the
+    // same URL.
+    // https://www.chromium.org/developers/design-documents/network-stack/http-cache/
+    // > The cache implements a single writer - multiple reader lock so that
+    // > only one network request for the same resource is in flight at any
+    // > given time.
+    const source = new SourceHttp(url, {
+      cache: "public, no-store, s-maxage=86400",
+    });
 
     // Figure out optimal defaults in light of
     // https://github.com/blacha/cogeotiff/issues/1431
