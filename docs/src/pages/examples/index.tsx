@@ -7,30 +7,51 @@ import styles from "./styles.module.css";
 
 type Example = {
   title: string;
-  description: string;
+  description: ReactNode;
   href: string;
   image: string;
 };
 
 const examples: Example[] = [
   {
-    title: "COG Basic",
-    description:
-      "Load and display RGB imagery from a Cloud-Optimized GeoTIFF with automatic reprojection from a non-Web Mercator CRS.",
+    title: "RGB GeoTIFF",
+    description: (
+      <>
+        Load and display RGB Cloud-Optimized GeoTIFF imagery with the{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-geotiff/classes/COGLayer/">
+          COGLayer
+        </Link>{" "}
+        .
+      </>
+    ),
     href: "https://developmentseed.org/deck.gl-raster/examples/cog-basic/",
     image: "/deck.gl-raster/img/cog-basic-examples-card.png",
   },
   {
     title: "Land Cover",
-    description:
-      "Visualize a 1.3 GB USGS annual land cover dataset using COGLayer with a categorical colormap.",
+    description: (
+      <>
+        Visualize a 1.3 GB USGS annual land cover dataset using{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-geotiff/classes/COGLayer/">
+          COGLayer
+        </Link>{" "}
+        with a categorical colormap.
+      </>
+    ),
     href: "https://developmentseed.org/deck.gl-raster/examples/land-cover/",
     image: "/deck.gl-raster/img/land-cover-examples-card.png",
   },
   {
     title: "NAIP Mosaic",
-    description:
-      "Stream a client-side mosaic of NAIP aerial imagery COGs using MosaicLayer, sourced from Microsoft Planetary Computer.",
+    description: (
+      <>
+        Stream a client-side mosaic of NAIP aerial imagery COGs using{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-geotiff/classes/MosaicLayer/">
+          MosaicLayer
+        </Link>
+        , sourced from Microsoft Planetary Computer.
+      </>
+    ),
     href: "https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/",
     image: "/deck.gl-raster/img/naip-mosaic-examples-card.png",
   },
