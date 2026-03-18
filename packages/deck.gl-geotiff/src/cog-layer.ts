@@ -4,7 +4,7 @@ import type {
   LayersList,
   UpdateParameters,
 } from "@deck.gl/core";
-import { CompositeLayer } from "@deck.gl/core";
+import { COORDINATE_SYSTEM, CompositeLayer } from "@deck.gl/core";
 import type {
   _Tile2DHeader as Tile2DHeader,
   TileLayerProps,
@@ -13,7 +13,10 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
-import type { RasterModule } from "@developmentseed/deck.gl-raster";
+import type {
+  RasterLayerProps,
+  RasterModule,
+} from "@developmentseed/deck.gl-raster";
 import {
   RasterLayer,
   TileMatrixSetTileset,
@@ -409,6 +412,45 @@ export class COGLayer<
         );
       }
 
+      // viewport.resolution is defined for GlobeView, undefined for WebMercatorViewport.
+      // For WebMercator we project the mesh to EPSG:3857 and use a model matrix
+      // to map from 3857 meters to deck.gl world space, matching the approach
+      // used by the MVTLayer. This avoids per-vertex WGS84→WebMercator linear
+      // interpolation errors that become visible at high latitudes.
+      const isGlobe = this.context.viewport.resolution !== undefined;
+      let reprojectionFns: ReprojectionFns;
+      let rasterLayerProps: Partial<RasterLayerProps>;
+
+      if (isGlobe) {
+        reprojectionFns = {
+          forwardTransform,
+          inverseTransform,
+          forwardReproject: forwardTo4326,
+          inverseReproject: inverseFrom4326,
+        };
+        rasterLayerProps = {};
+      } else {
+        const s = 512 / 40075016.68;
+        // Bake the 3857→world conversion into forwardReproject so the mesh
+        // outputs world-space coords (0–512) directly, avoiding GPU modelMatrix.
+        const forwardToWorld = (x: number, y: number): [number, number] => {
+          const [e, n] = forwardTo3857(x, y);
+          return [e * s + 256, n * s + 256];
+        };
+        const inverseFromWorld = (wx: number, wy: number): [number, number] => {
+          return inverseFrom3857((wx - 256) / s, (wy - 256) / s);
+        };
+        reprojectionFns = {
+          forwardTransform,
+          inverseTransform,
+          forwardReproject: forwardToWorld,
+          inverseReproject: inverseFromWorld,
+        };
+        rasterLayerProps = {
+          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        };
+      }
+
       layers.push(
         new RasterLayer(
           this.getSubLayerProps({
@@ -417,14 +459,10 @@ export class COGLayer<
             height,
             renderPipeline,
             maxError,
-            reprojectionFns: {
-              forwardTransform,
-              inverseTransform,
-              forwardReproject: forwardTo4326,
-              inverseReproject: inverseFrom4326,
-            },
+            reprojectionFns,
             debug,
             debugOpacity,
+            ...rasterLayerProps,
           }),
         ),
       );
@@ -497,6 +535,8 @@ export class COGLayer<
       }
     }
 
+    console.log("rendering TileLayer with TileMatrixSet", tms);
+
     const { maxRequests, maxCacheSize, maxCacheByteSize, debounceTime } =
       this.props;
 
@@ -530,6 +570,14 @@ export class COGLayer<
       geotiff,
     } = this.state;
 
+    console.log("renderLayers", {
+      forwardTo4326,
+      inverseFrom4326,
+      forwardTo3857,
+      inverseFrom3857,
+      tms,
+      geotiff,
+    });
     if (
       !forwardTo4326 ||
       !inverseFrom4326 ||
