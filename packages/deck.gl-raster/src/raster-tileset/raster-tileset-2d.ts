@@ -114,8 +114,7 @@ export class TileMatrixSetTileset extends Tileset2D {
     // because tileWidth can change between levels (e.g. the last Sentinel-2
     // overview doubles tileWidth while halving cellSize, giving a 1:1 spatial
     // mapping where decimation = 1).
-    const parentFootprintX =
-      parentOverview.cellSize * parentOverview.tileWidth;
+    const parentFootprintX = parentOverview.cellSize * parentOverview.tileWidth;
     const parentFootprintY =
       parentOverview.cellSize * parentOverview.tileHeight;
     const currentFootprintX =
@@ -173,8 +172,8 @@ export class TileMatrixSetTileset extends Tileset2D {
     // culling in filterSubLayer → isTileVisible. Without this, all tiles
     // would pass (or fail) the cull-rect test and the refinementStrategy
     // (best-available) would not show parent tiles correctly.
-    const corners = [topLeft, topRight, bottomLeft, bottomRight].map(([cx, cy]) =>
-      this.projectTo4326(cx, cy),
+    const corners = [topLeft, topRight, bottomLeft, bottomRight].map(
+      ([cx, cy]) => this.projectTo4326(cx, cy),
     );
     const bbox = {
       west: Math.min(...corners.map(([lon]) => lon)),

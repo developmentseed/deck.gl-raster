@@ -68,7 +68,9 @@ class ControlledTileset extends TileMatrixSetTileset {
     this._forcedIndices = indices;
   }
 
-  override getTileIndices(_opts: Parameters<TileMatrixSetTileset["getTileIndices"]>[0]): TileIndex[] {
+  override getTileIndices(
+    _opts: Parameters<TileMatrixSetTileset["getTileIndices"]>[0],
+  ): TileIndex[] {
     return this._forcedIndices;
   }
 }
@@ -145,7 +147,9 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
     const childTiles = tileset.tiles.filter((t) => t.index.z === 1);
     expect(childTiles).toHaveLength(4);
     for (const child of childTiles) {
-      expect(child.isLoaded, `child ${child.id} should still be loading`).toBe(false);
+      expect(child.isLoaded, `child ${child.id} should still be loading`).toBe(
+        false,
+      );
     }
 
     // The z=0 parent should still be visible as a placeholder.
@@ -268,9 +272,21 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
     );
 
     // Every z=4 tile should map 1:1 to the z=3 tile at the same x,y.
-    expect(tileset.getParentIndex({ x: 0, y: 0, z: 1 })).toEqual({ x: 0, y: 0, z: 0 });
-    expect(tileset.getParentIndex({ x: 5, y: 5, z: 1 })).toEqual({ x: 5, y: 5, z: 0 });
-    expect(tileset.getParentIndex({ x: 10, y: 10, z: 1 })).toEqual({ x: 10, y: 10, z: 0 });
+    expect(tileset.getParentIndex({ x: 0, y: 0, z: 1 })).toEqual({
+      x: 0,
+      y: 0,
+      z: 0,
+    });
+    expect(tileset.getParentIndex({ x: 5, y: 5, z: 1 })).toEqual({
+      x: 5,
+      y: 5,
+      z: 0,
+    });
+    expect(tileset.getParentIndex({ x: 10, y: 10, z: 1 })).toEqual({
+      x: 10,
+      y: 10,
+      z: 0,
+    });
   });
 
   it("getTileMetadata includes a bbox in GeoBoundingBox format", () => {
