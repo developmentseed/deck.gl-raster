@@ -2,6 +2,7 @@ import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
@@ -12,7 +13,7 @@ function DeckGLOverlay(props: DeckProps) {
   return null;
 }
 
-const COG_OPTIONS: { title: string; url: string }[] = [
+const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
   {
     title: "Sentinel-2 True Color Image (New York, 2026)",
     url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
@@ -28,6 +29,16 @@ const COG_OPTIONS: { title: string; url: string }[] = [
   {
     title: "NLCD Land Cover 2023",
     url: "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif",
+  },
+  {
+    title: "EOxCloudless 2020 RGB",
+    url: "https://s2downloads.eox.at/demo/EOxCloudless/2020/rgb_corrected_geodetic/3/0/0.tif",
+    attribution: (
+      <>
+        <a href="https://cloudless.eox.at">EOxCloudless - https://cloudless.eox.at</a>
+        {" (Contains modified Copernicus Sentinel data 2020)"}
+      </>
+    ),
   },
   // {
   //   title: "Fields of the World — Denmark S2",
@@ -137,6 +148,19 @@ export default function App() {
           {/* <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
             Displaying RGB imagery from New Zealand (NZTM2000 projection)
           </p> */}
+
+          {/* Attribution */}
+          {COG_OPTIONS[selectedIndex].attribution && (
+            <p
+              style={{
+                margin: "8px 0 0 0",
+                fontSize: "11px",
+                color: "#666",
+              }}
+            >
+              {COG_OPTIONS[selectedIndex].attribution}
+            </p>
+          )}
 
           {/* Debug Controls */}
           <div
