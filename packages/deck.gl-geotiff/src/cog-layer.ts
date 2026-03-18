@@ -284,9 +284,27 @@ export class COGLayer<
 
     const tms = generateTileMatrixSet(geotiff, sourceProjection);
 
+    // Use +over to disable proj4's adjust_lon longitude normalization.
+    // Without +over, proj4 wraps longitude at ±180° causing:
+    // - forward(-180.001°) → positive easting (wrong sign)
+    // - inverse(-WM_HALF) → +180° instead of -180°
+    // These 360° round-trip errors make mesh refinement (Delatin)
+    // unconvergeable for tiles touching the antimeridian on global COGs.
+    // +over is safe for longlat and Mercator targets where the 180°
+    // meridian projects to a straight line.
+    // Ref: https://proj.org/en/latest/usage/projections.html
+    // Ref: https://github.com/proj4js/proj4js/pull/530
+    // Register target projections with +over via proj4.defs so they are
+    // referenced by name (avoids ts-expect-error for wkt-parser input).
+    proj4.defs("__WGS84_OVER", "+proj=longlat +datum=WGS84 +over");
+    proj4.defs(
+      "__MERC_OVER",
+      "+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null +over",
+    );
+
     // @ts-expect-error - proj4 typings are incomplete and don't support
     // wkt-parser input
-    const converter4326 = proj4(sourceProjection, "EPSG:4326");
+    const converter4326 = proj4(sourceProjection, "__WGS84_OVER");
     const forwardTo4326 = (x: number, y: number) =>
       converter4326.forward<[number, number]>([x, y], false);
     const inverseFrom4326 = (x: number, y: number) =>
@@ -294,7 +312,7 @@ export class COGLayer<
 
     // @ts-expect-error - proj4 typings are incomplete and don't support
     // wkt-parser input
-    const converter3857 = proj4(sourceProjection, "EPSG:3857");
+    const converter3857 = proj4(sourceProjection, "__MERC_OVER");
     const forwardTo3857 = makeClampedForwardTo3857(
       (x: number, y: number) =>
         converter3857.forward<[number, number]>([x, y], false),
