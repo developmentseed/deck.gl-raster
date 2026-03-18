@@ -41,6 +41,31 @@ import type { EpsgResolver } from "./proj.js";
 import { epsgResolver } from "./proj.js";
 
 /**
+ * The size of the entire world in deck.gl's common coordinate space.
+ *
+ * The world always spans [0, 512] in both X and Y in Web Mercator common space.
+ *
+ * At zoom level 0, there is 1 tile that represents the whole world, so that tile is 512x512 units.
+ * At zoom level z, there are 2^z tiles along each axis, so each tile is (512 / 2^z) units.
+ *
+ * The origin (0,0) is at the top-left corner, and (512,512) is at the
+ * bottom-right.
+ */
+const TILE_SIZE = 512;
+
+/**
+ * The size of the globe in web mercator meters.
+ */
+const WEB_MERCATOR_METER_CIRCUMFERENCE = 40075016.686;
+
+/**
+ * Scale factor for converting EPSG:3857 meters into deck.gl world units
+ * (512×512).
+ */
+const WEB_MERCATOR_TO_WORLD_SCALE =
+  TILE_SIZE / WEB_MERCATOR_METER_CIRCUMFERENCE;
+
+/**
  * Minimum interface that **must** be returned from getTileData.
  */
 export type MinimalDataT = {
@@ -430,24 +455,28 @@ export class COGLayer<
         };
         rasterLayerProps = {};
       } else {
-        const s = 512 / 40075016.68;
-        // Bake the 3857→world conversion into forwardReproject so the mesh
-        // outputs world-space coords (0–512) directly, avoiding GPU modelMatrix.
-        const forwardToWorld = (x: number, y: number): [number, number] => {
-          const [e, n] = forwardTo3857(x, y);
-          return [e * s + 256, n * s + 256];
-        };
-        const inverseFromWorld = (wx: number, wy: number): [number, number] => {
-          return inverseFrom3857((wx - 256) / s, (wy - 256) / s);
-        };
         reprojectionFns = {
           forwardTransform,
           inverseTransform,
-          forwardReproject: forwardToWorld,
-          inverseReproject: inverseFromWorld,
+          forwardReproject: forwardTo3857,
+          inverseReproject: inverseFrom3857,
         };
+        // Scale 3857 meters → deck.gl world units (512×512).
+        //
+        // coordinateOrigin shifts the world-space origin to (256, 256) so that
+        // easting=0 / northing=0 maps to world center. Then the modelMatrix
+        //
+        // No Y-flip needed: CARTESIAN Y increases upward = northing.
         rasterLayerProps = {
           coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
+          // biome-ignore format: array
+          modelMatrix: [
+            WEB_MERCATOR_TO_WORLD_SCALE, 0, 0, 0,
+            0, WEB_MERCATOR_TO_WORLD_SCALE, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+          ],
         };
       }
 
