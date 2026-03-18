@@ -193,6 +193,7 @@ export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> =
     };
 
 const defaultProps: Partial<COGLayerProps> = {
+  ...TileLayer.defaultProps,
   epsgResolver,
   debug: false,
   debugOpacity: 0.5,
