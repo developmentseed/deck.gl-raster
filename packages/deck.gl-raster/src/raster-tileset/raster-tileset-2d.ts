@@ -109,11 +109,26 @@ export class TileMatrixSetTileset extends Tileset2D {
     const currentOverview = this.tms.tileMatrices[index.z]!;
     const parentOverview = this.tms.tileMatrices[index.z - 1]!;
 
-    const decimation = currentOverview.cellSize / parentOverview.cellSize;
+    // Decimation is the number of child tiles that fit across one parent tile.
+    // Must use tile footprint (cellSize × tileWidth/Height), not cellSize alone,
+    // because tileWidth can change between levels (e.g. the last Sentinel-2
+    // overview doubles tileWidth while halving cellSize, giving a 1:1 spatial
+    // mapping where decimation = 1).
+    const parentFootprintX =
+      parentOverview.cellSize * parentOverview.tileWidth;
+    const parentFootprintY =
+      parentOverview.cellSize * parentOverview.tileHeight;
+    const currentFootprintX =
+      currentOverview.cellSize * currentOverview.tileWidth;
+    const currentFootprintY =
+      currentOverview.cellSize * currentOverview.tileHeight;
+
+    const decimationX = parentFootprintX / currentFootprintX;
+    const decimationY = parentFootprintY / currentFootprintY;
 
     return {
-      x: Math.floor(index.x / decimation),
-      y: Math.floor(index.y / decimation),
+      x: Math.floor(index.x / decimationX),
+      y: Math.floor(index.y / decimationY),
       z: index.z - 1,
     };
   }
@@ -153,7 +168,23 @@ export class TileMatrixSetTileset extends Tileset2D {
       Math.max(topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]),
     ];
 
+    // Project all four corners to WGS84 and compute geographic bounding box.
+    // deck.gl's Tile2DHeader uses `bbox` (GeoBoundingBox) for screen-space
+    // culling in filterSubLayer → isTileVisible. Without this, all tiles
+    // would pass (or fail) the cull-rect test and the refinementStrategy
+    // (best-available) would not show parent tiles correctly.
+    const corners = [topLeft, topRight, bottomLeft, bottomRight].map(([cx, cy]) =>
+      this.projectTo4326(cx, cy),
+    );
+    const bbox = {
+      west: Math.min(...corners.map(([lon]) => lon)),
+      south: Math.min(...corners.map(([, lat]) => lat)),
+      east: Math.max(...corners.map(([lon]) => lon)),
+      north: Math.max(...corners.map(([, lat]) => lat)),
+    };
+
     return {
+      bbox,
       bounds,
       projectedBounds,
       tileWidth,
