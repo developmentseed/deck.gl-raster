@@ -18,19 +18,26 @@ import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 
 /**
- * A high-level GeoTIFF abstraction built on @cogeotiff/core.
+ * A high-level GeoTIFF abstraction built on
+ * {@link https://github.com/blacha/cogeotiff | @cogeotiff/core}'s `Tiff` and
+ * `TiffImage` classes.
  *
- * Separates data IFDs from mask IFDs, pairs them by resolution level,
- * and exposes sorted overviews.  Mirrors the Python async-geotiff API.
+ * This class separates data IFDs from mask IFDs, pairs them by resolution
+ * level, and exposes sorted overviews. Intentionally mirrors the Python
+ * {@link https://github.com/developmentseed/async-geotiff | async-geotiff} API
+ * as closely as possible.
  *
- * Construct via `GeoTIFF.open(source)` or `GeoTIFF.fromTiff(tiff)`.
+ * Construct via {@link GeoTIFF.fromUrl}, {@link GeoTIFF.fromArrayBuffer},
+ * {@link GeoTIFF.open} or {@link GeoTIFF.fromTiff}.
+ *
+ * @see {@link Overview} for reduced-resolution overview images.
  */
 export class GeoTIFF {
   /**
    * Reduced-resolution overview levels, sorted finest-to-coarsest.
    *
-   * Does not include the full-resolution image — use `fetchTile` / methods
-   * on the GeoTIFF instance itself for that.
+   * Does not include the full-resolution image — use {@link fetchTile} on the
+   * GeoTIFF instance itself for that.
    */
   readonly overviews: Overview[];
 
@@ -88,19 +95,16 @@ export class GeoTIFF {
    *
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    *
-   * @param dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
-   * @param headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs.
-   * @param prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
+   * @param options.dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
+   * @param options.headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs.
+   * @param options.prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
    */
-  static async open({
-    dataSource,
-    headerSource,
-    prefetch = 32 * 1024,
-  }: {
+  static async open(options: {
     dataSource: Pick<Source, "fetch">;
     headerSource: Source;
     prefetch?: number;
   }): Promise<GeoTIFF> {
+    const { dataSource, headerSource, prefetch = 32 * 1024 } = options;
     const tiff = await Tiff.create(headerSource, {
       defaultReadSize: prefetch,
     });
@@ -197,6 +201,17 @@ export class GeoTIFF {
     return geotiff;
   }
 
+  /**
+   * Create a GeoTIFF from an ArrayBuffer containing the entire file.
+   *
+   * This is a convenience method that wraps the ArrayBuffer in a memory source
+   * and calls {@link GeoTIFF.open}. For large files, consider using
+   * {@link GeoTIFF.fromUrl} or {@link GeoTIFF.open} with a chunked HTTP source
+   * to avoid loading the entire file into memory at once.
+   *
+   * @param input The ArrayBuffer containing the GeoTIFF file data.
+   * @returns A Promise that resolves to a GeoTIFF instance.
+   */
   static async fromArrayBuffer(input: ArrayBuffer): Promise<GeoTIFF> {
     const source = new SourceMemory("memory://input.tif", input);
     return await GeoTIFF.open({
@@ -221,7 +236,15 @@ export class GeoTIFF {
       cacheSize = 1024 * 1024,
     }: { chunkSize?: number; cacheSize?: number } = {},
   ): Promise<GeoTIFF> {
-    const source = new SourceHttp(url);
+    // Bypass Chrome disk cache, which serializes multiple range requests to the
+    // same URL.
+    // https://www.chromium.org/developers/design-documents/network-stack/http-cache/
+    // > The cache implements a single writer - multiple reader lock so that
+    // > only one network request for the same resource is in flight at any
+    // > given time.
+    const source = new SourceHttp(url, {
+      cache: "public, no-store, s-maxage=86400",
+    });
 
     // Figure out optimal defaults in light of
     // https://github.com/blacha/cogeotiff/issues/1431
@@ -285,7 +308,7 @@ export class GeoTIFF {
     return this.image.tileSize.height;
   }
 
-  /** The NoData value, or null if not set. */
+  /** The no data value, or null if not set. */
   get nodata(): number | null {
     return this.image.noData;
   }
@@ -300,7 +323,8 @@ export class GeoTIFF {
    *
    * Extracted from the GDALMetadata TIFF tag; never computed on demand.
    * Keys are **1-based** band indices to match GDAL's convention.
-   * Returns null if no statistics are stored in the file.
+   *
+   * Returns `null` if no statistics are stored in the file.
    */
   get storedStats(): ReadonlyMap<number, BandStatistics> | null {
     const stats = this.gdalMetadata?.bandStatistics;
@@ -351,7 +375,15 @@ export class GeoTIFF {
 
   // Mixins
 
-  /** Fetch a single tile from the full-resolution image. */
+  /** Fetch a single tile from the full-resolution image.
+   *
+   * @param x The tile column index (0-based).
+   * @param y The tile row index (0-based).
+   * @param options Optional parameters for fetching the tile.
+   * @param options.boundless Whether to clip tiles that are partially outside the image bounds. When `true`, no clipping is applied. Defaults to `true`.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tile data. If not provided, a new decoder will be created for each tile.
+   * @param options.signal An optional {@link AbortSignal} to cancel the fetch request.
+   */
   async fetchTile(
     x: number,
     y: number,

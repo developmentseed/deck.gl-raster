@@ -45,7 +45,7 @@ export type MinimalDataT = {
   width: number;
 };
 
-export type DefaultDataT = MinimalDataT & {
+type DefaultDataT = MinimalDataT & {
   texture: Texture;
 };
 
@@ -100,6 +100,9 @@ type COGLayerDataProps<DataT extends MinimalDataT> =
       renderTile?: undefined;
     };
 
+/**
+ * Props that can be passed into the {@link COGLayer}.
+ */
 export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> =
   CompositeLayerProps &
     Pick<TileLayerProps, "maxRequests"> &

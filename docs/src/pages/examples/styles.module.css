@@ -1,0 +1,55 @@
+.main {
+  padding: 2rem 0 4rem;
+}
+
+.intro {
+  font-size: 1.1rem;
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 2rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: var(--ifm-card-border-radius, 8px);
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.cardImage {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+
+.card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.cardBody {
+  flex: 1;
+  padding: 1.25rem 1.5rem;
+}
+
+.cardBody h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.cardBody p {
+  margin: 0;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.cardFooter {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}

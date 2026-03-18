@@ -1,4 +1,8 @@
+*.wkt
 *.xml
+
+# Local-only example apps
+aef-zarr/
 
 # pixi environments
 .pixi

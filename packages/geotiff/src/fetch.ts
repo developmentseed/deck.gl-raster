@@ -41,7 +41,7 @@ export async function fetchTile(
   x: number,
   y: number,
   {
-    boundless,
+    boundless = true,
     pool,
     signal,
   }: {
@@ -108,7 +108,7 @@ export async function fetchTile(
   return {
     x,
     y,
-    array: boundless === false ? clipToImageBounds(self, x, y, array) : array,
+    array: boundless === true ? array : clipToImageBounds(self, x, y, array),
   };
 }
 

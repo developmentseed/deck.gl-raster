@@ -4,10 +4,27 @@
  */
 
 .heroBanner {
-  padding: 4rem 0;
+  padding: 6rem 0;
   text-align: center;
   position: relative;
   overflow: hidden;
+  background-image:
+    radial-gradient(
+      120% 100% at center,
+      rgba(0, 0, 0, 0.65) 0%,
+      rgba(0, 0, 0, 0.45) 60%,
+      rgba(0, 0, 0, 0.7) 100%
+    ),
+    /* https://unsplash.com/photos/floating-icebergs-in-dark-blue-water-from-above-m4BDhFKm6hU */
+    url("https://images.unsplash.com/photo-1744968777436-683dc799943c?ixlib=rb-4.1.0&q=85&fm=jpg&crop=entropy&cs=srgb&w=1920");
+  background-size: cover;
+  background-position: center;
+}
+
+.heroBanner h1,
+.heroBanner p {
+  color: #e3e3e3;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 
 @media screen and (max-width: 996px) {
@@ -20,4 +37,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.photoCredit {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.75rem;
+  margin: 0;
+  font-size: 0.65rem;
+  color: #e3e3e3;
+  opacity: 1;
+}
+
+.photoCredit a {
+  color: inherit;
 }

@@ -43,6 +43,9 @@ type DebugData = {
   length: number;
 };
 
+/**
+ * Props for {@link RasterLayer}.
+ */
 export interface RasterLayerProps extends CompositeLayerProps {
   /**
    * Width of the input raster image in pixels
@@ -76,8 +79,10 @@ export interface RasterLayerProps extends CompositeLayerProps {
    */
   maxError?: number;
 
+  /** If set, enables debug mode for visualizing the mesh and reprojection process. */
   debug?: boolean;
 
+  /** Opacity of the debug overlay. */
   debugOpacity?: number;
 }
 
@@ -87,10 +92,13 @@ const defaultProps = {
 };
 
 /**
- * RasterLayer renders georeferenced raster data with client-side reprojection.
+ * Generic deck.gl layer for rendering geospatial raster data with client-side,
+ * GPU-based reprojection and custom processing pipelines.
  *
- * This is a composite layer that uses raster-reproject to generate an adaptive mesh
- * that accurately represents the reprojected raster, then renders it using SimpleMeshLayer.
+ * This is a composite layer that uses {@link RasterReprojector} to generate an adaptive mesh
+ * that accurately represents the reprojected raster, then renders it using
+ * {@link MeshTextureLayer} (a small wrapper around a deck.gl
+ * {@link SimpleMeshLayer}).
  */
 export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   static override layerName = "RasterLayer";
@@ -127,7 +135,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     }
   }
 
-  _generateMesh(): void {
+  protected _generateMesh(): void {
     const {
       width,
       height,
@@ -222,7 +230,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 
   /** Create assembled render pipeline from the renderPipeline prop input. */
-  _createRenderPipeline(): RasterModule[] {
+  protected _createRenderPipeline(): RasterModule[] {
     if (this.props.renderPipeline instanceof ImageData) {
       const imageData = this.props.renderPipeline;
       const texture = this.context.device.createTexture({

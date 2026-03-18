@@ -1,3 +1,5 @@
+import type { TileMatrix, TileMatrixSet } from "./types";
+
 /**
  * Coefficient to convert the coordinate reference system (CRS)
  * units into meters (metersPerUnit).
@@ -12,9 +14,6 @@
  * @param semiMajorAxis - The semi-major axis of the ellipsoid, required if unit is 'degree'.
  * @returns The meters per unit conversion factor.
  */
-
-import type { TileMatrix, TileMatrixSet } from "./types";
-
 // https://github.com/developmentseed/morecantile/blob/7c95a11c491303700d6e33e9c1607f2719584dec/morecantile/utils.py#L67-L90
 export function metersPerUnit(
   unit:

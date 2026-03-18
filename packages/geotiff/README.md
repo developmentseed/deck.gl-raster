@@ -13,6 +13,35 @@ Fast, high-level GeoTIFF reader written in TypeScript for the browser, wrapping 
 
 ## Features
 
+### Full TypeScript
+
+The entire project — both public APIs and internal code — is strongly and exhaustively typed in TypeScript.
+
+Image data fetches return a strongly typed object. With type narrowing we can infer whether data is pixel-interleaved, in a band-interleaved,
+
+```ts
+import { GeoTIFF } from "@developmentseed/geotiff";
+
+const geotiff = await GeoTIFF.fromUrl(url);
+const tile = await geotiff.fetchTile(10, 10);
+const { array } = tile;
+if ( array.layout === "pixel-interleaved" ) {
+    // array is narrowed to type RasterArrayPixelInterleaved
+
+    // TypedArray interleaved pixel data in a single array
+    const data = array.data; // RasterTypedArray
+} else if ( array.layout === "band-separate" ) {
+    // array is narrowed to type RasterArrayBandSeparate
+
+    // TypedArray data per raster band
+    const bands = array.bands; // RasterTypedArray[]
+}
+```
+
+### No unnecessary data copies
+
+Image fetching APIs always return data in their original layout, ensuring data copies only happen with the user's explicit consent.
+
 ### Easy access to COG tiles
 
 Use `GeoTIFF.fetchTile` to load `Tile` instances.
@@ -57,6 +86,15 @@ const overview = geotiff.overviews[0];
 // Read top-left tile of the overview
 const tile = await overview.fetchTile(0, 0);
 ```
+
+### Affine transformation handling
+
+Integrates with [`@developmentseed/affine`] for easy handling of image transforms, associating pixel positions to spatial coordinates.
+
+All loaded {@link RasterArray} instances contain an [`Affine`], tracking the relative image transform of that specific image window.
+
+[`Affine`]: https://developmentseed.org/deck.gl-raster/api/affine/type-aliases/Affine/
+[`@developmentseed/affine`]: https://developmentseed.org/deck.gl-raster/api/affine/
 
 ### Automatic Nodata Mask handling
 
