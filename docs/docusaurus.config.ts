@@ -179,6 +179,21 @@ const config: Config = {
   projectName: "deck.gl-raster",
 
   trailingSlash: true,
+
+  headTags: [
+    {
+      tagName: "script",
+      attributes: {
+        async: "true",
+        src: "https://plausible.io/js/pa-GXbpwCRHPm1QSDOLNB_on.js",
+      },
+    },
+    {
+      tagName: "script",
+      attributes: {},
+      innerHTML: `window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init()`,
+    },
+  ],
   onBrokenLinks: "warn",
   onBrokenMarkdownLinks: "warn",
 
