@@ -112,6 +112,7 @@ export class RasterReprojector {
     reprojectors: ReprojectionFns,
     width: number,
     height: number = width,
+    { _vMin = 0, _vMax = 1 }: { _vMin?: number; _vMax?: number } = {},
   ) {
     this.reprojectors = reprojectors;
     this.width = width;
@@ -131,12 +132,14 @@ export class RasterReprojector {
     this._pending = []; // triangles pending addition to queue
     this._pendingLen = 0;
 
-    // The two initial triangles cover the entire input texture in UV space, so
-    // they range from [0, 0] to [1, 1] in u and v.
+    // The two initial triangles cover the input texture UV space.
+    // _vMin/_vMax allow callers to exclude rows at the top/bottom edges
+    // (e.g. to avoid polar singularities when the tile touches lat ±90°).
     const u1 = 1;
-    const v1 = 1;
-    const p0 = this._addPoint(0, 0);
-    const p1 = this._addPoint(u1, 0);
+    const v0 = _vMin;
+    const v1 = _vMax;
+    const p0 = this._addPoint(0, v0);
+    const p1 = this._addPoint(u1, v0);
     const p2 = this._addPoint(0, v1);
     const p3 = this._addPoint(u1, v1);
 

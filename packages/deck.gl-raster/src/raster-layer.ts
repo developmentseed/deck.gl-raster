@@ -79,6 +79,22 @@ export interface RasterLayerProps extends CompositeLayerProps {
    */
   maxError?: number;
 
+  /**
+   * Minimum V (top edge) of the mesh in UV space [0, 1].
+   * Use to exclude rows at the top of the tile from meshing
+   * (e.g. when the tile touches lat +90° and the projection is undefined).
+   * @default 0
+   */
+  _vMin?: number;
+
+  /**
+   * Maximum V (bottom edge) of the mesh in UV space [0, 1].
+   * Use to exclude rows at the bottom of the tile from meshing
+   * (e.g. when the tile touches lat -90° and the projection is undefined).
+   * @default 1
+   */
+  _vMax?: number;
+
   /** If set, enables debug mode for visualizing the mesh and reprojection process. */
   debug?: boolean;
 
@@ -141,6 +157,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       height,
       reprojectionFns,
       maxError = DEFAULT_MAX_ERROR,
+      _vMin,
+      _vMax,
     } = this.props;
 
     // The mesh is lined up with the upper and left edges of the raster. So if
@@ -154,6 +172,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       reprojectionFns,
       width + 1,
       height + 1,
+      { _vMin, _vMax },
     );
     reprojector.run(maxError);
     const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
