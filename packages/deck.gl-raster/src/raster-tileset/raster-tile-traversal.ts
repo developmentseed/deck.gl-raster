@@ -95,6 +95,9 @@ const WGS84_ELLIPSOID_A = 6378137;
 const EPSG_3857_CIRCUMFERENCE = 2 * Math.PI * WGS84_ELLIPSOID_A;
 const EPSG_3857_HALF_CIRCUMFERENCE = EPSG_3857_CIRCUMFERENCE / 2;
 
+// Maximum latitude representable in Web Mercator (EPSG:3857), in degrees.
+const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
+
 // 0.28 mm per pixel
 // https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15
 const SCREEN_PIXEL_SIZE = 0.00028;
@@ -141,6 +144,7 @@ export class RasterTileNode {
   private _children?: RasterTileNode[] | null;
 
   private projectTo3857: ProjectionFunction;
+  private projectTo4326: ProjectionFunction;
 
   constructor(
     x: number,
@@ -149,13 +153,19 @@ export class RasterTileNode {
     {
       metadata,
       projectTo3857,
-    }: { metadata: TileMatrixSet; projectTo3857: ProjectionFunction },
+      projectTo4326,
+    }: {
+      metadata: TileMatrixSet;
+      projectTo3857: ProjectionFunction;
+      projectTo4326: ProjectionFunction;
+    },
   ) {
     this.x = x;
     this.y = y;
     this.z = z;
     this.metadata = metadata;
     this.projectTo3857 = projectTo3857;
+    this.projectTo4326 = projectTo4326;
   }
 
   /** Get overview info for this tile's z level */
@@ -198,13 +208,14 @@ export class RasterTileNode {
 
       const children: RasterTileNode[] = [];
 
-      const { metadata, projectTo3857 } = this;
+      const { metadata, projectTo3857, projectTo4326 } = this;
       for (let y = minRow; y <= maxRow; y++) {
         for (let x = minCol; x <= maxCol; x++) {
           children.push(
             new RasterTileNode(x, y, childZ, {
               metadata,
               projectTo3857,
+              projectTo4326,
             }),
           );
         }
@@ -438,6 +449,7 @@ export class RasterTileNode {
       REF_POINTS_9,
       tileCrsBounds,
       this.projectTo3857,
+      this.projectTo4326,
     );
 
     const commonSpacePositions = refPointsEPSG3857.map((xy) =>
@@ -505,6 +517,48 @@ function computeProjectedTileBounds(
 }
 
 /**
+ * Wrap a forward projection to EPSG:3857 so that it never returns NaN.
+ *
+ * proj4 returns [NaN, NaN] for points at the poles (lat = ±90°) because the
+ * Mercator projection is undefined there. The wrapper falls back to:
+ *   1. Project the input to WGS84 via `projectTo4326`
+ *   2. Clamp the latitude to the Web Mercator limit (±85.05°)
+ *   3. Convert analytically from WGS84 to EPSG:3857
+ *
+ * This correctly handles any input CRS, not just EPSG:4326.
+ *
+ * NOTE: An identical copy of this function lives in
+ * `packages/deck.gl-geotiff/src/proj.ts` as `makeClampedForwardTo3857`.
+ * The two packages cannot share code due to their dependency relationship
+ * (deck.gl-geotiff depends on deck.gl-raster, not vice versa). If this logic
+ * changes, update both copies.
+ *
+ * Perhaps in the future we'll make a `@developmentseed/projections` package to
+ * hold shared projection utilities like this.
+ */
+function makeClampedForwardTo3857(
+  projectTo3857: ProjectionFunction,
+  projectTo4326: ProjectionFunction,
+): ProjectionFunction {
+  return (x: number, y: number): [number, number] => {
+    const [px, py] = projectTo3857(x, y);
+    if (Number.isFinite(px) && Number.isFinite(py)) {
+      return [px, py];
+    }
+    const [lon, lat] = projectTo4326(x, y);
+    const clampedLat = Math.max(
+      -MAX_WEB_MERCATOR_LAT,
+      Math.min(MAX_WEB_MERCATOR_LAT, lat),
+    );
+    const latRad = (clampedLat * Math.PI) / 180;
+    const x3857 = (lon * Math.PI * WGS84_ELLIPSOID_A) / 180;
+    const y3857 =
+      Math.log(Math.tan(Math.PI / 4 + latRad / 2)) * WGS84_ELLIPSOID_A;
+    return [x3857, y3857];
+  };
+}
+
+/**
  * Sample the selected reference points in EPSG:3857
  *
  * Note that EPSG:3857 is **not** the same as deck.gl's common space! deck.gl's
@@ -518,27 +572,19 @@ function sampleReferencePointsInEPSG3857(
   refPoints: [number, number][],
   tileBounds: [number, number, number, number],
   projectTo3857: ProjectionFunction,
+  projectTo4326: ProjectionFunction,
 ): [number, number][] {
   const [minX, minY, maxX, maxY] = tileBounds;
+  const clampedProjectTo3857 = makeClampedForwardTo3857(
+    projectTo3857,
+    projectTo4326,
+  );
   const refPointPositions: [number, number][] = [];
 
   for (const [relX, relY] of refPoints) {
     const geoX = minX + relX * (maxX - minX);
     const geoY = minY + relY * (maxY - minY);
-
-    // Reproject to Web Mercator (EPSG 3857)
-    const [projectedX, projectedY] = projectTo3857(geoX, geoY);
-
-    // Handle invalid projections (e.g., latitudes beyond ±85.05° produce NaN/Infinity)
-    // Clamp Y to valid Web Mercator bounds in EPSG:3857 meters
-    //
-    // Note that whenever a NaN is created from a positive geoY, that this must
-    // be the north pole. And vice versa for negative geoY.
-    const clampedY = Number.isFinite(projectedY)
-      ? projectedY
-      : Math.sign(geoY) * EPSG_3857_HALF_CIRCUMFERENCE;
-
-    refPointPositions.push([projectedX, clampedY]);
+    refPointPositions.push(clampedProjectTo3857(geoX, geoY));
   }
 
   return refPointPositions;
@@ -657,6 +703,7 @@ export function getTileIndices(
     maxZ: number;
     zRange: ZRange | null;
     projectTo3857: ProjectionFunction;
+    projectTo4326: ProjectionFunction;
     wgs84Bounds: CornerBounds;
   },
 ): TileIndex[] {
@@ -731,6 +778,7 @@ export function getTileIndices(
         new RasterTileNode(x, y, 0, {
           metadata,
           projectTo3857: opts.projectTo3857,
+          projectTo4326: opts.projectTo4326,
         }),
       );
     }

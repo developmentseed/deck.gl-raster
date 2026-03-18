@@ -152,8 +152,15 @@ export class RasterReprojector {
       throw new Error("maxError must be positive");
     }
 
+    let iterations = 0;
     while (this.getMaxError() > maxError) {
       this.refine();
+      if (++iterations > 10000) {
+        console.warn(
+          `RasterReprojector: mesh refinement did not converge after ${iterations} iterations (maxError=${maxError}, currentError=${this.getMaxError()})`,
+        );
+        break;
+      }
     }
   }
 
