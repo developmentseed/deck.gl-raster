@@ -1,0 +1,189 @@
+# @developmentseed/geotiff
+
+Fast, high-level GeoTIFF reader written in TypeScript for the browser, wrapping [`@cogeotiff/core`][cogeotiff-lib].
+
+[cogeotiff-lib]: https://github.com/blacha/cogeotiff
+
+- Easy access to COG tiles and reduced-resolution overviews.
+- Automatic nodata mask handling.
+- Image decoding off the main thread.
+- Supported compressions:
+    - Deflate, LERC, LERC+Deflate, LERC+ZSTD, LZW, JPEG (browser-only), WebP (browser-only), ZSTD
+    - Support for user-defined decompression algorithms.
+
+## Features
+
+### Full TypeScript
+
+The entire project — both public APIs and internal code — is strongly and exhaustively typed in TypeScript.
+
+Image data fetches return a strongly typed object. With type narrowing we can infer whether data is pixel-interleaved, in a band-interleaved,
+
+```ts
+import { GeoTIFF } from "@developmentseed/geotiff";
+
+const geotiff = await GeoTIFF.fromUrl(url);
+const tile = await geotiff.fetchTile(10, 10);
+const { array } = tile;
+if ( array.layout === "pixel-interleaved" ) {
+    // array is narrowed to type RasterArrayPixelInterleaved
+
+    // TypedArray interleaved pixel data in a single array
+    const data = array.data; // RasterTypedArray
+} else if ( array.layout === "band-separate" ) {
+    // array is narrowed to type RasterArrayBandSeparate
+
+    // TypedArray data per raster band
+    const bands = array.bands; // RasterTypedArray[]
+}
+```
+
+### No unnecessary data copies
+
+Image fetching APIs always return data in their original layout, ensuring data copies only happen with the user's explicit consent.
+
+### Easy access to COG tiles
+
+Use `GeoTIFF.fetchTile` to load `Tile` instances.
+
+```ts
+import { GeoTIFF } from "@developmentseed/geotiff";
+
+// RGB Sentinel-2 image over NYC
+const url = "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif"
+const geotiff = await GeoTIFF.fromUrl(url);
+
+// Read full-resolution tile from bottom right of image.
+// tile ordering starts at top left.
+const tile = await geotiff.fetchTile(10, 10);
+const {
+    x, // 10
+    y, // 10
+} = tile;
+
+// tile.array holds data & relevant metadata
+const {
+    data, // Uint8Array(3145728) [49,  51,  46,  42, ...]
+    count, // 3 (RGB)
+    height, // 1024
+    width, // 1024
+    transform, // [ 10, 0, 602380, 0, -10, 4497620 ]
+    crs, // 32618 (EPSG code)
+    mask, // null
+    nodata, // 0
+} = tile.array;
+```
+
+### Convenient access to overviews
+
+The `.overviews` attribute on `GeoTIFF` contains an array of reduced-resolution overviews, ordered from highest to lowest resolution. Use these to fetch tiles at your desired resolution.
+
+```ts
+const geotiff = await GeoTIFF.fromUrl("https://example.com/image.tif");
+// Read from the first overview
+// (the next-highest resolution after the full-resolution image)
+const overview = geotiff.overviews[0];
+// Read top-left tile of the overview
+const tile = await overview.fetchTile(0, 0);
+```
+
+### Affine transformation handling
+
+Integrates with [`@developmentseed/affine`] for easy handling of image transforms, associating pixel positions to spatial coordinates.
+
+All loaded {@link RasterArray} instances contain an [`Affine`], tracking the relative image transform of that specific image window.
+
+[`Affine`]: https://developmentseed.org/deck.gl-raster/api/affine/type-aliases/Affine/
+[`@developmentseed/affine`]: https://developmentseed.org/deck.gl-raster/api/affine/
+
+### Automatic Nodata Mask handling
+
+With a library like `geotiff.js` or the underlying `@cogeotiff/core`, you have to do extra work to keep track of which of the internal images represent _data_ versus _masks_. We automatically handle nodata values and mask arrays.
+
+### Easy CRS handling
+
+GeoTIFFs can be defined either by an integer EPSG code or by a user-defined CRS.
+
+For integer EPSG codes, the `GeoTIFF.crs` method returns the integer directly, allowing downstream applications to decide how to resolve the EPSG code into WKT or PROJJSON formats (e.g. by querying `https://epsg.io`).
+
+For user-defined CRSes, we automatically parse the CRS into a PROJJSON object, which can be passed directly into `proj4js`. This is natively implemented **without a large cache of PROJ data**. This avoids the need for a large additional dependency like [`geotiff-geokeys-to-proj4`], which would otherwise add 1.5MB to your bundle.
+
+[`geotiff-geokeys-to-proj4`]: https://github.com/matafokka/geotiff-geokeys-to-proj4
+
+If you have an image where the CRS fails to parse, please create an issue.
+
+### Configurable Web Worker pool for image decoding
+
+The `DecoderPool` allows for decoding image data off the main thread.
+
+By default workers are created up to `navigator.hardwareConcurrency`, but you can customize how large the web worker pool is by passing options to the `DecoderPool` constructor.
+
+### Dynamically load compressions as needed
+
+Instead of bundling support for all compressions out of the box, dynamically load the decompressors as required.
+
+Until you try to load an image compressed with, say, [LERC], you don't pay for the bundle size of the dependency.
+
+[LERC]: https://github.com/Esri/lerc
+
+You can also override the built-in decoders with your own by using `registry`. For example, to use a custom zstd decoder:
+
+```ts
+import { Compression } from "@cogeotiff/core";
+import { registry } from "@developmentseed/geotiff";
+
+registry.set(Compression.Zstd, () =>
+  import("your-zstd-module").then((m) => m.decode),
+);
+```
+
+A decoder is a function that takes an `ArrayBuffer` and a `DecoderMetadata` object and returns a `Promise<ArrayBuffer>`. See [decode.ts](./src/decode.ts) for the full type definitions.
+
+### Full user control over caching and chunking
+
+There are a lot of great utilities in [`chunkd`](https://github.com/blacha/chunkd) that work out of the box here.
+
+```ts
+import { SourceCache, SourceChunk } from '@chunkd/middleware';
+import { SourceView } from '@chunkd/source';
+import { SourceHttp } from '@chunkd/source-http';
+import { GeoTIFF } from '@developmentseed/geotiff';
+
+// 16MB Cache
+const cache = new SourceCache({ size: 16 * 1024 * 1024 });
+
+// Chunk requests into 16KB fetches
+const chunk = new SourceChunk({ size: 16 * 1024 });
+
+// Raw source to HTTP file
+const httpSource = new SourceHttp('https://blayne.chard.com/world.webp.google.cog.tiff');
+
+// HTTP source with chunking and caching
+const tiffSource = new SourceView(httpSource, [chunk, cache]);
+const geotiff = await GeoTIFF.open(tiffSource);
+const tile = await geotiff.fetchTile(0, 0);
+```
+
+### Nearly-identical API to Python `async-geotiff`
+
+The TypeScript API is nearly identical to our Python project [`async-geotiff`].
+
+This is extremely useful for us as we build visualization projects for both Python and the browser.
+
+[`async-geotiff`]: https://github.com/developmentseed/async-geotiff
+
+## Why not build on top of geotiff.js?
+
+The initial implementation of deck.gl-raster used [geotiff.js], and geotiff.js was great for quickly getting started. But there's a few reasons why this project switched to [`@cogeotiff/core`][cogeotiff-lib].
+
+[geotiff.js]: https://geotiffjs.github.io/
+
+- **Fully typed**: `@cogeotiff/core` is fully typed in expressive TypeScript, making it much more enjoyable to build on top of. Even the low-level
+- `@cogeotiff/core` implements a bunch of optimizations, like reading [_and utilizing_](https://github.com/blacha/cogeotiff/blob/4781a6375adf419da9f0319d15c8a67284dfb0c4/packages/core/src/tiff.image.ts#L566-L572) the [GDAL "ghost header"](https://gdal.org/en/stable/drivers/raster/cog.html#header-ghost-area) out of the box. In contrast, geotiff.js [can parse](https://github.com/geotiffjs/geotiff.js/blob/ae88c5e8d7b254cdd86d84fcd50254863663980d/src/geotiff.js#L529) but won't automatically use the ghost values.
+- **Project scope**: geotiff.js has a _lot_ of code unrelated to the needs of deck.gl-raster. All we need here is really efficient access to individual tiles from the COG. geotiff.js has a bunch of features we don't need: resampling, tile-merging, conversion to RGB, overview choice based on a target resolution, or writing GeoTIFFs.
+- **Complexity**: this is subjective. Overall geotiff.js seems to be... fine. But there are various parts of geotiff.js that give me pause. Vendoring a full 1000-line JPEG decoder? Perhaps this is because they need to support JPEG decoding in Node as well (points to differences in project scopes), but it doesn't give me confidence that I could fix a problem there if I had to.
+- **Confidence to build on top of**: this is subjective, but geotiff.js doesn't feel focused, like the way that `@cogeotiff/core` is very focused on its targeted, narrow API.
+- **JSDoc is hard to read and contribute to**: this is very subjective, but I find it _much_ harder to read and contribute to geotiff.js code written with [JSDoc](https://jsdoc.app/) instead of pure TypeScript.
+- **Code quality**: there are various parts of geotiff.js with code just... [commented out](https://github.com/geotiffjs/geotiff.js/blob/ae88c5e8d7b254cdd86d84fcd50254863663980d/src/geotiffimage.js#L161-L174). And the function has [no documentation](https://github.com/geotiffjs/geotiff.js/blob/ae88c5e8d7b254cdd86d84fcd50254863663980d/src/geotiffimage.js#L100-L110). Why is it normalizing? The [`needsNormalization` function](https://github.com/geotiffjs/geotiff.js/blob/ae88c5e8d7b254cdd86d84fcd50254863663980d/src/geotiffimage.js#L86-L98) also has no documentation, and is hard to understand what the equality is checking because it doesn't use TypeScript-standard enums, which would make the code itself readable.
+
+Overall, geotiff.js seems like a fine library, and it was useful to get started with to prove my proof of concept quickly. But if I'm building an entire stack on top of a COG reader, I need to have a huge amount of confidence on what I'm building on, and `@cogeotiff/core` gives that confidence.

@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/raster-reproject",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Mesh generation for client-side raster reprojection.",
   "type": "module",
   "main": "./dist/index.js",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./affine": {
-      "types": "./dist/affine/index.d.ts",
-      "default": "./dist/affine/index.js"
     }
   },
   "sideEffects": false,
@@ -44,11 +40,12 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^25.0.3",
-    "jsdom": "^27.4.0",
-    "proj4": "^2.20.2",
+    "@developmentseed/affine": "workspace:^",
+    "@types/node": "^25.3.3",
+    "jsdom": "^28.1.0",
+    "proj4": "^2.20.4",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.18"
   },
   "volta": {
     "extends": "../../package.json"

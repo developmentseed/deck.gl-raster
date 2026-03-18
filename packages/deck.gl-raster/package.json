@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/deck.gl-raster",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Georeferenced image data visualization in deck.gl",
   "type": "module",
   "main": "./dist/index.js",
@@ -44,22 +44,24 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@luma.gl/core": "9.2.5",
-    "@luma.gl/shadertools": "9.2.5",
-    "@types/node": "^25.0.3",
-    "jsdom": "^27.4.0",
+    "@luma.gl/core": "9.2.6",
+    "@luma.gl/shadertools": "9.2.6",
+    "@types/node": "^25.3.3",
+    "jsdom": "^28.1.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
-    "@deck.gl/core": "^9.2.5",
-    "@deck.gl/geo-layers": "^9.2.5",
-    "@deck.gl/layers": "^9.2.5",
-    "@deck.gl/mesh-layers": "^9.2.5",
-    "@luma.gl/core": "^9.2.5",
-    "@luma.gl/shadertools": "^9.2.5"
+    "@deck.gl/core": "^9.2.7",
+    "@deck.gl/geo-layers": "^9.2.7",
+    "@deck.gl/layers": "^9.2.7",
+    "@deck.gl/mesh-layers": "^9.2.7",
+    "@luma.gl/core": "^9.2.6",
+    "@luma.gl/shadertools": "^9.2.6"
   },
   "dependencies": {
+    "@developmentseed/affine": "workspace:^",
+    "@developmentseed/morecantile": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "@math.gl/core": "^4.1.0",
     "@math.gl/culling": "^4.1.0",
