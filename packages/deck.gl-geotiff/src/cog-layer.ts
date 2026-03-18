@@ -40,16 +40,10 @@ import { fromAffine } from "./geotiff-reprojection.js";
 import type { EpsgResolver } from "./proj.js";
 import { epsgResolver } from "./proj.js";
 
-/**
- * The size of the entire world in deck.gl's common coordinate space.
+/** Size of deck.gl's common coordinate space in world units.
  *
- * The world always spans [0, 512] in both X and Y in Web Mercator common space.
- *
- * At zoom level 0, there is 1 tile that represents the whole world, so that tile is 512x512 units.
- * At zoom level z, there are 2^z tiles along each axis, so each tile is (512 / 2^z) units.
- *
- * The origin (0,0) is at the top-left corner, and (512,512) is at the
- * bottom-right.
+ * At zoom 0, one tile covers the whole world (512×512 units); at zoom z, each
+ * tile is 512/2^z units.
  */
 const TILE_SIZE = 512;
 
@@ -564,8 +558,6 @@ export class COGLayer<
       }
     }
 
-    console.log("rendering TileLayer with TileMatrixSet", tms);
-
     const { maxRequests, maxCacheSize, maxCacheByteSize, debounceTime } =
       this.props;
 
@@ -599,14 +591,6 @@ export class COGLayer<
       geotiff,
     } = this.state;
 
-    console.log("renderLayers", {
-      forwardTo4326,
-      inverseFrom4326,
-      forwardTo3857,
-      inverseFrom3857,
-      tms,
-      geotiff,
-    });
     if (
       !forwardTo4326 ||
       !inverseFrom4326 ||
