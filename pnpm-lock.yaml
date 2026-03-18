@@ -230,8 +230,8 @@ importers:
         specifier: ^5.19.0
         version: 5.19.0
       proj4:
-        specifier: ^2.20.3
-        version: 2.20.3
+        specifier: ^2.20.4
+        version: 2.20.4
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -312,8 +312,8 @@ importers:
         specifier: ^4.5.0
         version: 4.5.0
       proj4:
-        specifier: ^2.20.3
-        version: 2.20.3
+        specifier: ^2.20.4
+        version: 2.20.4
       wkt-parser:
         specifier: ^1.5.3
         version: 1.5.3
@@ -392,8 +392,8 @@ importers:
         specifier: workspace:^
         version: link:../raster-reproject
       proj4:
-        specifier: ^2.20.3
-        version: 2.20.3
+        specifier: ^2.20.4
+        version: 2.20.4
       zarrita:
         specifier: ^0.6.1
         version: 0.6.1
@@ -420,8 +420,8 @@ importers:
         specifier: ^27.4.0
         version: 27.4.0
       proj4:
-        specifier: ^2.20.3
-        version: 2.20.3
+        specifier: ^2.20.4
+        version: 2.20.4
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -524,8 +524,8 @@ importers:
         specifier: ^28.1.0
         version: 28.1.0
       proj4:
-        specifier: ^2.20.3
-        version: 2.20.3
+        specifier: ^2.20.4
+        version: 2.20.4
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -6227,8 +6227,8 @@ packages:
   process-nextick-args@2.0.1:
     resolution: {integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==}
 
-  proj4@2.20.3:
-    resolution: {integrity: sha512-uKJXnf/RkHhExxnWHqQqy2J1bPc5Qo8XSGzrMSJTdPWUQDo1DkunIRBfAS0crQaP9bZCSKNjqYJdYWVov0hDXw==}
+  proj4@2.20.4:
+    resolution: {integrity: sha512-/EEBoXjBw+zW1Lofinw0YFQ4OFOqC6XThnwRAgjEHw8WBN+wSy/6aeqRRdjy4b2igy3X0k3RNDuwcYqcQq7nDw==}
 
   prompts@2.4.2:
     resolution: {integrity: sha512-NxNv/kLguCA7p3jE8oL2aEBsrJWgAakBpgmgK6lpPWV+WuOmY6r2/zbAVnP+T8bQlA0nzHXSJSJW0Hq7ylaD2Q==}
@@ -14732,7 +14732,7 @@ snapshots:
 
   process-nextick-args@2.0.1: {}
 
-  proj4@2.20.3:
+  proj4@2.20.4:
     dependencies:
       mgrs: 1.0.0
       wkt-parser: 1.5.3
