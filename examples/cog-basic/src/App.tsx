@@ -35,7 +35,9 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
     url: "https://s2downloads.eox.at/demo/EOxCloudless/2020/rgb_corrected_geodetic/3/0/0.tif",
     attribution: (
       <>
-        <a href="https://cloudless.eox.at">EOxCloudless - https://cloudless.eox.at</a>
+        <a href="https://cloudless.eox.at">
+          EOxCloudless - https://cloudless.eox.at
+        </a>
         {" (Contains modified Copernicus Sentinel data 2020)"}
       </>
     ),

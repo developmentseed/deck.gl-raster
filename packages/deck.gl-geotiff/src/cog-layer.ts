@@ -38,10 +38,7 @@ import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { fromAffine } from "./geotiff-reprojection.js";
 import type { EpsgResolver } from "./proj.js";
-import {
-  epsgResolver,
-  makeClampedForwardTo3857,
-} from "./proj.js";
+import { epsgResolver, makeClampedForwardTo3857 } from "./proj.js";
 
 /** Size of deck.gl's common coordinate space in world units.
  *
