@@ -213,6 +213,7 @@ export class COGLayer<
     forwardTo4326?: ReprojectionFns["forwardReproject"];
     inverseFrom4326?: ReprojectionFns["inverseReproject"];
     forwardTo3857?: ReprojectionFns["forwardReproject"];
+    inverseFrom3857?: ReprojectionFns["inverseReproject"];
     tms?: TileMatrixSet;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
@@ -245,6 +246,7 @@ export class COGLayer<
       forwardTo4326: undefined,
       inverseFrom4326: undefined,
       forwardTo3857: undefined,
+      inverseFrom3857: undefined,
       defaultGetTileData: undefined,
       defaultRenderTile: undefined,
     });
@@ -273,6 +275,8 @@ export class COGLayer<
     const converter3857 = proj4(sourceProjection, "EPSG:3857");
     const forwardTo3857 = (x: number, y: number) =>
       converter3857.forward<[number, number]>([x, y], false);
+    const inverseFrom3857 = (x: number, y: number) =>
+      converter3857.inverse<[number, number]>([x, y], false);
 
     if (this.props.onGeoTIFFLoad) {
       const geographicBounds = getGeographicBounds(geotiff, converter4326);
@@ -296,6 +300,7 @@ export class COGLayer<
       forwardTo4326,
       inverseFrom4326,
       forwardTo3857,
+      inverseFrom3857,
     });
   }
 
@@ -373,6 +378,8 @@ export class COGLayer<
     tms: TileMatrixSet,
     forwardTo4326: ReprojectionFns["forwardReproject"],
     inverseFrom4326: ReprojectionFns["inverseReproject"],
+    forwardTo3857: ReprojectionFns["forwardReproject"],
+    inverseFrom3857: ReprojectionFns["inverseReproject"],
   ): Layer | LayersList | null {
     const { maxError, debug, debugOpacity } = this.props;
     const { tile } = props;
@@ -477,6 +484,7 @@ export class COGLayer<
     forwardTo4326: ReprojectionFns["forwardReproject"],
     inverseFrom4326: ReprojectionFns["inverseReproject"],
     forwardTo3857: ReprojectionFns["forwardReproject"],
+    inverseFrom3857: ReprojectionFns["inverseReproject"],
     geotiff: GeoTIFF,
   ): TileLayer {
     // Create a factory class that wraps COGTileset2D with the metadata
@@ -497,7 +505,14 @@ export class COGLayer<
       TilesetClass: TileMatrixSetTilesetFactory,
       getTileData: async (tile) => this._getTileData(tile, geotiff, tms),
       renderSubLayers: (props) =>
-        this._renderSubLayers(props, tms, forwardTo4326, inverseFrom4326),
+        this._renderSubLayers(
+          props,
+          tms,
+          forwardTo4326,
+          inverseFrom4326,
+          forwardTo3857,
+          inverseFrom3857,
+        ),
       maxRequests,
       maxCacheSize,
       maxCacheByteSize,
@@ -506,13 +521,20 @@ export class COGLayer<
   }
 
   renderLayers() {
-    const { forwardTo4326, inverseFrom4326, forwardTo3857, tms, geotiff } =
-      this.state;
+    const {
+      forwardTo4326,
+      inverseFrom4326,
+      forwardTo3857,
+      inverseFrom3857,
+      tms,
+      geotiff,
+    } = this.state;
 
     if (
       !forwardTo4326 ||
       !inverseFrom4326 ||
       !forwardTo3857 ||
+      !inverseFrom3857 ||
       !tms ||
       !geotiff
     ) {
@@ -527,6 +549,7 @@ export class COGLayer<
       forwardTo4326,
       inverseFrom4326,
       forwardTo3857,
+      inverseFrom3857,
       geotiff,
     );
   }
