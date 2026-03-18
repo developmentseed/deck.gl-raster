@@ -29,6 +29,14 @@ function wgs84To3857(lon: number, lat: number): [number, number] {
  *   3. Convert analytically from WGS84 to EPSG:3857
  *
  * This correctly handles any input CRS, not just EPSG:4326.
+ *
+ * NOTE: An identical copy of this function lives in `raster-tile-traversal.ts`.
+ * The two packages cannot share code due to their dependency relationship
+ * (deck.gl-geotiff depends on deck.gl-raster, not vice versa). If this logic
+ * changes, update both copies.
+ *
+ * Perhaps in the future we'll make a `@developmentseed/projections` package to
+ * hold shared projection utilities like this. *
  */
 export function makeClampedForwardTo3857(
   forwardTo3857: (x: number, y: number) => [number, number],
