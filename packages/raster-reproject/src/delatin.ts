@@ -146,16 +146,28 @@ export class RasterReprojector {
     this._flush();
   }
 
-  // refine the mesh until its maximum error gets below the given one
-  run(maxError: number = DEFAULT_MAX_ERROR): void {
+  /**
+   * Refine the mesh until its maximum error gets below the given one
+   *
+   * @param maxError The maximum reprojection error in input pixels that the mesh should achieve.
+   * @param maxIterations Optional safeguard to prevent infinite loops in case of non-convergence. If the mesh fails to converge within this number of iterations, a warning will be logged and the function will return early.
+   *
+   * @return  {[type]}  [return description]
+   */
+  run(
+    maxError: number = DEFAULT_MAX_ERROR,
+    { maxIterations = 10000 } = {},
+  ): void {
     if (maxError <= 0) {
       throw new Error("maxError must be positive");
     }
 
+    // Note: this primarily happens near the poles, where we'll essentially
+    // never converge
     let iterations = 0;
     while (this.getMaxError() > maxError) {
       this.refine();
-      if (++iterations > 10000) {
+      if (++iterations > maxIterations) {
         console.warn(
           `RasterReprojector: mesh refinement did not converge after ${iterations} iterations (maxError=${maxError}, currentError=${this.getMaxError()})`,
         );
