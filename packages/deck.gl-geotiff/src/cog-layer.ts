@@ -38,7 +38,10 @@ import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { fromAffine } from "./geotiff-reprojection.js";
 import type { EpsgResolver } from "./proj.js";
-import { epsgResolver } from "./proj.js";
+import {
+  epsgResolver,
+  makeClampedForwardTo3857,
+} from "./proj.js";
 
 /** Size of deck.gl's common coordinate space in world units.
  *
@@ -295,8 +298,11 @@ export class COGLayer<
     // @ts-expect-error - proj4 typings are incomplete and don't support
     // wkt-parser input
     const converter3857 = proj4(sourceProjection, "EPSG:3857");
-    const forwardTo3857 = (x: number, y: number) =>
-      converter3857.forward<[number, number]>([x, y], false);
+    const forwardTo3857 = makeClampedForwardTo3857(
+      (x: number, y: number) =>
+        converter3857.forward<[number, number]>([x, y], false),
+      forwardTo4326,
+    );
     const inverseFrom3857 = (x: number, y: number) =>
       converter3857.inverse<[number, number]>([x, y], false);
 
