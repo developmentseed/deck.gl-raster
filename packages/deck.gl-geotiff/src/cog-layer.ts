@@ -41,12 +41,18 @@ import { epsgResolver } from "./proj.js";
  * Minimum interface that **must** be returned from getTileData.
  */
 export type MinimalDataT = {
+  /** The height of the tile in pixels. */
   height: number;
+  /** The width of the tile in pixels. */
   width: number;
+
+  /** Byte length of the data, used for cache eviction when `maxCacheByteSize` is set. */
+  byteLength?: number;
 };
 
 type DefaultDataT = MinimalDataT & {
   texture: Texture;
+  byteLength: number;
 };
 
 /** Options passed to `getTileData`. */
@@ -105,7 +111,10 @@ type COGLayerDataProps<DataT extends MinimalDataT> =
  */
 export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> =
   CompositeLayerProps &
-    Pick<TileLayerProps, "maxRequests"> &
+    Pick<
+      TileLayerProps,
+      "debounceTime" | "maxCacheSize" | "maxCacheByteSize" | "maxRequests"
+    > &
     COGLayerDataProps<DataT> & {
       /**
        * Cloud-optimized GeoTIFF input.
@@ -479,13 +488,19 @@ export class COGLayer<
       }
     }
 
+    const { maxRequests, maxCacheSize, maxCacheByteSize, debounceTime } =
+      this.props;
+
     return new TileLayer<GetTileDataResult<DataT>>({
       id: `cog-tile-layer-${this.id}`,
       TilesetClass: TileMatrixSetTilesetFactory,
       getTileData: async (tile) => this._getTileData(tile, geotiff, tms),
       renderSubLayers: (props) =>
         this._renderSubLayers(props, tms, forwardTo4326, inverseFrom4326),
-      maxRequests: this.props.maxRequests,
+      maxRequests,
+      maxCacheSize,
+      maxCacheByteSize,
+      debounceTime,
     });
   }
 

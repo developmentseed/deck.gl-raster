@@ -24,6 +24,7 @@ import { inferTextureFormat } from "./texture";
 export type TextureDataT = {
   height: number;
   width: number;
+  byteLength: number;
   texture: Texture;
   mask?: Texture;
 };
@@ -184,6 +185,7 @@ function createUnormPipeline(
       height,
       bytesPerPixel,
     });
+    let byteLength = textureData.byteLength;
     const texture = device.createTexture({
       data: textureData,
       format: textureFormat,
@@ -207,11 +209,13 @@ function createUnormPipeline(
         height,
         sampler: samplerOptions,
       });
+      byteLength += mask.byteLength;
     }
 
     return {
       texture,
       mask: maskTexture,
+      byteLength,
       height: array.height,
       width: array.width,
     };
