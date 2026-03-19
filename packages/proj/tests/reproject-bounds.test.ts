@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { reprojectBounds } from "../src/reproject-bounds.js";
+import { transformBounds } from "../src/reproject-bounds.js";
 
-describe("reprojectBounds", () => {
+describe("transformBounds", () => {
   it("returns the same bounds for an identity projection", () => {
     const identity = (x: number, y: number): [number, number] => [x, y];
-    const result = reprojectBounds(identity, 0, 0, 10, 10);
+    const result = transformBounds(identity, 0, 0, 10, 10);
     expect(result[0]).toBeCloseTo(0);
     expect(result[1]).toBeCloseTo(0);
     expect(result[2]).toBeCloseTo(10);
@@ -13,7 +13,7 @@ describe("reprojectBounds", () => {
 
   it("applies a uniform scale projection", () => {
     const double = (x: number, y: number): [number, number] => [x * 2, y * 2];
-    const result = reprojectBounds(double, 1, 2, 3, 4);
+    const result = transformBounds(double, 1, 2, 3, 4);
     expect(result).toEqual([2, 4, 6, 8]);
   });
 
@@ -25,8 +25,8 @@ describe("reprojectBounds", () => {
       x,
       y + Math.sin(((x - 0) / 10) * Math.PI),
     ];
-    const corners_only = reprojectBounds(bow, 0, 0, 10, 0, { densifyPts: 0 });
-    const densified = reprojectBounds(bow, 0, 0, 10, 0, { densifyPts: 21 });
+    const corners_only = transformBounds(bow, 0, 0, 10, 0, { densifyPts: 0 });
+    const densified = transformBounds(bow, 0, 0, 10, 0, { densifyPts: 21 });
     // With densification the top edge should capture the bow
     expect(densified[3]).toBeGreaterThan(corners_only[3]);
   });
@@ -34,7 +34,7 @@ describe("reprojectBounds", () => {
   it("accepts spread bounds array", () => {
     const identity = (x: number, y: number): [number, number] => [x, y];
     const bounds = [0, 0, 5, 5] as const;
-    const result = reprojectBounds(identity, ...bounds);
+    const result = transformBounds(identity, ...bounds);
     expect(result).toEqual([0, 0, 5, 5]);
   });
 });

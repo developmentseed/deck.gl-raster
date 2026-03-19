@@ -5,8 +5,8 @@ export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
 export type ProjectionFunction = (x: number, y: number) => Point;
 
 /**
- * Reproject a bounding box through a projection function, densifying edges to
- * account for non-linear projections.
+ * Transform boundary densifying the edges to account for nonlinear
+ * transformations along these edges and extracting the outermost bounds.
  *
  * @param project - function that maps (x, y) in source CRS to (x, y) in target CRS
  * @param left - min X in source CRS
@@ -16,14 +16,16 @@ export type ProjectionFunction = (x: number, y: number) => Point;
  * @param options.densifyPts - number of intermediate points along each edge (default 21)
  * @returns [minX, minY, maxX, maxY] in the target CRS
  */
-export function reprojectBounds(
+export function transformBounds(
   project: ProjectionFunction,
   left: number,
   bottom: number,
   right: number,
   top: number,
-  { densifyPts = 21 }: { densifyPts?: number } = {},
+  options: { densifyPts?: number } = {},
 ): Bounds {
+  const { densifyPts = 21 } = options;
+
   // Corners in order: bottom-left, bottom-right, top-right, top-left
   const cx = [left, right, right, left];
   const cy = [bottom, bottom, top, top];
@@ -45,6 +47,7 @@ export function reprojectBounds(
         fromX + (toX - fromX) * t,
         fromY + (toY - fromY) * t,
       );
+
       if (px < outMinX) outMinX = px;
       if (py < outMinY) outMinY = py;
       if (px > outMaxX) outMaxX = px;
