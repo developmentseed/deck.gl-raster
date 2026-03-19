@@ -7,6 +7,7 @@
 
 import type { Viewport } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
+import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { describe, expect, it } from "vitest";
 import { TileMatrixSetTileset } from "../src/raster-tileset/raster-tileset-2d.js";
 import type { TileIndex } from "../src/raster-tileset/types.js";
@@ -20,12 +21,12 @@ import type { TileIndex } from "../src/raster-tileset/types.js";
 //
 // cellSize ratio is 2 (standard power-of-2 pyramid).
 
-const MOCK_TMS = {
+const MOCK_TMS: TileMatrixSet = {
   id: "test",
   crs: { uri: "http://www.opengis.net/def/crs/EPSG/0/4326" },
   boundingBox: {
-    lowerLeft: [0, 0] as [number, number],
-    upperRight: [1, 1] as [number, number],
+    lowerLeft: [0, 0],
+    upperRight: [1, 1],
   },
   tileMatrices: [
     {
@@ -33,7 +34,7 @@ const MOCK_TMS = {
       scaleDenominator: 1000,
       cellSize: 0.02,
       cornerOfOrigin: "topLeft" as const,
-      pointOfOrigin: [0, 1] as [number, number],
+      pointOfOrigin: [0, 1],
       tileWidth: 64,
       tileHeight: 64,
       matrixWidth: 1,
@@ -44,7 +45,7 @@ const MOCK_TMS = {
       scaleDenominator: 500,
       cellSize: 0.01,
       cornerOfOrigin: "topLeft" as const,
-      pointOfOrigin: [0, 1] as [number, number],
+      pointOfOrigin: [0, 1],
       tileWidth: 64,
       tileHeight: 64,
       matrixWidth: 2,
@@ -100,7 +101,7 @@ function makeTileset(opts?: Partial<Tileset2DProps>): ControlledTileset {
       getTileData: () => new Promise(() => {}), // never resolves
       ...opts,
     },
-    MOCK_TMS as any,
+    MOCK_TMS,
     { projectTo4326: identity, projectTo3857: identity },
   );
 }
@@ -121,11 +122,15 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
     const parentTile = tileset.tiles.find(
       (t) => t.index.x === 0 && t.index.y === 0 && t.index.z === 0,
     );
-    expect(parentTile, "parent tile should be in cache").toBeDefined();
+
+    if (!parentTile) {
+      expect.fail("parent tile should be in cache");
+    }
 
     // Simulate the tile loading successfully by injecting content.
-    (parentTile as any).content = { width: 64, height: 64 };
-    (parentTile as any)._isLoaded = true;
+    parentTile.content = { width: 64, height: 64 };
+    // @ts-expect-error _isLoaded is private
+    parentTile._isLoaded = true;
 
     // Run another update so the tileset sees the loaded state.
     tileset.setForcedIndices([{ x: 0, y: 0, z: 0 }]);
@@ -175,8 +180,9 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
     tileset.update(makeViewport(), { zRange: null, modelMatrix: null });
 
     const parentTile = tileset.tiles.find((t) => t.index.z === 0)!;
-    (parentTile as any).content = { width: 64, height: 64 };
-    (parentTile as any)._isLoaded = true;
+    parentTile.content = { width: 64, height: 64 };
+    // @ts-expect-error _isLoaded is private
+    parentTile._isLoaded = true;
 
     // Zoom in
     tileset.setForcedIndices([
@@ -190,8 +196,9 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
     // Load all children
     const childTiles = tileset.tiles.filter((t) => t.index.z === 1);
     for (const child of childTiles) {
-      (child as any).content = { width: 64, height: 64 };
-      (child as any)._isLoaded = true;
+      child.content = { width: 64, height: 64 };
+      // @ts-expect-error _isLoaded is private
+      child._isLoaded = true;
     }
 
     tileset.update(makeViewport(), { zRange: null, modelMatrix: null });
@@ -230,12 +237,12 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
     // Sentinel-2-like TMS: last overview doubles tileWidth while halving cellSize,
     // so parent and child tiles cover the exact same spatial footprint.
     // decimation should be 1 (each child maps to the parent at the same x,y).
-    const sentinel2TMS = {
+    const sentinel2TMS: TileMatrixSet = {
       id: "s2",
       crs: { uri: "http://www.opengis.net/def/crs/EPSG/0/32618" },
       boundingBox: {
-        lowerLeft: [499980, 4490220] as [number, number],
-        upperRight: [609780, 4600020] as [number, number],
+        lowerLeft: [499980, 4490220],
+        upperRight: [609780, 4600020],
       },
       tileMatrices: [
         // z=3: cellSize=20, tileWidth=512 → footprint = 10240m
@@ -244,7 +251,7 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
           scaleDenominator: 71428.57,
           cellSize: 20,
           cornerOfOrigin: "topLeft" as const,
-          pointOfOrigin: [499980, 4600020] as [number, number],
+          pointOfOrigin: [499980, 4600020],
           tileWidth: 512,
           tileHeight: 512,
           matrixWidth: 11,
@@ -256,7 +263,7 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
           scaleDenominator: 35714.29,
           cellSize: 10,
           cornerOfOrigin: "topLeft" as const,
-          pointOfOrigin: [499980, 4600020] as [number, number],
+          pointOfOrigin: [499980, 4600020],
           tileWidth: 1024,
           tileHeight: 1024,
           matrixWidth: 11,
@@ -295,7 +302,7 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
     const meta = tileset.getTileMetadata({ x: 0, y: 0, z: 0 });
 
     expect(meta.bbox).toBeDefined();
-    const { bbox } = meta as any;
+    const { bbox } = meta;
     expect(typeof bbox.west).toBe("number");
     expect(typeof bbox.south).toBe("number");
     expect(typeof bbox.east).toBe("number");
