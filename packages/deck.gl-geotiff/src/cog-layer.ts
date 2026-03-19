@@ -16,6 +16,7 @@ import { PathLayer } from "@deck.gl/layers";
 import type {
   RasterLayerProps,
   RasterModule,
+  TileMetadata,
 } from "@developmentseed/deck.gl-raster";
 import {
   RasterLayer,
@@ -407,7 +408,12 @@ export class COGLayer<
     inverseFrom3857: ReprojectionFns["inverseReproject"],
   ): Layer | LayersList | null {
     const { maxError, debug, debugOpacity } = this.props;
-    const { tile } = props;
+
+    // Cast to include TileMetadata from raster-tileset's `getTileMetadata`
+    // method.
+    // TODO: implement generic handling of tile metadata upstream in TileLayer
+    const tile = props.tile as Tile2DHeader<GetTileDataResult<DataT>> &
+      TileMetadata;
 
     if (!props.data) {
       return null;
@@ -495,35 +501,34 @@ export class COGLayer<
     }
 
     if (debug) {
-      // Get projected bounds from tile data
-      // getTileMetadata returns data that includes projectedBounds
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const projectedBounds: {
-        topLeft: [number, number];
-        topRight: [number, number];
-        bottomLeft: [number, number];
-        bottomRight: [number, number];
-      } = (tile as any)?.projectedBounds;
+      const { projectedCorners } = tile;
 
-      if (!projectedBounds || !tms) {
+      if (!projectedCorners || !tms) {
         return [];
       }
 
-      // Project bounds from image CRS to WGS84
-      const { topLeft, topRight, bottomLeft, bottomRight } = projectedBounds;
-
+      // Create a closed path in WGS84 projection around the tile bounds
+      //
+      // The tile has a `bbox` field which is already the bounding box in WGS84,
+      // but that uses `transformBounds` and densifies edges. So the corners of
+      // the bounding boxes don't line up with each other.
+      //
+      // In this case in the debug mode, it looks better if we ignore the actual
+      // non-linearities of the edges and just draw a box connecting the
+      // reprojected corners. In any case, the _image itself_ will be densified
+      // on the edges as a feature of the mesh generation.
+      const { topLeft, topRight, bottomRight, bottomLeft } = projectedCorners;
       const topLeftWgs84 = forwardTo4326(topLeft[0], topLeft[1]);
       const topRightWgs84 = forwardTo4326(topRight[0], topRight[1]);
       const bottomRightWgs84 = forwardTo4326(bottomRight[0], bottomRight[1]);
       const bottomLeftWgs84 = forwardTo4326(bottomLeft[0], bottomLeft[1]);
 
-      // Create a closed path around the tile bounds
       const path = [
         topLeftWgs84,
         topRightWgs84,
         bottomRightWgs84,
         bottomLeftWgs84,
-        topLeftWgs84, // Close the path
+        topLeftWgs84,
       ];
 
       layers.push(

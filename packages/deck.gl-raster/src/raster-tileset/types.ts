@@ -8,14 +8,15 @@ export type GeoBoundingBox = {
   east: number;
   south: number;
 };
-export type NonGeoBoundingBox = {
+
+export type ProjectedBoundingBox = {
   left: number;
   top: number;
   right: number;
   bottom: number;
 };
 
-export type TileBoundingBox = NonGeoBoundingBox | GeoBoundingBox;
+export type TileBoundingBox = ProjectedBoundingBox | GeoBoundingBox;
 
 export type TileLoadProps = {
   index: TileIndex;
