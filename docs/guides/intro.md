@@ -42,7 +42,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 | [`epsg`]             | The full EPSG projection database, compressed for the web       | [![npm][epsg-npm-badge]][epsg-npm]                         |
 | [`geotiff`]          | Fast, high-level, fully-typed GeoTIFF & COG reader              | [![npm][geotiff-npm-badge]][geotiff-npm]                   |
 | [`morecantile`]      | Port of [Morecantile] for working with OGC [TileMatrixSets]     | [![npm][morecantile-npm-badge]][morecantile-npm]           |
-| [`proj`]             | Utilities for geographic reprojections (e.g. `reprojectBounds`) | [![npm][proj-npm-badge]][proj-npm]                         |
+| [`proj`]             | Utilities for geographic reprojections                          | [![npm][proj-npm-badge]][proj-npm]                         |
 | [`raster-reproject`] | Standalone mesh-based image reprojection utilities              | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
 
 [`affine`]: /deck.gl-raster/api/affine
