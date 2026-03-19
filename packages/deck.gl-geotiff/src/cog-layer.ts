@@ -136,7 +136,11 @@ export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> =
   CompositeLayerProps &
     Pick<
       TileLayerProps,
-      "debounceTime" | "maxCacheSize" | "maxCacheByteSize" | "maxRequests"
+      | "debounceTime"
+      | "maxCacheSize"
+      | "maxCacheByteSize"
+      | "maxRequests"
+      | "refinementStrategy"
     > &
     COGLayerDataProps<DataT> & {
       /**
@@ -566,8 +570,13 @@ export class COGLayer<
       }
     }
 
-    const { maxRequests, maxCacheSize, maxCacheByteSize, debounceTime } =
-      this.props;
+    const {
+      maxRequests,
+      maxCacheSize,
+      maxCacheByteSize,
+      debounceTime,
+      refinementStrategy,
+    } = this.props;
 
     return new TileLayer<GetTileDataResult<DataT>>({
       id: `cog-tile-layer-${this.id}`,
@@ -582,10 +591,11 @@ export class COGLayer<
           forwardTo3857,
           inverseFrom3857,
         ),
-      maxRequests,
-      maxCacheSize,
-      maxCacheByteSize,
       debounceTime,
+      maxCacheByteSize,
+      maxCacheSize,
+      maxRequests,
+      refinementStrategy,
     });
   }
 
