@@ -6,17 +6,18 @@ import {
   Colormap,
   CreateTexture,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { Overview } from "@developmentseed/geotiff";
+import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
+import * as Slider from "@radix-ui/react-slider";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer";
-import "./proj";
-import type { Overview } from "@developmentseed/geotiff";
-import { GeoTIFF } from "@developmentseed/geotiff";
 import colormap from "./cfastie";
+import "./proj";
 import STAC_DATA from "./minimal_stac.json";
 import { epsgResolver } from "./proj";
 
@@ -29,7 +30,12 @@ function DeckGLOverlay(props: DeckProps) {
   return null;
 }
 
-type STACItem = {
+/**
+ * A subset of STAC Item properties.
+ *
+ * These are the only properties we actually care about for this example.
+ */
+type PartialSTACItem = {
   bbox: [number, number, number, number];
   assets: {
     image: {
@@ -38,8 +44,9 @@ type STACItem = {
   };
 };
 
+/** A feature collection of STAC items. */
 type STACFeatureCollection = {
-  features: STACItem[];
+  features: PartialSTACItem[];
 };
 
 type TextureDataT = {
@@ -77,7 +84,12 @@ async function getTileData(
   };
 }
 
-/** Shader module that sets alpha channel to 1.0 */
+/** Shader module that sets alpha channel to 1.0.
+ *
+ * The input NAIP imagery is 4-band but the 4th band means near-infrared (NIR)
+ * rather than alpha, so we need to set alpha to 1.0 so that the imagery is
+ * fully opaque when rendered.
+ */
 const SetAlpha1 = {
   name: "set-alpha-1",
   inject: {
@@ -87,7 +99,11 @@ const SetAlpha1 = {
   },
 } as const satisfies ShaderModule;
 
-/** Shader module that reorders bands to a false color infrared composite. */
+/**
+ * Shader module that reorders bands to a false color infrared composite.
+ *
+ * {@see https://www.usgs.gov/media/images/common-landsat-band-combinations}
+ */
 const setFalseColorInfrared = {
   name: "set-false-color-infrared",
   inject: {
@@ -126,8 +142,13 @@ uniform ${NDVI_FILTER_MODULE_NAME}Uniforms {
 } ${NDVI_FILTER_MODULE_NAME};
 `;
 
-// TODO: enable NDVI filtering
-const _ndviFilter = {
+/**
+ * A shader module that filters out pixels based on their NDVI value.
+ *
+ * It takes in min and max values for the range, and discards pixels outside of
+ * that range.
+ */
+const ndviFilter = {
   name: NDVI_FILTER_MODULE_NAME,
   fs: ndviUniformBlock,
   inject: {
@@ -149,6 +170,12 @@ const _ndviFilter = {
   },
 } as const satisfies ShaderModule<{ ndviMin: number; ndviMax: number }>;
 
+/**
+ * Create a rendering pipeline for RGB true-color rendering.
+ *
+ * Just uploads the texture and overrides the near-infrared (NIR) value in the
+ * alpha channel to 1.
+ */
 function renderRGB(tileData: TextureDataT): RasterModule[] {
   const { texture } = tileData;
   return [
@@ -164,6 +191,12 @@ function renderRGB(tileData: TextureDataT): RasterModule[] {
   ];
 }
 
+/**
+ * Create a rendering pipeline for false color infrared rendering.
+ *
+ * Reorders bands so that NIR is mapped to red, red is mapped to green, and
+ * green is mapped to blue. Also overrides the alpha channel to 1.
+ */
 function renderFalseColor(tileData: TextureDataT): RasterModule[] {
   const { texture } = tileData;
   return [
@@ -182,10 +215,17 @@ function renderFalseColor(tileData: TextureDataT): RasterModule[] {
   ];
 }
 
+/**
+ * Create a rendering pipeline for NDVI rendering.
+ *
+ * Calculates NDVI in a shader module, then applies a color map based on the
+ * resulting NDVI value. Also applies an NDVI range filter to allow filtering
+ * out pixels with NDVI values outside of a specified range.
+ */
 function renderNDVI(
   tileData: TextureDataT,
   colormapTexture: Texture,
-  // ndviRange: [number, number],
+  ndviRange: [number, number],
 ): RasterModule[] {
   const { texture } = tileData;
   return [
@@ -198,13 +238,13 @@ function renderNDVI(
     {
       module: ndvi,
     },
-    // {
-    //   module: ndviFilter,
-    //   props: {
-    //     ndviMin: ndviRange[0],
-    //     ndviMax: ndviRange[1],
-    //   },
-    // },
+    {
+      module: ndviFilter,
+      props: {
+        ndviMin: ndviRange[0],
+        ndviMax: ndviRange[1],
+      },
+    },
     {
       module: Colormap,
       props: {
@@ -253,7 +293,7 @@ async function fetchSTACItems(): Promise<STACFeatureCollection> {
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
-  const [stacItems, setStacItems] = useState<STACItem[]>([]);
+  const [stacItems, setStacItems] = useState<PartialSTACItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [renderMode, setRenderMode] = useState<RenderMode>("trueColor");
@@ -303,7 +343,7 @@ export default function App() {
   const layers = [];
 
   if (stacItems.length > 0 && colormapTexture) {
-    const mosaicLayer = new MosaicLayer<STACItem, GeoTIFF>({
+    const mosaicLayer = new MosaicLayer<PartialSTACItem, GeoTIFF>({
       id: "naip-mosaic-layer",
       sources: stacItems,
       // For each source, fetch the GeoTIFF instance
@@ -328,7 +368,8 @@ export default function App() {
               ? renderRGB
               : renderMode === "falseColor"
                 ? renderFalseColor
-                : (tileData) => renderNDVI(tileData, colormapTexture),
+                : (tileData) =>
+                    renderNDVI(tileData, colormapTexture, ndviRange),
           signal,
         });
       },
@@ -465,136 +506,77 @@ export default function App() {
             </select>
           </div>
 
-          {/* TODO: enable pixel filter */}
-          {false && renderMode === "ndvi" && (
+          {renderMode === "ndvi" && (
             <div style={{ marginTop: "16px" }}>
-              <label
-                htmlFor="ndvi-filter-min"
-                style={{ fontSize: "14px", fontWeight: 500 }}
-              >
-                NDVI Filter
-              </label>
-              <div
+              <span style={{ fontSize: "14px", fontWeight: 500 }}>
+                NDVI Range
+              </span>
+              <Slider.Root
+                min={-1}
+                max={1}
+                step={0.01}
+                value={ndviRange}
+                onValueChange={(v) => setNdviRange(v as [number, number])}
                 style={{
                   position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  userSelect: "none",
+                  touchAction: "none",
                   height: "20px",
-                  marginTop: "8px",
+                  marginTop: "12px",
                 }}
               >
-                {/* Background track */}
-                <div
+                <Slider.Track
                   style={{
-                    position: "absolute",
-                    top: "50%",
-                    left: 0,
-                    right: 0,
+                    position: "relative",
+                    flexGrow: 1,
                     height: "4px",
-                    transform: "translateY(-50%)",
                     background: "#ddd",
                     borderRadius: "2px",
                   }}
-                />
-                {/* Selected range track */}
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "50%",
-                    left: `${((ndviRange[0] + 1) / 2) * 100}%`,
-                    width: `${((ndviRange[1] - ndviRange[0]) / 2) * 100}%`,
-                    height: "4px",
-                    transform: "translateY(-50%)",
-                    background: "#007bff",
-                    borderRadius: "2px",
-                  }}
-                />
-                <input
-                  id="ndvi-filter-min"
-                  type="range"
-                  min={-1}
-                  max={1}
-                  step={0.01}
-                  value={ndviRange[0]}
-                  onChange={(e) =>
-                    setNdviRange([
-                      Math.min(parseFloat(e.target.value), ndviRange[1] - 0.01),
-                      ndviRange[1],
-                    ])
-                  }
-                  style={{
-                    position: "absolute",
-                    width: "100%",
-                    pointerEvents: "none",
-                    background: "transparent",
-                    zIndex: 1,
-                  }}
-                  className="range-thumb"
-                />
-                <input
-                  type="range"
-                  min={-1}
-                  max={1}
-                  step={0.01}
-                  value={ndviRange[1]}
-                  onChange={(e) =>
-                    setNdviRange([
-                      ndviRange[0],
-                      Math.max(parseFloat(e.target.value), ndviRange[0] + 0.01),
-                    ])
-                  }
-                  style={{
-                    position: "absolute",
-                    width: "100%",
-                    pointerEvents: "none",
-                    background: "transparent",
-                    zIndex: 2,
-                  }}
-                  className="range-thumb"
-                />
-              </div>
+                >
+                  <Slider.Range
+                    style={{
+                      position: "absolute",
+                      height: "100%",
+                      background: "#4a7c59",
+                      borderRadius: "2px",
+                    }}
+                  />
+                </Slider.Track>
+                {(["min", "max"] as const).map((key) => (
+                  <Slider.Thumb
+                    key={key}
+                    style={{
+                      display: "block",
+                      width: "16px",
+                      height: "16px",
+                      borderRadius: "50%",
+                      background: "#4a7c59",
+                      border: "2px solid white",
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                      cursor: "pointer",
+                      outline: "none",
+                    }}
+                  />
+                ))}
+              </Slider.Root>
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  marginTop: "8px",
+                  marginTop: "6px",
                   fontSize: "12px",
                   color: "#666",
                 }}
               >
                 <span>-1</span>
                 <span>
-                  {ndviRange[0].toFixed(2)} to {ndviRange[1].toFixed(2)}
+                  {ndviRange[0].toFixed(2)} – {ndviRange[1].toFixed(2)}
                 </span>
                 <span>+1</span>
               </div>
-              <style>{`
-                .range-thumb {
-                  -webkit-appearance: none;
-                  appearance: none;
-                  height: 4px;
-                }
-                .range-thumb::-webkit-slider-thumb {
-                  -webkit-appearance: none;
-                  appearance: none;
-                  width: 16px;
-                  height: 16px;
-                  border-radius: 50%;
-                  background: #007bff;
-                  cursor: pointer;
-                  pointer-events: auto;
-                  border: 2px solid white;
-                  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-                }
-                .range-thumb::-moz-range-thumb {
-                  width: 16px;
-                  height: 16px;
-                  border-radius: 50%;
-                  background: #007bff;
-                  cursor: pointer;
-                  pointer-events: auto;
-                  border: 2px solid white;
-                  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-                }
-              `}</style>
             </div>
           )}
         </div>
