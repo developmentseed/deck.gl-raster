@@ -338,7 +338,6 @@ export class COGLayer<
     geotiff: GeoTIFF,
     tms: TileMatrixSet,
   ): Promise<GetTileDataResult<DataT>> {
-    console.log("tile in getTileData", tile);
     const { signal } = tile;
     const { x, y, z } = tile.index;
 
@@ -502,21 +501,34 @@ export class COGLayer<
     }
 
     if (debug) {
-      console.log("tile", tile);
-      const { corners } = tile;
+      const { projectedCorners } = tile;
 
-      if (!corners || !tms) {
+      if (!projectedCorners || !tms) {
         return [];
       }
 
-      // Create a closed path around the tile bounds
-      const { topLeft, topRight, bottomLeft, bottomRight } = corners;
+      // Create a closed path in WGS84 projection around the tile bounds
+      //
+      // The tile has a `bbox` field which is already the bounding box in WGS84,
+      // but that uses `transformBounds` and densifies edges. So the corners of
+      // the bounding boxes don't line up with each other.
+      //
+      // In this case in the debug mode, it looks better if we ignore the actual
+      // non-linearities of the edges and just draw a box connecting the
+      // reprojected corners. In any case, the _image itself_ will be densified
+      // on the edges as a feature of the mesh generation.
+      const { topLeft, topRight, bottomRight, bottomLeft } = projectedCorners;
+      const topLeftWgs84 = forwardTo4326(topLeft[0], topLeft[1]);
+      const topRightWgs84 = forwardTo4326(topRight[0], topRight[1]);
+      const bottomRightWgs84 = forwardTo4326(bottomRight[0], bottomRight[1]);
+      const bottomLeftWgs84 = forwardTo4326(bottomLeft[0], bottomLeft[1]);
+
       const path = [
-        topLeft,
-        topRight,
-        bottomRight,
-        bottomLeft,
-        topLeft, // Close the path
+        topLeftWgs84,
+        topRightWgs84,
+        bottomRightWgs84,
+        bottomLeftWgs84,
+        topLeftWgs84,
       ];
 
       layers.push(
