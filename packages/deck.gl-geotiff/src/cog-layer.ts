@@ -16,6 +16,7 @@ import { PathLayer } from "@deck.gl/layers";
 import type {
   RasterLayerProps,
   RasterModule,
+  TileMetadata,
 } from "@developmentseed/deck.gl-raster";
 import {
   RasterLayer,
@@ -337,6 +338,7 @@ export class COGLayer<
     geotiff: GeoTIFF,
     tms: TileMatrixSet,
   ): Promise<GetTileDataResult<DataT>> {
+    console.log("tile in getTileData", tile);
     const { signal } = tile;
     const { x, y, z } = tile.index;
 
@@ -407,7 +409,12 @@ export class COGLayer<
     inverseFrom3857: ReprojectionFns["inverseReproject"],
   ): Layer | LayersList | null {
     const { maxError, debug, debugOpacity } = this.props;
-    const { tile } = props;
+
+    // Cast to include TileMetadata from raster-tileset's `getTileMetadata`
+    // method.
+    // TODO: implement generic handling of tile metadata upstream in TileLayer
+    const tile = props.tile as Tile2DHeader<GetTileDataResult<DataT>> &
+      TileMetadata;
 
     if (!props.data) {
       return null;
@@ -495,35 +502,21 @@ export class COGLayer<
     }
 
     if (debug) {
-      // Get projected bounds from tile data
-      // getTileMetadata returns data that includes projectedBounds
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const projectedBounds: {
-        topLeft: [number, number];
-        topRight: [number, number];
-        bottomLeft: [number, number];
-        bottomRight: [number, number];
-      } = (tile as any)?.projectedBounds;
+      console.log("tile", tile);
+      const { corners } = tile;
 
-      if (!projectedBounds || !tms) {
+      if (!corners || !tms) {
         return [];
       }
 
-      // Project bounds from image CRS to WGS84
-      const { topLeft, topRight, bottomLeft, bottomRight } = projectedBounds;
-
-      const topLeftWgs84 = forwardTo4326(topLeft[0], topLeft[1]);
-      const topRightWgs84 = forwardTo4326(topRight[0], topRight[1]);
-      const bottomRightWgs84 = forwardTo4326(bottomRight[0], bottomRight[1]);
-      const bottomLeftWgs84 = forwardTo4326(bottomLeft[0], bottomLeft[1]);
-
       // Create a closed path around the tile bounds
+      const { topLeft, topRight, bottomLeft, bottomRight } = corners;
       const path = [
-        topLeftWgs84,
-        topRightWgs84,
-        bottomRightWgs84,
-        bottomLeftWgs84,
-        topLeftWgs84, // Close the path
+        topLeft,
+        topRight,
+        bottomRight,
+        bottomLeft,
+        topLeft, // Close the path
       ];
 
       layers.push(

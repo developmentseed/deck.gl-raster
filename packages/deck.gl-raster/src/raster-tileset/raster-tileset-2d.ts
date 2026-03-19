@@ -6,7 +6,10 @@
  */
 
 import type { Viewport } from "@deck.gl/core";
-import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
+import type {
+  GeoBoundingBox,
+  _Tileset2DProps as Tileset2DProps,
+} from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import * as affine from "@developmentseed/affine";
 import type {
@@ -22,29 +25,69 @@ import type {
   Bounds,
   CornerBounds,
   Point,
+  ProjectedBoundingBox,
   ProjectionFunction,
   TileIndex,
   ZRange,
 } from "./types";
 
 /** Type returned by `getTileMetadata` */
-type TileMetadata = {
-  /** Bounding box of the tile in WGS84 coordinates */
-  bbox: { west: number; south: number; east: number; north: number };
+export type TileMetadata = {
+  /**
+   * **Axis-aligned** bounding box of the tile in **WGS84 coordinates**.
+   */
+  bbox: GeoBoundingBox;
 
-  /** Axis-aligned bounding box of the tile in projected coordinates */
-  bounds: Bounds;
+  /**
+   * **Axis-aligned** bounding box of the tile in **projected coordinates**.
+   */
+  projectedBbox: ProjectedBoundingBox;
 
-  /** Bounding box of the tile in projected coordinates, represented as four corners to preserve rotation/skew info */
-  projectedBounds: {
+  /**
+   * "Rotated" bounding box of the tile in **WGS84 coordinates**, represented as
+   * four corners.
+   *
+   * This preserves rotation/skew information that would be lost in the
+   * axis-aligned bbox.
+   */
+  corners: {
     topLeft: Point;
     topRight: Point;
     bottomLeft: Point;
     bottomRight: Point;
   };
 
+  /**
+   * "Rotated" bounding box of the tile in **projected coordinates**,
+   * represented as four corners.
+   *
+   * This preserves rotation/skew information that would be lost in the
+   * axis-aligned bbox.
+   */
+  projectedCorners: {
+    topLeft: Point;
+    topRight: Point;
+    bottomLeft: Point;
+    bottomRight: Point;
+  };
+
+  /**
+   * Tile width in pixels.
+   *
+   * Note this may differ between levels in some TileMatrixSets.
+   */
   tileWidth: number;
+
+  /**
+   * Tile height in pixels.
+   *
+   * Note this may differ between levels in some TileMatrixSets.
+   */
   tileHeight: number;
+
+  /**
+   * A reference to the underlying TileMatrix.
+   */
   tileMatrix: TileMatrix;
 };
 
