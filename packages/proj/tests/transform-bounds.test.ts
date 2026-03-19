@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { transformBounds } from "../src/reproject-bounds.js";
+import { transformBounds } from "../src/transform-bounds.js";
 
 describe("transformBounds", () => {
   it("returns the same bounds for an identity projection", () => {
