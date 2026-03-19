@@ -9,7 +9,11 @@ import type { Viewport } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import * as affine from "@developmentseed/affine";
-import type { BoundingBox, TileMatrixSet } from "@developmentseed/morecantile";
+import type {
+  BoundingBox,
+  TileMatrix,
+  TileMatrixSet,
+} from "@developmentseed/morecantile";
 import { tileTransform } from "@developmentseed/morecantile";
 import type { Matrix4 } from "@math.gl/core";
 
@@ -22,6 +26,27 @@ import type {
   TileIndex,
   ZRange,
 } from "./types";
+
+/** Type returned by `getTileMetadata` */
+type TileMetadata = {
+  /** Bounding box of the tile in WGS84 coordinates */
+  bbox: { west: number; south: number; east: number; north: number };
+
+  /** Axis-aligned bounding box of the tile in projected coordinates */
+  bounds: Bounds;
+
+  /** Bounding box of the tile in projected coordinates, represented as four corners to preserve rotation/skew info */
+  projectedBounds: {
+    topLeft: Point;
+    topRight: Point;
+    bottomLeft: Point;
+    bottomRight: Point;
+  };
+
+  tileWidth: number;
+  tileHeight: number;
+  tileMatrix: TileMatrix;
+};
 
 /**
  * A generic tileset implementation organized according to the OGC
@@ -136,7 +161,7 @@ export class TileMatrixSetTileset extends Tileset2D {
     return index.z;
   }
 
-  override getTileMetadata(index: TileIndex): Record<string, unknown> {
+  override getTileMetadata(index: TileIndex): TileMetadata {
     const { x, y, z } = index;
     const { tileMatrices } = this.tms;
     const tileMatrix = tileMatrices[z]!;
