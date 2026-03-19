@@ -24,38 +24,32 @@ export function reprojectBounds(
   top: number,
   { densifyPts = 21 }: { densifyPts?: number } = {},
 ): Bounds {
-  const corners: Point[] = [
-    [left, bottom],
-    [right, bottom],
-    [right, top],
-    [left, top],
-  ];
-
-  const points: Point[] = [];
-  for (let i = 0; i < corners.length; i++) {
-    const from = corners[i]!;
-    const to = corners[(i + 1) % corners.length]!;
-    // Include start corner + intermediate points (end corner is start of next edge)
-    for (let j = 0; j <= densifyPts; j++) {
-      const t = j / (densifyPts + 1);
-      points.push([
-        from[0] + (to[0] - from[0]) * t,
-        from[1] + (to[1] - from[1]) * t,
-      ]);
-    }
-  }
+  // Corners in order: bottom-left, bottom-right, top-right, top-left
+  const cx = [left, right, right, left];
+  const cy = [bottom, bottom, top, top];
 
   let outMinX = Infinity;
   let outMinY = Infinity;
   let outMaxX = -Infinity;
   let outMaxY = -Infinity;
 
-  for (const [x, y] of points) {
-    const [px, py] = project(x, y);
-    if (px < outMinX) outMinX = px;
-    if (py < outMinY) outMinY = py;
-    if (px > outMaxX) outMaxX = px;
-    if (py > outMaxY) outMaxY = py;
+  for (let i = 0; i < 4; i++) {
+    const fromX = cx[i]!;
+    const fromY = cy[i]!;
+    const toX = cx[(i + 1) % 4]!;
+    const toY = cy[(i + 1) % 4]!;
+    // Include start corner + intermediate points (end corner is start of next edge)
+    for (let j = 0; j <= densifyPts; j++) {
+      const t = j / (densifyPts + 1);
+      const [px, py] = project(
+        fromX + (toX - fromX) * t,
+        fromY + (toY - fromY) * t,
+      );
+      if (px < outMinX) outMinX = px;
+      if (py < outMinY) outMinY = py;
+      if (px > outMaxX) outMaxX = px;
+      if (py > outMaxY) outMaxY = py;
+    }
   }
 
   return [outMinX, outMinY, outMaxX, outMaxY];
