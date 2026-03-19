@@ -42,6 +42,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 | [`epsg`]             | The full EPSG projection database, compressed for the web       | [![npm][epsg-npm-badge]][epsg-npm]                         |
 | [`geotiff`]          | Fast, high-level, fully-typed GeoTIFF & COG reader              | [![npm][geotiff-npm-badge]][geotiff-npm]                   |
 | [`morecantile`]      | Port of [Morecantile] for working with OGC [TileMatrixSets]     | [![npm][morecantile-npm-badge]][morecantile-npm]           |
+| [`proj`]             | Utilities for geographic reprojections (e.g. `reprojectBounds`) | [![npm][proj-npm-badge]][proj-npm]                         |
 | [`raster-reproject`] | Standalone mesh-based image reprojection utilities              | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
 
 [`affine`]: #developmentseedaffine
@@ -51,6 +52,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 [`epsg`]: #developmentseedepsg
 [`geotiff`]: #developmentseedgeotiff
 [`morecantile`]: #developmentseedmorecantile
+[`proj`]: #developmentseedproj
 [`raster-reproject`]: #developmentseedraster-reproject
 
 [`rasterio/affine`]: https://github.com/rasterio/affine
@@ -63,6 +65,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 [epsg-npm-badge]: https://img.shields.io/npm/v/@developmentseed/epsg
 [geotiff-npm-badge]: https://img.shields.io/npm/v/@developmentseed/geotiff
 [morecantile-npm-badge]: https://img.shields.io/npm/v/@developmentseed/morecantile
+[proj-npm-badge]: https://img.shields.io/npm/v/@developmentseed/proj
 [raster-reproject-npm-badge]: https://img.shields.io/npm/v/@developmentseed/raster-reproject
 
 [affine-npm]: https://www.npmjs.com/package/@developmentseed/affine
@@ -71,6 +74,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 [epsg-npm]: https://www.npmjs.com/package/@developmentseed/epsg
 [geotiff-npm]: https://www.npmjs.com/package/@developmentseed/geotiff
 [morecantile-npm]: https://www.npmjs.com/package/@developmentseed/morecantile
+[proj-npm]: https://www.npmjs.com/package/@developmentseed/proj
 [raster-reproject-npm]: https://www.npmjs.com/package/@developmentseed/raster-reproject
 
 

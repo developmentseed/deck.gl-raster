@@ -52,6 +52,12 @@ const packages = [
     readme: "../packages/morecantile/README.md",
   },
   {
+    id: "proj",
+    label: "proj",
+    entry: "../packages/proj/src/index.ts",
+    readme: "../packages/proj/README.md",
+  },
+  {
     id: "raster-reproject",
     label: "raster-reproject",
     entry: "../packages/raster-reproject/src/index.ts",
