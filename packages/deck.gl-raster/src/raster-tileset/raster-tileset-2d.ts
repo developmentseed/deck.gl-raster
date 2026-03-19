@@ -229,22 +229,20 @@ export class TileMatrixSetTileset extends Tileset2D {
       this.projectTo4326,
       ...projectedBounds,
     );
-    const bbox = {
-      west,
-      south,
-      east,
-      north,
-    };
-    const projectedBbox: ProjectedBoundingBox = {
-      left: projectedBounds[0],
-      bottom: projectedBounds[1],
-      right: projectedBounds[2],
-      top: projectedBounds[3],
-    };
 
     return {
-      bbox,
-      projectedBbox,
+      bbox: {
+        west,
+        south,
+        east,
+        north,
+      },
+      projectedBbox: {
+        left: projectedBounds[0],
+        bottom: projectedBounds[1],
+        right: projectedBounds[2],
+        top: projectedBounds[3],
+      },
       projectedCorners,
       tileWidth,
       tileHeight,
