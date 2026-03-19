@@ -351,6 +351,9 @@ importers:
       '@developmentseed/morecantile':
         specifier: workspace:^
         version: link:../morecantile
+      '@developmentseed/proj':
+        specifier: workspace:^
+        version: link:../proj
       '@developmentseed/raster-reproject':
         specifier: workspace:^
         version: link:../raster-reproject
