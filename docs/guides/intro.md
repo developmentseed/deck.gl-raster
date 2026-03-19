@@ -37,23 +37,23 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 | -------------------- | --------------------------------------------------------------- | ---------------------------------------------------------- |
 | [`affine`]           | Port of [`rasterio/affine`] for managing affine transformations | [![npm][affine-npm-badge]][affine-npm]                     |
 | [`deck.gl-geotiff`]  | High-level deck.gl layers for GeoTIFF & COG visualization       | [![npm][deck.gl-geotiff-npm-badge]][deck.gl-geotiff-npm]   |
-| [`deck.gl-zarr`]     | High-level deck.gl layers for Zarr visualization (_soon_)       | -                                                          |
 | [`deck.gl-raster`]   | Core georeferenced raster rendering primitives                  | [![npm][deck.gl-raster-npm-badge]][deck.gl-raster-npm]     |
+| [`deck.gl-zarr`]     | High-level deck.gl layers for Zarr visualization (_soon_)       | -                                                          |
 | [`epsg`]             | The full EPSG projection database, compressed for the web       | [![npm][epsg-npm-badge]][epsg-npm]                         |
 | [`geotiff`]          | Fast, high-level, fully-typed GeoTIFF & COG reader              | [![npm][geotiff-npm-badge]][geotiff-npm]                   |
 | [`morecantile`]      | Port of [Morecantile] for working with OGC [TileMatrixSets]     | [![npm][morecantile-npm-badge]][morecantile-npm]           |
 | [`proj`]             | Utilities for geographic reprojections (e.g. `reprojectBounds`) | [![npm][proj-npm-badge]][proj-npm]                         |
 | [`raster-reproject`] | Standalone mesh-based image reprojection utilities              | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
 
-[`affine`]: #developmentseedaffine
-[`deck.gl-geotiff`]: #developmentseeddeckgl-geotiff
-[`deck.gl-zarr`]: #developmentseeddeckgl-zarr
-[`deck.gl-raster`]: #developmentseeddeckgl-raster
-[`epsg`]: #developmentseedepsg
-[`geotiff`]: #developmentseedgeotiff
-[`morecantile`]: #developmentseedmorecantile
-[`proj`]: #developmentseedproj
-[`raster-reproject`]: #developmentseedraster-reproject
+[`affine`]: /deck.gl-raster/api/affine
+[`deck.gl-geotiff`]: /deck.gl-raster/api/deck-gl-geotiff
+[`deck.gl-zarr`]: /deck.gl-raster/api/deck-gl-zarr
+[`deck.gl-raster`]: /deck.gl-raster/api/deck-gl-raster
+[`epsg`]: /deck.gl-raster/api/epsg
+[`geotiff`]: /deck.gl-raster/api/geotiff
+[`morecantile`]: /deck.gl-raster/api/morecantile
+[`proj`]: /deck.gl-raster/api/proj
+[`raster-reproject`]: /deck.gl-raster/api/raster-reproject
 
 [`rasterio/affine`]: https://github.com/rasterio/affine
 [Morecantile]: https://github.com/developmentseed/morecantile
