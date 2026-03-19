@@ -18,8 +18,8 @@ import type {
   TileMatrixSet,
 } from "@developmentseed/morecantile";
 import { tileTransform } from "@developmentseed/morecantile";
+import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
-
 import { getTileIndices } from "./raster-tile-traversal";
 import type {
   Bounds,
@@ -42,20 +42,6 @@ export type TileMetadata = {
    * **Axis-aligned** bounding box of the tile in **projected coordinates**.
    */
   projectedBbox: ProjectedBoundingBox;
-
-  /**
-   * "Rotated" bounding box of the tile in **WGS84 coordinates**, represented as
-   * four corners.
-   *
-   * This preserves rotation/skew information that would be lost in the
-   * axis-aligned bbox.
-   */
-  corners: {
-    topLeft: Point;
-    topRight: Point;
-    bottomLeft: Point;
-    bottomRight: Point;
-  };
 
   /**
    * "Rotated" bounding box of the tile in **projected coordinates**,
@@ -220,7 +206,7 @@ export class TileMatrixSetTileset extends Tileset2D {
 
     // Return the projected bounds as four corners
     // This preserves rotation/skew information
-    const projectedBounds = {
+    const projectedCorners = {
       topLeft,
       topRight,
       bottomLeft,
@@ -228,32 +214,38 @@ export class TileMatrixSetTileset extends Tileset2D {
     };
 
     // Also compute axis-aligned bounding box for compatibility
-    const bounds: Bounds = [
+    const projectedBounds: Bounds = [
       Math.min(topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]),
       Math.min(topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]),
       Math.max(topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]),
       Math.max(topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]),
     ];
 
-    // Project all four corners to WGS84 and compute geographic bounding box.
     // deck.gl's Tile2DHeader uses `bbox` (GeoBoundingBox) for screen-space
     // culling in filterSubLayer → isTileVisible. Without this, all tiles
     // would pass (or fail) the cull-rect test and the refinementStrategy
     // (best-available) would not show parent tiles correctly.
-    const corners = [topLeft, topRight, bottomLeft, bottomRight].map(
-      ([cx, cy]) => this.projectTo4326(cx, cy),
+    const [west, south, east, north] = transformBounds(
+      this.projectTo4326,
+      ...projectedBounds,
     );
     const bbox = {
-      west: Math.min(...corners.map(([lon]) => lon)),
-      south: Math.min(...corners.map(([, lat]) => lat)),
-      east: Math.max(...corners.map(([lon]) => lon)),
-      north: Math.max(...corners.map(([, lat]) => lat)),
+      west,
+      south,
+      east,
+      north,
+    };
+    const projectedBbox: ProjectedBoundingBox = {
+      left: projectedBounds[0],
+      bottom: projectedBounds[1],
+      right: projectedBounds[2],
+      top: projectedBounds[3],
     };
 
     return {
       bbox,
-      bounds,
-      projectedBounds,
+      projectedBbox,
+      projectedCorners,
       tileWidth,
       tileHeight,
       tileMatrix,
