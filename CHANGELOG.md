@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.4.0 - 2026-03-20
+
+## What's Changed
+
+* feat: expose maxRequests on COGLayer by @maxrjones in https://github.com/developmentseed/deck.gl-raster/pull/333
+* fix: Bump proj4 to fix web mercator projection by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/346
+* fix: fix setting default values for inherited props from TileLayer by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/347
+* fix: Render mesh from Web Mercator coordinates by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/349
+* fix: Clamp to Web Mercator latitude bounds by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/182
+* feat: create new `@developmentseed/proj` subpackage by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/356
+* fix: Support TileLayer refinement strategies by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/354
+* feat: add ndvi filter slider to NAIP-mosaic example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/357
+
+## New Contributors
+* @maxrjones made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/333
+* @aboydnw made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/348
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.3.0...v0.4.0
+
 ## v0.3.0 - 2026-03-18
 
 ### What's Changed

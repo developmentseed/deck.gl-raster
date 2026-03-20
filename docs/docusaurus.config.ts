@@ -1,6 +1,8 @@
 import type * as Preset from "@docusaurus/preset-classic";
 import type { Config } from "@docusaurus/types";
 import { themes as prismThemes } from "prism-react-renderer";
+import rehypeKatex from "rehype-katex";
+import remarkMath from "remark-math";
 
 /**
  * Each package that gets TypeDoc API generation + an independent versioned
@@ -186,6 +188,14 @@ const config: Config = {
 
   trailingSlash: true,
 
+  stylesheets: [
+    {
+      href: "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css",
+      type: "text/css",
+      crossorigin: "anonymous",
+    },
+  ],
+
   headTags: [
     {
       tagName: "script",
@@ -225,10 +235,14 @@ const config: Config = {
           sidebarPath: "./sidebars.ts",
           editUrl:
             "https://github.com/developmentseed/deck.gl-raster/tree/main/docs/",
+          remarkPlugins: [remarkMath],
+          rehypePlugins: [rehypeKatex],
         },
         blog: {
           showReadingTime: true,
           feedOptions: { type: ["rss", "atom"] },
+          remarkPlugins: [remarkMath],
+          rehypePlugins: [rehypeKatex],
         },
         theme: {
           customCss: "./src/css/custom.css",
