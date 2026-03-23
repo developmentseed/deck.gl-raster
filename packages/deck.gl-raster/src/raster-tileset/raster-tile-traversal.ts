@@ -859,20 +859,46 @@ export function getTileIndices(
   let bounds: Bounds;
 
   if (project) {
-    // Globe view: project WGS84 bounds corners into globe common space
+    // Globe view: project WGS84 bounds into globe common space.
+    //
+    // We densify the edges of the bounding box before projecting because the
+    // globe projection is nonlinear — straight edges in WGS84 become curved
+    // arcs on the sphere. Taking the AABB of only 4 corner projections
+    // underestimates the true extent, causing tiles near dataset edges to be
+    // incorrectly culled (e.g. South Texas getting cut off on NLCD).
     const { lowerLeft, upperRight } = wgs84Bounds;
     const [minLng, minLat] = lowerLeft;
     const [maxLng, maxLat] = upperRight;
-    const bl = project([minLng, minLat, 0]);
-    const tr = project([maxLng, maxLat, 0]);
-    const br = project([maxLng, minLat, 0]);
-    const tl = project([minLng, maxLat, 0]);
-    bounds = [
-      Math.min(bl[0]!, tl[0]!, br[0]!, tr[0]!),
-      Math.min(bl[1]!, tl[1]!, br[1]!, tr[1]!),
-      Math.max(bl[0]!, tl[0]!, br[0]!, tr[0]!),
-      Math.max(bl[1]!, tl[1]!, br[1]!, tr[1]!),
-    ];
+
+    let csMinX = Infinity;
+    let csMinY = Infinity;
+    let csMaxX = -Infinity;
+    let csMaxY = -Infinity;
+
+    const EDGE_SAMPLES = 20;
+    for (let i = 0; i <= EDGE_SAMPLES; i++) {
+      const t = i / EDGE_SAMPLES;
+      const lng = minLng + t * (maxLng - minLng);
+      const lat = minLat + t * (maxLat - minLat);
+
+      // Sample all 4 edges at each interpolation step
+      const samples: [number, number][] = [
+        [lng, minLat], // bottom edge
+        [lng, maxLat], // top edge
+        [minLng, lat], // left edge
+        [maxLng, lat], // right edge
+      ];
+
+      for (const [sLng, sLat] of samples) {
+        const p = project([sLng, sLat, 0]);
+        if (p[0]! < csMinX) csMinX = p[0]!;
+        if (p[1]! < csMinY) csMinY = p[1]!;
+        if (p[0]! > csMaxX) csMaxX = p[0]!;
+        if (p[1]! > csMaxY) csMaxY = p[1]!;
+      }
+    }
+
+    bounds = [csMinX, csMinY, csMaxX, csMaxY];
   } else {
     // Mercator view: existing code
     const { lowerLeft, upperRight } = wgs84Bounds;
