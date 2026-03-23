@@ -5,8 +5,10 @@ import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import { useCallback, useState } from "react";
 
 // New Zealand imagery (NZTM2000 projection)
+// const COG_URL =
+//   "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
 const COG_URL =
-  "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
+  "https://s3.us-east-1.amazonaws.com/ds-deck.gl-raster-public/cog/Annual_NLCD_LndCov_2024_CU_C1V1.tif";
 
 // Antarctic sea ice (polar stereographic)
 // const COG_URL =
