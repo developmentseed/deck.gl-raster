@@ -19,6 +19,7 @@ import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport } from "@deck.gl/core";
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
 import { xy_bounds } from "@developmentseed/morecantile";
+import { transformBounds } from "@developmentseed/proj";
 import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
   CullingVolume,
@@ -870,35 +871,10 @@ export function getTileIndices(
     const [minLng, minLat] = lowerLeft;
     const [maxLng, maxLat] = upperRight;
 
-    let csMinX = Infinity;
-    let csMinY = Infinity;
-    let csMaxX = -Infinity;
-    let csMaxY = -Infinity;
-
-    const EDGE_SAMPLES = 20;
-    for (let i = 0; i <= EDGE_SAMPLES; i++) {
-      const t = i / EDGE_SAMPLES;
-      const lng = minLng + t * (maxLng - minLng);
-      const lat = minLat + t * (maxLat - minLat);
-
-      // Sample all 4 edges at each interpolation step
-      const samples: [number, number][] = [
-        [lng, minLat], // bottom edge
-        [lng, maxLat], // top edge
-        [minLng, lat], // left edge
-        [maxLng, lat], // right edge
-      ];
-
-      for (const [sLng, sLat] of samples) {
-        const p = project([sLng, sLat, 0]);
-        if (p[0]! < csMinX) csMinX = p[0]!;
-        if (p[1]! < csMinY) csMinY = p[1]!;
-        if (p[0]! > csMaxX) csMaxX = p[0]!;
-        if (p[1]! > csMaxY) csMaxY = p[1]!;
-      }
-    }
-
-    bounds = [csMinX, csMinY, csMaxX, csMaxY];
+    const projectWrapper: ProjectionFunction = (x: number, y: number) => {
+      return project([x, y, 0]) as [number, number];
+    };
+    bounds = transformBounds(projectWrapper, minLng, minLat, maxLng, maxLat);
   } else {
     // Mercator view: existing code
     const { lowerLeft, upperRight } = wgs84Bounds;
