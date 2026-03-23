@@ -31,7 +31,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Cloud-Optimized Formats",
-    img: "https://cogeo.org/images/logo/Cog-02.png",
+    img: require("@site/static/img/cog-white-background.png").default,
     description: (
       <>
         Stream{" "}
