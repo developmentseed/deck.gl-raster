@@ -56,6 +56,12 @@ async function decodeUncompressed(bytes: ArrayBuffer): Promise<ArrayBuffer> {
   return bytes;
 }
 
+/**
+ * The global registry of decoders for each compression type.
+ *
+ * This maps a {@link Compression} value to a function that returns a promise of
+ * a {@link Decoder}.
+ */
 export const DECODER_REGISTRY = new Map<Compression, () => Promise<Decoder>>();
 
 DECODER_REGISTRY.set(Compression.None, () =>

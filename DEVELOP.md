@@ -29,7 +29,6 @@ pnpm format
 pnpm typecheck
 ```
 
-
 ## Publishing
 
 Publishing happens automatically when a new tag is pushed to the `main` branch with format `v*`.

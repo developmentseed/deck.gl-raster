@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/deck.gl-geotiff",
-  "version": "0.3.0-beta.3",
+  "version": "0.4.0",
   "description": "GeoTIFF and Cloud-Optimized GeoTIFF visualization in deck.gl",
   "type": "module",
   "main": "./dist/index.js",
@@ -53,7 +53,7 @@
     "@developmentseed/morecantile": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "flatbush": "^4.5.0",
-    "proj4": "^2.20.3",
+    "proj4": "^2.20.4",
     "wkt-parser": "^1.5.3"
   },
   "peerDependencies": {

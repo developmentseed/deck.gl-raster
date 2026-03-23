@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/epsg",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "The full EPSG projection database, compressed to 309kb for the web.",
   "type": "module",
   "exports": {
@@ -41,7 +41,7 @@
   "devDependencies": {
     "@types/node": "^25.3.3",
     "jsdom": "^27.4.0",
-    "proj4": "^2.20.3",
+    "proj4": "^2.20.4",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

@@ -1,5 +1,84 @@
 # Changelog
 
+## v0.4.0 - 2026-03-20
+
+## What's Changed
+
+* feat: expose maxRequests on COGLayer by @maxrjones in https://github.com/developmentseed/deck.gl-raster/pull/333
+* fix: Bump proj4 to fix web mercator projection by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/346
+* fix: fix setting default values for inherited props from TileLayer by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/347
+* fix: Render mesh from Web Mercator coordinates by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/349
+* fix: Clamp to Web Mercator latitude bounds by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/182
+* feat: create new `@developmentseed/proj` subpackage by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/356
+* fix: Support TileLayer refinement strategies by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/354
+* feat: add ndvi filter slider to NAIP-mosaic example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/357
+
+## New Contributors
+* @maxrjones made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/333
+* @aboydnw made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/348
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.3.0...v0.4.0
+
+## v0.3.0 - 2026-03-18
+
+### What's Changed
+
+* fix: Fix shader caching by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/221
+* feat: Create new `geotiff` subpackage, abstracting over `@cogeotiff/core` by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/223
+* feat(affine): Create new `affine` standalone package as port of Python `affine` by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/224
+* feat: Initial GeoTIFF dynamic decoder API by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/226
+* feat(geotiff): Overhaul `GeoTIFF` and `Overview` classes by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/225
+* chore: Use `@chunkd/source-file` in tests for loading tiffs by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/227
+* feat(geotiff): Support decoding JPEG and WebP-compressed COGs by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/229
+* feat(geotiff): High-level CRS handling from GeoTIFF GeoKeys by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/236
+* feat: Create `morecantile` subpackage by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/238
+* feat(geotiff): generate TileMatrixSet from `GeoTIFF` instance by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/235
+* feat: Overhaul to use our `geotiff` package & generic TileMatrixSet support by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/208
+* feat: Add AbortSignal support to `GeoTIFF.fetchTile` by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/243
+* chore: Update code for new upstream `SamplesPerPixel` typing by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/245
+* test(geotiff): Add integration tests against geotiff.js by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/246
+* feat(geotiff): LZW and Predictor support by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/247
+* fix: Fix rendering of YCbCr-encoded JPEG images by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/249
+* feat(geotiff): Support non-boundless reads by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/250
+* feat(geotiff): Add tileCount property to GeoTIFF and Overview by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/254
+* feat(geotiff): User-specified prefetch size by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/256
+* fix: Fix declared luma.gl dependency by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/265
+* fix: Fix `TileMatrixSetTileset` projected bounds computation for each tile by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/274
+* feat: Add mesh max error slider to NLCD example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/271
+* feat: add zstd via fzstd by @gadomski in https://github.com/developmentseed/deck.gl-raster/pull/263
+* feat: Offset transform by half pixel for pixel-is-point raster type by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/286
+* feat: New `@developmentseed/epsg` package for shipping compressed EPSG code bundle by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/262
+* fix: Ensure 4-byte alignment on texture buffers by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/289
+* chore: Update import of TiffImageTileCount by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/291
+* fix: Update naip-mosaic example to use our `geotiff` package by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/293
+* fix: Turn off TIFF chunking for now by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/295
+* feat: Decoder pool by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/277
+* docs: Rewording of readme by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/296
+* feat: Support reading band-interleaved COGs by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/297
+* feat(geotiff): Separate source for header fetches and data fetches by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/299
+* refactor: Cleaner type defs for DecodedPixels and RasterArray by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/306
+* fix: Avoid unnecessarily calling `inferDefaultPipeline` by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/307
+* fix: Force loading gdal tags (nodata and metadata) by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/308
+* test(geotiff): Set up integration tests against rasterio by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/311
+* feat: Handle GeoTIFF transparency masks by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/309
+* feat: Support lerc+deflate and lerc+zstd by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/314
+* feat: Parse GDAL_Metadata TIFF tag, including stored statistics and offsets/scales by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/316
+* feat: Support grayscale photometric interpretation by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/179
+* fix: Fix adding alpha channel to uint16 image by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/318
+* feat: Update `cog-basic` example app with drop-down image selector by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/323
+* fix: Fix passing general layer props down to RasterLayer by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/329
+* docs: Initial creation of docusaurus-based documentation website by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/304
+* ci: Fix docs publish; fetch submodules by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/331
+* docs: Initialize blog on website by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/332
+* docs: API docs review by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/335
+* ci: Fix building examples as part of docs website generation by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/336
+* docs: Add example nav pane in top bar by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/337
+* docs: Switch to DS logos and add simple static search index by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/338
+* docs: Update hero image with USGS unsplash photo by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/339
+* docs: Use smaller hero image for slightly smaller download size by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/340
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.2.0...v0.3.0
+
 ## [0.3.0-beta.2](https://github.com/developmentseed/deck.gl-raster/compare/v0.3.0-beta.1...v0.3.0-beta.2) (2026-02-19)
 
 

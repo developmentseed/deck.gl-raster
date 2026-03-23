@@ -6,27 +6,83 @@
  */
 
 import type { Viewport } from "@deck.gl/core";
-import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
+import type {
+  GeoBoundingBox,
+  _Tileset2DProps as Tileset2DProps,
+} from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import * as affine from "@developmentseed/affine";
-import type { BoundingBox, TileMatrixSet } from "@developmentseed/morecantile";
+import type {
+  BoundingBox,
+  TileMatrix,
+  TileMatrixSet,
+} from "@developmentseed/morecantile";
 import { tileTransform } from "@developmentseed/morecantile";
+import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
-
 import { getTileIndices } from "./raster-tile-traversal";
 import type {
   Bounds,
   CornerBounds,
   Point,
+  ProjectedBoundingBox,
   ProjectionFunction,
   TileIndex,
   ZRange,
 } from "./types";
 
+/** Type returned by `getTileMetadata` */
+export type TileMetadata = {
+  /**
+   * **Axis-aligned** bounding box of the tile in **WGS84 coordinates**.
+   */
+  bbox: GeoBoundingBox;
+
+  /**
+   * **Axis-aligned** bounding box of the tile in **projected coordinates**.
+   */
+  projectedBbox: ProjectedBoundingBox;
+
+  /**
+   * "Rotated" bounding box of the tile in **projected coordinates**,
+   * represented as four corners.
+   *
+   * This preserves rotation/skew information that would be lost in the
+   * axis-aligned bbox.
+   */
+  projectedCorners: {
+    topLeft: Point;
+    topRight: Point;
+    bottomLeft: Point;
+    bottomRight: Point;
+  };
+
+  /**
+   * Tile width in pixels.
+   *
+   * Note this may differ between levels in some TileMatrixSets.
+   */
+  tileWidth: number;
+
+  /**
+   * Tile height in pixels.
+   *
+   * Note this may differ between levels in some TileMatrixSets.
+   */
+  tileHeight: number;
+
+  /**
+   * A reference to the underlying TileMatrix.
+   */
+  tileMatrix: TileMatrix;
+};
+
 /**
  * A generic tileset implementation organized according to the OGC
  * [TileMatrixSet](https://docs.ogc.org/is/17-083r4/17-083r4.html)
  * specification.
+ *
+ * Handles tile lifecycle, caching, and viewport-based loading.
  */
 export class TileMatrixSetTileset extends Tileset2D {
   private tms: TileMatrixSet;
@@ -107,11 +163,25 @@ export class TileMatrixSetTileset extends Tileset2D {
     const currentOverview = this.tms.tileMatrices[index.z]!;
     const parentOverview = this.tms.tileMatrices[index.z - 1]!;
 
-    const decimation = currentOverview.cellSize / parentOverview.cellSize;
+    // Decimation is the number of child tiles that fit across one parent tile.
+    // Must use tile footprint (cellSize × tileWidth/Height), not cellSize alone,
+    // because tileWidth can change between levels (e.g. the last Sentinel-2
+    // overview doubles tileWidth while halving cellSize, giving a 1:1 spatial
+    // mapping where decimation = 1).
+    const parentFootprintX = parentOverview.cellSize * parentOverview.tileWidth;
+    const parentFootprintY =
+      parentOverview.cellSize * parentOverview.tileHeight;
+    const currentFootprintX =
+      currentOverview.cellSize * currentOverview.tileWidth;
+    const currentFootprintY =
+      currentOverview.cellSize * currentOverview.tileHeight;
+
+    const decimationX = parentFootprintX / currentFootprintX;
+    const decimationY = parentFootprintY / currentFootprintY;
 
     return {
-      x: Math.floor(index.x / decimation),
-      y: Math.floor(index.y / decimation),
+      x: Math.floor(index.x / decimationX),
+      y: Math.floor(index.y / decimationY),
       z: index.z - 1,
     };
   }
@@ -120,7 +190,7 @@ export class TileMatrixSetTileset extends Tileset2D {
     return index.z;
   }
 
-  override getTileMetadata(index: TileIndex): Record<string, unknown> {
+  override getTileMetadata(index: TileIndex): TileMetadata {
     const { x, y, z } = index;
     const { tileMatrices } = this.tms;
     const tileMatrix = tileMatrices[z]!;
@@ -136,7 +206,7 @@ export class TileMatrixSetTileset extends Tileset2D {
 
     // Return the projected bounds as four corners
     // This preserves rotation/skew information
-    const projectedBounds = {
+    const projectedCorners = {
       topLeft,
       topRight,
       bottomLeft,
@@ -144,16 +214,36 @@ export class TileMatrixSetTileset extends Tileset2D {
     };
 
     // Also compute axis-aligned bounding box for compatibility
-    const bounds: Bounds = [
+    const projectedBounds: Bounds = [
       Math.min(topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]),
       Math.min(topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]),
       Math.max(topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]),
       Math.max(topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]),
     ];
 
+    // deck.gl's Tile2DHeader uses `bbox` (GeoBoundingBox) for screen-space
+    // culling in filterSubLayer → isTileVisible. Without this, all tiles
+    // would pass (or fail) the cull-rect test and the refinementStrategy
+    // (best-available) would not show parent tiles correctly.
+    const [west, south, east, north] = transformBounds(
+      this.projectTo4326,
+      ...projectedBounds,
+    );
+
     return {
-      bounds,
-      projectedBounds,
+      bbox: {
+        west,
+        south,
+        east,
+        north,
+      },
+      projectedBbox: {
+        left: projectedBounds[0],
+        bottom: projectedBounds[1],
+        right: projectedBounds[2],
+        top: projectedBounds[3],
+      },
+      projectedCorners,
       tileWidth,
       tileHeight,
       tileMatrix,

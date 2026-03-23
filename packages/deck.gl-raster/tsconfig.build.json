@@ -9,6 +9,7 @@
   "exclude": ["node_modules", "dist", "tests"],
   "references": [
     { "path": "../morecantile/tsconfig.build.json" },
+    { "path": "../proj/tsconfig.build.json" },
     { "path": "../raster-reproject/tsconfig.build.json" }
   ]
 }

@@ -4,8 +4,5 @@
 
 /**
  * A 2D Point in the CRS indicated elsewhere
- *
- * @minItems 2
- * @maxItems 2
  */
 export type DPoint = [number, number];

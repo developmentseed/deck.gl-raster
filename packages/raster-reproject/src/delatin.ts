@@ -55,9 +55,22 @@ export interface ReprojectionFns {
   inverseReproject(x: number, y: number): [number, number];
 }
 
+/**
+ * RasterReprojector performs a Delaunay triangulation-based reprojection of a
+ * raster image.
+ *
+ * It takes as input a set of functions to associate pixel positions with
+ * coordinates in the input and output CRS, as well as the dimensions of the
+ * output image, and it produces a triangulated mesh that can be used to
+ * reproject the input raster onto the output raster with bounded error.
+ */
 export class RasterReprojector {
   reprojectors: ReprojectionFns;
+
+  /** Width of the image in pixels */
   width: number;
+
+  /** Height of the image in pixels */
   height: number;
 
   /**
@@ -133,14 +146,33 @@ export class RasterReprojector {
     this._flush();
   }
 
-  // refine the mesh until its maximum error gets below the given one
-  run(maxError: number = DEFAULT_MAX_ERROR): void {
+  /**
+   * Refine the mesh until its maximum error gets below the given one
+   *
+   * @param maxError The maximum reprojection error in input pixels that the mesh should achieve.
+   * @param maxIterations Optional safeguard to prevent infinite loops in case of non-convergence. If the mesh fails to converge within this number of iterations, a warning will be logged and the function will return early.
+   *
+   * @return  {[type]}  [return description]
+   */
+  run(
+    maxError: number = DEFAULT_MAX_ERROR,
+    { maxIterations = 10000 } = {},
+  ): void {
     if (maxError <= 0) {
       throw new Error("maxError must be positive");
     }
 
+    // Note: this primarily happens near the poles, where we'll essentially
+    // never converge
+    let iterations = 0;
     while (this.getMaxError() > maxError) {
       this.refine();
+      if (++iterations > maxIterations) {
+        console.warn(
+          `RasterReprojector: mesh refinement did not converge after ${iterations} iterations (maxError=${maxError}, currentError=${this.getMaxError()})`,
+        );
+        break;
+      }
     }
   }
 
@@ -167,9 +199,9 @@ export class RasterReprojector {
   /**
    * Conversion of upstream's `_findCandidate` for reprojection error handling.
    *
-   * @param   {number}  t  The index (into `this.triangles`) of the pending triangle to process.
+   * @param t The index (into `this.triangles`) of the pending triangle to process.
    *
-   * @return  {void}    Doesn't return; instead modifies internal state.
+   * @return Doesn't return; instead modifies internal state.
    */
   private _findReprojectionCandidate(t: number): void {
     // Find the three vertices of this triangle
@@ -362,7 +394,7 @@ export class RasterReprojector {
   }
 
   // add or update a triangle in the mesh
-  _addTriangle(
+  private _addTriangle(
     a: number,
     b: number,
     c: number,

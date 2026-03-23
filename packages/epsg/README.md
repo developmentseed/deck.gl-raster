@@ -4,7 +4,7 @@ The full EPSG projection database, compressed to **309kb** for the web.
 
 [EPSG]: https://en.wikipedia.org/wiki/EPSG_Geodetic_Parameter_Dataset
 
-Some existing EPSG amalgamations exist, but all are uncompressed, incomplete, outdated, and/or not reproducible [^1] [^2] [^3] [^4]. This package uses the [DecompressionStream] API, now [widely available in browsers][DecompressionStream_gzip], to bundle a gzip-compressed text file of WKT definitions for **all 7352 defined EPSG codes**.
+Some existing EPSG amalgamations exist, but all are uncompressed, incomplete, outdated, and/or not reproducible [^1] [^2] [^3] [^4]. This package uses the [DecompressionStream] API, now [widely available in browsers][DecompressionStream_gzip], to bundle a gzip-compressed text file of WKT definitions for **all 7352 defined EPSG projection codes**.
 
 [DecompressionStream]: https://developer.mozilla.org/en-US/docs/Web/API/DecompressionStream
 [DecompressionStream_gzip]: https://caniuse.com/mdn-api_decompressionstream_decompressionstream_gzip
@@ -40,7 +40,7 @@ const outputPoint = converter.forward(inputPoint);
 
 ## Generate new EPSG definitions
 
-First, download the latest EPSG definitions in WKT format. Go to <https://epsg.org/download-dataset.html>, create an account or log in, then download the `WKT File` version.
+First, download the latest EPSG definitions in WKT format. Go to [epsg.org/download-dataset.html](https://epsg.org/download-dataset.html), create an account or log in, then download the `WKT File` version.
 
 Then, from this directory, run
 

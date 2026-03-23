@@ -2,6 +2,7 @@ import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
@@ -12,41 +13,62 @@ function DeckGLOverlay(props: DeckProps) {
   return null;
 }
 
-const COG_URL =
-  "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff";
-
-// const COG_URL =
-//   "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif";
-
-// const COG_URL =
-//   "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif";
-// const COG_URL =
-//   "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif";
-
-// 1:
-// const COG_URL =
-//   "https://data.source.coop/kerner-lab/fields-of-the-world/denmark/s2_images/window_a/g22_00002_10.tif";
-
-// 2:
-// const COG_URL =
-// "https://data.source.coop/ausantarctic/ghrsst-mur-v2/2020/12/12/20201212090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-v02.0-fv04.1_sea_ice_fraction.tif";
-
-// 3:
-// const COG_URL =
-//   "https://data.source.coop/tabaqat/riyadh-sentinel-rgb/Sentinel-2_Satellite_RGB_Riyadh.tif";
-
-// 4:
-// const COG_URL =
-//   "https://data.source.coop/giswqs/tn-imagery/imagery/AndersonCo_OrthoPan_2ft_2000.tif";
+const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
+  {
+    title: "Sentinel-2 True Color Image (New York, 2026)",
+    url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
+  },
+  {
+    title: "New Zealand 2024-2025 10m RGB",
+    url: "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff",
+  },
+  {
+    title: "NAIP Aerial (New York, 2022)",
+    url: "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif",
+  },
+  {
+    title: "NLCD Land Cover 2023",
+    url: "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif",
+  },
+  {
+    title: "EOxCloudless 2020 RGB",
+    url: "https://s2downloads.eox.at/demo/EOxCloudless/2020/rgb_corrected_geodetic/3/0/0.tif",
+    attribution: (
+      <>
+        <a href="https://cloudless.eox.at">
+          EOxCloudless - https://cloudless.eox.at
+        </a>
+        {" (Contains modified Copernicus Sentinel data 2020)"}
+      </>
+    ),
+  },
+  // {
+  //   title: "Fields of the World — Denmark S2",
+  //   url: "https://data.source.coop/kerner-lab/fields-of-the-world/denmark/s2_images/window_a/g22_00002_10.tif",
+  // },
+  // {
+  //   title: "GHRSST Sea Ice Fraction (2020-12-12)",
+  //   url: "https://data.source.coop/ausantarctic/ghrsst-mur-v2/2020/12/12/20201212090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-v02.0-fv04.1_sea_ice_fraction.tif",
+  // },
+  // {
+  //   title: "Sentinel-2 RGB — Riyadh",
+  //   url: "https://data.source.coop/tabaqat/riyadh-sentinel-rgb/Sentinel-2_Satellite_RGB_Riyadh.tif",
+  // },
+  {
+    title: "Anderson Co. Ortho Pan 2ft (2000)",
+    url: "https://data.source.coop/giswqs/tn-imagery/imagery/AndersonCo_OrthoPan_2ft_2000.tif",
+  },
+];
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   const cog_layer = new COGLayer({
     id: "cog-layer",
-    geotiff: COG_URL,
+    geotiff: COG_OPTIONS[selectedIndex].url,
     debug,
     debugOpacity,
     onGeoTIFFLoad: (tiff, options) => {
@@ -110,9 +132,37 @@ export default function App() {
           <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
             COGLayer Example
           </h3>
+          <select
+            value={selectedIndex}
+            onChange={(e) => setSelectedIndex(Number(e.target.value))}
+            style={{
+              width: "100%",
+              padding: "4px",
+              cursor: "pointer",
+            }}
+          >
+            {COG_OPTIONS.map((opt, i) => (
+              <option key={opt.url} value={i}>
+                {opt.title}
+              </option>
+            ))}
+          </select>
           {/* <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
             Displaying RGB imagery from New Zealand (NZTM2000 projection)
           </p> */}
+
+          {/* Attribution */}
+          {COG_OPTIONS[selectedIndex].attribution && (
+            <p
+              style={{
+                margin: "8px 0 0 0",
+                fontSize: "11px",
+                color: "#666",
+              }}
+            >
+              {COG_OPTIONS[selectedIndex].attribution}
+            </p>
+          )}
 
           {/* Debug Controls */}
           <div

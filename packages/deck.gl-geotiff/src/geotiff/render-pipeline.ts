@@ -10,7 +10,6 @@ import {
   MaskTexture,
   WhiteIsZero,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
-
 import type {
   GeoTIFF,
   Overview,
@@ -25,6 +24,7 @@ import { inferTextureFormat } from "./texture";
 export type TextureDataT = {
   height: number;
   width: number;
+  byteLength: number;
   texture: Texture;
   mask?: Texture;
 };
@@ -126,11 +126,12 @@ function createUnormPipeline(
     });
   }
 
-  const toRGBModule = photometricInterpretationToRGB(
+  const toRGBModule = photometricInterpretationToRGB({
+    count: samplesPerPixel,
     photometric,
     device,
     colorMap,
-  );
+  });
   if (toRGBModule) {
     renderPipeline.push(toRGBModule);
   }
@@ -184,6 +185,7 @@ function createUnormPipeline(
       height,
       bytesPerPixel,
     });
+    let byteLength = textureData.byteLength;
     const texture = device.createTexture({
       data: textureData,
       format: textureFormat,
@@ -207,11 +209,13 @@ function createUnormPipeline(
         height,
         sampler: samplerOptions,
       });
+      byteLength += mask.byteLength;
     }
 
     return {
       texture,
       mask: maskTexture,
+      byteLength,
       height: array.height,
       width: array.width,
     };
@@ -223,11 +227,22 @@ function createUnormPipeline(
   return { getTileData, renderTile };
 }
 
-function photometricInterpretationToRGB(
-  photometric: Photometric,
-  device: Device,
-  ColorMap?: Uint16Array,
-): RasterModule | null {
+function photometricInterpretationToRGB({
+  count,
+  colorMap,
+  device,
+  photometric,
+}: {
+  count: number;
+  colorMap?: Uint16Array;
+  device: Device;
+  photometric: Photometric;
+}): RasterModule | null {
+  if (count === 3 || count === 4) {
+    // Always interpret 3-band or 4-band images as RGB/RGBA
+    return null;
+  }
+
   switch (photometric) {
     case Photometric.MinIsWhite: {
       return {
@@ -242,12 +257,12 @@ function photometricInterpretationToRGB(
     case Photometric.Rgb:
       return null;
     case Photometric.Palette: {
-      if (!ColorMap) {
+      if (!colorMap) {
         throw new Error(
           "ColorMap is required for PhotometricInterpretation Palette",
         );
       }
-      const { data, width, height } = parseColormap(ColorMap);
+      const { data, width, height } = parseColormap(colorMap);
       const cmapTexture = device.createTexture({
         data,
         format: "rgba8unorm",

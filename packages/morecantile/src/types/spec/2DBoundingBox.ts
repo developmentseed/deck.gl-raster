@@ -12,10 +12,6 @@ export interface DBoundingBox {
   lowerLeft: DPoint;
   upperRight: DPoint;
   crs?: CRS;
-  /**
-   * @minItems 2
-   * @maxItems 2
-   */
   orderedAxes?: [string, string];
   [k: string]: unknown;
 }

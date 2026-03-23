@@ -48,14 +48,24 @@ export class Overview {
     this.dataSource = dataSource;
   }
 
+  /**
+   * The CRS parsed from the GeoKeyDirectory.
+   *
+   * Returns an EPSG code (number) for EPSG-coded CRSes, or a PROJJSON object
+   * for user-defined CRSes. The result is cached after the first access.
+   *
+   * See also {@link GeoTIFF.epsg} for the EPSG code directly from the TIFF tags.
+   */
   get crs(): number | ProjJson {
     return this.geotiff.crs;
   }
 
+  /** Image height in pixels. */
   get height(): number {
     return this.image.size.height;
   }
 
+  /** The no data value, or null if not set. */
   get nodata(): number | null {
     return this.geotiff.nodata;
   }
@@ -65,14 +75,19 @@ export class Overview {
     return this.image.tileCount;
   }
 
+  /** Tile height in pixels. */
   get tileHeight(): number {
     return this.image.tileSize.height;
   }
 
+  /** Tile width in pixels. */
   get tileWidth(): number {
     return this.image.tileSize.width;
   }
 
+  /**
+   * Return the dataset's georeferencing transformation matrix.
+   */
   get transform(): Affine {
     const fullTransform = this.geotiff.transform;
     const scaleX = this.geotiff.width / this.width;
@@ -80,11 +95,20 @@ export class Overview {
     return compose(fullTransform, scale(scaleX, scaleY));
   }
 
+  /** Image width in pixels. */
   get width(): number {
     return this.image.size.width;
   }
 
-  /** Fetch a single tile from the full-resolution image. */
+  /** Fetch a single tile from the full-resolution image.
+   *
+   * @param x The tile column index (0-based).
+   * @param y The tile row index (0-based).
+   * @param options Optional parameters for fetching the tile.
+   * @param options.boundless Whether to clip tiles that are partially outside the image bounds. When `true`, no clipping is applied. Defaults to `true`.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tile data. If not provided, a new decoder will be created for each tile.
+   * @param options.signal An optional {@link AbortSignal} to cancel the fetch request.
+   */
   async fetchTile(
     x: number,
     y: number,

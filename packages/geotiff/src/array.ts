@@ -19,7 +19,7 @@ export type RasterTypedArray =
   | Float64Array;
 
 /** Common metadata shared by all raster layouts. */
-type RasterArrayBase = {
+export type RasterArrayBase = {
   /** Number of bands (samples per pixel). */
   count: number;
 

@@ -30,9 +30,6 @@ export interface TileMatrixSetDefinition {
    * Reference to an official source for this tileMatrixSet
    */
   uri?: string;
-  /**
-   * @minItems 1
-   */
   orderedAxes?: [string, ...string[]];
   crs: CRS;
   /**

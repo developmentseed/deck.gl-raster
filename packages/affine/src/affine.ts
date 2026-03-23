@@ -1,11 +1,14 @@
 /**
- * Affine geotransform: [a, b, c, d, e, f].
+ * Affine geotransform: `[a, b, c, d, e, f]`.
  *
  * Maps pixel (col, row) to geographic (x, y):
- *   x = a * col + b * row + c
- *   y = d * col + e * row + f
+ *
+ * ```
+ * x = a * col + b * row + c
+ * y = d * col + e * row + f
+ * ```
  */
-export type Affine = [
+export type Affine = readonly [
   a: number,
   b: number,
   c: number,
@@ -14,17 +17,43 @@ export type Affine = [
   f: number,
 ];
 
-/** The identity transform. */
+// Create a single identity array to reuse for all calls to `identity()`.
+const ident: Affine = [1, 0, 0, 0, 1, 0];
+
+/**
+ * Access the identity affine transform, which maps pixel coordinates to
+ * themselves.
+ *
+ * @return  The identity affine transform.
+ */
 export function identity(): Affine {
-  return [1, 0, 0, 0, 1, 0];
+  return ident;
 }
 
-/** Create a translation transform. */
+/**
+ * Create a translation transform from an offset vector.
+ *
+ * @param xoff  Translation offset in x direction.
+ * @param yoff  Translation offset in y direction.
+ *
+ * @return Transform that applies the given translation.
+ */
 export function translation(xoff: number, yoff: number): Affine {
   return [1, 0, xoff, 0, 1, yoff];
 }
 
-/** Create a scaling transform. If only one argument, scale uniformly. */
+/**
+ * Create a scaling transform from a scalar or vector.
+ *
+ * You can pass either one or two scaling factors. Passing only a single scalar
+ * value will scale in both dimensions equally. A vector scaling value scales
+ * the dimensions independently.
+ *
+ * @param sx  Scaling factor in x direction.
+ * @param sy  Scaling factor in y direction (defaults to sx if not provided).
+ *
+ * @return Transform that applies the given scaling.
+ */
 export function scale(sx: number, sy: number = sx): Affine {
   return [sx, 0, 0, 0, sy, 0];
 }
@@ -32,24 +61,46 @@ export function scale(sx: number, sy: number = sx): Affine {
 /**
  * Apply a geotransform to a coordinate.
  *
- *   x_out = a * x + b * y + c
- *   y_out = d * x + e * y + f
+ * That is, we apply this series of equations:
+ *
+ * ```
+ *  x_out = a * x + b * y + c
+ *  y_out = d * x + e * y + f
+ * ```
+ *
+ * @param affine  The affine transform to apply.
+ * @param x       The x coordinate.
+ * @param y       The y coordinate.
+ *
+ * @return The transformed coordinates.
  */
 export function apply(
   [a, b, c, d, e, f]: Affine,
   x: number,
   y: number,
-): [number, number] {
-  return [a * x + b * y + c, d * x + e * y + f];
+): [x: number, y: number] {
+  // biome-ignore format: array
+  return [
+    a * x + b * y + c,
+    d * x + e * y + f
+  ];
 }
 
 /**
  * Compose two affine transforms: A×B (apply B first, then A).
  *
- * Equivalent to multiplying the 3×3 matrices:
+ * This is equivalent to `a @ b` in Python's `affine` library, and is equivalent
+ * to multiplying the 3×3 matrices:
+ * ```
  *   | a1 b1 c1 |   | a2 b2 c2 |
  *   | d1 e1 f1 | × | d2 e2 f2 |
  *   | 0  0  1  |   | 0  0  1  |
+ * ```
+ *
+ * @param A The first affine transform to apply.
+ * @param B The second affine transform to apply.
+ *
+ * @return The composed affine transform.
  */
 export function compose(
   [a1, b1, c1, d1, e1, f1]: Affine,
@@ -67,6 +118,10 @@ export function compose(
 
 /**
  * Compute the inverse of an Affine.
+ *
+ * @param affine  The affine transform to invert.
+ * @return The inverted affine transform.
+ * @throws If the transform is degenerate and cannot be inverted.
  */
 export function invert([sa, sb, sc, sd, se, sf]: Affine): Affine {
   const det = sa * se - sb * sd;

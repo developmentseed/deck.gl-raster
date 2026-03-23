@@ -4,7 +4,7 @@ import type {
   LayersList,
   UpdateParameters,
 } from "@deck.gl/core";
-import { CompositeLayer } from "@deck.gl/core";
+import { COORDINATE_SYSTEM, CompositeLayer } from "@deck.gl/core";
 import type {
   _Tile2DHeader as Tile2DHeader,
   TileLayerProps,
@@ -13,7 +13,11 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
-import type { RasterModule } from "@developmentseed/deck.gl-raster";
+import type {
+  RasterLayerProps,
+  RasterModule,
+  TileMetadata,
+} from "@developmentseed/deck.gl-raster";
 import {
   RasterLayer,
   TileMatrixSetTileset,
@@ -35,18 +39,43 @@ import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { fromAffine } from "./geotiff-reprojection.js";
 import type { EpsgResolver } from "./proj.js";
-import { epsgResolver } from "./proj.js";
+import { epsgResolver, makeClampedForwardTo3857 } from "./proj.js";
+
+/** Size of deck.gl's common coordinate space in world units.
+ *
+ * At zoom 0, one tile covers the whole world (512×512 units); at zoom z, each
+ * tile is 512/2^z units.
+ */
+const TILE_SIZE = 512;
+
+/**
+ * The size of the globe in web mercator meters.
+ */
+const WEB_MERCATOR_METER_CIRCUMFERENCE = 40075016.686;
+
+/**
+ * Scale factor for converting EPSG:3857 meters into deck.gl world units
+ * (512×512).
+ */
+const WEB_MERCATOR_TO_WORLD_SCALE =
+  TILE_SIZE / WEB_MERCATOR_METER_CIRCUMFERENCE;
 
 /**
  * Minimum interface that **must** be returned from getTileData.
  */
 export type MinimalDataT = {
+  /** The height of the tile in pixels. */
   height: number;
+  /** The width of the tile in pixels. */
   width: number;
+
+  /** Byte length of the data, used for cache eviction when `maxCacheByteSize` is set. */
+  byteLength?: number;
 };
 
-export type DefaultDataT = MinimalDataT & {
+type DefaultDataT = MinimalDataT & {
   texture: Texture;
+  byteLength: number;
 };
 
 /** Options passed to `getTileData`. */
@@ -100,8 +129,19 @@ type COGLayerDataProps<DataT extends MinimalDataT> =
       renderTile?: undefined;
     };
 
+/**
+ * Props that can be passed into the {@link COGLayer}.
+ */
 export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> =
   CompositeLayerProps &
+    Pick<
+      TileLayerProps,
+      | "debounceTime"
+      | "maxCacheSize"
+      | "maxCacheByteSize"
+      | "maxRequests"
+      | "refinementStrategy"
+    > &
     COGLayerDataProps<DataT> & {
       /**
        * Cloud-optimized GeoTIFF input.
@@ -180,6 +220,7 @@ export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> =
     };
 
 const defaultProps: Partial<COGLayerProps> = {
+  ...TileLayer.defaultProps,
   epsgResolver,
   debug: false,
   debugOpacity: 0.5,
@@ -199,6 +240,7 @@ export class COGLayer<
     forwardTo4326?: ReprojectionFns["forwardReproject"];
     inverseFrom4326?: ReprojectionFns["inverseReproject"];
     forwardTo3857?: ReprojectionFns["forwardReproject"];
+    inverseFrom3857?: ReprojectionFns["inverseReproject"];
     tms?: TileMatrixSet;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
@@ -217,8 +259,24 @@ export class COGLayer<
       Boolean(changeFlags.dataChanged) || props.geotiff !== oldProps.geotiff;
 
     if (needsUpdate) {
+      // Clear stale state so renderLayers returns null until the new GeoTIFF is
+      // ready
+      this.clearState();
       this._parseGeoTIFF();
     }
+  }
+
+  clearState() {
+    this.setState({
+      geotiff: undefined,
+      tms: undefined,
+      forwardTo4326: undefined,
+      inverseFrom4326: undefined,
+      forwardTo3857: undefined,
+      inverseFrom3857: undefined,
+      defaultGetTileData: undefined,
+      defaultRenderTile: undefined,
+    });
   }
 
   async _parseGeoTIFF(): Promise<void> {
@@ -242,8 +300,13 @@ export class COGLayer<
     // @ts-expect-error - proj4 typings are incomplete and don't support
     // wkt-parser input
     const converter3857 = proj4(sourceProjection, "EPSG:3857");
-    const forwardTo3857 = (x: number, y: number) =>
-      converter3857.forward<[number, number]>([x, y], false);
+    const forwardTo3857 = makeClampedForwardTo3857(
+      (x: number, y: number) =>
+        converter3857.forward<[number, number]>([x, y], false),
+      forwardTo4326,
+    );
+    const inverseFrom3857 = (x: number, y: number) =>
+      converter3857.inverse<[number, number]>([x, y], false);
 
     if (this.props.onGeoTIFFLoad) {
       const geographicBounds = getGeographicBounds(geotiff, converter4326);
@@ -267,6 +330,7 @@ export class COGLayer<
       forwardTo4326,
       inverseFrom4326,
       forwardTo3857,
+      inverseFrom3857,
     });
   }
 
@@ -344,9 +408,16 @@ export class COGLayer<
     tms: TileMatrixSet,
     forwardTo4326: ReprojectionFns["forwardReproject"],
     inverseFrom4326: ReprojectionFns["inverseReproject"],
+    forwardTo3857: ReprojectionFns["forwardReproject"],
+    inverseFrom3857: ReprojectionFns["inverseReproject"],
   ): Layer | LayersList | null {
     const { maxError, debug, debugOpacity } = this.props;
-    const { tile } = props;
+
+    // Cast to include TileMetadata from raster-tileset's `getTileMetadata`
+    // method.
+    // TODO: implement generic handling of tile metadata upstream in TileLayer
+    const tile = props.tile as Tile2DHeader<GetTileDataResult<DataT>> &
+      TileMetadata;
 
     if (!props.data) {
       return null;
@@ -373,55 +444,95 @@ export class COGLayer<
         );
       }
 
+      // viewport.resolution is defined for GlobeView, undefined for WebMercatorViewport.
+      // For WebMercator we project the mesh to EPSG:3857 and use a model matrix
+      // to map from 3857 meters to deck.gl world space, matching the approach
+      // used by the MVTLayer. This avoids per-vertex WGS84→WebMercator linear
+      // interpolation errors that become visible at high latitudes.
+      const isGlobe = this.context.viewport.resolution !== undefined;
+      let reprojectionFns: ReprojectionFns;
+      let rasterLayerProps: Partial<RasterLayerProps>;
+
+      if (isGlobe) {
+        reprojectionFns = {
+          forwardTransform,
+          inverseTransform,
+          forwardReproject: forwardTo4326,
+          inverseReproject: inverseFrom4326,
+        };
+        rasterLayerProps = {};
+      } else {
+        reprojectionFns = {
+          forwardTransform,
+          inverseTransform,
+          forwardReproject: forwardTo3857,
+          inverseReproject: inverseFrom3857,
+        };
+        // Scale 3857 meters → deck.gl world units (512×512).
+        //
+        // coordinateOrigin shifts the world-space origin to (256, 256) so that
+        // easting=0 / northing=0 maps to world center. Then the modelMatrix
+        //
+        // No Y-flip needed: CARTESIAN Y increases upward = northing.
+        rasterLayerProps = {
+          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
+          // biome-ignore format: array
+          modelMatrix: [
+            WEB_MERCATOR_TO_WORLD_SCALE, 0, 0, 0,
+            0, WEB_MERCATOR_TO_WORLD_SCALE, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+          ],
+        };
+      }
+
       layers.push(
-        new RasterLayer({
-          id: `${props.id}-raster`,
-          width,
-          height,
-          renderPipeline,
-          maxError,
-          reprojectionFns: {
-            forwardTransform,
-            inverseTransform,
-            forwardReproject: forwardTo4326,
-            inverseReproject: inverseFrom4326,
-          },
-          debug,
-          debugOpacity,
-        }),
+        new RasterLayer(
+          this.getSubLayerProps({
+            id: `${props.id}-raster`,
+            width,
+            height,
+            renderPipeline,
+            maxError,
+            reprojectionFns,
+            debug,
+            debugOpacity,
+            ...rasterLayerProps,
+          }),
+        ),
       );
     }
 
     if (debug) {
-      // Get projected bounds from tile data
-      // getTileMetadata returns data that includes projectedBounds
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const projectedBounds: {
-        topLeft: [number, number];
-        topRight: [number, number];
-        bottomLeft: [number, number];
-        bottomRight: [number, number];
-      } = (tile as any)?.projectedBounds;
+      const { projectedCorners } = tile;
 
-      if (!projectedBounds || !tms) {
+      if (!projectedCorners || !tms) {
         return [];
       }
 
-      // Project bounds from image CRS to WGS84
-      const { topLeft, topRight, bottomLeft, bottomRight } = projectedBounds;
-
+      // Create a closed path in WGS84 projection around the tile bounds
+      //
+      // The tile has a `bbox` field which is already the bounding box in WGS84,
+      // but that uses `transformBounds` and densifies edges. So the corners of
+      // the bounding boxes don't line up with each other.
+      //
+      // In this case in the debug mode, it looks better if we ignore the actual
+      // non-linearities of the edges and just draw a box connecting the
+      // reprojected corners. In any case, the _image itself_ will be densified
+      // on the edges as a feature of the mesh generation.
+      const { topLeft, topRight, bottomRight, bottomLeft } = projectedCorners;
       const topLeftWgs84 = forwardTo4326(topLeft[0], topLeft[1]);
       const topRightWgs84 = forwardTo4326(topRight[0], topRight[1]);
       const bottomRightWgs84 = forwardTo4326(bottomRight[0], bottomRight[1]);
       const bottomLeftWgs84 = forwardTo4326(bottomLeft[0], bottomLeft[1]);
 
-      // Create a closed path around the tile bounds
       const path = [
         topLeftWgs84,
         topRightWgs84,
         bottomRightWgs84,
         bottomLeftWgs84,
-        topLeftWgs84, // Close the path
+        topLeftWgs84,
       ];
 
       layers.push(
@@ -446,6 +557,7 @@ export class COGLayer<
     forwardTo4326: ReprojectionFns["forwardReproject"],
     inverseFrom4326: ReprojectionFns["inverseReproject"],
     forwardTo3857: ReprojectionFns["forwardReproject"],
+    inverseFrom3857: ReprojectionFns["inverseReproject"],
     geotiff: GeoTIFF,
   ): TileLayer {
     // Create a factory class that wraps COGTileset2D with the metadata
@@ -458,23 +570,50 @@ export class COGLayer<
       }
     }
 
+    const {
+      maxRequests,
+      maxCacheSize,
+      maxCacheByteSize,
+      debounceTime,
+      refinementStrategy,
+    } = this.props;
+
     return new TileLayer<GetTileDataResult<DataT>>({
       id: `cog-tile-layer-${this.id}`,
       TilesetClass: TileMatrixSetTilesetFactory,
       getTileData: async (tile) => this._getTileData(tile, geotiff, tms),
       renderSubLayers: (props) =>
-        this._renderSubLayers(props, tms, forwardTo4326, inverseFrom4326),
+        this._renderSubLayers(
+          props,
+          tms,
+          forwardTo4326,
+          inverseFrom4326,
+          forwardTo3857,
+          inverseFrom3857,
+        ),
+      debounceTime,
+      maxCacheByteSize,
+      maxCacheSize,
+      maxRequests,
+      refinementStrategy,
     });
   }
 
   renderLayers() {
-    const { forwardTo4326, inverseFrom4326, forwardTo3857, tms, geotiff } =
-      this.state;
+    const {
+      forwardTo4326,
+      inverseFrom4326,
+      forwardTo3857,
+      inverseFrom3857,
+      tms,
+      geotiff,
+    } = this.state;
 
     if (
       !forwardTo4326 ||
       !inverseFrom4326 ||
       !forwardTo3857 ||
+      !inverseFrom3857 ||
       !tms ||
       !geotiff
     ) {
@@ -489,6 +628,7 @@ export class COGLayer<
       forwardTo4326,
       inverseFrom4326,
       forwardTo3857,
+      inverseFrom3857,
       geotiff,
     );
   }

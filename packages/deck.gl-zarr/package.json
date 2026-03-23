@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/deck.gl-zarr",
-  "version": "0.3.0-beta.3",
+  "version": "0.4.0",
   "description": "Zarr visualization in deck.gl.",
   "type": "module",
   "main": "./dist/index.js",
@@ -48,7 +48,7 @@
   "dependencies": {
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
-    "proj4": "^2.20.3",
+    "proj4": "^2.20.4",
     "zarrita": "^0.6.1"
   },
   "volta": {
