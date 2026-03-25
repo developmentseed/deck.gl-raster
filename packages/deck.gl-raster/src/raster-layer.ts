@@ -148,12 +148,24 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
     const { props, oldProps, changeFlags } = params;
 
-    // Regenerate mesh if key properties change
+    // Regenerate mesh if key properties change.
+    // Compare reprojectionFns members individually since callers may create a
+    // new wrapper object on every render even when the functions are stable.
+    const reprojectionFnsChanged =
+      props.reprojectionFns.forwardTransform !==
+        oldProps.reprojectionFns?.forwardTransform ||
+      props.reprojectionFns.inverseTransform !==
+        oldProps.reprojectionFns?.inverseTransform ||
+      props.reprojectionFns.forwardReproject !==
+        oldProps.reprojectionFns?.forwardReproject ||
+      props.reprojectionFns.inverseReproject !==
+        oldProps.reprojectionFns?.inverseReproject;
+
     const needsMeshUpdate =
       Boolean(changeFlags.dataChanged) ||
       props.width !== oldProps.width ||
       props.height !== oldProps.height ||
-      props.reprojectionFns !== oldProps.reprojectionFns ||
+      reprojectionFnsChanged ||
       props.maxError !== oldProps.maxError;
 
     if (needsMeshUpdate) {
