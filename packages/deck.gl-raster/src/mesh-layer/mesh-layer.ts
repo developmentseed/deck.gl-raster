@@ -1,8 +1,4 @@
-import type {
-  DefaultProps,
-  TextureSource,
-  UpdateParameters,
-} from "@deck.gl/core";
+import type { DefaultProps, TextureSource } from "@deck.gl/core";
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import type { Texture } from "@luma.gl/core";
@@ -42,28 +38,6 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   static override layerName = "mesh-texture-layer";
   static override defaultProps: typeof defaultProps = defaultProps;
 
-  state!: SimpleMeshLayer["state"] & {
-    renderPipeline: RasterModule[];
-  };
-
-  override initializeState(): void {
-    super.initializeState();
-
-    this.setState({ renderPipeline: this._resolveRenderPipeline() });
-  }
-
-  override updateState(params: UpdateParameters<this>): void {
-    super.updateState(params);
-
-    const { image, renderPipeline } = this.props;
-    const prevImage = params.oldProps.image;
-    const prevRenderPipeline = params.oldProps.renderPipeline;
-
-    if (image !== prevImage || renderPipeline !== prevRenderPipeline) {
-      this.setState({ renderPipeline: this._resolveRenderPipeline() });
-    }
-  }
-
   _resolveRenderPipeline(): RasterModule[] {
     const { image, renderPipeline } = this.props;
     const imageModule: RasterModule[] = image
@@ -76,7 +50,7 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     const upstreamShaders = super.getShaders();
 
     const modules: ShaderModule[] = upstreamShaders.modules;
-    for (const m of this.state.renderPipeline) {
+    for (const m of this._resolveRenderPipeline()) {
       modules.push(m.module);
     }
 
@@ -91,7 +65,7 @@ export class MeshTextureLayer extends SimpleMeshLayer<
 
   override draw(opts: any): void {
     const shaderProps: { [x: string]: Partial<Record<string, unknown>> } = {};
-    for (const m of this.state.renderPipeline) {
+    for (const m of this._resolveRenderPipeline()) {
       // Props should be keyed by module name
       shaderProps[m.module.name] = m.props || {};
     }
