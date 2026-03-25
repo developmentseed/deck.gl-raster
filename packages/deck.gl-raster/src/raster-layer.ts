@@ -7,6 +7,7 @@ import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
+import { Texture } from "@luma.gl/core";
 import { CreateTexture } from "./gpu-modules/create-texture";
 import type { RasterModule } from "./gpu-modules/types";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
@@ -70,7 +71,7 @@ export interface RasterLayerProps extends CompositeLayerProps {
    * - ImageData representing RGBA pixel data
    * - Sequence of shader modules to be composed into a shader program
    */
-  renderPipeline: ImageData | RasterModule[];
+  renderPipeline: ImageData | Texture | RasterModule[];
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
@@ -239,6 +240,15 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         height: imageData.height,
         data: imageData.data,
       });
+      const wrapper: RasterModule = {
+        module: CreateTexture,
+        props: {
+          textureName: texture,
+        },
+      };
+      return [wrapper];
+    } else if (this.props.renderPipeline instanceof Texture) {
+      const texture = this.props.renderPipeline;
       const wrapper: RasterModule = {
         module: CreateTexture,
         props: {
