@@ -111,8 +111,8 @@ export interface RasterLayerProps extends CompositeLayerProps {
 const defaultProps: DefaultProps<RasterLayerProps> = {
   // A prop with `type: "image"` gets converted to a texture automatically by
   // deck.gl
-  image: { type: "image", value: null },
-  renderPipeline: { type: "array", value: [], compare: false },
+  image: { type: "image", value: null, async: true },
+  renderPipeline: { type: "array", value: [], compare: true },
   debug: false,
   debugOpacity: 0.5,
 };
