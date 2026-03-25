@@ -1,12 +1,15 @@
 import type {
   CompositeLayerProps,
+  DefaultProps,
   Layer,
+  TextureSource,
   UpdateParameters,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
+import type { Texture } from "@luma.gl/core";
 import { CreateTexture } from "./gpu-modules/create-texture";
 import type { RasterModule } from "./gpu-modules/types";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
@@ -44,6 +47,17 @@ type DebugData = {
 };
 
 /**
+ * The result returned by a `renderTile` function.
+ *
+ * Must contain at least one of `image` or `renderPipeline`. If both are
+ * provided, `image` is prepended as a `CreateTexture` module so the pipeline
+ * can operate on it.
+ */
+export type RenderTileResult =
+  | { image: TextureSource; renderPipeline?: RasterModule[] }
+  | { renderPipeline: RasterModule[]; image?: TextureSource };
+
+/**
  * Props for {@link RasterLayer}.
  */
 export interface RasterLayerProps extends CompositeLayerProps {
@@ -63,14 +77,24 @@ export interface RasterLayerProps extends CompositeLayerProps {
   reprojectionFns: ReprojectionFns;
 
   /**
-   * Render pipeline for visualizing textures.
+   * The image to display. Accepts any luma.gl `TextureSource` (e.g. a URL,
+   * `HTMLImageElement`, `ImageData`, etc.). deck.gl manages the texture
+   * lifecycle automatically.
    *
-   * Can be:
+   * If `renderPipeline` is also provided, `image` is prepended as a
+   * `CreateTexture` module so the pipeline can operate on it.
    *
-   * - ImageData representing RGBA pixel data
-   * - Sequence of shader modules to be composed into a shader program
+   * @default null
    */
-  renderPipeline: ImageData | RasterModule[];
+  image?: TextureSource | null;
+
+  /**
+   * Sequence of shader modules to be composed into a render pipeline.
+   *
+   * If `image` is also provided, it is automatically prepended as a
+   * `CreateTexture` module.
+   */
+  renderPipeline?: RasterModule[] | null;
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
@@ -86,7 +110,9 @@ export interface RasterLayerProps extends CompositeLayerProps {
   debugOpacity?: number;
 }
 
-const defaultProps = {
+const defaultProps: DefaultProps<RasterLayerProps> = {
+  image: { type: "image", value: null },
+  renderPipeline: { type: "object", value: null, compare: false },
   debug: false,
   debugOpacity: 0.5,
 };
@@ -229,33 +255,26 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     );
   }
 
-  /** Create assembled render pipeline from the renderPipeline prop input. */
-  protected _createRenderPipeline(): RasterModule[] {
-    if (this.props.renderPipeline instanceof ImageData) {
-      const imageData = this.props.renderPipeline;
-      const texture = this.context.device.createTexture({
-        format: "rgba8unorm",
-        width: imageData.width,
-        height: imageData.height,
-        data: imageData.data,
-      });
-      const wrapper: RasterModule = {
-        module: CreateTexture,
-        props: {
-          textureName: texture,
-        },
-      };
-      return [wrapper];
-    } else {
-      return this.props.renderPipeline;
-    }
+  _createRenderPipeline(): RasterModule[] | null {
+    const { image, renderPipeline: pipelineFromProps } = this.props;
+
+    // Build effective pipeline: if image is set, prepend CreateTexture so
+    // renderPipeline modules can operate on it. If only image is set, the
+    // pipeline is just the single CreateTexture module.
+    const imageModule: RasterModule[] = image
+      ? [{ module: CreateTexture, props: { textureName: image as Texture } }]
+      : [];
+    return imageModule.length > 0 || pipelineFromProps
+      ? [...imageModule, ...(pipelineFromProps ?? [])]
+      : null;
   }
 
   renderLayers() {
     const { mesh } = this.state;
     const { debug } = this.props;
+    const renderPipeline = this._createRenderPipeline();
 
-    if (!mesh) {
+    if (!mesh || !renderPipeline) {
       return null;
     }
 
@@ -264,7 +283,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     const meshLayer = new MeshTextureLayer(
       this.getSubLayerProps({
         id: "raster",
-        renderPipeline: this._createRenderPipeline(),
+        renderPipeline,
         // Dummy data because we're only rendering _one_ instance of this mesh
         // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
         data: [1],

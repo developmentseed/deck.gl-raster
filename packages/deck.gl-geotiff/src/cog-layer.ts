@@ -15,7 +15,7 @@ import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
 import type {
   RasterLayerProps,
-  RasterModule,
+  RenderTileResult,
   TileMetadata,
 } from "@developmentseed/deck.gl-raster";
 import {
@@ -122,7 +122,7 @@ type COGLayerDataProps<DataT extends MinimalDataT> =
        * Must be provided together with `getTileData`. Receives the value
        * returned by `getTileData` and must return a render pipeline.
        */
-      renderTile: (data: DataT) => ImageData | RasterModule[];
+      renderTile: (data: DataT) => RenderTileResult;
     }
   | {
       getTileData?: undefined;
@@ -430,16 +430,16 @@ export class COGLayer<
     if (data) {
       const { height, width } = data;
 
-      let renderPipeline: ImageData | RasterModule[];
+      let tileResult: RenderTileResult;
       if (this.props.getTileData) {
         // In the case that the user passed in a custom `getTileData`, TS knows
         // that `data` can be passed in to `renderTile`.
-        renderPipeline = this.props.renderTile(data);
+        tileResult = this.props.renderTile(data);
       } else {
         // In the default case, `data` is `DefaultDataT` — cast required because
         // TS can't prove that `DataT` (which defaults to `DefaultDataT`) is
         // `DefaultDataT` at this point.
-        renderPipeline = this.state.defaultRenderTile!(
+        tileResult = this.state.defaultRenderTile!(
           data as unknown as DefaultDataT,
         );
       }
@@ -493,7 +493,7 @@ export class COGLayer<
             id: `${props.id}-raster`,
             width,
             height,
-            renderPipeline,
+            ...tileResult,
             maxError,
             reprojectionFns,
             debug,

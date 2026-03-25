@@ -1,4 +1,3 @@
-import assert from "node:assert";
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF } from "@developmentseed/geotiff";
 import { describe, expect, it } from "vitest";
@@ -17,10 +16,7 @@ function _createRenderPipeline(geotiff: GeoTIFF): RasterModule[] {
     geotiff,
     MOCK_DEVICE as any,
   );
-  const renderPipeline = renderTile(MOCK_RENDER_TILE_DATA as any);
-
-  assert(!(renderPipeline instanceof ImageData));
-  return renderPipeline;
+  return renderTile(MOCK_RENDER_TILE_DATA as any).renderPipeline!;
 }
 
 describe("land cover, single-band uint8", async () => {

@@ -1,7 +1,10 @@
 import type { DeckProps } from "@deck.gl/core";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
-import type { RasterModule } from "@developmentseed/deck.gl-raster";
+import type {
+  RasterModule,
+  RenderTileResult,
+} from "@developmentseed/deck.gl-raster";
 import {
   Colormap,
   CreateTexture,
@@ -176,19 +179,13 @@ const ndviFilter = {
  * Just uploads the texture and overrides the near-infrared (NIR) value in the
  * alpha channel to 1.
  */
-function renderRGB(tileData: TextureDataT): RasterModule[] {
+function renderRGB(tileData: TextureDataT): RenderTileResult {
   const { texture } = tileData;
-  return [
-    {
-      module: CreateTexture,
-      props: {
-        textureName: texture,
-      },
-    },
-    {
-      module: SetAlpha1,
-    },
+  const renderPipeline: RasterModule[] = [
+    { module: CreateTexture, props: { textureName: texture } },
+    { module: SetAlpha1 },
   ];
+  return { renderPipeline };
 }
 
 /**
@@ -197,22 +194,14 @@ function renderRGB(tileData: TextureDataT): RasterModule[] {
  * Reorders bands so that NIR is mapped to red, red is mapped to green, and
  * green is mapped to blue. Also overrides the alpha channel to 1.
  */
-function renderFalseColor(tileData: TextureDataT): RasterModule[] {
+function renderFalseColor(tileData: TextureDataT): RenderTileResult {
   const { texture } = tileData;
-  return [
-    {
-      module: CreateTexture,
-      props: {
-        textureName: texture,
-      },
-    },
-    {
-      module: setFalseColorInfrared,
-    },
-    {
-      module: SetAlpha1,
-    },
+  const renderPipeline: RasterModule[] = [
+    { module: CreateTexture, props: { textureName: texture } },
+    { module: setFalseColorInfrared },
+    { module: SetAlpha1 },
   ];
+  return { renderPipeline };
 }
 
 /**
@@ -226,35 +215,19 @@ function renderNDVI(
   tileData: TextureDataT,
   colormapTexture: Texture,
   ndviRange: [number, number],
-): RasterModule[] {
+): RenderTileResult {
   const { texture } = tileData;
-  return [
-    {
-      module: CreateTexture,
-      props: {
-        textureName: texture,
-      },
-    },
-    {
-      module: ndvi,
-    },
+  const renderPipeline: RasterModule[] = [
+    { module: CreateTexture, props: { textureName: texture } },
+    { module: ndvi },
     {
       module: ndviFilter,
-      props: {
-        ndviMin: ndviRange[0],
-        ndviMax: ndviRange[1],
-      },
+      props: { ndviMin: ndviRange[0], ndviMax: ndviRange[1] },
     },
-    {
-      module: Colormap,
-      props: {
-        colormapTexture,
-      },
-    },
-    {
-      module: SetAlpha1,
-    },
+    { module: Colormap, props: { colormapTexture } },
+    { module: SetAlpha1 },
   ];
+  return { renderPipeline };
 }
 
 type RenderMode = "trueColor" | "falseColor" | "ndvi";

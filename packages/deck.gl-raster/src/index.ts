@@ -1,5 +1,5 @@
 export type { RasterModule } from "./gpu-modules/types.js";
-export type { RasterLayerProps } from "./raster-layer.js";
+export type { RasterLayerProps, RenderTileResult } from "./raster-layer.js";
 export { RasterLayer } from "./raster-layer.js";
 export type { TileMetadata } from "./raster-tileset/index.js";
 export { TileMatrixSetTileset } from "./raster-tileset/index.js";

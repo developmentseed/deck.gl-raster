@@ -1,4 +1,5 @@
 import { Photometric, SampleFormat } from "@cogeotiff/core";
+import type { RenderTileResult } from "@developmentseed/deck.gl-raster";
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
   BlackIsZero,
@@ -56,7 +57,7 @@ export function inferRenderPipeline(
     image: GeoTIFF | Overview,
     options: GetTileDataOptions,
   ) => Promise<TextureDataT>;
-  renderTile: (data: TextureDataT) => ImageData | RasterModule[];
+  renderTile: (data: TextureDataT) => RenderTileResult;
 } {
   const { sampleFormat } = geotiff.cachedTags;
   if (sampleFormat === null) {
@@ -85,7 +86,7 @@ function createUnormPipeline(
     image: GeoTIFF | Overview,
     options: GetTileDataOptions,
   ) => Promise<TextureDataT>;
-  renderTile: (data: TextureDataT) => ImageData | RasterModule[];
+  renderTile: (data: TextureDataT) => RenderTileResult;
 } {
   const {
     bitsPerSample,
@@ -220,8 +221,8 @@ function createUnormPipeline(
       width: array.width,
     };
   };
-  const renderTile = (tileData: TextureDataT): RasterModule[] => {
-    return renderPipeline.map((m, _i) => resolveModule(m, tileData));
+  const renderTile = (tileData: TextureDataT): RenderTileResult => {
+    return { renderPipeline: renderPipeline.map((m, _i) => resolveModule(m, tileData)) };
   };
 
   return { getTileData, renderTile };
