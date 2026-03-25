@@ -16,9 +16,10 @@
  */
 
 import type { Viewport } from "@deck.gl/core";
-import { _GlobeViewport, assert } from "@deck.gl/core";
+import { _GlobeViewport } from "@deck.gl/core";
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
 import { xy_bounds } from "@developmentseed/morecantile";
+import { transformBounds } from "@developmentseed/proj";
 import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
   CullingVolume,
@@ -274,10 +275,8 @@ export class RasterTileNode {
     } = params;
 
     // Get bounding volume for this tile
-    const { boundingVolume, commonSpaceBounds } = this.getBoundingVolume(
-      elevationBounds,
-      project,
-    );
+    const { boundingVolume, commonSpaceBounds, centerLatitude } =
+      this.getBoundingVolume(elevationBounds, project);
 
     // Step 1: Bounds checking
     // If geographic bounds are specified, reject tiles outside those bounds
@@ -299,8 +298,8 @@ export class RasterTileNode {
     // Only select this tile if no child is visible (prevents overlapping tiles)
     // “When pitch is low, force selection at maxZ.”
     if (!this.childVisible && this.z >= minZ) {
-      const metersPerScreenPixel = getMetersPerPixelAtBoundingVolume(
-        boundingVolume,
+      const metersPerScreenPixel = getMetersPerPixel(
+        centerLatitude,
         viewport.zoom,
       );
       // console.log("metersPerScreenPixel", metersPerScreenPixel);
@@ -407,13 +406,15 @@ export class RasterTileNode {
   getBoundingVolume(
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
-  ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
-    // Case 1: Globe view - need to construct an oriented bounding box from
-    // reprojected sample points, but also using the `project` param
+  ): {
+    boundingVolume: OrientedBoundingBox;
+    commonSpaceBounds: Bounds;
+    centerLatitude: number;
+  } {
+    // Case 1: Globe view - construct an oriented bounding box from sample
+    // points projected into globe common space via viewport.projectPosition
     if (project) {
-      assert(false, "TODO: implement getBoundingVolume in Globe view");
-      // Reproject positions to wgs84 instead, then pass them into `project`
-      // return makeOrientedBoundingBoxFromPoints(refPointPositions);
+      return this._getGlobeBoundingVolume(zRange, project);
     }
 
     // (Future) Case 2: Web Mercator input image, can directly compute AABB in
@@ -436,6 +437,7 @@ export class RasterTileNode {
   private _getGenericBoundingVolume(zRange: ZRange): {
     boundingVolume: OrientedBoundingBox;
     commonSpaceBounds: Bounds;
+    centerLatitude: number;
   } {
     const tileMatrix = this.tileMatrix;
     const [minZ, maxZ] = zRange;
@@ -481,9 +483,81 @@ export class RasterTileNode {
     }
 
     const commonSpaceBounds: Bounds = [minX, minY, maxX, maxY];
+    const boundingVolume = makeOrientedBoundingBoxFromPoints(refPointPositions);
+    const [, centerLatitude] = worldToLngLat(boundingVolume.center);
+
+    return {
+      boundingVolume,
+      commonSpaceBounds,
+      centerLatitude,
+    };
+  }
+
+  /**
+   * Globe view bounding volume.
+   *
+   * Sample reference points, reproject to WGS84, then project into globe
+   * common space via viewport.projectPosition.
+   */
+  private _getGlobeBoundingVolume(
+    zRange: ZRange,
+    project: (xyz: number[]) => number[],
+  ): {
+    boundingVolume: OrientedBoundingBox;
+    commonSpaceBounds: Bounds;
+    centerLatitude: number;
+  } {
+    const tileMatrix = this.tileMatrix;
+    const [minZ, maxZ] = zRange;
+
+    const tileCrsBounds = computeProjectedTileBounds(tileMatrix, {
+      x: this.x,
+      y: this.y,
+    });
+
+    // Sample reference points in WGS84 (not EPSG:3857)
+    const refPointsWgs84 = sampleReferencePointsInWgs84(
+      REF_POINTS_9,
+      tileCrsBounds,
+      this.projectTo4326,
+    );
+
+    // Project WGS84 points into globe common space via viewport.projectPosition
+    const refPointPositions: [number, number, number][] = [];
+    let csMinX = Number.POSITIVE_INFINITY;
+    let csMinY = Number.POSITIVE_INFINITY;
+    let csMaxX = Number.NEGATIVE_INFINITY;
+    let csMaxY = Number.NEGATIVE_INFINITY;
+    let latSum = 0;
+
+    for (const [lng, lat] of refPointsWgs84) {
+      latSum += lat;
+      const posMin = project([lng, lat, minZ]);
+      refPointPositions.push([posMin[0]!, posMin[1]!, posMin[2]!]);
+
+      if (posMin[0]! < csMinX) csMinX = posMin[0]!;
+      if (posMin[1]! < csMinY) csMinY = posMin[1]!;
+      if (posMin[0]! > csMaxX) csMaxX = posMin[0]!;
+      if (posMin[1]! > csMaxY) csMaxY = posMin[1]!;
+
+      if (minZ !== maxZ) {
+        const posMax = project([lng, lat, maxZ]);
+        refPointPositions.push([posMax[0]!, posMax[1]!, posMax[2]!]);
+
+        if (posMax[0]! < csMinX) csMinX = posMax[0]!;
+        if (posMax[1]! < csMinY) csMinY = posMax[1]!;
+        if (posMax[0]! > csMaxX) csMaxX = posMax[0]!;
+        if (posMax[1]! > csMaxY) csMaxY = posMax[1]!;
+      }
+    }
+
+    const commonSpaceBounds: Bounds = [csMinX, csMinY, csMaxX, csMaxY];
+    const centerLatitude = latSum / refPointsWgs84.length;
+
     return {
       boundingVolume: makeOrientedBoundingBoxFromPoints(refPointPositions),
       commonSpaceBounds,
+      centerLatitude,
     };
   }
 }
@@ -585,6 +659,35 @@ function sampleReferencePointsInEPSG3857(
     const geoX = minX + relX * (maxX - minX);
     const geoY = minY + relY * (maxY - minY);
     refPointPositions.push(clampedProjectTo3857(geoX, geoY));
+  }
+
+  return refPointPositions;
+}
+
+/**
+ * Sample the selected reference points in WGS84 (EPSG:4326)
+ *
+ * Used for Globe view bounding volume computation where we need WGS84
+ * coordinates instead of EPSG:3857.
+ *
+ * @param  refPoints selected reference points. Each coordinate should be in [0-1]
+ * @param  tileBounds the bounds of the tile in **tile CRS** [minX, minY, maxX, maxY]
+ * @param  projectTo4326 projection function from tile CRS to WGS84
+ */
+function sampleReferencePointsInWgs84(
+  refPoints: [number, number][],
+  tileBounds: [number, number, number, number],
+  projectTo4326: ProjectionFunction,
+): [number, number][] {
+  const [minX, minY, maxX, maxY] = tileBounds;
+  const refPointPositions: [number, number][] = [];
+
+  for (const [relX, relY] of refPoints) {
+    const geoX = minX + relX * (maxX - minX);
+    const geoY = minY + relY * (maxY - minY);
+
+    const projected = projectTo4326(geoX, geoY);
+    refPointPositions.push(projected);
   }
 
   return refPointPositions;
@@ -753,17 +856,34 @@ export function getTileIndices(
   // minZ to 0
   const minZ = 0;
 
-  const { lowerLeft, upperRight } = wgs84Bounds;
-  const [minLng, minLat] = lowerLeft;
-  const [maxLng, maxLat] = upperRight;
-  const bottomLeft = lngLatToWorld([minLng, minLat]);
-  const topRight = lngLatToWorld([maxLng, maxLat]);
-  const bounds: Bounds = [
-    bottomLeft[0],
-    bottomLeft[1],
-    topRight[0],
-    topRight[1],
-  ];
+  // Convert WGS84 bounds to the appropriate common space for bounds filtering
+  let bounds: Bounds;
+
+  if (project) {
+    // Globe view: project WGS84 bounds into globe common space.
+    //
+    // We densify the edges of the bounding box before projecting because the
+    // globe projection is nonlinear — straight edges in WGS84 become curved
+    // arcs on the sphere. Taking the AABB of only 4 corner projections
+    // underestimates the true extent, causing tiles near dataset edges to be
+    // incorrectly culled (e.g. South Texas getting cut off on NLCD).
+    const { lowerLeft, upperRight } = wgs84Bounds;
+    const [minLng, minLat] = lowerLeft;
+    const [maxLng, maxLat] = upperRight;
+
+    const projectWrapper: ProjectionFunction = (x: number, y: number) => {
+      return project([x, y, 0]) as [number, number];
+    };
+    bounds = transformBounds(projectWrapper, minLng, minLat, maxLng, maxLat);
+  } else {
+    // Mercator view: existing code
+    const { lowerLeft, upperRight } = wgs84Bounds;
+    const [minLng, minLat] = lowerLeft;
+    const [maxLng, maxLat] = upperRight;
+    const bottomLeft = lngLatToWorld([minLng, minLat]);
+    const topRight = lngLatToWorld([maxLng, maxLat]);
+    bounds = [bottomLeft[0], bottomLeft[1], topRight[0], topRight[1]];
+  }
 
   // Start from coarsest overview
   const rootMatrix = metadata.tileMatrices[0]!;
@@ -838,5 +958,11 @@ function getMetersPerPixelAtBoundingVolume(
  */
 export const __TEST_EXPORTS = {
   computeProjectedTileBounds,
+  getOverlappingChildRange,
+  getMetersPerPixel,
+  getMetersPerPixelAtBoundingVolume,
+  rescaleEPSG3857ToCommonSpace,
+  sampleReferencePointsInEPSG3857,
+  sampleReferencePointsInWgs84,
   RasterTileNode,
 };
