@@ -43,7 +43,6 @@
     "@developmentseed/geotiff": "workspace:^",
     "@types/node": "^25.3.3",
     "geotiff": "^3.0.4",
-    "lerc": "^4.0.4",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
     "wkt-parser": "^1.5.3"
@@ -61,6 +60,7 @@
     "@developmentseed/lzw-tiff-decoder": "^0.2.2",
     "@developmentseed/morecantile": "workspace:^",
     "fzstd": "^0.1.1",
+    "lerc": "^4.1.1",
     "uuid": "^13.0.0"
   }
 }
