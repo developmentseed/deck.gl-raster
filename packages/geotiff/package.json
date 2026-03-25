@@ -55,7 +55,7 @@
     "@chunkd/source": "^11.2.0",
     "@chunkd/source-http": "^11.2.0",
     "@chunkd/source-memory": "^11.0.3",
-    "@cogeotiff/core": "^9.4.0",
+    "@cogeotiff/core": "^9.5.0",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/lzw-tiff-decoder": "^0.2.2",
     "@developmentseed/morecantile": "workspace:^",
