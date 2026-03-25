@@ -1,10 +1,15 @@
-import { Photometric, SampleFormat } from "@cogeotiff/core";
+import {
+  Photometric,
+  PlanarConfiguration,
+  SampleFormat,
+} from "@cogeotiff/core";
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
   BlackIsZero,
   CMYKToRGB,
   Colormap,
   CreateTexture,
+  CreateTextureBands,
   cieLabToRGB,
   FilterNoDataVal,
   MaskTexture,
@@ -21,13 +26,22 @@ import type { GetTileDataOptions } from "../cog-layer";
 import { addAlphaChannel } from "./geotiff";
 import { inferTextureFormat } from "./texture";
 
-export type TextureDataT = {
+type BaseTextureData = {
   height: number;
   width: number;
   byteLength: number;
-  texture: Texture;
   mask?: Texture;
 };
+
+type InterleavedTexture = {
+  texture: Texture;
+} & BaseTextureData;
+
+type BandSeparateTexture = {
+  bands: Texture[];
+} & BaseTextureData;
+
+export type TextureDataT = InterleavedTexture | BandSeparateTexture;
 
 /**
  * A raster module that can be "unresolved", meaning that its props may come
@@ -93,17 +107,30 @@ function createUnormPipeline(
     photometric,
     sampleFormat,
     samplesPerPixel,
+    planarConfiguration,
     nodata,
   } = geotiff.cachedTags;
 
-  const renderPipeline: UnresolvedRasterModule<TextureDataT>[] = [
-    {
+  const renderPipeline: UnresolvedRasterModule<TextureDataT>[] = [];
+
+  if (planarConfiguration === PlanarConfiguration.Contig) {
+    renderPipeline.push({
       module: CreateTexture,
       props: {
-        textureName: (data: TextureDataT) => data.texture,
+        textureName: (data: InterleavedTexture) => data.texture,
       },
-    },
-  ];
+    });
+  } else {
+    renderPipeline.push({
+      module: CreateTextureBands,
+      props: {
+        band1: (data: BandSeparateTexture) => data.bands[0],
+        band2: (data: BandSeparateTexture) => data.bands[1] ?? undefined,
+        band3: (data: BandSeparateTexture) => data.bands[2] ?? undefined,
+        band4: (data: BandSeparateTexture) => data.bands[3] ?? undefined,
+      },
+    });
+  }
 
   if (nodata !== null) {
     // Since values are 0-1 for unorm textures, scale nodata to [0, 1]
