@@ -1,6 +1,7 @@
 import type {
   CompositeLayerProps,
   Layer,
+  LayerProps,
   LayersList,
   UpdateParameters,
 } from "@deck.gl/core";
@@ -14,7 +15,6 @@ import type {
 import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer } from "@deck.gl/layers";
 import type {
-  RasterLayerProps,
   RenderTileResult,
   TileMetadata,
 } from "@developmentseed/deck.gl-raster";
@@ -443,6 +443,7 @@ export class COGLayer<
           data as unknown as DefaultDataT,
         );
       }
+      const { image, renderPipeline } = tileResult;
 
       // viewport.resolution is defined for GlobeView, undefined for WebMercatorViewport.
       // For WebMercator we project the mesh to EPSG:3857 and use a model matrix
@@ -451,7 +452,7 @@ export class COGLayer<
       // interpolation errors that become visible at high latitudes.
       const isGlobe = this.context.viewport.resolution !== undefined;
       let reprojectionFns: ReprojectionFns;
-      let rasterLayerProps: Partial<RasterLayerProps>;
+      let deckProjectionProps: Partial<LayerProps>;
 
       if (isGlobe) {
         reprojectionFns = {
@@ -460,7 +461,7 @@ export class COGLayer<
           forwardReproject: forwardTo4326,
           inverseReproject: inverseFrom4326,
         };
-        rasterLayerProps = {};
+        deckProjectionProps = {};
       } else {
         reprojectionFns = {
           forwardTransform,
@@ -474,7 +475,7 @@ export class COGLayer<
         // easting=0 / northing=0 maps to world center. Then the modelMatrix
         //
         // No Y-flip needed: CARTESIAN Y increases upward = northing.
-        rasterLayerProps = {
+        deckProjectionProps = {
           coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
           coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
           // biome-ignore format: array
@@ -493,12 +494,13 @@ export class COGLayer<
             id: `${props.id}-raster`,
             width,
             height,
-            ...tileResult,
+            image,
+            renderPipeline,
             maxError,
             reprojectionFns,
             debug,
             debugOpacity,
-            ...rasterLayerProps,
+            ...deckProjectionProps,
           }),
         ),
       );
