@@ -9,8 +9,6 @@ import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
-import type { Texture } from "@luma.gl/core";
-import { CreateTexture } from "./gpu-modules/create-texture";
 import type { RasterModule } from "./gpu-modules/types";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
 
@@ -114,7 +112,7 @@ const defaultProps: DefaultProps<RasterLayerProps> = {
   // A prop with `type: "image"` gets converted to a texture automatically by
   // deck.gl
   image: { type: "image", value: null },
-  renderPipeline: { type: "object", value: null, compare: false },
+  renderPipeline: { type: "array", value: [], compare: false },
   debug: false,
   debugOpacity: 0.5,
 };
@@ -257,26 +255,11 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     );
   }
 
-  _createRenderPipeline(): RasterModule[] | null {
-    const { image, renderPipeline: pipelineFromProps } = this.props;
-
-    // Build effective pipeline: if image is set, prepend CreateTexture so
-    // renderPipeline modules can operate on it. If only image is set, the
-    // pipeline is just the single CreateTexture module.
-    const imageModule: RasterModule[] = image
-      ? [{ module: CreateTexture, props: { textureName: image as Texture } }]
-      : [];
-    return imageModule.length > 0 || pipelineFromProps
-      ? [...imageModule, ...(pipelineFromProps ?? [])]
-      : null;
-  }
-
   renderLayers() {
     const { mesh } = this.state;
-    const { debug } = this.props;
-    const renderPipeline = this._createRenderPipeline();
+    const { debug, image, renderPipeline } = this.props;
 
-    if (!mesh || !renderPipeline) {
+    if (!mesh || (!image && (renderPipeline?.length ?? 0) === 0)) {
       return null;
     }
 
@@ -285,6 +268,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     const meshLayer = new MeshTextureLayer(
       this.getSubLayerProps({
         id: "raster",
+        image,
         renderPipeline,
         // Dummy data because we're only rendering _one_ instance of this mesh
         // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
