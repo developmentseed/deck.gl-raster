@@ -470,6 +470,9 @@ importers:
       fzstd:
         specifier: ^0.1.1
         version: 0.1.1
+      lerc:
+        specifier: ^4.1.1
+        version: 4.1.1
       uuid:
         specifier: ^13.0.0
         version: 13.0.0
@@ -486,9 +489,6 @@ importers:
       geotiff:
         specifier: ^3.0.4
         version: 3.0.4
-      lerc:
-        specifier: ^4.0.4
-        version: 4.0.4
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -5257,8 +5257,8 @@ packages:
   lerc@3.0.0:
     resolution: {integrity: sha512-Rm4J/WaHhRa93nCN2mwWDZFoRVF18G1f47C+kvQWyHGEZxFpTUi73p7lMVSAndyxGt6lJ2/CFbOcf9ra5p8aww==}
 
-  lerc@4.0.4:
-    resolution: {integrity: sha512-nHZH+ffiGPkgKUQtiZrljGUGV2GddvPcVTV5E345ZFncbKz+/rBIjDPrSxkiqW0EAtg1Jw7qAgRdaCwV+95Fow==}
+  lerc@4.1.1:
+    resolution: {integrity: sha512-rgMqdHK4+gIUnF80OkWyfRae2u1B96BT8ZAjbLB4xfxIdfCHQ9GOf17haZVCag+5X9WC+40hLNZPbwctFs2FPQ==}
 
   leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
@@ -13599,7 +13599,7 @@ snapshots:
 
   lerc@3.0.0: {}
 
-  lerc@4.0.4: {}
+  lerc@4.1.1: {}
 
   leven@3.1.0: {}
 
