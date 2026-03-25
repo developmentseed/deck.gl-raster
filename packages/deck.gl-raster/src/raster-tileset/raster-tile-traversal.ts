@@ -146,6 +146,17 @@ export class RasterTileNode {
   private projectTo3857: ProjectionFunction;
   private projectTo4326: ProjectionFunction;
 
+  /**
+   * A cached bounding volume for this tile, used for frustum culling
+   *
+   * This stores the result of `getBoundingVolume`.
+   */
+  private _boundingVolume?: {
+    /** The zrange used to compute this bounding volume. */
+    zRange: ZRange;
+    result: { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds };
+  };
+
   constructor(
     x: number,
     y: number,
@@ -408,6 +419,15 @@ export class RasterTileNode {
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
+    const cached = this._boundingVolume;
+    if (
+      cached &&
+      cached.zRange[0] === zRange[0] &&
+      cached.zRange[1] === zRange[1]
+    ) {
+      return cached.result;
+    }
+
     // Case 1: Globe view - need to construct an oriented bounding box from
     // reprojected sample points, but also using the `project` param
     if (project) {
@@ -425,7 +445,9 @@ export class RasterTileNode {
 
     // Case 4: Generic case - sample reference points and reproject to
     // Web Mercator, then convert to deck.gl common space
-    return this._getGenericBoundingVolume(zRange);
+    const result = this._getGenericBoundingVolume(zRange);
+    this._boundingVolume = { zRange, result };
+    return result;
   }
 
   /**
