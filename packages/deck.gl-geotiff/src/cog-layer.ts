@@ -13,7 +13,7 @@ import type {
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
-import { PathLayer } from "@deck.gl/layers";
+import { PathLayer, TextLayer } from "@deck.gl/layers";
 import type {
   RenderTileResult,
   TileMetadata,
@@ -510,11 +510,10 @@ export class COGLayer<
     }
 
     if (debug) {
-      const { projectedCorners } = tile;
       layers.push(
-        this.renderDebugTileOutline(
+        ...this.renderDebugTileOutline(
           `${this.id}-${tile.id}-bounds`,
-          projectedCorners,
+          tile,
           forwardTo4326,
         ),
       );
@@ -606,9 +605,11 @@ export class COGLayer<
 
   renderDebugTileOutline(
     id: string,
-    projectedCorners: TileMetadata["projectedCorners"],
+    tile: Tile2DHeader<GetTileDataResult<DataT>> & TileMetadata,
     forwardTo4326: ReprojectionFns["forwardReproject"],
   ) {
+    const { projectedCorners } = tile;
+
     // Create a closed path in WGS84 projection around the tile bounds
     //
     // The tile has a `bbox` field which is already the bounding box in WGS84,
@@ -633,7 +634,27 @@ export class COGLayer<
       topLeftWgs84,
     ];
 
-    return new PathLayer({
+    const center = [
+      (topLeftWgs84[0] + bottomRightWgs84[0]) / 2,
+      (topLeftWgs84[1] + bottomRightWgs84[1]) / 2,
+    ];
+    const labelLayer = new TextLayer({
+      id: `${id}-label`,
+      data: [
+        {
+          position: center,
+          text: `x=${tile.index.x} y=${tile.index.y} z=${tile.index.z}`,
+        },
+      ],
+      getColor: [255, 255, 255, 255],
+      getSize: 24,
+      sizeUnits: "pixels",
+      outlineWidth: 3,
+      outlineColor: [0, 0, 0, 255],
+      fontSettings: { sdf: true },
+    });
+
+    const outlineLayer = new PathLayer({
       id,
       data: [path],
       getPath: (d) => d,
@@ -642,5 +663,7 @@ export class COGLayer<
       widthUnits: "pixels",
       pickable: false,
     });
+
+    return [outlineLayer, labelLayer];
   }
 }
