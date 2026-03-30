@@ -405,7 +405,6 @@ export class COGLayer<
       _offset: number;
       tile: Tile2DHeader<GetTileDataResult<DataT>>;
     },
-    tms: TileMatrixSet,
     forwardTo4326: ReprojectionFns["forwardReproject"],
     inverseFrom4326: ReprojectionFns["inverseReproject"],
     forwardTo3857: ReprojectionFns["forwardReproject"],
@@ -512,45 +511,12 @@ export class COGLayer<
 
     if (debug) {
       const { projectedCorners } = tile;
-
-      if (!projectedCorners || !tms) {
-        return [];
-      }
-
-      // Create a closed path in WGS84 projection around the tile bounds
-      //
-      // The tile has a `bbox` field which is already the bounding box in WGS84,
-      // but that uses `transformBounds` and densifies edges. So the corners of
-      // the bounding boxes don't line up with each other.
-      //
-      // In this case in the debug mode, it looks better if we ignore the actual
-      // non-linearities of the edges and just draw a box connecting the
-      // reprojected corners. In any case, the _image itself_ will be densified
-      // on the edges as a feature of the mesh generation.
-      const { topLeft, topRight, bottomRight, bottomLeft } = projectedCorners;
-      const topLeftWgs84 = forwardTo4326(topLeft[0], topLeft[1]);
-      const topRightWgs84 = forwardTo4326(topRight[0], topRight[1]);
-      const bottomRightWgs84 = forwardTo4326(bottomRight[0], bottomRight[1]);
-      const bottomLeftWgs84 = forwardTo4326(bottomLeft[0], bottomLeft[1]);
-
-      const path = [
-        topLeftWgs84,
-        topRightWgs84,
-        bottomRightWgs84,
-        bottomLeftWgs84,
-        topLeftWgs84,
-      ];
-
       layers.push(
-        new PathLayer({
-          id: `${this.id}-${tile.id}-bounds`,
-          data: [path],
-          getPath: (d) => d,
-          getColor: [255, 0, 0, 255], // Red
-          getWidth: 2,
-          widthUnits: "pixels",
-          pickable: false,
-        }),
+        this.renderDebugTileOutline(
+          `${this.id}-${tile.id}-bounds`,
+          projectedCorners,
+          forwardTo4326,
+        ),
       );
     }
 
@@ -591,7 +557,6 @@ export class COGLayer<
       renderSubLayers: (props) =>
         this._renderSubLayers(
           props,
-          tms,
           forwardTo4326,
           inverseFrom4326,
           forwardTo3857,
@@ -637,5 +602,45 @@ export class COGLayer<
       inverseFrom3857,
       geotiff,
     );
+  }
+
+  renderDebugTileOutline(
+    id: string,
+    projectedCorners: TileMetadata["projectedCorners"],
+    forwardTo4326: ReprojectionFns["forwardReproject"],
+  ) {
+    // Create a closed path in WGS84 projection around the tile bounds
+    //
+    // The tile has a `bbox` field which is already the bounding box in WGS84,
+    // but that uses `transformBounds` and densifies edges. So the corners of
+    // the bounding boxes don't line up with each other.
+    //
+    // In this case in the debug mode, it looks better if we ignore the actual
+    // non-linearities of the edges and just draw a box connecting the
+    // reprojected corners. In any case, the _image itself_ will be densified
+    // on the edges as a feature of the mesh generation.
+    const { topLeft, topRight, bottomRight, bottomLeft } = projectedCorners;
+    const topLeftWgs84 = forwardTo4326(topLeft[0], topLeft[1]);
+    const topRightWgs84 = forwardTo4326(topRight[0], topRight[1]);
+    const bottomRightWgs84 = forwardTo4326(bottomRight[0], bottomRight[1]);
+    const bottomLeftWgs84 = forwardTo4326(bottomLeft[0], bottomLeft[1]);
+
+    const path = [
+      topLeftWgs84,
+      topRightWgs84,
+      bottomRightWgs84,
+      bottomLeftWgs84,
+      topLeftWgs84,
+    ];
+
+    return new PathLayer({
+      id,
+      data: [path],
+      getPath: (d) => d,
+      getColor: [255, 0, 0, 255], // Red
+      getWidth: 2,
+      widthUnits: "pixels",
+      pickable: false,
+    });
   }
 }
