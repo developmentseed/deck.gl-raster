@@ -494,7 +494,11 @@ export class COGLayer<
             id: `${props.id}-raster`,
             width,
             height,
-            image,
+            // Only pass image if defined — passing `undefined` explicitly overrides
+            // the default null and causes isAsyncPropLoading to return true briefly,
+            // which hides the parent tile placeholder and causes a black flash.
+            // https://github.com/developmentseed/deck.gl-raster/issues/376
+            ...(image !== undefined && { image }),
             renderPipeline,
             maxError,
             reprojectionFns,

@@ -21,7 +21,9 @@ const defaultProps: DefaultProps<
   }
 > = {
   ...SimpleMeshLayer.defaultProps,
-  image: { type: "image", value: null, async: true },
+  // Note: putting `image` in defaultProps causes Maplibre to fail to render
+  // labels in interleaved mode 🤷‍♂️
+  // image: { type: "image", value: null, async: true },
   renderPipeline: { type: "array", value: [], compare: true },
 };
 
