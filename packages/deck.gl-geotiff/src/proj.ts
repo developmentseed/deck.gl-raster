@@ -8,6 +8,11 @@ const WGS84_ELLIPSOID_A = 6378137;
 // Beyond this, the Mercator projection is undefined.
 const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
 
+const WEB_MERCATOR_METER_CIRCUMFERENCE = 2 * Math.PI * WGS84_ELLIPSOID_A;
+const HALF_CIRCUMFERENCE = WEB_MERCATOR_METER_CIRCUMFERENCE / 2;
+
+type ProjectionFn = (x: number, y: number) => [number, number];
+
 /**
  * Convert a WGS84 longitude/latitude to EPSG:3857 meters analytically.
  * Valid for latitudes in [-MAX_WEB_MERCATOR_LAT, MAX_WEB_MERCATOR_LAT].
@@ -17,6 +22,37 @@ function wgs84To3857(lon: number, lat: number): [number, number] {
   const latRad = (lat * Math.PI) / 180;
   const y = Math.log(Math.tan(Math.PI / 4 + latRad / 2)) * WGS84_ELLIPSOID_A;
   return [x, y];
+}
+
+/**
+ * If a tile's EPSG:3857 corner x-values span more than half the globe, wrap
+ * `forwardTo3857` / `inverseFrom3857` so the coordinate space is continuous.
+ *
+ * Returns the original functions unchanged when no wrapping is needed.
+ */
+export function wrapAntimeridianProjections(
+  cornerXs3857: number[],
+  forwardTo3857: ProjectionFn,
+  inverseFrom3857: ProjectionFn,
+): { forwardTo3857: ProjectionFn; inverseFrom3857: ProjectionFn } {
+  const xMin = Math.min(...cornerXs3857);
+  const xMax = Math.max(...cornerXs3857);
+
+  if (xMax - xMin <= HALF_CIRCUMFERENCE) {
+    return { forwardTo3857, inverseFrom3857 };
+  }
+
+  return {
+    forwardTo3857: (x: number, y: number): [number, number] => {
+      const [px, py] = forwardTo3857(x, y);
+      return [px < 0 ? px + WEB_MERCATOR_METER_CIRCUMFERENCE : px, py];
+    },
+    inverseFrom3857: (x: number, y: number): [number, number] => {
+      const unwrapped =
+        x > HALF_CIRCUMFERENCE ? x - WEB_MERCATOR_METER_CIRCUMFERENCE : x;
+      return inverseFrom3857(unwrapped, y);
+    },
+  };
 }
 
 /**

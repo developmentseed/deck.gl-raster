@@ -39,7 +39,11 @@ import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { fromAffine } from "./geotiff-reprojection.js";
 import type { EpsgResolver } from "./proj.js";
-import { epsgResolver, makeClampedForwardTo3857 } from "./proj.js";
+import {
+  epsgResolver,
+  makeClampedForwardTo3857,
+  wrapAntimeridianProjections,
+} from "./proj.js";
 
 /** Size of deck.gl's common coordinate space in world units.
  *
@@ -462,11 +466,29 @@ export class COGLayer<
         };
         deckProjectionProps = {};
       } else {
+        // Wrap projection fns for antimeridian-crossing tiles so the 3857
+        // x-coordinates are continuous and RasterReprojector can converge (#366).
+        const corners = [
+          [0, 0],
+          [width, 0],
+          [width, height],
+          [0, height],
+        ] as const;
+        const cornerXs = corners.map(([cx, cy]) => {
+          const [sx, sy] = forwardTransform(cx, cy);
+          return forwardTo3857(sx, sy)[0];
+        });
+        const wrapped = wrapAntimeridianProjections(
+          cornerXs,
+          forwardTo3857,
+          inverseFrom3857,
+        );
+
         reprojectionFns = {
           forwardTransform,
           inverseTransform,
-          forwardReproject: forwardTo3857,
-          inverseReproject: inverseFrom3857,
+          forwardReproject: wrapped.forwardTo3857,
+          inverseReproject: wrapped.inverseFrom3857,
         };
         // Scale 3857 meters → deck.gl world units (512×512).
         //
