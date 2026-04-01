@@ -45,16 +45,16 @@
     "geotiff": "^3.0.4",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
-    "wkt-parser": "^1.5.3"
+    "wkt-parser": "^1.5.4"
   },
   "volta": {
     "extends": "../../package.json"
   },
   "dependencies": {
-    "@chunkd/middleware": "^11.2.0",
-    "@chunkd/source": "^11.2.0",
-    "@chunkd/source-http": "^11.2.0",
-    "@chunkd/source-memory": "^11.0.3",
+    "@chunkd/middleware": "^11.3.0",
+    "@chunkd/source": "^11.4.0",
+    "@chunkd/source-http": "^11.4.0",
+    "@chunkd/source-memory": "^11.2.0",
     "@cogeotiff/core": "^9.5.0",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/lzw-tiff-decoder": "^0.2.2",

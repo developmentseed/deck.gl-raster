@@ -52,9 +52,9 @@
     "@developmentseed/geotiff": "workspace:^",
     "@developmentseed/morecantile": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
-    "flatbush": "^4.5.0",
+    "flatbush": "^4.5.1",
     "proj4": "^2.20.4",
-    "wkt-parser": "^1.5.3"
+    "wkt-parser": "^1.5.4"
   },
   "peerDependencies": {
     "@deck.gl/core": "^9.2.7",
