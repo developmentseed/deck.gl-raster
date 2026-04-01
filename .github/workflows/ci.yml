@@ -30,7 +30,7 @@ jobs:
         working-directory: ./fixtures/geotiff-test-data
         run: pixi run generate-npy
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - run: |
           pnpm install
           pnpm build
