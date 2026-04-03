@@ -52,6 +52,7 @@
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
+    "@developmentseed/morecantile": "workspace:^",
     "@deck.gl/core": "^9.2.7",
     "@deck.gl/geo-layers": "^9.2.7",
     "@deck.gl/layers": "^9.2.7",
@@ -61,7 +62,6 @@
   },
   "dependencies": {
     "@developmentseed/affine": "workspace:^",
-    "@developmentseed/morecantile": "workspace:^",
     "@developmentseed/proj": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "@math.gl/core": "^4.1.0",
