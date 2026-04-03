@@ -79,5 +79,5 @@ export interface TilesetDescriptor {
   projectTo4326: ProjectionFunction;
 
   /** Bounding box of the dataset in the source CRS. */
-  sourceCrsBounds: Bounds;
+  // sourceCrsBounds: Bounds;
 }
