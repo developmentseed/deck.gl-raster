@@ -1,4 +1,4 @@
-import type { Bounds, ProjectionFunction } from "./types.js";
+import type { Bounds, Point, ProjectionFunction } from "./types.js";
 
 /**
  * A single zoom level in a generic raster tileset.
@@ -30,13 +30,23 @@ export interface TilesetLevel {
   /**
    * Get the projected bounding box of a tile in the source CRS.
    *
-   * Returns `[minX, minY, maxX, maxY]`.
+   * The tileset is not guaranteed to be axis aligned, so this returns a rotated
+   * rectangle as four corners, which preserves rotation/skew information that
+   * would be lost in an axis-aligned bbox.
    *
    * For TMS this delegates to `xy_bounds()`; for Zarr it uses affine math
    * directly. Using a function (rather than a stored affine) lets TMS handle
    * variable tile widths (coalesced rows) and bottomLeft origins cleanly.
    */
-  projectedTileBounds: (col: number, row: number) => Bounds;
+  projectedTileBounds: (
+    col: number,
+    row: number,
+  ) => {
+    topLeft: Point;
+    topRight: Point;
+    bottomLeft: Point;
+    bottomRight: Point;
+  };
 
   /**
    * Get the range of tile indices that overlap a given CRS bounding box.

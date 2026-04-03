@@ -1,7 +1,7 @@
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
 import { xy_bounds } from "@developmentseed/morecantile";
 import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface";
-import type { Bounds, ProjectionFunction } from "./types";
+import type { Bounds, Point, ProjectionFunction } from "./types";
 
 // 0.28 mm per pixel — OGC TMS 2.0 standard screen pixel size
 // https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15
@@ -43,14 +43,22 @@ class TileMatrixAdaptor implements TilesetLevel {
    *
    * @return      The bounding box as [minX, minY, maxX, maxY] in projected CRS.
    */
-  projectedTileBounds(col: number, row: number): Bounds {
+  projectedTileBounds(
+    col: number,
+    row: number,
+  ): {
+    topLeft: Point;
+    topRight: Point;
+    bottomLeft: Point;
+    bottomRight: Point;
+  } {
     const bounds = xy_bounds(this.inner, { x: col, y: row });
-    return [
-      bounds.lowerLeft[0],
-      bounds.lowerLeft[1],
-      bounds.upperRight[0],
-      bounds.upperRight[1],
-    ];
+    return {
+      topLeft: [bounds.lowerLeft[0], bounds.upperRight[1]],
+      topRight: bounds.upperRight,
+      bottomLeft: bounds.lowerLeft,
+      bottomRight: [bounds.upperRight[0], bounds.lowerLeft[1]],
+    };
   }
 
   /**

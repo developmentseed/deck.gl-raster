@@ -28,13 +28,7 @@ import {
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
 import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
-import type {
-  Bounds,
-  CornerBounds,
-  ProjectionFunction,
-  TileIndex,
-  ZRange,
-} from "./types.js";
+import type { Bounds, ProjectionFunction, TileIndex, ZRange } from "./types.js";
 
 /**
  * The size of the entire world in deck.gl's common coordinate space.
@@ -565,7 +559,7 @@ export function getTileIndices(
     viewport: Viewport;
     maxZ: number;
     zRange: ZRange | null;
-    wgs84Bounds: CornerBounds;
+    wgs84Bounds: Bounds;
   },
 ): TileIndex[] {
   const { viewport, maxZ, zRange, wgs84Bounds } = opts;
@@ -614,9 +608,7 @@ export function getTileIndices(
   // minZ to 0
   const minZ = 0;
 
-  const { lowerLeft, upperRight } = wgs84Bounds;
-  const [minLng, minLat] = lowerLeft;
-  const [maxLng, maxLat] = upperRight;
+  const [minLng, minLat, maxLng, maxLat] = wgs84Bounds;
   const bottomLeft = lngLatToWorld([minLng, minLat]);
   const topRight = lngLatToWorld([maxLng, maxLat]);
   const bounds: Bounds = [
