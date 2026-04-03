@@ -145,4 +145,16 @@ export class TileMatrixSetAdaptor implements TilesetDescriptor {
   get levels(): TilesetLevel[] {
     return this._levels;
   }
+
+  get projectedBounds(): Bounds {
+    const { boundingBox } = this.tms;
+    if (!boundingBox) {
+      throw new Error(
+        "Bounding Box inference not yet implemented; should be provided on TileMatrixSet",
+      );
+    }
+
+    const { lowerLeft, upperRight } = boundingBox;
+    return [lowerLeft[0], lowerLeft[1], upperRight[0], upperRight[1]];
+  }
 }
