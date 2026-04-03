@@ -19,7 +19,7 @@ import type { TilesetDescriptor } from "./tileset-interface";
 import { TileMatrixSetAdaptor } from "./tms-interface";
 import type {
   Bounds,
-  Point,
+  Corners,
   ProjectedBoundingBox,
   ProjectionFunction,
   TileIndex,
@@ -45,12 +45,7 @@ export type TileMetadata = {
    * This preserves rotation/skew information that would be lost in the
    * axis-aligned bbox.
    */
-  projectedCorners: {
-    topLeft: Point;
-    topRight: Point;
-    bottomLeft: Point;
-    bottomRight: Point;
-  };
+  projectedCorners: Corners;
 
   /**
    * Tile width in pixels.

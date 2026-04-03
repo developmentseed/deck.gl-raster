@@ -1,4 +1,4 @@
-import type { Bounds, Point, ProjectionFunction } from "./types.js";
+import type { Bounds, Corners, ProjectionFunction } from "./types.js";
 
 /**
  * A single zoom level in a generic raster tileset.
@@ -38,15 +38,7 @@ export interface TilesetLevel {
    * directly. Using a function (rather than a stored affine) lets TMS handle
    * variable tile widths (coalesced rows) and bottomLeft origins cleanly.
    */
-  projectedTileBounds: (
-    col: number,
-    row: number,
-  ) => {
-    topLeft: Point;
-    topRight: Point;
-    bottomLeft: Point;
-    bottomRight: Point;
-  };
+  projectedTileBounds: (col: number, row: number) => Corners;
 
   /**
    * Get the range of tile indices that overlap a given CRS bounding box.
