@@ -1,6 +1,5 @@
 /**
- * This file implements tile traversal for generic 2D tilesets defined by
- * TileMatrixSet tile layouts.
+ * This file implements tile traversal for generic 2D tilesets.
  *
  * The main algorithm works as follows:
  *
@@ -8,17 +7,18 @@
  *    necessarily the whole world)
  * 2. Test if each tile is visible using viewport frustum culling
  * 3. For visible tiles, compute distance-based LOD (Level of Detail)
- * 4. If LOD is insufficient, recursively subdivide into 4 child tiles
+ * 4. If LOD is insufficient, recursively subdivide into child tiles
  * 5. Select tiles at appropriate zoom levels based on distance from camera
  *
  * The result is a set of tiles at varying zoom levels that efficiently
  * cover the visible area with appropriate detail.
+ *
+ * The traversal is driven by a {@link TilesetDescriptor}, which abstracts over
+ * both OGC TileMatrixSet grids and Zarr multiscale pyramids.
  */
 
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport, assert } from "@deck.gl/core";
-import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
-import { xy_bounds } from "@developmentseed/morecantile";
 import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
   CullingVolume,
@@ -27,6 +27,7 @@ import {
 } from "@math.gl/culling";
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
+import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
 import type {
   Bounds,
   CornerBounds,
@@ -98,19 +99,15 @@ const EPSG_3857_HALF_CIRCUMFERENCE = EPSG_3857_CIRCUMFERENCE / 2;
 // Maximum latitude representable in Web Mercator (EPSG:3857), in degrees.
 const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
 
-// 0.28 mm per pixel
-// https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15
-const SCREEN_PIXEL_SIZE = 0.00028;
-
 /**
- * Raster Tile Node - represents a single tile in the TileMatrixSet structure
+ * Raster Tile Node - represents a single tile in a tileset pyramid.
  *
  * Akin to the upstream OSMNode class.
  *
  * This node class uses the following coordinate system:
  *
- * - x: tile column (0 to TileMatrix.matrixWidth, left to right)
- * - y: tile row (0 to TileMatrix.matrixHeight, top to bottom)
+ * - x: tile column (0 to TilesetLevel.matrixWidth, left to right)
+ * - y: tile row (0 to TilesetLevel.matrixHeight, top to bottom)
  * - z: overview level. This assumes ordering where: 0 = coarsest, higher = finer
  */
 export class RasterTileNode {
@@ -123,7 +120,7 @@ export class RasterTileNode {
   /** Zoom index assumed to be (higher = finer detail) */
   z: number;
 
-  private metadata: TileMatrixSet;
+  private descriptor: TilesetDescriptor;
 
   /**
    * Flag indicating whether any descendant of this tile is visible.
@@ -143,9 +140,6 @@ export class RasterTileNode {
   /** A cache of the children of this node. */
   private _children?: RasterTileNode[] | null;
 
-  private projectTo3857: ProjectionFunction;
-  private projectTo4326: ProjectionFunction;
-
   /**
    * A cached bounding volume for this tile, used for frustum culling
    *
@@ -161,74 +155,51 @@ export class RasterTileNode {
     x: number,
     y: number,
     z: number,
-    {
-      metadata,
-      projectTo3857,
-      projectTo4326,
-    }: {
-      metadata: TileMatrixSet;
-      projectTo3857: ProjectionFunction;
-      projectTo4326: ProjectionFunction;
-    },
+    { descriptor }: { descriptor: TilesetDescriptor },
   ) {
     this.x = x;
     this.y = y;
     this.z = z;
-    this.metadata = metadata;
-    this.projectTo3857 = projectTo3857;
-    this.projectTo4326 = projectTo4326;
+    this.descriptor = descriptor;
   }
 
-  /** Get overview info for this tile's z level */
-  get tileMatrix(): TileMatrix {
-    return this.metadata.tileMatrices[this.z]!;
+  /** Get the level info for this tile's z index. */
+  get level(): TilesetLevel {
+    return this.descriptor.levels[this.z]!;
   }
 
   /** Get the children of this node.
    *
    * Find all tiles at level this.z + 1 whose spatial extent overlaps this tile.
    *
-   * A TileMatrixSet is not a quadtree, but rather a stack of independent grids. We can't cleanly find child tiles by decimation directly.
-   *
+   * A tileset pyramid is not guaranteed to be a quadtree — it is a stack of
+   * independent grids. We find children by mapping the parent tile's CRS bounds
+   * into the child grid using {@link TilesetLevel.crsBoundsToTileRange}.
    */
   get children(): RasterTileNode[] | null {
     if (!this._children) {
-      const maxZ = this.metadata.tileMatrices.length - 1;
+      const maxZ = this.descriptor.levels.length - 1;
       if (this.z >= maxZ) {
         // Already at finest resolution, no children
         this._children = null;
         return null;
       }
 
-      // In TileMatrixSet ordering: refine to z + 1 (finer detail)
-      const parentMatrix = this.tileMatrix;
       const childZ = this.z + 1;
-      const childMatrix = this.metadata.tileMatrices[childZ]!;
+      const childLevel = this.descriptor.levels[childZ]!;
 
-      // Compute this tile's bounds in TMS' CRS
-      const parentBounds = computeProjectedTileBounds(parentMatrix, {
-        x: this.x,
-        y: this.y,
-      });
+      // Compute this tile's bounds in the source CRS
+      const parentBounds = this.level.projectedTileBounds(this.x, this.y);
 
       // Find overlapping child index range
-      const { minCol, maxCol, minRow, maxRow } = getOverlappingChildRange(
-        parentBounds,
-        childMatrix,
-      );
+      const { minCol, maxCol, minRow, maxRow } =
+        childLevel.crsBoundsToTileRange(...parentBounds);
 
       const children: RasterTileNode[] = [];
-
-      const { metadata, projectTo3857, projectTo4326 } = this;
+      const { descriptor } = this;
       for (let y = minRow; y <= maxRow; y++) {
         for (let x = minCol; x <= maxCol; x++) {
-          children.push(
-            new RasterTileNode(x, y, childZ, {
-              metadata,
-              projectTo3857,
-              projectTo4326,
-            }),
-          );
+          children.push(new RasterTileNode(x, y, childZ, { descriptor }));
         }
       }
 
@@ -241,8 +212,8 @@ export class RasterTileNode {
    * Recursively traverse the tile pyramid to determine if this tile (or its
    * descendants) should be rendered.
    *
-   * I.e. “Given this tile node, should I render this tile, or should I recurse
-   * into its children?”
+   * I.e. "Given this tile node, should I render this tile, or should I recurse
+   * into its children?"
    *
    * The algorithm performs:
    * 1. Visibility culling - reject tiles outside the view frustum
@@ -263,9 +234,9 @@ export class RasterTileNode {
     cullingVolume: CullingVolume;
     // [min, max] elevation in common space
     elevationBounds: ZRange;
-    /** Minimum (coarsest) COG overview level */
+    /** Minimum (coarsest) overview level */
     minZ: number;
-    /** Maximum (finest) COG overview level */
+    /** Maximum (finest) overview level */
     maxZ?: number;
     /** Optional geographic bounds filter */
     bounds?: Bounds;
@@ -279,7 +250,7 @@ export class RasterTileNode {
       cullingVolume,
       elevationBounds,
       minZ,
-      maxZ = this.metadata.tileMatrices.length - 1,
+      maxZ = this.descriptor.levels.length - 1,
       project,
       bounds,
     } = params;
@@ -308,43 +279,21 @@ export class RasterTileNode {
 
     // LOD (Level of Detail) selection (only if allowed at this level)
     // Only select this tile if no child is visible (prevents overlapping tiles)
-    // “When pitch is low, force selection at maxZ.”
+    // "When pitch is low, force selection at maxZ."
     if (!this.childVisible && this.z >= minZ) {
       const metersPerScreenPixel = getMetersPerPixelAtBoundingVolume(
         boundingVolume,
         viewport.zoom,
       );
-      // console.log("metersPerScreenPixel", metersPerScreenPixel);
 
-      const tileMetersPerPixel =
-        this.tileMatrix.scaleDenominator * SCREEN_PIXEL_SIZE;
-
-      // console.log("tileMetersPerPixel", tileMetersPerPixel);
-
-      // const screenScaleDenominator = metersPerScreenPixel / SCREEN_PIXEL_SIZE;
-
-      // console.log("screenScaleDenominator", screenScaleDenominator);
-
-      // TODO: in the future we could try adding a bias
-      // const LOD_BIAS = 0.75;
-      // this.tileMatrix.scaleDenominator <= screenScaleDenominator * LOD_BIAS
-
-      // console.log(
-      //   "this.tileMatrix.scaleDenominator",
-      //   this.tileMatrix.scaleDenominator,
-      // );
-
-      // console.log(
-      //   "tileMetersPerPixel <= metersPerScreenPixel",
-      //   tileMetersPerPixel <= metersPerScreenPixel,
-      // );
+      const tileMetersPerPixel = this.level.metersPerPixel;
 
       if (
         tileMetersPerPixel <= metersPerScreenPixel ||
         this.z >= maxZ ||
         (children === null && this.z >= minZ)
       ) {
-        // “Select this tile when its scale is at least as detailed as the screen.”
+        // "Select this tile when its scale is at least as detailed as the screen."
         this.selected = true;
         return true;
       }
@@ -377,7 +326,7 @@ export class RasterTileNode {
    * Recursively traverses the entire tree and gathers tiles where selected=true.
    *
    * @param result - Accumulator array for selected tiles
-   * @returns Array of selected OSMNode tiles
+   * @returns Array of selected RasterTileNode tiles
    */
   getSelected(result: RasterTileNode[] = []): RasterTileNode[] {
     if (this.selected) {
@@ -459,19 +408,15 @@ export class RasterTileNode {
     boundingVolume: OrientedBoundingBox;
     commonSpaceBounds: Bounds;
   } {
-    const tileMatrix = this.tileMatrix;
     const [minZ, maxZ] = zRange;
 
-    const tileCrsBounds = computeProjectedTileBounds(tileMatrix, {
-      x: this.x,
-      y: this.y,
-    });
+    const tileCrsBounds = this.level.projectedTileBounds(this.x, this.y);
 
     const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
       REF_POINTS_9,
       tileCrsBounds,
-      this.projectTo3857,
-      this.projectTo4326,
+      this.descriptor.projectTo3857,
+      this.descriptor.projectTo4326,
     );
 
     const commonSpacePositions = refPointsEPSG3857.map((xy) =>
@@ -617,10 +562,6 @@ function sampleReferencePointsInEPSG3857(
  *
  * Similar to the upstream code here:
  * https://github.com/visgl/deck.gl/blob/b0134f025148b52b91320d16768ab5d14a745328/modules/geo-layers/src/tileset-2d/tile-2d-traversal.ts#L172-L177
- *
- * @param   {number[]}  xy  [xy description]
- *
- * @return  {number}        [return description]
  */
 function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
   number,
@@ -719,13 +660,11 @@ function getOverlappingChildRange(
  * Overviews follow TileMatrixSet ordering: index 0 = coarsest, higher = finer
  */
 export function getTileIndices(
-  metadata: TileMatrixSet,
+  descriptor: TilesetDescriptor,
   opts: {
     viewport: Viewport;
     maxZ: number;
     zRange: ZRange | null;
-    projectTo3857: ProjectionFunction;
-    projectTo4326: ProjectionFunction;
     wgs84Bounds: CornerBounds;
   },
 ): TileIndex[] {
@@ -787,22 +726,16 @@ export function getTileIndices(
     topRight[1],
   ];
 
-  // Start from coarsest overview
-  const rootMatrix = metadata.tileMatrices[0]!;
+  // Start from coarsest level
+  const rootLevel = descriptor.levels[0]!;
 
-  // Create root tiles at coarsest level
+  // Create root tiles at coarsest level.
   // In contrary to OSM tiling, we might have more than one tile at the
-  // coarsest level (z=0)
+  // coarsest level (z=0).
   const roots: RasterTileNode[] = [];
-  for (let y = 0; y < rootMatrix.matrixHeight; y++) {
-    for (let x = 0; x < rootMatrix.matrixWidth; x++) {
-      roots.push(
-        new RasterTileNode(x, y, 0, {
-          metadata,
-          projectTo3857: opts.projectTo3857,
-          projectTo4326: opts.projectTo4326,
-        }),
-      );
+  for (let y = 0; y < rootLevel.matrixHeight; y++) {
+    for (let x = 0; x < rootLevel.matrixWidth; x++) {
+      roots.push(new RasterTileNode(x, y, 0, { descriptor }));
     }
   }
 
@@ -859,6 +792,5 @@ function getMetersPerPixelAtBoundingVolume(
  * Exports only for use in testing
  */
 export const __TEST_EXPORTS = {
-  computeProjectedTileBounds,
   RasterTileNode,
 };
