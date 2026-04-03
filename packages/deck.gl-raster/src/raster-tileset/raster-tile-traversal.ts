@@ -767,10 +767,3 @@ function bilerpPoint(
     p00[1] * w00 + p10[1] * w10 + p01[1] * w01 + p11[1] * w11,
   ];
 }
-
-/**
- * Exports only for use in testing
- */
-export const __TEST_EXPORTS = {
-  RasterTileNode,
-};

@@ -1,5 +1,6 @@
 /**
- * TileMatrixSetTileset - Improved Implementation with Frustum Culling
+ * RasterTileset2D - Generic tile traversal over a tile pyramid with Frustum
+ * Culling
  *
  * This version properly implements frustum culling and bounding volume calculations
  * following the pattern from deck.gl's OSM tile indexing.
@@ -11,12 +12,10 @@ import type {
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
-import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
 import { getTileIndices } from "./raster-tile-traversal";
 import type { TilesetDescriptor } from "./tileset-interface";
-import { TileMatrixSetAdaptor } from "./tms-interface";
 import type {
   Bounds,
   Corners,
@@ -49,15 +48,11 @@ export type TileMetadata = {
 
   /**
    * Tile width in pixels.
-   *
-   * Note this may differ between levels in some TileMatrixSets.
    */
   tileWidth: number;
 
   /**
    * Tile height in pixels.
-   *
-   * Note this may differ between levels in some TileMatrixSets.
    */
   tileHeight: number;
 };
@@ -69,41 +64,27 @@ export type TileMetadata = {
  *
  * Handles tile lifecycle, caching, and viewport-based loading.
  */
-export class TileMatrixSetTileset extends Tileset2D {
-  private tms: TileMatrixSet;
+export class RasterTileset2D extends Tileset2D {
+  private descriptor: TilesetDescriptor;
   private wgs84Bounds: Bounds;
   private projectTo4326: ProjectionFunction;
-  private tilesetDescriptor: TilesetDescriptor;
 
   constructor(
     opts: Tileset2DProps,
-    tms: TileMatrixSet,
+    descriptor: TilesetDescriptor,
     {
       projectTo4326,
-      projectTo3857,
     }: {
       projectTo4326: ProjectionFunction;
-      projectTo3857: ProjectionFunction;
     },
   ) {
     super(opts);
-    this.tms = tms;
+    this.descriptor = descriptor;
     this.projectTo4326 = projectTo4326;
-
-    if (!tms.boundingBox) {
-      throw new Error(
-        "Bounding Box inference not yet implemented; should be provided on TileMatrixSet",
-      );
-    }
-
-    this.tilesetDescriptor = new TileMatrixSetAdaptor(tms, {
-      projectTo3857,
-      projectTo4326,
-    });
 
     this.wgs84Bounds = transformBounds(
       projectTo4326,
-      ...this.tilesetDescriptor.projectedBounds,
+      ...this.descriptor.projectedBounds,
     );
   }
 
@@ -121,14 +102,14 @@ export class TileMatrixSetTileset extends Tileset2D {
     modelMatrix?: Matrix4;
     modelMatrixInverse?: Matrix4;
   }): TileIndex[] {
-    const maxAvailableZ = this.tms.tileMatrices.length - 1;
+    const maxAvailableZ = this.descriptor.levels.length - 1;
 
     const maxZ =
       typeof opts.maxZoom === "number"
         ? Math.min(opts.maxZoom, maxAvailableZ)
         : maxAvailableZ;
 
-    const tileIndices = getTileIndices(this.tilesetDescriptor, {
+    const tileIndices = getTileIndices(this.descriptor, {
       viewport: opts.viewport,
       maxZ,
       zRange: opts.zRange ?? null,
@@ -148,21 +129,22 @@ export class TileMatrixSetTileset extends Tileset2D {
       return index;
     }
 
-    const currentOverview = this.tms.tileMatrices[index.z]!;
-    const parentOverview = this.tms.tileMatrices[index.z - 1]!;
+    const currentOverview = this.descriptor.levels[index.z]!;
+    const parentOverview = this.descriptor.levels[index.z - 1]!;
 
     // Decimation is the number of child tiles that fit across one parent tile.
     // Must use tile footprint (cellSize × tileWidth/Height), not cellSize alone,
     // because tileWidth can change between levels (e.g. the last Sentinel-2
     // overview doubles tileWidth while halving cellSize, giving a 1:1 spatial
     // mapping where decimation = 1).
-    const parentFootprintX = parentOverview.cellSize * parentOverview.tileWidth;
+    const parentFootprintX =
+      parentOverview.metersPerPixel * parentOverview.tileWidth;
     const parentFootprintY =
-      parentOverview.cellSize * parentOverview.tileHeight;
+      parentOverview.metersPerPixel * parentOverview.tileHeight;
     const currentFootprintX =
-      currentOverview.cellSize * currentOverview.tileWidth;
+      currentOverview.metersPerPixel * currentOverview.tileWidth;
     const currentFootprintY =
-      currentOverview.cellSize * currentOverview.tileHeight;
+      currentOverview.metersPerPixel * currentOverview.tileHeight;
 
     const decimationX = parentFootprintX / currentFootprintX;
     const decimationY = parentFootprintY / currentFootprintY;
@@ -180,7 +162,7 @@ export class TileMatrixSetTileset extends Tileset2D {
 
   override getTileMetadata(index: TileIndex): TileMetadata {
     const { x, y, z } = index;
-    const levelDescriptor = this.tilesetDescriptor.levels[z]!;
+    const levelDescriptor = this.descriptor.levels[z]!;
     const { tileHeight, tileWidth } = levelDescriptor;
     const { topLeft, topRight, bottomLeft, bottomRight } =
       levelDescriptor.projectedTileCorners(x, y);
