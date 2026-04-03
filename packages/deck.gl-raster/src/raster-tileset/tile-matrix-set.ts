@@ -123,6 +123,10 @@ class TileMatrixAdaptor implements TilesetLevel {
   }
 }
 
+/**
+ * An adapter interface to use a TileMatrixSet as a TilesetDescriptor for raster
+ * tile traversal.
+ */
 export class TileMatrixSetAdaptor implements TilesetDescriptor {
   tms: TileMatrixSet;
   private _levels: TileMatrixAdaptor[];
