@@ -31,6 +31,7 @@ import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
 import type {
   Bounds,
   Corners,
+  Point,
   ProjectionFunction,
   TileIndex,
   ZRange,
@@ -499,22 +500,26 @@ function makeClampedForwardTo3857(
 }
 
 /**
- * Sample the selected reference points in EPSG:3857
+ * Sample the selected reference points in EPSG:3857.
  *
- * Note that EPSG:3857 is **not** the same as deck.gl's common space! deck.gl's
- * common space is the size of `TILE_SIZE` (512) units, while EPSG:3857 uses
- * meters.
+ * Reference points are given as `[relX, relY]` fractions in `[0, 1]` and are
+ * bilinearly interpolated across the tile's four CRS corners. For axis-aligned
+ * tiles this is equivalent to the old AABB lerp; for rotated tiles it correctly
+ * samples the actual quadrilateral rather than its bounding box.
  *
- * @param  refPoints selected reference points. Each coordinate should be in [0-1]
- * @param  tileBounds the bounds of the tile in **tile CRS** [minX, minY, maxX, maxY]
+ * Note that EPSG:3857 is **not** the same as deck.gl's common space — deck.gl's
+ * common space is 512 units wide, while EPSG:3857 uses meters.
+ *
+ * @param refPoints  Reference points as `[relX, relY]` fractions in `[0, 1]`.
+ * @param tileCorners  The four CRS corners of the tile.
  */
 function sampleReferencePointsInEPSG3857(
   refPoints: [number, number][],
-  tileBounds: [number, number, number, number],
+  tileCorners: Corners,
   projectTo3857: ProjectionFunction,
   projectTo4326: ProjectionFunction,
 ): [number, number][] {
-  const [minX, minY, maxX, maxY] = tileBounds;
+  const { topLeft, topRight, bottomLeft, bottomRight } = tileCorners;
   const clampedProjectTo3857 = makeClampedForwardTo3857(
     projectTo3857,
     projectTo4326,
@@ -522,8 +527,14 @@ function sampleReferencePointsInEPSG3857(
   const refPointPositions: [number, number][] = [];
 
   for (const [relX, relY] of refPoints) {
-    const geoX = minX + relX * (maxX - minX);
-    const geoY = minY + relY * (maxY - minY);
+    const [geoX, geoY] = bilerpPoint(
+      topLeft,
+      topRight,
+      bottomLeft,
+      bottomRight,
+      relX,
+      relY,
+    );
     refPointPositions.push(clampedProjectTo3857(geoX, geoY));
   }
 
@@ -699,6 +710,62 @@ function cornersToBounds({
   const xs = [topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]];
   const ys = [topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]];
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+/**
+ * Bilinearly interpolate a 2D point over a unit square.
+ *
+ * Given four corner points of a quadrilateral, this evaluates the bilinear
+ * interpolation at normalized coordinates `(x, y)` ∈ [0, 1]². The mapping is:
+ *
+ *   p(x, y) =
+ *     p00 * (1 - x) * (1 - y) +
+ *     p10 * x       * (1 - y) +
+ *     p01 * (1 - x) * y       +
+ *     p11 * x       * y
+ *
+ * where:
+ *   - `p00` corresponds to (x=0, y=0) (top-left)
+ *   - `p10` corresponds to (x=1, y=0) (top-right)
+ *   - `p01` corresponds to (x=0, y=1) (bottom-left)
+ *   - `p11` corresponds to (x=1, y=1) (bottom-right)
+ *
+ * This performs interpolation in Euclidean space (component-wise on x/y),
+ * producing a bilinear mapping from the unit square to the quadrilateral
+ * defined by the four input points.
+ *
+ * @param p00 - Point at (0, 0), typically top-left.
+ * @param p10 - Point at (1, 0), typically top-right.
+ * @param p01 - Point at (0, 1), typically bottom-left.
+ * @param p11 - Point at (1, 1), typically bottom-right.
+ * @param x - Normalized horizontal coordinate in [0, 1].
+ * @param y - Normalized vertical coordinate in [0, 1].
+ * @returns Interpolated 2D point `[x, y]`.
+ *
+ * @remarks
+ * - Reduces to linear interpolation along edges when `x = 0/1` or `y = 0/1`.
+ * - Produces an affine mapping only if the four points form a parallelogram;
+ *   otherwise the interior mapping is bilinear (not affine).
+ * - No CRS or geodesic behavior is implied; inputs are treated as Cartesian
+ *   coordinates.
+ */
+function bilerpPoint(
+  p00: Point,
+  p10: Point,
+  p01: Point,
+  p11: Point,
+  x: number,
+  y: number,
+): [number, number] {
+  const w00 = (1 - x) * (1 - y);
+  const w10 = x * (1 - y);
+  const w01 = (1 - x) * y;
+  const w11 = x * y;
+
+  return [
+    p00[0] * w00 + p10[0] * w10 + p01[0] * w01 + p11[0] * w11,
+    p00[1] * w00 + p10[1] * w10 + p01[1] * w01 + p11[1] * w11,
+  ];
 }
 
 /**
