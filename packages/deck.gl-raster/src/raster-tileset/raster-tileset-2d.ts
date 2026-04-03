@@ -1,5 +1,6 @@
 /**
- * TileMatrixSetTileset - Improved Implementation with Frustum Culling
+ * RasterTileset2D - Generic tile traversal over a tile pyramid with Frustum
+ * Culling
  *
  * This version properly implements frustum culling and bounding volume calculations
  * following the pattern from deck.gl's OSM tile indexing.

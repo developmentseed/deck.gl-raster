@@ -9,7 +9,8 @@ import type { Viewport } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { describe, expect, it } from "vitest";
-import { TileMatrixSetTileset } from "../src/raster-tileset/raster-tileset-2d.js";
+import { RasterTileset2D } from "../src/raster-tileset/raster-tileset-2d.js";
+import { TileMatrixSetAdaptor } from "../src/raster-tileset/tile-matrix-set.js";
 import type { TileIndex } from "../src/raster-tileset/types.js";
 
 // ---------------------------------------------------------------------------
@@ -62,7 +63,7 @@ const identity = (x: number, y: number): [number, number] => [x, y];
 // "visible" at each simulated zoom level without needing a real Viewport.
 // ---------------------------------------------------------------------------
 
-class ControlledTileset extends TileMatrixSetTileset {
+class ControlledTileset extends RasterTileset2D {
   private _forcedIndices: TileIndex[] = [];
 
   setForcedIndices(indices: TileIndex[]) {
@@ -70,7 +71,7 @@ class ControlledTileset extends TileMatrixSetTileset {
   }
 
   override getTileIndices(
-    _opts: Parameters<TileMatrixSetTileset["getTileIndices"]>[0],
+    _opts: Parameters<RasterTileset2D["getTileIndices"]>[0],
   ): TileIndex[] {
     return this._forcedIndices;
   }
@@ -101,8 +102,11 @@ function makeTileset(opts?: Partial<Tileset2DProps>): ControlledTileset {
       getTileData: () => new Promise(() => {}), // never resolves
       ...opts,
     },
-    MOCK_TMS,
-    { projectTo4326: identity, projectTo3857: identity },
+    new TileMatrixSetAdaptor(MOCK_TMS, {
+      projectTo4326: identity,
+      projectTo3857: identity,
+    }),
+    { projectTo4326: identity },
   );
 }
 
@@ -274,8 +278,11 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
 
     const tileset = new ControlledTileset(
       { getTileData: () => new Promise(() => {}) },
-      sentinel2TMS as any,
-      { projectTo4326: identity, projectTo3857: identity },
+      new TileMatrixSetAdaptor(sentinel2TMS, {
+        projectTo4326: identity,
+        projectTo3857: identity,
+      }),
+      { projectTo4326: identity },
     );
 
     // Every z=4 tile should map 1:1 to the z=3 tile at the same x,y.
