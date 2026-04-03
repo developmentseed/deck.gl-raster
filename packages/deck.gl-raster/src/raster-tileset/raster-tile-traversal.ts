@@ -189,7 +189,7 @@ export class RasterTileNode {
       const childLevel = this.descriptor.levels[childZ]!;
 
       // Compute this tile's bounds in the source CRS
-      const parentCorners = this.level.projectedTileBounds(this.x, this.y);
+      const parentCorners = this.level.projectedTileCorners(this.x, this.y);
       const parentBounds = cornersToBounds(parentCorners);
 
       // Find overlapping child index range
@@ -411,7 +411,7 @@ export class RasterTileNode {
   } {
     const [minZ, maxZ] = zRange;
 
-    const tileCorners = this.level.projectedTileBounds(this.x, this.y);
+    const tileCorners = this.level.projectedTileCorners(this.x, this.y);
 
     const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
       REF_POINTS_9,

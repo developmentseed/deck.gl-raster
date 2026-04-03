@@ -183,7 +183,7 @@ export class TileMatrixSetTileset extends Tileset2D {
     const levelDescriptor = this.tilesetDescriptor.levels[z]!;
     const { tileHeight, tileWidth } = levelDescriptor;
     const { topLeft, topRight, bottomLeft, bottomRight } =
-      levelDescriptor.projectedTileBounds(x, y);
+      levelDescriptor.projectedTileCorners(x, y);
 
     // Return the projected bounds as four corners
     // This preserves rotation/skew information

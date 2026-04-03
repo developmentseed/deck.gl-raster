@@ -38,7 +38,7 @@ export interface TilesetLevel {
    * directly. Using a function (rather than a stored affine) lets TMS handle
    * variable tile widths (coalesced rows) and bottomLeft origins cleanly.
    */
-  projectedTileBounds: (col: number, row: number) => Corners;
+  projectedTileCorners: (col: number, row: number) => Corners;
 
   /**
    * Get the range of tile indices that overlap a given CRS bounding box.

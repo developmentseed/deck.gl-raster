@@ -43,7 +43,7 @@ class TileMatrixAdaptor implements TilesetLevel {
    *
    * @return      The bounding box as [minX, minY, maxX, maxY] in projected CRS.
    */
-  projectedTileBounds(col: number, row: number): Corners {
+  projectedTileCorners(col: number, row: number): Corners {
     const bounds = xy_bounds(this.inner, { x: col, y: row });
     return {
       topLeft: [bounds.lowerLeft[0], bounds.upperRight[1]],
