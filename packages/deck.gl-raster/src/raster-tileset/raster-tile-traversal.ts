@@ -28,7 +28,13 @@ import {
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
 import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
-import type { Bounds, ProjectionFunction, TileIndex, ZRange } from "./types.js";
+import type {
+  Bounds,
+  Corners,
+  ProjectionFunction,
+  TileIndex,
+  ZRange,
+} from "./types.js";
 
 /**
  * The size of the entire world in deck.gl's common coordinate space.
@@ -183,7 +189,8 @@ export class RasterTileNode {
       const childLevel = this.descriptor.levels[childZ]!;
 
       // Compute this tile's bounds in the source CRS
-      const parentBounds = this.level.projectedTileBounds(this.x, this.y);
+      const parentCorners = this.level.projectedTileBounds(this.x, this.y);
+      const parentBounds = cornersToBounds(parentCorners);
 
       // Find overlapping child index range
       const { minCol, maxCol, minRow, maxRow } =
@@ -404,11 +411,11 @@ export class RasterTileNode {
   } {
     const [minZ, maxZ] = zRange;
 
-    const tileCrsBounds = this.level.projectedTileBounds(this.x, this.y);
+    const tileCorners = this.level.projectedTileBounds(this.x, this.y);
 
     const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
       REF_POINTS_9,
-      tileCrsBounds,
+      tileCorners,
       this.descriptor.projectTo3857,
       this.descriptor.projectTo4326,
     );
@@ -678,6 +685,20 @@ function getMetersPerPixelAtBoundingVolume(
 ): number {
   const [_lng, lat] = worldToLngLat(boundingVolume.center);
   return getMetersPerPixel(lat, zoom);
+}
+
+/**
+ * Compute the axis-aligned bounding box of a rotated tile rectangle.
+ */
+function cornersToBounds({
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight,
+}: Corners): Bounds {
+  const xs = [topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]];
+  const ys = [topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]];
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
 /**
