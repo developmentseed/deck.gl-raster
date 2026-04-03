@@ -1,6 +1,5 @@
 /**
- * This file implements tile traversal for generic 2D tilesets defined by
- * TileMatrixSet tile layouts.
+ * This file implements tile traversal for generic 2D tilesets.
  *
  * The main algorithm works as follows:
  *
@@ -8,17 +7,18 @@
  *    necessarily the whole world)
  * 2. Test if each tile is visible using viewport frustum culling
  * 3. For visible tiles, compute distance-based LOD (Level of Detail)
- * 4. If LOD is insufficient, recursively subdivide into 4 child tiles
+ * 4. If LOD is insufficient, recursively subdivide into child tiles
  * 5. Select tiles at appropriate zoom levels based on distance from camera
  *
  * The result is a set of tiles at varying zoom levels that efficiently
  * cover the visible area with appropriate detail.
+ *
+ * The traversal is driven by a {@link TilesetDescriptor}, which abstracts over
+ * both OGC TileMatrixSet grids and Zarr multiscale pyramids.
  */
 
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport, assert } from "@deck.gl/core";
-import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
-import { xy_bounds } from "@developmentseed/morecantile";
 import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
   CullingVolume,
@@ -27,9 +27,11 @@ import {
 } from "@math.gl/culling";
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
+import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
 import type {
   Bounds,
-  CornerBounds,
+  Corners,
+  Point,
   ProjectionFunction,
   TileIndex,
   ZRange,
@@ -98,19 +100,15 @@ const EPSG_3857_HALF_CIRCUMFERENCE = EPSG_3857_CIRCUMFERENCE / 2;
 // Maximum latitude representable in Web Mercator (EPSG:3857), in degrees.
 const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
 
-// 0.28 mm per pixel
-// https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15
-const SCREEN_PIXEL_SIZE = 0.00028;
-
 /**
- * Raster Tile Node - represents a single tile in the TileMatrixSet structure
+ * Raster Tile Node - represents a single tile in a tileset pyramid.
  *
  * Akin to the upstream OSMNode class.
  *
  * This node class uses the following coordinate system:
  *
- * - x: tile column (0 to TileMatrix.matrixWidth, left to right)
- * - y: tile row (0 to TileMatrix.matrixHeight, top to bottom)
+ * - x: tile column (0 to TilesetLevel.matrixWidth, left to right)
+ * - y: tile row (0 to TilesetLevel.matrixHeight, top to bottom)
  * - z: overview level. This assumes ordering where: 0 = coarsest, higher = finer
  */
 export class RasterTileNode {
@@ -123,7 +121,7 @@ export class RasterTileNode {
   /** Zoom index assumed to be (higher = finer detail) */
   z: number;
 
-  private metadata: TileMatrixSet;
+  private descriptor: TilesetDescriptor;
 
   /**
    * Flag indicating whether any descendant of this tile is visible.
@@ -143,9 +141,6 @@ export class RasterTileNode {
   /** A cache of the children of this node. */
   private _children?: RasterTileNode[] | null;
 
-  private projectTo3857: ProjectionFunction;
-  private projectTo4326: ProjectionFunction;
-
   /**
    * A cached bounding volume for this tile, used for frustum culling
    *
@@ -161,74 +156,52 @@ export class RasterTileNode {
     x: number,
     y: number,
     z: number,
-    {
-      metadata,
-      projectTo3857,
-      projectTo4326,
-    }: {
-      metadata: TileMatrixSet;
-      projectTo3857: ProjectionFunction;
-      projectTo4326: ProjectionFunction;
-    },
+    { descriptor }: { descriptor: TilesetDescriptor },
   ) {
     this.x = x;
     this.y = y;
     this.z = z;
-    this.metadata = metadata;
-    this.projectTo3857 = projectTo3857;
-    this.projectTo4326 = projectTo4326;
+    this.descriptor = descriptor;
   }
 
-  /** Get overview info for this tile's z level */
-  get tileMatrix(): TileMatrix {
-    return this.metadata.tileMatrices[this.z]!;
+  /** Get the level info for this tile's z index. */
+  get level(): TilesetLevel {
+    return this.descriptor.levels[this.z]!;
   }
 
   /** Get the children of this node.
    *
    * Find all tiles at level this.z + 1 whose spatial extent overlaps this tile.
    *
-   * A TileMatrixSet is not a quadtree, but rather a stack of independent grids. We can't cleanly find child tiles by decimation directly.
-   *
+   * A tileset pyramid is not guaranteed to be a quadtree — it is a stack of
+   * independent grids. We find children by mapping the parent tile's CRS bounds
+   * into the child grid using {@link TilesetLevel.crsBoundsToTileRange}.
    */
   get children(): RasterTileNode[] | null {
     if (!this._children) {
-      const maxZ = this.metadata.tileMatrices.length - 1;
+      const maxZ = this.descriptor.levels.length - 1;
       if (this.z >= maxZ) {
         // Already at finest resolution, no children
         this._children = null;
         return null;
       }
 
-      // In TileMatrixSet ordering: refine to z + 1 (finer detail)
-      const parentMatrix = this.tileMatrix;
       const childZ = this.z + 1;
-      const childMatrix = this.metadata.tileMatrices[childZ]!;
+      const childLevel = this.descriptor.levels[childZ]!;
 
-      // Compute this tile's bounds in TMS' CRS
-      const parentBounds = computeProjectedTileBounds(parentMatrix, {
-        x: this.x,
-        y: this.y,
-      });
+      // Compute this tile's bounds in the source CRS
+      const parentCorners = this.level.projectedTileCorners(this.x, this.y);
+      const parentBounds = cornersToBounds(parentCorners);
 
       // Find overlapping child index range
-      const { minCol, maxCol, minRow, maxRow } = getOverlappingChildRange(
-        parentBounds,
-        childMatrix,
-      );
+      const { minCol, maxCol, minRow, maxRow } =
+        childLevel.crsBoundsToTileRange(...parentBounds);
 
       const children: RasterTileNode[] = [];
-
-      const { metadata, projectTo3857, projectTo4326 } = this;
+      const { descriptor } = this;
       for (let y = minRow; y <= maxRow; y++) {
         for (let x = minCol; x <= maxCol; x++) {
-          children.push(
-            new RasterTileNode(x, y, childZ, {
-              metadata,
-              projectTo3857,
-              projectTo4326,
-            }),
-          );
+          children.push(new RasterTileNode(x, y, childZ, { descriptor }));
         }
       }
 
@@ -241,8 +214,8 @@ export class RasterTileNode {
    * Recursively traverse the tile pyramid to determine if this tile (or its
    * descendants) should be rendered.
    *
-   * I.e. “Given this tile node, should I render this tile, or should I recurse
-   * into its children?”
+   * I.e. "Given this tile node, should I render this tile, or should I recurse
+   * into its children?"
    *
    * The algorithm performs:
    * 1. Visibility culling - reject tiles outside the view frustum
@@ -263,9 +236,9 @@ export class RasterTileNode {
     cullingVolume: CullingVolume;
     // [min, max] elevation in common space
     elevationBounds: ZRange;
-    /** Minimum (coarsest) COG overview level */
+    /** Minimum (coarsest) overview level */
     minZ: number;
-    /** Maximum (finest) COG overview level */
+    /** Maximum (finest) overview level */
     maxZ?: number;
     /** Optional geographic bounds filter */
     bounds?: Bounds;
@@ -279,7 +252,7 @@ export class RasterTileNode {
       cullingVolume,
       elevationBounds,
       minZ,
-      maxZ = this.metadata.tileMatrices.length - 1,
+      maxZ = this.descriptor.levels.length - 1,
       project,
       bounds,
     } = params;
@@ -308,43 +281,21 @@ export class RasterTileNode {
 
     // LOD (Level of Detail) selection (only if allowed at this level)
     // Only select this tile if no child is visible (prevents overlapping tiles)
-    // “When pitch is low, force selection at maxZ.”
+    // "When pitch is low, force selection at maxZ."
     if (!this.childVisible && this.z >= minZ) {
       const metersPerScreenPixel = getMetersPerPixelAtBoundingVolume(
         boundingVolume,
         viewport.zoom,
       );
-      // console.log("metersPerScreenPixel", metersPerScreenPixel);
 
-      const tileMetersPerPixel =
-        this.tileMatrix.scaleDenominator * SCREEN_PIXEL_SIZE;
-
-      // console.log("tileMetersPerPixel", tileMetersPerPixel);
-
-      // const screenScaleDenominator = metersPerScreenPixel / SCREEN_PIXEL_SIZE;
-
-      // console.log("screenScaleDenominator", screenScaleDenominator);
-
-      // TODO: in the future we could try adding a bias
-      // const LOD_BIAS = 0.75;
-      // this.tileMatrix.scaleDenominator <= screenScaleDenominator * LOD_BIAS
-
-      // console.log(
-      //   "this.tileMatrix.scaleDenominator",
-      //   this.tileMatrix.scaleDenominator,
-      // );
-
-      // console.log(
-      //   "tileMetersPerPixel <= metersPerScreenPixel",
-      //   tileMetersPerPixel <= metersPerScreenPixel,
-      // );
+      const tileMetersPerPixel = this.level.metersPerPixel;
 
       if (
         tileMetersPerPixel <= metersPerScreenPixel ||
         this.z >= maxZ ||
         (children === null && this.z >= minZ)
       ) {
-        // “Select this tile when its scale is at least as detailed as the screen.”
+        // "Select this tile when its scale is at least as detailed as the screen."
         this.selected = true;
         return true;
       }
@@ -377,7 +328,7 @@ export class RasterTileNode {
    * Recursively traverses the entire tree and gathers tiles where selected=true.
    *
    * @param result - Accumulator array for selected tiles
-   * @returns Array of selected OSMNode tiles
+   * @returns Array of selected RasterTileNode tiles
    */
   getSelected(result: RasterTileNode[] = []): RasterTileNode[] {
     if (this.selected) {
@@ -459,19 +410,15 @@ export class RasterTileNode {
     boundingVolume: OrientedBoundingBox;
     commonSpaceBounds: Bounds;
   } {
-    const tileMatrix = this.tileMatrix;
     const [minZ, maxZ] = zRange;
 
-    const tileCrsBounds = computeProjectedTileBounds(tileMatrix, {
-      x: this.x,
-      y: this.y,
-    });
+    const tileCorners = this.level.projectedTileCorners(this.x, this.y);
 
     const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
       REF_POINTS_9,
-      tileCrsBounds,
-      this.projectTo3857,
-      this.projectTo4326,
+      tileCorners,
+      this.descriptor.projectTo3857,
+      this.descriptor.projectTo4326,
     );
 
     const commonSpacePositions = refPointsEPSG3857.map((xy) =>
@@ -508,34 +455,6 @@ export class RasterTileNode {
       commonSpaceBounds,
     };
   }
-}
-
-/**
- * Compute the projected tile bounds in the tile matrix's CRS.
- *
- * Because it's a linear transformation from the tile index to projected bounds,
- * we don't need to sample this for each of the reference points. We only need
- * the corners.
- *
- * @return      The bounding box as [minX, minY, maxX, maxY] in projected CRS.
- */
-function computeProjectedTileBounds(
-  tileMatrix: TileMatrix,
-  {
-    x,
-    y,
-  }: {
-    x: number;
-    y: number;
-  },
-): [number, number, number, number] {
-  const bounds = xy_bounds(tileMatrix, { x, y });
-  return [
-    bounds.lowerLeft[0],
-    bounds.lowerLeft[1],
-    bounds.upperRight[0],
-    bounds.upperRight[1],
-  ];
 }
 
 /**
@@ -581,22 +500,26 @@ function makeClampedForwardTo3857(
 }
 
 /**
- * Sample the selected reference points in EPSG:3857
+ * Sample the selected reference points in EPSG:3857.
  *
- * Note that EPSG:3857 is **not** the same as deck.gl's common space! deck.gl's
- * common space is the size of `TILE_SIZE` (512) units, while EPSG:3857 uses
- * meters.
+ * Reference points are given as `[relX, relY]` fractions in `[0, 1]` and are
+ * bilinearly interpolated across the tile's four CRS corners. For axis-aligned
+ * tiles this is equivalent to the old AABB lerp; for rotated tiles it correctly
+ * samples the actual quadrilateral rather than its bounding box.
  *
- * @param  refPoints selected reference points. Each coordinate should be in [0-1]
- * @param  tileBounds the bounds of the tile in **tile CRS** [minX, minY, maxX, maxY]
+ * Note that EPSG:3857 is **not** the same as deck.gl's common space — deck.gl's
+ * common space is 512 units wide, while EPSG:3857 uses meters.
+ *
+ * @param refPoints  Reference points as `[relX, relY]` fractions in `[0, 1]`.
+ * @param tileCorners  The four CRS corners of the tile.
  */
 function sampleReferencePointsInEPSG3857(
   refPoints: [number, number][],
-  tileBounds: [number, number, number, number],
+  tileCorners: Corners,
   projectTo3857: ProjectionFunction,
   projectTo4326: ProjectionFunction,
 ): [number, number][] {
-  const [minX, minY, maxX, maxY] = tileBounds;
+  const { topLeft, topRight, bottomLeft, bottomRight } = tileCorners;
   const clampedProjectTo3857 = makeClampedForwardTo3857(
     projectTo3857,
     projectTo4326,
@@ -604,8 +527,14 @@ function sampleReferencePointsInEPSG3857(
   const refPointPositions: [number, number][] = [];
 
   for (const [relX, relY] of refPoints) {
-    const geoX = minX + relX * (maxX - minX);
-    const geoY = minY + relY * (maxY - minY);
+    const [geoX, geoY] = bilerpPoint(
+      topLeft,
+      topRight,
+      bottomLeft,
+      bottomRight,
+      relX,
+      relY,
+    );
     refPointPositions.push(clampedProjectTo3857(geoX, geoY));
   }
 
@@ -617,10 +546,6 @@ function sampleReferencePointsInEPSG3857(
  *
  * Similar to the upstream code here:
  * https://github.com/visgl/deck.gl/blob/b0134f025148b52b91320d16768ab5d14a745328/modules/geo-layers/src/tileset-2d/tile-2d-traversal.ts#L172-L177
- *
- * @param   {number[]}  xy  [xy description]
- *
- * @return  {number}        [return description]
  */
 function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
   number,
@@ -639,94 +564,20 @@ function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
 }
 
 /**
- * Compute the range of tile indices in a child TileMatrix that spatially
- * overlap a parent tile.
+ * Get tile indices visible in viewport.
  *
- * TileMatrixSets are not guaranteed to form a strict quadtree: successive
- * TileMatrix levels may differ by non-integer refinement ratios and may not
- * align perfectly in tile space. As a result, parent/child relationships
- * cannot be inferred from zoom level or resolution alone.
+ * Uses frustum culling driven by a {@link TilesetDescriptor}, which abstracts
+ * over OGC TileMatrixSet grids and Zarr multiscale pyramids.
  *
- * This function determines parent→child relationships by:
- * 1. Treating each TileMatrix as an independent, axis-aligned grid in CRS space
- * 2. Mapping the parent tile's CRS bounding box into the child grid
- * 3. Returning the inclusive range of child tile indices whose spatial extent
- *    intersects the parent tile
- *
- * The returned indices are clamped to the valid extents of the child matrix
- * (`[0, matrixWidth)` and `[0, matrixHeight)`).
- *
- * Assumptions:
- * - The TileMatrix grid is axis-aligned in CRS space
- * - `cornerOfOrigin` is `"topLeft"`
- * - Tiles are rectangular and uniformly sized within a TileMatrix
- *
- * @param parentBounds  Bounding box of the parent tile in CRS coordinates
- *                      as `[minX, minY, maxX, maxY]`
- * @param childMatrix   The TileMatrix definition for the child zoom level
- *
- * @returns An object containing inclusive index ranges:
- *          `{ minCol, maxCol, minRow, maxRow }`, identifying all child tiles
- *          that spatially overlap the parent tile
- */
-function getOverlappingChildRange(
-  parentBounds: [number, number, number, number],
-  childMatrix: TileMatrix,
-): {
-  minCol: number;
-  maxCol: number;
-  minRow: number;
-  maxRow: number;
-} {
-  const [pMinX, pMinY, pMaxX, pMaxY] = parentBounds;
-
-  const {
-    tileWidth,
-    tileHeight,
-    cellSize,
-    matrixWidth,
-    matrixHeight,
-    pointOfOrigin,
-  } = childMatrix;
-
-  const childTileWidthCRS = tileWidth * cellSize;
-  const childTileHeightCRS = tileHeight * cellSize;
-
-  // Note: we assume top left origin
-  const originX = pointOfOrigin[0];
-  const originY = pointOfOrigin[1];
-
-  // Convert CRS bounds → tile indices
-  let minCol = Math.floor((pMinX - originX) / childTileWidthCRS);
-  let maxCol = Math.floor((pMaxX - originX) / childTileWidthCRS);
-
-  let minRow = Math.floor((originY - pMaxY) / childTileHeightCRS);
-  let maxRow = Math.floor((originY - pMinY) / childTileHeightCRS);
-
-  // Clamp to matrix bounds
-  minCol = Math.max(0, Math.min(matrixWidth - 1, minCol));
-  maxCol = Math.max(0, Math.min(matrixWidth - 1, maxCol));
-  minRow = Math.max(0, Math.min(matrixHeight - 1, minRow));
-  maxRow = Math.max(0, Math.min(matrixHeight - 1, maxRow));
-
-  return { minCol, maxCol, minRow, maxRow };
-}
-
-/**
- * Get tile indices visible in viewport
- * Uses frustum culling similar to OSM implementation
- *
- * Overviews follow TileMatrixSet ordering: index 0 = coarsest, higher = finer
+ * Overview levels follow the descriptor ordering: index 0 = coarsest, higher = finer.
  */
 export function getTileIndices(
-  metadata: TileMatrixSet,
+  descriptor: TilesetDescriptor,
   opts: {
     viewport: Viewport;
     maxZ: number;
     zRange: ZRange | null;
-    projectTo3857: ProjectionFunction;
-    projectTo4326: ProjectionFunction;
-    wgs84Bounds: CornerBounds;
+    wgs84Bounds: Bounds;
   },
 ): TileIndex[] {
   const { viewport, maxZ, zRange, wgs84Bounds } = opts;
@@ -775,9 +626,7 @@ export function getTileIndices(
   // minZ to 0
   const minZ = 0;
 
-  const { lowerLeft, upperRight } = wgs84Bounds;
-  const [minLng, minLat] = lowerLeft;
-  const [maxLng, maxLat] = upperRight;
+  const [minLng, minLat, maxLng, maxLat] = wgs84Bounds;
   const bottomLeft = lngLatToWorld([minLng, minLat]);
   const topRight = lngLatToWorld([maxLng, maxLat]);
   const bounds: Bounds = [
@@ -787,22 +636,16 @@ export function getTileIndices(
     topRight[1],
   ];
 
-  // Start from coarsest overview
-  const rootMatrix = metadata.tileMatrices[0]!;
+  // Start from coarsest level
+  const rootLevel = descriptor.levels[0]!;
 
-  // Create root tiles at coarsest level
+  // Create root tiles at coarsest level.
   // In contrary to OSM tiling, we might have more than one tile at the
-  // coarsest level (z=0)
+  // coarsest level (z=0).
   const roots: RasterTileNode[] = [];
-  for (let y = 0; y < rootMatrix.matrixHeight; y++) {
-    for (let x = 0; x < rootMatrix.matrixWidth; x++) {
-      roots.push(
-        new RasterTileNode(x, y, 0, {
-          metadata,
-          projectTo3857: opts.projectTo3857,
-          projectTo4326: opts.projectTo4326,
-        }),
-      );
+  for (let y = 0; y < rootLevel.matrixHeight; y++) {
+    for (let x = 0; x < rootLevel.matrixWidth; x++) {
+      roots.push(new RasterTileNode(x, y, 0, { descriptor }));
     }
   }
 
@@ -856,9 +699,78 @@ function getMetersPerPixelAtBoundingVolume(
 }
 
 /**
+ * Compute the axis-aligned bounding box of a rotated tile rectangle.
+ */
+function cornersToBounds({
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight,
+}: Corners): Bounds {
+  const xs = [topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]];
+  const ys = [topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]];
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+/**
+ * Bilinearly interpolate a 2D point over a unit square.
+ *
+ * Given four corner points of a quadrilateral, this evaluates the bilinear
+ * interpolation at normalized coordinates `(x, y)` ∈ [0, 1]². The mapping is:
+ *
+ *   p(x, y) =
+ *     p00 * (1 - x) * (1 - y) +
+ *     p10 * x       * (1 - y) +
+ *     p01 * (1 - x) * y       +
+ *     p11 * x       * y
+ *
+ * where:
+ *   - `p00` corresponds to (x=0, y=0) (top-left)
+ *   - `p10` corresponds to (x=1, y=0) (top-right)
+ *   - `p01` corresponds to (x=0, y=1) (bottom-left)
+ *   - `p11` corresponds to (x=1, y=1) (bottom-right)
+ *
+ * This performs interpolation in Euclidean space (component-wise on x/y),
+ * producing a bilinear mapping from the unit square to the quadrilateral
+ * defined by the four input points.
+ *
+ * @param p00 - Point at (0, 0), typically top-left.
+ * @param p10 - Point at (1, 0), typically top-right.
+ * @param p01 - Point at (0, 1), typically bottom-left.
+ * @param p11 - Point at (1, 1), typically bottom-right.
+ * @param x - Normalized horizontal coordinate in [0, 1].
+ * @param y - Normalized vertical coordinate in [0, 1].
+ * @returns Interpolated 2D point `[x, y]`.
+ *
+ * @remarks
+ * - Reduces to linear interpolation along edges when `x = 0/1` or `y = 0/1`.
+ * - Produces an affine mapping only if the four points form a parallelogram;
+ *   otherwise the interior mapping is bilinear (not affine).
+ * - No CRS or geodesic behavior is implied; inputs are treated as Cartesian
+ *   coordinates.
+ */
+function bilerpPoint(
+  p00: Point,
+  p10: Point,
+  p01: Point,
+  p11: Point,
+  x: number,
+  y: number,
+): [number, number] {
+  const w00 = (1 - x) * (1 - y);
+  const w10 = x * (1 - y);
+  const w01 = (1 - x) * y;
+  const w11 = x * y;
+
+  return [
+    p00[0] * w00 + p10[0] * w10 + p01[0] * w01 + p11[0] * w11,
+    p00[1] * w00 + p10[1] * w10 + p01[1] * w01 + p11[1] * w11,
+  ];
+}
+
+/**
  * Exports only for use in testing
  */
 export const __TEST_EXPORTS = {
-  computeProjectedTileBounds,
   RasterTileNode,
 };

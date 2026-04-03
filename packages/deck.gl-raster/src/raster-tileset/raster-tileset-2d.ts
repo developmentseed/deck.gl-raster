@@ -11,20 +11,15 @@ import type {
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
-import * as affine from "@developmentseed/affine";
-import type {
-  BoundingBox,
-  TileMatrix,
-  TileMatrixSet,
-} from "@developmentseed/morecantile";
-import { tileTransform } from "@developmentseed/morecantile";
+import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
 import { getTileIndices } from "./raster-tile-traversal";
+import type { TilesetDescriptor } from "./tileset-interface";
+import { TileMatrixSetAdaptor } from "./tms-interface";
 import type {
   Bounds,
-  CornerBounds,
-  Point,
+  Corners,
   ProjectedBoundingBox,
   ProjectionFunction,
   TileIndex,
@@ -50,12 +45,7 @@ export type TileMetadata = {
    * This preserves rotation/skew information that would be lost in the
    * axis-aligned bbox.
    */
-  projectedCorners: {
-    topLeft: Point;
-    topRight: Point;
-    bottomLeft: Point;
-    bottomRight: Point;
-  };
+  projectedCorners: Corners;
 
   /**
    * Tile width in pixels.
@@ -70,11 +60,6 @@ export type TileMetadata = {
    * Note this may differ between levels in some TileMatrixSets.
    */
   tileHeight: number;
-
-  /**
-   * A reference to the underlying TileMatrix.
-   */
-  tileMatrix: TileMatrix;
 };
 
 /**
@@ -86,9 +71,9 @@ export type TileMetadata = {
  */
 export class TileMatrixSetTileset extends Tileset2D {
   private tms: TileMatrixSet;
-  private wgs84Bounds: CornerBounds;
-  private projectTo3857: ProjectionFunction;
+  private wgs84Bounds: Bounds;
   private projectTo4326: ProjectionFunction;
+  private tilesetDescriptor: TilesetDescriptor;
 
   constructor(
     opts: Tileset2DProps,
@@ -103,7 +88,6 @@ export class TileMatrixSetTileset extends Tileset2D {
   ) {
     super(opts);
     this.tms = tms;
-    this.projectTo3857 = projectTo3857;
     this.projectTo4326 = projectTo4326;
 
     if (!tms.boundingBox) {
@@ -112,9 +96,15 @@ export class TileMatrixSetTileset extends Tileset2D {
       );
     }
 
-    this.wgs84Bounds = projectBoundsToWgs84(tms.boundingBox, projectTo4326, {
-      densifyPts: 10,
+    this.tilesetDescriptor = new TileMatrixSetAdaptor(tms, {
+      projectTo3857,
+      projectTo4326,
     });
+
+    this.wgs84Bounds = transformBounds(
+      projectTo4326,
+      ...this.tilesetDescriptor.projectedBounds,
+    );
   }
 
   /**
@@ -138,13 +128,11 @@ export class TileMatrixSetTileset extends Tileset2D {
         ? Math.min(opts.maxZoom, maxAvailableZ)
         : maxAvailableZ;
 
-    const tileIndices = getTileIndices(this.tms, {
+    const tileIndices = getTileIndices(this.tilesetDescriptor, {
       viewport: opts.viewport,
       maxZ,
       zRange: opts.zRange ?? null,
       wgs84Bounds: this.wgs84Bounds,
-      projectTo3857: this.projectTo3857,
-      projectTo4326: this.projectTo4326,
     });
 
     return tileIndices;
@@ -192,17 +180,10 @@ export class TileMatrixSetTileset extends Tileset2D {
 
   override getTileMetadata(index: TileIndex): TileMetadata {
     const { x, y, z } = index;
-    const { tileMatrices } = this.tms;
-    const tileMatrix = tileMatrices[z]!;
-    const { tileHeight, tileWidth } = tileMatrix;
-    const tileAffine = tileTransform(tileMatrix, { col: x, row: y });
-
-    // tileAffine maps pixel (0,0) → top-left corner of this tile, so use
-    // local pixel coordinates (0..tileWidth, 0..tileHeight).
-    const topLeft = affine.apply(tileAffine, 0, 0);
-    const topRight = affine.apply(tileAffine, tileWidth, 0);
-    const bottomLeft = affine.apply(tileAffine, 0, tileHeight);
-    const bottomRight = affine.apply(tileAffine, tileWidth, tileHeight);
+    const levelDescriptor = this.tilesetDescriptor.levels[z]!;
+    const { tileHeight, tileWidth } = levelDescriptor;
+    const { topLeft, topRight, bottomLeft, bottomRight } =
+      levelDescriptor.projectedTileCorners(x, y);
 
     // Return the projected bounds as four corners
     // This preserves rotation/skew information
@@ -246,58 +227,6 @@ export class TileMatrixSetTileset extends Tileset2D {
       projectedCorners,
       tileWidth,
       tileHeight,
-      tileMatrix,
     };
   }
-}
-
-function projectBoundsToWgs84(
-  bounds: BoundingBox,
-  projectTo4326: ProjectionFunction,
-  { densifyPts }: { densifyPts: number },
-): CornerBounds {
-  const { lowerLeft, upperRight } = bounds;
-
-  // Four corners of the bounding box
-  const corners: Point[] = [
-    lowerLeft,
-    [upperRight[0], lowerLeft[1]],
-    upperRight,
-    [lowerLeft[0], upperRight[1]],
-  ];
-
-  // Densify edges: interpolate densifyPts points along each edge
-  const points: Point[] = [];
-  for (let i = 0; i < corners.length; i++) {
-    const from = corners[i]!;
-    const to = corners[(i + 1) % corners.length]!;
-    // Include the start corner and all intermediate points (end corner
-    // will be included as the start of the next edge)
-    for (let j = 0; j <= densifyPts; j++) {
-      const t = j / (densifyPts + 1);
-      points.push([
-        from[0] + (to[0] - from[0]) * t,
-        from[1] + (to[1] - from[1]) * t,
-      ]);
-    }
-  }
-
-  // Reproject all points to WGS84 and compute the bounding box
-  let wgsMinX = Infinity;
-  let wgsMinY = Infinity;
-  let wgsMaxX = -Infinity;
-  let wgsMaxY = -Infinity;
-
-  for (const [x, y] of points) {
-    const [lon, lat] = projectTo4326(x, y);
-    if (lon < wgsMinX) wgsMinX = lon;
-    if (lat < wgsMinY) wgsMinY = lat;
-    if (lon > wgsMaxX) wgsMaxX = lon;
-    if (lat > wgsMaxY) wgsMaxY = lat;
-  }
-
-  return {
-    lowerLeft: [wgsMinX, wgsMinY],
-    upperRight: [wgsMaxX, wgsMaxY],
-  };
 }

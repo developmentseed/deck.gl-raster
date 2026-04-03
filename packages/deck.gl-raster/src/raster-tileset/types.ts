@@ -1,6 +1,15 @@
 export type ZRange = [minZ: number, maxZ: number];
 
+/** An axis-aligned bounding box */
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
+
+/** Corners which may or may not be axis-aligned. */
+export type Corners = {
+  topLeft: Point;
+  topRight: Point;
+  bottomLeft: Point;
+  bottomRight: Point;
+};
 
 export type GeoBoundingBox = {
   west: number;
