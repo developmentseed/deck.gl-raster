@@ -20,7 +20,8 @@ import type {
 } from "@developmentseed/deck.gl-raster";
 import {
   RasterLayer,
-  TileMatrixSetTileset,
+  RasterTileset2D,
+  TileMatrixSetAdaptor,
 } from "@developmentseed/deck.gl-raster";
 import type { DecoderPool, GeoTIFF, Overview } from "@developmentseed/geotiff";
 import {
@@ -532,11 +533,14 @@ export class COGLayer<
     geotiff: GeoTIFF,
   ): TileLayer {
     // Create a factory class that wraps COGTileset2D with the metadata
-    class TileMatrixSetTilesetFactory extends TileMatrixSetTileset {
+    class TileMatrixSetTilesetFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
-        super(opts, tms, {
+        const descriptor = new TileMatrixSetAdaptor(tms, {
           projectTo4326: forwardTo4326,
           projectTo3857: forwardTo3857,
+        });
+        super(opts, descriptor, {
+          projectTo4326: forwardTo4326,
         });
       }
     }
