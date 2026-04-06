@@ -507,6 +507,9 @@ importers:
       zarrita:
         specifier: ^0.6.1
         version: 0.6.1
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@types/node':
         specifier: ^25.3.3
@@ -514,9 +517,6 @@ importers:
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0
-      json-schema-to-typescript:
-        specifier: ^15.0.4
-        version: 15.0.4
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -7724,6 +7724,9 @@ packages:
 
   zarrita@0.6.1:
     resolution: {integrity: sha512-YOMTW8FT55Rz+vadTIZeOFZ/F2h4svKizyldvPtMYSxPgSNcRkOzkxCsWpIWlWzB1I/LmISmi0bEekOhLlI+Zw==}
+
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
   zstd-codec@0.1.5:
     resolution: {integrity: sha512-v3fyjpK8S/dpY/X5WxqTK3IoCnp/ZOLxn144GZVlNUjtwAchzrVo03h+oMATFhCIiJ5KTr4V3vDQQYz4RU684g==}
@@ -16621,6 +16624,8 @@ snapshots:
     dependencies:
       '@zarrita/storage': 0.1.4
       numcodecs: 0.3.2
+
+  zod@4.3.6: {}
 
   zstd-codec@0.1.5:
     optional: true
