@@ -11,13 +11,16 @@
     "ignoreUnknown": true,
     "includes": [
       "**",
-      "!!**/dist",
-      "!!**/node_modules",
-      "!!**/coverage",
       "!!**/*.log",
+      "!!**/coverage",
+      "!!**/dist",
       "!!**/fixtures",
-      "!!packages/morecantile/spec",
-      "!!**/minimal_stac.json"
+      "!!**/minimal_stac.json",
+      "!!**/node_modules",
+      "!!packages/geozarr/geo-proj",
+      "!!packages/geozarr/multiscales",
+      "!!packages/geozarr/spatial",
+      "!!packages/morecantile/spec"
     ]
   },
   "formatter": {
