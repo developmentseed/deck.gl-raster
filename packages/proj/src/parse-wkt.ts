@@ -1,4 +1,5 @@
 import wktParser from "wkt-parser";
+import type { ProjJson } from "./projjson.js";
 
 export interface DatumDefinition {
   /** The type of datum. */
@@ -57,6 +58,6 @@ export interface ProjectionDefinition {
  *
  * This is a typed wrapper around the `wkt-parser` package.
  */
-export function parseWkt(input: string | unknown): ProjectionDefinition {
+export function parseWkt(input: string | ProjJson): ProjectionDefinition {
   return wktParser(input);
 }
