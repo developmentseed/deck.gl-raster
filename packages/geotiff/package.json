@@ -43,7 +43,7 @@
     "@developmentseed/geotiff": "workspace:^",
     "@types/node": "^25.3.3",
     "geotiff": "^3.0.4",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.2",
     "vitest": "^4.0.18"
   },
   "volta": {
