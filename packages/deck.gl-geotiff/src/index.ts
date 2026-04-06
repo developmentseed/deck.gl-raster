@@ -14,5 +14,3 @@ export {
   type MosaicSource,
   MosaicTileset2D,
 } from "./mosaic-layer/mosaic-tileset-2d";
-export type { EpsgResolver } from "./proj.js";
-export { epsgResolver } from "./proj.js";

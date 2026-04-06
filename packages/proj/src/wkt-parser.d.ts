@@ -1,6 +1,4 @@
 declare module "wkt-parser" {
-  import type { ProjJson } from "./crs.js";
-
   export interface DatumDefinition {
     /** The type of datum. */
     datum_type: number;
@@ -57,6 +55,6 @@ declare module "wkt-parser" {
    * definition.
    */
   export default function wktParser(
-    input: string | ProjJson,
+    input: string | unknown,
   ): ProjectionDefinition;
 }
