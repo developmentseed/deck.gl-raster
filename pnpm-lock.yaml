@@ -415,6 +415,9 @@ importers:
       '@developmentseed/geozarr':
         specifier: workspace:^
         version: link:../geozarr
+      '@developmentseed/proj':
+        specifier: workspace:^
+        version: link:../proj
       '@developmentseed/raster-reproject':
         specifier: workspace:^
         version: link:../raster-reproject
@@ -488,6 +491,9 @@ importers:
       '@developmentseed/morecantile':
         specifier: workspace:^
         version: link:../morecantile
+      '@developmentseed/proj':
+        specifier: workspace:^
+        version: link:../proj
       fzstd:
         specifier: ^0.1.1
         version: 0.1.1
