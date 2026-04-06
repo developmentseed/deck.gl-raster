@@ -1,4 +1,3 @@
-import type { Affine } from "@developmentseed/affine";
 import { GeoProjAttrsSchema, SpatialAttrsSchema } from "./schemas.js";
 import type { CRSInfo, GeoZarrMetadata, MultiscaleLevel } from "./types.js";
 
@@ -78,7 +77,7 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
       // spatial:shape is [height, width]
       return {
         path: item.asset,
-        affine: tupleToAffine(transform),
+        affine: transform,
         arrayWidth: shape[1],
         arrayHeight: shape[0],
       };
@@ -100,7 +99,7 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
     levels = [
       {
         path: ".",
-        affine: tupleToAffine(transform),
+        affine: transform,
         arrayWidth: shape[1],
         arrayHeight: shape[0],
       },
@@ -108,18 +107,4 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
   }
 
   return { levels, crs, axes, yAxisIndex, xAxisIndex };
-}
-
-/**
- * Convert a `spatial:transform` 6-tuple to an Affine.
- *
- * Both use the same layout [a, b, c, d, e, f] mapping pixel (col, row) →
- * CRS (x, y):
- *   x = a*col + b*row + c
- *   y = d*col + e*row + f
- */
-function tupleToAffine(
-  t: readonly [number, number, number, number, number, number],
-): Affine {
-  return [t[0], t[1], t[2], t[3], t[4], t[5]];
 }
