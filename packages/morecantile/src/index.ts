@@ -6,4 +6,3 @@ export type {
   TileMatrix,
   TileMatrixSet,
 } from "./types/index.js";
-export { metersPerUnit } from "./utils.js";

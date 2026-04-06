@@ -9,6 +9,7 @@
   "exclude": ["node_modules", "dist", "tests"],
   "references": [
     { "path": "../affine/tsconfig.build.json" },
-    { "path": "../morecantile/tsconfig.build.json" }
+    { "path": "../morecantile/tsconfig.build.json" },
+    { "path": "../proj/tsconfig.build.json" }
   ]
 }

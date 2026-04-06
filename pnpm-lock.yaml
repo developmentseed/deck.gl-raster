@@ -397,15 +397,39 @@ importers:
 
   packages/deck.gl-zarr:
     dependencies:
+      '@deck.gl/core':
+        specifier: ^9.2.11
+        version: 9.2.11
+      '@deck.gl/geo-layers':
+        specifier: ^9.2.11
+        version: 9.2.11(@deck.gl/core@9.2.11)(@deck.gl/extensions@9.2.5(@deck.gl/core@9.2.11)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/layers@9.2.11(@deck.gl/core@9.2.11)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@deck.gl/mesh-layers@9.2.11(@deck.gl/core@9.2.11)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/gltf@9.2.6(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))(@loaders.gl/core@4.3.4)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
+      '@deck.gl/layers':
+        specifier: ^9.2.11
+        version: 9.2.11(@deck.gl/core@9.2.11)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6)))
+      '@developmentseed/affine':
+        specifier: workspace:^
+        version: link:../affine
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../deck.gl-raster
+      '@developmentseed/geozarr':
+        specifier: workspace:^
+        version: link:../geozarr
+      '@developmentseed/proj':
+        specifier: workspace:^
+        version: link:../proj
       '@developmentseed/raster-reproject':
         specifier: workspace:^
         version: link:../raster-reproject
+      '@luma.gl/core':
+        specifier: ^9.2.6
+        version: 9.2.6
       proj4:
         specifier: ^2.20.4
         version: 2.20.4
+      wkt-parser:
+        specifier: ^1.5.3
+        version: 1.5.3
       zarrita:
         specifier: ^0.6.1
         version: 0.6.1
@@ -467,6 +491,9 @@ importers:
       '@developmentseed/morecantile':
         specifier: workspace:^
         version: link:../morecantile
+      '@developmentseed/proj':
+        specifier: workspace:^
+        version: link:../proj
       fzstd:
         specifier: ^0.1.1
         version: 0.1.1

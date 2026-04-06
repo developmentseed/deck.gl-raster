@@ -46,10 +46,20 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@developmentseed/affine": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
+    "@developmentseed/geozarr": "workspace:^",
+    "@developmentseed/proj": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "proj4": "^2.20.4",
+    "wkt-parser": "^1.5.3",
     "zarrita": "^0.6.1"
+  },
+  "peerDependencies": {
+    "@deck.gl/core": "^9.2.7",
+    "@deck.gl/geo-layers": "^9.2.7",
+    "@deck.gl/layers": "^9.2.7",
+    "@luma.gl/core": "^9.2.6"
   },
   "volta": {
     "extends": "../../package.json"
