@@ -6,9 +6,9 @@ import type {
   TileMatrix,
   TileMatrixSet,
 } from "@developmentseed/morecantile";
+import type { ProjJson } from "@developmentseed/proj";
 import { metersPerUnit } from "@developmentseed/proj";
 import { v4 as uuidv4 } from "uuid";
-import type { ProjJson } from "./crs.js";
 import type { GeoTIFF } from "./geotiff.js";
 
 /**

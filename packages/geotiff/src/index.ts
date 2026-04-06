@@ -6,7 +6,6 @@ export type {
   RasterTypedArray,
 } from "./array.js";
 export { parseColormap } from "./colormap.js";
-export type { ProjJson } from "./crs.js";
 export type {
   DecodedBandSeparate,
   DecodedPixelInterleaved,

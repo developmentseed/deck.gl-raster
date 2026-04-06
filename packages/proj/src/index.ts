@@ -6,6 +6,7 @@ export type {
   ProjectedCRS,
   ProjJson,
   ProjJsonConversion,
+  ProjJsonCoordinateSystem,
   ProjJsonDatum,
   ProjJsonEllipsoid,
   ProjJsonParameter,
