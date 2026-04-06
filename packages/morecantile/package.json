@@ -38,12 +38,12 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^25.3.3",
+    "@types/node": "^25.5.2",
     "jsdom": "^28.1.0",
     "json-schema-to-typescript": "^15.0.4",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.2"
   },
   "dependencies": {
     "@developmentseed/affine": "workspace:^"
