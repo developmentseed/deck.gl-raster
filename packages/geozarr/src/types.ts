@@ -2,10 +2,6 @@ import type { Affine } from "@developmentseed/affine";
 
 /**
  * A single resolution level in a GeoZarr dataset.
- *
- * Affine maps pixel (col, row) → source CRS (x, y):
- *   x = a*col + b*row + c
- *   y = d*col + e*row + f
  */
 export interface MultiscaleLevel {
   /** Path within the Zarr group, e.g. "0", "1", "2". */
