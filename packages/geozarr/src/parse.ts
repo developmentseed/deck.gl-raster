@@ -87,7 +87,9 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
     // Single-resolution
     const transform = spatial["spatial:transform"];
     if (!transform) {
-      throw new Error("spatial:transform is required for single-resolution Zarr");
+      throw new Error(
+        "spatial:transform is required for single-resolution Zarr",
+      );
     }
 
     const shape = spatial["spatial:shape"];
