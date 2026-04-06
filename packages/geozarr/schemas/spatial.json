@@ -1,0 +1,246 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/zarr-conventions/spatial/refs/tags/v1/schema.json",
+  "title": "Spatial Coordinate Convention (spatial:)",
+  "description": "Schema for spatial coordinate information in Zarr. Properties use the 'spatial:' namespace prefix. This convention defines the relationship between array indices and spatial coordinates.",
+  "type": "object",
+  "properties": {
+    "zarr_format": {
+      "type": "integer",
+      "description": "Zarr format version"
+    },
+    "node_type": {
+      "type": "string",
+      "enum": [
+        "array",
+        "group"
+      ],
+      "description": "Type of Zarr node"
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Zarr attributes containing convention metadata and spatial: prefixed properties",
+      "properties": {
+        "zarr_conventions": {
+          "type": "array",
+          "description": "Array of convention metadata objects",
+          "contains": {
+            "$ref": "#/$defs/conventionMetadata"
+          }
+        }
+      },
+      "required": [
+        "zarr_conventions"
+      ],
+      "$ref": "#/$defs/spatialAttributes"
+    }
+  },
+  "required": [
+    "zarr_format",
+    "node_type",
+    "attributes"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "conventionMetadata": {
+      "type": "object",
+      "description": "Spatial coordinate convention metadata object for use in zarr_conventions array",
+      "properties": {
+        "schema_url": {
+          "type": "string",
+          "const": "https://raw.githubusercontent.com/zarr-conventions/spatial/refs/tags/v1/schema.json",
+          "description": "URL to the JSON Schema definition for this convention"
+        },
+        "spec_url": {
+          "type": "string",
+          "const": "https://github.com/zarr-conventions/spatial/blob/v1/README.md",
+          "description": "URL to the full specification document"
+        },
+        "uuid": {
+          "type": "string",
+          "const": "689b58e2-cf7b-45e0-9fff-9cfc0883d6b4",
+          "description": "UUID that permanently identifies this convention"
+        },
+        "name": {
+          "type": "string",
+          "const": "spatial:",
+          "description": "Human-readable name of the convention with colon to indicate key-prefixing"
+        },
+        "description": {
+          "type": "string",
+          "const": "Spatial coordinate information",
+          "description": "Brief description of the convention's purpose and usage"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "schema_url"
+          ]
+        },
+        {
+          "required": [
+            "spec_url"
+          ]
+        },
+        {
+          "required": [
+            "uuid"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "spatialAttributes": {
+      "type": "object",
+      "description": "Spatial coordinate properties using spatial: key prefix",
+      "properties": {
+        "zarr_conventions": true,
+        "spatial:dimensions": {
+          "type": "array",
+          "description": "Names of spatial dimensions [y_name, x_name] or [z_name, y_name, x_name]",
+          "oneOf": [
+            {
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "2D spatial dimensions"
+            },
+            {
+              "minItems": 3,
+              "maxItems": 3,
+              "description": "3D spatial dimensions"
+            }
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "spatial:bbox": {
+          "type": "array",
+          "description": "Bounding box in coordinate space: [xmin, ymin, xmax, ymax] for 2D or [xmin, ymin, zmin, xmax, ymax, zmax] for 3D",
+          "oneOf": [
+            {
+              "minItems": 4,
+              "maxItems": 4,
+              "description": "2D bounding box"
+            },
+            {
+              "minItems": 6,
+              "maxItems": 6,
+              "description": "3D bounding box"
+            }
+          ],
+          "items": {
+            "type": "number"
+          }
+        },
+        "spatial:transform_type": {
+          "type": "string",
+          "description": "Type of transformation used to map array indices to coordinates. Defaults to 'affine' if not specified. Currently defined types: 'affine'. Additional transform types may be defined in future versions (e.g., 'rpc', 'polynomial', 'lookup'). Custom types are allowed for extensibility."
+        },
+        "spatial:transform": {
+          "type": "array",
+          "description": "Affine transformation coefficients mapping array indices to coordinates. Used when transform_type is 'affine' (default). For 2D: [a, b, c, d, e, f] where x = a*i + b*j + c, y = d*i + e*j + f",
+          "oneOf": [
+            {
+              "minItems": 6,
+              "maxItems": 6,
+              "description": "2D affine transform: [a, b, c, d, e, f]"
+            },
+            {
+              "minItems": 9,
+              "maxItems": 9,
+              "description": "3D affine transform (future extension)"
+            }
+          ],
+          "items": {
+            "type": "number"
+          }
+        },
+        "spatial:shape": {
+          "type": "array",
+          "description": "Shape of spatial dimensions [height, width] for 2D or [depth, height, width] for 3D",
+          "oneOf": [
+            {
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "2D spatial shape"
+            },
+            {
+              "minItems": 3,
+              "maxItems": 3,
+              "description": "3D spatial shape"
+            }
+          ],
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "spatial:registration": {
+          "type": "string",
+          "description": "Grid cell registration type. 'node' (grid-registered) means cells are centered on coordinate points with footprints extending 1/2 cell width outside the range. 'pixel' (cell-registered) means cell boundaries align with coordinate points. Defaults to 'pixel' if not specified.",
+          "enum": [
+            "node",
+            "pixel"
+          ]
+        },
+        "multiscales": {
+          "type": "object",
+          "description": "When composing with multiscales convention, spatial: properties can be added to layout items",
+          "properties": {
+            "layout": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "spatial:shape": {
+                    "type": "array",
+                    "description": "Shape override for this resolution level [height, width]",
+                    "oneOf": [
+                      {
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      {
+                        "minItems": 3,
+                        "maxItems": 3
+                      }
+                    ],
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "spatial:transform": {
+                    "type": "array",
+                    "description": "Transform override for this resolution level",
+                    "oneOf": [
+                      {
+                        "minItems": 6,
+                        "maxItems": 6
+                      },
+                      {
+                        "minItems": 9,
+                        "maxItems": 9
+                      }
+                    ],
+                    "items": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "spatial:dimensions"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

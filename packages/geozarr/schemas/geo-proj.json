@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/zarr-experimental/geo-proj/refs/tags/v1/schema.json",
+  "title": "Geospatial Projection Convention (proj:)",
+  "description": "Schema for geospatial coordinate reference system information in Zarr. Properties use the 'proj:' namespace prefix.",
+  "type": "object",
+  "properties": {
+    "zarr_format": {
+      "type": "integer",
+      "description": "Zarr format version"
+    },
+    "node_type": {
+      "type": "string",
+      "enum": [
+        "array",
+        "group"
+      ],
+      "description": "Type of Zarr node"
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Zarr attributes containing convention metadata and proj: prefixed properties",
+      "properties": {
+        "zarr_conventions": {
+          "type": "array",
+          "description": "Array of convention metadata objects",
+          "contains": {
+            "$ref": "#/$defs/conventionMetadata"
+          }
+        }
+      },
+      "required": [
+        "zarr_conventions"
+      ],
+      "$ref": "#/$defs/projAttributes"
+    }
+  },
+  "required": [
+    "zarr_format",
+    "node_type",
+    "attributes"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "conventionMetadata": {
+      "type": "object",
+      "description": "Geospatial projection convention metadata object for use in zarr_conventions array",
+      "properties": {
+        "schema_url": {
+          "type": "string",
+          "const": "https://raw.githubusercontent.com/zarr-experimental/geo-proj/refs/tags/v1/schema.json",
+          "description": "URL to the JSON Schema definition for this convention"
+        },
+        "spec_url": {
+          "type": "string",
+          "const": "https://github.com/zarr-experimental/geo-proj/blob/v1/README.md",
+          "description": "URL to the full specification document"
+        },
+        "uuid": {
+          "type": "string",
+          "const": "f17cb550-5864-4468-aeb7-f3180cfb622f",
+          "description": "UUID that permanently identifies this convention"
+        },
+        "name": {
+          "type": "string",
+          "const": "proj:",
+          "description": "Human-readable name of the convention with colon to indicate key-prefixing"
+        },
+        "description": {
+          "type": "string",
+          "const": "Coordinate reference system information for geospatial data",
+          "description": "Brief description of the convention's purpose and usage"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "schema_url"
+          ]
+        },
+        {
+          "required": [
+            "spec_url"
+          ]
+        },
+        {
+          "required": [
+            "uuid"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "projAttributes": {
+      "type": "object",
+      "description": "Geospatial projection properties using proj: key prefix. For spatial coordinate information (bbox, transform, shape, dimensions), compose with the spatial: convention.",
+      "properties": {
+        "zarr_conventions": true,
+        "proj:code": {
+          "type": "string",
+          "description": "CRS authority:code identifier (e.g., EPSG:4326, EPSG:32633)",
+          "pattern": "^[A-Z]+:[0-9]+$"
+        },
+        "proj:wkt2": {
+          "type": "string",
+          "description": "WKT2 (ISO 19162:2019) CRS representation"
+        },
+        "proj:projjson": {
+          "$ref": "https://proj.org/schemas/v0.7/projjson.schema.json",
+          "description": "PROJJSON CRS representation following PROJ specification"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "proj:code"
+          ]
+        },
+        {
+          "required": [
+            "proj:wkt2"
+          ]
+        },
+        {
+          "required": [
+            "proj:projjson"
+          ]
+        }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/zarr-conventions/multiscales/refs/tags/v1/schema.json",
+  "title": "Multiscales Convention",
+  "description": "Schema for multiscale pyramid information in Zarr",
+  "type": "object",
+  "properties": {
+    "zarr_format": {
+      "type": "integer",
+      "description": "Zarr format version"
+    },
+    "node_type": {
+      "type": "string",
+      "enum": ["group"],
+      "description": "Type of Zarr node (multiscales only applies to groups)"
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Zarr attributes containing convention metadata and properties",
+      "properties": {
+        "zarr_conventions": {
+          "type": "array",
+          "description": "Array of convention metadata objects",
+          "contains": {
+            "$ref": "#/$defs/conventionMetadata"
+          }
+        },
+        "multiscales": {
+          "$ref": "#/$defs/multiscalesProperties"
+        }
+      },
+      "required": ["zarr_conventions", "multiscales"],
+      "additionalProperties": true
+    }
+  },
+  "required": ["zarr_format", "node_type", "attributes"],
+  "additionalProperties": true,
+  "$defs": {
+    "conventionMetadata": {
+      "type": "object",
+      "description": "Multiscales convention metadata object for use in zarr_conventions array",
+      "properties": {
+        "schema_url": {
+          "type": "string",
+          "const": "https://raw.githubusercontent.com/zarr-conventions/multiscales/refs/tags/v1/schema.json",
+          "description": "URL to the JSON Schema definition for this convention"
+        },
+        "spec_url": {
+          "type": "string",
+          "const": "https://github.com/zarr-conventions/multiscales/blob/v1/README.md",
+          "description": "URL to the full specification document"
+        },
+        "uuid": {
+          "type": "string",
+          "const": "d35379db-88df-4056-af3a-620245f8e347",
+          "description": "UUID that permanently identifies this convention"
+        },
+        "name": {
+          "type": "string",
+          "const": "multiscales",
+          "description": "Human-readable name of the convention"
+        },
+        "description": {
+          "type": "string",
+          "const": "Multiscale layout of zarr datasets",
+          "description": "Brief description of the convention's purpose and usage"
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["schema_url"]
+        },
+        {
+          "required": ["spec_url"]
+        },
+        {
+          "required": ["uuid"]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "multiscalesProperties": {
+      "type": "object",
+      "description": "Multiscales convention properties defining the hierarchical layout and transformations",
+      "properties": {
+        "layout": {
+          "type": "array",
+          "description": "Array of objects representing the pyramid layout and transformation relationships",
+          "items": {
+            "$ref": "#/$defs/layoutObject"
+          },
+          "minItems": 1
+        },
+        "resampling_method": {
+          "type": "string",
+          "description": "Default resampling method used for downsampling"
+        }
+      },
+      "required": ["layout"],
+      "additionalProperties": true
+    },
+    "layoutObject": {
+      "type": "object",
+      "description": "Layout object representing a single resolution level",
+      "properties": {
+        "asset": {
+          "type": "string",
+          "description": "Path to the Zarr group or array for this resolution level. Can be a simple name (e.g., '0') for a child group, or a path with '/' separator for nested groups or arrays (e.g., '0/data' for an array within a group)",
+          "pattern": "^(?!/)(?!.*(\\.\\.))([^/]+(/[^/]+)*)$"
+        },
+        "derived_from": {
+          "type": "string",
+          "description": "Path to the source Zarr group or array used to generate this level. Uses the same path syntax as 'asset' with '/' separator for nested resources",
+          "pattern": "^(?!/)(?!.*(\\.\\.))([^/]+(/[^/]+)*)$"
+        },
+        "transform": {
+          "type": "object",
+          "description": "Transformation parameters describing the coordinate transformation for this level. Contains relative transformation parameters (scale, translation). Absolute positioning parameters should be placed at the layout entry level, outside this object.",
+          "properties": {
+            "scale": {
+              "type": "array",
+              "description": "Array of scale factors per axis describing the coordinate transformation from the source level (derived_from) to this level",
+              "items": {
+                "type": "number"
+              }
+            },
+            "translation": {
+              "type": "array",
+              "description": "Array of translation offsets per axis in the coordinate space",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "resampling_method": {
+          "type": "string",
+          "description": "Default resampling method used for resampling data"
+        }
+      },
+      "required": ["asset"],
+      "if": {
+        "required": ["derived_from"]
+      },
+      "then": {
+        "required": ["transform"]
+      },
+      "additionalProperties": true
+    }
+  }
+}
