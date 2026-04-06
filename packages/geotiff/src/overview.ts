@@ -1,7 +1,7 @@
 import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
-import type { ProjJson } from "./crs.js";
+import type { ProjJson } from "@developmentseed/proj";
 import { fetchTile } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";

@@ -1,5 +1,5 @@
+import { parseWkt } from "@developmentseed/proj";
 import { describe, expect, it } from "vitest";
-import wktParser from "wkt-parser";
 import { GeoTIFF } from "../src/geotiff.js";
 import { generateTileMatrixSet } from "../src/tile-matrix-set.js";
 import { loadGeoTIFF } from "./helpers.js";
@@ -89,7 +89,7 @@ describe("test TMS", () => {
     const crs = geotiff.crs;
     expect(crs).toEqual(4326);
 
-    const parsedCrs = wktParser(EPSG_4326);
+    const parsedCrs = parseWkt(EPSG_4326);
 
     const tms = generateTileMatrixSet(geotiff, parsedCrs, { id: "test-tms" });
 

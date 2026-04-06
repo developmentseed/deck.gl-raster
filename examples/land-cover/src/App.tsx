@@ -4,10 +4,10 @@ import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import "maplibre-gl/dist/maplibre-gl.css";
 import loadEpsg from "@developmentseed/epsg/all";
 import epsgCsvUrl from "@developmentseed/epsg/all.csv.gz?url";
+import { parseWkt } from "@developmentseed/proj";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-import wktParser from "wkt-parser";
 import { InfoPanel } from "./components/InfoPanel";
 import { UIOverlay } from "./components/UIOverlay";
 
@@ -30,7 +30,7 @@ async function epsgResolver(epsg: number) {
     throw new Error(`EPSG code ${epsg} not found in database`);
   }
 
-  return wktParser(wkt);
+  return parseWkt(wkt);
 }
 
 const COG_URL =

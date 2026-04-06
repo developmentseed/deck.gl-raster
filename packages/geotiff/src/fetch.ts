@@ -1,8 +1,8 @@
 import type { SampleFormat, Source, TiffImage } from "@cogeotiff/core";
 import { Compression, PlanarConfiguration, TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
+import type { ProjJson } from "@developmentseed/proj";
 import type { RasterArray } from "./array.js";
-import type { ProjJson } from "./crs.js";
 import type { DecodedPixels, DecoderMetadata } from "./decode.js";
 import { decode } from "./decode.js";
 import type { CachedTags } from "./ifd.js";

@@ -1,5 +1,5 @@
 import type { Affine } from "@developmentseed/affine";
-import type { ProjJson } from "./crs.js";
+import type { ProjJson } from "@developmentseed/proj";
 import type {
   DecodedBandSeparate,
   DecodedPixelInterleaved,

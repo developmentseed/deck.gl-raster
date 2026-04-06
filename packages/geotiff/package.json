@@ -44,8 +44,7 @@
     "@types/node": "^25.3.3",
     "geotiff": "^3.0.4",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18",
-    "wkt-parser": "^1.5.3"
+    "vitest": "^4.0.18"
   },
   "volta": {
     "extends": "../../package.json"
