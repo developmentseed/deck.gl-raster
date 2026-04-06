@@ -1,6 +1,6 @@
-export type { DatumDefinition, ProjectionDefinition } from "wkt-parser";
-export { default as wktParser } from "wkt-parser";
 export { metersPerUnit } from "./meters-per-unit.js";
+export type { DatumDefinition, ProjectionDefinition } from "./parse-wkt.js";
+export { parseWkt } from "./parse-wkt.js";
 export type {
   GeographicCRS,
   ProjectedCRS,

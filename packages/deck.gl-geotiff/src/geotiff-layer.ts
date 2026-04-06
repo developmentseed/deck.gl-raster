@@ -2,14 +2,12 @@ import type { CompositeLayerProps, UpdateParameters } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { RasterLayer } from "@developmentseed/deck.gl-raster";
 import type { DecoderPool, GeoTIFF } from "@developmentseed/geotiff";
+import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
+import { epsgResolver, parseWkt } from "@developmentseed/proj";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import proj4 from "proj4";
-import type { ProjectionDefinition } from "wkt-parser";
-import wktParser from "wkt-parser";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { extractGeotiffReprojectors } from "./geotiff-reprojection.js";
-import type { EpsgResolver } from "./proj.js";
-import { epsgResolver } from "./proj.js";
 
 export interface GeoTIFFLayerProps extends CompositeLayerProps {
   /**
@@ -127,7 +125,7 @@ export class GeoTIFFLayer extends CompositeLayer<GeoTIFFLayerProps> {
     const sourceProjection =
       typeof crs === "number"
         ? await this.props.epsgResolver!(crs)
-        : wktParser(crs);
+        : parseWkt(crs);
 
     // @ts-expect-error proj4 has incomplete types that don't support wkt-parser
     // output

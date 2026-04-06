@@ -1,5 +1,5 @@
-import type { ProjectionDefinition } from "wkt-parser";
-import wktParser from "wkt-parser";
+import type { ProjectionDefinition } from "./parse-wkt";
+import { parseWkt } from "./parse-wkt";
 import type { ProjJson } from "./projjson";
 
 /**
@@ -19,7 +19,7 @@ export async function epsgResolver(epsg: number) {
   }
 
   const projjson = await getProjjson(epsg);
-  const proj = wktParser(projjson);
+  const proj = parseWkt(projjson);
   PROJECTION_REGISTRY.set(key, proj);
 
   return proj;

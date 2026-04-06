@@ -30,17 +30,19 @@ import {
 } from "@developmentseed/geotiff";
 import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { tileTransform } from "@developmentseed/morecantile";
+import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
+import {
+  epsgResolver,
+  makeClampedForwardTo3857,
+  parseWkt,
+} from "@developmentseed/proj";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device, Texture } from "@luma.gl/core";
 import proj4 from "proj4";
-import type { ProjectionDefinition } from "wkt-parser";
-import wktParser from "wkt-parser";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { fromAffine } from "./geotiff-reprojection.js";
-import type { EpsgResolver } from "./proj.js";
-import { epsgResolver, makeClampedForwardTo3857 } from "./proj.js";
 
 /** Size of deck.gl's common coordinate space in world units.
  *
@@ -286,7 +288,7 @@ export class COGLayer<
     const sourceProjection =
       typeof crs === "number"
         ? await this.props.epsgResolver!(crs)
-        : wktParser(crs);
+        : parseWkt(crs);
 
     const tms = generateTileMatrixSet(geotiff, sourceProjection);
 

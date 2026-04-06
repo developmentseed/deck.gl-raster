@@ -1,11 +1,11 @@
 import type { Affine } from "@developmentseed/affine";
 import * as affine from "@developmentseed/affine";
 import type { GeoTIFF } from "@developmentseed/geotiff";
+import type { ProjectionDefinition } from "@developmentseed/proj";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import proj4 from "proj4";
 import type { PROJJSONDefinition } from "proj4/dist/lib/core";
 import type Projection from "proj4/dist/lib/Proj";
-import type { ProjectionDefinition } from "wkt-parser";
 
 // Derived from existing work here:
 // https://github.com/developmentseed/lonboard/blob/35a1f3d691604ad9e083bf10a4bfde4158171486/src/cog-tileset/claude-tileset-2d-improved.ts#L141

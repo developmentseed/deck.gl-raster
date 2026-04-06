@@ -5,7 +5,7 @@ import { SourceMemory } from "@chunkd/source-memory";
 import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
-import type { ProjJson } from "./crs.js";
+import type { ProjJson } from "@developmentseed/proj";
 import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile } from "./fetch.js";
 import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";

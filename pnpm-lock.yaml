@@ -311,6 +311,9 @@ importers:
       '@developmentseed/morecantile':
         specifier: workspace:^
         version: link:../morecantile
+      '@developmentseed/proj':
+        specifier: workspace:^
+        version: link:../proj
       '@developmentseed/raster-reproject':
         specifier: workspace:^
         version: link:../raster-reproject
@@ -577,6 +580,10 @@ importers:
         version: 4.0.18(@types/node@25.3.3)(happy-dom@20.0.11)(jiti@1.21.7)(jsdom@28.1.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/proj:
+    dependencies:
+      wkt-parser:
+        specifier: 1.5.5
+        version: 1.5.5
     devDependencies:
       '@types/node':
         specifier: ^25.3.3
@@ -7679,6 +7686,9 @@ packages:
 
   wkt-parser@1.5.3:
     resolution: {integrity: sha512-myla+RrMj+WTlnHc8Y4HEwjBcBF9dqJ3vjff/zmlrn9V3OKOM1mZVIyNjlPEmOM9Jjr/PPut0tnaTs9NyHcK8Q==}
+
+  wkt-parser@1.5.5:
+    resolution: {integrity: sha512-/zMYi94/7D7fxcOSlVmWn6vnOMj3Gq5d1xvVjaYOS9n6h0qOJ4I7YYVxBWYcH1vq9+suhqzXkn05Yx47zQNUIA==}
 
   wrap-ansi@7.0.0:
     resolution: {integrity: sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q==}
@@ -16601,6 +16611,8 @@ snapshots:
   wildcard@2.0.1: {}
 
   wkt-parser@1.5.3: {}
+
+  wkt-parser@1.5.5: {}
 
   wrap-ansi@7.0.0:
     dependencies:
