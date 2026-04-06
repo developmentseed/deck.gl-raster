@@ -1,10 +1,20 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { GeoProjAttrsSchema, MultiscalesAttrsSchema, SpatialAttrsSchema } from "../src/schemas.js";
+import {
+  GeoProjAttrsSchema,
+  MultiscalesAttrsSchema,
+  SpatialAttrsSchema,
+} from "../src/schemas.js";
 
 function readExample(submodule: string, filename: string): unknown {
-  const path = resolve(import.meta.dirname, "..", submodule, "examples", filename);
+  const path = resolve(
+    import.meta.dirname,
+    "..",
+    submodule,
+    "examples",
+    filename,
+  );
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
@@ -18,12 +28,16 @@ function attrs(example: unknown): unknown {
 
 describe("SpatialAttrsSchema", () => {
   it("passes spatial/examples/proj.json (top-level transform)", () => {
-    const result = SpatialAttrsSchema.safeParse(attrs(readExample("spatial", "proj.json")));
+    const result = SpatialAttrsSchema.safeParse(
+      attrs(readExample("spatial", "proj.json")),
+    );
     expect(result.success).toBe(true);
   });
 
   it("passes spatial/examples/multiscales.json (per-level transform)", () => {
-    const result = SpatialAttrsSchema.safeParse(attrs(readExample("spatial", "multiscales.json")));
+    const result = SpatialAttrsSchema.safeParse(
+      attrs(readExample("spatial", "multiscales.json")),
+    );
     expect(result.success).toBe(true);
   });
 });
@@ -34,22 +48,30 @@ describe("SpatialAttrsSchema", () => {
 
 describe("GeoProjAttrsSchema", () => {
   it("passes geo-proj/examples/epsg26711.json (proj:code)", () => {
-    const result = GeoProjAttrsSchema.safeParse(attrs(readExample("geo-proj", "epsg26711.json")));
+    const result = GeoProjAttrsSchema.safeParse(
+      attrs(readExample("geo-proj", "epsg26711.json")),
+    );
     expect(result.success).toBe(true);
   });
 
   it("passes geo-proj/examples/epsg3587.json (proj:code)", () => {
-    const result = GeoProjAttrsSchema.safeParse(attrs(readExample("geo-proj", "epsg3587.json")));
+    const result = GeoProjAttrsSchema.safeParse(
+      attrs(readExample("geo-proj", "epsg3587.json")),
+    );
     expect(result.success).toBe(true);
   });
 
   it("passes geo-proj/examples/wkt2.json (proj:wkt2)", () => {
-    const result = GeoProjAttrsSchema.safeParse(attrs(readExample("geo-proj", "wkt2.json")));
+    const result = GeoProjAttrsSchema.safeParse(
+      attrs(readExample("geo-proj", "wkt2.json")),
+    );
     expect(result.success).toBe(true);
   });
 
   it("passes geo-proj/examples/multiscales.json (proj:code + spatial + multiscales)", () => {
-    const result = GeoProjAttrsSchema.safeParse(attrs(readExample("geo-proj", "multiscales.json")));
+    const result = GeoProjAttrsSchema.safeParse(
+      attrs(readExample("geo-proj", "multiscales.json")),
+    );
     expect(result.success).toBe(true);
   });
 });
