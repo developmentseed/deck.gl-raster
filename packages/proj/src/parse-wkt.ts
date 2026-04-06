@@ -54,6 +54,8 @@ export interface ProjectionDefinition {
 /**
  * Parse a WKT string or PROJJSON object into a proj4-compatible projection
  * definition.
+ *
+ * This is a typed wrapper around the `wkt-parser` package.
  */
 export function parseWkt(input: string | unknown): ProjectionDefinition {
   return wktParser(input);
