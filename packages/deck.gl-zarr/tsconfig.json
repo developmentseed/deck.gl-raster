@@ -11,6 +11,7 @@
     { "path": "../affine" },
     { "path": "../deck.gl-raster" },
     { "path": "../geozarr" },
+    { "path": "../proj" },
     { "path": "../raster-reproject" }
   ]
 }

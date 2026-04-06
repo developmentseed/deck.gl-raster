@@ -11,6 +11,7 @@
     { "path": "../affine/tsconfig.build.json" },
     { "path": "../deck.gl-raster/tsconfig.build.json" },
     { "path": "../geozarr/tsconfig.build.json" },
+    { "path": "../proj/tsconfig.build.json" },
     { "path": "../raster-reproject/tsconfig.build.json" }
   ]
 }
