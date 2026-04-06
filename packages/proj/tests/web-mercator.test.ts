@@ -1,6 +1,6 @@
 import proj4 from "proj4";
 import { describe, expect, it } from "vitest";
-import { makeClampedForwardTo3857 } from "../src/proj.js";
+import { makeClampedForwardTo3857 } from "../src/web-mercator.js";
 
 const WGS84_ELLIPSOID_A = 6378137;
 const EPSG_3857_HALF_CIRCUMFERENCE = Math.PI * WGS84_ELLIPSOID_A;
