@@ -1,0 +1,54 @@
+{
+  "name": "@developmentseed/geozarr",
+  "version": "0.5.0-beta.1",
+  "description": "GeoZarr metadata parsing.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json",
+    "codegen": "json2ts --input schemas/ --output src/schema-types/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "zarr",
+    "geozarr",
+    "zarr-conventions",
+    "raster",
+    "geospatial"
+  ],
+  "author": "Development Seed",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
+  },
+  "dependencies": {
+    "@developmentseed/affine": "workspace:^",
+    "zarrita": "^0.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "json-schema-to-typescript": "^15.0.4",
+    "jsdom": "^28.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "volta": {
+    "extends": "../../package.json"
+  }
+}
