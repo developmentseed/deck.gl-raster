@@ -1,5 +1,5 @@
+import { parseWkt } from "@developmentseed/proj";
 import { describe, expect, it } from "vitest";
-import wktParser from "wkt-parser";
 import { loadGeoTIFF } from "./helpers.js";
 
 describe("test CRS", () => {
@@ -100,7 +100,7 @@ describe("test GeoKey CRS parsing", () => {
 
     // Verify wkt-parser can consume our PROJJSON and extract the fields
     // needed for TileMatrixSet construction (semi-major axis, units).
-    const proj = wktParser(crs);
+    const proj = parseWkt(crs);
     expect(proj.a).toBe(6378137);
     expect(proj.units).toBe("meter");
     expect(proj.projName).toBe("Albers Equal Area");
