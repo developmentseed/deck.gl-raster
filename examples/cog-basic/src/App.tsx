@@ -1,4 +1,4 @@
-import type { DeckProps } from "@deck.gl/core";
+import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -7,7 +7,7 @@ import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 
-function DeckGLOverlay(props: DeckProps) {
+function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
   overlay.setProps(props);
   return null;

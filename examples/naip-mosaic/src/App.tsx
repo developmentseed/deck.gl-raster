@@ -1,4 +1,4 @@
-import type { DeckProps } from "@deck.gl/core";
+import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
 import type {
@@ -27,7 +27,7 @@ import { epsgResolver } from "./proj";
 /** Bounding box query passed to Microsoft Planetary Computer STAC API */
 const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];
 
-function DeckGLOverlay(props: DeckProps) {
+function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
   overlay.setProps(props);
   return null;
