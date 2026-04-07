@@ -24,15 +24,6 @@ export default function App() {
     source: ZARR_URL,
     debug,
     debugOpacity,
-    onZarrLoad: () => {
-      // Bounds are [499980, 4490220, 609780, 4600020] in EPSG:32618 (UTM zone 18N)
-      // Center approx: lon=-74, lat=40.7 (New York area)
-      mapRef.current?.flyTo({
-        center: [-74, 41],
-        zoom: 8,
-        duration: 1000,
-      });
-    },
   });
 
   return (
@@ -42,7 +33,7 @@ export default function App() {
         initialViewState={{
           longitude: -74,
           latitude: 41,
-          zoom: 6,
+          zoom: 8.5,
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
