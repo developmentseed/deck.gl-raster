@@ -17,8 +17,8 @@
     "@developmentseed/deck.gl-geotiff": "workspace:^",
     "@developmentseed/proj": "workspace:^",
     "@developmentseed/epsg": "workspace:^",
-    "@luma.gl/core": "9.2.6",
-    "maplibre-gl": "^5.19.0",
+    "@luma.gl/core": "9.3.2",
+    "maplibre-gl": "^5.22.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-map-gl": "^8.1.0"
