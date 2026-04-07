@@ -13,7 +13,7 @@ import type {
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
-import * as affineLib from "@developmentseed/affine";
+import * as affine from "@developmentseed/affine";
 import type { TileMetadata } from "@developmentseed/deck.gl-raster";
 import {
   RasterLayer,
@@ -126,6 +126,10 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
 
   declare state: {
     meta?: GeoZarrMetadata;
+
+    // TODO: arrays should be a named record, since the GeoZarr levels array
+    // isn't ordered. And we might need to support multiple separate arrays
+    // (different variables) in a single render
     /** One opened array per level, finest-first (matches meta.levels order). */
     arrays?: zarr.Array<zarr.DataType, zarr.Readable>[];
     forwardTo4326?: ReprojectionFns["forwardReproject"];
@@ -242,6 +246,8 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     });
   }
 
+  // TODO: I need to go through _getTileData again and understand how slicing is
+  // fetched.
   async _getTileData(
     tile: TileLoadProps,
     meta: GeoZarrMetadata,
@@ -256,6 +262,8 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     const level = meta.levels[zarrLevelIdx]!;
     const arr = arrays[zarrLevelIdx]!;
 
+    // TODO: don't hard-code y/x as the last two dims; look at spatial
+    // convention metadata
     // chunks is [...otherDims, chunkHeight, chunkWidth]
     const tileWidth = arr.chunks[arr.chunks.length - 1]!;
     const tileHeight = arr.chunks[arr.chunks.length - 2]!;
@@ -273,6 +281,8 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     // Build slice for each dimension
     const slices: (zarr.Slice | number)[] = arr.shape.map((_, dimIdx) => {
       const numDims = arr.shape.length;
+      // TODO: don't hard-code y/x as the last two dims; look at spatial
+      // convention metadata
       if (dimIdx === numDims - 2) {
         // y dimension
         return zarr.slice(rowStart, rowEnd);
@@ -289,14 +299,14 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     const result = await zarr.get(arr, slices);
 
     // Compute per-tile affine: compose level affine with pixel offset of this tile
-    const tileOffset = affineLib.translation(colStart, rowStart);
-    const tileAffine = affineLib.compose(level.affine, tileOffset);
-    const invTileAffine = affineLib.invert(tileAffine);
+    const tileOffset = affine.translation(colStart, rowStart);
+    const tileAffine = affine.compose(level.affine, tileOffset);
+    const invTileAffine = affine.invert(tileAffine);
 
     const forwardTransform = (px: number, py: number) =>
-      affineLib.apply(tileAffine, px, py);
+      affine.apply(tileAffine, px, py);
     const inverseTransform = (cx: number, cy: number) =>
-      affineLib.apply(invTileAffine, cx, cy);
+      affine.apply(invTileAffine, cx, cy);
 
     const image = toImageData(result, actualWidth, actualHeight);
 
@@ -403,6 +413,8 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     forwardTo3857: ReprojectionFns["forwardReproject"],
     inverseFrom3857: ReprojectionFns["inverseReproject"],
   ): TileLayer {
+    // TODO: don't hard-code y/x as the last two dims; look at spatial
+    // convention metadata
     const chunkSizes = arrays.map((arr) => ({
       width: arr.chunks[arr.chunks.length - 1]!,
       height: arr.chunks[arr.chunks.length - 2]!,

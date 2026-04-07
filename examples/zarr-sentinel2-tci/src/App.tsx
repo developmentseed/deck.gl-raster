@@ -12,6 +12,8 @@ function DeckGLOverlay(props: MapboxOverlayProps) {
   return null;
 }
 
+// Currently generated locally from
+// https://github.com/developmentseed/geozarr-examples/pull/36
 const ZARR_URL = "http://localhost:8080/TCI.zarr";
 
 export default function App() {
