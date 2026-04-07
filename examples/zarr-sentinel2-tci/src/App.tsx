@@ -1,51 +1,38 @@
-import type { DeckProps } from "@deck.gl/core";
+import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer } from "@developmentseed/deck.gl-geotiff";
+import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 
-function DeckGLOverlay(props: DeckProps) {
+function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
   overlay.setProps(props);
   return null;
 }
 
-const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
-  {
-    title: "Sentinel-2 TCI",
-    url: "http://localhost:8080/TCI.zarr/zarr.json",
-  },
-];
+const ZARR_URL = "http://localhost:8080/TCI.zarr";
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
-  const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const cog_layer = new COGLayer({
-    id: "cog-layer",
-    geotiff: COG_OPTIONS[selectedIndex].url,
+  const zarrLayer = new ZarrLayer({
+    id: "zarr-layer",
+    source: ZARR_URL,
     debug,
     debugOpacity,
-    onGeoTIFFLoad: (tiff, options) => {
-      (window as any).tiff = tiff;
-      const { west, south, east, north } = options.geographicBounds;
-      mapRef.current?.fitBounds(
-        [
-          [west, south],
-          [east, north],
-        ],
-        {
-          padding: 40,
-          duration: 1000,
-        },
-      );
+    onZarrLoad: () => {
+      // Bounds are [300000, 3990240, 409800, 4100040] in EPSG:32612 (UTM zone 12N)
+      // Center approx: lon=-111.5, lat=36.2 (Utah/Arizona area)
+      mapRef.current?.flyTo({
+        center: [-111.5, 36.2],
+        zoom: 8,
+        duration: 1000,
+      });
     },
-    beforeId: "boundary_country_outline",
   });
 
   return (
@@ -53,18 +40,15 @@ export default function App() {
       <MaplibreMap
         ref={mapRef}
         initialViewState={{
-          longitude: 0,
-          latitude: 0,
-          zoom: 3,
-          pitch: 0,
-          bearing: 0,
+          longitude: -111.5,
+          latitude: 36.2,
+          zoom: 8,
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={[cog_layer]} interleaved />
+        <DeckGLOverlay layers={[zarrLayer]} interleaved />
       </MaplibreMap>
 
-      {/* UI Overlay Container */}
       <div
         style={{
           position: "absolute",
@@ -90,46 +74,17 @@ export default function App() {
           }}
         >
           <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
-            COGLayer Example
+            ZarrLayer — Sentinel-2 TCI
           </h3>
-          <select
-            value={selectedIndex}
-            onChange={(e) => setSelectedIndex(Number(e.target.value))}
-            style={{
-              width: "100%",
-              padding: "4px",
-              cursor: "pointer",
-            }}
-          >
-            {COG_OPTIONS.map((opt, i) => (
-              <option key={opt.url} value={i}>
-                {opt.title}
-              </option>
-            ))}
-          </select>
-          {/* <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
-            Displaying RGB imagery from New Zealand (NZTM2000 projection)
-          </p> */}
+          <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "#666" }}>
+            GeoZarr multiscale, EPSG:32612
+          </p>
 
-          {/* Attribution */}
-          {COG_OPTIONS[selectedIndex].attribution && (
-            <p
-              style={{
-                margin: "8px 0 0 0",
-                fontSize: "11px",
-                color: "#666",
-              }}
-            >
-              {COG_OPTIONS[selectedIndex].attribution}
-            </p>
-          )}
-
-          {/* Debug Controls */}
           <div
             style={{
               padding: "12px 0",
               borderTop: "1px solid #eee",
-              marginTop: "12px",
+              marginTop: "4px",
             }}
           >
             <label
