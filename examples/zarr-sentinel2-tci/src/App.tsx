@@ -25,10 +25,10 @@ export default function App() {
     debug,
     debugOpacity,
     onZarrLoad: () => {
-      // Bounds are [300000, 3990240, 409800, 4100040] in EPSG:32612 (UTM zone 12N)
-      // Center approx: lon=-111.5, lat=36.2 (Utah/Arizona area)
+      // Bounds are [499980, 4490220, 609780, 4600020] in EPSG:32618 (UTM zone 18N)
+      // Center approx: lon=-74, lat=40.7 (New York area)
       mapRef.current?.flyTo({
-        center: [-111.5, 36.2],
+        center: [-74, 41],
         zoom: 8,
         duration: 1000,
       });
@@ -40,9 +40,9 @@ export default function App() {
       <MaplibreMap
         ref={mapRef}
         initialViewState={{
-          longitude: -111.5,
-          latitude: 36.2,
-          zoom: 8,
+          longitude: -74,
+          latitude: 41,
+          zoom: 6,
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
