@@ -293,7 +293,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     const inverseTransform = (cx: number, cy: number) =>
       affineLib.apply(invTileAffine, cx, cy);
 
-    const image = toImageData(result as NDArrayLike, actualWidth, actualHeight);
+    const image = toImageData(result, actualWidth, actualHeight);
 
     return {
       image,
@@ -497,7 +497,7 @@ async function parseCrs(
  *  - shape [H, W]     → grayscale (R=G=B, alpha = 255)
  */
 function toImageData(
-  result: NDArrayLike,
+  result: zarr.Chunk<zarr.NumberDataType>,
   width: number,
   height: number,
 ): ImageData {
