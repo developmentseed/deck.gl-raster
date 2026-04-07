@@ -14,7 +14,12 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import * as affineLib from "@developmentseed/affine";
-import { RasterLayer, RasterTileset2D } from "@developmentseed/deck.gl-raster";
+import type { TileMetadata } from "@developmentseed/deck.gl-raster";
+import {
+  RasterLayer,
+  RasterTileset2D,
+  _renderDebugTileOutline as renderDebugTileOutline,
+} from "@developmentseed/deck.gl-raster";
 import type { GeoZarrMetadata } from "@developmentseed/geozarr";
 import { parseGeoZarrMetadata } from "@developmentseed/geozarr";
 import type {
@@ -318,8 +323,24 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
   ): Layer | LayersList | null {
     const { maxError, debug, debugOpacity } = this.props;
 
+    // Cast to include TileMetadata from raster-tileset's `getTileMetadata`
+    // method.
+    // TODO: implement generic handling of tile metadata upstream in TileLayer
+    const tile = props.tile as Tile2DHeader & TileMetadata;
+
+    const layers: Layer[] = [];
+    if (debug) {
+      layers.push(
+        ...renderDebugTileOutline(
+          `${this.id}-${tile.id}-bounds`,
+          tile,
+          forwardTo4326,
+        ),
+      );
+    }
+
     if (!props.data) {
-      return null;
+      return layers;
     }
 
     const { image, forwardTransform, inverseTransform, width, height } =
@@ -357,7 +378,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
       };
     }
 
-    return new RasterLayer(
+    const rasterLayer = new RasterLayer(
       this.getSubLayerProps({
         id: `${props.id}-raster`,
         image,
@@ -370,6 +391,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
         ...deckProjectionProps,
       }),
     );
+    return [rasterLayer, ...layers];
   }
 
   renderTileLayer(

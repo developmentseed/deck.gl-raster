@@ -13,7 +13,6 @@ import type {
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
-import { PathLayer, TextLayer } from "@deck.gl/layers";
 import type {
   RenderTileResult,
   TileMetadata,
@@ -21,6 +20,7 @@ import type {
 import {
   RasterLayer,
   RasterTileset2D,
+  _renderDebugTileOutline as renderDebugTileOutline,
   TileMatrixSetAdaptor,
 } from "@developmentseed/deck.gl-raster";
 import type { DecoderPool, GeoTIFF, Overview } from "@developmentseed/geotiff";
@@ -421,100 +421,10 @@ export class COGLayer<
     const tile = props.tile as Tile2DHeader<GetTileDataResult<DataT>> &
       TileMetadata;
 
-    if (!props.data) {
-      return null;
-    }
-
-    const { data, forwardTransform, inverseTransform } = props.data;
-
     const layers: Layer[] = [];
-
-    if (data) {
-      const { height, width } = data;
-
-      let tileResult: RenderTileResult;
-      if (this.props.getTileData) {
-        // In the case that the user passed in a custom `getTileData`, TS knows
-        // that `data` can be passed in to `renderTile`.
-        tileResult = this.props.renderTile(data);
-      } else {
-        // In the default case, `data` is `DefaultDataT` — cast required because
-        // TS can't prove that `DataT` (which defaults to `DefaultDataT`) is
-        // `DefaultDataT` at this point.
-        tileResult = this.state.defaultRenderTile!(
-          data as unknown as DefaultDataT,
-        );
-      }
-      const { image, renderPipeline } = tileResult;
-
-      // viewport.resolution is defined for GlobeView, undefined for WebMercatorViewport.
-      // For WebMercator we project the mesh to EPSG:3857 and use a model matrix
-      // to map from 3857 meters to deck.gl world space, matching the approach
-      // used by the MVTLayer. This avoids per-vertex WGS84→WebMercator linear
-      // interpolation errors that become visible at high latitudes.
-      const isGlobe = this.context.viewport.resolution !== undefined;
-      let reprojectionFns: ReprojectionFns;
-      let deckProjectionProps: Partial<LayerProps>;
-
-      if (isGlobe) {
-        reprojectionFns = {
-          forwardTransform,
-          inverseTransform,
-          forwardReproject: forwardTo4326,
-          inverseReproject: inverseFrom4326,
-        };
-        deckProjectionProps = {};
-      } else {
-        reprojectionFns = {
-          forwardTransform,
-          inverseTransform,
-          forwardReproject: forwardTo3857,
-          inverseReproject: inverseFrom3857,
-        };
-        // Scale 3857 meters → deck.gl world units (512×512).
-        //
-        // coordinateOrigin shifts the world-space origin to (256, 256) so that
-        // easting=0 / northing=0 maps to world center. Then the modelMatrix
-        //
-        // No Y-flip needed: CARTESIAN Y increases upward = northing.
-        deckProjectionProps = {
-          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-          coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
-          // biome-ignore format: array
-          modelMatrix: [
-            WEB_MERCATOR_TO_WORLD_SCALE, 0, 0, 0,
-            0, WEB_MERCATOR_TO_WORLD_SCALE, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1
-          ],
-        };
-      }
-
-      layers.push(
-        new RasterLayer(
-          this.getSubLayerProps({
-            id: `${props.id}-raster`,
-            width,
-            height,
-            // Only pass image if defined — passing `undefined` explicitly overrides
-            // the default null and causes isAsyncPropLoading to return true briefly,
-            // which hides the parent tile placeholder and causes a black flash.
-            // https://github.com/developmentseed/deck.gl-raster/issues/376
-            ...(image !== undefined && { image }),
-            renderPipeline,
-            maxError,
-            reprojectionFns,
-            debug,
-            debugOpacity,
-            ...deckProjectionProps,
-          }),
-        ),
-      );
-    }
-
     if (debug) {
       layers.push(
-        ...this.renderDebugTileOutline(
+        ...renderDebugTileOutline(
           `${this.id}-${tile.id}-bounds`,
           tile,
           forwardTo4326,
@@ -522,7 +432,91 @@ export class COGLayer<
       );
     }
 
-    return layers;
+    if (!props.data) {
+      return layers;
+    }
+
+    const { data, forwardTransform, inverseTransform } = props.data;
+
+    const { height, width } = data;
+
+    let tileResult: RenderTileResult;
+    if (this.props.getTileData) {
+      // In the case that the user passed in a custom `getTileData`, TS knows
+      // that `data` can be passed in to `renderTile`.
+      tileResult = this.props.renderTile(data);
+    } else {
+      // In the default case, `data` is `DefaultDataT` — cast required because
+      // TS can't prove that `DataT` (which defaults to `DefaultDataT`) is
+      // `DefaultDataT` at this point.
+      tileResult = this.state.defaultRenderTile!(
+        data as unknown as DefaultDataT,
+      );
+    }
+    const { image, renderPipeline } = tileResult;
+
+    // viewport.resolution is defined for GlobeView, undefined for WebMercatorViewport.
+    // For WebMercator we project the mesh to EPSG:3857 and use a model matrix
+    // to map from 3857 meters to deck.gl world space, matching the approach
+    // used by the MVTLayer. This avoids per-vertex WGS84→WebMercator linear
+    // interpolation errors that become visible at high latitudes.
+    const isGlobe = this.context.viewport.resolution !== undefined;
+    let reprojectionFns: ReprojectionFns;
+    let deckProjectionProps: Partial<LayerProps>;
+
+    if (isGlobe) {
+      reprojectionFns = {
+        forwardTransform,
+        inverseTransform,
+        forwardReproject: forwardTo4326,
+        inverseReproject: inverseFrom4326,
+      };
+      deckProjectionProps = {};
+    } else {
+      reprojectionFns = {
+        forwardTransform,
+        inverseTransform,
+        forwardReproject: forwardTo3857,
+        inverseReproject: inverseFrom3857,
+      };
+      // Scale 3857 meters → deck.gl world units (512×512).
+      //
+      // coordinateOrigin shifts the world-space origin to (256, 256) so that
+      // easting=0 / northing=0 maps to world center. Then the modelMatrix
+      //
+      // No Y-flip needed: CARTESIAN Y increases upward = northing.
+      deckProjectionProps = {
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
+        // biome-ignore format: array
+        modelMatrix: [
+            WEB_MERCATOR_TO_WORLD_SCALE, 0, 0, 0,
+            0, WEB_MERCATOR_TO_WORLD_SCALE, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+          ],
+      };
+    }
+
+    const rasterLayer = new RasterLayer(
+      this.getSubLayerProps({
+        id: `${props.id}-raster`,
+        width,
+        height,
+        // Only pass image if defined — passing `undefined` explicitly overrides
+        // the default null and causes isAsyncPropLoading to return true briefly,
+        // which hides the parent tile placeholder and causes a black flash.
+        // https://github.com/developmentseed/deck.gl-raster/issues/376
+        ...(image !== undefined && { image }),
+        renderPipeline,
+        maxError,
+        reprojectionFns,
+        debug,
+        debugOpacity,
+        ...deckProjectionProps,
+      }),
+    );
+    return [rasterLayer, ...layers];
   }
 
   /** Define the underlying deck.gl TileLayer. */
@@ -607,69 +601,5 @@ export class COGLayer<
       inverseFrom3857,
       geotiff,
     );
-  }
-
-  renderDebugTileOutline(
-    id: string,
-    tile: Tile2DHeader<GetTileDataResult<DataT>> & TileMetadata,
-    forwardTo4326: ReprojectionFns["forwardReproject"],
-  ) {
-    const { projectedCorners } = tile;
-
-    // Create a closed path in WGS84 projection around the tile bounds
-    //
-    // The tile has a `bbox` field which is already the bounding box in WGS84,
-    // but that uses `transformBounds` and densifies edges. So the corners of
-    // the bounding boxes don't line up with each other.
-    //
-    // In this case in the debug mode, it looks better if we ignore the actual
-    // non-linearities of the edges and just draw a box connecting the
-    // reprojected corners. In any case, the _image itself_ will be densified
-    // on the edges as a feature of the mesh generation.
-    const { topLeft, topRight, bottomRight, bottomLeft } = projectedCorners;
-    const topLeftWgs84 = forwardTo4326(topLeft[0], topLeft[1]);
-    const topRightWgs84 = forwardTo4326(topRight[0], topRight[1]);
-    const bottomRightWgs84 = forwardTo4326(bottomRight[0], bottomRight[1]);
-    const bottomLeftWgs84 = forwardTo4326(bottomLeft[0], bottomLeft[1]);
-
-    const path = [
-      topLeftWgs84,
-      topRightWgs84,
-      bottomRightWgs84,
-      bottomLeftWgs84,
-      topLeftWgs84,
-    ];
-
-    const center = [
-      (topLeftWgs84[0] + bottomRightWgs84[0]) / 2,
-      (topLeftWgs84[1] + bottomRightWgs84[1]) / 2,
-    ];
-    const labelLayer = new TextLayer({
-      id: `${id}-label`,
-      data: [
-        {
-          position: center,
-          text: `x=${tile.index.x} y=${tile.index.y} z=${tile.index.z}`,
-        },
-      ],
-      getColor: [255, 255, 255, 255],
-      getSize: 24,
-      sizeUnits: "pixels",
-      outlineWidth: 3,
-      outlineColor: [0, 0, 0, 255],
-      fontSettings: { sdf: true },
-    });
-
-    const outlineLayer = new PathLayer({
-      id,
-      data: [path],
-      getPath: (d) => d,
-      getColor: [255, 0, 0, 255], // Red
-      getWidth: 2,
-      widthUnits: "pixels",
-      pickable: false,
-    });
-
-    return [outlineLayer, labelLayer];
   }
 }
