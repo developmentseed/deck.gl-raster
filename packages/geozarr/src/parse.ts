@@ -36,7 +36,7 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
   } else if ("proj:wkt2" in geoProj) {
     crs.wkt2 = geoProj["proj:wkt2"];
   } else if ("proj:projjson" in geoProj) {
-    crs.projjson = geoProj["proj:projjson"] as Record<string, unknown>;
+    crs.projjson = geoProj["proj:projjson"];
   }
 
   // --- Axes ---
