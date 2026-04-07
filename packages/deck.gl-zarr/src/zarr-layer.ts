@@ -193,32 +193,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
       ),
     );
 
-    // Resolve CRS
-    const { crs } = meta;
-    let sourceProjection: ProjectionDefinition;
-
-    if (crs.code) {
-      const [authority, code] = crs.code.split(":");
-      if (authority !== "EPSG") {
-        throw new Error(
-          `Unsupported CRS authority "${authority}". Only "EPSG" is supported.`,
-        );
-      }
-      if (!code) {
-        throw new Error(
-          `Invalid CRS code "${crs.code}". Expected format "EPSG:XXXX".`,
-        );
-      }
-      sourceProjection = await this.props.epsgResolver!(
-        Number.parseInt(code, 10),
-      );
-    } else if (crs.wkt2) {
-      sourceProjection = parseWkt(crs.wkt2);
-    } else if (crs.projjson) {
-      sourceProjection = parseWkt(crs.projjson as unknown as ProjJson);
-    } else {
-      throw new Error("No CRS information found in GeoZarr metadata");
-    }
+    const sourceProjection = await parseCrs(meta.crs, this.props.epsgResolver!);
 
     // Build proj4 converters
     // @ts-expect-error - proj4 typings don't cover wkt-parser output
@@ -230,17 +205,21 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
 
     // @ts-expect-error - proj4 typings don't cover wkt-parser output
     const converter3857 = proj4(sourceProjection, "EPSG:3857");
-    const forwardTo3857Raw = (x: number, y: number) =>
-      converter3857.forward<[number, number]>([x, y], false);
     const forwardTo3857 = makeClampedForwardTo3857(
-      forwardTo3857Raw,
+      (x: number, y: number) =>
+        converter3857.forward<[number, number]>([x, y], false),
       forwardTo4326,
     );
     const inverseFrom3857 = (x: number, y: number) =>
       converter3857.inverse<[number, number]>([x, y], false);
 
     // Compute meters-per-CRS-unit from the resolved projection
-    const units: string = sourceProjection.units ?? "m";
+    const units = sourceProjection.units;
+    if (!units) {
+      throw new Error(
+        "Source projection is missing 'units' property, cannot compute meters per unit",
+      );
+    }
     const semiMajorAxis: number | undefined =
       sourceProjection.datum?.a ?? sourceProjection.a;
     const mpu = metersPerUnit(units as Parameters<typeof metersPerUnit>[0], {
@@ -483,11 +462,31 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
   }
 }
 
-/** Minimal interface for the data returned by zarrita.get */
-type NDArrayLike = {
-  data: ArrayLike<number>;
-  shape: number[];
-};
+async function parseCrs(
+  crs: GeoZarrMetadata["crs"],
+  epsgResolver: EpsgResolver,
+): Promise<ProjectionDefinition> {
+  if (crs.code) {
+    const [authority, code] = crs.code.split(":");
+    if (authority !== "EPSG") {
+      throw new Error(
+        `Unsupported CRS authority "${authority}". Only "EPSG" is supported.`,
+      );
+    }
+    if (!code) {
+      throw new Error(
+        `Invalid CRS code "${crs.code}". Expected format "EPSG:XXXX".`,
+      );
+    }
+    return await epsgResolver(Number.parseInt(code, 10));
+  } else if (crs.wkt2) {
+    return parseWkt(crs.wkt2);
+  } else if (crs.projjson) {
+    return parseWkt(crs.projjson as unknown as ProjJson);
+  } else {
+    throw new Error("No CRS information found in GeoZarr metadata");
+  }
+}
 
 /**
  * Convert a band-planar zarr result to an RGBA ImageData.
