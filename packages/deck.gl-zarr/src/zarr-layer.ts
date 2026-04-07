@@ -89,7 +89,9 @@ export type ZarrLayerProps<
     debugOpacity?: number;
 
     /** Called when Zarr metadata has been loaded and parsed. */
-    onZarrLoad?: (meta: GeoZarrMetadata) => void;
+    // TODO: restore onZarrLoad once we understand what metadata we should pass
+    // through it.
+    // onZarrLoad?: (meta: GeoZarrMetadata) => void;
 
     /** User-provided AbortSignal to cancel loading. */
     signal?: AbortSignal;
@@ -244,8 +246,6 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     const mpu = metersPerUnit(units as Parameters<typeof metersPerUnit>[0], {
       semiMajorAxis,
     });
-
-    this.props.onZarrLoad?.(meta);
 
     this.setState({
       meta,
