@@ -46,7 +46,10 @@ const WEB_MERCATOR_TO_WORLD_SCALE =
 /**
  * Props for the {@link ZarrLayer}.
  */
-export type ZarrLayerProps = CompositeLayerProps &
+export type ZarrLayerProps<
+  Store extends zarr.Readable = zarr.Readable,
+  Dtype extends zarr.DataType = zarr.DataType,
+> = CompositeLayerProps &
   Pick<
     TileLayerProps,
     | "debounceTime"
@@ -56,7 +59,7 @@ export type ZarrLayerProps = CompositeLayerProps &
     | "refinementStrategy"
   > & {
     /** URL to the Zarr v3 store root. */
-    source: string | URL;
+    source: string | URL | zarr.Array<Dtype, Store> | zarr.Group<Store>;
 
     /**
      * Optional path within the store to the variable group.
@@ -107,52 +110,6 @@ type TileData = {
   height: number;
 };
 
-// Minimal interface for the data returned by zarrita.get
-type NDArrayLike = {
-  data: ArrayLike<number>;
-  shape: number[];
-};
-
-/**
- * Convert a band-planar zarr result to an RGBA ImageData.
- *
- * Supports:
- *  - shape [3, H, W]  → RGB  (alpha = 255)
- *  - shape [1, H, W]  → grayscale (R=G=B, alpha = 255)
- *  - shape [H, W]     → grayscale (R=G=B, alpha = 255)
- */
-function toImageData(result: NDArrayLike, width: number, height: number): ImageData {
-  const { data, shape } = result;
-  const rgba = new Uint8ClampedArray(width * height * 4);
-  const numBands = shape.length >= 3 ? shape[shape.length - 3]! : 1;
-  const pixelCount = width * height;
-
-  if (numBands >= 3) {
-    // Band-planar RGB: [3, H, W]
-    const rOffset = 0;
-    const gOffset = pixelCount;
-    const bOffset = pixelCount * 2;
-    for (let i = 0; i < pixelCount; i++) {
-      rgba[i * 4 + 0] = (data as ArrayLike<number>)[rOffset + i] as number;
-      rgba[i * 4 + 1] = (data as ArrayLike<number>)[gOffset + i] as number;
-      rgba[i * 4 + 2] = (data as ArrayLike<number>)[bOffset + i] as number;
-      rgba[i * 4 + 3] = 255;
-    }
-  } else {
-    // Single band: [1, H, W] or [H, W]
-    const offset = shape.length >= 3 ? 0 : 0;
-    for (let i = 0; i < pixelCount; i++) {
-      const v = (data as ArrayLike<number>)[offset + i] as number;
-      rgba[i * 4 + 0] = v;
-      rgba[i * 4 + 1] = v;
-      rgba[i * 4 + 2] = v;
-      rgba[i * 4 + 3] = 255;
-    }
-  }
-
-  return new ImageData(rgba, width, height);
-}
-
 /**
  * ZarrLayer renders a GeoZarr dataset using a tiled approach with reprojection.
  */
@@ -162,13 +119,13 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
 
   declare state: {
     meta?: GeoZarrMetadata;
-    group?: zarr.Group<zarr.FetchStore>;
+    /** One opened array per level, finest-first (matches meta.levels order). */
+    arrays?: zarr.Array<zarr.DataType, zarr.Readable>[];
     forwardTo4326?: ReprojectionFns["forwardReproject"];
     inverseFrom4326?: ReprojectionFns["inverseReproject"];
     forwardTo3857?: ReprojectionFns["forwardReproject"];
     inverseFrom3857?: ReprojectionFns["inverseReproject"];
     mpu?: number;
-    chunkSizes?: Array<{ width: number; height: number }>;
   };
 
   override initializeState(): void {
@@ -177,13 +134,17 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
 
   override updateState(params: UpdateParameters<this>) {
     super.updateState(params);
+
     const { props, oldProps, changeFlags } = params;
+
     const needsUpdate =
       Boolean(changeFlags.dataChanged) ||
       props.source !== oldProps.source ||
       props.variable !== oldProps.variable;
 
     if (needsUpdate) {
+      // Clear stale state so renderLayers returns null until the new GeoTIFF is
+      // ready
       this._clearState();
       void this._parseZarr();
     }
@@ -192,13 +153,12 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
   _clearState() {
     this.setState({
       meta: undefined,
-      group: undefined,
+      arrays: undefined,
       forwardTo4326: undefined,
       inverseFrom4326: undefined,
       forwardTo3857: undefined,
       inverseFrom3857: undefined,
       mpu: undefined,
-      chunkSizes: undefined,
     });
   }
 
@@ -206,26 +166,29 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     const { source, variable } = this.props;
 
     const store = new zarr.FetchStore(source.toString());
-    const rootGroup = await zarr.open(store, { kind: "group" });
+    // @ts-expect-error - for debugging
+    window.store = store;
+
+    const root = await zarr.open(store);
+    // @ts-expect-error - for debugging
+    window.root = root;
+
     const group = variable
-      ? await zarr.open(rootGroup.resolve(variable), { kind: "group" })
-      : rootGroup;
+      ? await zarr.open(root.resolve(variable), { kind: "group" })
+      : root;
+    // @ts-expect-error - for debugging
+    window.group = group;
 
     const meta = parseGeoZarrMetadata(group.attrs);
+    // @ts-expect-error - for debugging
+    window.meta = meta;
 
-    // Open each level array to get chunk sizes (shape is in attrs via spatial:shape)
-    const chunkSizes = await Promise.all(
-      meta.levels.map(async (level) => {
-        const arr = await zarr.open(group.resolve(level.path), {
-          kind: "array",
-        });
-        // chunks is [...otherDims, chunkHeight, chunkWidth]
-        const chunks = arr.chunks;
-        return {
-          width: chunks[chunks.length - 1]!,
-          height: chunks[chunks.length - 2]!,
-        };
-      }),
+    // Open each level's array once and keep the references in state.
+    // This avoids re-fetching array metadata on every tile request.
+    const arrays = await Promise.all(
+      meta.levels.map((level) =>
+        zarr.open(group.resolve(level.path), { kind: "array" }),
+      ),
     );
 
     // Resolve CRS
@@ -286,21 +249,19 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
 
     this.setState({
       meta,
-      group,
+      arrays,
       forwardTo4326,
       inverseFrom4326,
       forwardTo3857,
       inverseFrom3857,
       mpu,
-      chunkSizes,
     });
   }
 
   async _getTileData(
     tile: TileLoadProps,
     meta: GeoZarrMetadata,
-    group: zarr.Group<zarr.FetchStore>,
-    chunkSizes: Array<{ width: number; height: number }>,
+    arrays: zarr.Array<zarr.DataType, zarr.Readable>[],
   ): Promise<TileData> {
     const { x, y, z } = tile.index;
     const { dimensionIndices = {} } = this.props;
@@ -309,14 +270,11 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     // so descriptor level z maps to meta.levels[numLevels - 1 - z]
     const zarrLevelIdx = meta.levels.length - 1 - z;
     const level = meta.levels[zarrLevelIdx]!;
-    const chunk = chunkSizes[zarrLevelIdx]!;
+    const arr = arrays[zarrLevelIdx]!;
 
-    const { tileWidth, tileHeight } = {
-      tileWidth: chunk.width,
-      tileHeight: chunk.height,
-    };
-
-    const arr = await zarr.open(group.resolve(level.path), { kind: "array" });
+    // chunks is [...otherDims, chunkHeight, chunkWidth]
+    const tileWidth = arr.chunks[arr.chunks.length - 1]!;
+    const tileHeight = arr.chunks[arr.chunks.length - 2]!;
 
     // Build slice spec for all dimensions
     // The last two dims are y (height) and x (width); others use dimensionIndices
@@ -385,7 +343,8 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
       return null;
     }
 
-    const { image, forwardTransform, inverseTransform, width, height } = props.data;
+    const { image, forwardTransform, inverseTransform, width, height } =
+      props.data;
 
     const isGlobe = this.context.viewport.resolution !== undefined;
     let reprojectionFns: ReprojectionFns;
@@ -436,14 +395,18 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
 
   renderTileLayer(
     meta: GeoZarrMetadata,
-    group: zarr.Group<zarr.FetchStore>,
-    chunkSizes: Array<{ width: number; height: number }>,
+    arrays: zarr.Array<zarr.DataType, zarr.Readable>[],
     mpu: number,
     forwardTo4326: ReprojectionFns["forwardReproject"],
     inverseFrom4326: ReprojectionFns["inverseReproject"],
     forwardTo3857: ReprojectionFns["forwardReproject"],
     inverseFrom3857: ReprojectionFns["inverseReproject"],
   ): TileLayer {
+    const chunkSizes = arrays.map((arr) => ({
+      width: arr.chunks[arr.chunks.length - 1]!,
+      height: arr.chunks[arr.chunks.length - 2]!,
+    }));
+
     class ZarrTilesetFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
         const descriptor = geoZarrToDescriptor(
@@ -468,7 +431,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     return new TileLayer<TileData>({
       id: `zarr-tile-layer-${this.id}`,
       TilesetClass: ZarrTilesetFactory,
-      getTileData: (tile) => this._getTileData(tile, meta, group, chunkSizes),
+      getTileData: (tile) => this._getTileData(tile, meta, arrays),
       renderSubLayers: (props) =>
         this._renderSubLayers(
           props,
@@ -488,8 +451,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
   override renderLayers() {
     const {
       meta,
-      group,
-      chunkSizes,
+      arrays,
       mpu,
       forwardTo4326,
       inverseFrom4326,
@@ -499,8 +461,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
 
     if (
       !meta ||
-      !group ||
-      !chunkSizes ||
+      !arrays ||
       mpu === undefined ||
       !forwardTo4326 ||
       !inverseFrom4326 ||
@@ -512,8 +473,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
 
     return this.renderTileLayer(
       meta,
-      group,
-      chunkSizes,
+      arrays,
       mpu,
       forwardTo4326,
       inverseFrom4326,
@@ -521,4 +481,53 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
       inverseFrom3857,
     );
   }
+}
+
+/** Minimal interface for the data returned by zarrita.get */
+type NDArrayLike = {
+  data: ArrayLike<number>;
+  shape: number[];
+};
+
+/**
+ * Convert a band-planar zarr result to an RGBA ImageData.
+ *
+ * Supports:
+ *  - shape [3, H, W]  → RGB  (alpha = 255)
+ *  - shape [1, H, W]  → grayscale (R=G=B, alpha = 255)
+ *  - shape [H, W]     → grayscale (R=G=B, alpha = 255)
+ */
+function toImageData(
+  result: NDArrayLike,
+  width: number,
+  height: number,
+): ImageData {
+  const { data, shape } = result;
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  const numBands = shape.length >= 3 ? shape[shape.length - 3]! : 1;
+  const pixelCount = width * height;
+
+  if (numBands >= 3) {
+    // Band-planar RGB: [3, H, W]
+    const rOffset = 0;
+    const gOffset = pixelCount;
+    const bOffset = pixelCount * 2;
+    for (let i = 0; i < pixelCount; i++) {
+      rgba[i * 4 + 0] = data[rOffset + i]!;
+      rgba[i * 4 + 1] = data[gOffset + i]!;
+      rgba[i * 4 + 2] = data[bOffset + i]!;
+      rgba[i * 4 + 3] = 255;
+    }
+  } else {
+    // Single band: [1, H, W] or [H, W]
+    for (let i = 0; i < pixelCount; i++) {
+      const v = data[i]!;
+      rgba[i * 4 + 0] = v;
+      rgba[i * 4 + 1] = v;
+      rgba[i * 4 + 2] = v;
+      rgba[i * 4 + 3] = 255;
+    }
+  }
+
+  return new ImageData(rgba, width, height);
 }
