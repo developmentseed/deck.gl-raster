@@ -8,7 +8,7 @@ import type {
   TilesetDescriptor,
   TilesetLevel,
 } from "../../src/raster-tileset/tileset-interface.js";
-import type { Corners, Point } from "../../src/raster-tileset/types.js";
+import type { Corners } from "../../src/raster-tileset/types.js";
 
 /** Helper: create a mock TilesetLevel */
 function mockLevel(opts: {
@@ -21,10 +21,10 @@ function mockLevel(opts: {
   return {
     ...opts,
     projectedTileCorners: (_col: number, _row: number): Corners => ({
-      topLeft: [0, 1] as Point,
-      topRight: [1, 1] as Point,
-      bottomLeft: [0, 0] as Point,
-      bottomRight: [1, 0] as Point,
+      topLeft: [0, 1],
+      topRight: [1, 1],
+      bottomLeft: [0, 0],
+      bottomRight: [1, 0],
     }),
     crsBoundsToTileRange: () => ({
       minCol: 0,
@@ -48,14 +48,38 @@ function mockDescriptor(levels: TilesetLevel[]): TilesetDescriptor {
 
 describe("tilesetLevelsEqual", () => {
   it("returns true for levels with same grid parameters", () => {
-    const a = mockLevel({ matrixWidth: 43, matrixHeight: 43, tileWidth: 256, tileHeight: 256, metersPerPixel: 10 });
-    const b = mockLevel({ matrixWidth: 43, matrixHeight: 43, tileWidth: 256, tileHeight: 256, metersPerPixel: 10 });
+    const a = mockLevel({
+      matrixWidth: 43,
+      matrixHeight: 43,
+      tileWidth: 256,
+      tileHeight: 256,
+      metersPerPixel: 10,
+    });
+    const b = mockLevel({
+      matrixWidth: 43,
+      matrixHeight: 43,
+      tileWidth: 256,
+      tileHeight: 256,
+      metersPerPixel: 10,
+    });
     expect(tilesetLevelsEqual(a, b)).toBe(true);
   });
 
   it("returns false for levels with different grid parameters", () => {
-    const a = mockLevel({ matrixWidth: 43, matrixHeight: 43, tileWidth: 256, tileHeight: 256, metersPerPixel: 10 });
-    const b = mockLevel({ matrixWidth: 22, matrixHeight: 22, tileWidth: 256, tileHeight: 256, metersPerPixel: 20 });
+    const a = mockLevel({
+      matrixWidth: 43,
+      matrixHeight: 43,
+      tileWidth: 256,
+      tileHeight: 256,
+      metersPerPixel: 10,
+    });
+    const b = mockLevel({
+      matrixWidth: 22,
+      matrixHeight: 22,
+      tileWidth: 256,
+      tileHeight: 256,
+      metersPerPixel: 20,
+    });
     expect(tilesetLevelsEqual(a, b)).toBe(false);
   });
 });
@@ -63,23 +87,73 @@ describe("tilesetLevelsEqual", () => {
 describe("createMultiTilesetDescriptor", () => {
   it("selects the finest-resolution tileset as primary", () => {
     const fine = mockDescriptor([
-      mockLevel({ matrixWidth: 1, matrixHeight: 1, tileWidth: 256, tileHeight: 256, metersPerPixel: 100 }),
-      mockLevel({ matrixWidth: 43, matrixHeight: 43, tileWidth: 256, tileHeight: 256, metersPerPixel: 10 }),
+      mockLevel({
+        matrixWidth: 1,
+        matrixHeight: 1,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 100,
+      }),
+      mockLevel({
+        matrixWidth: 43,
+        matrixHeight: 43,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 10,
+      }),
     ]);
     const coarse = mockDescriptor([
-      mockLevel({ matrixWidth: 1, matrixHeight: 1, tileWidth: 256, tileHeight: 256, metersPerPixel: 200 }),
-      mockLevel({ matrixWidth: 22, matrixHeight: 22, tileWidth: 256, tileHeight: 256, metersPerPixel: 20 }),
+      mockLevel({
+        matrixWidth: 1,
+        matrixHeight: 1,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 200,
+      }),
+      mockLevel({
+        matrixWidth: 22,
+        matrixHeight: 22,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 20,
+      }),
     ]);
-    const multi = createMultiTilesetDescriptor(new Map([["red", fine], ["swir", coarse]]));
+    const multi = createMultiTilesetDescriptor(
+      new Map([
+        ["red", fine],
+        ["swir", coarse],
+      ]),
+    );
     expect(multi.primary).toBe(fine);
     expect(multi.secondaries.size).toBe(1);
     expect(multi.secondaries.get("swir")).toBe(coarse);
   });
 
   it("does not include the primary key in secondaries", () => {
-    const fine = mockDescriptor([mockLevel({ matrixWidth: 43, matrixHeight: 43, tileWidth: 256, tileHeight: 256, metersPerPixel: 10 })]);
-    const coarse = mockDescriptor([mockLevel({ matrixWidth: 22, matrixHeight: 22, tileWidth: 256, tileHeight: 256, metersPerPixel: 20 })]);
-    const multi = createMultiTilesetDescriptor(new Map([["red", fine], ["swir", coarse]]));
+    const fine = mockDescriptor([
+      mockLevel({
+        matrixWidth: 43,
+        matrixHeight: 43,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 10,
+      }),
+    ]);
+    const coarse = mockDescriptor([
+      mockLevel({
+        matrixWidth: 22,
+        matrixHeight: 22,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 20,
+      }),
+    ]);
+    const multi = createMultiTilesetDescriptor(
+      new Map([
+        ["red", fine],
+        ["swir", coarse],
+      ]),
+    );
     expect(multi.secondaries.has("red")).toBe(false);
   });
 });
@@ -87,9 +161,27 @@ describe("createMultiTilesetDescriptor", () => {
 describe("selectSecondaryLevel", () => {
   it("picks the finest level that is >= primary metersPerPixel", () => {
     const levels = [
-      mockLevel({ matrixWidth: 1, matrixHeight: 1, tileWidth: 256, tileHeight: 256, metersPerPixel: 200 }),
-      mockLevel({ matrixWidth: 5, matrixHeight: 5, tileWidth: 256, tileHeight: 256, metersPerPixel: 60 }),
-      mockLevel({ matrixWidth: 22, matrixHeight: 22, tileWidth: 256, tileHeight: 256, metersPerPixel: 20 }),
+      mockLevel({
+        matrixWidth: 1,
+        matrixHeight: 1,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 200,
+      }),
+      mockLevel({
+        matrixWidth: 5,
+        matrixHeight: 5,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 60,
+      }),
+      mockLevel({
+        matrixWidth: 22,
+        matrixHeight: 22,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 20,
+      }),
     ];
     const selected = selectSecondaryLevel(levels, 10);
     expect(selected).toBe(levels[2]);
@@ -97,8 +189,20 @@ describe("selectSecondaryLevel", () => {
 
   it("returns the finest level when all are coarser than primary", () => {
     const levels = [
-      mockLevel({ matrixWidth: 1, matrixHeight: 1, tileWidth: 256, tileHeight: 256, metersPerPixel: 200 }),
-      mockLevel({ matrixWidth: 3, matrixHeight: 3, tileWidth: 256, tileHeight: 256, metersPerPixel: 60 }),
+      mockLevel({
+        matrixWidth: 1,
+        matrixHeight: 1,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 200,
+      }),
+      mockLevel({
+        matrixWidth: 3,
+        matrixHeight: 3,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 60,
+      }),
     ];
     const selected = selectSecondaryLevel(levels, 10);
     expect(selected).toBe(levels[1]);
@@ -106,9 +210,27 @@ describe("selectSecondaryLevel", () => {
 
   it("selects a coarser level when primary is zoomed out", () => {
     const levels = [
-      mockLevel({ matrixWidth: 1, matrixHeight: 1, tileWidth: 256, tileHeight: 256, metersPerPixel: 200 }),
-      mockLevel({ matrixWidth: 5, matrixHeight: 5, tileWidth: 256, tileHeight: 256, metersPerPixel: 60 }),
-      mockLevel({ matrixWidth: 22, matrixHeight: 22, tileWidth: 256, tileHeight: 256, metersPerPixel: 20 }),
+      mockLevel({
+        matrixWidth: 1,
+        matrixHeight: 1,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 200,
+      }),
+      mockLevel({
+        matrixWidth: 5,
+        matrixHeight: 5,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 60,
+      }),
+      mockLevel({
+        matrixWidth: 22,
+        matrixHeight: 22,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 20,
+      }),
     ];
     const selected = selectSecondaryLevel(levels, 100);
     expect(selected).toBe(levels[1]);
