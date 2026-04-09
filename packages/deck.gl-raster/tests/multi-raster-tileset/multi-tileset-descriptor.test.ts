@@ -159,80 +159,66 @@ describe("createMultiTilesetDescriptor", () => {
 });
 
 describe("selectSecondaryLevel", () => {
-  it("picks the finest level that is >= primary metersPerPixel", () => {
-    const levels = [
-      mockLevel({
-        matrixWidth: 1,
-        matrixHeight: 1,
-        tileWidth: 256,
-        tileHeight: 256,
-        metersPerPixel: 200,
-      }),
-      mockLevel({
-        matrixWidth: 5,
-        matrixHeight: 5,
-        tileWidth: 256,
-        tileHeight: 256,
-        metersPerPixel: 60,
-      }),
-      mockLevel({
-        matrixWidth: 22,
-        matrixHeight: 22,
-        tileWidth: 256,
-        tileHeight: 256,
-        metersPerPixel: 20,
-      }),
-    ];
-    const selected = selectSecondaryLevel(levels, 10);
-    expect(selected).toBe(levels[2]);
+  const levels = [
+    mockLevel({
+      matrixWidth: 1,
+      matrixHeight: 1,
+      tileWidth: 256,
+      tileHeight: 256,
+      metersPerPixel: 200,
+    }),
+    mockLevel({
+      matrixWidth: 5,
+      matrixHeight: 5,
+      tileWidth: 256,
+      tileHeight: 256,
+      metersPerPixel: 60,
+    }),
+    mockLevel({
+      matrixWidth: 22,
+      matrixHeight: 22,
+      tileWidth: 256,
+      tileHeight: 256,
+      metersPerPixel: 20,
+    }),
+  ];
+
+  describe("closest-finer (default)", () => {
+    it("falls back to finest when all levels are coarser than primary", () => {
+      // Primary at 10m — all levels (200, 60, 20) are coarser
+      const selected = selectSecondaryLevel(levels, 10);
+      expect(selected).toBe(levels[2]); // 20m — finest available
+    });
+
+    it("picks the coarsest level that is still finer than primary", () => {
+      // Primary at 100m — finer-or-equal candidates are [60, 20]
+      // Pick the coarsest among them (closest to 100m without exceeding)
+      const selected = selectSecondaryLevel(levels, 100);
+      expect(selected).toBe(levels[1]); // 60m
+    });
+
+    it("picks exact match when available", () => {
+      const selected = selectSecondaryLevel(levels, 60);
+      expect(selected).toBe(levels[1]); // 60m exact
+    });
   });
 
-  it("returns the finest level when all are coarser than primary", () => {
-    const levels = [
-      mockLevel({
-        matrixWidth: 1,
-        matrixHeight: 1,
-        tileWidth: 256,
-        tileHeight: 256,
-        metersPerPixel: 200,
-      }),
-      mockLevel({
-        matrixWidth: 3,
-        matrixHeight: 3,
-        tileWidth: 256,
-        tileHeight: 256,
-        metersPerPixel: 60,
-      }),
-    ];
-    const selected = selectSecondaryLevel(levels, 10);
-    expect(selected).toBe(levels[1]);
-  });
+  describe("closest", () => {
+    it("picks the level with the smallest absolute mpp difference", () => {
+      // Primary at 50m — diffs: |200-50|=150, |60-50|=10, |20-50|=30
+      const selected = selectSecondaryLevel(levels, 50, "closest");
+      expect(selected).toBe(levels[1]); // 60m (closest by abs diff)
+    });
 
-  it("selects a coarser level when primary is zoomed out", () => {
-    const levels = [
-      mockLevel({
-        matrixWidth: 1,
-        matrixHeight: 1,
-        tileWidth: 256,
-        tileHeight: 256,
-        metersPerPixel: 200,
-      }),
-      mockLevel({
-        matrixWidth: 5,
-        matrixHeight: 5,
-        tileWidth: 256,
-        tileHeight: 256,
-        metersPerPixel: 60,
-      }),
-      mockLevel({
-        matrixWidth: 22,
-        matrixHeight: 22,
-        tileWidth: 256,
-        tileHeight: 256,
-        metersPerPixel: 20,
-      }),
-    ];
-    const selected = selectSecondaryLevel(levels, 100);
-    expect(selected).toBe(levels[1]);
+    it("may pick a coarser level if it is closer than all finer ones", () => {
+      // Primary at 100m — diffs: |200-100|=100, |60-100|=40, |20-100|=80
+      const selected = selectSecondaryLevel(levels, 100, "closest");
+      expect(selected).toBe(levels[1]); // 60m
+    });
+
+    it("picks finest when primary is finer than all levels", () => {
+      const selected = selectSecondaryLevel(levels, 10, "closest");
+      expect(selected).toBe(levels[2]); // 20m (closest to 10m)
+    });
   });
 });

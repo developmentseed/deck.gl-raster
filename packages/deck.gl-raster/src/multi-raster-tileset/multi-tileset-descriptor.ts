@@ -72,23 +72,52 @@ export function createMultiTilesetDescriptor(
 }
 
 /**
+ * Strategy for selecting a secondary tileset level.
+ *
+ * - `"closest"` — Pick the level whose `metersPerPixel` is nearest to the
+ *   primary's, in either direction. Minimizes wasted bandwidth but may return
+ *   a slightly coarser level than necessary.
+ * - `"closest-finer"` — Prefer the finest level whose `metersPerPixel` is
+ *   <= the primary's. Falls back to the finest available if all levels are
+ *   coarser. Ensures the secondary is never blurrier than necessary when a
+ *   finer option exists.
+ */
+export type SecondaryLevelStrategy = "closest" | "closest-finer";
+
+/**
  * Select the best {@link TilesetLevel} from a secondary tileset for a given
  * primary {@link TilesetLevel.metersPerPixel}.
- *
- * Picks the level whose `metersPerPixel` is closest to the primary's,
- * avoiding both over-fetching (using too-fine a level) and under-fetching
- * (using too-coarse a level).
  *
  * @param levels - Ordered coarsest-first (index 0 = coarsest), matching
  *   {@link TilesetDescriptor.levels} convention
  * @param primaryMetersPerPixel - The `metersPerPixel` of the current primary
  *   tile's zoom level
- * @returns The level with the closest `metersPerPixel` to the primary
+ * @param strategy - Selection strategy. Defaults to `"closest-finer"`.
+ * @returns The selected {@link TilesetLevel}
+ *
+ * @see {@link SecondaryLevelStrategy} for available strategies
  */
 export function selectSecondaryLevel(
   levels: TilesetLevel[],
   primaryMetersPerPixel: number,
+  strategy: SecondaryLevelStrategy = "closest-finer",
 ): TilesetLevel {
+  if (strategy === "closest-finer") {
+    // Among levels that are finer-or-equal to the primary, pick the closest
+    // (coarsest of the finer-or-equal set). Walk from coarsest to finest,
+    // tracking the last level that's <= primary.
+    let bestFiner: TilesetLevel | null = null;
+    for (let i = 0; i < levels.length; i++) {
+      if (levels[i]!.metersPerPixel <= primaryMetersPerPixel) {
+        bestFiner = levels[i]!;
+        break;
+      }
+    }
+    // If found, return it; otherwise fall back to the finest available
+    return bestFiner ?? levels[levels.length - 1]!;
+  }
+
+  // "closest" — pick the level with the smallest absolute difference
   let best = levels[0]!;
   let bestDiff = Math.abs(best.metersPerPixel - primaryMetersPerPixel);
   for (let i = 1; i < levels.length; i++) {
