@@ -335,7 +335,7 @@ function resolveModule<T>(m: UnresolvedRasterModule<T>, data: T): RasterModule {
  * For all array types, we must match our typed array type to what WebGL
  * expects, so this must return the same array type as what was passed in.
  */
-function enforceAlignment<T extends RasterTypedArray>(
+export function enforceAlignment<T extends RasterTypedArray>(
   data: T,
   {
     width,
