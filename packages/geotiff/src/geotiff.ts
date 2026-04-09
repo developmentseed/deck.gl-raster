@@ -7,7 +7,7 @@ import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
 import { crsFromGeoKeys } from "./crs.js";
-import { fetchTile } from "./fetch.js";
+import { fetchTile, fetchTiles } from "./fetch.js";
 import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";
 import { parseGDALMetadata } from "./gdal-metadata.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
@@ -386,6 +386,29 @@ export class GeoTIFF {
     } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
+  }
+
+  /**
+   * Fetch multiple tiles in parallel.
+   *
+   * A future implementation may coalesce contiguous byte ranges to reduce
+   * the number of HTTP requests.
+   *
+   * @param xy - Array of `[x, y]` tile coordinates.
+   * @param options - Optional parameters (same as {@link fetchTile}).
+   * @returns Array of {@link Tile} objects in the same order as `xy`.
+   *
+   * @see {@link fetchTile} for single-tile fetching.
+   */
+  async fetchTiles(
+    xy: Array<[number, number]>,
+    options: {
+      boundless?: boolean;
+      pool?: DecoderPool;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<Tile[]> {
+    return await fetchTiles(this, xy, options);
   }
 
   // Transform mixin
