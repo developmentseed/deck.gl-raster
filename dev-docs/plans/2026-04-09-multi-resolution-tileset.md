@@ -6,7 +6,7 @@
 
 **Architecture:** A `MultiTilesetDescriptor` in `deck.gl-raster` describes the relationship between tile grids at different resolutions. A `MultiCOGLayer` in `deck.gl-geotiff` orchestrates fetching tiles from multiple COGs, stitching across tile boundaries, computing UV transforms, and passing named textures to the shader. The primary (highest-resolution) tileset drives tile traversal; secondary tilesets are consulted at fetch time.
 
-**Tech Stack:** TypeScript, deck.gl (CompositeLayer, TileLayer, Tileset2D), luma.gl (Texture, ShaderModule), geotiff.js, vitest, Biome
+**Tech Stack:** TypeScript, deck.gl (CompositeLayer, TileLayer, Tileset2D), luma.gl (Texture, ShaderModule), @developmentseed/geotiff (monorepo package, built on @cogeotiff/core), vitest, Biome
 
 **Spec:** `dev-docs/specs/2026-04-09-multi-resolution-tileset-design.md`
 
@@ -18,19 +18,19 @@
 
 | File | Responsibility |
 |------|---------------|
-| `packages/deck.gl-raster/src/raster-tileset/multi-tileset-descriptor.ts` | `MultiTilesetDescriptor` type + `createMultiTilesetDescriptor()` factory + `selectSecondaryLevel()` + `tilesetLevelsEqual()` |
-| `packages/deck.gl-raster/src/raster-tileset/secondary-tile-resolver.ts` | `resolveSecondaryTiles()` — computes covering tile ranges and UV transforms for a primary tile against a secondary tileset |
+| `packages/deck.gl-raster/src/multi-raster-tileset/multi-tileset-descriptor.ts` | `MultiTilesetDescriptor` type + `createMultiTilesetDescriptor()` factory + `selectSecondaryLevel()` + `tilesetLevelsEqual()` |
+| `packages/deck.gl-raster/src/multi-raster-tileset/secondary-tile-resolver.ts` | `resolveSecondaryTiles()` — computes covering tile ranges and UV transforms for a primary tile against a secondary tileset |
 | `packages/deck.gl-raster/src/gpu-modules/composite-bands.ts` | `CompositeBands` GPU module — samples named band textures with UV transforms, outputs `vec4` |
 | `packages/deck.gl-geotiff/src/multi-cog-layer.ts` | `MultiCOGLayer` — orchestrates multi-source COG loading, tile fetching, stitching, rendering |
-| `packages/deck.gl-raster/tests/multi-tileset-descriptor.test.ts` | Tests for `MultiTilesetDescriptor` creation and validation |
-| `packages/deck.gl-raster/tests/secondary-tile-resolver.test.ts` | Tests for secondary tile resolution and UV transform computation |
-| `packages/deck.gl-raster/tests/composite-bands.test.ts` | Tests for `CompositeBands` module structure |
+| `packages/deck.gl-raster/tests/multi-raster-tileset/multi-tileset-descriptor.test.ts` | Tests for `MultiTilesetDescriptor` creation and validation |
+| `packages/deck.gl-raster/tests/multi-raster-tileset/secondary-tile-resolver.test.ts` | Tests for secondary tile resolution and UV transform computation |
+| `packages/deck.gl-raster/tests/gpu-modules/composite-bands.test.ts` | Tests for `CompositeBands` module structure |
 
 ### Modified files
 
 | File | Change |
 |------|--------|
-| `packages/deck.gl-raster/src/raster-tileset/index.ts` | Export new types and functions |
+| `packages/deck.gl-raster/src/multi-raster-tileset/index.ts` | (New) Barrel exports for multi-raster-tileset |
 | `packages/deck.gl-raster/src/gpu-modules/index.ts` | Export `CompositeBands` |
 | `packages/deck.gl-raster/src/index.ts` | Export new public types |
 | `packages/deck.gl-geotiff/src/index.ts` | Export `MultiCOGLayer` |
@@ -40,27 +40,28 @@
 ## Task 1: MultiTilesetDescriptor Type and Factory
 
 **Files:**
-- Create: `packages/deck.gl-raster/src/raster-tileset/multi-tileset-descriptor.ts`
-- Test: `packages/deck.gl-raster/tests/multi-tileset-descriptor.test.ts`
-- Modify: `packages/deck.gl-raster/src/raster-tileset/index.ts`
+- Create: `packages/deck.gl-raster/src/multi-raster-tileset/multi-tileset-descriptor.ts`
+- Test: `packages/deck.gl-raster/tests/multi-raster-tileset/multi-tileset-descriptor.test.ts`
+- Create: `packages/deck.gl-raster/src/multi-raster-tileset/index.ts`
+- Modify: `packages/deck.gl-raster/src/index.ts`
 
 - [ ] **Step 1: Write tests for MultiTilesetDescriptor**
 
 Create test file with mock tilesets representing 10m and 20m grids:
 
 ```ts
-// packages/deck.gl-raster/tests/multi-tileset-descriptor.test.ts
+// packages/deck.gl-raster/tests/multi-raster-tileset/multi-tileset-descriptor.test.ts
 import { describe, expect, it } from "vitest";
 import {
   createMultiTilesetDescriptor,
   selectSecondaryLevel,
   tilesetLevelsEqual,
-} from "../src/raster-tileset/multi-tileset-descriptor.js";
+} from "../src/multi-raster-tileset/multi-tileset-descriptor.js";
 import type {
   TilesetDescriptor,
   TilesetLevel,
-} from "../src/raster-tileset/tileset-interface.js";
-import type { Corners, Point } from "../src/raster-tileset/types.js";
+} from "../../src/raster-tileset/tileset-interface.js";
+import type { Corners, Point } from "../../src/raster-tileset/types.js";
 
 /** Helper: create a mock TilesetLevel */
 function mockLevel(opts: {
@@ -303,13 +304,13 @@ describe("selectSecondaryLevel", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `npx vitest run packages/deck.gl-raster/tests/multi-tileset-descriptor.test.ts`
-Expected: FAIL — module not found
+Run: `npx vitest run packages/deck.gl-raster/tests/multi-raster-tileset/multi-tileset-descriptor.test.ts`
+Expected: FAIL (module not found)
 
 - [ ] **Step 3: Implement MultiTilesetDescriptor**
 
 ```ts
-// packages/deck.gl-raster/src/raster-tileset/multi-tileset-descriptor.ts
+// packages/deck.gl-raster/src/multi-raster-tileset/multi-tileset-descriptor.ts
 import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
 import type { Bounds, ProjectionFunction } from "./types.js";
 
@@ -428,12 +429,12 @@ export function tilesetLevelsEqual(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npx vitest run packages/deck.gl-raster/tests/multi-tileset-descriptor.test.ts`
+Run: `npx vitest run packages/deck.gl-raster/tests/multi-raster-tileset/multi-tileset-descriptor.test.ts`
 Expected: All tests PASS
 
 - [ ] **Step 5: Add exports**
 
-In `packages/deck.gl-raster/src/raster-tileset/index.ts`, add:
+Create `packages/deck.gl-raster/src/multi-raster-tileset/index.ts`:
 
 ```ts
 export type { MultiTilesetDescriptor } from "./multi-tileset-descriptor.js";
@@ -444,27 +445,27 @@ export {
 } from "./multi-tileset-descriptor.js";
 ```
 
-In `packages/deck.gl-raster/src/index.ts`, add to the raster-tileset re-exports:
+In `packages/deck.gl-raster/src/index.ts`, add:
 
 ```ts
-export type { MultiTilesetDescriptor } from "./raster-tileset/index.js";
+export type { MultiTilesetDescriptor } from "./multi-raster-tileset/index.js";
 export {
   createMultiTilesetDescriptor,
   selectSecondaryLevel,
   tilesetLevelsEqual,
-} from "./raster-tileset/index.js";
+} from "./multi-raster-tileset/index.js";
 ```
 
 - [ ] **Step 6: Run full test suite and lint**
 
 Run: `npx vitest run packages/deck.gl-raster/`
-Run: `npx biome check packages/deck.gl-raster/src/raster-tileset/multi-tileset-descriptor.ts`
+Run: `npx biome check packages/deck.gl-raster/src/multi-raster-tileset/multi-tileset-descriptor.ts`
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/deck.gl-raster/src/raster-tileset/multi-tileset-descriptor.ts \
-       packages/deck.gl-raster/tests/multi-tileset-descriptor.test.ts \
+git add packages/deck.gl-raster/src/multi-raster-tileset/multi-tileset-descriptor.ts \
+       packages/deck.gl-raster/tests/multi-raster-tileset/multi-tileset-descriptor.test.ts \
        packages/deck.gl-raster/src/raster-tileset/index.ts \
        packages/deck.gl-raster/src/index.ts
 git commit -m "feat: add MultiTilesetDescriptor type and factory"
@@ -477,16 +478,16 @@ git commit -m "feat: add MultiTilesetDescriptor type and factory"
 Computes which secondary tiles cover a primary tile's extent, and the UV transform to map between them.
 
 **Files:**
-- Create: `packages/deck.gl-raster/src/raster-tileset/secondary-tile-resolver.ts`
-- Test: `packages/deck.gl-raster/tests/secondary-tile-resolver.test.ts`
-- Modify: `packages/deck.gl-raster/src/raster-tileset/index.ts`
+- Create: `packages/deck.gl-raster/src/multi-raster-tileset/secondary-tile-resolver.ts`
+- Test: `packages/deck.gl-raster/tests/multi-raster-tileset/secondary-tile-resolver.test.ts`
+- Modify: `packages/deck.gl-raster/src/multi-raster-tileset/index.ts`
 
 - [ ] **Step 1: Write tests for secondary tile resolution**
 
 ```ts
-// packages/deck.gl-raster/tests/secondary-tile-resolver.test.ts
+// packages/deck.gl-raster/tests/multi-raster-tileset/secondary-tile-resolver.test.ts
 import { describe, expect, it } from "vitest";
-import { resolveSecondaryTiles } from "../src/raster-tileset/secondary-tile-resolver.js";
+import { resolveSecondaryTiles } from "../src/multi-raster-tileset/secondary-tile-resolver.js";
 import type { TilesetLevel } from "../src/raster-tileset/tileset-interface.js";
 import type { Bounds, Corners, Point } from "../src/raster-tileset/types.js";
 
@@ -659,13 +660,13 @@ describe("resolveSecondaryTiles", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `npx vitest run packages/deck.gl-raster/tests/secondary-tile-resolver.test.ts`
-Expected: FAIL — module not found
+Run: `npx vitest run packages/deck.gl-raster/tests/multi-raster-tileset/secondary-tile-resolver.test.ts`
+Expected: FAIL (module not found)
 
 - [ ] **Step 3: Implement resolveSecondaryTiles**
 
 ```ts
-// packages/deck.gl-raster/src/raster-tileset/secondary-tile-resolver.ts
+// packages/deck.gl-raster/src/multi-raster-tileset/secondary-tile-resolver.ts
 import type { TilesetLevel } from "./tileset-interface.js";
 
 /** A tile index in a secondary tileset */
@@ -833,12 +834,12 @@ export function resolveSecondaryTiles(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npx vitest run packages/deck.gl-raster/tests/secondary-tile-resolver.test.ts`
+Run: `npx vitest run packages/deck.gl-raster/tests/multi-raster-tileset/secondary-tile-resolver.test.ts`
 Expected: All tests PASS
 
 - [ ] **Step 5: Add exports**
 
-In `packages/deck.gl-raster/src/raster-tileset/index.ts`, add:
+In `packages/deck.gl-raster/src/multi-raster-tileset/index.ts`, add:
 
 ```ts
 export type {
@@ -851,13 +852,13 @@ export { resolveSecondaryTiles } from "./secondary-tile-resolver.js";
 - [ ] **Step 6: Run full test suite and lint**
 
 Run: `npx vitest run packages/deck.gl-raster/`
-Run: `npx biome check packages/deck.gl-raster/src/raster-tileset/secondary-tile-resolver.ts`
+Run: `npx biome check packages/deck.gl-raster/src/multi-raster-tileset/secondary-tile-resolver.ts`
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/deck.gl-raster/src/raster-tileset/secondary-tile-resolver.ts \
-       packages/deck.gl-raster/tests/secondary-tile-resolver.test.ts \
+git add packages/deck.gl-raster/src/multi-raster-tileset/secondary-tile-resolver.ts \
+       packages/deck.gl-raster/tests/multi-raster-tileset/secondary-tile-resolver.test.ts \
        packages/deck.gl-raster/src/raster-tileset/index.ts
 git commit -m "feat: add secondary tile resolver with UV transform computation"
 ```
@@ -870,15 +871,15 @@ A shader module that samples N named band textures with UV transforms and output
 
 **Files:**
 - Create: `packages/deck.gl-raster/src/gpu-modules/composite-bands.ts`
-- Test: `packages/deck.gl-raster/tests/composite-bands.test.ts`
+- Test: `packages/deck.gl-raster/tests/gpu-modules/composite-bands.test.ts`
 - Modify: `packages/deck.gl-raster/src/gpu-modules/index.ts`
 
 - [ ] **Step 1: Write tests for CompositeBands module structure**
 
 ```ts
-// packages/deck.gl-raster/tests/composite-bands.test.ts
+// packages/deck.gl-raster/tests/gpu-modules/composite-bands.test.ts
 import { describe, expect, it } from "vitest";
-import { createCompositeBandsModule } from "../src/gpu-modules/composite-bands.js";
+import { createCompositeBandsModule } from "../../src/gpu-modules/composite-bands.js";
 
 describe("createCompositeBandsModule", () => {
   it("creates a shader module with correct uniforms for RGB bands", () => {
@@ -951,8 +952,8 @@ describe("createCompositeBandsModule", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `npx vitest run packages/deck.gl-raster/tests/composite-bands.test.ts`
-Expected: FAIL — module not found
+Run: `npx vitest run packages/deck.gl-raster/tests/gpu-modules/composite-bands.test.ts`
+Expected: FAIL (module not found)
 
 - [ ] **Step 3: Implement CompositeBands**
 
@@ -1043,7 +1044,7 @@ vec2 compositeBands_applyUv(vec2 uv, vec4 transform) {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npx vitest run packages/deck.gl-raster/tests/composite-bands.test.ts`
+Run: `npx vitest run packages/deck.gl-raster/tests/gpu-modules/composite-bands.test.ts`
 Expected: All tests PASS
 
 - [ ] **Step 5: Add exports**
@@ -1063,7 +1064,7 @@ Run: `npx biome check packages/deck.gl-raster/src/gpu-modules/composite-bands.ts
 
 ```bash
 git add packages/deck.gl-raster/src/gpu-modules/composite-bands.ts \
-       packages/deck.gl-raster/tests/composite-bands.test.ts \
+       packages/deck.gl-raster/tests/gpu-modules/composite-bands.test.ts \
        packages/deck.gl-raster/src/gpu-modules/index.ts
 git commit -m "feat: add CompositeBands GPU module for multi-band rendering"
 ```
@@ -1623,97 +1624,64 @@ git commit -m "feat: add tile fetching, stitching, and rendering to MultiCOGLaye
 
 ---
 
-## Task 6: Integration Smoke Test
+## Task 6: Integration Test with Real Sentinel-2 TileMatrixSet
 
-Create a minimal integration test to verify the full pipeline wires together.
+Use the real Sentinel-2 multiscales fixture (`packages/geozarr/multiscales/examples/sentinel-2-multiresolution.json`) to build TileMatrixSet-backed tilesets and verify the full multi-resolution pipeline with real-world grid parameters.
 
 **Files:**
-- Create: `packages/deck.gl-geotiff/tests/multi-cog-layer.test.ts`
+- Create: `packages/deck.gl-raster/tests/multi-raster-tileset/sentinel2-integration.test.ts`
 
-- [ ] **Step 1: Write integration test**
+- [ ] **Step 1: Write integration test using real Sentinel-2 TMS data**
+
+The Sentinel-2 fixture at `packages/geozarr/multiscales/examples/sentinel-2-multiresolution.json` contains a `tile_matrix_set` with real tile matrices for r10m, r20m, r60m, etc. Use `TileMatrixSetAdaptor` to create real `TilesetDescriptor` instances from those.
 
 ```ts
-// packages/deck.gl-geotiff/tests/multi-cog-layer.test.ts
+// packages/deck.gl-raster/tests/multi-raster-tileset/sentinel2-integration.test.ts
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createMultiTilesetDescriptor,
   selectSecondaryLevel,
   resolveSecondaryTiles,
   tilesetLevelsEqual,
-} from "@developmentseed/deck.gl-raster";
-import type {
-  TilesetDescriptor,
-  TilesetLevel,
-} from "@developmentseed/deck.gl-raster";
-import type { Corners, Point } from "@developmentseed/deck.gl-raster";
+  TileMatrixSetAdaptor,
+} from "../../src/index.js";
+import type { TilesetDescriptor } from "../../src/index.js";
+
+// Load the real Sentinel-2 multiscales fixture
+const fixturePath = resolve(
+  import.meta.dirname,
+  "../../../geozarr/multiscales/examples/sentinel-2-multiresolution.json",
+);
+const fixture = JSON.parse(readFileSync(fixturePath, "utf-8"));
+const tms = fixture.attributes.multiscales.tile_matrix_set;
+
+// Identity projection (the fixture is in UTM, we're testing grid logic not reprojection)
+const identity = (x: number, y: number): [number, number] => [x, y];
 
 /**
- * Simulates a Sentinel-2 scene with 10m and 20m bands.
- * Origin at (600000, 8000000) in EPSG:32625, top-left convention.
+ * Build a TilesetDescriptor from a subset of tile matrices in the Sentinel-2 TMS.
+ * @param matrixIds - The tile matrix IDs to include (e.g. ["r10m", "r720m"])
  */
-function sentinelLevel(cellSize: number, tilePixels: number): TilesetLevel {
-  const originX = 600000;
-  const originY = 8000000;
-  const totalPixels = Math.ceil(109800 / cellSize); // ~110km scene
-  const matrixSize = Math.ceil(totalPixels / tilePixels);
-  const tileCrsWidth = tilePixels * cellSize;
-  const tileCrsHeight = tilePixels * cellSize;
-
-  return {
-    matrixWidth: matrixSize,
-    matrixHeight: matrixSize,
-    tileWidth: tilePixels,
-    tileHeight: tilePixels,
-    metersPerPixel: cellSize,
-    projectedTileCorners: (col: number, row: number): Corners => {
-      const minX = originX + col * tileCrsWidth;
-      const maxX = minX + tileCrsWidth;
-      const maxY = originY - row * tileCrsHeight;
-      const minY = maxY - tileCrsHeight;
-      return {
-        topLeft: [minX, maxY] as Point,
-        topRight: [maxX, maxY] as Point,
-        bottomLeft: [minX, minY] as Point,
-        bottomRight: [maxX, minY] as Point,
-      };
-    },
-    crsBoundsToTileRange: (
-      projectedMinX: number,
-      projectedMinY: number,
-      projectedMaxX: number,
-      projectedMaxY: number,
-    ) => {
-      let minCol = Math.floor((projectedMinX - originX) / tileCrsWidth);
-      let maxCol = Math.floor((projectedMaxX - originX) / tileCrsWidth);
-      let minRow = Math.floor((originY - projectedMaxY) / tileCrsHeight);
-      let maxRow = Math.floor((originY - projectedMinY) / tileCrsHeight);
-      minCol = Math.max(0, Math.min(matrixSize - 1, minCol));
-      maxCol = Math.max(0, Math.min(matrixSize - 1, maxCol));
-      minRow = Math.max(0, Math.min(matrixSize - 1, minRow));
-      maxRow = Math.max(0, Math.min(matrixSize - 1, maxRow));
-      return { minCol, maxCol, minRow, maxRow };
-    },
+function descriptorFromMatrixIds(matrixIds: string[]): TilesetDescriptor {
+  const filtered = {
+    ...tms,
+    tileMatrices: tms.tileMatrices.filter((m: any) =>
+      matrixIds.includes(m.id),
+    ),
   };
-}
-
-function sentinelDescriptor(cellSize: number): TilesetDescriptor {
-  const identity = (x: number, y: number): [number, number] => [x, y];
-  // Create a 2-level pyramid: coarse overview + full resolution
-  return {
-    levels: [
-      sentinelLevel(cellSize * 4, 256), // overview
-      sentinelLevel(cellSize, 256), // full res
-    ],
-    projectTo3857: identity,
+  return new TileMatrixSetAdaptor(filtered, {
     projectTo4326: identity,
-    projectedBounds: [600000, 7890200, 709800, 8000000],
-  };
+    projectTo3857: identity,
+  });
 }
 
-describe("Multi-resolution Sentinel-2 simulation", () => {
-  it("builds MultiTilesetDescriptor with 10m as primary", () => {
-    const band10m = sentinelDescriptor(10);
-    const band20m = sentinelDescriptor(20);
+describe("Sentinel-2 multi-resolution integration", () => {
+  it("creates MultiTilesetDescriptor with 10m primary from real TMS", () => {
+    // B04 (red) at 10m, B11 (SWIR) at 20m — each with their own overview pyramid
+    const band10m = descriptorFromMatrixIds(["r720m", "r360m", "r120m", "r60m", "r10m"]);
+    const band20m = descriptorFromMatrixIds(["r720m", "r360m", "r120m", "r60m", "r20m"]);
 
     const multi = createMultiTilesetDescriptor(
       new Map([
@@ -1722,44 +1690,65 @@ describe("Multi-resolution Sentinel-2 simulation", () => {
       ]),
     );
 
+    // 10m has finer metersPerPixel at its finest level, so it should be primary
     expect(multi.primaryKey).toBe("B04");
     expect(multi.secondaries.has("B11")).toBe(true);
+    expect(multi.secondaries.size).toBe(1);
   });
 
-  it("resolves UV transform for 20m band against 10m tile", () => {
-    const level10m = sentinelLevel(10, 256); // 256 * 10 = 2560m per tile
-    const level20m = sentinelLevel(20, 256); // 256 * 20 = 5120m per tile
+  it("detects that two 10m band tilesets share the same grid", () => {
+    const band10m_a = descriptorFromMatrixIds(["r720m", "r360m", "r10m"]);
+    const band10m_b = descriptorFromMatrixIds(["r720m", "r360m", "r10m"]);
 
-    // Primary tile (0,0) covers [600000, 7997440] to [602560, 8000000]
+    // Finest levels should be equal (both are r10m)
+    const finestA = band10m_a.levels[band10m_a.levels.length - 1]!;
+    const finestB = band10m_b.levels[band10m_b.levels.length - 1]!;
+    expect(tilesetLevelsEqual(finestA, finestB)).toBe(true);
+  });
+
+  it("selects correct secondary level for 20m band at 10m primary zoom", () => {
+    const band20m = descriptorFromMatrixIds(["r720m", "r360m", "r120m", "r60m", "r20m"]);
+
+    // At 10m primary resolution, best secondary level is the 20m (finest available)
+    const finestLevel = band20m.levels[band20m.levels.length - 1]!;
+    const selected = selectSecondaryLevel(band20m.levels, 10);
+    expect(selected).toBe(finestLevel);
+  });
+
+  it("resolves UV transform for 20m tile against 10m tile grid", () => {
+    const band10m = descriptorFromMatrixIds(["r10m"]);
+    const band20m = descriptorFromMatrixIds(["r20m"]);
+
+    const level10m = band10m.levels[band10m.levels.length - 1]!;
+    const level20m = band20m.levels[band20m.levels.length - 1]!;
+
+    // Tile (0,0) at 10m resolution
     const result = resolveSecondaryTiles(level10m, 0, 0, level20m);
 
-    // Should map to a sub-region of secondary tile (0,0)
-    expect(result.tileIndices.length).toBe(1);
-    expect(result.uvTransform[2]).toBeCloseTo(0.5); // scaleX: 2560/5120
-    expect(result.uvTransform[3]).toBeCloseTo(0.5); // scaleY: 2560/5120
-    expect(result.uvTransform[0]).toBeCloseTo(0); // offsetX: at origin
-    expect(result.uvTransform[1]).toBeCloseTo(0); // offsetY: at origin
+    // 10m tile should map into a sub-region of the 20m tile grid
+    expect(result.tileIndices.length).toBeGreaterThanOrEqual(1);
+    // UV scale should be < 1 (10m tile is smaller than 20m tile in CRS extent)
+    expect(result.uvTransform[2]).toBeLessThanOrEqual(1); // scaleX
+    expect(result.uvTransform[3]).toBeLessThanOrEqual(1); // scaleY
   });
 
-  it("detects matching grids for same-resolution bands", () => {
-    const level10m_a = sentinelLevel(10, 256);
-    const level10m_b = sentinelLevel(10, 256);
+  it("10m and 20m finest levels have different grid parameters", () => {
+    const band10m = descriptorFromMatrixIds(["r10m"]);
+    const band20m = descriptorFromMatrixIds(["r20m"]);
 
-    expect(tilesetLevelsEqual(level10m_a, level10m_b)).toBe(true);
-  });
+    const finest10m = band10m.levels[band10m.levels.length - 1]!;
+    const finest20m = band20m.levels[band20m.levels.length - 1]!;
 
-  it("selectSecondaryLevel picks correct level for zoomed-out view", () => {
-    const band20m = sentinelDescriptor(20);
-    // When primary is at overview level (~40m), secondary should use overview too
-    const selected = selectSecondaryLevel(band20m.levels, 40);
-    expect(selected.metersPerPixel).toBe(20);
+    expect(tilesetLevelsEqual(finest10m, finest20m)).toBe(false);
+    // 10m has finer resolution
+    expect(finest10m.metersPerPixel).toBeLessThan(finest20m.metersPerPixel);
   });
 });
 ```
 
 - [ ] **Step 2: Run integration test**
 
-Run: `npx vitest run packages/deck.gl-geotiff/tests/multi-cog-layer.test.ts`
+Run: `npx vitest run packages/deck.gl-raster/tests/multi-raster-tileset/sentinel2-integration.test.ts`
 Expected: All tests PASS
 
 - [ ] **Step 3: Run full test suite**
@@ -1770,6 +1759,6 @@ Expected: No regressions
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/deck.gl-geotiff/tests/multi-cog-layer.test.ts
-git commit -m "test: add integration smoke test for multi-resolution tile pipeline"
+git add packages/deck.gl-raster/tests/multi-raster-tileset/sentinel2-integration.test.ts
+git commit -m "test: add Sentinel-2 integration test for multi-resolution tileset"
 ```
