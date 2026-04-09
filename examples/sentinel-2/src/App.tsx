@@ -1,6 +1,7 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { MultiCOGLayer } from "@developmentseed/deck.gl-geotiff";
+import { LinearRescale } from "@developmentseed/deck.gl-raster";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -75,6 +76,9 @@ export default function App() {
     id: "sentinel-2-multi",
     sources: preset.sources,
     composite: preset.composite,
+    renderPipeline: [
+      { module: LinearRescale, props: { rescaleMin: 0, rescaleMax: 0.05 } },
+    ],
   });
 
   return (

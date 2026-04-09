@@ -1,8 +1,12 @@
 export type {
-  CompositeBandsMapping,
-  CompositeBandsModule,
+  CompositeBandsProps,
+  LinearRescaleProps,
 } from "./gpu-modules/index.js";
-export { createCompositeBandsModule } from "./gpu-modules/index.js";
+export {
+  buildCompositeBandsProps,
+  CompositeBands,
+  LinearRescale,
+} from "./gpu-modules/index.js";
 export type { RasterModule } from "./gpu-modules/types.js";
 // Not a public API; exported for use in COGLayer and ZarrLayer
 export { renderDebugTileOutline as _renderDebugTileOutline } from "./layer-utils.js";

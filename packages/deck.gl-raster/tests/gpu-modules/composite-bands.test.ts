@@ -1,53 +1,112 @@
+import type { Texture } from "@luma.gl/core";
 import { describe, expect, it } from "vitest";
-import { createCompositeBandsModule } from "../../src/gpu-modules/composite-bands.js";
+import {
+  buildCompositeBandsProps,
+  CompositeBands,
+} from "../../src/gpu-modules/composite-bands.js";
 
-describe("createCompositeBandsModule", () => {
-  it("creates a shader module with correct uniforms for RGB bands", () => {
-    const mod = createCompositeBandsModule({ r: "red", g: "green", b: "blue" });
-    expect(mod.name).toBe("composite-bands");
-    const decl = mod.inject["fs:#decl"];
-    expect(decl).toContain("uniform sampler2D band_red;");
-    expect(decl).toContain("uniform sampler2D band_green;");
-    expect(decl).toContain("uniform sampler2D band_blue;");
-    expect(decl).toContain("uniform vec4 uvTransform_red;");
-    expect(decl).toContain("uniform vec4 uvTransform_green;");
-    expect(decl).toContain("uniform vec4 uvTransform_blue;");
-    const filterColor = mod.inject["fs:DECKGL_FILTER_COLOR"];
-    expect(filterColor).toContain("band_red");
-    expect(filterColor).toContain("band_green");
-    expect(filterColor).toContain("band_blue");
-    expect(filterColor).toContain("uvTransform_red");
+describe("CompositeBands", () => {
+  it("has static uniform declarations for 4 band slots", () => {
+    // Texture samplers are in inject["fs:#decl"]
+    const decl = CompositeBands.inject["fs:#decl"];
+    expect(decl).toContain("uniform sampler2D band0;");
+    expect(decl).toContain("uniform sampler2D band1;");
+    expect(decl).toContain("uniform sampler2D band2;");
+    expect(decl).toContain("uniform sampler2D band3;");
+
+    // Scalar uniforms are in fs (uniform block)
+    const fsBlock = CompositeBands.fs;
+    expect(fsBlock).toContain("uvTransform0");
+    expect(fsBlock).toContain("uvTransform1");
+    expect(fsBlock).toContain("channelMap");
   });
 
-  it("creates a module with only 2 bands (r and g, no blue)", () => {
-    const mod = createCompositeBandsModule({ r: "nir", g: "swir" });
-    const decl = mod.inject["fs:#decl"];
-    expect(decl).toContain("uniform sampler2D band_nir;");
-    expect(decl).toContain("uniform sampler2D band_swir;");
-    const filterColor = mod.inject["fs:DECKGL_FILTER_COLOR"];
-    expect(filterColor).toContain("0.0"); // default for missing blue
+  it("has uniformTypes for vec4 transforms and ivec4 channelMap", () => {
+    expect(CompositeBands.uniformTypes.uvTransform0).toBe("vec4<f32>");
+    expect(CompositeBands.uniformTypes.channelMap).toBe("vec4<i32>");
   });
 
-  it("supports an alpha channel", () => {
-    const mod = createCompositeBandsModule({
-      r: "red",
-      g: "green",
-      b: "blue",
-      a: "alpha",
-    });
-    const decl = mod.inject["fs:#decl"];
-    expect(decl).toContain("uniform sampler2D band_alpha;");
-    expect(decl).toContain("uniform vec4 uvTransform_alpha;");
+  it("getUniforms provides defaults", () => {
+    const uniforms = CompositeBands.getUniforms({});
+    expect(uniforms.uvTransform0).toEqual([0, 0, 1, 1]);
+    expect(uniforms.channelMap).toEqual([0, 1, 2, -1]);
+  });
+});
+
+describe("buildCompositeBandsProps", () => {
+  const mockTexture = (id: string) => ({ id }) as unknown as Texture;
+  const identityUv = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1 };
+
+  it("maps RGB bands to slots 0, 1, 2", () => {
+    const bands = new Map([
+      ["red", { texture: mockTexture("r"), uvTransform: identityUv }],
+      ["green", { texture: mockTexture("g"), uvTransform: identityUv }],
+      ["blue", { texture: mockTexture("b"), uvTransform: identityUv }],
+    ]);
+
+    const props = buildCompositeBandsProps(
+      { r: "red", g: "green", b: "blue" },
+      bands,
+    );
+
+    expect(props.band0).toBe(bands.get("red")!.texture);
+    expect(props.band1).toBe(bands.get("green")!.texture);
+    expect(props.band2).toBe(bands.get("blue")!.texture);
+    expect(props.channelMap).toEqual([0, 1, 2, -1]);
   });
 
-  it("getUniforms passes through texture and transform props", () => {
-    const mod = createCompositeBandsModule({ r: "red", g: "green", b: "blue" });
-    const mockTexture = { id: "tex" };
-    const uniforms = mod.getUniforms({
-      band_red: mockTexture,
-      uvTransform_red: [0, 0, 1, 1],
-    });
-    expect(uniforms.band_red).toBe(mockTexture);
-    expect(uniforms.uvTransform_red).toEqual([0, 0, 1, 1]);
+  it("deduplicates bands used in multiple channels", () => {
+    const bands = new Map([
+      ["gray", { texture: mockTexture("g"), uvTransform: identityUv }],
+    ]);
+
+    const props = buildCompositeBandsProps(
+      { r: "gray", g: "gray", b: "gray" },
+      bands,
+    );
+
+    expect(props.band0).toBe(bands.get("gray")!.texture);
+    // Unused slots are filled with the first texture as a placeholder
+    expect(props.band1).toBe(bands.get("gray")!.texture);
+    expect(props.band2).toBe(bands.get("gray")!.texture);
+    expect(props.band3).toBe(bands.get("gray")!.texture);
+    expect(props.channelMap).toEqual([0, 0, 0, -1]);
+  });
+
+  it("passes UV transforms to correct slots", () => {
+    const customUv = {
+      offsetX: 0.1,
+      offsetY: 0.2,
+      scaleX: 0.5,
+      scaleY: 0.5,
+    };
+    const bands = new Map([
+      ["nir", { texture: mockTexture("nir"), uvTransform: customUv }],
+      ["red", { texture: mockTexture("red"), uvTransform: identityUv }],
+    ]);
+
+    const props = buildCompositeBandsProps({ r: "nir", g: "red" }, bands);
+
+    expect(props.uvTransform0).toEqual([0.1, 0.2, 0.5, 0.5]);
+    expect(props.uvTransform1).toEqual([0, 0, 1, 1]);
+  });
+
+  it("sets alpha channel to -1 when not provided", () => {
+    const bands = new Map([
+      ["r", { texture: mockTexture("r"), uvTransform: identityUv }],
+    ]);
+
+    const props = buildCompositeBandsProps({ r: "r" }, bands);
+    expect(props.channelMap![3]).toBe(-1);
+  });
+
+  it("throws when band is not found in the map", () => {
+    const bands = new Map([
+      ["red", { texture: mockTexture("r"), uvTransform: identityUv }],
+    ]);
+
+    expect(() =>
+      buildCompositeBandsProps({ r: "red", g: "missing" }, bands),
+    ).toThrow('Band "missing" not found');
   });
 });

@@ -14,14 +14,14 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type {
-  CompositeBandsMapping,
   MultiTilesetDescriptor,
   RasterModule,
   TilesetDescriptor,
   TilesetLevel,
 } from "@developmentseed/deck.gl-raster";
 import {
-  createCompositeBandsModule,
+  buildCompositeBandsProps,
+  CompositeBands,
   createMultiTilesetDescriptor,
   RasterLayer,
   RasterTileset2D,
@@ -170,9 +170,9 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     /**
      * Map source bands to RGB(A) output channels.
      *
-     * @see {@link CompositeBandsMapping}
+     * @see {@link buildCompositeBandsProps}
      */
-    composite?: CompositeBandsMapping;
+    composite?: { r: string; g?: string; b?: string; a?: string };
 
     /**
      * Post-processing render pipeline modules applied after compositing.
@@ -583,29 +583,24 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       r: [...bands.keys()][0]!,
     };
 
-    // Create the CompositeBands shader module
-    const compositeBandsModule = createCompositeBandsModule(composite);
-
-    // Build props for the CompositeBands module: bind textures and UV transforms
-    const compositeBandsProps: Record<string, unknown> = {};
-    for (const [bandName, bandData] of bands) {
-      compositeBandsProps[`band_${bandName}`] = bandData.texture;
-      const uv = bandData.uvTransform;
-      compositeBandsProps[`uvTransform_${bandName}`] = [
-        uv.offsetX,
-        uv.offsetY,
-        uv.scaleX,
-        uv.scaleY,
-      ];
+    // Skip rendering if cached tile data doesn't have the required bands
+    // (happens when switching presets — old tiles will be re-fetched)
+    const requiredBands = [
+      composite.r,
+      composite.g,
+      composite.b,
+      composite.a,
+    ].filter((n): n is string => n != null);
+    if (requiredBands.some((name) => !bands.has(name))) {
+      return null;
     }
 
-    // Assemble the full render pipeline
-    // Cast required because CompositeBandsModule uses Record<string, unknown>
-    // for its getUniforms return type, while RasterModule expects
-    // ShaderModule<Record<string, number | Texture>>.
+    // Map named bands to fixed slot indices and build module props
+    const compositeBandsProps = buildCompositeBandsProps(composite, bands);
+
     const renderPipeline: RasterModule[] = [
       {
-        module: compositeBandsModule as RasterModule["module"],
+        module: CompositeBands as RasterModule["module"],
         props: compositeBandsProps as RasterModule["props"],
       },
       ...(this.props.renderPipeline ?? []),
@@ -692,8 +687,16 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       refinementStrategy,
     } = this.props;
 
+    // Stringify sources to detect when the set of COG URLs changes.
+    // This triggers TileLayer to invalidate its cache and re-fetch.
+    const sourceKeys = Object.keys(this.props.sources).sort().join(",");
+    const sourceUrls = Object.values(this.props.sources)
+      .map((s) => String(s.url))
+      .sort()
+      .join(",");
+
     return new TileLayer<MultiTileResult>({
-      id: `multi-cog-tile-layer-${this.id}`,
+      id: `multi-cog-tile-layer-${this.id}-${sourceUrls}`,
       TilesetClass: PrimaryTilesetFactory,
       getTileData: async (tile) => this._getTileData(tile),
       renderSubLayers: (props) =>
@@ -704,6 +707,9 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
           forwardTo3857,
           inverseFrom3857,
         ),
+      updateTriggers: {
+        getTileData: [sourceKeys, sourceUrls],
+      },
       debounceTime,
       maxCacheByteSize,
       maxCacheSize,

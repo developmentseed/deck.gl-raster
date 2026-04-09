@@ -6,12 +6,14 @@ export {
   YCbCrToRGB,
 } from "./color";
 export { Colormap } from "./colormap";
-export type {
-  CompositeBandsMapping,
-  CompositeBandsModule,
+export type { CompositeBandsProps } from "./composite-bands.js";
+export {
+  buildCompositeBandsProps,
+  CompositeBands,
 } from "./composite-bands.js";
-export { createCompositeBandsModule } from "./composite-bands.js";
 export { CreateTexture } from "./create-texture";
 export { FilterNoDataVal } from "./filter-nodata";
+export type { LinearRescaleProps } from "./linear-rescale.js";
+export { LinearRescale } from "./linear-rescale.js";
 export { MaskTexture } from "./mask-texture";
 export type { RasterModule } from "./types";
