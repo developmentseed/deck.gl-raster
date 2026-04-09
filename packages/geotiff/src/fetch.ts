@@ -112,6 +112,40 @@ export async function fetchTile(
   };
 }
 
+/**
+ * Fetch multiple tiles from a GeoTIFF or Overview in parallel.
+ *
+ * The benefit of using this over multiple calls to {@link fetchTile} is that
+ * a future implementation can coalesce requests for tiles stored contiguously
+ * on disk, reducing the number of HTTP range requests. For now, this simply
+ * calls {@link fetchTile} in parallel for each coordinate.
+ *
+ * @param self - The GeoTIFF or Overview to fetch tiles from.
+ * @param xy - Array of `[x, y]` tile coordinates.
+ * @param options - Optional parameters (same as {@link fetchTile}).
+ * @returns Array of {@link Tile} objects in the same order as `xy`.
+ *
+ * @see {@link fetchTile} for single-tile fetching.
+ */
+export async function fetchTiles(
+  self: HasTiffReference,
+  xy: Array<[number, number]>,
+  {
+    boundless = true,
+    pool,
+    signal,
+  }: {
+    boundless?: boolean;
+    pool?: DecoderPool;
+    signal?: AbortSignal;
+  } = {},
+): Promise<Tile[]> {
+  // TODO: coalesce contiguous byte ranges for fewer HTTP requests
+  return Promise.all(
+    xy.map(([x, y]) => fetchTile(self, x, y, { boundless, pool, signal })),
+  );
+}
+
 type GetBytesResponse = { bytes: ArrayBuffer; compression: Compression };
 type ByteRange = Awaited<ReturnType<TiffImage["getTileSize"]>>;
 
