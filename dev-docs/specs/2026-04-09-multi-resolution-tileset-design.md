@@ -2,7 +2,7 @@
 
 ## Problem
 
-Satellites like Sentinel-2 have bands at different spatial resolutions (10m, 20m, 60m). When rendering a scene that combines bands from different resolution groups (e.g., NDVI from a 10m red band and a 20m NIR band), the internal tiling grids don't align across resolutions. The tile pyramids have different tile sizes, grid dimensions, and overview structures.
+Satellites like Sentinel-2 have bands at different spatial resolutions (10m, 20m, 60m). When rendering a scene that combines bands from different resolution groups (e.g., NDVI from a 10m red band and a 20m NIR band), the internal tiling grids don't _necessarily_ align across resolutions. The tile pyramids have different tile sizes, grid dimensions, and overview structures.
 
 The GPU naturally handles resolution differences — if two textures represent the same geographic area but one has 2x the pixels, the GPU's bilinear sampler interpolates correctly. The hard part is aligning the tile grids so that each texture covers the correct geographic region.
 
@@ -164,12 +164,12 @@ new MultiCOGLayer({
 
 1. Fetch primary tile data (existing COG tile fetch logic)
 2. For each secondary group:
-   a. Compute primary tile CRS extent
-   b. Select appropriate secondary level
-   c. Find covering secondary tiles via `crsBoundsToTileRange`
-   d. Fetch covering tiles
-   e. Stitch if needed (memcpy)
-   f. Compute UV transform
+    1. Compute primary tile CRS extent
+    1. Select appropriate secondary level
+    1. Find covering secondary tiles via `crsBoundsToTileRange`
+    1. Fetch covering tiles
+    1. Stitch if needed (memcpy)
+    1. Compute UV transform
 3. Return `MultiTileData` bundle
 
 Sources that share the primary's tile grid are fetched with identity UV transforms (the short-circuit optimization).
