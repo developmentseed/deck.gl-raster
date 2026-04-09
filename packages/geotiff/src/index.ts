@@ -5,6 +5,8 @@ export type {
   RasterArrayPixelInterleaved,
   RasterTypedArray,
 } from "./array.js";
+export type { AssembleTilesOptions } from "./assemble.js";
+export { assembleTiles } from "./assemble.js";
 export { parseColormap } from "./colormap.js";
 export type {
   DecodedBandSeparate,
