@@ -50,7 +50,7 @@ import {
   parseWkt,
 } from "@developmentseed/proj";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { Device, Texture } from "@luma.gl/core";
+import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import proj4 from "proj4";
 import { fetchGeoTIFF } from "./geotiff/geotiff.js";
 import { fromAffine } from "./geotiff-reprojection.js";
@@ -753,19 +753,35 @@ function selectImage(geotiff: GeoTIFF, z: number): GeoTIFF | Overview {
 /**
  * Create a GPU texture from a {@link RasterArray}.
  *
- * Currently hardcoded to `r8unorm` for single-band uint8 data.
- * TODO: infer texture format from the array's typed array type and band count.
+ * Infers the texture format from the typed array type. Currently supports
+ * single-band `Uint8Array` (`r8unorm`) and `Uint16Array` (`r16unorm`).
+ *
+ * TODO: use `inferTextureFormat` from `texture.ts` for full format support.
  */
 function createBandTexture(device: Device, array: RasterArray): Texture {
   if (array.layout !== "pixel-interleaved") {
     throw new Error("Band-separate layout not yet supported in MultiCOGLayer");
   }
 
+  const { data, width, height } = array;
+  let format: TextureFormat;
+
+  if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
+    format = "r8unorm";
+  } else if (data instanceof Uint16Array) {
+    format = "r16unorm";
+  } else {
+    throw new Error(
+      `Unsupported typed array type: ${data.constructor.name}. ` +
+        "Currently only Uint8Array and Uint16Array are supported.",
+    );
+  }
+
   return device.createTexture({
-    data: array.data as Uint8Array,
-    format: "r8unorm",
-    width: array.width,
-    height: array.height,
+    data,
+    format,
+    width,
+    height,
     sampler: { minFilter: "linear", magFilter: "linear" },
   });
 }
