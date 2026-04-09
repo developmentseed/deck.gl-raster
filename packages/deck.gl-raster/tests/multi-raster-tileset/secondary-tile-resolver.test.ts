@@ -59,8 +59,8 @@ describe("resolveSecondaryTiles", () => {
   it("returns correct UV transform when primary tile is fully inside one secondary tile", () => {
     // Primary tile (0,0) covers [600000, 7997440] to [602560, 8000000]
     // Secondary tile (0,0) covers [600000, 7994880] to [605120, 8000000]
-    const result = resolveSecondaryTiles(primaryLevel, 0, 0, secondaryLevel);
-    expect(result.tileIndices).toEqual([{ col: 0, row: 0 }]);
+    const result = resolveSecondaryTiles(primaryLevel, 0, 0, secondaryLevel, 0);
+    expect(result.tileIndices).toEqual([{ x: 0, y: 0 }]);
     // scaleX = 2560 / 5120 = 0.5, offsetX = 0, offsetY = 0
     expect(result.uvTransform[0]).toBeCloseTo(0);
     expect(result.uvTransform[1]).toBeCloseTo(0);
@@ -71,8 +71,8 @@ describe("resolveSecondaryTiles", () => {
   it("computes correct UV offset for non-origin primary tile", () => {
     // Primary tile (1,0): covers [602560, 7997440] to [605120, 8000000]
     // Still inside secondary tile (0,0): [600000, 7994880] to [605120, 8000000]
-    const result = resolveSecondaryTiles(primaryLevel, 1, 0, secondaryLevel);
-    expect(result.tileIndices).toEqual([{ col: 0, row: 0 }]);
+    const result = resolveSecondaryTiles(primaryLevel, 1, 0, secondaryLevel, 0);
+    expect(result.tileIndices).toEqual([{ x: 0, y: 0 }]);
     // offsetX = (602560 - 600000) / 5120 = 0.5
     expect(result.uvTransform[0]).toBeCloseTo(0.5);
     expect(result.uvTransform[1]).toBeCloseTo(0);
@@ -83,7 +83,7 @@ describe("resolveSecondaryTiles", () => {
   it("handles primary tile spanning two secondary tiles", () => {
     // Primary tile (2,0): covers [605120, 7997440] to [607680, 8000000]
     // Crosses boundary between secondary (0,0) and (1,0)
-    const result = resolveSecondaryTiles(primaryLevel, 2, 0, secondaryLevel);
+    const result = resolveSecondaryTiles(primaryLevel, 2, 0, secondaryLevel, 0);
     expect(result.tileIndices.length).toBe(2);
     // Stitched: [600000..610240], width=10240
     // scaleX = 2560 / 10240 = 0.25, offsetX = (605120-600000)/10240 = 0.5
@@ -92,8 +92,8 @@ describe("resolveSecondaryTiles", () => {
   });
 
   it("returns identity-like transform when grids align exactly", () => {
-    const result = resolveSecondaryTiles(primaryLevel, 0, 0, primaryLevel);
-    expect(result.tileIndices).toEqual([{ col: 0, row: 0 }]);
+    const result = resolveSecondaryTiles(primaryLevel, 0, 0, primaryLevel, 0);
+    expect(result.tileIndices).toEqual([{ x: 0, y: 0 }]);
     expect(result.uvTransform[0]).toBeCloseTo(0);
     expect(result.uvTransform[1]).toBeCloseTo(0);
     expect(result.uvTransform[2]).toBeCloseTo(1);

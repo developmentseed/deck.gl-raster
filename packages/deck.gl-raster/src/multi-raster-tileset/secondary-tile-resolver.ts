@@ -3,13 +3,15 @@ import type { TilesetLevel } from "../raster-tileset/tileset-interface.js";
 /**
  * A tile index in a secondary tileset.
  *
+ * Uses `x`/`y` naming to match {@link TileIndex} convention.
+ *
  * @see {@link SecondaryTileResolution}
  */
 export interface SecondaryTileIndex {
   /** Column index of the secondary tile. */
-  col: number;
+  x: number;
   /** Row index of the secondary tile. */
-  row: number;
+  y: number;
 }
 
 /**
@@ -73,6 +75,14 @@ export interface SecondaryTileResolution {
    * `(row - minRow) * tileHeight`).
    */
   minRow: number;
+
+  /**
+   * Zoom level index into {@link TilesetDescriptor.levels}.
+   *
+   * All tiles in {@link tileIndices} come from this same level. Tells the
+   * consumer which COG overview to fetch from.
+   */
+  z: number;
 }
 
 /**
@@ -93,6 +103,10 @@ export interface SecondaryTileResolution {
  * @param primaryCol - Column index of the primary tile.
  * @param primaryRow - Row index of the primary tile.
  * @param secondaryLevel - The {@link TilesetLevel} describing the secondary tileset.
+ * @param secondaryZ - The zoom level index of `secondaryLevel` within its
+ *   {@link TilesetDescriptor.levels} array. Stored in the returned
+ *   {@link SecondaryTileResolution.z} so the consumer knows which COG overview
+ *   to fetch.
  * @returns A {@link SecondaryTileResolution} with tile indices, UV transform,
  *   stitched dimensions, and the min col/row of the covered range.
  */
@@ -101,6 +115,7 @@ export function resolveSecondaryTiles(
   primaryCol: number,
   primaryRow: number,
   secondaryLevel: TilesetLevel,
+  secondaryZ: number,
 ): SecondaryTileResolution {
   // Step 1: Get the CRS extent of the primary tile
   const corners = primaryLevel.projectedTileCorners(primaryCol, primaryRow);
@@ -139,7 +154,7 @@ export function resolveSecondaryTiles(
   const tileIndices: SecondaryTileIndex[] = [];
   for (let row = range.minRow; row <= range.maxRow; row++) {
     for (let col = range.minCol; col <= range.maxCol; col++) {
-      tileIndices.push({ col, row });
+      tileIndices.push({ x: col, y: row });
     }
   }
 
@@ -200,5 +215,6 @@ export function resolveSecondaryTiles(
     stitchedHeight,
     minCol: range.minCol,
     minRow: range.minRow,
+    z: secondaryZ,
   };
 }
