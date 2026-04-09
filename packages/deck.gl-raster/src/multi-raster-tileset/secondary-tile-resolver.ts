@@ -47,14 +47,18 @@ export interface SecondaryTileResolution {
   /**
    * The total stitched texture width in pixels.
    *
-   * Equals `(maxCol - minCol + 1) * secondaryLevel.tileWidth`.
+   * Equals the number of tile columns in the covering range times the
+   * secondary tile width. For example, if 2 tiles of 256px wide are
+   * fetched, `stitchedWidth` is 512.
    */
   stitchedWidth: number;
 
   /**
    * The total stitched texture height in pixels.
    *
-   * Equals `(maxRow - minRow + 1) * secondaryLevel.tileHeight`.
+   * Equals the number of tile rows in the covering range times the
+   * secondary tile height. For example, if 2 tiles of 256px tall are
+   * fetched, `stitchedHeight` is 512.
    */
   stitchedHeight: number;
 
