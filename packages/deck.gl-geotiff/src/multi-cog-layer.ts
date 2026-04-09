@@ -20,8 +20,6 @@ import type {
   TilesetLevel,
 } from "@developmentseed/deck.gl-raster";
 import {
-  buildCompositeBandsProps,
-  CompositeBands,
   createMultiTilesetDescriptor,
   RasterLayer,
   RasterTileset2D,
@@ -30,6 +28,10 @@ import {
   TileMatrixSetAdaptor,
   tilesetLevelsEqual,
 } from "@developmentseed/deck.gl-raster";
+import {
+  buildCompositeBandsProps,
+  CompositeBands,
+} from "@developmentseed/deck.gl-raster/gpu-modules";
 import type {
   DecoderPool,
   GeoTIFF,
