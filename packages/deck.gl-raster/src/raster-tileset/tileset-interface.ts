@@ -43,6 +43,9 @@ export interface TilesetLevel {
   /**
    * Get the range of tile indices that overlap a given CRS bounding box.
    *
+   * The returned range is **inclusive** on both ends: a consumer should
+   * iterate `for (let col = minCol; col <= maxCol; col++)`.
+   *
    * Used by the traversal algorithm to find child tiles from a parent tile's
    * projected bounds.
    */
