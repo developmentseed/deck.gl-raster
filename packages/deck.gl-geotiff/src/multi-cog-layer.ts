@@ -13,6 +13,7 @@ import type {
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
+import { PathLayer, TextLayer } from "@deck.gl/layers";
 import type {
   Corners,
   MultiTilesetDescriptor,
@@ -72,6 +73,23 @@ const WEB_MERCATOR_METER_CIRCUMFERENCE = 40075016.686;
  */
 const WEB_MERCATOR_TO_WORLD_SCALE =
   TILE_SIZE / WEB_MERCATOR_METER_CIRCUMFERENCE;
+
+/**
+ * Color palette for debug overlays.
+ *
+ * Index 0 is the primary tileset (red outline, white text).
+ * Indices 1+ cycle through distinct colors for secondary tilesets.
+ */
+const DEBUG_COLORS: {
+  outline: [number, number, number, number];
+  text: [number, number, number, number];
+}[] = [
+  { outline: [255, 0, 0, 255], text: [255, 255, 255, 255] }, // primary: red outline, white text
+  { outline: [0, 255, 255, 255], text: [0, 255, 255, 255] }, // cyan
+  { outline: [255, 255, 0, 255], text: [255, 255, 0, 255] }, // yellow
+  { outline: [255, 0, 255, 255], text: [255, 0, 255, 255] }, // magenta
+  { outline: [0, 255, 128, 255], text: [0, 255, 128, 255] }, // lime
+];
 
 /** Data returned per band from tile fetching. */
 interface BandTileData {
@@ -723,7 +741,168 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       }),
     );
 
-    return [rasterLayer];
+    const sublayers: Layer[] = [rasterLayer];
+
+    if (debug && props.data) {
+      sublayers.push(
+        ...this._renderDebugLayers(
+          props.id,
+          props.tile,
+          props.data,
+          forwardTo4326,
+        ),
+      );
+    }
+
+    return sublayers;
+  }
+
+  /**
+   * Render debug overlay layers for a single tile: colored outlines for
+   * primary and secondary tile boundaries, and tiered text labels.
+   *
+   * @param tileId - Base id for sub-layer naming.
+   * @param tile - The tile header with index info.
+   * @param data - The fetched multi-tile result containing debug info.
+   * @param forwardTo4326 - Projection function for converting CRS corners to WGS84.
+   * @returns Array of PathLayer and TextLayer sub-layers.
+   */
+  private _renderDebugLayers(
+    tileId: string,
+    tile: Tile2DHeader<MultiTileResult>,
+    data: MultiTileResult,
+    forwardTo4326: ReprojectionFns["forwardReproject"],
+  ): Layer[] {
+    const layers: Layer[] = [];
+    const debugLevel = this.props.debugLevel ?? 1;
+    const { multiDescriptor } = this.state;
+    if (!multiDescriptor) return layers;
+
+    const { x, y, z } = tile.index;
+    const primaryLevel = multiDescriptor.primary.levels[z];
+    if (!primaryLevel) return layers;
+
+    // --- Primary tile outline and label ---
+    const primaryCrsCorners = primaryLevel.projectedTileCorners(x, y);
+    const { path: primaryPath, center: primaryCenter } = cornersToWgs84Path(
+      primaryCrsCorners,
+      forwardTo4326,
+    );
+
+    const primaryColor = DEBUG_COLORS[0]!;
+
+    layers.push(
+      new PathLayer({
+        id: `${tileId}-debug-primary-outline`,
+        data: [primaryPath],
+        getPath: (d) => d,
+        getColor: primaryColor.outline,
+        getWidth: 2,
+        widthUnits: "pixels",
+        pickable: false,
+      }),
+    );
+
+    // Build primary label text
+    let primaryText = `x=${x} y=${y} z=${z}`;
+    if (debugLevel >= 2) {
+      primaryText += `  ${data.width}x${data.height}`;
+    }
+    if (debugLevel >= 3) {
+      primaryText += `  ${primaryLevel.metersPerPixel.toFixed(1)}m/px`;
+    }
+
+    // Count total label lines for vertical stacking
+    const secondaryNames = data.debugInfo
+      ? [...data.debugInfo.bands.keys()]
+      : [];
+    const totalLines = 1 + secondaryNames.length;
+    const lineSpacing = 18; // pixels
+    const topOffset = ((totalLines - 1) * lineSpacing) / 2;
+
+    layers.push(
+      new TextLayer({
+        id: `${tileId}-debug-primary-label`,
+        data: [
+          {
+            position: primaryCenter,
+            text: primaryText,
+          },
+        ],
+        getColor: primaryColor.text,
+        getSize: 14,
+        getPixelOffset: [0, -topOffset],
+        sizeUnits: "pixels",
+        outlineWidth: 3,
+        outlineColor: [0, 0, 0, 255],
+        fontSettings: { sdf: true },
+      }),
+    );
+
+    // --- Secondary tile outlines and labels ---
+    if (!data.debugInfo) return layers;
+
+    let secondaryIdx = 0;
+    for (const [name, info] of data.debugInfo.bands) {
+      const colorEntry =
+        DEBUG_COLORS[1 + (secondaryIdx % (DEBUG_COLORS.length - 1))]!;
+
+      // Draw outline for each secondary tile
+      for (let i = 0; i < info.secondaryTileCorners.length; i++) {
+        const { path: secondaryPath } = cornersToWgs84Path(
+          info.secondaryTileCorners[i]!,
+          forwardTo4326,
+        );
+
+        layers.push(
+          new PathLayer({
+            id: `${tileId}-debug-${name}-outline-${i}`,
+            data: [secondaryPath],
+            getPath: (d) => d,
+            getColor: colorEntry.outline,
+            getWidth: 2,
+            widthUnits: "pixels",
+            pickable: false,
+          }),
+        );
+      }
+
+      // Build secondary label text
+      const mpp = info.metersPerPixel.toFixed(1);
+      let labelText = `${name}: ${mpp}m z=${info.secondaryZ}`;
+      if (debugLevel >= 2) {
+        const uv = info.uvTransform;
+        labelText += `  uv=[${uv.map((v) => v.toFixed(2)).join(",")}]  ${info.tileCount} tiles`;
+      }
+      if (debugLevel >= 3) {
+        labelText += `  stitch=${info.stitchedWidth}x${info.stitchedHeight}`;
+      }
+
+      const lineOffset = -topOffset + (1 + secondaryIdx) * lineSpacing;
+
+      layers.push(
+        new TextLayer({
+          id: `${tileId}-debug-${name}-label`,
+          data: [
+            {
+              position: primaryCenter,
+              text: labelText,
+            },
+          ],
+          getColor: colorEntry.text,
+          getSize: 12,
+          getPixelOffset: [0, lineOffset],
+          sizeUnits: "pixels",
+          outlineWidth: 2,
+          outlineColor: [0, 0, 0, 255],
+          fontSettings: { sdf: true },
+        }),
+      );
+
+      secondaryIdx++;
+    }
+
+    return layers;
   }
 
   /**
@@ -872,4 +1051,36 @@ function createBandTexture(device: Device, array: RasterArray): Texture {
     height,
     sampler: { minFilter: "linear", magFilter: "linear" },
   });
+}
+
+/**
+ * Project CRS tile corners to WGS84 and return a closed path suitable for
+ * PathLayer, plus the center point for label placement.
+ *
+ * @param corners - Tile corners in the source CRS.
+ * @param projectTo4326 - Projection function from source CRS to WGS84.
+ * @returns A closed `[topLeft, topRight, bottomRight, bottomLeft, topLeft]`
+ *   path and the geographic center.
+ */
+function cornersToWgs84Path(
+  corners: Corners,
+  projectTo4326: ReprojectionFns["forwardReproject"],
+): { path: [number, number][]; center: [number, number] } {
+  const topLeft = projectTo4326(corners.topLeft[0], corners.topLeft[1]);
+  const topRight = projectTo4326(corners.topRight[0], corners.topRight[1]);
+  const bottomRight = projectTo4326(
+    corners.bottomRight[0],
+    corners.bottomRight[1],
+  );
+  const bottomLeft = projectTo4326(
+    corners.bottomLeft[0],
+    corners.bottomLeft[1],
+  );
+  return {
+    path: [topLeft, topRight, bottomRight, bottomLeft, topLeft],
+    center: [
+      (topLeft[0] + bottomRight[0]) / 2,
+      (topLeft[1] + bottomRight[1]) / 2,
+    ],
+  };
 }
