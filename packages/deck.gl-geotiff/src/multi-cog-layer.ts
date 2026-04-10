@@ -307,8 +307,19 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     });
   }
 
-  override updateState({ changeFlags }: UpdateParameters<this>): void {
-    if (changeFlags.dataChanged || changeFlags.propsChanged) {
+  override updateState({
+    changeFlags,
+    props,
+    oldProps,
+  }: UpdateParameters<this>): void {
+    if (changeFlags.dataChanged || props.sources !== oldProps.sources) {
+      // Reset state so renderLayers() returns null while we re-open COGs.
+      // Without this, the TileLayer renders with new props but stale state,
+      // caching tiles with the wrong bands.
+      this.setState({
+        sources: null,
+        multiDescriptor: null,
+      });
       this._parseAllSources();
     }
   }
@@ -492,6 +503,10 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     const byteLength = [...bands.values()].reduce(
       (sum, band) => sum + band.byteLength,
       0,
+    );
+
+    console.log(
+      `Tile (${x}, ${y}, ${z}): fetched bands [${[...bands.keys()].join(", ")}], total byte length: ${byteLength}`,
     );
 
     return {
