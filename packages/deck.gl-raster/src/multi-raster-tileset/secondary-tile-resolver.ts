@@ -14,7 +14,7 @@ import type { TilesetLevel } from "../raster-tileset/tileset-interface.js";
  * - `scaleX` — horizontal scale: fraction of the band texture width covered by the primary tile
  * - `scaleY` — vertical scale: fraction of the band texture height covered by the primary tile
  */
-export type UvTransform = [
+export type UvTransform = readonly [
   offsetX: number,
   offsetY: number,
   scaleX: number,
