@@ -35,7 +35,7 @@ describe("CompositeBands", () => {
 
 describe("buildCompositeBandsProps", () => {
   const mockTexture = (id: string) => ({ id }) as unknown as Texture;
-  const identityUv = { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1 };
+  const identityUv = [0, 0, 1, 1] as const;
 
   it("maps RGB bands to slots 0, 1, 2", () => {
     const bands = new Map([
@@ -74,12 +74,7 @@ describe("buildCompositeBandsProps", () => {
   });
 
   it("passes UV transforms to correct slots", () => {
-    const customUv = {
-      offsetX: 0.1,
-      offsetY: 0.2,
-      scaleX: 0.5,
-      scaleY: 0.5,
-    };
+    const customUv = [0.1, 0.2, 0.5, 0.5] as const;
     const bands = new Map([
       ["nir", { texture: mockTexture("nir"), uvTransform: customUv }],
       ["red", { texture: mockTexture("red"), uvTransform: identityUv }],

@@ -1,5 +1,6 @@
 import type { Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
+import type { UvTransform } from "../multi-raster-tileset/index.js";
 
 /**
  * Maximum number of band texture slots supported by {@link CompositeBands}.
@@ -17,10 +18,10 @@ export type CompositeBandsProps = {
   band1: Texture;
   band2: Texture;
   band3: Texture;
-  uvTransform0: [number, number, number, number];
-  uvTransform1: [number, number, number, number];
-  uvTransform2: [number, number, number, number];
-  uvTransform3: [number, number, number, number];
+  uvTransform0: UvTransform;
+  uvTransform1: UvTransform;
+  uvTransform2: UvTransform;
+  uvTransform3: UvTransform;
   channelMap: [number, number, number, number];
 };
 
@@ -122,12 +123,7 @@ export function buildCompositeBandsProps(
     string,
     {
       texture: Texture;
-      uvTransform: {
-        offsetX: number;
-        offsetY: number;
-        scaleX: number;
-        scaleY: number;
-      };
+      uvTransform: UvTransform;
     }
   >,
 ): Partial<CompositeBandsProps> {
@@ -174,14 +170,8 @@ export function buildCompositeBandsProps(
     if (!band) {
       throw new Error(`Band "${name}" not found in fetched bands`);
     }
-    const uv = band.uvTransform;
     props[`band${slot}`] = band.texture;
-    props[`uvTransform${slot}`] = [
-      uv.offsetX,
-      uv.offsetY,
-      uv.scaleX,
-      uv.scaleY,
-    ];
+    props[`uvTransform${slot}`] = band.uvTransform;
   }
 
   // Fill unused slots with the first texture as a placeholder

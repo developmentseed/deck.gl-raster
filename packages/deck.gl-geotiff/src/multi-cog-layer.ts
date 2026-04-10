@@ -18,6 +18,7 @@ import type {
   RasterModule,
   TilesetDescriptor,
   TilesetLevel,
+  UvTransform,
 } from "@developmentseed/deck.gl-raster";
 import {
   createMultiTilesetDescriptor,
@@ -70,34 +71,6 @@ const WEB_MERCATOR_METER_CIRCUMFERENCE = 40075016.686;
  */
 const WEB_MERCATOR_TO_WORLD_SCALE =
   TILE_SIZE / WEB_MERCATOR_METER_CIRCUMFERENCE;
-
-/**
- * UV transform mapping primary tile UV space to the correct sub-region of a
- * band texture.
- *
- * Applied in the shader as: `sampledUV = uv * [scaleX, scaleY] + [offsetX, offsetY]`
- *
- * For primary-grid bands this is the identity `[0, 0, 1, 1]`.
- * For secondary bands it accounts for resolution and alignment differences.
- */
-interface UvTransform {
-  /** Horizontal offset: left edge of the primary tile within the band texture, in UV units. */
-  offsetX: number;
-  /** Vertical offset: top edge of the primary tile within the band texture, in UV units. */
-  offsetY: number;
-  /** Horizontal scale: fraction of the band texture width covered by the primary tile. */
-  scaleX: number;
-  /** Vertical scale: fraction of the band texture height covered by the primary tile. */
-  scaleY: number;
-}
-
-/**
- * Convert the `[offsetX, offsetY, scaleX, scaleY]` tuple returned by
- * {@link resolveSecondaryTiles} into the named {@link UvTransform} form.
- */
-function tupleToUvTransform(t: [number, number, number, number]): UvTransform {
-  return { offsetX: t[0], offsetY: t[1], scaleX: t[2], scaleY: t[3] };
-}
 
 /** Data returned per band from tile fetching. */
 interface BandTileData {
@@ -463,7 +436,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       name,
       {
         texture,
-        uvTransform: { offsetX: 0, offsetY: 0, scaleX: 1, scaleY: 1 },
+        uvTransform: [0, 0, 1, 1],
         width: tile.array.width,
         height: tile.array.height,
       },
@@ -544,7 +517,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       name,
       {
         texture,
-        uvTransform: tupleToUvTransform(resolution.uvTransform),
+        uvTransform: resolution.uvTransform,
         width: assembled.width,
         height: assembled.height,
       },
