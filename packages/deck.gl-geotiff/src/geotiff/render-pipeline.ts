@@ -155,7 +155,7 @@ function createUnormPipeline(
   ) => {
     const { device, x, y, signal, pool } = options;
     const tile = await image.fetchTile(x, y, {
-      boundless: true,
+      boundless: false,
       pool,
       signal,
     });
@@ -222,6 +222,7 @@ function createUnormPipeline(
     };
   };
   const renderTile = (tileData: TextureDataT): RenderTileResult => {
+    console.log("renderPipeline renderTile", renderPipeline);
     return {
       renderPipeline: renderPipeline.map((m, _i) => resolveModule(m, tileData)),
     };
