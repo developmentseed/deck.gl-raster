@@ -14,6 +14,7 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type {
+  Corners,
   MultiTilesetDescriptor,
   RasterModule,
   TilesetDescriptor,
@@ -84,6 +85,30 @@ interface BandTileData {
   height: number;
 }
 
+/** Debug metadata for a secondary band, collected during tile fetching. */
+interface BandDebugInfo {
+  /** CRS corners of each secondary tile fetched (for drawing outlines). */
+  secondaryTileCorners: Corners[];
+  /** Secondary zoom level index selected. */
+  secondaryZ: number;
+  /** UV transform applied to this band. */
+  uvTransform: UvTransform;
+  /** Stitched texture width in pixels. */
+  stitchedWidth: number;
+  /** Stitched texture height in pixels. */
+  stitchedHeight: number;
+  /** Number of secondary tiles fetched. */
+  tileCount: number;
+  /** Meters per pixel at the selected secondary level. */
+  metersPerPixel: number;
+}
+
+/** Debug info for all bands of a single primary tile. */
+interface MultiTileDebugInfo {
+  /** Per-band debug metadata, keyed by source name. Only secondary bands. */
+  bands: Map<string, BandDebugInfo>;
+}
+
 /** Result of {@link MultiCOGLayer._getTileData} -- all band textures plus reprojection functions. */
 interface MultiTileResult {
   /** Per-band texture data, keyed by source name. */
@@ -96,6 +121,8 @@ interface MultiTileResult {
   width: number;
   /** Height of the primary tile in pixels. */
   height: number;
+  /** Only present when `debug: true`. */
+  debugInfo?: MultiTileDebugInfo;
 }
 
 /**
@@ -378,7 +405,9 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     const primaryLevel = multiDescriptor!.primary.levels[z]!;
 
     // Collect fetch promises for all bands
-    const bandPromises: Array<Promise<[string, BandTileData]>> = [];
+    const bandPromises: Array<
+      Promise<[string, BandTileData, BandDebugInfo | null]>
+    > = [];
 
     for (const [name, sourceState] of sources!) {
       const descriptor =
@@ -417,13 +446,26 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
             pool,
             signal: combinedSignal,
             device,
+            debug: this.props.debug ?? false,
           }),
         );
       }
     }
 
     const bandEntries = await Promise.all(bandPromises);
-    const bands = new Map(bandEntries);
+    const bands = new Map(bandEntries.map(([name, data]) => [name, data]));
+
+    // Collect debug info from secondary bands
+    let debugInfo: MultiTileDebugInfo | undefined;
+    if (this.props.debug) {
+      const debugBands = new Map<string, BandDebugInfo>();
+      for (const [name, , bandDebug] of bandEntries) {
+        if (bandDebug) {
+          debugBands.set(name, bandDebug);
+        }
+      }
+      debugInfo = { bands: debugBands };
+    }
 
     return {
       bands,
@@ -431,13 +473,15 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       inverseTransform,
       width: primaryLevel.tileWidth,
       height: primaryLevel.tileHeight,
+      debugInfo,
     };
   }
 
   /**
    * Fetch a single tile for a source that shares the primary tile grid.
    *
-   * @returns A `[name, BandTileData]` tuple with identity UV transform.
+   * @returns A `[name, BandTileData, null]` tuple with identity UV transform
+   *   and no debug info (primary bands don't need it).
    */
   private async _fetchPrimaryBand(
     name: string,
@@ -450,7 +494,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       signal: AbortSignal | undefined;
       device: Device;
     },
-  ): Promise<[string, BandTileData]> {
+  ): Promise<[string, BandTileData, BandDebugInfo | null]> {
     const { x, y, z, pool, signal, device } = opts;
     const image = selectImage(sourceState.geotiff, z);
 
@@ -470,6 +514,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
         width: tile.array.width,
         height: tile.array.height,
       },
+      null,
     ];
   }
 
@@ -477,7 +522,8 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
    * Fetch covering tiles for a secondary source and stitch them into a
    * single texture using {@link assembleTiles}.
    *
-   * @returns A `[name, BandTileData]` tuple with the computed UV transform.
+   * @returns A `[name, BandTileData, BandDebugInfo | null]` tuple with the
+   *   computed UV transform and optional debug metadata.
    */
   private async _fetchSecondaryBand(
     name: string,
@@ -491,8 +537,9 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       pool: DecoderPool;
       signal: AbortSignal | undefined;
       device: Device;
+      debug: boolean;
     },
-  ): Promise<[string, BandTileData]> {
+  ): Promise<[string, BandTileData, BandDebugInfo | null]> {
     const {
       descriptor,
       primaryLevel,
@@ -518,6 +565,23 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       secondaryLevel,
       secondaryZ,
     );
+
+    // Collect debug info if requested
+    let debugInfo: BandDebugInfo | null = null;
+    if (opts.debug) {
+      const secondaryTileCorners = resolution.tileIndices.map((idx) =>
+        secondaryLevel.projectedTileCorners(idx.x, idx.y),
+      );
+      debugInfo = {
+        secondaryTileCorners,
+        secondaryZ,
+        uvTransform: resolution.uvTransform,
+        stitchedWidth: resolution.stitchedWidth,
+        stitchedHeight: resolution.stitchedHeight,
+        tileCount: resolution.tileIndices.length,
+        metersPerPixel: secondaryLevel.metersPerPixel,
+      };
+    }
 
     // Fetch all covering tiles via fetchTiles
     const image = selectImage(sourceState.geotiff, secondaryZ);
@@ -551,6 +615,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
         width: assembled.width,
         height: assembled.height,
       },
+      debugInfo,
     ];
   }
 
