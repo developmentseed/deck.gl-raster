@@ -72,7 +72,7 @@ export type MinimalDataT = {
   /** The width of the tile in pixels. */
   width: number;
 
-  /** Byte length of the data, used for cache eviction when `maxCacheByteSize` is set. */
+  /** Byte length of the data, required for cache management when `maxCacheByteSize` is set. */
   byteLength?: number;
 };
 
