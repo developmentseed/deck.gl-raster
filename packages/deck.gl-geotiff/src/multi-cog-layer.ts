@@ -101,6 +101,8 @@ interface BandTileData {
   width: number;
   /** Height of the texture in pixels. */
   height: number;
+  /** Byte length of the underlying texture data. */
+  byteLength: number;
 }
 
 /** Debug metadata for a secondary band, collected during tile fetching. */
@@ -139,6 +141,8 @@ interface MultiTileResult {
   width: number;
   /** Height of the primary tile in pixels. */
   height: number;
+  /** Byte length of all band textures, required for deck.gl TileLayer cache management. */
+  byteLength: number;
   /** Only present when `debug: true`. */
   debugInfo?: MultiTileDebugInfo;
 }
@@ -485,12 +489,18 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       debugInfo = { bands: debugBands };
     }
 
+    const byteLength = [...bands.values()].reduce(
+      (sum, band) => sum + band.byteLength,
+      0,
+    );
+
     return {
       bands,
       forwardTransform,
       inverseTransform,
       width: primaryLevel.tileWidth,
       height: primaryLevel.tileHeight,
+      byteLength,
       debugInfo,
     };
   }
@@ -523,14 +533,20 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     });
 
     const texture = createBandTexture(device, tile.array);
+    const arr = tile.array;
+    const byteLength =
+      arr.layout === "pixel-interleaved"
+        ? arr.data.byteLength
+        : arr.bands.reduce((sum, b) => sum + b.byteLength, 0);
 
     return [
       name,
       {
         texture,
         uvTransform: [0, 0, 1, 1],
-        width: tile.array.width,
-        height: tile.array.height,
+        width: arr.width,
+        height: arr.height,
+        byteLength,
       },
       null,
     ];
@@ -624,6 +640,10 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     });
 
     const texture = createBandTexture(device, assembled);
+    const assembledByteLength =
+      assembled.layout === "pixel-interleaved"
+        ? assembled.data.byteLength
+        : assembled.bands.reduce((sum, b) => sum + b.byteLength, 0);
 
     return [
       name,
@@ -632,6 +652,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
         uvTransform: resolution.uvTransform,
         width: assembled.width,
         height: assembled.height,
+        byteLength: assembledByteLength,
       },
       debugInfo,
     ];
