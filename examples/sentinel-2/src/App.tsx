@@ -69,6 +69,9 @@ const PRESETS: CompositePreset[] = [
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [debug, setDebug] = useState(false);
+  const [debugOpacity, setDebugOpacity] = useState(0.25);
+  const [debugLevel, setDebugLevel] = useState<1 | 2 | 3>(1);
 
   const preset = PRESETS[selectedIndex];
 
@@ -76,6 +79,9 @@ export default function App() {
     id: "sentinel-2-multi",
     sources: preset.sources,
     composite: preset.composite,
+    debug,
+    debugOpacity,
+    debugLevel,
     renderPipeline: [
       { module: LinearRescale, props: { rescaleMin: 0, rescaleMax: 0.05 } },
     ],
@@ -141,6 +147,58 @@ export default function App() {
               </option>
             ))}
           </select>
+          <div style={{ marginTop: "8px" }}>
+            <label style={{ fontSize: "13px", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={debug}
+                onChange={(e) => setDebug(e.target.checked)}
+                style={{ marginRight: "6px" }}
+              />
+              Debug overlay
+            </label>
+          </div>
+          {debug && (
+            <>
+              <div style={{ marginTop: "4px" }}>
+                <label style={{ fontSize: "12px", color: "#666" }}>
+                  Detail level:{" "}
+                  <select
+                    value={debugLevel}
+                    onChange={(e) =>
+                      setDebugLevel(Number(e.target.value) as 1 | 2 | 3)
+                    }
+                    style={{ padding: "2px", cursor: "pointer" }}
+                  >
+                    <option value={1}>1 — Compact</option>
+                    <option value={2}>2 — Detailed</option>
+                    <option value={3}>3 — Verbose</option>
+                  </select>
+                </label>
+              </div>
+              <div style={{ marginTop: "4px" }}>
+                <label
+                  style={{
+                    fontSize: "12px",
+                    color: "#666",
+                  }}
+                >
+                  Debug Opacity: {debugOpacity.toFixed(2)}
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={debugOpacity}
+                    onChange={(e) =>
+                      setDebugOpacity(parseFloat(e.target.value))
+                    }
+                    style={{ width: "100%", cursor: "pointer" }}
+                  />
+                </label>
+              </div>
+            </>
+          )}
           <p style={{ margin: "8px 0 0 0", fontSize: "11px", color: "#999" }}>
             Bands:{" "}
             {Object.entries(preset.sources)
