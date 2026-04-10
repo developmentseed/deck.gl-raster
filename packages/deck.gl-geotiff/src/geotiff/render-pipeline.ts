@@ -222,7 +222,6 @@ function createUnormPipeline(
     };
   };
   const renderTile = (tileData: TextureDataT): RenderTileResult => {
-    console.log("renderPipeline renderTile", renderPipeline);
     return {
       renderPipeline: renderPipeline.map((m, _i) => resolveModule(m, tileData)),
     };
