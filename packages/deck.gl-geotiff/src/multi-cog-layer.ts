@@ -184,11 +184,41 @@ export type MultiCOGLayerProps = CompositeLayerProps &
      * AbortSignal to cancel loading of all sources.
      */
     signal?: AbortSignal;
+
+    /**
+     * Enable debug overlay showing tile boundaries and metadata labels
+     * for all tilesets.
+     *
+     * @default false
+     */
+    debug?: boolean;
+
+    /**
+     * Opacity of the reprojection mesh debug overlay. Only used when
+     * `debug` is `true`. Forwarded to the underlying {@link RasterLayer}.
+     *
+     * @default 0.5
+     */
+    debugOpacity?: number;
+
+    /**
+     * Controls how much detail is shown in debug text labels.
+     *
+     * - `1`: tile index and resolution only
+     * - `2`: adds UV transform and tile count
+     * - `3`: adds stitched dimensions and meters/pixel
+     *
+     * @default 1
+     */
+    debugLevel?: 1 | 2 | 3;
   };
 
 const defaultProps = {
   epsgResolver: { type: "accessor" as const, value: defaultEpsgResolver },
   maxError: { type: "number" as const, value: 0.125 },
+  debug: { type: "boolean" as const, value: false },
+  debugOpacity: { type: "number" as const, value: 0.5 },
+  debugLevel: { type: "number" as const, value: 1 },
 };
 
 /**
@@ -543,7 +573,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     forwardTo3857: ReprojectionFns["forwardReproject"],
     inverseFrom3857: ReprojectionFns["inverseReproject"],
   ): Layer | LayersList | null {
-    const { maxError } = this.props;
+    const { maxError, debug, debugOpacity } = this.props;
 
     if (!props.data) {
       return null;
@@ -622,6 +652,8 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
         renderPipeline,
         maxError,
         reprojectionFns,
+        debug,
+        debugOpacity,
         ...deckProjectionProps,
       }),
     );
