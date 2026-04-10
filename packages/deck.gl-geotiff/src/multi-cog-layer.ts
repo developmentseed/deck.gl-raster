@@ -517,7 +517,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     const image = selectImage(sourceState.geotiff, z);
 
     const tile = await image.fetchTile(x, y, {
-      boundless: false,
+      boundless: true,
       pool,
       signal,
     });
@@ -608,7 +608,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       idx.y,
     ]);
     const tiles = await image.fetchTiles(xy, {
-      boundless: false,
+      boundless: true,
       pool,
       signal,
     });
