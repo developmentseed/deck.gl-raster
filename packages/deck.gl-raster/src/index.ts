@@ -5,6 +5,7 @@ export type {
   MultiTilesetDescriptor,
   SecondaryTileIndex,
   SecondaryTileResolution,
+  UvTransform,
 } from "./multi-raster-tileset/index.js";
 export {
   createMultiTilesetDescriptor,

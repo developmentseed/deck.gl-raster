@@ -1,6 +1,27 @@
 import type { TilesetLevel } from "../raster-tileset/tileset-interface.js";
 
 /**
+ * UV transform mapping primary tile UV space to the correct sub-region of a
+ * band texture.
+ *
+ * Applied in the shader as: `sampledUV = uv * [scaleX, scaleY] + [offsetX, offsetY]`
+ *
+ * Defined as a tuple so it can be uploaded directly to the GPU as a vec4 uniform.
+ *
+ * Elements:
+ * - `offsetX` — horizontal offset: left edge of the primary tile within the band texture, in UV units
+ * - `offsetY` — vertical offset: top edge of the primary tile within the band texture, in UV units
+ * - `scaleX` — horizontal scale: fraction of the band texture width covered by the primary tile
+ * - `scaleY` — vertical scale: fraction of the band texture height covered by the primary tile
+ */
+export type UvTransform = readonly [
+  offsetX: number,
+  offsetY: number,
+  scaleX: number,
+  scaleY: number,
+];
+
+/**
  * A tile index in a secondary tileset.
  *
  * Uses `x`/`y` naming to match {@link TileIndex} convention.
@@ -42,7 +63,7 @@ export interface SecondaryTileResolution {
    * - `scaleX`, `scaleY`: fraction of the stitched texture covered by the
    *   primary tile.
    */
-  uvTransform: [number, number, number, number];
+  uvTransform: UvTransform;
 
   /**
    * The total stitched texture width in pixels.

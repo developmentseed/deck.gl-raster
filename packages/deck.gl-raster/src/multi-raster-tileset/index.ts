@@ -10,5 +10,6 @@ export {
 export type {
   SecondaryTileIndex,
   SecondaryTileResolution,
+  UvTransform,
 } from "./secondary-tile-resolver.js";
 export { resolveSecondaryTiles } from "./secondary-tile-resolver.js";
