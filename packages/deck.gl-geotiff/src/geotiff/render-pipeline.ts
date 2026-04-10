@@ -155,7 +155,7 @@ function createUnormPipeline(
   ) => {
     const { device, x, y, signal, pool } = options;
     const tile = await image.fetchTile(x, y, {
-      boundless: false,
+      boundless: true,
       pool,
       signal,
     });
