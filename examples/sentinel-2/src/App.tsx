@@ -1,7 +1,7 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { MultiCOGLayer } from "@developmentseed/deck.gl-geotiff";
-import { LinearRescale } from "@developmentseed/deck.gl-raster";
+import { LinearRescale } from "@developmentseed/deck.gl-raster/gpu-modules";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";

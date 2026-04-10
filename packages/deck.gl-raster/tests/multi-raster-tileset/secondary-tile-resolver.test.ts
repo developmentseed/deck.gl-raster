@@ -16,11 +16,22 @@ function gridLevel(opts: {
   matrixWidth: number;
   matrixHeight: number;
 }): TilesetLevel {
-  const { originX, originY, cellSize, tileWidth, tileHeight, matrixWidth, matrixHeight } = opts;
+  const {
+    originX,
+    originY,
+    cellSize,
+    tileWidth,
+    tileHeight,
+    matrixWidth,
+    matrixHeight,
+  } = opts;
   const tileCrsWidth = tileWidth * cellSize;
   const tileCrsHeight = tileHeight * cellSize;
   return {
-    matrixWidth, matrixHeight, tileWidth, tileHeight,
+    matrixWidth,
+    matrixHeight,
+    tileWidth,
+    tileHeight,
     metersPerPixel: cellSize,
     projectedTileCorners: (col: number, row: number): Corners => {
       const minX = originX + col * tileCrsWidth;
@@ -28,11 +39,18 @@ function gridLevel(opts: {
       const maxY = originY - row * tileCrsHeight;
       const minY = maxY - tileCrsHeight;
       return {
-        topLeft: [minX, maxY] as Point, topRight: [maxX, maxY] as Point,
-        bottomLeft: [minX, minY] as Point, bottomRight: [maxX, minY] as Point,
+        topLeft: [minX, maxY] as Point,
+        topRight: [maxX, maxY] as Point,
+        bottomLeft: [minX, minY] as Point,
+        bottomRight: [maxX, minY] as Point,
       };
     },
-    crsBoundsToTileRange: (projectedMinX: number, projectedMinY: number, projectedMaxX: number, projectedMaxY: number) => {
+    crsBoundsToTileRange: (
+      projectedMinX: number,
+      projectedMinY: number,
+      projectedMaxX: number,
+      projectedMaxY: number,
+    ) => {
       // Use ceil-1 for both min and max so that exact tile boundaries are treated
       // as inclusive on the left tile (the boundary point belongs to the tile ending there).
       let minCol = Math.ceil((projectedMinX - originX) / tileCrsWidth) - 1;
@@ -53,8 +71,24 @@ describe("resolveSecondaryTiles", () => {
   // Primary: 10m, 256px tiles → each tile covers 2560m
   // Secondary: 20m, 256px tiles → each tile covers 5120m
   const origin = { x: 600000, y: 8000000 };
-  const primaryLevel = gridLevel({ originX: origin.x, originY: origin.y, cellSize: 10, tileWidth: 256, tileHeight: 256, matrixWidth: 43, matrixHeight: 43 });
-  const secondaryLevel = gridLevel({ originX: origin.x, originY: origin.y, cellSize: 20, tileWidth: 256, tileHeight: 256, matrixWidth: 22, matrixHeight: 22 });
+  const primaryLevel = gridLevel({
+    originX: origin.x,
+    originY: origin.y,
+    cellSize: 10,
+    tileWidth: 256,
+    tileHeight: 256,
+    matrixWidth: 43,
+    matrixHeight: 43,
+  });
+  const secondaryLevel = gridLevel({
+    originX: origin.x,
+    originY: origin.y,
+    cellSize: 20,
+    tileWidth: 256,
+    tileHeight: 256,
+    matrixWidth: 22,
+    matrixHeight: 22,
+  });
 
   it("returns correct UV transform when primary tile is fully inside one secondary tile", () => {
     // Primary tile (0,0) covers [600000, 7997440] to [602560, 8000000]
