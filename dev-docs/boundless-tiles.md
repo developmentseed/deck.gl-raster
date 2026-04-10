@@ -2,7 +2,7 @@
 
 ## Preference: `boundless: true`
 
-When fetching tiles from GeoTIFFs, we prefer `boundless: true` so that all tiles — including edge tiles — are returned at the full nominal tile size (e.g., 1024x1024). Edge tiles that extend beyond the image extent are zero-padded.
+When fetching tiles from GeoTIFFs, we prefer `boundless: true` so that all tiles — including edge tiles — are returned at the full nominal tile size (e.g., 1024x1024). Edge tiles that extend beyond the image extent are padded by the COG encoder, typically with the nodata value or accompanied by an internal nodata mask.
 
 ## Why
 
@@ -13,7 +13,7 @@ With `boundless: false`, edge tiles are clipped to the valid pixel region (e.g.,
 
 ## Nodata Masking
 
-With `boundless: true`, padding pixels contain zeros (or whatever fill value the TIFF uses). These must be masked out during rendering so they don't appear as black borders.
+With `boundless: true`, padding pixels in edge tiles are filled by the COG encoder — typically with the declared nodata value, or marked as invalid via an internal mask IFD. These must be masked out during rendering so they don't appear as visible borders.
 
 Two mechanisms exist for this:
 
