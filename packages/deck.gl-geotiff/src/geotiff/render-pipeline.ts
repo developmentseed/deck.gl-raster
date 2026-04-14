@@ -316,4 +316,3 @@ function resolveModule<T>(m: UnresolvedRasterModule<T>, data: T): RasterModule {
 
   return { module, props: resolvedProps };
 }
-
