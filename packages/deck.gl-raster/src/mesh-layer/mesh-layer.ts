@@ -25,6 +25,13 @@ const defaultProps: DefaultProps<
   // labels in interleaved mode 🤷‍♂️
   // image: { type: "image", value: null, async: true },
   renderPipeline: { type: "array", value: [], compare: true },
+  // Disable lighting by default (avoids darkening raster)
+  material: {
+    ambient: 1.0,
+    diffuse: 0.0,
+    shininess: 0,
+    specularColor: [0, 0, 0],
+  },
 };
 
 /**
