@@ -76,12 +76,19 @@ for what `UNPACK_ALIGNMENT` / `UNPACK_ROW_LENGTH` actually do.
 
 ## How we ended up with warped edge tiles on deck.gl/luma.gl 9.3
 
-Prior to luma.gl PR #2461, `writeData` never touched `UNPACK_ALIGNMENT` and
-never set `UNPACK_ROW_LENGTH` when `bytesPerRow` was undefined. WebGL then
-fell back to its default `UNPACK_ALIGNMENT = 4`, which happened to match the
-4-byte padding that `padToAlignment` was applying in
-`packages/deck.gl-geotiff/src/geotiff/render-pipeline.ts`. Both sides shared
-the same "4-byte aligned rows" assumption and it worked by accident.
+See [developmentseed/deck.gl-raster#416](https://github.com/developmentseed/deck.gl-raster/issues/416)
+for the original bug report against the `cog-basic` example's Anderson Co.
+imagery.
+
+Prior to luma.gl
+[PR #2461](https://github.com/visgl/luma.gl/pull/2461), `writeData` never
+touched `UNPACK_ALIGNMENT` and never set `UNPACK_ROW_LENGTH` when
+`bytesPerRow` was undefined. WebGL then fell back to its default
+`UNPACK_ALIGNMENT = 4`, which happened to match the 4-byte padding that
+`padToAlignment` was applying in
+[`packages/deck.gl-geotiff/src/geotiff/render-pipeline.ts`](../packages/deck.gl-geotiff/src/geotiff/render-pipeline.ts).
+Both sides shared the same "4-byte aligned rows" assumption and it worked by
+accident.
 
 After PR #2461:
 
@@ -102,10 +109,11 @@ trigger:
 3-band RGB gets implicit-alpha padding to `bytesPerPixel = 4` before it
 reaches luma.gl, so it's always aligned and was never affected.
 
-The Anderson Co. Ortho Pan 2ft (2000) COG hit every unlucky condition: 1-band
-uint8, 512-px internal block size, and overview widths (2625, 1313, 657,
-329, …) that generate right-edge tiles of width 65, 289, 145, 329 — none of
-which are divisible by 4.
+The
+[Anderson Co. Ortho Pan 2ft (2000) COG](https://data.source.coop/giswqs/tn-imagery/imagery/AndersonCo_OrthoPan_2ft_2000.tif)
+hit every unlucky condition: 1-band uint8, 512-px internal block size, and
+overview widths (2625, 1313, 657, 329, …) that generate right-edge tiles of
+width 65, 289, 145, 329 — none of which are divisible by 4.
 
 ## Caveats
 
@@ -114,10 +122,11 @@ which are divisible by 4.
   constraint). In that case luma.gl will honor the stride you give it. We
   just don't have a reason to do that here.
 - **WebGPU has its own alignment rules.** WebGPU requires `bytesPerRow` to be
-  a multiple of 256 for image copies; luma.gl handles this internally on the
-  WebGPU backend but the requirement is stricter than WebGL's. If we ever
-  write directly to `CopyExternalImage` / `writeBuffer` we should revisit
-  this.
+  a multiple of 256 for image copies
+  ([`GPUImageCopyBuffer.bytesPerRow`](https://www.w3.org/TR/webgpu/#dom-gpuimagecopybuffer-bytesperrow));
+  luma.gl handles this internally on the WebGPU backend but the requirement
+  is stricter than WebGL's. If we ever write directly to
+  `CopyExternalImage` / `writeBuffer` we should revisit this.
 - **Do not re-introduce `UNPACK_ALIGNMENT = 4` assumptions** in deck.gl-raster
   or downstream caller code. If a future regression makes it tempting to add
   padding back, the right fix is to also pass an explicit `bytesPerRow` to
@@ -127,10 +136,21 @@ which are divisible by 4.
 
 - luma.gl [PR #2461](https://github.com/visgl/luma.gl/pull/2461) —
   `fix(webgl): unpack row length handling for texture uploads` (shipped in
-  v9.2.4 / v9.2.5 / v9.3.0).
-- luma.gl `modules/webgl/src/adapter/resources/webgl-texture.ts:85` —
-  hardcoded `byteAlignment: 1` on WebGL textures.
-- luma.gl `modules/webgl/src/adapter/resources/webgl-texture.ts:343` —
-  explicit `UNPACK_ALIGNMENT = this.byteAlignment` in `writeData`.
-- luma.gl `modules/core/src/adapter/resources/texture.ts:585` — default
-  `bytesPerRow = layout.bytesPerRow`.
+  [`v9.2.4`](https://github.com/visgl/luma.gl/releases/tag/v9.2.4) /
+  [`v9.2.5`](https://github.com/visgl/luma.gl/releases/tag/v9.2.5) /
+  [`v9.3.0`](https://github.com/visgl/luma.gl/releases/tag/v9.3.0)).
+- [`@luma.gl/webgl` `webgl-texture.ts:85`](https://github.com/visgl/luma.gl/blob/v9.3.0/modules/webgl/src/adapter/resources/webgl-texture.ts#L85)
+  — hardcoded `byteAlignment: 1` on WebGL textures.
+- [`@luma.gl/webgl` `webgl-texture.ts:343-349`](https://github.com/visgl/luma.gl/blob/v9.3.0/modules/webgl/src/adapter/resources/webgl-texture.ts#L343-L349)
+  — explicit `UNPACK_ALIGNMENT = this.byteAlignment` in `writeData`.
+- [`@luma.gl/core` `texture.ts:585`](https://github.com/visgl/luma.gl/blob/v9.3.0/modules/core/src/adapter/resources/texture.ts#L585)
+  — default `bytesPerRow = layout.bytesPerRow`.
+- [`boundless-tiles.md`](./boundless-tiles.md) — related guidance on why
+  `COGLayer` / `MultiCOGLayer` fetch tiles with `boundless: true`, which is
+  what avoids the clipped-edge-tile shape that triggered this bug.
+- [developmentseed/deck.gl-raster#411](https://github.com/developmentseed/deck.gl-raster/pull/411)
+  — earlier `MultiCOGLayer` edge-tile fix that switched that layer to
+  `boundless: true`.
+- [developmentseed/deck.gl-raster#289](https://github.com/developmentseed/deck.gl-raster/pull/289)
+  / [#237](https://github.com/developmentseed/deck.gl-raster/issues/237) —
+  prior edge-tile rendering history for `COGLayer`.
