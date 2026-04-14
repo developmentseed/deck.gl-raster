@@ -11,11 +11,7 @@ import {
   MaskTexture,
   WhiteIsZero,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
-import type {
-  GeoTIFF,
-  Overview,
-  RasterTypedArray,
-} from "@developmentseed/geotiff";
+import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import { parseColormap } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GetTileDataOptions } from "../cog-layer";
@@ -180,15 +176,9 @@ function createUnormPipeline(
       bitsPerSample,
       sampleFormat,
     );
-    const bytesPerPixel = (bitsPerSample[0]! / 8) * numSamples;
-    const textureData = enforceAlignment(array.data, {
-      width,
-      height,
-      bytesPerPixel,
-    });
-    let byteLength = textureData.byteLength;
+    let byteLength = array.data.byteLength;
     const texture = device.createTexture({
-      data: textureData,
+      data: array.data,
       format: textureFormat,
       width,
       height,
@@ -202,8 +192,7 @@ function createUnormPipeline(
     let maskTexture: Texture | undefined;
     if (mask !== null) {
       maskTexture = device.createTexture({
-        // Mask is single-channel 8-bit, so bytesPerPixel must be 1
-        data: padToAlignment(mask, width, height, 1),
+        data: mask,
         // Single-channel 8-bit texture for the mask
         format: "r8unorm",
         width,
@@ -326,61 +315,4 @@ function resolveModule<T>(m: UnresolvedRasterModule<T>, data: T): RasterModule {
   }
 
   return { module, props: resolvedProps };
-}
-
-/**
- * WebGL's default `UNPACK_ALIGNMENT` is 4, meaning each row of pixel data must
- * start on a 4-byte boundary.
- *
- * For all array types, we must match our typed array type to what WebGL
- * expects, so this must return the same array type as what was passed in.
- */
-export function enforceAlignment<T extends RasterTypedArray>(
-  data: T,
-  {
-    width,
-    height,
-    bytesPerPixel,
-  }: { width: number; height: number; bytesPerPixel: number },
-): T {
-  return data instanceof Uint8Array ||
-    data instanceof Int8Array ||
-    data instanceof Uint16Array ||
-    data instanceof Int16Array
-    ? padToAlignment(data, width, height, bytesPerPixel)
-    : data;
-}
-
-/**
- * WebGL's default `UNPACK_ALIGNMENT` is 4, meaning each row of pixel data must
- * start on a 4-byte boundary.
- *
- * For 8-bit and 16-bit data, rows may not be 4-byte aligned. For 32-bit+ data,
- * each element is already 4 bytes so rows are always aligned.
- *
- * Returns the original array unchanged when no padding is needed.
- */
-function padToAlignment<
-  T extends Uint8Array | Int8Array | Uint16Array | Int16Array,
->(data: T, width: number, height: number, bytesPerPixel: number): T {
-  const rowBytes = width * bytesPerPixel;
-  const alignedRowBytes = Math.ceil(rowBytes / 4) * 4;
-  if (alignedRowBytes === rowBytes) {
-    return data;
-  }
-
-  const src = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-  const dstBytes = new Uint8Array(alignedRowBytes * height);
-  for (let r = 0; r < height; r++) {
-    dstBytes.set(
-      src.subarray(r * rowBytes, (r + 1) * rowBytes),
-      r * alignedRowBytes,
-    );
-  }
-
-  // Return the same typed array type as the input
-  if (data instanceof Int8Array) return new Int8Array(dstBytes.buffer) as T;
-  if (data instanceof Uint16Array) return new Uint16Array(dstBytes.buffer) as T;
-  if (data instanceof Int16Array) return new Int16Array(dstBytes.buffer) as T;
-  return dstBytes as T;
 }

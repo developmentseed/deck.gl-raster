@@ -58,7 +58,6 @@ import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import proj4 from "proj4";
 import { fetchGeoTIFF } from "./geotiff/geotiff.js";
-import { enforceAlignment } from "./geotiff/render-pipeline.js";
 import { fromAffine } from "./geotiff-reprojection.js";
 
 /** Size of deck.gl's common coordinate space in world units. */
@@ -1057,16 +1056,13 @@ function createBandTexture(device: Device, array: RasterArray): Texture {
     throw new Error("Band-separate layout not yet supported in MultiCOGLayer");
   }
 
-  const { data, width, height, count } = array;
+  const { data, width, height } = array;
   let format: TextureFormat;
-  let bytesPerSample: number;
 
   if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
     format = "r8unorm";
-    bytesPerSample = 1;
   } else if (data instanceof Uint16Array) {
     format = "r16unorm";
-    bytesPerSample = 2;
   } else {
     throw new Error(
       `Unsupported typed array type: ${data.constructor.name}. ` +
@@ -1074,14 +1070,8 @@ function createBandTexture(device: Device, array: RasterArray): Texture {
     );
   }
 
-  const aligned = enforceAlignment(data, {
-    width,
-    height,
-    bytesPerPixel: bytesPerSample * count,
-  });
-
   return device.createTexture({
-    data: aligned,
+    data,
     format,
     width,
     height,
