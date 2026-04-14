@@ -56,10 +56,10 @@
     "zarrita": "^0.6.1"
   },
   "peerDependencies": {
-    "@deck.gl/core": "^9.2.7",
-    "@deck.gl/geo-layers": "^9.2.7",
-    "@deck.gl/layers": "^9.2.7",
-    "@luma.gl/core": "^9.2.6"
+    "@deck.gl/core": "^9.3.0",
+    "@deck.gl/geo-layers": "^9.3.0",
+    "@deck.gl/layers": "^9.3.0",
+    "@luma.gl/core": "^9.3.2"
   },
   "volta": {
     "extends": "../../package.json"
