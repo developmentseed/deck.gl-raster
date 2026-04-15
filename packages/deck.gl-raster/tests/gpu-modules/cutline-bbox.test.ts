@@ -76,8 +76,8 @@ describe("CutlineBbox", () => {
     expect(CutlineBbox.fs).toContain("vec4 bbox");
   });
 
-  it("injects a discard into DECKGL_FILTER_COLOR", () => {
-    const injected = CutlineBbox.inject["fs:DECKGL_FILTER_COLOR"];
+  it("injects a discard into fs:#main-start", () => {
+    const injected = CutlineBbox.inject["fs:#main-start"];
     expect(injected).toContain("position_commonspace");
     expect(injected).toContain("discard");
   });
