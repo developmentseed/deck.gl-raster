@@ -4,8 +4,6 @@ export type {
   MinimalDataT,
 } from "./cog-layer.js";
 export { COGLayer } from "./cog-layer.js";
-export type { TextureDataT } from "./geotiff/render-pipeline.js";
-export { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 export * as texture from "./geotiff/texture.js";
 export type { MosaicLayerProps } from "./mosaic-layer/mosaic-layer.js";
 export { MosaicLayer } from "./mosaic-layer/mosaic-layer.js";
