@@ -95,6 +95,7 @@ const PRESETS: CompositePreset[] = [
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
+  const centeredSceneRef = useRef<number | null>(null);
   const [sceneIndex, setSceneIndex] = useState(0);
   const [presetIndex, setPresetIndex] = useState(0);
   const [debug, setDebug] = useState(false);
@@ -127,6 +128,12 @@ export default function App() {
       { module: LinearRescale, props: { rescaleMin: 0, rescaleMax: 0.05 } },
     ],
     onGeoTIFFLoad: (_sources, { geographicBounds }) => {
+      // Only fly to the scene on the initial load, not on subsequent band changes
+      if (centeredSceneRef.current === sceneIndex) {
+        return;
+      }
+      centeredSceneRef.current = sceneIndex;
+
       const { west, south, east, north } = geographicBounds;
       mapRef.current?.fitBounds(
         [
@@ -179,9 +186,7 @@ export default function App() {
             Renders individual band COGs at different resolutions using
             MultiCOGLayer. The GPU handles cross-resolution resampling.
           </p>
-          <label
-            style={{ fontSize: "12px", color: "#666", display: "block" }}
-          >
+          <label style={{ fontSize: "12px", color: "#666", display: "block" }}>
             Scene
             <select
               value={sceneIndex}
