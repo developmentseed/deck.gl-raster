@@ -40,6 +40,26 @@ const TOPO_OPTIONS: TopoOption[] = [
     url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/CA/CA_Emigrant%20Gap_297419_1955_62500_geo.tif",
     bbox: [-120.75, 39.25, -120.5, 39.5],
   },
+  {
+    title: "Moab, UT (1885, 1:250,000)",
+    url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/UT/UT_La%20Sal_250205_1885_250000_geo.tif",
+    bbox: [-110.0, 38.0, -109.0, 39.0],
+  },
+  {
+    title: "Mount St Helens, WA (1919, 1:125,000)",
+    url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/WA/WA_Mount%20St%20Helens_242547_1919_125000_geo.tif",
+    bbox: [-122.5, 46.0, -122.0, 46.5],
+  },
+  {
+    title: "Estes Park, CO (1961, 1:24,000)",
+    url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/CO/CO_Estes%20Park_466919_1961_24000_geo.tif",
+    bbox: [-105.625, 40.375, -105.5, 40.5],
+  },
+  {
+    title: "Kanab Point, AZ (1962, 1:62,500)",
+    url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/AZ/AZ_Kanab%20Point_314712_1962_62500_geo.tif",
+    bbox: [-112.75, 36.25, -112.5, 36.5],
+  },
 ];
 
 type TextureDataT = {
@@ -179,7 +199,7 @@ export default function App() {
         }}
       >
         <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
-          USGS Topo Cutline Example
+          USGS Historical Topographic Maps
         </h3>
         <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#444" }}>
           This uses the <code>CutlineBbox</code> shader module to avoid
