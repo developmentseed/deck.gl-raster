@@ -43,6 +43,11 @@ const SCENES: Scene[] = [
       "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/34/K/FD/2025/7/S2A_34KFD_20250730_0_L2A",
   },
   {
+    title: "Sossusvlei, Namibia — 2026-04-13",
+    baseUrl:
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/33/J/WN/2026/4/S2C_33JWN_20260413_0_L2A",
+  },
+  {
     title: "Grand Junction, Colorado — 2026-04-08",
     baseUrl:
       "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/12/S/YJ/2026/4/S2C_12SYJ_20260408_0_L2A",
