@@ -492,6 +492,9 @@ importers:
         specifier: ^2.20.4
         version: 2.20.4
     devDependencies:
+      '@chunkd/source-file':
+        specifier: ^11.0.2
+        version: 11.0.2
       '@types/node':
         specifier: ^25.3.3
         version: 25.3.3
