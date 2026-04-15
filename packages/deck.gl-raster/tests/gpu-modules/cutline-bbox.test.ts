@@ -34,33 +34,33 @@ describe("CutlineBbox", () => {
   });
 
   it("getUniforms throws when east <= west", () => {
-    expect(() =>
-      CutlineBbox.getUniforms({ bbox: [10, 0, -10, 1] }),
-    ).toThrow(/east > west/);
+    expect(() => CutlineBbox.getUniforms({ bbox: [10, 0, -10, 1] })).toThrow(
+      /east > west/,
+    );
 
-    expect(() =>
-      CutlineBbox.getUniforms({ bbox: [5, 0, 5, 1] }),
-    ).toThrow(/east > west/);
+    expect(() => CutlineBbox.getUniforms({ bbox: [5, 0, 5, 1] })).toThrow(
+      /east > west/,
+    );
   });
 
   it("getUniforms throws when north <= south", () => {
-    expect(() =>
-      CutlineBbox.getUniforms({ bbox: [-10, 20, 10, 10] }),
-    ).toThrow(/north > south/);
+    expect(() => CutlineBbox.getUniforms({ bbox: [-10, 20, 10, 10] })).toThrow(
+      /north > south/,
+    );
 
-    expect(() =>
-      CutlineBbox.getUniforms({ bbox: [-10, 15, 10, 15] }),
-    ).toThrow(/north > south/);
+    expect(() => CutlineBbox.getUniforms({ bbox: [-10, 15, 10, 15] })).toThrow(
+      /north > south/,
+    );
   });
 
   it("getUniforms throws when latitudes exceed Web Mercator limits", () => {
-    expect(() =>
-      CutlineBbox.getUniforms({ bbox: [-10, -86, 10, 0] }),
-    ).toThrow(/Web Mercator/);
+    expect(() => CutlineBbox.getUniforms({ bbox: [-10, -86, 10, 0] })).toThrow(
+      /Web Mercator/,
+    );
 
-    expect(() =>
-      CutlineBbox.getUniforms({ bbox: [-10, 0, 10, 86] }),
-    ).toThrow(/Web Mercator/);
+    expect(() => CutlineBbox.getUniforms({ bbox: [-10, 0, 10, 86] })).toThrow(
+      /Web Mercator/,
+    );
   });
 
   it("has the expected module name", () => {
