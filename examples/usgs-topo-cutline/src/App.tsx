@@ -27,9 +27,7 @@ function DeckGLOverlay(props: MapboxOverlayProps) {
 // WGS84 bbox from the USGS HTMC metadata CSV (westbc, southbc, eastbc, northbc).
 const TOPO_URL =
   "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/CA/CA_Emigrant%20Gap_297419_1955_62500_geo.tif";
-const TOPO_BBOX: [number, number, number, number] = [
-  -120.75, 39.25, -120.5, 39.5,
-];
+const TOPO_BBOX = [-120.75, 39.25, -120.5, 39.5] as const;
 
 type TextureDataT = {
   height: number;
@@ -117,7 +115,6 @@ function renderTile(
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [cutlineEnabled, setCutlineEnabled] = useState(true);
-  const [zoom, setZoom] = useState(11);
 
   const layer = new COGLayer<TextureDataT>({
     id: "usgs-topo",
@@ -148,7 +145,6 @@ export default function App() {
           bearing: 0,
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-        onMove={(e) => setZoom(e.viewState.zoom)}
       >
         <DeckGLOverlay layers={[layer]} interleaved />
       </MaplibreMap>
@@ -162,18 +158,19 @@ export default function App() {
           padding: "16px",
           borderRadius: "8px",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          maxWidth: "320px",
+          maxWidth: "290px",
           zIndex: 1000,
         }}
       >
         <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
           USGS Topo Cutline Example
         </h3>
+        <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "#444" }}>
+          USGS Topo Quad of Emigrant Gap, CA, 1955.
+        </p>
         <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#444" }}>
-          Emigrant Gap, CA 1:62,500 quad (1955). Render pipeline is two explicit
-          modules: <code>CreateTexture</code> uploads the raw RGB pixels, and{" "}
-          <code>CutlineBbox</code> discards fragments outside the map's WGS84
-          bbox to hide the metadata collar.
+          This uses the <code>CutlineBbox</code> shader module to avoid
+          rendering pixels containing the map collar.
         </p>
         <label
           style={{
@@ -190,21 +187,8 @@ export default function App() {
             onChange={(e) => setCutlineEnabled(e.target.checked)}
             style={{ cursor: "pointer" }}
           />
-          <span>Discard map collar (CutlineBbox)</span>
+          <span>Discard map collar</span>
         </label>
-        <div
-          style={{
-            marginTop: "12px",
-            paddingTop: "12px",
-            borderTop: "1px solid #eee",
-            fontSize: "13px",
-            color: "#444",
-            fontFamily:
-              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-          }}
-        >
-          zoom: {zoom.toFixed(2)}
-        </div>
       </div>
     </div>
   );
