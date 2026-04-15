@@ -350,6 +350,8 @@ export default function App() {
       // this isn't so large that we can't just cache all the GeoTIFF header
       // metadata instances
       maxCacheSize: Infinity,
+      // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+      // doesn't know about it.
       beforeId: "tunnel_service_case",
     });
     layers.push(mosaicLayer);
