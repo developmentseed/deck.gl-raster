@@ -100,15 +100,26 @@ export const CutlineBbox = {
   name: MODULE_NAME,
   fs: uniformBlock,
   inject: {
-    "fs:DECKGL_FILTER_COLOR": /* glsl */ `
-      // Globe support: when rendering in a GlobeView, position_commonspace is
-      // on the unit sphere rather than in Web Mercator common space. A future
-      // globe code path would need a different varying (e.g. lng/lat passed
-      // through from the vertex shader) and a matching uniform layout.
-      vec2 p = position_commonspace.xy;
-      if (p.x < ${MODULE_NAME}.bbox.x || p.x > ${MODULE_NAME}.bbox.z ||
-          p.y < ${MODULE_NAME}.bbox.y || p.y > ${MODULE_NAME}.bbox.w) {
-        discard;
+    // Injects at fs:#main-start (not fs:DECKGL_FILTER_COLOR). The
+    // DECKGL_FILTER_COLOR hook is a generated function whose body only sees
+    // its parameters and top-level uniforms; the position_commonspace varying
+    // declared in the main FS source is assembled *after* the hook function
+    // and is therefore out of scope there. Injecting at #main-start puts the
+    // test inside main() where the varying is visible and discard works.
+    //
+    // Globe support: when rendering in a GlobeView, the mesh positions are in
+    // 4326 lng/lat rather than 3857 meters, so position_commonspace is no
+    // longer directly comparable to a 3857-meter bbox. A future globe code
+    // path would need a different varying and matching uniform layout.
+    "fs:#main-start": /* glsl */ `
+      {
+        vec2 cutlineBboxPos = position_commonspace.xy;
+        if (cutlineBboxPos.x < ${MODULE_NAME}.bbox.x ||
+            cutlineBboxPos.x > ${MODULE_NAME}.bbox.z ||
+            cutlineBboxPos.y < ${MODULE_NAME}.bbox.y ||
+            cutlineBboxPos.y > ${MODULE_NAME}.bbox.w) {
+          discard;
+        }
       }
     `,
   },
