@@ -23,11 +23,24 @@ function DeckGLOverlay(props: MapboxOverlayProps) {
   return null;
 }
 
-// Emigrant Gap, CA — 1955, 1:62,500 scale USGS quad.
-// WGS84 bbox from the USGS HTMC metadata CSV (westbc, southbc, eastbc, northbc).
-const TOPO_URL =
-  "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/CA/CA_Emigrant%20Gap_297419_1955_62500_geo.tif";
-const TOPO_BBOX = [-120.75, 39.25, -120.5, 39.5] as const;
+/**
+ * One USGS historical topo quad to render. The bbox is the WGS84 data area
+ * (`westbc`, `southbc`, `eastbc`, `northbc` from the HTMC metadata CSV) that
+ * `CutlineBbox` will clip to — everything outside is the paper map collar.
+ */
+type TopoOption = {
+  title: string;
+  url: string;
+  bbox: [number, number, number, number];
+};
+
+const TOPO_OPTIONS: TopoOption[] = [
+  {
+    title: "Emigrant Gap, CA (1955, 1:62,500)",
+    url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/CA/CA_Emigrant%20Gap_297419_1955_62500_geo.tif",
+    bbox: [-120.75, 39.25, -120.5, 39.5],
+  },
+];
 
 type TextureDataT = {
   height: number;
@@ -98,6 +111,7 @@ async function getTileData(
 function renderTile(
   tileData: TextureDataT,
   cutlineEnabled: boolean,
+  bbox: [number, number, number, number],
 ): RenderTileResult {
   const { texture } = tileData;
   const renderPipeline: RasterModule[] = [
@@ -106,7 +120,7 @@ function renderTile(
   if (cutlineEnabled) {
     renderPipeline.push({
       module: CutlineBbox,
-      props: { bbox: TOPO_BBOX },
+      props: { bbox },
     });
   }
   return { renderPipeline };
@@ -115,12 +129,14 @@ function renderTile(
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [cutlineEnabled, setCutlineEnabled] = useState(true);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const selected = TOPO_OPTIONS[selectedIndex]!;
 
   const layer = new COGLayer<TextureDataT>({
-    id: "usgs-topo",
-    geotiff: TOPO_URL,
+    id: `usgs-topo-${selectedIndex}`,
+    geotiff: selected.url,
     getTileData,
-    renderTile: (data) => renderTile(data, cutlineEnabled),
+    renderTile: (data) => renderTile(data, cutlineEnabled, selected.bbox),
     onGeoTIFFLoad: (_tiff, options) => {
       const { west, south, east, north } = options.geographicBounds;
       mapRef.current?.fitBounds(
@@ -165,13 +181,27 @@ export default function App() {
         <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
           USGS Topo Cutline Example
         </h3>
-        <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "#444" }}>
-          USGS Topo Quad of Emigrant Gap, CA, 1955.
-        </p>
         <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#444" }}>
           This uses the <code>CutlineBbox</code> shader module to avoid
           rendering pixels containing the map collar.
         </p>
+        <select
+          value={selectedIndex}
+          onChange={(e) => setSelectedIndex(Number(e.target.value))}
+          style={{
+            width: "100%",
+            padding: "6px",
+            fontSize: "13px",
+            marginBottom: "12px",
+            cursor: "pointer",
+          }}
+        >
+          {TOPO_OPTIONS.map((opt, i) => (
+            <option key={opt.url} value={i}>
+              {opt.title}
+            </option>
+          ))}
+        </select>
         <label
           style={{
             display: "flex",
