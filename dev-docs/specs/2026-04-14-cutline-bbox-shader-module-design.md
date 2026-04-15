@@ -76,10 +76,43 @@ deliberately do *not* use `lngLatToWorld` here — that function returns values
 pre-scaled into deck.gl's 512-unit common-space world, which we are
 specifically avoiding.
 
+### API split: pass-through module + project-once helper
+
+The module's `bbox` prop is in **EPSG:3857 meters**, not WGS84 degrees.
+Projection from WGS84 happens in a separate exported helper
+`lngLatToMercator` — a general point-level helper that takes a `[lng, lat]`
+and returns `[x, y]` in EPSG:3857 meters. Callers invoke it **once at
+bbox definition time** (e.g. as part of a module-level options const) and
+pack the two corner points into the bbox `vec4`. This keeps `getUniforms`
+a trivial pass-through that runs zero math in the per-frame render loop.
+
+A bbox-specific wrapper was considered and rejected: composing
+`lngLatToMercator` twice in user code is three lines and does not hide
+the coordinate transform, and the bbox-packing concern (which corner is
+"min" vs "max") belongs to the caller rather than a library helper.
+
+**Why this split instead of taking WGS84 directly:**
+
+luma.gl's `ShaderInputs.setProps` calls `module.getUniforms` unconditionally
+on every invocation — there is no equality check to skip it. And deck.gl
+layers' `draw()` runs `setProps` every frame with a freshly constructed
+props object. So any non-trivial work inside `getUniforms` (like WGS84 →
+mercator projection and validation) runs on every frame, per visible tile,
+even though the answer is identical across frames. The absolute cost is
+small (low-single-digit milliseconds of CPU per second for a typical
+viewport) but it's conceptually wasteful work and sets a bad pattern for
+future modules.
+
+Splitting into a pure data pass-through (module) and a one-time projection
+(helper) also aligns the module with the pattern the rest of this repo
+uses: `FilterNoDataVal`, `MaskTexture`, `LinearRescale`, `CreateTexture`,
+and `CompositeBands` all take "raw" values that map 1:1 to shader uniforms
+with no CPU-side transformation of user input. `CutlineBbox` taking
+WGS84-in would have been the outlier.
+
 ### Shader module shape
 
-New file: `packages/deck.gl-raster/src/gpu-modules/cutline-bbox.ts`. Structure
-mirrors `filter-nodata.ts` and `mask-texture.ts`:
+New file: `packages/deck.gl-raster/src/gpu-modules/cutline-bbox.ts`.
 
 ```ts
 import type { ShaderModule } from "@luma.gl/shadertools";
@@ -88,7 +121,11 @@ const EARTH_RADIUS = 6378137.0;
 const MERCATOR_LAT_LIMIT = 85.051129;
 
 export type CutlineBboxProps = {
-  /** WGS84 axis-aligned bbox [west, south, east, north] in degrees. */
+  /**
+   * Axis-aligned bbox in EPSG:3857 meters, packed as
+   * `[minX, minY, maxX, maxY]`. Use `lngLatToMercator` to convert WGS84
+   * points once at bbox definition time.
+   */
   bbox: [number, number, number, number];
 };
 
@@ -96,25 +133,10 @@ const MODULE_NAME = "cutlineBbox";
 
 const uniformBlock = `\
 uniform ${MODULE_NAME}Uniforms {
-  vec4 bbox; // [minMercX, minMercY, maxMercX, maxMercY] in EPSG:3857 meters
+  vec4 bbox;
 } ${MODULE_NAME};
 `;
 
-function lngLatToMercatorMeters(lng: number, lat: number): [number, number] {
-  const x = (EARTH_RADIUS * lng * Math.PI) / 180;
-  const y =
-    EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
-  return [x, y];
-}
-
-/**
- * Discards fragments whose position falls outside a WGS84 axis-aligned bbox.
- *
- * Only supports rendering in a WebMercatorViewport — the caller is
- * responsible for asserting this. Assumes the layer's mesh `positions`
- * attribute is already in EPSG:3857 meters (true for COGLayer/RasterLayer's
- * mercator path).
- */
 export const CutlineBbox = {
   name: MODULE_NAME,
   fs: uniformBlock,
@@ -150,36 +172,38 @@ export const CutlineBbox = {
   uniformTypes: {
     bbox: "vec4<f32>",
   },
-  getUniforms: (props: Partial<CutlineBboxProps>) => {
-    const bbox = props.bbox;
-    if (!bbox) return {};
-    const [west, south, east, north] = bbox;
-    validateBbox(west, south, east, north);
-    const [swX, swY] = lngLatToMercatorMeters(west, south);
-    const [neX, neY] = lngLatToMercatorMeters(east, north);
-    return {
-      bbox: [
-        Math.min(swX, neX),
-        Math.min(swY, neY),
-        Math.max(swX, neX),
-        Math.max(swY, neY),
-      ],
-    };
-  },
+  // Pure pass-through: the bbox is already in 3857 meters.
+  getUniforms: (props: Partial<CutlineBboxProps>) =>
+    props.bbox ? { bbox: props.bbox } : {},
 } as const satisfies ShaderModule<CutlineBboxProps>;
+
+/**
+ * Project a single WGS84 lng/lat point (degrees) to EPSG:3857 meters.
+ * Throws if the latitude is outside ±85.051129° (the Web Mercator limit).
+ */
+export function lngLatToMercator(
+  lng: number,
+  lat: number,
+): [number, number] {
+  // validation + hand-rolled mercator forward (R · λ, R · ln(tan(π/4 + φ/2))).
+}
+```
+
+A typical caller composes the helper twice and packs the result:
+
+```ts
+const [minX, minY] = lngLatToMercator(west, south);
+const [maxX, maxY] = lngLatToMercator(east, north);
+const bbox: [number, number, number, number] = [minX, minY, maxX, maxY];
 ```
 
 ### Validation
 
-`getUniforms` throws when the bbox is invalid, rather than silently producing
-garbage:
-
-- `east <= west` → "bbox must have east > west (antimeridian crossing not supported)"
-- `north <= south` → "bbox must have north > south"
-- `Math.abs(lat) > 85.051129` on either corner → "bbox latitudes must be within Web Mercator limits"
-
-These are cheap checks run once per draw; they catch obvious caller bugs
-without measurable overhead.
+`lngLatToMercator` throws when the input latitude is outside the Web
+Mercator projection's valid range (±85.051129°). Bbox-level validation
+(antimeridian crossing, inverted Y) is the caller's responsibility —
+those are packing concerns, not projection concerns, and USGS quads
+(the primary use case) never run into them.
 
 ### Integration point
 
@@ -213,11 +237,12 @@ The module is **not** added to `inferRenderPipeline`. It is opt-in.
 ### Y-axis verification
 
 Both `positions.y` (from `RasterLayer`'s mesh, built from 3857 meters) and
-our CPU-side `lngLatToMercatorMeters` use a y-increases-northward convention
+our CPU-side `lngLatToMercator` use a y-increases-northward convention
 (higher latitude → higher y), consistent with `cog-layer.ts`'s CARTESIAN
 branch comment "No Y-flip needed: CARTESIAN Y increases upward = northing".
-Packing as `[minX, minY, maxX, maxY]` with `Math.min`/`Math.max` makes the
-comparison robust to any future sign flip.
+Callers packing a bbox as `[minX, minY, maxX, maxY]` can rely on
+`lngLatToMercator(west, south)` being the min corner and
+`lngLatToMercator(east, north)` being the max corner.
 
 ### Float32 precision ceiling
 
@@ -241,20 +266,15 @@ uniform — a larger change intentionally out of scope for this module.
 ```
 USGS CSV { westbc, southbc, eastbc, northbc }   ← user
          │
-         │  (once per module instance, in app code)
+         │  (once at bbox definition time, in app code)
          ▼
-new COGLayer({ renderTile: data => ({
-  renderPipeline: [{ module: CutlineBbox, props: { bbox } }],
-  ...
-})})
+[minX, minY] = lngLatToMercator(west, south)
+[maxX, maxY] = lngLatToMercator(east, north)
+bbox_3857 = [minX, minY, maxX, maxY]
          │
-         │  (per draw, on GPU)
+         │  (every frame, via getUniforms pass-through)
          ▼
-getUniforms → lngLatToMercatorMeters(west, south),
-              lngLatToMercatorMeters(east, north)
-         │
-         ▼
-uniform vec4 cutlineBbox.bbox   (raw EPSG:3857 meters)
+uniform vec4 cutlineBbox.bbox   (EPSG:3857 meters, unchanged)
          │
          │  VS:  v_cutlineBboxMercator = positions.xy;   (raw 3857 m)
          ▼
@@ -266,20 +286,25 @@ fs: compare v_cutlineBboxMercator against bbox → discard if outside
 ### Unit tests
 
 New file:
-`packages/deck.gl-raster/src/gpu-modules/cutline-bbox.test.ts`. No GPU needed.
+`packages/deck.gl-raster/tests/gpu-modules/cutline-bbox.test.ts`. No GPU
+needed.
 
-- `getUniforms` with a known WGS84 bbox (e.g. `[-85.25, 31.5, -85.125, 31.625]`
-  from the Abbeville East USGS quad) produces the expected `vec4`, computed by
-  calling `lngLatToWorld` in the test itself.
-- `getUniforms` with no `bbox` returns an empty object (no-op pipeline
-  behavior).
-- `getUniforms` throws on:
-  - `east <= west`
-  - `north <= south`
-  - latitude > 85.051129
-  - latitude < -85.051129
+`lngLatToMercator`:
+
+- Projects a known WGS84 point to the textbook `R · λ, R · ln(tan(π/4 + φ/2))`
+  value.
+- Maps the equator to `y = 0` and the prime meridian to `x = 0`.
+- Throws on latitude outside ±85.051129°.
+
+`CutlineBbox`:
+
+- `getUniforms` passes `bbox` through unchanged (it's already in 3857 m).
+- `getUniforms` returns `{}` when `bbox` is not provided.
 - Module metadata: `name` equals `"cutlineBbox"`, `uniformTypes.bbox` equals
   `"vec4<f32>"`, `fs` contains the `cutlineBboxUniforms` declaration.
+- Inject hooks: `vs:#decl` and `fs:#decl` declare the
+  `v_cutlineBboxMercator` varying, `vs:#main-start` writes `positions.xy`
+  to it, `fs:#main-start` contains a `discard` against the uniform bbox.
 
 ### Manual visual verification
 
@@ -298,10 +323,10 @@ criteria:
 ## Files Changed
 
 - **new** `packages/deck.gl-raster/src/gpu-modules/cutline-bbox.ts`
-- **new** `packages/deck.gl-raster/src/gpu-modules/cutline-bbox.test.ts`
-- **edit** `packages/deck.gl-raster/src/gpu-modules/index.ts` — export `CutlineBbox`
-  and `CutlineBboxProps`.
+- **new** `packages/deck.gl-raster/tests/gpu-modules/cutline-bbox.test.ts`
+- **edit** `packages/deck.gl-raster/src/gpu-modules/index.ts` — export
+  `CutlineBbox`, `CutlineBboxProps`, and `lngLatToMercator`.
 
 No changes to `COGLayer`, `RasterLayer`, `MeshTextureLayer`, or
-`inferRenderPipeline`. The example gallery entry is added separately by the
-user.
+`inferRenderPipeline`. The example gallery entry
+(`examples/usgs-topo-cutline/`) is added separately.

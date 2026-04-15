@@ -8,11 +8,13 @@ const MERCATOR_LAT_LIMIT = 85.051129;
 
 export type CutlineBboxProps = {
   /**
-   * WGS84 axis-aligned bbox as `[west, south, east, north]` in degrees.
+   * Axis-aligned bbox in **EPSG:3857 meters**, packed as
+   * `[minX, minY, maxX, maxY]`. This must be in the same coordinate space
+   * as the layer's mesh `positions` attribute — for `COGLayer` /
+   * `RasterLayer`'s Web Mercator rendering path, that is raw 3857 meters.
    *
-   * Must satisfy `east > west` (antimeridian crossing is not supported) and
-   * `north > south`. Latitudes must lie within the Web Mercator limits
-   * (±85.051129°).
+   * Use {@link lngLatBboxToMercator} to project a WGS84 lng/lat bbox once
+   * at bbox definition time.
    */
   bbox: [number, number, number, number];
 };
@@ -25,24 +27,17 @@ uniform ${MODULE_NAME}Uniforms {
 } ${MODULE_NAME};
 `;
 
-function lngLatToMercatorMeters(lng: number, lat: number): [number, number] {
-  const x = (EARTH_RADIUS * lng * Math.PI) / 180;
-  const y =
-    EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
-  return [x, y];
-}
-
 /**
  * A shader module that discards fragments whose position falls outside a
- * WGS84 axis-aligned bbox.
+ * Web Mercator (EPSG:3857) axis-aligned bbox.
  *
  * Intended for rendering rasters with a "map collar" (e.g. USGS historical
- * topographic maps) where the valid data area is described as a lat/lng bbox
- * but the raw pixels include surrounding metadata.
+ * topographic maps) where the valid data area is described as a bbox but
+ * the raw pixels include surrounding metadata.
  *
  * Only supports rendering in a `WebMercatorViewport`. The caller is
- * responsible for enforcing this in application code; the module itself does
- * not have viewport access.
+ * responsible for enforcing this in application code; the module itself
+ * does not have viewport access.
  *
  * This module assumes the layer's mesh `positions` attribute is in EPSG:3857
  * meters — the convention used by `COGLayer` / `RasterLayer` in Web Mercator
@@ -90,41 +85,39 @@ export const CutlineBbox = {
   uniformTypes: {
     bbox: "vec4<f32>",
   },
-  getUniforms: (props: Partial<CutlineBboxProps>) => {
-    const bbox = props.bbox;
-    if (!bbox) {
-      return {};
-    }
-    const [west, south, east, north] = bbox;
-    if (!(east > west)) {
-      throw new Error(
-        `CutlineBbox: bbox must have east > west (antimeridian crossing is not supported); got west=${west}, east=${east}`,
-      );
-    }
-    if (!(north > south)) {
-      throw new Error(
-        `CutlineBbox: bbox must have north > south; got south=${south}, north=${north}`,
-      );
-    }
-    if (
-      south < -MERCATOR_LAT_LIMIT ||
-      south > MERCATOR_LAT_LIMIT ||
-      north < -MERCATOR_LAT_LIMIT ||
-      north > MERCATOR_LAT_LIMIT
-    ) {
-      throw new Error(
-        `CutlineBbox: bbox latitudes must be within Web Mercator limits (±${MERCATOR_LAT_LIMIT}°); got south=${south}, north=${north}`,
-      );
-    }
-    const [swX, swY] = lngLatToMercatorMeters(west, south);
-    const [neX, neY] = lngLatToMercatorMeters(east, north);
-    return {
-      bbox: [
-        Math.min(swX, neX),
-        Math.min(swY, neY),
-        Math.max(swX, neX),
-        Math.max(swY, neY),
-      ],
-    };
-  },
+  // Pass-through: the bbox is expected to already be in 3857 meters. The
+  // conversion from WGS84 is done by `lngLatBboxToMercator` at bbox
+  // definition time so it does not run in the per-frame render loop.
+  getUniforms: (props: Partial<CutlineBboxProps>) =>
+    props.bbox ? { bbox: props.bbox } : {},
 } as const satisfies ShaderModule<CutlineBboxProps>;
+
+/**
+ * Project a single WGS84 lng/lat point (degrees) to EPSG:3857 meters.
+ *
+ * Throws if the latitude falls outside the Web Mercator projection's valid
+ * range (±85.051129°).
+ *
+ * This is intended to be used with the {@link CutlineBbox} module, which
+ * expects a bbox in 3857 meters. The conversion from WGS84 to 3857 is a
+ * one-time cost that can be done at bbox definition time, rather than per frame
+ * in the shader.
+ *
+ * @example
+ * ```ts
+ * const [west, south] = lngLatToMercator(-120.75, 39.25);
+ * const [east, north] = lngLatToMercator(-120.5, 39.5);
+ * const bbox = [west, south, east, north];
+ * ```
+ */
+export function lngLatToMercator(lng: number, lat: number): [number, number] {
+  if (lat < -MERCATOR_LAT_LIMIT || lat > MERCATOR_LAT_LIMIT) {
+    throw new Error(
+      `lngLatToMercator: latitude must be within Web Mercator limits (±${MERCATOR_LAT_LIMIT}°); got lat=${lat}`,
+    );
+  }
+  const x = (EARTH_RADIUS * lng * Math.PI) / 180;
+  const y =
+    EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  return [x, y];
+}

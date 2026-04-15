@@ -1,76 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { CutlineBbox } from "../../src/gpu-modules/cutline-bbox.js";
+import {
+  CutlineBbox,
+  lngLatToMercator,
+} from "../../src/gpu-modules/cutline-bbox.js";
 
 const EARTH_RADIUS = 6378137.0;
 
-function lngLatToMercatorMeters(lng: number, lat: number): [number, number] {
-  const x = (EARTH_RADIUS * lng * Math.PI) / 180;
-  const y =
-    EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
-  return [x, y];
-}
+describe("lngLatToMercator", () => {
+  it("projects a WGS84 point to EPSG:3857 meters", () => {
+    // Emigrant Gap SW corner from USGS metadata CSV.
+    const [x, y] = lngLatToMercator(-120.75, 39.25);
+
+    // Textbook mercator forward at R = 6378137.
+    const expectedX = (EARTH_RADIUS * -120.75 * Math.PI) / 180;
+    const expectedY =
+      EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4 + (39.25 * Math.PI) / 360));
+
+    expect(x).toBeCloseTo(expectedX, 6);
+    expect(y).toBeCloseTo(expectedY, 6);
+  });
+
+  it("maps the equator to y=0", () => {
+    const [, y] = lngLatToMercator(0, 0);
+    expect(y).toBeCloseTo(0, 6);
+  });
+
+  it("maps the prime meridian to x=0", () => {
+    const [x] = lngLatToMercator(0, 45);
+    expect(x).toBeCloseTo(0, 6);
+  });
+
+  it("throws when latitude exceeds the Web Mercator limit", () => {
+    expect(() => lngLatToMercator(0, 86)).toThrow(/Web Mercator/);
+    expect(() => lngLatToMercator(0, -86)).toThrow(/Web Mercator/);
+  });
+});
 
 describe("CutlineBbox", () => {
-  it("getUniforms converts a WGS84 bbox to EPSG:3857 meters", () => {
-    // Abbeville East 7.5' quad, from USGS metadata CSV
-    const west = -85.25;
-    const south = 31.5;
-    const east = -85.125;
-    const north = 31.625;
-
-    const [swX, swY] = lngLatToMercatorMeters(west, south);
-    const [neX, neY] = lngLatToMercatorMeters(east, north);
-    const expectedMinX = Math.min(swX, neX);
-    const expectedMinY = Math.min(swY, neY);
-    const expectedMaxX = Math.max(swX, neX);
-    const expectedMaxY = Math.max(swY, neY);
-
-    const uniforms = CutlineBbox.getUniforms({
-      bbox: [west, south, east, north],
-    });
-
-    expect(uniforms.bbox).toEqual([
-      expectedMinX,
-      expectedMinY,
-      expectedMaxX,
-      expectedMaxY,
-    ]);
-  });
-
-  it("getUniforms returns an empty object when bbox is not provided", () => {
-    expect(CutlineBbox.getUniforms({})).toEqual({});
-  });
-
-  it("getUniforms throws when east <= west", () => {
-    expect(() => CutlineBbox.getUniforms({ bbox: [10, 0, -10, 1] })).toThrow(
-      /east > west/,
-    );
-
-    expect(() => CutlineBbox.getUniforms({ bbox: [5, 0, 5, 1] })).toThrow(
-      /east > west/,
-    );
-  });
-
-  it("getUniforms throws when north <= south", () => {
-    expect(() => CutlineBbox.getUniforms({ bbox: [-10, 20, 10, 10] })).toThrow(
-      /north > south/,
-    );
-
-    expect(() => CutlineBbox.getUniforms({ bbox: [-10, 15, 10, 15] })).toThrow(
-      /north > south/,
-    );
-  });
-
-  it("getUniforms throws when latitudes exceed Web Mercator limits", () => {
-    expect(() => CutlineBbox.getUniforms({ bbox: [-10, -86, 10, 0] })).toThrow(
-      /Web Mercator/,
-    );
-
-    expect(() => CutlineBbox.getUniforms({ bbox: [-10, 0, 10, 86] })).toThrow(
-      /Web Mercator/,
-    );
-  });
-
   it("has the expected module name", () => {
     expect(CutlineBbox.name).toBe("cutlineBbox");
   });
@@ -100,5 +66,17 @@ describe("CutlineBbox", () => {
     const injected = CutlineBbox.inject["fs:#main-start"];
     expect(injected).toContain("v_cutlineBboxMercator");
     expect(injected).toContain("discard");
+  });
+
+  it("getUniforms passes the bbox through unchanged", () => {
+    const mercatorBbox: [number, number, number, number] = [
+      -1_000_000, 2_000_000, 3_000_000, 4_000_000,
+    ];
+    const uniforms = CutlineBbox.getUniforms({ bbox: mercatorBbox });
+    expect(uniforms.bbox).toBe(mercatorBbox);
+  });
+
+  it("getUniforms returns an empty object when bbox is not provided", () => {
+    expect(CutlineBbox.getUniforms({})).toEqual({});
   });
 });

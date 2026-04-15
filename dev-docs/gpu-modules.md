@@ -97,7 +97,7 @@ See `CompositeBands` for a working example of this pattern.
 | `FilterNoDataVal` | none | 1 (`value`) | fs + uniformTypes |
 | `LinearRescale` | none | 2 (`rescaleMin`, `rescaleMax`) | fs + uniformTypes |
 | `CompositeBands` | 4 (`band0`–`band3`) | 5 (`uvTransform0`–`3`, `channelMap`) | both |
-| `CutlineBbox` | none | 1 (`bbox`) | fs + uniformTypes, `fs:#main-start` injection |
+| `CutlineBbox` | none | 1 (`bbox`) | fs + uniformTypes, VS + FS `#main-start` injection, pass-through `getUniforms` |
 
 ## Injection Hooks: Where Your Code Ends Up
 
