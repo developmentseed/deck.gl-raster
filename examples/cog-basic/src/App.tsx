@@ -85,6 +85,8 @@ export default function App() {
         },
       );
     },
+    // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+    // doesn't know about it.
     beforeId: "boundary_country_outline",
   });
 

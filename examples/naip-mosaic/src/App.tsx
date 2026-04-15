@@ -238,6 +238,7 @@ const RENDER_MODE_OPTIONS: { value: RenderMode; label: string }[] = [
   { value: "ndvi", label: "NDVI" },
 ];
 
+// @ts-expect-error function kept for reference
 // biome-ignore lint/correctness/noUnusedVariables: For now we hard-code our STAC results instead of fetching from the API. We keep this function around for reference and future use.
 async function fetchSTACItems(): Promise<STACFeatureCollection> {
   const params = {
@@ -350,6 +351,8 @@ export default function App() {
       // this isn't so large that we can't just cache all the GeoTIFF header
       // metadata instances
       maxCacheSize: Infinity,
+      // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+      // doesn't know about it.
       beforeId: "tunnel_service_case",
     });
     layers.push(mosaicLayer);
