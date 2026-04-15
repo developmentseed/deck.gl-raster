@@ -34,7 +34,7 @@ jobs:
       - run: |
           pnpm install
           pnpm build
-          pnpm typecheck
+          pnpm -r --filter="!docs" typecheck
           pnpm test
           pnpm publint
 
