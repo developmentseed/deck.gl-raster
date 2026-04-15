@@ -28,14 +28,14 @@ type Scene = {
 
 const SCENES: Scene[] = [
   {
-    title: "Salar de Uyuni, Bolivia — 2026-04-14",
-    baseUrl:
-      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/19/K/EU/2026/4/S2A_19KEU_20260414_0_L2A",
-  },
-  {
     title: "Torres del Paine, Chile — 2026-04-06",
     baseUrl:
       "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/F/XJ/2026/4/S2C_18FXJ_20260406_0_L2A",
+  },
+  {
+    title: "Salar de Uyuni, Bolivia — 2026-04-14",
+    baseUrl:
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/19/K/EU/2026/4/S2A_19KEU_20260414_0_L2A",
   },
   {
     title: "Okavango Delta, Botswana — 2025-07-30",
