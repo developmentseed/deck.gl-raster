@@ -57,7 +57,7 @@ const PRESETS: CompositePreset[] = [
     composite: { r: "red", g: "green", b: "blue" },
   },
   {
-    title: "False Color NIR (B08, B04, B03) — all 10m",
+    title: "Infrared False Color (B08, B04, B03) — all 10m",
     sources: { nir: "B08", red: "B04", green: "B03" },
     composite: { r: "nir", g: "red", b: "green" },
   },
@@ -85,6 +85,11 @@ const PRESETS: CompositePreset[] = [
     title: "Healthy Vegetation (B08, B11, B02) — 10m + 20m + 10m",
     sources: { nir: "B08", swir: "B11", blue: "B02" },
     composite: { r: "nir", g: "swir", b: "blue" },
+  },
+  {
+    title: "Burned Area (B12, B11, B08) — 20m + 20m + 10m",
+    sources: { swir2: "B12", swir1: "B11", nir: "B08" },
+    composite: { r: "swir2", g: "swir1", b: "nir" },
   },
 ];
 
