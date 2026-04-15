@@ -28,6 +28,21 @@ type Scene = {
 
 const SCENES: Scene[] = [
   {
+    title: "Salar de Uyuni, Bolivia — 2026-04-14",
+    baseUrl:
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/19/K/EU/2026/4/S2A_19KEU_20260414_0_L2A",
+  },
+  {
+    title: "Torres del Paine, Chile — 2026-04-06",
+    baseUrl:
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/F/XJ/2026/4/S2C_18FXJ_20260406_0_L2A",
+  },
+  {
+    title: "Okavango Delta, Botswana — 2025-07-30",
+    baseUrl:
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/34/K/FD/2025/7/S2A_34KFD_20250730_0_L2A",
+  },
+  {
     title: "Grand Junction, Colorado — 2026-04-08",
     baseUrl:
       "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/12/S/YJ/2026/4/S2C_12SYJ_20260408_0_L2A",
@@ -36,6 +51,21 @@ const SCENES: Scene[] = [
     title: "Central California — 2026-04-03",
     baseUrl:
       "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/10/T/FK/2026/4/S2C_10TFK_20260403_0_L2A",
+  },
+  {
+    title: "Nile Delta, Egypt — 2026-04-12",
+    baseUrl:
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/36/R/TV/2026/4/S2A_36RTV_20260412_1_L2A",
+  },
+  {
+    title: "Kamchatka Peninsula, Russia — 2024-07-22",
+    baseUrl:
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/58/V/CH/2024/7/S2A_58VCH_20240722_0_L2A",
+  },
+  {
+    title: "Mount Etna, Italy — 2024-07-25",
+    baseUrl:
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/33/S/VB/2024/7/S2B_33SVB_20240725_0_L2A",
   },
   {
     title: "New York — 2026-01-01",
