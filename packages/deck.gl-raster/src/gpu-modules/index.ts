@@ -12,6 +12,8 @@ export {
   CompositeBands,
 } from "./composite-bands.js";
 export { CreateTexture } from "./create-texture";
+export type { CutlineBboxProps } from "./cutline-bbox.js";
+export { CutlineBbox, lngLatToMercator } from "./cutline-bbox.js";
 export { FilterNoDataVal } from "./filter-nodata";
 export type { LinearRescaleProps } from "./linear-rescale.js";
 export { LinearRescale } from "./linear-rescale.js";

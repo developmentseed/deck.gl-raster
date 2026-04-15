@@ -97,3 +97,97 @@ See `CompositeBands` for a working example of this pattern.
 | `FilterNoDataVal` | none | 1 (`value`) | fs + uniformTypes |
 | `LinearRescale` | none | 2 (`rescaleMin`, `rescaleMax`) | fs + uniformTypes |
 | `CompositeBands` | 4 (`band0`–`band3`) | 5 (`uvTransform0`–`3`, `channelMap`) | both |
+| `CutlineBbox` | none | 1 (`bbox`) | fs + uniformTypes, VS + FS `#main-start` injection, pass-through `getUniforms` |
+
+## Injection Hooks: Where Your Code Ends Up
+
+luma.gl has **two distinct injection mechanisms** and mixing them up produces "undeclared identifier" errors that are hard to diagnose. When you pick an `inject` key, you are choosing which mechanism is used.
+
+### Mechanism 1 — Shader hook functions (`fs:DECKGL_FILTER_COLOR`, etc.)
+
+Hook functions are **separate GLSL functions** that luma.gl generates from the hook name. Your injected code becomes the *body* of that function:
+
+```glsl
+// luma.gl generates this at assembly time:
+void DECKGL_FILTER_COLOR(inout vec4 color, FragmentGeometry geometry) {
+  // ← your injected code goes here
+}
+```
+
+The key thing to understand: the hook function is assembled *before* the vendored main shader source. That means:
+
+- ✅ **Top-level uniforms** are visible (they're declared earlier in the assembled shader).
+- ✅ **Function parameters** (`color`, `geometry`) are visible.
+- ❌ **Top-level `in` varyings** declared in the main FS source (`position_commonspace`, `vTexCoord`, `cameraPosition`, etc.) are *not yet declared* at the point the hook function is compiled — trying to reference them produces `ERROR: 'position_commonspace' : undeclared identifier`.
+- ❌ **Fields not present on `FragmentGeometry`** are not accessible. The FS-side `FragmentGeometry` struct in this codebase only carries `vec2 uv`. It does **not** have `.position`, `.worldPosition`, etc. — those fields only exist on the vertex-side `Geometry` struct used by the VS.
+
+Hook-function hooks are the right choice when:
+- You only need `color`, `geometry.uv`, or a top-level uniform.
+- You want your code to run in well-defined pipeline order relative to other modules (luma.gl concatenates injections for the same hook in registration order).
+
+`FilterNoDataVal` and `MaskTexture` use `fs:DECKGL_FILTER_COLOR` because they only need `color` and `geometry.uv`.
+
+### Mechanism 2 — Source injections (`fs:#main-start`, `fs:#main-end`, `fs:#decl`, and VS equivalents)
+
+Source injections are **text substitutions against the main shader source** — no hook function is generated. The injected string is spliced directly into the main FS source at one of these points:
+
+- `fs:#decl` → before `main()`, after varying declarations. Use for adding `uniform`, top-level helper functions, `in` varyings.
+- `fs:#main-start` → the first line of the `main()` body. Has access to all top-level FS varyings.
+- `fs:#main-end` → the last line of the `main()` body. Too late for `discard` to affect color in most cases, since color has usually already been written.
+
+Because the code is spliced into main() itself, **top-level FS varyings are in scope** there. This is the escape hatch for modules that need varying data (like `position_commonspace`) which hook functions can't see.
+
+**Tradeoff:** source injections are not ordered relative to hook-function injections from other modules. If the test needs to happen after another module's color computation, prefer `fs:DECKGL_FILTER_COLOR`. If it needs varying access, you are forced to `fs:#main-start`.
+
+### Worked example — why `CutlineBbox` uses VS injection + `fs:#main-start`
+
+`CutlineBbox` needs to compare each fragment's mercator-meter position against a bbox and `discard`. A first attempt tried to read the existing `position_commonspace` varying inside `fs:DECKGL_FILTER_COLOR`, which failed with `ERROR: 'position_commonspace' : undeclared identifier` for the reasons explained above. Moving the injection to `fs:#main-start` fixed the compile error, but then produced a second bug at higher zoom levels: deck.gl applies a **viewport-dependent precision translation** to common-space positions (it rebases to the current viewport anchor to keep f32 math precise), so an uniform computed absolutely on the CPU ends up in a different coordinate frame than `position_commonspace` after zoom-in, and the test starts discarding every fragment.
+
+The robust fix is to sidestep common space entirely. The layer's mesh `positions` attribute is already in raw EPSG:3857 meters (by CPU-side construction in `RasterLayer._generateMesh`), so we capture it directly in the vertex shader and pass it through a module-owned varying to the fragment shader. The FS then compares against a uniform also in raw 3857 meters. No deck.gl common-space math, no viewport-dependent rebasing, consistent at every zoom level.
+
+```ts
+inject: {
+  "vs:#decl": `out vec2 v_cutlineBboxMercator;`,
+  "vs:#main-start": /* glsl */ `
+    v_cutlineBboxMercator = positions.xy;
+  `,
+  "fs:#decl": `in vec2 v_cutlineBboxMercator;`,
+  "fs:#main-start": /* glsl */ `
+    {
+      if (v_cutlineBboxMercator.x < ${MODULE_NAME}.bbox.x ||
+          v_cutlineBboxMercator.x > ${MODULE_NAME}.bbox.z ||
+          v_cutlineBboxMercator.y < ${MODULE_NAME}.bbox.y ||
+          v_cutlineBboxMercator.y > ${MODULE_NAME}.bbox.w) {
+        discard;
+      }
+    }
+  `,
+},
+```
+
+The module-name prefix on the varying (`v_cutlineBboxMercator`) avoids collisions with other modules. The `{ ... }` block scope on the FS inject is defense-in-depth against local-variable collisions if anything else ever injects at the same hook.
+
+**Tradeoffs to be aware of:**
+
+- This module now assumes `positions.xy` is in EPSG:3857 meters. That's true for `COGLayer` / `RasterLayer`'s mercator rendering path but not for arbitrary layers — the assumption should be documented in the module's JSDoc.
+- Float32 precision at |10M| mercator values gives ~1.2m quantization, so the bbox edge starts quantizing to roughly one pixel at z=17 and becomes visibly "wiggly" at z=18+. The interior of the bbox stays correct; only the edges quantize. For use cases that need sharp edges at z=18+, the fix is to emit a `POSITION64LOW` attribute alongside `POSITION` and do two-float arithmetic in both the VS injection and the uniform.
+
+### Diagnosing `undeclared identifier` errors
+
+If a shader module compiles but fails at runtime with `ERROR: '<some varying>' : undeclared identifier` at the line of your injected code, the cause is almost certainly:
+
+1. You are injecting at `fs:DECKGL_FILTER_COLOR` (or another hook-function hook).
+2. You are referencing a top-level FS varying that hook functions cannot see.
+
+**Fix:** move the injection to `fs:#main-start`. If you need the test to run after another module has computed color, pipe the data through `geometry` instead (by adding a field to `FragmentGeometry` via a `fs:#decl` struct redeclaration — out of scope here) or do the test in two stages.
+
+### Hook reference cheat sheet
+
+| Hook | Mechanism | Sees top-level varyings? | Sees `geometry` / `color`? | Typical use |
+|------|-----------|--------------------------|----------------------------|-------------|
+| `fs:#decl` | source | — (declares them) | — | Declare `uniform sampler2D`, helper funcs, new varyings |
+| `fs:#main-start` | source | ✅ | ⚠️ `geometry.uv` not yet set — avoid |
+| `fs:#main-end` | source | ✅ | ✅ | After color is final — too late to `discard` meaningfully |
+| `fs:DECKGL_FILTER_COLOR` | hook function | ❌ | ✅ | Color processing, sampling via `geometry.uv` |
+| `vs:#decl` | source | — | — | Declare out varyings, helpers |
+| `vs:#main-end` | source | ✅ (in attrs) | — | Write to `out` varyings after `gl_Position` is set |
