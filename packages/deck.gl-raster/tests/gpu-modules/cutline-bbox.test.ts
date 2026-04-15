@@ -1,17 +1,25 @@
-import { lngLatToWorld } from "@math.gl/web-mercator";
 import { describe, expect, it } from "vitest";
 import { CutlineBbox } from "../../src/gpu-modules/cutline-bbox.js";
 
+const EARTH_RADIUS = 6378137.0;
+
+function lngLatToMercatorMeters(lng: number, lat: number): [number, number] {
+  const x = (EARTH_RADIUS * lng * Math.PI) / 180;
+  const y =
+    EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  return [x, y];
+}
+
 describe("CutlineBbox", () => {
-  it("getUniforms converts a WGS84 bbox to deck.gl common space via lngLatToWorld", () => {
+  it("getUniforms converts a WGS84 bbox to EPSG:3857 meters", () => {
     // Abbeville East 7.5' quad, from USGS metadata CSV
     const west = -85.25;
     const south = 31.5;
     const east = -85.125;
     const north = 31.625;
 
-    const [swX, swY] = lngLatToWorld([west, south]);
-    const [neX, neY] = lngLatToWorld([east, north]);
+    const [swX, swY] = lngLatToMercatorMeters(west, south);
+    const [neX, neY] = lngLatToMercatorMeters(east, north);
     const expectedMinX = Math.min(swX, neX);
     const expectedMinY = Math.min(swY, neY);
     const expectedMaxX = Math.max(swX, neX);
@@ -76,9 +84,21 @@ describe("CutlineBbox", () => {
     expect(CutlineBbox.fs).toContain("vec4 bbox");
   });
 
+  it("injects a mercator varying write in the vertex shader", () => {
+    const vsMainStart = CutlineBbox.inject["vs:#main-start"];
+    expect(vsMainStart).toContain("v_cutlineBboxMercator");
+    expect(vsMainStart).toContain("positions.xy");
+    expect(CutlineBbox.inject["vs:#decl"]).toContain(
+      "out vec2 v_cutlineBboxMercator",
+    );
+    expect(CutlineBbox.inject["fs:#decl"]).toContain(
+      "in vec2 v_cutlineBboxMercator",
+    );
+  });
+
   it("injects a discard into fs:#main-start", () => {
     const injected = CutlineBbox.inject["fs:#main-start"];
-    expect(injected).toContain("position_commonspace");
+    expect(injected).toContain("v_cutlineBboxMercator");
     expect(injected).toContain("discard");
   });
 });
