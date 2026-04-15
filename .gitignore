@@ -2,6 +2,10 @@
 *.wkt
 *.xml
 
+# Execution plans are one-shot TDD scaffolds; specs in dev-docs/specs/
+# capture design decisions that are worth versioning. Plans are ephemeral.
+dev-docs/plans/
+
 # Local-only example apps
 aef-zarr/
 
