@@ -1,8 +1,8 @@
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF } from "@developmentseed/geotiff";
 import { describe, expect, it } from "vitest";
-import { loadGeoTIFF } from "../../geotiff/tests/helpers.js";
 import { inferRenderPipeline } from "../src/geotiff/render-pipeline";
+import { loadGeoTIFF } from "./helpers.js";
 
 const MOCK_DEVICE = {
   createTexture: (x: any) => x,

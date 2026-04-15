@@ -1,12 +1,10 @@
-// This file is duplicated in packages/deck.gl-geotiff/tests/helpers.ts. We
-// can't share it across packages because composite project references
-// require every imported file to have an emitted .d.ts in the referenced
-// project's outDir, and tsconfig.build.json excludes tests/ from emission.
+// This file is duplicated from packages/geotiff/tests/helpers.ts. We can't
+// share it across packages because composite project references require
+// every imported file to have an emitted .d.ts in the referenced project's
+// outDir, and tsconfig.build.json excludes tests/ from emission.
 import { resolve } from "node:path";
 import { SourceFile } from "@chunkd/source-file";
 import { GeoTIFF } from "@developmentseed/geotiff";
-
-// ── Fixture helpers ─────────────────────────────────────────────────────
 
 const FIXTURES_DIR = resolve(
   import.meta.dirname,
