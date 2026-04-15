@@ -28,6 +28,16 @@ type Scene = {
 
 const SCENES: Scene[] = [
   {
+    title: "Grand Junction, Colorado — 2026-04-08",
+    baseUrl:
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/12/S/YJ/2026/4/S2C_12SYJ_20260408_0_L2A",
+  },
+  {
+    title: "Central California — 2026-04-03",
+    baseUrl:
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/10/T/FK/2026/4/S2C_10TFK_20260403_0_L2A",
+  },
+  {
     title: "New York — 2026-01-01",
     baseUrl:
       "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A",
