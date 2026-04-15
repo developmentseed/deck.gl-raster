@@ -1,14 +1,21 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { TextureDataT } from "@developmentseed/deck.gl-geotiff";
-import { COGLayer, inferRenderPipeline } from "@developmentseed/deck.gl-geotiff";
-import type { RenderTileResult } from "@developmentseed/deck.gl-raster";
-import { CutlineBbox } from "@developmentseed/deck.gl-raster/gpu-modules";
-import { GeoTIFF } from "@developmentseed/geotiff";
+import { COGLayer } from "@developmentseed/deck.gl-geotiff";
+import type {
+  RasterModule,
+  RenderTileResult,
+} from "@developmentseed/deck.gl-raster";
+import {
+  CreateTexture,
+  CutlineBbox,
+} from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
+import type { Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer";
 
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -21,78 +28,113 @@ function DeckGLOverlay(props: MapboxOverlayProps) {
 const TOPO_URL =
   "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/CA/CA_Emigrant%20Gap_297419_1955_62500_geo.tif";
 const TOPO_BBOX: [number, number, number, number] = [
-  -120.75,
-  39.25,
-  -120.5,
-  39.5,
+  -120.75, 39.25, -120.5, 39.5,
 ];
+
+type TextureDataT = {
+  height: number;
+  width: number;
+  texture: Texture;
+};
+
+/**
+ * Pad an RGB Uint8 buffer to RGBA by filling alpha with 255. WebGL2 has no
+ * rgb8unorm format, so we have to inflate.
+ */
+function rgbToRgba(
+  rgb: Uint8Array | Uint8ClampedArray,
+  width: number,
+  height: number,
+): Uint8Array {
+  const out = new Uint8Array(width * height * 4);
+  for (let i = 0; i < width * height; i++) {
+    out[i * 4] = rgb[i * 3]!;
+    out[i * 4 + 1] = rgb[i * 3 + 1]!;
+    out[i * 4 + 2] = rgb[i * 3 + 2]!;
+    out[i * 4 + 3] = 255;
+  }
+  return out;
+}
+
+/**
+ * Minimal tile loader for a 3-band uint8 RGB JPEG-compressed COG (the shape
+ * USGS HTMC GeoTIFFs use). Decoder converts YCbCr JPEG → RGB bytes via the
+ * browser's image decoder; we pad to RGBA here for WebGL2.
+ */
+async function getTileData(
+  image: GeoTIFF | Overview,
+  options: GetTileDataOptions,
+): Promise<TextureDataT> {
+  const { device, x, y, signal, pool } = options;
+  const tile = await image.fetchTile(x, y, { signal, pool, boundless: false });
+  const { array } = tile;
+
+  if (array.layout === "band-separate") {
+    throw new Error("USGS topo tiles are pixel interleaved");
+  }
+
+  const { width, height, data } = array;
+  if (!(data instanceof Uint8Array || data instanceof Uint8ClampedArray)) {
+    throw new Error("USGS topo tiles should decode to uint8");
+  }
+
+  const rgba =
+    data.length === width * height * 3
+      ? rgbToRgba(data, width, height)
+      : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+
+  const texture = device.createTexture({
+    data: rgba,
+    format: "rgba8unorm",
+    width,
+    height,
+  });
+
+  return { texture, width, height };
+}
+
+/**
+ * Explicit two-module render pipeline: upload the tile texture, then
+ * (optionally) discard fragments outside the USGS quad's WGS84 bbox.
+ */
+function renderTile(
+  tileData: TextureDataT,
+  cutlineEnabled: boolean,
+): RenderTileResult {
+  const { texture } = tileData;
+  const renderPipeline: RasterModule[] = [
+    { module: CreateTexture, props: { textureName: texture } },
+  ];
+  if (cutlineEnabled) {
+    renderPipeline.push({
+      module: CutlineBbox,
+      props: { bbox: TOPO_BBOX },
+    });
+  }
+  return { renderPipeline };
+}
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
-  const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
   const [cutlineEnabled, setCutlineEnabled] = useState(true);
+  const [zoom, setZoom] = useState(11);
 
-  // Fetch the GeoTIFF once so we can pass the same instance to both COGLayer
-  // and inferRenderPipeline (the latter needs it synchronously to build the
-  // default pipeline that we'll wrap).
-  useEffect(() => {
-    let cancelled = false;
-    GeoTIFF.fromUrl(TOPO_URL).then((tiff) => {
-      if (!cancelled) {
-        setGeotiff(tiff);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // The inferred pipeline needs both the GeoTIFF and a luma.gl Device. We
-  // don't have a device until the first tile fetch, so we cache the inferred
-  // pipeline lazily inside getTileData and reuse it for renderTile.
-  const inferredRef = useRef<ReturnType<typeof inferRenderPipeline> | null>(
-    null,
-  );
-
-  const layer = geotiff
-    ? new COGLayer<TextureDataT>({
-        id: "usgs-topo",
-        geotiff,
-        getTileData: async (image, options) => {
-          if (!inferredRef.current) {
-            inferredRef.current = inferRenderPipeline(geotiff, options.device);
-          }
-          return inferredRef.current.getTileData(image, options);
-        },
-        renderTile: (data): RenderTileResult => {
-          if (!inferredRef.current) {
-            throw new Error("inferredRef must be initialized before renderTile");
-          }
-          const inferred = inferredRef.current.renderTile(data);
-          const basePipeline = inferred.renderPipeline ?? [];
-          return {
-            ...inferred,
-            renderPipeline: cutlineEnabled
-              ? [
-                  ...basePipeline,
-                  { module: CutlineBbox, props: { bbox: TOPO_BBOX } },
-                ]
-              : basePipeline,
-          };
-        },
-        onGeoTIFFLoad: (_tiff, options) => {
-          const { west, south, east, north } = options.geographicBounds;
-          mapRef.current?.fitBounds(
-            [
-              [west, south],
-              [east, north],
-            ],
-            { padding: 40, duration: 1000 },
-          );
-        },
-        beforeId: "boundary_country_outline",
-      })
-    : null;
+  const layer = new COGLayer<TextureDataT>({
+    id: "usgs-topo",
+    geotiff: TOPO_URL,
+    getTileData,
+    renderTile: (data) => renderTile(data, cutlineEnabled),
+    onGeoTIFFLoad: (_tiff, options) => {
+      const { west, south, east, north } = options.geographicBounds;
+      mapRef.current?.fitBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        { padding: 40, duration: 1000 },
+      );
+    },
+  });
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -106,8 +148,9 @@ export default function App() {
           bearing: 0,
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+        onMove={(e) => setZoom(e.viewState.zoom)}
       >
-        <DeckGLOverlay layers={layer ? [layer] : []} interleaved />
+        <DeckGLOverlay layers={[layer]} interleaved />
       </MaplibreMap>
 
       <div
@@ -127,8 +170,10 @@ export default function App() {
           USGS Topo Cutline Example
         </h3>
         <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#444" }}>
-          Emigrant Gap, CA 1:62,500 quad (1955). Toggle the cutline to see the
-          "map collar" of metadata printed around the data area.
+          Emigrant Gap, CA 1:62,500 quad (1955). Render pipeline is two explicit
+          modules: <code>CreateTexture</code> uploads the raw RGB pixels, and{" "}
+          <code>CutlineBbox</code> discards fragments outside the map's WGS84
+          bbox to hide the metadata collar.
         </p>
         <label
           style={{
@@ -147,6 +192,19 @@ export default function App() {
           />
           <span>Discard map collar (CutlineBbox)</span>
         </label>
+        <div
+          style={{
+            marginTop: "12px",
+            paddingTop: "12px",
+            borderTop: "1px solid #eee",
+            fontSize: "13px",
+            color: "#444",
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          }}
+        >
+          zoom: {zoom.toFixed(2)}
+        </div>
       </div>
     </div>
   );
