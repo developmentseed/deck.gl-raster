@@ -49,22 +49,32 @@ existing shader-module render pipeline used by `COGLayer` / `RasterLayer` /
 
 ### Coordinate space for the test
 
-The test lives in **deck.gl's Web Mercator common space**. This is deck.gl's
-universal common space for any layer rendered in a `MapView`: 512 common units
-span the Earth's circumference, and a given lat/lng maps to the same
-common-space position regardless of what layer's `coordinateSystem` produced
-it. In `COGLayer`'s mercator path, mesh positions are supplied in EPSG:3857
-meters and scaled into common space via `modelMatrix` + `coordinateOrigin` (see
-`cog-layer.ts` `_renderSubLayers`). As a result, the existing
-`position_commonspace` varying in `MeshTextureLayer`'s vendored fragment shader
-(`mesh-layer-fragment.glsl.ts`) already carries each fragment's position in
-deck.gl common space.
+The test lives in **raw EPSG:3857 meters**, *not* in deck.gl's common space.
 
-The CPU-side conversion from WGS84 to common space uses
-`lngLatToWorld` from `@math.gl/web-mercator` — already a transitive dependency
-via deck.gl. This is the same function `WebMercatorViewport.projectFlat` wraps
-internally, so it produces values consistent with the universal common-space
-projection.
+An earlier design attempt used `position_commonspace` (an existing varying on
+the vendored `MeshTextureLayer` fragment shader) against a uniform computed
+with `lngLatToWorld` from `@math.gl/web-mercator`. That worked at low zoom but
+broke visibly at higher zooms because **deck.gl applies a viewport-dependent
+translation to common-space positions** for float32 precision — positions are
+rebased to the current viewport anchor before being interpolated across the
+mesh. The uniform computed absolutely on the CPU was therefore in a different
+coordinate frame than `position_commonspace` in the FS, and at high zoom the
+offset grew large enough that every fragment evaluated as "outside" the bbox
+and the whole raster was discarded.
+
+The robust approach is to bypass deck.gl common space entirely: capture each
+vertex's `positions.xy` attribute (which in `COGLayer`'s mercator path is
+already in raw EPSG:3857 meters, by CPU-side construction in
+`RasterLayer._generateMesh`) into a new fragment-shader varying via a vertex
+shader injection, and compare against a uniform also in raw 3857 meters.
+Both sides of the comparison live in the same absolute coordinate frame at
+every zoom level, with no viewport-dependent rebasing involved.
+
+The CPU-side WGS84 → 3857 conversion is a hand-rolled spherical mercator
+forward (`x = R · λ`, `y = R · ln(tan(π/4 + φ/2))` with `R = 6378137`). We
+deliberately do *not* use `lngLatToWorld` here — that function returns values
+pre-scaled into deck.gl's 512-unit common-space world, which we are
+specifically avoiding.
 
 ### Shader module shape
 
@@ -72,8 +82,10 @@ New file: `packages/deck.gl-raster/src/gpu-modules/cutline-bbox.ts`. Structure
 mirrors `filter-nodata.ts` and `mask-texture.ts`:
 
 ```ts
-import { lngLatToWorld } from "@math.gl/web-mercator";
 import type { ShaderModule } from "@luma.gl/shadertools";
+
+const EARTH_RADIUS = 6378137.0;
+const MERCATOR_LAT_LIMIT = 85.051129;
 
 export type CutlineBboxProps = {
   /** WGS84 axis-aligned bbox [west, south, east, north] in degrees. */
@@ -84,40 +96,52 @@ const MODULE_NAME = "cutlineBbox";
 
 const uniformBlock = `\
 uniform ${MODULE_NAME}Uniforms {
-  vec4 bbox; // [westCommon, southCommon, eastCommon, northCommon]
+  vec4 bbox; // [minMercX, minMercY, maxMercX, maxMercY] in EPSG:3857 meters
 } ${MODULE_NAME};
 `;
+
+function lngLatToMercatorMeters(lng: number, lat: number): [number, number] {
+  const x = (EARTH_RADIUS * lng * Math.PI) / 180;
+  const y =
+    EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  return [x, y];
+}
 
 /**
  * Discards fragments whose position falls outside a WGS84 axis-aligned bbox.
  *
- * Intended for rendering rasters with a "map collar" (e.g. USGS historical
- * topographic maps) where the valid data area is described as a lat/lng bbox
- * but the raw pixels include surrounding metadata. Only supports rendering in
- * a WebMercatorViewport — the caller is responsible for asserting this.
+ * Only supports rendering in a WebMercatorViewport — the caller is
+ * responsible for asserting this. Assumes the layer's mesh `positions`
+ * attribute is already in EPSG:3857 meters (true for COGLayer/RasterLayer's
+ * mercator path).
  */
 export const CutlineBbox = {
   name: MODULE_NAME,
   fs: uniformBlock,
   inject: {
-    // Injects at fs:#main-start (not fs:DECKGL_FILTER_COLOR). The
-    // DECKGL_FILTER_COLOR hook is a generated function whose body only sees
-    // its parameters and top-level uniforms; the position_commonspace varying
-    // declared in the main FS source is assembled *after* the hook function
-    // and is therefore out of scope there. Injecting at #main-start puts the
-    // test inside main() where the varying is visible and discard works.
+    // Pass raw mercator meters from VS to FS via a module-owned varying.
+    // This sidesteps deck.gl's common space — which applies a
+    // viewport-dependent precision translation that breaks absolute
+    // CPU-computed comparisons at high zoom.
+    "vs:#decl": `out vec2 v_cutlineBboxMercator;`,
+    "vs:#main-start": /* glsl */ `
+      v_cutlineBboxMercator = positions.xy;
+    `,
+    "fs:#decl": `in vec2 v_cutlineBboxMercator;`,
+    // Injects at fs:#main-start (not fs:DECKGL_FILTER_COLOR) because the
+    // DECKGL_FILTER_COLOR hook is compiled as a separate function whose body
+    // cannot see top-level FS varyings. #main-start splices directly into
+    // main() where the varying is in scope.
     //
-    // Globe support: when rendering in a GlobeView, the mesh positions are in
-    // 4326 lng/lat rather than 3857 meters, so position_commonspace is no
-    // longer directly comparable to a 3857-meter bbox. A future globe code
-    // path would need a different varying and matching uniform layout.
+    // Globe support: GlobeView meshes are in 4326 lng/lat, not 3857 meters.
+    // The globe code path would need a different varying and matching
+    // uniform layout.
     "fs:#main-start": /* glsl */ `
       {
-        vec2 cutlineBboxPos = position_commonspace.xy;
-        if (cutlineBboxPos.x < ${MODULE_NAME}.bbox.x ||
-            cutlineBboxPos.x > ${MODULE_NAME}.bbox.z ||
-            cutlineBboxPos.y < ${MODULE_NAME}.bbox.y ||
-            cutlineBboxPos.y > ${MODULE_NAME}.bbox.w) {
+        if (v_cutlineBboxMercator.x < ${MODULE_NAME}.bbox.x ||
+            v_cutlineBboxMercator.x > ${MODULE_NAME}.bbox.z ||
+            v_cutlineBboxMercator.y < ${MODULE_NAME}.bbox.y ||
+            v_cutlineBboxMercator.y > ${MODULE_NAME}.bbox.w) {
           discard;
         }
       }
@@ -131,10 +155,15 @@ export const CutlineBbox = {
     if (!bbox) return {};
     const [west, south, east, north] = bbox;
     validateBbox(west, south, east, north);
-    const [wCommon, sCommon] = lngLatToWorld([west, south]);
-    const [eCommon, nCommon] = lngLatToWorld([east, north]);
+    const [swX, swY] = lngLatToMercatorMeters(west, south);
+    const [neX, neY] = lngLatToMercatorMeters(east, north);
     return {
-      bbox: [wCommon, sCommon, eCommon, nCommon],
+      bbox: [
+        Math.min(swX, neX),
+        Math.min(swY, neY),
+        Math.max(swX, neX),
+        Math.max(swY, neY),
+      ],
     };
   },
 } as const satisfies ShaderModule<CutlineBboxProps>;
@@ -183,29 +212,29 @@ The module is **not** added to `inferRenderPipeline`. It is opt-in.
 
 ### Y-axis verification
 
-`COGLayer`'s comment at `cog-layer.ts` (CARTESIAN branch) says "No Y-flip
-needed: CARTESIAN Y increases upward = northing". `lngLatToWorld` also returns
-`y` increasing northward (higher latitude → higher `y`). These should agree, so
-the test `p.y < south_common || p.y > north_common` is straightforward. If
-visual verification shows the test is inverted (cutline rendered upside down),
-the fix is swapping the comparison — flagged here as an implementation-time
-sanity check, not a likely issue.
+Both `positions.y` (from `RasterLayer`'s mesh, built from 3857 meters) and
+our CPU-side `lngLatToMercatorMeters` use a y-increases-northward convention
+(higher latitude → higher y), consistent with `cog-layer.ts`'s CARTESIAN
+branch comment "No Y-flip needed: CARTESIAN Y increases upward = northing".
+Packing as `[minX, minY, maxX, maxY]` with `Math.min`/`Math.max` makes the
+comparison robust to any future sign flip.
 
-### Precision translation note
+### Float32 precision ceiling
 
-deck.gl applies a viewport-dependent translation to common-space positions
-inside `project_common_position_to_clipspace` (for `gl_Position`) to work
-around f32 precision. The `position_commonspace` varying passed into the
-vendored `simple-mesh-layer-fs` shader is the pre-clipspace value — i.e.
-absolute common space, not the precision-shifted value. The uniform produced by
-`lngLatToWorld` is in the same absolute common space, so direct comparison is
-valid.
+Mercator meter values in the continental US sit around |10M|. Float32 has
+~7 decimal digits of precision, so at |10M| each float has ~1.2m
+quantization. Web Mercator pixel size is ~1.2m at z=16, ~0.6m at z=17,
+~0.3m at z=18. This means the bbox edges start quantizing to roughly
+1-pixel boundaries around z=17 and produce visible "wiggle" at z=18+. The
+interior of a typical USGS quad bbox (~25km × 25km) has tens of thousands
+of distinct float32 values, so interior fragments stay correctly inside the
+bbox at every zoom — only the edges quantize.
 
-If during implementation this assumption proves wrong (e.g. visible tile
-drift), the fix is either (a) apply the same precision translation to the
-uniform via `project_uCoordinateOrigin` / `project_uCommonUnitsPerMeter`, or
-(b) fall back to a vertex-shader injection that writes a new varying from
-`positions.xy`. Flagged here as a verification step.
+For the target USGS historical topo use case (printed at ~300 DPI, typical
+viewing z=11–17) this is acceptable. If a future use case needs sharp edges
+at z=18+, the fix is to add a `POSITION64LOW` attribute to `RasterLayer`'s
+mesh output and use two-float precision in both the VS injection and the
+uniform — a larger change intentionally out of scope for this module.
 
 ## Architecture Overview
 
@@ -214,20 +243,22 @@ USGS CSV { westbc, southbc, eastbc, northbc }   ← user
          │
          │  (once per module instance, in app code)
          ▼
-new CogLayer({ renderTile: data => ({
+new COGLayer({ renderTile: data => ({
   renderPipeline: [{ module: CutlineBbox, props: { bbox } }],
   ...
 })})
          │
          │  (per draw, on GPU)
          ▼
-getUniforms → lngLatToWorld([west, south]), lngLatToWorld([east, north])
+getUniforms → lngLatToMercatorMeters(west, south),
+              lngLatToMercatorMeters(east, north)
          │
          ▼
-uniform vec4 cutlineBbox.bbox        (deck.gl common space)
+uniform vec4 cutlineBbox.bbox   (raw EPSG:3857 meters)
          │
+         │  VS:  v_cutlineBboxMercator = positions.xy;   (raw 3857 m)
          ▼
-fs: compare position_commonspace.xy against bbox → discard if outside
+fs: compare v_cutlineBboxMercator against bbox → discard if outside
 ```
 
 ## Testing

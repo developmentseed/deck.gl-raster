@@ -139,28 +139,25 @@ Because the code is spliced into main() itself, **top-level FS varyings are in s
 
 **Tradeoff:** source injections are not ordered relative to hook-function injections from other modules. If the test needs to happen after another module's color computation, prefer `fs:DECKGL_FILTER_COLOR`. If it needs varying access, you are forced to `fs:#main-start`.
 
-### Worked example — why `CutlineBbox` uses `fs:#main-start`
+### Worked example — why `CutlineBbox` uses VS injection + `fs:#main-start`
 
-`CutlineBbox` needs to compare each fragment's common-space position against a bbox and `discard`. The natural expression is:
+`CutlineBbox` needs to compare each fragment's mercator-meter position against a bbox and `discard`. A first attempt tried to read the existing `position_commonspace` varying inside `fs:DECKGL_FILTER_COLOR`, which failed with `ERROR: 'position_commonspace' : undeclared identifier` for the reasons explained above. Moving the injection to `fs:#main-start` fixed the compile error, but then produced a second bug at higher zoom levels: deck.gl applies a **viewport-dependent precision translation** to common-space positions (it rebases to the current viewport anchor to keep f32 math precise), so an uniform computed absolutely on the CPU ends up in a different coordinate frame than `position_commonspace` after zoom-in, and the test starts discarding every fragment.
 
-```glsl
-vec2 p = position_commonspace.xy;
-if (p.x < bbox.x || ...) discard;
-```
-
-This reads a top-level FS varying (`position_commonspace`) so it cannot live inside `fs:DECKGL_FILTER_COLOR` — the hook function has no access to it. `FragmentGeometry` also does not carry `.position`, so there is no `geometry.position` escape hatch either.
-
-The fix is to inject at `fs:#main-start`:
+The robust fix is to sidestep common space entirely. The layer's mesh `positions` attribute is already in raw EPSG:3857 meters (by CPU-side construction in `RasterLayer._generateMesh`), so we capture it directly in the vertex shader and pass it through a module-owned varying to the fragment shader. The FS then compares against a uniform also in raw 3857 meters. No deck.gl common-space math, no viewport-dependent rebasing, consistent at every zoom level.
 
 ```ts
 inject: {
+  "vs:#decl": `out vec2 v_cutlineBboxMercator;`,
+  "vs:#main-start": /* glsl */ `
+    v_cutlineBboxMercator = positions.xy;
+  `,
+  "fs:#decl": `in vec2 v_cutlineBboxMercator;`,
   "fs:#main-start": /* glsl */ `
     {
-      vec2 cutlineBboxPos = position_commonspace.xy;
-      if (cutlineBboxPos.x < ${MODULE_NAME}.bbox.x ||
-          cutlineBboxPos.x > ${MODULE_NAME}.bbox.z ||
-          cutlineBboxPos.y < ${MODULE_NAME}.bbox.y ||
-          cutlineBboxPos.y > ${MODULE_NAME}.bbox.w) {
+      if (v_cutlineBboxMercator.x < ${MODULE_NAME}.bbox.x ||
+          v_cutlineBboxMercator.x > ${MODULE_NAME}.bbox.z ||
+          v_cutlineBboxMercator.y < ${MODULE_NAME}.bbox.y ||
+          v_cutlineBboxMercator.y > ${MODULE_NAME}.bbox.w) {
         discard;
       }
     }
@@ -168,7 +165,12 @@ inject: {
 },
 ```
 
-The `{ ... }` block scope wraps the injected code so its local variable cannot collide with anything else injected at the same hook.
+The module-name prefix on the varying (`v_cutlineBboxMercator`) avoids collisions with other modules. The `{ ... }` block scope on the FS inject is defense-in-depth against local-variable collisions if anything else ever injects at the same hook.
+
+**Tradeoffs to be aware of:**
+
+- This module now assumes `positions.xy` is in EPSG:3857 meters. That's true for `COGLayer` / `RasterLayer`'s mercator rendering path but not for arbitrary layers — the assumption should be documented in the module's JSDoc.
+- Float32 precision at |10M| mercator values gives ~1.2m quantization, so the bbox edge starts quantizing to roughly one pixel at z=17 and becomes visibly "wiggly" at z=18+. The interior of the bbox stays correct; only the edges quantize. For use cases that need sharp edges at z=18+, the fix is to emit a `POSITION64LOW` attribute alongside `POSITION` and do two-float arithmetic in both the VS injection and the uniform.
 
 ### Diagnosing `undeclared identifier` errors
 
