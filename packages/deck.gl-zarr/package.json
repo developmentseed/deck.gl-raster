@@ -51,9 +51,9 @@
     "@developmentseed/geozarr": "workspace:^",
     "@developmentseed/proj": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
-    "proj4": "^2.20.8",
-    "wkt-parser": "^1.5.5",
-    "zarrita": "^0.7.1"
+    "proj4": "^2.20.4",
+    "wkt-parser": "^1.5.3",
+    "zarrita": "^0.6.1"
   },
   "peerDependencies": {
     "@deck.gl/core": "^9.3.0",
