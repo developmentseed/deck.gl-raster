@@ -87,42 +87,42 @@ type CompositePreset = {
 
 const PRESETS: CompositePreset[] = [
   {
-    title: "True Color (B04, B03, B02) — all 10m",
+    title: "True Color (Red, Green, Blue) — all 10m",
     sources: { red: "B04", green: "B03", blue: "B02" },
     composite: { r: "red", g: "green", b: "blue" },
   },
   {
-    title: "Infrared False Color (B08, B04, B03) — all 10m",
+    title: "Infrared False Color (NIR, Red, Green) — all 10m",
     sources: { nir: "B08", red: "B04", green: "B03" },
     composite: { r: "nir", g: "red", b: "green" },
   },
   {
-    title: "SWIR Composite (B12, B8A, B04) — 20m + 20m + 10m",
+    title: "SWIR Composite (SWIR, NIR, Red) — 20m + 20m + 10m",
     sources: { swir: "B12", nir: "B8A", red: "B04" },
     composite: { r: "swir", g: "nir", b: "red" },
   },
   {
-    title: "Vegetation (B08, B11, B04) — 10m + 20m + 10m",
+    title: "Vegetation (NIR, SWIR, Red) — 10m + 20m + 10m",
     sources: { nir: "B08", swir: "B11", red: "B04" },
     composite: { r: "nir", g: "swir", b: "red" },
   },
   {
-    title: "Agriculture (B11, B08, B02) — 20m + 10m + 10m",
+    title: "Agriculture (SWIR, NIR, Blue) — 20m + 10m + 10m",
     sources: { swir: "B11", nir: "B08", blue: "B02" },
     composite: { r: "swir", g: "nir", b: "blue" },
   },
   {
-    title: "Geology (B12, B11, B02) — 20m + 20m + 10m",
+    title: "Geology (SWIR2, SWIR1, Blue) — 20m + 20m + 10m",
     sources: { swir2: "B12", swir1: "B11", blue: "B02" },
     composite: { r: "swir2", g: "swir1", b: "blue" },
   },
   {
-    title: "Healthy Vegetation (B08, B11, B02) — 10m + 20m + 10m",
+    title: "Healthy Vegetation (NIR, SWIR, Blue) — 10m + 20m + 10m",
     sources: { nir: "B08", swir: "B11", blue: "B02" },
     composite: { r: "nir", g: "swir", b: "blue" },
   },
   {
-    title: "Burned Area (B12, B11, B08) — 20m + 20m + 10m",
+    title: "Burned Area (SWIR2, SWIR1, NIR) — 20m + 20m + 10m",
     sources: { swir2: "B12", swir1: "B11", nir: "B08" },
     composite: { r: "swir2", g: "swir1", b: "nir" },
   },
@@ -318,12 +318,6 @@ export default function App() {
               </div>
             </>
           )}
-          <p style={{ margin: "8px 0 0 0", fontSize: "11px", color: "#999" }}>
-            Bands:{" "}
-            {Object.entries(preset.sources)
-              .map(([slot, band]) => `${slot}=${band}`)
-              .join(", ")}
-          </p>
         </div>
       </div>
     </div>
