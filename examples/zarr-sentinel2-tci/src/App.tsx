@@ -20,6 +20,7 @@ export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
+  const [panelOpen, setPanelOpen] = useState(true);
 
   const zarrLayer = new ZarrLayer({
     id: "zarr-layer",
@@ -62,69 +63,106 @@ export default function App() {
             padding: "16px",
             borderRadius: "8px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            maxWidth: "300px",
+            width: "300px",
             pointerEvents: "auto",
           }}
         >
-          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
-            ZarrLayer — Sentinel-2 TCI
-          </h3>
-          <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "#666" }}>
-            GeoZarr multiscale, EPSG:32612
-          </p>
-
-          <div
+          <button
+            type="button"
             style={{
-              padding: "12px 0",
-              borderTop: "1px solid #eee",
-              marginTop: "4px",
+              all: "unset",
+              width: "100%",
+              margin: 0,
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              userSelect: "none",
             }}
+            onClick={() => setPanelOpen((o) => !o)}
           >
-            <label
+            ZarrLayer — Sentinel-2 TCI
+            <span
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "14px",
-                cursor: "pointer",
-                marginBottom: "12px",
+                fontSize: "12px",
+                transition: "transform 0.2s",
+                transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
               }}
             >
-              <input
-                type="checkbox"
-                checked={debug}
-                onChange={(e) => setDebug(e.target.checked)}
-                style={{ cursor: "pointer" }}
-              />
-              <span>Show Debug Mesh</span>
-            </label>
+              ▼
+            </span>
+          </button>
+          {panelOpen && (
+            <>
+              <p style={{ margin: "8px 0 12px 0", fontSize: "12px", color: "#666" }}>
+                GeoZarr multiscale, EPSG:32612
+              </p>
+              <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
+                <a
+                  href="https://developmentseed.org/deck.gl-raster/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  deck.gl-raster Documentation ↗
+                </a>
+              </p>
 
-            {debug && (
-              <div style={{ marginTop: "8px" }}>
+              <div
+                style={{
+                  padding: "12px 0",
+                  borderTop: "1px solid #eee",
+                  marginTop: "4px",
+                }}
+              >
                 <label
                   style={{
-                    display: "block",
-                    fontSize: "12px",
-                    color: "#666",
-                    marginBottom: "4px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                    marginBottom: "12px",
                   }}
                 >
-                  Debug Opacity: {debugOpacity.toFixed(2)}
                   <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={debugOpacity}
-                    onChange={(e) =>
-                      setDebugOpacity(parseFloat(e.target.value))
-                    }
-                    style={{ width: "100%", cursor: "pointer" }}
+                    type="checkbox"
+                    checked={debug}
+                    onChange={(e) => setDebug(e.target.checked)}
+                    style={{ cursor: "pointer" }}
                   />
+                  <span>Show Debug Mesh</span>
                 </label>
+
+                {debug && (
+                  <div style={{ marginTop: "8px" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "12px",
+                        color: "#666",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Debug Opacity: {debugOpacity.toFixed(2)}
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={debugOpacity}
+                        onChange={(e) =>
+                          setDebugOpacity(parseFloat(e.target.value))
+                        }
+                        style={{ width: "100%", cursor: "pointer" }}
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>

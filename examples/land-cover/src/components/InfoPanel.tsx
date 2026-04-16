@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { HelpIcon } from "./HelpIcon";
 import { Legend } from "./Legend";
 
@@ -30,6 +31,7 @@ export function InfoPanel({
   onDebugOpacityChange,
   onMeshMaxErrorChange,
 }: InfoPanelProps) {
+  const [panelOpen, setPanelOpen] = useState(true);
   return (
     <div
       style={{
@@ -40,21 +42,41 @@ export function InfoPanel({
         padding: "16px",
         borderRadius: "8px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        maxWidth: "300px",
+        width: "300px",
         pointerEvents: "auto",
       }}
     >
-      <h3
+      <button
+        type="button"
         style={{
-          margin: "0 0 8px 0",
+          all: "unset",
+          width: "100%",
+          margin: 0,
           fontSize: "16px",
+          fontWeight: "bold",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          userSelect: "none",
           paddingBottom: "8px",
           borderBottom: "1px solid #eee",
         }}
+        onClick={() => setPanelOpen((o) => !o)}
       >
-        NLCD Land Cover Classification
-      </h3>
+        NLCD Land Cover
+        <span
+          style={{
+            fontSize: "12px",
+            transition: "transform 0.2s",
+            transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
+          }}
+        >
+          ▼
+        </span>
+      </button>
 
+      {panelOpen && <>
       <p style={{ margin: "8px 0", fontSize: "14px", color: "#666" }}>
         A <b>1.3GB</b>{" "}
         <a href="https://cogeo.org/" target="_blank" rel="noopener noreferrer">
@@ -72,7 +94,15 @@ export function InfoPanel({
           @developmentseed/deck.gl-raster
         </a>
         .
-        <br />
+      </p>
+      <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
+        <a
+          href="https://developmentseed.org/deck.gl-raster/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          deck.gl-raster Documentation ↗
+        </a>
       </p>
 
       <Legend />
@@ -171,6 +201,7 @@ export function InfoPanel({
           />
         </div>
       </div>
+      </>}
     </div>
   );
 }

@@ -170,6 +170,7 @@ export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [cutlineEnabled, setCutlineEnabled] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [panelOpen, setPanelOpen] = useState(true);
   const selected = TOPO_OPTIONS[selectedIndex]!;
 
   const layer = new COGLayer<TextureDataT>({
@@ -214,51 +215,88 @@ export default function App() {
           padding: "16px",
           borderRadius: "8px",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          maxWidth: "290px",
+          width: "290px",
           zIndex: 1000,
         }}
       >
-        <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
-          USGS Historical Topographic Maps
-        </h3>
-        <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#444" }}>
-          This uses the <code>CutlineBbox</code> shader module to avoid
-          rendering pixels containing the map collar.
-        </p>
-        <select
-          value={selectedIndex}
-          onChange={(e) => setSelectedIndex(Number(e.target.value))}
+        <button
+          type="button"
           style={{
+            all: "unset",
             width: "100%",
-            padding: "6px",
-            fontSize: "13px",
-            marginBottom: "12px",
+            margin: 0,
+            fontSize: "16px",
+            fontWeight: "bold",
             cursor: "pointer",
-          }}
-        >
-          {TOPO_OPTIONS.map((opt, i) => (
-            <option key={opt.url} value={i}>
-              {opt.title}
-            </option>
-          ))}
-        </select>
-        <label
-          style={{
             display: "flex",
             alignItems: "center",
-            gap: "8px",
-            fontSize: "14px",
-            cursor: "pointer",
+            justifyContent: "space-between",
+            userSelect: "none",
           }}
+          onClick={() => setPanelOpen((o) => !o)}
         >
-          <input
-            type="checkbox"
-            checked={cutlineEnabled}
-            onChange={(e) => setCutlineEnabled(e.target.checked)}
-            style={{ cursor: "pointer" }}
-          />
-          <span>Discard map collar</span>
-        </label>
+          USGS Topographic Maps
+          <span
+            style={{
+              fontSize: "12px",
+              transition: "transform 0.2s",
+              transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
+            }}
+          >
+            ▼
+          </span>
+        </button>
+        {panelOpen && (
+          <>
+            <p style={{ margin: "8px 0 12px 0", fontSize: "13px", color: "#444" }}>
+              This uses the <code>CutlineBbox</code> shader module to avoid
+              rendering pixels containing the map collar.
+            </p>
+            <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
+              <a
+                href="https://developmentseed.org/deck.gl-raster/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                deck.gl-raster Documentation ↗
+              </a>
+            </p>
+            <select
+              value={selectedIndex}
+              onChange={(e) => setSelectedIndex(Number(e.target.value))}
+              style={{
+                width: "100%",
+                padding: "6px",
+                fontSize: "13px",
+                marginBottom: "12px",
+                cursor: "pointer",
+              }}
+            >
+              {TOPO_OPTIONS.map((opt, i) => (
+                <option key={opt.url} value={i}>
+                  {opt.title}
+                </option>
+              ))}
+            </select>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "14px",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={cutlineEnabled}
+                onChange={(e) => setCutlineEnabled(e.target.checked)}
+                style={{ cursor: "pointer" }}
+              />
+              <span>Discard map collar</span>
+            </label>
+          </>
+        )}
       </div>
     </div>
   );

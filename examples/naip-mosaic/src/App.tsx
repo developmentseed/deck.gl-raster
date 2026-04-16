@@ -274,6 +274,7 @@ export default function App() {
   const [ndviRange, setNdviRange] = useState<[number, number]>([-1, 1]);
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
+  const [panelOpen, setPanelOpen] = useState(true);
 
   // Fetch STAC items on mount
   useEffect(() => {
@@ -404,12 +405,39 @@ export default function App() {
             padding: "16px",
             borderRadius: "8px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            maxWidth: "300px",
+            width: "300px",
             pointerEvents: "auto",
           }}
         >
-          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>NAIP Mosaic</h3>
-          <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
+          <button
+            type="button"
+            style={{
+              all: "unset",
+              width: "100%",
+              margin: 0,
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              userSelect: "none",
+            }}
+            onClick={() => setPanelOpen((o) => !o)}
+          >
+            NAIP Mosaic
+            <span
+              style={{
+                fontSize: "12px",
+                transition: "transform 0.2s",
+                transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
+              }}
+            >
+              ▼
+            </span>
+          </button>
+          {panelOpen && <>
+          <p style={{ margin: "8px 0 12px 0", fontSize: "14px", color: "#666" }}>
             {loading && "Loading STAC items... "}
             {error && `Error: ${error}`}
             {!loading && !error && `Fetched ${stacItems.length} `}
@@ -453,6 +481,15 @@ export default function App() {
               @developmentseed/deck.gl-raster
             </a>
             .
+          </p>
+          <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
+            <a
+              href="https://developmentseed.org/deck.gl-raster/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              deck.gl-raster Documentation ↗
+            </a>
           </p>
 
           <div>
@@ -555,6 +592,7 @@ export default function App() {
               </div>
             </div>
           )}
+          </>}
         </div>
       </div>
     </div>

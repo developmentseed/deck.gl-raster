@@ -65,6 +65,7 @@ export default function App() {
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [panelOpen, setPanelOpen] = useState(true);
 
   const cog_layer = new COGLayer({
     id: "cog-layer",
@@ -127,98 +128,136 @@ export default function App() {
             padding: "16px",
             borderRadius: "8px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            maxWidth: "300px",
+            width: "300px",
             pointerEvents: "auto",
           }}
         >
-          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
-            COGLayer Example
-          </h3>
-          <select
-            value={selectedIndex}
-            onChange={(e) => setSelectedIndex(Number(e.target.value))}
+          <button
+            type="button"
             style={{
+              all: "unset",
               width: "100%",
-              padding: "4px",
+              margin: 0,
+              fontSize: "16px",
+              fontWeight: "bold",
               cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              userSelect: "none",
             }}
+            onClick={() => setPanelOpen((o) => !o)}
           >
-            {COG_OPTIONS.map((opt, i) => (
-              <option key={opt.url} value={i}>
-                {opt.title}
-              </option>
-            ))}
-          </select>
-          {/* <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
-            Displaying RGB imagery from New Zealand (NZTM2000 projection)
-          </p> */}
-
-          {/* Attribution */}
-          {COG_OPTIONS[selectedIndex].attribution && (
-            <p
+            COGLayer Example
+            <span
               style={{
-                margin: "8px 0 0 0",
-                fontSize: "11px",
-                color: "#666",
+                fontSize: "12px",
+                transition: "transform 0.2s",
+                transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
               }}
             >
-              {COG_OPTIONS[selectedIndex].attribution}
-            </p>
-          )}
+              ▼
+            </span>
+          </button>
+          {panelOpen && (
+            <>
+              <p style={{ margin: "8px 0 12px 0", fontSize: "13px", color: "#666" }}>
+                Renders Cloud-Optimized GeoTIFFs directly from cloud storage,
+                with no server in between.
+              </p>
+              <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
+                <a
+                  href="https://developmentseed.org/deck.gl-raster/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  deck.gl-raster Documentation ↗
+                </a>
+              </p>
+              <select
+                value={selectedIndex}
+                onChange={(e) => setSelectedIndex(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                {COG_OPTIONS.map((opt, i) => (
+                  <option key={opt.url} value={i}>
+                    {opt.title}
+                  </option>
+                ))}
+              </select>
 
-          {/* Debug Controls */}
-          <div
-            style={{
-              padding: "12px 0",
-              borderTop: "1px solid #eee",
-              marginTop: "12px",
-            }}
-          >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "14px",
-                cursor: "pointer",
-                marginBottom: "12px",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={debug}
-                onChange={(e) => setDebug(e.target.checked)}
-                style={{ cursor: "pointer" }}
-              />
-              <span>Show Debug Mesh</span>
-            </label>
-
-            {debug && (
-              <div style={{ marginTop: "8px" }}>
-                <label
+              {/* Attribution */}
+              {COG_OPTIONS[selectedIndex].attribution && (
+                <p
                   style={{
-                    display: "block",
-                    fontSize: "12px",
+                    margin: "8px 0 0 0",
+                    fontSize: "11px",
                     color: "#666",
-                    marginBottom: "4px",
                   }}
                 >
-                  Debug Opacity: {debugOpacity.toFixed(2)}
+                  {COG_OPTIONS[selectedIndex].attribution}
+                </p>
+              )}
+
+              {/* Debug Controls */}
+              <div
+                style={{
+                  padding: "12px 0",
+                  borderTop: "1px solid #eee",
+                  marginTop: "12px",
+                }}
+              >
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                    marginBottom: "12px",
+                  }}
+                >
                   <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={debugOpacity}
-                    onChange={(e) =>
-                      setDebugOpacity(parseFloat(e.target.value))
-                    }
-                    style={{ width: "100%", cursor: "pointer" }}
+                    type="checkbox"
+                    checked={debug}
+                    onChange={(e) => setDebug(e.target.checked)}
+                    style={{ cursor: "pointer" }}
                   />
+                  <span>Show Debug Mesh</span>
                 </label>
+
+                {debug && (
+                  <div style={{ marginTop: "8px" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "12px",
+                        color: "#666",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      Debug Opacity: {debugOpacity.toFixed(2)}
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={debugOpacity}
+                        onChange={(e) =>
+                          setDebugOpacity(parseFloat(e.target.value))
+                        }
+                        style={{ width: "100%", cursor: "pointer" }}
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>
