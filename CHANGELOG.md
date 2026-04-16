@@ -1,5 +1,6 @@
 # Changelog
 
+
 ## Unreleased
 
 * feat: Create `@developmentseed/geozarr` package and define zod schema by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/395
@@ -47,6 +48,11 @@
 * chore: deduplicate tsconfigs in examples folder by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/426
 * ci: Ensure we typecheck examples by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/427
 * ci: Apply typechecking to source packages on CI by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/430
+* ci: deploy docs only on release tags by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/433
+* feat: Clean up sentinel-2 example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/437
+* docs: Add link from example cards to code source by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/439
+* docs: Update screenshots in docs by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/440
+* docs: Update examples to link back to docs website by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/441
 
 ## New Contributors
 
