@@ -2,6 +2,7 @@ import Link from "@docusaurus/Link";
 import Heading from "@theme/Heading";
 import Layout from "@theme/Layout";
 import type { ReactNode } from "react";
+import { FaGithub } from "react-icons/fa";
 
 import styles from "./styles.module.css";
 
@@ -10,6 +11,7 @@ type Example = {
   description: ReactNode;
   href: string;
   image: string;
+  source: string;
 };
 
 const examples: Example[] = [
@@ -26,6 +28,8 @@ const examples: Example[] = [
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/cog-basic/",
     image: "/deck.gl-raster/img/cog-basic-examples-card.png",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/cog-basic",
   },
   {
     title: "Land Cover",
@@ -40,6 +44,8 @@ const examples: Example[] = [
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/land-cover/",
     image: "/deck.gl-raster/img/land-cover-examples-card.png",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/land-cover",
   },
   {
     title: "NAIP Mosaic",
@@ -54,6 +60,8 @@ const examples: Example[] = [
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/",
     image: "/deck.gl-raster/img/naip-mosaic-examples-card.png",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/naip-mosaic",
   },
   {
     title: "Sentinel-2 Multi-Band",
@@ -68,25 +76,49 @@ const examples: Example[] = [
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/sentinel-2/",
     image: "/deck.gl-raster/img/sentinel-2-examples-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/sentinel-2",
   },
 ];
 
-function ExampleCard({ title, description, href, image }: Example): ReactNode {
+function ExampleCard({
+  title,
+  description,
+  href,
+  image,
+  source,
+}: Example): ReactNode {
   return (
     <div className={styles.card}>
-      <img src={image} alt={title} className={styles.cardImage} />
+      <Link href={href} target="_blank" rel="noopener noreferrer">
+        <img src={image} alt={title} className={styles.cardImage} />
+      </Link>
       <div className={styles.cardBody}>
         <Heading as="h3">{title}</Heading>
         <p>{description}</p>
       </div>
       <div className={styles.cardFooter}>
         <Link
-          className="button button--primary"
+          className="button button--primary button--sm"
           href={href}
           target="_blank"
           rel="noopener noreferrer"
         >
-          Open example ↗
+          Open Example ↗
+        </Link>
+        <Link
+          className="button button--secondary button--sm"
+          href={source}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.35em",
+          }}
+        >
+          Source
+          <FaGithub />
         </Link>
       </div>
     </div>

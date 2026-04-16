@@ -50,6 +50,10 @@
 }
 
 .cardFooter {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
   padding: 1rem 1.5rem;
   border-top: 1px solid var(--ifm-color-emphasis-200);
 }
