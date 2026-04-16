@@ -111,10 +111,14 @@ function ExampleCard({
           href={source}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ display: "inline-flex", alignItems: "center", gap: "0.35em" }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.35em",
+          }}
         >
-          <FaGithub />
           Source
+          <FaGithub />
         </Link>
       </div>
     </div>
