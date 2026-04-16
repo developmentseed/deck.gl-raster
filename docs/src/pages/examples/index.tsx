@@ -2,6 +2,7 @@ import Link from "@docusaurus/Link";
 import Heading from "@theme/Heading";
 import Layout from "@theme/Layout";
 import type { ReactNode } from "react";
+import { FaGithub } from "react-icons/fa";
 
 import styles from "./styles.module.css";
 
@@ -110,7 +111,9 @@ function ExampleCard({
           href={source}
           target="_blank"
           rel="noopener noreferrer"
+          style={{ display: "inline-flex", alignItems: "center", gap: "0.35em" }}
         >
+          <FaGithub />
           Source
         </Link>
       </div>
