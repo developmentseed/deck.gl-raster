@@ -57,7 +57,7 @@ import {
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import proj4 from "proj4";
-import { fetchGeoTIFF } from "./geotiff/geotiff.js";
+import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { fromAffine } from "./geotiff-reprojection.js";
 
 /** Size of deck.gl's common coordinate space in world units. */
@@ -234,6 +234,28 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     signal?: AbortSignal;
 
     /**
+     * Called once all configured sources have been opened and the
+     * {@link MultiTilesetDescriptor} has been built.
+     *
+     * `geographicBounds` is computed from the primary (finest-resolution)
+     * source and reprojected to WGS84; it matches the shape returned by
+     * {@link COGLayerProps.onGeoTIFFLoad} and is suitable for passing to
+     * MapLibre's `fitBounds`.
+     */
+    onGeoTIFFLoad?: (
+      sources: Map<string, GeoTIFF>,
+      options: {
+        primaryKey: string;
+        geographicBounds: {
+          west: number;
+          south: number;
+          east: number;
+          north: number;
+        };
+      },
+    ) => void;
+
+    /**
      * Enable debug overlay showing tile boundaries and metadata labels
      * for all tilesets.
      *
@@ -400,6 +422,20 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       forwardTo3857,
       inverseFrom3857,
     });
+
+    if (this.props.onGeoTIFFLoad) {
+      const primaryKey = multiDescriptor.primaryKey;
+      const primaryGeotiff = sourceMap.get(primaryKey)!.geotiff;
+      const geographicBounds = getGeographicBounds(
+        primaryGeotiff,
+        converter4326,
+      );
+      const geotiffMap = new Map<string, GeoTIFF>();
+      for (const [name, state] of sourceMap) {
+        geotiffMap.set(name, state.geotiff);
+      }
+      this.props.onGeoTIFFLoad(geotiffMap, { primaryKey, geographicBounds });
+    }
   }
 
   /**
