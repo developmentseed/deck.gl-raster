@@ -7,11 +7,13 @@ tags: [release]
 image: ../static/img/sentinel-2-examples-card.jpg
 ---
 
-deck.gl-raster now supports rendering multi-band [Cloud-Optimized GeoTIFFs][cogeo] (COGs), commonly found for satellite imagery data like Landsat or Sentinel-2.
+deck.gl-raster now supports rendering multi-band [Cloud-Optimized GeoTIFFs][cogeo] (COGs), commonly found for satellite imagery data like Landsat or Sentinel-2, all **without a server**. [See hosted example][sentinel-2-example].
 
 [cogeo]: https://cogeo.org/
 
-![](../static/img/sentinel-2-examples-card.jpg)
+[![](../static/img/sentinel-2-examples-card.jpg)][sentinel-2-example]
+
+[sentinel-2-example]: https://developmentseed.org/deck.gl-raster/examples/sentinel-2/
 
 <!-- truncate -->
 
