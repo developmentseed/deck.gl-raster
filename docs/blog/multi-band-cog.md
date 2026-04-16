@@ -19,13 +19,13 @@ deck.gl-raster now supports rendering multi-band [Cloud-Optimized GeoTIFFs][coge
 
 Many COGs are distributed as a collection of multiple inter-related files, where they all represent the same scene with the same spatial extent. For example, [Sentinel-2][s2-aws-bucket] or [Landsat](https://registry.opendata.aws/usgs-landsat/) images are distributed in this type of COG layout.
 
-We have a new [`MultiCOGLayer`] to support rendering this type of COG source. This layer is intended to be used whenever multiple separate COG files represent **one single composite image**. If you want to render multiple image sources as a mosaic, consult the [`MosaicLayer`].
+We have a new [`MultiCOGLayer`] to support rendering this type of COG source. This layer is intended to be used whenever multiple separate COG files represent **one single composite image**. If you want to render multiple image sources as a mosaic, use the [`MosaicLayer`].
 
 [s2-aws-bucket]: https://registry.opendata.aws/sentinel-2-l2a-cogs/
 [`MultiCOGLayer`]: https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGLayer/
 [`MosaicLayer`]: https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MosaicLayer/
 
-The `MultiCOGLayer` hides many technical implementation details from the end user. Even when the source has bands at different resolutions and stored in different tiling grids per file, it will automatically resample across mixed band resolutions — _all on the GPU_.
+The `MultiCOGLayer` abstracts many technical implementation details away from the end user. When the source has bands at different resolutions, it will automatically resample across mixed band resolutions — _all on the GPU_.
 
 For example, consider rendering a Sentinel-2 vegetation composite with the near-infrared, short-wave infrared, and red bands. The short-wave band's finest pixel resolution is 20 meters while the other bands have a finest pixel resolution of 10 meters. The `MultiCOGLayer` will _automatically upsample_ the short-wave infrared band up to 10m so that the three can be rendered together at full resolution.
 
