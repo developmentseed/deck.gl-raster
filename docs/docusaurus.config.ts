@@ -90,6 +90,7 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     COGLayer: `${BASE_DECK_GL_GEOTIFF}/classes/COGLayer/`,
     MosaicLayer: `${BASE_DECK_GL_GEOTIFF}/classes/MosaicLayer/`,
     MosaicTileset2D: `${BASE_DECK_GL_GEOTIFF}/classes/MosaicTileset2D/`,
+    MultiCOGLayer: `${BASE_DECK_GL_GEOTIFF}/classes/MultiCOGLayer/`,
   },
   "@developmentseed/deck.gl-raster": {
     RasterLayer: `${BASE_DECK_GL_RASTER}/classes/RasterLayer/`,
@@ -104,7 +105,6 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     Decoder: `${BASE_GEOTIFF}/type-aliases/Decoder/`,
     DecoderMetadata: `${BASE_GEOTIFF}/type-aliases/DecoderMetadata/`,
     DecoderPoolOptions: `${BASE_GEOTIFF}/type-aliases/DecoderPoolOptions/`,
-    ProjJson: `${BASE_GEOTIFF}/type-aliases/ProjJson/`,
     parseColormap: `${BASE_GEOTIFF}/functions/parseColormap/`,
   },
   "@developmentseed/morecantile": {
@@ -222,6 +222,7 @@ const config: Config = {
     ...typedocPlugins,
     ...contentDocsPlugins,
     "@cmfcmf/docusaurus-search-local",
+    "./plugins/changelog.js",
   ],
 
   presets: [

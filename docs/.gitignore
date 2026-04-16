@@ -1,4 +1,5 @@
 api/*
+guides/changelog.md
 
 # Dependencies
 /node_modules
