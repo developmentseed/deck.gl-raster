@@ -136,6 +136,7 @@ export default function App() {
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [debugLevel, setDebugLevel] = useState<1 | 2 | 3>(1);
+  const [panelOpen, setPanelOpen] = useState(true);
 
   const scene = SCENES[sceneIndex];
   const preset = PRESETS[presetIndex];
@@ -210,112 +211,157 @@ export default function App() {
             padding: "16px",
             borderRadius: "8px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            maxWidth: "350px",
+            width: "350px",
             pointerEvents: "auto",
           }}
         >
-          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
-            Sentinel-2 Multi-Band
-          </h3>
-          <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#666" }}>
-            Renders individual band COGs at different resolutions using
-            MultiCOGLayer. The GPU handles cross-resolution resampling.
-          </p>
-          <label style={{ fontSize: "12px", color: "#666", display: "block" }}>
-            Scene
-            <select
-              value={sceneIndex}
-              onChange={(e) => setSceneIndex(Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "4px",
-                cursor: "pointer",
-                marginTop: "2px",
-              }}
-            >
-              {SCENES.map((s, i) => (
-                <option key={s.baseUrl} value={i}>
-                  {s.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label
+          <button
+            type="button"
             style={{
-              fontSize: "12px",
-              color: "#666",
-              display: "block",
-              marginTop: "8px",
+              all: "unset",
+              width: "100%",
+              margin: 0,
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              userSelect: "none",
             }}
+            onClick={() => setPanelOpen((o) => !o)}
           >
-            Composite
-            <select
-              value={presetIndex}
-              onChange={(e) => setPresetIndex(Number(e.target.value))}
+            Sentinel-2 Multi-Band
+            <span
               style={{
-                width: "100%",
-                padding: "4px",
-                cursor: "pointer",
-                marginTop: "2px",
+                fontSize: "12px",
+                transition: "transform 0.2s",
+                transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
               }}
             >
-              {PRESETS.map((p, i) => (
-                <option key={p.title} value={i}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div style={{ marginTop: "8px" }}>
-            <label style={{ fontSize: "13px", cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={debug}
-                onChange={(e) => setDebug(e.target.checked)}
-                style={{ marginRight: "6px" }}
-              />
-              Debug overlay
-            </label>
-          </div>
-          {debug && (
+              ▼
+            </span>
+          </button>
+          {panelOpen && (
             <>
-              <div style={{ marginTop: "4px" }}>
-                <label style={{ fontSize: "12px", color: "#666" }}>
-                  Detail level:{" "}
-                  <select
-                    value={debugLevel}
-                    onChange={(e) =>
-                      setDebugLevel(Number(e.target.value) as 1 | 2 | 3)
-                    }
-                    style={{ padding: "2px", cursor: "pointer" }}
-                  >
-                    <option value={1}>1 — Compact</option>
-                    <option value={2}>2 — Detailed</option>
-                    <option value={3}>3 — Verbose</option>
-                  </select>
-                </label>
-              </div>
-              <div style={{ marginTop: "4px" }}>
-                <label
+              <p
+                style={{
+                  margin: "8px 0 12px 0",
+                  fontSize: "13px",
+                  color: "#666",
+                }}
+              >
+                Renders individual band COGs at different resolutions using
+                MultiCOGLayer. The GPU handles cross-resolution resampling.
+              </p>
+              <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
+                <a
+                  href="https://developmentseed.org/deck.gl-raster/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  deck.gl-raster Documentation ↗
+                </a>
+              </p>
+              <label
+                style={{ fontSize: "12px", color: "#666", display: "block" }}
+              >
+                Scene
+                <select
+                  value={sceneIndex}
+                  onChange={(e) => setSceneIndex(Number(e.target.value))}
                   style={{
-                    fontSize: "12px",
-                    color: "#666",
+                    width: "100%",
+                    padding: "4px",
+                    cursor: "pointer",
+                    marginTop: "2px",
                   }}
                 >
-                  Debug Opacity: {debugOpacity.toFixed(2)}
+                  {SCENES.map((s, i) => (
+                    <option key={s.baseUrl} value={i}>
+                      {s.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label
+                style={{
+                  fontSize: "12px",
+                  color: "#666",
+                  display: "block",
+                  marginTop: "8px",
+                }}
+              >
+                Composite
+                <select
+                  value={presetIndex}
+                  onChange={(e) => setPresetIndex(Number(e.target.value))}
+                  style={{
+                    width: "100%",
+                    padding: "4px",
+                    cursor: "pointer",
+                    marginTop: "2px",
+                  }}
+                >
+                  {PRESETS.map((p, i) => (
+                    <option key={p.title} value={i}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div style={{ marginTop: "8px" }}>
+                <label style={{ fontSize: "13px", cursor: "pointer" }}>
                   <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={debugOpacity}
-                    onChange={(e) =>
-                      setDebugOpacity(parseFloat(e.target.value))
-                    }
-                    style={{ width: "100%", cursor: "pointer" }}
+                    type="checkbox"
+                    checked={debug}
+                    onChange={(e) => setDebug(e.target.checked)}
+                    style={{ marginRight: "6px" }}
                   />
+                  Debug overlay
                 </label>
               </div>
+              {debug && (
+                <>
+                  <div style={{ marginTop: "4px" }}>
+                    <label style={{ fontSize: "12px", color: "#666" }}>
+                      Detail level:{" "}
+                      <select
+                        value={debugLevel}
+                        onChange={(e) =>
+                          setDebugLevel(Number(e.target.value) as 1 | 2 | 3)
+                        }
+                        style={{ padding: "2px", cursor: "pointer" }}
+                      >
+                        <option value={1}>1 — Compact</option>
+                        <option value={2}>2 — Detailed</option>
+                        <option value={3}>3 — Verbose</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div style={{ marginTop: "4px" }}>
+                    <label
+                      style={{
+                        fontSize: "12px",
+                        color: "#666",
+                      }}
+                    >
+                      Debug Opacity: {debugOpacity.toFixed(2)}
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={debugOpacity}
+                        onChange={(e) =>
+                          setDebugOpacity(parseFloat(e.target.value))
+                        }
+                        style={{ width: "100%", cursor: "pointer" }}
+                      />
+                    </label>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

@@ -274,6 +274,7 @@ export default function App() {
   const [ndviRange, setNdviRange] = useState<[number, number]>([-1, 1]);
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
+  const [panelOpen, setPanelOpen] = useState(true);
 
   // Fetch STAC items on mount
   useEffect(() => {
@@ -404,156 +405,201 @@ export default function App() {
             padding: "16px",
             borderRadius: "8px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            maxWidth: "300px",
+            width: "300px",
             pointerEvents: "auto",
           }}
         >
-          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px" }}>NAIP Mosaic</h3>
-          <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "#666" }}>
-            {loading && "Loading STAC items... "}
-            {error && `Error: ${error}`}
-            {!loading && !error && `Fetched ${stacItems.length} `}
-            <a
-              href="https://stacspec.org/en"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              STAC
-            </a>
-            {" Items "}
-            from{" "}
-            <a
-              href="https://planetarycomputer.microsoft.com"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Microsoft Planetary Computer
-            </a>
-            's{" "}
-            <a
-              href="https://planetarycomputer.microsoft.com/dataset/naip"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              NAIP dataset
-            </a>
-            .
-            <br />
-            <br />
-            All imagery is rendered client-side with <b>no server involved</b>{" "}
-            using{" "}
-            <a
-              href="https://github.com/developmentseed/deck.gl-raster"
-              target="_blank"
-              rel="noopener noreferrer"
+          <button
+            type="button"
+            style={{
+              all: "unset",
+              width: "100%",
+              margin: 0,
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              userSelect: "none",
+            }}
+            onClick={() => setPanelOpen((o) => !o)}
+          >
+            NAIP Mosaic
+            <span
               style={{
-                fontFamily: "monospace",
+                fontSize: "12px",
+                transition: "transform 0.2s",
+                transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
               }}
             >
-              @developmentseed/deck.gl-raster
-            </a>
-            .
-          </p>
-
-          <div>
-            <label
-              htmlFor="render-mode"
-              style={{ fontSize: "14px", fontWeight: 500 }}
-            >
-              Render Mode
-            </label>
-            <select
-              id="render-mode"
-              value={renderMode}
-              onChange={(e) => setRenderMode(e.target.value as RenderMode)}
-              style={{
-                width: "100%",
-                padding: "8px",
-                fontSize: "14px",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-              }}
-            >
-              {RENDER_MODE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {renderMode === "ndvi" && (
-            <div style={{ marginTop: "16px" }}>
-              <span style={{ fontSize: "14px", fontWeight: 500 }}>
-                NDVI Range
-              </span>
-              <Slider.Root
-                min={-1}
-                max={1}
-                step={0.01}
-                value={ndviRange}
-                onValueChange={(v) => setNdviRange(v as [number, number])}
+              ▼
+            </span>
+          </button>
+          {panelOpen && (
+            <>
+              <p
                 style={{
-                  position: "relative",
-                  display: "flex",
-                  alignItems: "center",
-                  userSelect: "none",
-                  touchAction: "none",
-                  height: "20px",
-                  marginTop: "12px",
-                }}
-              >
-                <Slider.Track
-                  style={{
-                    position: "relative",
-                    flexGrow: 1,
-                    height: "4px",
-                    background: "#ddd",
-                    borderRadius: "2px",
-                  }}
-                >
-                  <Slider.Range
-                    style={{
-                      position: "absolute",
-                      height: "100%",
-                      background: "#4a7c59",
-                      borderRadius: "2px",
-                    }}
-                  />
-                </Slider.Track>
-                {(["min", "max"] as const).map((key) => (
-                  <Slider.Thumb
-                    key={key}
-                    style={{
-                      display: "block",
-                      width: "16px",
-                      height: "16px",
-                      borderRadius: "50%",
-                      background: "#4a7c59",
-                      border: "2px solid white",
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-                      cursor: "pointer",
-                      outline: "none",
-                    }}
-                  />
-                ))}
-              </Slider.Root>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginTop: "6px",
-                  fontSize: "12px",
+                  margin: "8px 0 12px 0",
+                  fontSize: "14px",
                   color: "#666",
                 }}
               >
-                <span>-1</span>
-                <span>
-                  {ndviRange[0].toFixed(2)} – {ndviRange[1].toFixed(2)}
-                </span>
-                <span>+1</span>
+                {loading && "Loading STAC items... "}
+                {error && `Error: ${error}`}
+                {!loading && !error && `Fetched ${stacItems.length} `}
+                <a
+                  href="https://stacspec.org/en"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  STAC
+                </a>
+                {" Items "}
+                from{" "}
+                <a
+                  href="https://planetarycomputer.microsoft.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Microsoft Planetary Computer
+                </a>
+                's{" "}
+                <a
+                  href="https://planetarycomputer.microsoft.com/dataset/naip"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  NAIP dataset
+                </a>
+                .
+                <br />
+                <br />
+                All imagery is rendered client-side with{" "}
+                <b>no server involved</b> using{" "}
+                <a
+                  href="https://github.com/developmentseed/deck.gl-raster"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontFamily: "monospace",
+                  }}
+                >
+                  @developmentseed/deck.gl-raster
+                </a>
+                .
+              </p>
+              <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
+                <a
+                  href="https://developmentseed.org/deck.gl-raster/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  deck.gl-raster Documentation ↗
+                </a>
+              </p>
+
+              <div>
+                <label
+                  htmlFor="render-mode"
+                  style={{ fontSize: "14px", fontWeight: 500 }}
+                >
+                  Render Mode
+                </label>
+                <select
+                  id="render-mode"
+                  value={renderMode}
+                  onChange={(e) => setRenderMode(e.target.value as RenderMode)}
+                  style={{
+                    width: "100%",
+                    padding: "8px",
+                    fontSize: "14px",
+                    borderRadius: "4px",
+                    border: "1px solid #ccc",
+                  }}
+                >
+                  {RENDER_MODE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
+
+              {renderMode === "ndvi" && (
+                <div style={{ marginTop: "16px" }}>
+                  <span style={{ fontSize: "14px", fontWeight: 500 }}>
+                    NDVI Range
+                  </span>
+                  <Slider.Root
+                    min={-1}
+                    max={1}
+                    step={0.01}
+                    value={ndviRange}
+                    onValueChange={(v) => setNdviRange(v as [number, number])}
+                    style={{
+                      position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      userSelect: "none",
+                      touchAction: "none",
+                      height: "20px",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <Slider.Track
+                      style={{
+                        position: "relative",
+                        flexGrow: 1,
+                        height: "4px",
+                        background: "#ddd",
+                        borderRadius: "2px",
+                      }}
+                    >
+                      <Slider.Range
+                        style={{
+                          position: "absolute",
+                          height: "100%",
+                          background: "#4a7c59",
+                          borderRadius: "2px",
+                        }}
+                      />
+                    </Slider.Track>
+                    {(["min", "max"] as const).map((key) => (
+                      <Slider.Thumb
+                        key={key}
+                        style={{
+                          display: "block",
+                          width: "16px",
+                          height: "16px",
+                          borderRadius: "50%",
+                          background: "#4a7c59",
+                          border: "2px solid white",
+                          boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                          cursor: "pointer",
+                          outline: "none",
+                        }}
+                      />
+                    ))}
+                  </Slider.Root>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginTop: "6px",
+                      fontSize: "12px",
+                      color: "#666",
+                    }}
+                  >
+                    <span>-1</span>
+                    <span>
+                      {ndviRange[0].toFixed(2)} – {ndviRange[1].toFixed(2)}
+                    </span>
+                    <span>+1</span>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
