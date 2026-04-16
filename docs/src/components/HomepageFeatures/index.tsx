@@ -13,7 +13,7 @@ type FeatureItem = {
 const FeatureList: FeatureItem[] = [
   {
     title: "GPU-Accelerated Raster Rendering",
-    img: require("@site/static/img/hero-page-nyc-sentinel.png").default,
+    img: require("@site/static/img/hero-page-nyc-sentinel.jpg").default,
     description: (
       <>
         Render large raster datasets at interactive framerates using WebGL2 via{" "}
@@ -49,7 +49,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Flexible Visualization Pipeline",
-    img: require("@site/static/img/hero-page-boulder-naip-ndvi.png").default,
+    img: require("@site/static/img/naip-mosaic-examples-card.jpg").default,
     description: (
       <>
         Compose raster modules for band math, nodata masking, and color mapping.

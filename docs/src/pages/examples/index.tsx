@@ -27,7 +27,7 @@ const examples: Example[] = [
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/cog-basic/",
-    image: "/deck.gl-raster/img/cog-basic-examples-card.png",
+    image: "/deck.gl-raster/img/hero-page-nyc-sentinel.jpg",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/cog-basic",
   },
@@ -43,7 +43,7 @@ const examples: Example[] = [
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/land-cover/",
-    image: "/deck.gl-raster/img/land-cover-examples-card.png",
+    image: "/deck.gl-raster/img/land-cover-examples-card.jpg",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/land-cover",
   },
@@ -59,7 +59,7 @@ const examples: Example[] = [
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/",
-    image: "/deck.gl-raster/img/naip-mosaic-examples-card.png",
+    image: "/deck.gl-raster/img/naip-mosaic-examples-card.jpg",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/naip-mosaic",
   },
