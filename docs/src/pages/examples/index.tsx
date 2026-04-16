@@ -55,6 +55,20 @@ const examples: Example[] = [
     href: "https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/",
     image: "/deck.gl-raster/img/naip-mosaic-examples-card.png",
   },
+  {
+    title: "Sentinel-2 Multi-Band",
+    description: (
+      <>
+        Render split-band, mixed-resolution COGs using{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGLayer/">
+          MultiCOGLayer
+        </Link>
+        . The GPU handles cross-resolution resampling.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/sentinel-2/",
+    image: "/deck.gl-raster/img/sentinel-2-examples-card.jpg",
+  },
 ];
 
 function ExampleCard({ title, description, href, image }: Example): ReactNode {
