@@ -39,10 +39,10 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^25.3.3",
+    "@types/node": "^25.6.0",
     "proj4": "^2.20.4",
     "typescript": "^6.0.2",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.4"
   },
   "dependencies": {
     "wkt-parser": "1.5.5"
