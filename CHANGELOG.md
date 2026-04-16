@@ -54,7 +54,7 @@
 * docs: Update screenshots in docs by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/440
 * docs: Update examples to link back to docs website by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/441
 
-## New Contributors
+### New Contributors
 
 * @lhoupert made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/390
 
@@ -73,7 +73,8 @@
 * fix: Support TileLayer refinement strategies by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/354
 * feat: add ndvi filter slider to NAIP-mosaic example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/357
 
-## New Contributors
+### New Contributors
+
 * @maxrjones made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/333
 * @aboydnw made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/348
 
