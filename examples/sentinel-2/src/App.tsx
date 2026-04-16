@@ -251,8 +251,31 @@ export default function App() {
                   color: "#666",
                 }}
               >
-                Renders individual band COGs at different resolutions using
-                MultiCOGLayer. The GPU handles cross-resolution resampling.
+                These images are loaded directly from the{" "}
+                <a
+                  href="https://registry.opendata.aws/sentinel-2-l2a-cogs/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Sentinel-2 AWS Open Data bucket
+                </a>{" "}
+                — no server involved. Separate{" "}
+                <a
+                  href="https://gisgeography.com/sentinel-2-bands-combinations/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  bands
+                </a>{" "}
+                are rendered as true-color or false-color composites, where the{" "}
+                <a
+                  href="https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGLayer/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <code>MultiCOGLayer</code>
+                </a>{" "}
+                automatically handles GPU-based cross-resolution resampling.
               </p>
               <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
                 <a
