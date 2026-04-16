@@ -222,6 +222,7 @@ const config: Config = {
     ...typedocPlugins,
     ...contentDocsPlugins,
     "@cmfcmf/docusaurus-search-local",
+    "./plugins/changelog.js",
   ],
 
   presets: [
