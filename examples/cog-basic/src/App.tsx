@@ -161,7 +161,13 @@ export default function App() {
           </button>
           {panelOpen && (
             <>
-              <p style={{ margin: "8px 0 12px 0", fontSize: "13px", color: "#666" }}>
+              <p
+                style={{
+                  margin: "8px 0 12px 0",
+                  fontSize: "13px",
+                  color: "#666",
+                }}
+              >
                 Renders Cloud-Optimized GeoTIFFs directly from cloud storage,
                 with no server in between.
               </p>

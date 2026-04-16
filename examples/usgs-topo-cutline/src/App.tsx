@@ -248,7 +248,13 @@ export default function App() {
         </button>
         {panelOpen && (
           <>
-            <p style={{ margin: "8px 0 12px 0", fontSize: "13px", color: "#444" }}>
+            <p
+              style={{
+                margin: "8px 0 12px 0",
+                fontSize: "13px",
+                color: "#444",
+              }}
+            >
               This uses the <code>CutlineBbox</code> shader module to avoid
               rendering pixels containing the map collar.
             </p>

@@ -76,122 +76,130 @@ export function InfoPanel({
         </span>
       </button>
 
-      {panelOpen && <>
-      <p style={{ margin: "8px 0", fontSize: "14px", color: "#666" }}>
-        A <b>1.3GB</b>{" "}
-        <a href="https://cogeo.org/" target="_blank" rel="noopener noreferrer">
-          Cloud-Optimized GeoTIFF
-        </a>{" "}
-        rendered in the browser with <b>no server</b> using{" "}
-        <code>deck.gl-raster</code>.
-      </p>
-      <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
-        <a
-          href="https://developmentseed.org/deck.gl-raster/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          deck.gl-raster Documentation ↗
-        </a>
-      </p>
+      {panelOpen && (
+        <>
+          <p style={{ margin: "8px 0", fontSize: "14px", color: "#666" }}>
+            A <b>1.3GB</b>{" "}
+            <a
+              href="https://cogeo.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Cloud-Optimized GeoTIFF
+            </a>{" "}
+            rendered in the browser with <b>no server</b> using{" "}
+            <code>deck.gl-raster</code>.
+          </p>
+          <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
+            <a
+              href="https://developmentseed.org/deck.gl-raster/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              deck.gl-raster Documentation ↗
+            </a>
+          </p>
 
-      <Legend />
+          <Legend />
 
-      <div
-        style={{
-          padding: "12px 0",
-          borderTop: "1px solid #eee",
-          marginTop: "12px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            marginBottom: "12px",
-          }}
-        >
-          <label
+          <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "12px",
-              cursor: "pointer",
-              color: "#666",
+              padding: "12px 0",
+              borderTop: "1px solid #eee",
+              marginTop: "12px",
             }}
           >
-            <input
-              type="checkbox"
-              checked={debug}
-              onChange={(e) => onDebugChange(e.target.checked)}
-              style={{ cursor: "pointer" }}
-            />
-            <span>Show Debug Overlay</span>
-          </label>
-          <HelpIcon tooltip={helpIconTooltip} />
-        </div>
-
-        {debug && (
-          <div style={{ marginTop: "8px" }}>
-            <label
+            <div
               style={{
-                display: "block",
-                fontSize: "12px",
-                color: "#666",
-                marginBottom: "4px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "12px",
               }}
             >
-              Debug Opacity: {debugOpacity.toFixed(2)}
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  color: "#666",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={debug}
+                  onChange={(e) => onDebugChange(e.target.checked)}
+                  style={{ cursor: "pointer" }}
+                />
+                <span>Show Debug Overlay</span>
+              </label>
+              <HelpIcon tooltip={helpIconTooltip} />
+            </div>
+
+            {debug && (
+              <div style={{ marginTop: "8px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    color: "#666",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Debug Opacity: {debugOpacity.toFixed(2)}
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={debugOpacity}
+                    onChange={(e) =>
+                      onDebugOpacityChange(parseFloat(e.target.value))
+                    }
+                    style={{ width: "100%", cursor: "pointer" }}
+                  />
+                </label>
+              </div>
+            )}
+
+            <div style={{ marginTop: "8px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  marginBottom: "4px",
+                }}
+              >
+                <label
+                  htmlFor="mesh-max-error"
+                  style={{
+                    fontSize: "12px",
+                    color: "#666",
+                  }}
+                >
+                  Mesh Max Error: {meshMaxError.toFixed(3)}
+                </label>
+                <HelpIcon tooltip={meshMaxErrorTooltip} />
+              </div>
               <input
+                id="mesh-max-error"
                 type="range"
-                min="0"
-                max="1"
+                min="0.01"
+                max="5"
                 step="0.01"
-                value={debugOpacity}
+                value={meshMaxError}
                 onChange={(e) =>
-                  onDebugOpacityChange(parseFloat(e.target.value))
+                  onMeshMaxErrorChange(parseFloat(e.target.value))
                 }
                 style={{ width: "100%", cursor: "pointer" }}
               />
-            </label>
+            </div>
           </div>
-        )}
-
-        <div style={{ marginTop: "8px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              marginBottom: "4px",
-            }}
-          >
-            <label
-              htmlFor="mesh-max-error"
-              style={{
-                fontSize: "12px",
-                color: "#666",
-              }}
-            >
-              Mesh Max Error: {meshMaxError.toFixed(3)}
-            </label>
-            <HelpIcon tooltip={meshMaxErrorTooltip} />
-          </div>
-          <input
-            id="mesh-max-error"
-            type="range"
-            min="0.01"
-            max="5"
-            step="0.01"
-            value={meshMaxError}
-            onChange={(e) => onMeshMaxErrorChange(parseFloat(e.target.value))}
-            style={{ width: "100%", cursor: "pointer" }}
-          />
-        </div>
-      </div>
-      </>}
+        </>
+      )}
     </div>
   );
 }

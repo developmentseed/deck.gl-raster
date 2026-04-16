@@ -96,7 +96,13 @@ export default function App() {
           </button>
           {panelOpen && (
             <>
-              <p style={{ margin: "8px 0 12px 0", fontSize: "12px", color: "#666" }}>
+              <p
+                style={{
+                  margin: "8px 0 12px 0",
+                  fontSize: "12px",
+                  color: "#666",
+                }}
+              >
                 GeoZarr multiscale, EPSG:32612
               </p>
               <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>

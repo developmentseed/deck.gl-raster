@@ -244,7 +244,13 @@ export default function App() {
           </button>
           {panelOpen && (
             <>
-              <p style={{ margin: "8px 0 12px 0", fontSize: "13px", color: "#666" }}>
+              <p
+                style={{
+                  margin: "8px 0 12px 0",
+                  fontSize: "13px",
+                  color: "#666",
+                }}
+              >
                 Renders individual band COGs at different resolutions using
                 MultiCOGLayer. The GPU handles cross-resolution resampling.
               </p>
@@ -257,7 +263,9 @@ export default function App() {
                   deck.gl-raster Documentation ↗
                 </a>
               </p>
-              <label style={{ fontSize: "12px", color: "#666", display: "block" }}>
+              <label
+                style={{ fontSize: "12px", color: "#666", display: "block" }}
+              >
                 Scene
                 <select
                   value={sceneIndex}
