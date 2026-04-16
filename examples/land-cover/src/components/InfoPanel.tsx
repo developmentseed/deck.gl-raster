@@ -83,17 +83,7 @@ export function InfoPanel({
           Cloud-Optimized GeoTIFF
         </a>{" "}
         rendered in the browser with <b>no server</b> using{" "}
-        <a
-          href="https://github.com/developmentseed/deck.gl-raster"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            fontFamily: "monospace",
-          }}
-        >
-          @developmentseed/deck.gl-raster
-        </a>
-        .
+        <code>deck.gl-raster</code>.
       </p>
       <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
         <a
