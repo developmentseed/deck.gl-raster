@@ -97,7 +97,7 @@ const PRESETS: CompositePreset[] = [
     composite: { r: "nir", g: "red", b: "green" },
   },
   {
-    title: "SWIR Composite (SWIR, NIR, Red) — 20m + 20m + 10m",
+    title: "SWIR Composite (SWIR, NIR B8A, Red) — 20m + 20m + 10m",
     sources: { swir: "B12", nir: "B8A", red: "B04" },
     composite: { r: "swir", g: "nir", b: "red" },
   },
