@@ -193,7 +193,7 @@ importers:
         specifier: ^8.1.0
         version: 8.1.0(maplibre-gl@5.19.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       zarrita:
-        specifier: ^0.7
+        specifier: ^0.7.1
         version: 0.7.1
     devDependencies:
       '@types/react':
@@ -477,7 +477,7 @@ importers:
         specifier: ^8.1.0
         version: 8.1.0(maplibre-gl@5.19.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       zarrita:
-        specifier: ^0.7
+        specifier: ^0.7.1
         version: 0.7.1
     devDependencies:
       '@types/react':
@@ -663,7 +663,7 @@ importers:
         specifier: ^1.5.3
         version: 1.5.3
       zarrita:
-        specifier: ^0.7
+        specifier: ^0.7.1
         version: 0.7.1
     devDependencies:
       '@types/node':
@@ -761,7 +761,7 @@ importers:
         specifier: workspace:^
         version: link:../affine
       zarrita:
-        specifier: ^0.7
+        specifier: ^0.7.1
         version: 0.7.1
       zod:
         specifier: ^4.3.6
