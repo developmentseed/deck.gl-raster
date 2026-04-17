@@ -1,9 +1,9 @@
-import type { Texture } from "@luma.gl/core";
 import type { RenderTileResult } from "@developmentseed/deck.gl-raster";
 import {
   Colormap,
   LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { Texture } from "@luma.gl/core";
 import { SampleTexture2DArray } from "../gpu/sample-texture-2d-array.js";
 import type { EcmwfTileData } from "./get-tile-data.js";
 

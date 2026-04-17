@@ -97,7 +97,11 @@ export default function App() {
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [panelOpen, setPanelOpen] = useState(true);
 
-  const zarrLayer = new ZarrLayer<zarr.Readable, zarr.DataType, SentinelTileData>({
+  const zarrLayer = new ZarrLayer<
+    zarr.Readable,
+    zarr.DataType,
+    SentinelTileData
+  >({
     id: "zarr-layer",
     source: ZARR_URL,
     // The TCI zarr is band-planar RGB: the band dim is consumed inside

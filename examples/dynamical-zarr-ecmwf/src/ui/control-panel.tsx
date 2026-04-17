@@ -36,7 +36,9 @@ export function ControlPanel(props: ControlPanelProps) {
         pointerEvents: "auto",
       }}
     >
-      <div style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "8px" }}>
+      <div
+        style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "8px" }}
+      >
         ECMWF IFS ENS — 2 m Temperature
       </div>
       <div style={{ fontSize: "12px", color: "#666", marginBottom: "12px" }}>

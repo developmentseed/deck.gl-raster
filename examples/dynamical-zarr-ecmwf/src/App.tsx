@@ -53,11 +53,16 @@ export default function App() {
   // re-render needed between the two.
   const colormapRef = useRef<Texture | null>(null);
 
-  // Open the Zarr store + variable once.
+  // Open the Zarr store + variable once. The Dynamical.org ECMWF store uses
+  // consolidated metadata (the full hierarchy is inlined in the root
+  // `zarr.json`), so we wrap the FetchStore to short-circuit per-node metadata
+  // fetches.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const store = new zarr.FetchStore(ZARR_URL);
+      const store = await zarr.withMaybeConsolidatedMetadata(
+        new zarr.FetchStore(ZARR_URL),
+      );
       const root = await zarr.open(store, { kind: "group" });
       const opened = await zarr.open(root.resolve(VARIABLE), {
         kind: "array",

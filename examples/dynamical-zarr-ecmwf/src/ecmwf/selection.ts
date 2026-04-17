@@ -1,4 +1,4 @@
-import * as zarr from "zarrita";
+import type * as zarr from "zarrita";
 
 /**
  * Arguments for {@link buildSelection}.
