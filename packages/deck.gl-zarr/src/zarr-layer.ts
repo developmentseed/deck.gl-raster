@@ -124,6 +124,10 @@ export type ZarrLayerProps<
     | "maxRequests"
     | "refinementStrategy"
   > & {
+    // TODO: I think we may want to remove support for passing in a string/url
+    // to the root. We should probably force users to have already opened a
+    // zarrita store, and make them choose an array or group.
+
     /** URL to the Zarr v3 store root. */
     source: string | URL | zarr.Array<Dtype, Store> | zarr.Group<Store>;
 
@@ -272,11 +276,28 @@ export class ZarrLayer<
   async _parseZarr(): Promise<void> {
     const { source, variable, metadata: metadataOverride } = this.props;
 
-    const store = new zarr.FetchStore(source.toString());
-    // @ts-expect-error - for debugging
-    window.store = store;
+    // Reuse a pre-opened zarr.Array or zarr.Group when provided, so callers
+    // can configure the store (e.g. `withConsolidatedMetadata`) before
+    // handing it to the layer. Only fall back to constructing a new
+    // FetchStore when the source is a string / URL.
+    let preopenedArray: zarr.Array<zarr.DataType, zarr.Readable> | null = null;
+    let root:
+      | zarr.Group<zarr.Readable>
+      | zarr.Array<zarr.DataType, zarr.Readable>;
 
-    const root = await zarr.open(store);
+    if (typeof source === "string" || source instanceof URL) {
+      const store = new zarr.FetchStore(source.toString());
+      // @ts-expect-error - for debugging
+      window.store = store;
+      root = await zarr.open(store);
+    } else if ("shape" in source) {
+      // zarr.Array — reuse directly as the (single) level's array.
+      preopenedArray = source;
+      root = source;
+    } else {
+      // zarr.Group
+      root = source;
+    }
     // @ts-expect-error - for debugging
     window.root = root;
 
@@ -291,12 +312,17 @@ export class ZarrLayer<
     // @ts-expect-error - for debugging
     window.meta = meta;
 
-    // Open each level's array once and keep the references in state.
-    const arrays = await Promise.all(
-      meta.levels.map((level) =>
-        zarr.open(group.resolve(level.path), { kind: "array" }),
-      ),
-    );
+    // Open each level's array once and keep the references in state. If the
+    // caller passed a pre-opened array and the metadata describes a single
+    // level, reuse that array directly.
+    const arrays: zarr.Array<zarr.DataType, zarr.Readable>[] =
+      preopenedArray && meta.levels.length === 1
+        ? [preopenedArray]
+        : await Promise.all(
+            meta.levels.map((level) =>
+              zarr.open(group.resolve(level.path), { kind: "array" }),
+            ),
+          );
 
     // Derive spatial dim names from parsed GeoZarr metadata.
     // `meta.axes` is the authoritative ordered list of axis names for the array.
