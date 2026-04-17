@@ -324,24 +324,33 @@ export class ZarrLayer<
             ),
           );
 
-    // Derive spatial dim names from parsed GeoZarr metadata.
-    // `meta.axes` is the authoritative ordered list of axis names for the array.
-    // The spatial:dimensions convention (zarr-conventions/spatial v1) stores the
-    // spatial dim names as `spatial:dimensions: [y_name, x_name]` in the group
-    // attrs; geozarr.js surfaces them via `meta.axes` / `meta.yAxisIndex` /
-    // `meta.xAxisIndex`.
+    // Derive spatial dim names from GeoZarr metadata.
+    // `meta.axes` lists only the *spatial* dims (from the `spatial:dimensions`
+    // convention). The full ordered dim list comes from the zarr array's own
+    // `dimension_names`, which includes non-spatial dims (e.g. time, band).
     if (!meta.axes || meta.axes.length === 0) {
       throw new Error(
         "ZarrLayer requires named axes in GeoZarr metadata (spatial:dimensions). " +
           "Arrays without named dims are not supported.",
       );
     }
-    const dimensionNames: string[] = meta.axes;
-
     const spatialDims: [string, string] = [
       meta.axes[meta.yAxisIndex]!,
       meta.axes[meta.xAxisIndex]!,
     ];
+
+    // Use the first array's dim names as the canonical list. All levels of a
+    // multiscale pyramid share the same dim names by spec.
+    const arrDimNames: (string | null)[] = arrays[0]?.dimensionNames ?? [];
+    const dimensionNames: string[] = arrDimNames.filter(
+      (d): d is string => d !== null,
+    );
+    if (dimensionNames.length !== arrDimNames.length) {
+      throw new Error(
+        "ZarrLayer requires every zarr array dimension to have a name. " +
+          `Got dimension_names = ${JSON.stringify(arrDimNames)}.`,
+      );
+    }
 
     validateSpatialDimOrder({ dimensionNames, spatialDims });
     validateSelection({
@@ -416,8 +425,9 @@ export class ZarrLayer<
     // the state declaration. Revisit if zarrita exposes a narrower getter.
     const arr = arrays[zarrLevelIdx]! as zarr.Array<Dtype, Store>;
 
-    // Use meta.axes as the authoritative ordered dim names (same as _parseZarr).
-    const dimensionNames: string[] = meta.axes;
+    // Use the zarr array's actual ordered dim names (includes non-spatial
+    // dims like time/band), not meta.axes (spatial only).
+    const arrDimNames = arr.dimensionNames ?? [];
     const tileWidth = arr.chunks[arr.chunks.length - 1]!;
     const tileHeight = arr.chunks[arr.chunks.length - 2]!;
 
@@ -431,7 +441,7 @@ export class ZarrLayer<
 
     // Build slice per array dim: spatial dims get tile-bounded slices,
     // non-spatial dims are filled from the user's `selection` prop.
-    const sliceSpec: SliceInput[] = dimensionNames.map((dimName: string) => {
+    const sliceSpec: SliceInput[] = arrDimNames.map((dimName) => {
       if (dimName === spatialDims[0]) {
         return zarr.slice(rowStart, rowEnd);
       }
@@ -439,7 +449,7 @@ export class ZarrLayer<
         return zarr.slice(colStart, colEnd);
       }
       // validateSelection guarantees presence for all non-spatial dims.
-      return this.props.selection[dimName]!;
+      return this.props.selection[dimName!]!;
     });
 
     // Compute per-tile affine: compose level affine with pixel offset of this tile
