@@ -1,9 +1,35 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
+import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
+import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
+import type { Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import * as zarr from "zarrita";
+import type { EcmwfTileData } from "./ecmwf/get-tile-data.js";
+import { getTileData } from "./ecmwf/get-tile-data.js";
+import {
+  ECMWF_GEOZARR_ATTRS,
+  ECMWF_LEAD_TIME_COUNT,
+} from "./ecmwf/metadata.js";
+import { makeRenderTile } from "./ecmwf/render-tile.js";
+import { buildSelection } from "./ecmwf/selection.js";
+import { createTemperatureColormapTexture } from "./gpu/colormap.js";
+import { ControlPanel } from "./ui/control-panel.js";
+
+// Set to the actual ECMWF IFS ENS zarr store URL from Dynamical.org.
+// Inspect the store's consolidated metadata to confirm init_time length
+// before setting INIT_TIME_IDX below.
+const ZARR_URL =
+  "https://data.dynamical.org/ecmwf/ifs-ens/forecast-15-day-0-25-degree/latest.zarr";
+const VARIABLE = "temperature_2m";
+const INIT_TIME_IDX = 746; // most recent (adjust for actual dataset length)
+const ENSEMBLE_MEMBER_IDX = 0; // control run
+const RESCALE_MIN = -40; // °C
+const RESCALE_MAX = 50; // °C
+const FRAME_DURATION_MS = 200;
 
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -13,22 +39,123 @@ function DeckGLOverlay(props: MapboxOverlayProps) {
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [leadTimeIdx, setLeadTimeIdx] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
+    null,
+  );
+
+  // The colormap texture is created lazily on the first tile load (when a
+  // luma.gl Device first becomes available via options.device). We store it
+  // in a ref, not state, because the first renderTile call for the first
+  // tile happens synchronously after its getTileData resolves, and deck.gl
+  // guarantees getTileData → renderTile ordering for a given tile. No React
+  // re-render needed between the two.
+  const colormapRef = useRef<Texture | null>(null);
+
+  // Open the Zarr store + variable once.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const store = new zarr.FetchStore(ZARR_URL);
+      const root = await zarr.open(store, { kind: "group" });
+      const opened = await zarr.open(root.resolve(VARIABLE), {
+        kind: "array",
+      });
+      if (cancelled) return;
+      setArr(opened as zarr.Array<"float32", zarr.Readable>);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Animation loop: advance leadTimeIdx every FRAME_DURATION_MS while playing.
+  // Uses requestAnimationFrame so it auto-pauses when the tab is hidden.
+  useEffect(() => {
+    if (!isPlaying) return;
+    let raf = 0;
+    let last = performance.now();
+    const loop = (now: number) => {
+      if (now - last >= FRAME_DURATION_MS) {
+        setLeadTimeIdx((i) => (i + 1) % ECMWF_LEAD_TIME_COUNT);
+        last = now;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [isPlaying]);
+
+  const selection = useMemo(
+    () =>
+      buildSelection({
+        initTimeIdx: INIT_TIME_IDX,
+        ensembleMemberIdx: ENSEMBLE_MEMBER_IDX,
+      }),
+    [],
+  );
+
+  // getTileData wrapper: lazily creates the shared colormap texture on the
+  // first tile load (options.device is the luma.gl Device owned by deck.gl).
+  const getTileDataWithColormap = useCallback(
+    async (
+      openedArr: zarr.Array<zarr.DataType, zarr.Readable>,
+      options: GetTileDataOptions,
+    ) => {
+      if (!colormapRef.current) {
+        colormapRef.current = createTemperatureColormapTexture(options.device);
+      }
+      return getTileData(openedArr, options);
+    },
+    [],
+  );
+
+  // renderTile reads colormap from the ref. Safe because deck.gl always runs
+  // getTileData before renderTile for the same tile, so the ref is populated
+  // by the time this fires on real data.
+  const renderTile = useCallback(
+    (data: EcmwfTileData) => {
+      const colormapTexture = colormapRef.current;
+      if (!colormapTexture) {
+        // Defensive: shouldn't occur per the ordering guarantee above.
+        return { renderPipeline: [] };
+      }
+      return makeRenderTile({
+        layerIndex: leadTimeIdx,
+        colormapTexture,
+        rescaleMin: RESCALE_MIN,
+        rescaleMax: RESCALE_MAX,
+      })(data);
+    },
+    [leadTimeIdx],
+  );
+
+  const layers = arr
+    ? [
+        new ZarrLayer<zarr.Readable, "float32", EcmwfTileData>({
+          id: "ecmwf-zarr-layer",
+          source: arr,
+          metadata: ECMWF_GEOZARR_ATTRS,
+          selection,
+          getTileData: getTileDataWithColormap,
+          renderTile,
+          updateTriggers: {
+            renderTile: [leadTimeIdx],
+          },
+        }),
+      ]
+    : [];
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
         ref={mapRef}
-        initialViewState={{
-          longitude: 0,
-          latitude: 20,
-          zoom: 1.5,
-        }}
+        initialViewState={{ longitude: 0, latitude: 20, zoom: 1.5 }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={[]} interleaved />
+        <DeckGLOverlay layers={layers} interleaved />
       </MaplibreMap>
-
       <div
         style={{
           position: "absolute",
@@ -40,69 +167,12 @@ export default function App() {
           zIndex: 1000,
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "20px",
-            background: "white",
-            padding: "16px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            width: "300px",
-            pointerEvents: "auto",
-          }}
-        >
-          <button
-            type="button"
-            style={{
-              all: "unset",
-              width: "100%",
-              margin: 0,
-              fontSize: "16px",
-              fontWeight: "bold",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              userSelect: "none",
-            }}
-            onClick={() => setPanelOpen((o) => !o)}
-          >
-            Dynamical Zarr — ECMWF
-            <span
-              style={{
-                fontSize: "12px",
-                transition: "transform 0.2s",
-                transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
-              }}
-            >
-              ▼
-            </span>
-          </button>
-          {panelOpen && (
-            <>
-              <p
-                style={{
-                  margin: "8px 0 12px 0",
-                  fontSize: "12px",
-                  color: "#666",
-                }}
-              >
-                ECMWF forecast data from Dynamical.org
-              </p>
-              <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
-                <a
-                  href="https://developmentseed.org/deck.gl-raster/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  deck.gl-raster Documentation ↗
-                </a>
-              </p>
-            </>
-          )}
-        </div>
+        <ControlPanel
+          leadTimeIdx={leadTimeIdx}
+          isPlaying={isPlaying}
+          onLeadTimeIdxChange={setLeadTimeIdx}
+          onPlayPauseToggle={() => setIsPlaying((p) => !p)}
+        />
       </div>
     </div>
   );
