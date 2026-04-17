@@ -20,7 +20,8 @@
     "maplibre-gl": "^5.19.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-map-gl": "^8.1.0"
+    "react-map-gl": "^8.1.0",
+    "zarrita": "^0.7"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
