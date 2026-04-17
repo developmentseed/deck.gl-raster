@@ -27,7 +27,10 @@ uniform ${MODULE_NAME}Uniforms {
 } ${MODULE_NAME};
 `,
   inject: {
-    "fs:#decl": `uniform sampler2DArray dataTex;`,
+    "fs:#decl": `
+precision highp sampler2DArray;
+uniform sampler2DArray dataTex;
+`,
     "fs:DECKGL_FILTER_COLOR": /* glsl */ `
       float v = texture(dataTex, vec3(geometry.uv, ${MODULE_NAME}.layerIndex)).r;
       if (isnan(v)) discard;
