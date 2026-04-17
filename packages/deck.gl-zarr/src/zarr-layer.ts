@@ -554,10 +554,14 @@ export class ZarrLayer<
     const { image, renderPipeline }: RenderTileResult = this.props.renderTile(
       props.data as DataT,
     );
+    // Only forward `image` when the user actually supplied one. RasterLayer
+    // treats `image` as an async "type: image" prop and chokes on an
+    // explicit `undefined` (it calls createTexture on whatever was passed).
+    // Its documented default is `null`.
     const rasterLayer = new RasterLayer(
       this.getSubLayerProps({
         id: `${props.id}-raster`,
-        image,
+        image: image ?? null,
         renderPipeline: renderPipeline ?? [],
         width,
         height,
