@@ -8,9 +8,13 @@
  */
 export const ECMWF_GEOZARR_ATTRS = {
   "spatial:dimensions": ["latitude", "longitude"],
-  // [a, b, c, d, e, f] where px = a + b*col + c*row, py = d + e*col + f*row
-  // For ECMWF: top-left corner at (lon=-180, lat=90), step (0.25, -0.25).
-  "spatial:transform": [-180, 0.25, 0, 90, 0, -0.25],
+  // Affine [a, b, c, d, e, f] in this repo's convention (see @developmentseed/affine):
+  //   x_out = a*col + b*row + c
+  //   y_out = d*col + e*row + f
+  // For ECMWF: top-left corner at (lon=-180, lat=90); step (0.25°, -0.25°).
+  //   x_out = 0.25*col +  0*row + (-180)  → [-180, 180]
+  //   y_out =   0*col + (-0.25)*row + 90  → [90, -90.25]
+  "spatial:transform": [0.25, 0, -180, 0, -0.25, 90],
   "spatial:shape": [721, 1440], // [height, width]
   "proj:code": "EPSG:4326",
 } as const;
