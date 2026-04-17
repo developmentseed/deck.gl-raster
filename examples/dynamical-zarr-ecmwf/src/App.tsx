@@ -64,10 +64,14 @@ export default function App() {
         new zarr.FetchStore(ZARR_URL),
         { format: "v3" },
       );
+      console.log("Opened Zarr store:", store);
       const root = await zarr.open.v3(store, { kind: "group" });
+      console.log("Opened Zarr root group:", root);
       const opened = await zarr.open.v3(root.resolve(VARIABLE), {
         kind: "array",
       });
+      console.log("Opened Zarr array:", opened);
+
       if (cancelled) return;
       setArr(opened as zarr.Array<"float32", zarr.Readable>);
     })();
@@ -146,9 +150,14 @@ export default function App() {
           selection,
           getTileData: getTileDataWithColormap,
           renderTile,
+          // debug: true,
+          // debugOpacity: 0.2,
           updateTriggers: {
             renderTile: [leadTimeIdx],
           },
+          // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+          // doesn't know about it.
+          beforeId: "boundary_country_outline",
         }),
       ]
     : [];
@@ -157,7 +166,7 @@ export default function App() {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
         ref={mapRef}
-        initialViewState={{ longitude: 0, latitude: 20, zoom: 1.5 }}
+        initialViewState={{ longitude: 10, latitude: 45, zoom: 4.5 }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
         <DeckGLOverlay layers={layers} interleaved />
