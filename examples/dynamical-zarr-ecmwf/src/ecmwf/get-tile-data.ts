@@ -25,21 +25,8 @@ export async function getTileData(
 ): Promise<EcmwfTileData> {
   const { device, sliceSpec, width, height, signal } = options;
 
-  console.log("[getTileData] fetching", {
-    tile: [options.x, options.y, options.z],
-    sliceSpec,
-    width,
-    height,
-  });
   const chunk = await zarr.get(arr, sliceSpec, { signal });
   const { data } = chunk;
-
-  console.log("[getTileData] sliced", {
-    shape: chunk.shape,
-    byteLength: data.byteLength,
-    first5: Array.from(data.slice(0, 5)),
-    any_nonnan: data.some((v) => !Number.isNaN(v)),
-  });
 
   // Shape must be [depth, height, width] where depth is the kept lead_time dim.
   if (chunk.shape.length !== 3) {
