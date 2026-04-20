@@ -5,9 +5,8 @@ import {
   decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
-import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
-import type { Texture } from "@luma.gl/core";
+import type { Device, Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -92,12 +91,15 @@ export default function App() {
     };
   }, []);
 
-  // The colormap 2d-array texture is created lazily on the first tile load
-  // (when the luma.gl Device becomes available via options.device). We store
-  // it in a ref, not state, because the first renderTile call for the first
-  // tile happens synchronously after its getTileData resolves, and deck.gl
-  // guarantees getTileData → renderTile ordering for a given tile.
-  const colormapRef = useRef<Texture | null>(null);
+  // Upload the colormap sprite once the luma.gl Device is available. The
+  // Device arrives via the overlay's `onDeviceInitialized` callback; the
+  // sprite was decoded asynchronously above.
+  const [device, setDevice] = useState<Device | null>(null);
+  const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
+  useEffect(() => {
+    if (!device || !colormapImage) return;
+    setColormapTexture(createColormapTexture(device, colormapImage));
+  }, [device, colormapImage]);
 
   // Open the Zarr store + variable once. The Dynamical.org ECMWF store uses
   // Zarr v3 with consolidated metadata (the full hierarchy is inlined in the
@@ -166,33 +168,10 @@ export default function App() {
     [],
   );
 
-  // getTileData wrapper: lazily uploads the shared colormap sprite on the
-  // first tile load (options.device is the luma.gl Device owned by deck.gl).
-  // Requires the sprite PNG to be decoded already (colormapImage set).
-  const getTileDataWithColormap = useCallback(
-    async (
-      openedArr: zarr.Array<"float32", zarr.Readable>,
-      options: GetTileDataOptions,
-    ) => {
-      if (!colormapRef.current && colormapImage) {
-        colormapRef.current = createColormapTexture(
-          options.device,
-          colormapImage,
-        );
-      }
-      return getTileData(openedArr, options);
-    },
-    [colormapImage],
-  );
-
-  // renderTile reads colormap from the ref. Safe because deck.gl always runs
-  // getTileData before renderTile for the same tile, so the ref is populated
-  // by the time this fires on real data.
   const renderTile = useCallback(
     (data: EcmwfTileData) => {
-      const colormapTexture = colormapRef.current;
       if (!colormapTexture) {
-        // Defensive: shouldn't occur per the ordering guarantee above.
+        // Defensive: layer isn't constructed until colormapTexture is ready.
         return { renderPipeline: [] };
       }
       return makeRenderTile({
@@ -209,6 +188,7 @@ export default function App() {
     [
       leadTimeIdx,
       colormapChoice,
+      colormapTexture,
       filterMin,
       filterMax,
       rescaleMin,
@@ -216,15 +196,16 @@ export default function App() {
     ],
   );
 
-  const layers = arr
-    ? [
-        new ZarrLayer<zarr.Readable, "float32", EcmwfTileData>({
-          id: "ecmwf-zarr-layer",
-          source: arr,
-          metadata: ECMWF_GEOZARR_ATTRS,
-          selection,
-          getTileData: getTileDataWithColormap,
-          renderTile,
+  const layers =
+    arr && colormapTexture
+      ? [
+          new ZarrLayer<zarr.Readable, "float32", EcmwfTileData>({
+            id: "ecmwf-zarr-layer",
+            source: arr,
+            metadata: ECMWF_GEOZARR_ATTRS,
+            selection,
+            getTileData,
+            renderTile,
           // debug: true,
           // debugOpacity: 0.2,
           updateTriggers: {
@@ -251,7 +232,11 @@ export default function App() {
         initialViewState={{ longitude: 10, latitude: 45, zoom: 4.5 }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={layers} interleaved />
+        <DeckGLOverlay
+          layers={layers}
+          interleaved
+          onDeviceInitialized={setDevice}
+        />
       </MaplibreMap>
       <div
         style={{
