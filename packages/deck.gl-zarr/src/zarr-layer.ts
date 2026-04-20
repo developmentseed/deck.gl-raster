@@ -124,16 +124,22 @@ export type ZarrLayerProps<
     | "maxRequests"
     | "refinementStrategy"
   > & {
-    // TODO: I think we may want to remove support for passing in a string/url
-    // to the root. We should probably force users to have already opened a
-    // zarrita store, and make them choose an array or group.
-
-    /** URL to the Zarr v3 store root. */
-    source: string | URL | zarr.Array<Dtype, Store> | zarr.Group<Store>;
+    /**
+     * A pre-opened zarrita {@link zarr.Array} or {@link zarr.Group}. Callers
+     * must build and configure the underlying store themselves (for example, a
+     * user may want to wrap a {@link zarr.FetchStore} with
+     * `withConsolidatedMetadata`, `withRangeCoalescing`.
+     *
+     * Pass an Array to render it directly as a single-level source; pass a
+     * Group to let the layer resolve a `variable` path and use the GeoZarr
+     * multiscale layout from its attrs.
+     */
+    source: zarr.Array<Dtype, Store> | zarr.Group<Store>;
 
     /**
-     * Optional path within the store to the variable group.
-     * If omitted, the root group is used.
+     * Optional path within the store to the variable group. Only applies
+     * when `source` is a {@link zarr.Group}; ignored when an Array is passed
+     * directly. If omitted, the group itself is used.
      */
     variable?: string;
 
@@ -276,21 +282,14 @@ export class ZarrLayer<
   async _parseZarr(): Promise<void> {
     const { source, variable, metadata: metadataOverride } = this.props;
 
-    // Reuse a pre-opened zarr.Array or zarr.Group when provided, so callers
-    // can configure the store (e.g. `withConsolidatedMetadata`) before
-    // handing it to the layer. Only fall back to constructing a new
-    // FetchStore when the source is a string / URL.
+    // Callers own the store. We accept a pre-opened Array (rendered as a
+    // single-level source) or Group (used directly, with optional `variable`
+    // resolution to a child group).
     let preopenedArray: zarr.Array<zarr.DataType, zarr.Readable> | null = null;
     let root:
       | zarr.Group<zarr.Readable>
       | zarr.Array<zarr.DataType, zarr.Readable>;
-
-    if (typeof source === "string" || source instanceof URL) {
-      const store = new zarr.FetchStore(source.toString());
-      // @ts-expect-error - for debugging
-      window.store = store;
-      root = await zarr.open(store);
-    } else if ("shape" in source) {
+    if ("shape" in source) {
       // zarr.Array — reuse directly as the (single) level's array.
       preopenedArray = source;
       root = source;

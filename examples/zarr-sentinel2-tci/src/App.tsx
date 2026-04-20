@@ -6,7 +6,7 @@ import type {
 } from "@developmentseed/deck.gl-zarr";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
@@ -96,23 +96,37 @@ export default function App() {
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [source, setSource] = useState<zarr.Group<zarr.Readable> | null>(null);
 
-  const zarrLayer = new ZarrLayer<
-    zarr.Readable,
-    zarr.DataType,
-    SentinelTileData
-  >({
-    id: "zarr-layer",
-    source: ZARR_URL,
-    // The TCI zarr is band-planar RGB: the band dim is consumed inside
-    // toImageData, not via slice selection. If the store turns out to expose
-    // a named non-spatial dim, add it here (e.g. `{ band: null }`).
-    selection: {},
-    getTileData,
-    renderTile,
-    debug,
-    debugOpacity,
-  });
+  // Open the store ourselves so we own version/consolidation decisions,
+  // then hand the Group to the layer.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const store = new zarr.FetchStore(ZARR_URL);
+      const group = await zarr.open(store, { kind: "group" });
+      if (cancelled) return;
+      setSource(group);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const zarrLayer = source
+    ? new ZarrLayer<zarr.Readable, zarr.DataType, SentinelTileData>({
+        id: "zarr-layer",
+        source,
+        // The TCI zarr is band-planar RGB: the band dim is consumed inside
+        // toImageData, not via slice selection. If the store turns out to
+        // expose a named non-spatial dim, add it here (e.g. `{ band: null }`).
+        selection: {},
+        getTileData,
+        renderTile,
+        debug,
+        debugOpacity,
+      })
+    : null;
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -125,7 +139,7 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={[zarrLayer]} interleaved />
+        <DeckGLOverlay layers={zarrLayer ? [zarrLayer] : []} interleaved />
       </MaplibreMap>
 
       <div
