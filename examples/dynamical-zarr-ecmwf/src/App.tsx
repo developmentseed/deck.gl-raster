@@ -28,6 +28,7 @@ import {
 /** Base step (hours) that `frameDurationMs` applies to. 3-hour steps dwell
  *  for `frameDurationMs`; 6-hour steps dwell for 2× that. */
 const BASE_STEP_HOURS = 3;
+
 import { makeRenderTile } from "./ecmwf/render-tile.js";
 import { buildSelection } from "./ecmwf/selection.js";
 import { ControlPanel } from "./ui/control-panel.js";
@@ -57,8 +58,7 @@ export default function App() {
   const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
     null,
   );
-  const [colormapId, setColormapId] =
-    useState<ColormapId>(DEFAULT_COLORMAP_ID);
+  const [colormapId, setColormapId] = useState<ColormapId>(DEFAULT_COLORMAP_ID);
   const [rescaleMin, setRescaleMin] = useState(INITIAL_RESCALE_MIN);
   const [rescaleMax, setRescaleMax] = useState(INITIAL_RESCALE_MAX);
   // Filter range — independent of rescale. Starts wide open so nothing is
@@ -206,24 +206,24 @@ export default function App() {
             selection,
             getTileData,
             renderTile,
-          // debug: true,
-          // debugOpacity: 0.2,
-          updateTriggers: {
-            renderTile: [
-              leadTimeIdx,
-              colormapId,
-              rescaleMin,
-              rescaleMax,
-              filterMin,
-              filterMax,
-            ],
-          },
-          // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
-          // doesn't know about it.
-          beforeId: "boundary_country_outline",
-        }),
-      ]
-    : [];
+            // debug: true,
+            // debugOpacity: 0.2,
+            updateTriggers: {
+              renderTile: [
+                leadTimeIdx,
+                colormapId,
+                rescaleMin,
+                rescaleMax,
+                filterMin,
+                filterMax,
+              ],
+            },
+            // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+            // doesn't know about it.
+            beforeId: "boundary_country_outline",
+          }),
+        ]
+      : [];
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
