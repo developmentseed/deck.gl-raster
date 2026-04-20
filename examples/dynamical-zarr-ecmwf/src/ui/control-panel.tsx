@@ -343,6 +343,27 @@ export function ControlPanel(props: ControlPanelProps) {
           style={{ flex: 1, cursor: "pointer" }}
         />
       </label>
+      <div
+        style={{
+          marginTop: "16px",
+          paddingTop: "12px",
+          borderTop: "1px solid #eee",
+          fontSize: "11px",
+          color: "#888",
+          lineHeight: 1.4,
+        }}
+      >
+        ECMWF IFS ENS Forecast data processed by{" "}
+        <a
+          href="https://dynamical.org/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: "inherit" }}
+        >
+          dynamical.org
+        </a>{" "}
+        from ECMWF Open Data.
+      </div>
     </div>
   );
 }
