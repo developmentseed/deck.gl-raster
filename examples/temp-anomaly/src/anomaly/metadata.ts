@@ -16,42 +16,12 @@ export const ANOMALY_GEOZARR_ATTRS = {
 export const DATE_COUNT = 8;
 
 export const VARIABLES = [
-  {
-    value: "temp_mean_anom",
-    label: "Temp mean anomaly (°C)",
-    rescaleMin: -10,
-    rescaleMax: 10,
-  },
-  {
-    value: "temp_min_anom",
-    label: "Temp min anomaly (°C)",
-    rescaleMin: -10,
-    rescaleMax: 10,
-  },
-  {
-    value: "temp_max_anom",
-    label: "Temp max anomaly (°C)",
-    rescaleMin: -10,
-    rescaleMax: 10,
-  },
-  {
-    value: "temp_mean_std",
-    label: "Temp mean anomaly (σ)",
-    rescaleMin: -3,
-    rescaleMax: 3,
-  },
-  {
-    value: "temp_min_std",
-    label: "Temp min anomaly (σ)",
-    rescaleMin: -3,
-    rescaleMax: 3,
-  },
-  {
-    value: "temp_max_std",
-    label: "Temp max anomaly (σ)",
-    rescaleMin: -3,
-    rescaleMax: 3,
-  },
+  { value: "temp_mean_anom", label: "Temp mean anomaly (°C)", unit: "°C", rescaleMin: -10, rescaleMax: 10 },
+  { value: "temp_min_anom",  label: "Temp min anomaly (°C)",  unit: "°C", rescaleMin: -10, rescaleMax: 10 },
+  { value: "temp_max_anom",  label: "Temp max anomaly (°C)",  unit: "°C", rescaleMin: -10, rescaleMax: 10 },
+  { value: "temp_mean_std",  label: "Temp mean anomaly (σ)",  unit: "σ",  rescaleMin: -3,  rescaleMax: 3  },
+  { value: "temp_min_std",   label: "Temp min anomaly (σ)",   unit: "σ",  rescaleMin: -3,  rescaleMax: 3  },
+  { value: "temp_max_std",   label: "Temp max anomaly (σ)",   unit: "σ",  rescaleMin: -3,  rescaleMax: 3  },
 ] as const;
 
 export type VariableKey = (typeof VARIABLES)[number]["value"];

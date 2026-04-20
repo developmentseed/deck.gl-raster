@@ -27,6 +27,8 @@ const ZARR_URL = `${window.location.origin}/anomaly.zarr`;
 
 const FRAME_DURATION_MS = 400;
 
+type ClickedCell = { latIdx: number; lonIdx: number; lat: number; lon: number };
+
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
   overlay.setProps(props);
@@ -38,8 +40,13 @@ export default function App() {
   const [dateIdx, setDateIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [variable, setVariable] = useState<VariableKey>(VARIABLES[0].value);
-  const [arrays, setArrays] = useState<Record<VariableKey, zarr.Array<"float32", zarr.Readable>> | null>(null);
+  const [arrays, setArrays] = useState<Record<
+    VariableKey,
+    zarr.Array<"float32", zarr.Readable>
+  > | null>(null);
   const [dates, setDates] = useState<string[]>([]);
+  const [clickedCell, setClickedCell] = useState<ClickedCell | null>(null);
+  const [queryValue, setQueryValue] = useState<{ anom: number; std: number } | null>(null);
   const colormapRef = useRef<Texture | null>(null);
 
   // Derive current array and rescale range from selected variable.
@@ -47,7 +54,7 @@ export default function App() {
   const varConfig = VARIABLES.find((v) => v.value === variable)!;
   const { rescaleMin, rescaleMax } = varConfig;
 
-  // Open all variable arrays and read valid_date coordinate in one pass.
+  // Open all variable arrays at startup.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -57,7 +64,6 @@ export default function App() {
       );
       const root = await zarr.open.v3(store, { kind: "group" });
 
-      // Open all variable arrays in parallel.
       const entries = await Promise.all(
         VARIABLES.map(async ({ value }) => [
           value,
@@ -67,7 +73,6 @@ export default function App() {
 
       // Compute dates from today. zarrita doesn't reliably decode xarray's
       // datetime64[ns] encoding in zarr v3, so we derive them directly.
-      // The daily pipeline always writes today + (DATE_COUNT - 1) days.
       const parsedDates = Array.from({ length: DATE_COUNT }, (_, i) => {
         const d = new Date();
         d.setUTCDate(d.getUTCDate() + i);
@@ -75,12 +80,49 @@ export default function App() {
       });
 
       if (cancelled) return;
-      setArrays(Object.fromEntries(entries) as Record<VariableKey, zarr.Array<"float32", zarr.Readable>>);
+      setArrays(
+        Object.fromEntries(entries) as Record<
+          VariableKey,
+          zarr.Array<"float32", zarr.Readable>
+        >,
+      );
       setDates(parsedDates);
     })();
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Re-fetch both anom and std for the clicked cell whenever the date, variable, or location changes.
+  useEffect(() => {
+    if (!clickedCell || !arrays) return;
+    let cancelled = false;
+    // Derive the base name (e.g. "temp_mean") from whatever variable is selected,
+    // then always fetch both the _anom and _std versions for the query panel.
+    const base = variable.replace(/_anom$|_std$/, "") as "temp_mean" | "temp_min" | "temp_max";
+    const anomKey = `${base}_anom` as VariableKey;
+    const stdKey = `${base}_std` as VariableKey;
+    const idx = [dateIdx, clickedCell.latIdx, clickedCell.lonIdx] as const;
+    (async () => {
+      const [anomResult, stdResult] = await Promise.all([
+        zarr.get(arrays[anomKey], idx),
+        zarr.get(arrays[stdKey], idx),
+      ]);
+      if (cancelled) return;
+      const anom = anomResult as unknown as number;
+      const std = stdResult as unknown as number;
+      if (!Number.isNaN(anom) && !Number.isNaN(std)) setQueryValue({ anom, std });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [arrays, variable, dateIdx, clickedCell]);
+
+  // Convert a map click to zarr grid indices and store.
+  const handleMapClick = useCallback((lat: number, lon: number) => {
+    const latIdx = Math.min(720, Math.max(0, Math.round((90 - lat) / 0.25)));
+    const lonIdx = Math.min(1439, Math.max(0, Math.round((lon + 180) / 0.25)));
+    setClickedCell({ latIdx, lonIdx, lat, lon });
   }, []);
 
   // Animation loop.
@@ -152,6 +194,8 @@ export default function App() {
         ref={mapRef}
         initialViewState={{ longitude: 0, latitude: 20, zoom: 2 }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+        onClick={(e) => handleMapClick(e.lngLat.lat, e.lngLat.lng)}
+        onLoad={() => {}}
       >
         <DeckGLOverlay layers={layers} interleaved />
       </MaplibreMap>
@@ -170,6 +214,16 @@ export default function App() {
           dateIdx={dateIdx}
           dates={dates}
           variable={variable}
+          query={
+            clickedCell && queryValue !== null
+              ? {
+                  lat: clickedCell.lat,
+                  lon: clickedCell.lon,
+                  anom: queryValue.anom,
+                  std: queryValue.std,
+                }
+              : null
+          }
           isPlaying={isPlaying}
           onDateIdxChange={setDateIdx}
           onVariableChange={setVariable}
