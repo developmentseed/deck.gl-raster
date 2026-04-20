@@ -1,53 +1,53 @@
 {
-    "name": "@developmentseed/proj",
-    "version": "0.6.0-alpha.1",
-    "description": "Utilities for geographic reprojections.",
-    "type": "module",
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "default": "./dist/index.js"
-        }
-    },
-    "sideEffects": false,
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "tsc --build tsconfig.build.json",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "typecheck": "tsc --noEmit",
-        "prepublishOnly": "npm run build"
-    },
-    "keywords": [
-        "geotiff",
-        "zarr",
-        "cog",
-        "cloud-optimized-geotiff",
-        "raster",
-        "visualization",
-        "webgl",
-        "gpu"
-    ],
-    "author": "Development Seed",
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
-    },
-    "devDependencies": {
-        "@types/node": "^25.3.3",
-        "proj4": "^2.20.4",
-        "typescript": "^6.0.2",
-        "vitest": "^4.0.18"
-    },
-    "dependencies": {
-        "wkt-parser": "1.5.5"
-    },
-    "volta": {
-        "extends": "../../package.json"
+  "name": "@developmentseed/proj",
+  "version": "0.6.0-alpha.1",
+  "description": "Utilities for geographic reprojections.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "geotiff",
+    "zarr",
+    "cog",
+    "cloud-optimized-geotiff",
+    "raster",
+    "visualization",
+    "webgl",
+    "gpu"
+  ],
+  "author": "Development Seed",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "proj4": "^2.20.4",
+    "typescript": "^6.0.2",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "wkt-parser": "1.5.5"
+  },
+  "volta": {
+    "extends": "../../package.json"
+  }
 }
