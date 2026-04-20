@@ -213,8 +213,6 @@ export default function App() {
             selection,
             getTileData,
             renderTile,
-            // debug: true,
-            // debugOpacity: 0.2,
             updateTriggers: {
               renderTile: [
                 leadTimeIdx,
