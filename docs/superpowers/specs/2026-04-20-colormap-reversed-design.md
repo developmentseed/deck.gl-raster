@@ -48,9 +48,11 @@ color = texture(colormapTexture, vec2(idx, 0.));
 ```ts
 getUniforms: (props: Partial<ColormapProps>) => ({
   colormapTexture: props.colormapTexture,
-  reversed: props.reversed ? 1.0 : 0.0,
+  reversed: props.reversed ?? false,
 })
 ```
+
+The return is a boolean, not `1.0 / 0.0`, because `ShaderModule<PropsT>` derives the uniform return type from `PropsT` via `PickUniforms` — so a `boolean` prop forces a `boolean` return. luma.gl accepts booleans for `f32` uniforms and coerces them to 0.0/1.0 at runtime; this matches luma.gl's own `picking` module (`isActive: false` with `uniformTypes.isActive: "f32"`).
 
 ## Tests
 
@@ -60,9 +62,9 @@ New file `packages/deck.gl-raster/tests/gpu-modules/colormap.test.ts`, matching 
 - `inject["fs:#decl"]` declares the `colormapTexture` sampler.
 - `inject["fs:DECKGL_FILTER_COLOR"]` contains the `mix(...)` expression and the `texture(colormapTexture, ...)` call.
 - `uniformTypes.reversed === "f32"`.
-- `getUniforms({ reversed: true }).reversed === 1.0`.
-- `getUniforms({ reversed: false }).reversed === 0.0`.
-- `getUniforms({}).reversed === 0.0` (default).
+- `getUniforms({ reversed: true }).reversed === true`.
+- `getUniforms({ reversed: false }).reversed === false`.
+- `getUniforms({}).reversed === false` (default).
 - `colormapTexture` is passed through unchanged.
 
 ## Non-goals
