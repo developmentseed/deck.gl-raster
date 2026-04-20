@@ -36,12 +36,13 @@ export async function getTileData(
     sliceSpec as Parameters<typeof zarr.get>[1],
     { opts: { signal } },
   );
-  const dataArr = result.data as Float32Array;
+  const data = result.data;
+
   console.log("[getTileData] sliced", {
     shape: result.shape,
-    byteLength: dataArr.byteLength,
-    first5: Array.from(dataArr.slice(0, 5)),
-    any_nonnan: dataArr.some((v) => !Number.isNaN(v)),
+    byteLength: data.byteLength,
+    first5: Array.from(data.slice(0, 5)),
+    any_nonnan: data.some((v) => !Number.isNaN(v)),
   });
 
   // Shape must be [depth, height, width] where depth is the kept lead_time dim.
@@ -62,8 +63,6 @@ export async function getTileData(
         `${width}], got [${result.shape.join(", ")}]`,
     );
   }
-
-  const data = result.data as Float32Array;
 
   const texture = device.createTexture({
     dimension: "2d-array",
