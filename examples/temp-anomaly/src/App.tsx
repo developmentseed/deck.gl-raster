@@ -65,12 +65,14 @@ export default function App() {
         ]),
       );
 
-      // Read valid_date coordinate (int64 nanoseconds since Unix epoch).
-      const dateCoord = await zarr.open.v3(root.resolve("valid_date"), { kind: "array" });
-      const dateResult = await zarr.get(dateCoord, [null]);
-      const parsedDates = Array.from(dateResult.data as BigInt64Array).map((ns) =>
-        new Date(Number(ns) / 1_000_000).toISOString().slice(0, 10),
-      );
+      // Compute dates from today. zarrita doesn't reliably decode xarray's
+      // datetime64[ns] encoding in zarr v3, so we derive them directly.
+      // The daily pipeline always writes today + (DATE_COUNT - 1) days.
+      const parsedDates = Array.from({ length: DATE_COUNT }, (_, i) => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() + i);
+        return d.toISOString().slice(0, 10);
+      });
 
       if (cancelled) return;
       setArrays(Object.fromEntries(entries) as Record<VariableKey, zarr.Array<"float32", zarr.Readable>>);
