@@ -81,7 +81,8 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const bytes = await (await fetch(colormapsPngUrl)).arrayBuffer();
+      const resp = await fetch(colormapsPngUrl);
+      const bytes = await resp.arrayBuffer();
       const image = await decodeColormapSprite(bytes);
       if (cancelled) return;
       setColormapImage(image);
