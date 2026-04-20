@@ -24,7 +24,9 @@ export type ColormapProps = {
 
 ### Shader
 
-Add a uniform block exposing a `float reversed` (0.0 / 1.0). This follows the UBO pattern already used in `linear-rescale.ts` and `filter-nodata.ts`. A float is used rather than a bool to avoid std140 layout quirks with GLSL booleans.
+Add a uniform block exposing a `float reversed` (0.0 / 1.0). This follows the UBO pattern already used in `linear-rescale.ts` and `filter-nodata.ts`.
+
+luma.gl v9.3's `uniformTypes` has no `"bool"` option — a boolean must be declared as `"f32"`, `"i32"`, or `"u32"` (see `UniformLeafType` in `@luma.gl/shadertools/dist/lib/utils/uniform-types.d.ts`). `f32` is the simplest of the three because it plugs directly into GLSL `mix()` without a cast; `i32`/`u32` would require `mix(..., float(colormap.reversed))`.
 
 ```glsl
 uniform colormapUniforms {
