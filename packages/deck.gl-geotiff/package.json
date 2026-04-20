@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/deck.gl-geotiff",
-  "version": "0.5.0",
+  "version": "0.6.0-alpha.1",
   "description": "GeoTIFF and Cloud-Optimized GeoTIFF visualization in deck.gl",
   "type": "module",
   "main": "./dist/index.js",

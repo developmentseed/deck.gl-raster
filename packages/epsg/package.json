@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/epsg",
-  "version": "0.5.0",
+  "version": "0.6.0-alpha.1",
   "description": "The full EPSG projection database, compressed to 309kb for the web.",
   "type": "module",
   "exports": {
