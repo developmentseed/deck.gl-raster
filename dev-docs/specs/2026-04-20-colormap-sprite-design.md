@@ -65,7 +65,8 @@ export type ColormapProps = {
   /**
    * The colormap sprite as a 2D array texture. Each layer of the array is
    * one 256×1 RGBA8 colormap. Build from the shipped `colormaps.png` with
-   * {@link loadColormapSprite}, or bring your own.
+   * {@link decodeColormapSprite} + {@link createColormapTexture}, or bring
+   * your own.
    */
   colormapTexture: Texture;
   /**
@@ -157,73 +158,121 @@ Example consumer patterns (documented in the module's JSDoc):
 ```ts
 // Vite / webpack with url-loader: ?url returns a string URL
 import colormapsUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png?url";
-const { texture, index } = await loadColormapSprite(device, colormapsUrl);
+const imageData = await decodeColormapSprite(colormapsUrl);
+const colormapTexture = createColormapTexture(device, imageData);
 ```
 
 ```ts
 // Bundler configured to treat .png as arraybuffer: pass the buffer directly
 import colormapsBuffer from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
-const { texture, index } = await loadColormapSprite(device, colormapsBuffer);
+const imageData = await decodeColormapSprite(colormapsBuffer);
+const colormapTexture = createColormapTexture(device, imageData);
 ```
 
-### Loader helper
+### Loader helpers
 
-New file: `packages/deck.gl-raster/src/gpu-modules/load-colormap-sprite.ts`.
+The loader is split into two functions with a single new file per function:
+
+- `packages/deck.gl-raster/src/gpu-modules/decode-colormap-sprite.ts` — pure
+  CPU / browser-API work. Fetches and decodes the sprite image. Does not
+  require a `Device`, so it can run as soon as the app boots and complete
+  in parallel with whatever code eventually brings a device online.
+- `packages/deck.gl-raster/src/gpu-modules/create-colormap-texture.ts` —
+  synchronous GPU upload. Takes an already-decoded `ImageData` and produces
+  a `Texture` with `dimension: "2d-array"`.
 
 ```ts
+// decode-colormap-sprite.ts
+export type ColormapSpriteSource =
+  | string
+  | ArrayBuffer
+  | Uint8Array
+  | ImageBitmap;
+
+/**
+ * Fetch and decode a colormap sprite image into `ImageData`. Does not
+ * require a GPU `Device`, so it can run during app startup in parallel
+ * with the device-creation path.
+ *
+ * Supported source forms:
+ * - `string` URL: the helper issues a `fetch` and decodes the response
+ *   via `createImageBitmap`.
+ * - `ArrayBuffer` / `Uint8Array`: wrapped in a `Blob` and decoded via
+ *   `createImageBitmap`.
+ * - `ImageBitmap`: drawn into an `OffscreenCanvas` to extract pixels.
+ */
+export async function decodeColormapSprite(
+  source: ColormapSpriteSource,
+): Promise<ImageData>;
+```
+
+```ts
+// create-colormap-texture.ts
 import type { Device, Texture } from "@luma.gl/core";
 
 /**
- * Load a colormap sprite into a 2D array texture on the given device.
+ * Upload a decoded colormap sprite to the GPU as a 2D array texture.
  *
- * Accepts either:
- * - a URL string (the helper issues a `fetch` and decodes the response), or
- * - an already-decoded source (`ArrayBuffer`, `Uint8Array`, `ImageBitmap`,
- *   or `ImageData`) — useful when the consumer's bundler has already handled
- *   the binary asset.
+ * The sprite must be exactly 256 pixels wide; each row becomes one layer
+ * of the returned `Texture`. Use the result as the `colormapTexture` prop
+ * of the `Colormap` shader module.
  *
- * The returned texture has `dimension: "2d-array"` with one layer per row of
- * the source image. Use it as the `colormapTexture` prop of the `Colormap`
- * shader module.
- *
- * Name → layer index mappings are not this helper's concern: for the shipped
- * sprite, import {@link COLORMAP_INDEX} directly; for custom sprites, the
- * consumer owns whatever mapping they need.
+ * Synchronous — pair with {@link decodeColormapSprite} for the full
+ * URL-in, texture-out flow.
  */
-export async function loadColormapSprite(
+export function createColormapTexture(
   device: Device,
-  source: string | ArrayBuffer | Uint8Array | ImageBitmap | ImageData,
-): Promise<Texture>;
+  imageData: ImageData,
+): Texture;
 ```
 
-Internal implementation responsibilities:
+`createColormapTexture` responsibilities:
 
-1. Normalize `source` to `ImageData` (fetch + `createImageBitmap` + canvas if
-   it's a URL or a raw buffer).
-2. Compute `layerCount = imageData.height`; throw if `imageData.width` is not
-   256.
-3. Slice the image into `layerCount` `Uint8Array` rows and upload as a
-   `Texture` with `dimension: "2d-array"`, `format: "rgba8unorm"`, size
-   `[256, 1, layerCount]`, and `mipmaps: false`. Filters: `mag: "linear"`,
-   `min: "linear"` — safe because there is only one texel in the `v`
-   direction and we always sample at `v = 0.5`.
+1. Validate `imageData.width === 256`; throw otherwise.
+2. Set `depth = imageData.height` (one colormap per row; the count is
+   carried implicitly in the image's `height`).
+3. Upload via `device.createTexture` with `dimension: "2d-array"`,
+   `format: "rgba8unorm"`, size `[256, 1, imageData.height]`, and
+   `mipLevels: 1`. Filters: `min: "linear"`, `mag: "linear"` — safe
+   because there is only one texel in the `v` direction and we always
+   sample at `v = 0.5`. Address modes: `clamp-to-edge` in all three axes.
 4. Return the `Texture`.
+
+`ImageData`'s row-major RGBA layout is already a valid 2D-array upload
+layout for 1-texel-tall layers, so the byte buffer is handed to luma.gl
+unchanged.
 
 Keeping name→index separate from the loader avoids a footgun where a
 consumer loads a custom sprite and silently inherits the default catalog's
-mapping. Importing `COLORMAP_INDEX` directly is equally ergonomic for the
-common case:
+mapping. Importing `COLORMAP_INDEX` directly is ergonomic for the common
+case. Typical "device ready now" usage:
 
 ```ts
-import { Colormap, COLORMAP_INDEX, loadColormapSprite }
-  from "@developmentseed/deck.gl-raster/gpu-modules";
+import {
+  Colormap,
+  COLORMAP_INDEX,
+  createColormapTexture,
+  decodeColormapSprite,
+} from "@developmentseed/deck.gl-raster/gpu-modules";
 
-const texture = await loadColormapSprite(device, colormapsUrl);
+const imageData = await decodeColormapSprite(colormapsUrl);
+const colormapTexture = createColormapTexture(device, imageData);
+
 // ...
 { module: Colormap, props: {
-    colormapTexture: texture,
+    colormapTexture,
     colormapIndex: COLORMAP_INDEX.viridis,
   } }
+```
+
+"Decode at app boot, upload when device is ready":
+
+```ts
+// At app load — no device yet.
+const spritePromise = decodeColormapSprite(colormapsUrl);
+
+// Later, after device initialization.
+const colormapTexture = createColormapTexture(device, await spritePromise);
 ```
 
 ### Generator script
@@ -272,12 +321,13 @@ tsc build
 Consumer at runtime
   │
   ├─ import colormapsUrl from "…/gpu-modules/colormaps.png?url"
-  ├─ const { texture, index } = await loadColormapSprite(device, colormapsUrl)
+  ├─ const imageData = await decodeColormapSprite(colormapsUrl)   ← no device
+  ├─ const colormapTexture = createColormapTexture(device, imageData)
   │
   └─ per-layer render pipeline:
         { module: Colormap, props: {
-            colormapTexture: texture,
-            colormapIndex: index.viridis,   // or COLORMAP_INDEX.viridis
+            colormapTexture,
+            colormapIndex: COLORMAP_INDEX.viridis,
             reversed: false,
           } }
 
@@ -292,8 +342,12 @@ Shader (per fragment)
 ### Unit tests
 
 Existing file `packages/deck.gl-raster/tests/gpu-modules/colormap.test.ts` is
-updated; a new `load-colormap-sprite.test.ts` covers the loader. No GPU
-needed — mock `Device` / `Texture` with `as any` as elsewhere in this repo.
+updated; a new `create-colormap-texture.test.ts` covers the upload helper.
+No GPU needed — mock `Device` / `Texture` with `as any` as elsewhere in
+this repo. `decodeColormapSprite` is not unit-tested because its entire
+body is browser-only APIs (`fetch`, `createImageBitmap`, `OffscreenCanvas`)
+that jsdom does not fully implement; it is exercised via the manual
+visual verification app.
 
 `Colormap` module:
 
@@ -307,18 +361,15 @@ needed — mock `Device` / `Texture` with `as any` as elsewhere in this repo.
   `fs:DECKGL_FILTER_COLOR` samples with a `vec3(..., 0.5, float(...))`
   coordinate.
 
-`loadColormapSprite`:
+`createColormapTexture`:
 
 - Given a mocked `ImageData` of width 256 and height 3, calls
   `device.createTexture` once with `dimension: "2d-array"`, `format:
   "rgba8unorm"`, width 256, height 1, depth 3.
 - Throws when the source's width is not 256.
 - Returns the same `Texture` instance that `device.createTexture` produced.
-
-The URL / `ArrayBuffer` / `Uint8Array` branches of the normalization logic
-depend on browser-only APIs (`fetch`, `createImageBitmap`, canvas
-`getImageData`) that jsdom does not fully implement — they are exercised
-via the manual visual verification app, not unit tests.
+- Passes the `imageData.data` bytes through unchanged as the texture's
+  `data`.
 
 ### Manual visual verification
 
@@ -338,15 +389,18 @@ a `<select>` bound to a React state variable that drives
 - **edit** `packages/deck.gl-raster/src/gpu-modules/colormap.ts` — swap
   `sampler2D` for `sampler2DArray`, add `colormapIndex` uniform (`i32`,
   defaults to `0`).
-- **new** `packages/deck.gl-raster/src/gpu-modules/load-colormap-sprite.ts` —
-  loader helper returning `{ texture, index }`.
+- **new** `packages/deck.gl-raster/src/gpu-modules/decode-colormap-sprite.ts` —
+  browser-API fetch + decode helper returning `ImageData`.
+- **new** `packages/deck.gl-raster/src/gpu-modules/create-colormap-texture.ts` —
+  synchronous GPU upload returning a 2D-array `Texture`.
 - **new (generated)** `packages/deck.gl-raster/src/gpu-modules/colormaps.png`
-  — committed N × 256 × 4 RGBA8 sprite.
+  — committed N × 256 × 4 RGBA8 sprite (one row per colormap).
 - **new (generated)**
   `packages/deck.gl-raster/src/gpu-modules/colormap-names.ts` — committed
   `COLORMAP_INDEX` + `ColormapName`.
 - **edit** `packages/deck.gl-raster/src/gpu-modules/index.ts` — re-export
-  `loadColormapSprite`, `ColormapSprite`, `COLORMAP_INDEX`, `ColormapName`.
+  `decodeColormapSprite`, `ColormapSpriteSource`, `createColormapTexture`,
+  `COLORMAP_INDEX`, `ColormapName`, `Colormap`, `ColormapProps`.
 - **edit** `packages/deck.gl-raster/scripts/generate_colormaps.py` — emit a
   single stacked PNG + one TS names file instead of N per-colormap PNGs.
 - **edit** `packages/deck.gl-raster/package.json` — add `"./gpu-modules/
@@ -355,7 +409,7 @@ a `<select>` bound to a React state variable that drives
 - **edit** `packages/deck.gl-raster/tests/gpu-modules/colormap.test.ts` —
   update for the new `sampler2DArray` declaration, `colormapIndex` uniform,
   and `vec3(..., 0.5, float(...))` sample coordinate.
-- **new** `packages/deck.gl-raster/tests/gpu-modules/load-colormap-sprite.test.ts`.
+- **new** `packages/deck.gl-raster/tests/gpu-modules/create-colormap-texture.test.ts`.
 - **edit** `CHANGELOG.md` — breaking-change note with the one-liner migration
   (wrap existing 256×1 uploads as a 1-layer 2D array, pass
   `colormapIndex: 0`).
