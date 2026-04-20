@@ -25,6 +25,12 @@ type ColormapChoiceShape = {
  */
 export const COLORMAP_CHOICES = [
   {
+    id: "thermal",
+    label: "thermal (cmocean sequential)",
+    colormapIndex: COLORMAP_INDEX.thermal,
+    reversed: false,
+  },
+  {
     id: "coolwarm",
     label: "coolwarm (diverging)",
     colormapIndex: COLORMAP_INDEX.coolwarm,
@@ -40,12 +46,6 @@ export const COLORMAP_CHOICES = [
     id: "balance",
     label: "balance (cmocean diverging)",
     colormapIndex: COLORMAP_INDEX.balance,
-    reversed: false,
-  },
-  {
-    id: "thermal",
-    label: "thermal (cmocean sequential)",
-    colormapIndex: COLORMAP_INDEX.thermal,
     reversed: false,
   },
   {
