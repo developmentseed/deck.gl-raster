@@ -31,7 +31,7 @@ export async function getTileData(
     width,
     height,
   });
-  const chunk = await zarr.get(arr, sliceSpec, { opts: { signal } });
+  const chunk = await zarr.get(arr, sliceSpec, { signal });
   const { data } = chunk;
 
   console.log("[getTileData] sliced", {

@@ -34,8 +34,8 @@ async function getTileData(
 ): Promise<SentinelTileData> {
   const result = await zarr.get(
     arr as zarr.Array<zarr.NumberDataType, zarr.Readable>,
-    options.sliceSpec as Parameters<typeof zarr.get>[1],
-    { opts: { signal: options.signal } },
+    options.sliceSpec,
+    { signal: options.signal },
   );
   const image = toImageData(result, options.width, options.height);
   return {
@@ -117,10 +117,9 @@ export default function App() {
     ? new ZarrLayer<zarr.Readable, zarr.DataType, SentinelTileData>({
         id: "zarr-layer",
         source,
-        // The TCI zarr is band-planar RGB: the band dim is consumed inside
-        // toImageData, not via slice selection. If the store turns out to
-        // expose a named non-spatial dim, add it here (e.g. `{ band: null }`).
-        selection: {},
+        // Keep all 3 bands; `toImageData` consumes the band-planar RGB and
+        // packs it into RGBA ImageData.
+        selection: { band: null },
         getTileData,
         renderTile,
         debug,
