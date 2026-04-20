@@ -4,6 +4,7 @@ import {
   LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Texture } from "@luma.gl/core";
+import { FilterRange } from "../gpu/filter-range.js";
 import { SampleTexture2DArray } from "../gpu/sample-texture-2d-array.js";
 import type { EcmwfTileData } from "./get-tile-data.js";
 
@@ -19,6 +20,10 @@ export type MakeRenderTileArgs = {
   colormapIndex: number;
   /** Whether to reverse the colormap. */
   colormapReversed: boolean;
+  /** Minimum value to keep (inclusive). Pixels below are discarded. */
+  filterMin: number;
+  /** Maximum value to keep (inclusive). Pixels above are discarded. */
+  filterMax: number;
   /** Minimum value for rescale (same units as the variable). */
   rescaleMin: number;
   /** Maximum value for rescale. */
@@ -37,6 +42,8 @@ export function makeRenderTile(args: MakeRenderTileArgs) {
     colormapTexture,
     colormapIndex,
     colormapReversed,
+    filterMin,
+    filterMax,
     rescaleMin,
     rescaleMax,
   } = args;
@@ -46,6 +53,12 @@ export function makeRenderTile(args: MakeRenderTileArgs) {
         {
           module: SampleTexture2DArray,
           props: { dataTex: data.texture, layerIndex },
+        },
+        // FilterRange runs on the raw scalar (still in `color.r`) before
+        // LinearRescale clamps it to [0, 1].
+        {
+          module: FilterRange,
+          props: { filterMin, filterMax },
         },
         {
           module: LinearRescale,

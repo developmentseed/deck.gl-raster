@@ -57,6 +57,10 @@ export default function App() {
     useState<ColormapId>(DEFAULT_COLORMAP_ID);
   const [rescaleMin, setRescaleMin] = useState(INITIAL_RESCALE_MIN);
   const [rescaleMax, setRescaleMax] = useState(INITIAL_RESCALE_MAX);
+  // Filter range — independent of rescale. Starts wide open so nothing is
+  // filtered until the user narrows it.
+  const [filterMin, setFilterMin] = useState(INITIAL_RESCALE_MIN);
+  const [filterMax, setFilterMax] = useState(INITIAL_RESCALE_MAX);
   const [frameDurationMs, setFrameDurationMs] = useState(
     INITIAL_FRAME_DURATION_MS,
   );
@@ -177,11 +181,20 @@ export default function App() {
         colormapTexture,
         colormapIndex: colormapChoice.colormapIndex,
         colormapReversed: colormapChoice.reversed,
+        filterMin,
+        filterMax,
         rescaleMin,
         rescaleMax,
       })(data);
     },
-    [leadTimeIdx, colormapChoice, rescaleMin, rescaleMax],
+    [
+      leadTimeIdx,
+      colormapChoice,
+      filterMin,
+      filterMax,
+      rescaleMin,
+      rescaleMax,
+    ],
   );
 
   const layers = arr
@@ -196,7 +209,14 @@ export default function App() {
           // debug: true,
           // debugOpacity: 0.2,
           updateTriggers: {
-            renderTile: [leadTimeIdx, colormapId, rescaleMin, rescaleMax],
+            renderTile: [
+              leadTimeIdx,
+              colormapId,
+              rescaleMin,
+              rescaleMax,
+              filterMin,
+              filterMax,
+            ],
           },
           // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
           // doesn't know about it.
@@ -231,12 +251,16 @@ export default function App() {
           colormapId={colormapId}
           rescaleMin={rescaleMin}
           rescaleMax={rescaleMax}
+          filterMin={filterMin}
+          filterMax={filterMax}
           frameDurationMs={frameDurationMs}
           onLeadTimeIdxChange={setLeadTimeIdx}
           onPlayPauseToggle={() => setIsPlaying((p) => !p)}
           onColormapIdChange={setColormapId}
           onRescaleMinChange={setRescaleMin}
           onRescaleMaxChange={setRescaleMax}
+          onFilterMinChange={setFilterMin}
+          onFilterMaxChange={setFilterMax}
           onFrameDurationMsChange={setFrameDurationMs}
         />
       </div>

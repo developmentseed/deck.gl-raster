@@ -32,12 +32,16 @@ export type ControlPanelProps = {
   colormapId: ColormapId;
   rescaleMin: number;
   rescaleMax: number;
+  filterMin: number;
+  filterMax: number;
   frameDurationMs: number;
   onLeadTimeIdxChange: (idx: number) => void;
   onPlayPauseToggle: () => void;
   onColormapIdChange: (id: ColormapId) => void;
   onRescaleMinChange: (v: number) => void;
   onRescaleMaxChange: (v: number) => void;
+  onFilterMinChange: (v: number) => void;
+  onFilterMaxChange: (v: number) => void;
   onFrameDurationMsChange: (v: number) => void;
 };
 
@@ -52,12 +56,16 @@ export function ControlPanel(props: ControlPanelProps) {
     colormapId,
     rescaleMin,
     rescaleMax,
+    filterMin,
+    filterMax,
     frameDurationMs,
     onLeadTimeIdxChange,
     onPlayPauseToggle,
     onColormapIdChange,
     onRescaleMinChange,
     onRescaleMaxChange,
+    onFilterMinChange,
+    onFilterMaxChange,
     onFrameDurationMsChange,
   } = props;
   const hours = ECMWF_LEAD_TIME_HOURS[leadTimeIdx] ?? 0;
@@ -67,13 +75,22 @@ export function ControlPanel(props: ControlPanelProps) {
 
   // Radix Slider.Root with two thumbs emits [min, max] pairs and keeps the
   // thumbs ordered internally, so no manual clamping is needed.
-  const handleRangeChange = (range: number[]) => {
+  const handleRescaleChange = (range: number[]) => {
     const [nextMin, nextMax] = range;
     if (nextMin !== undefined && nextMin !== rescaleMin) {
       onRescaleMinChange(nextMin);
     }
     if (nextMax !== undefined && nextMax !== rescaleMax) {
       onRescaleMaxChange(nextMax);
+    }
+  };
+  const handleFilterChange = (range: number[]) => {
+    const [nextMin, nextMax] = range;
+    if (nextMin !== undefined && nextMin !== filterMin) {
+      onFilterMinChange(nextMin);
+    }
+    if (nextMax !== undefined && nextMax !== filterMax) {
+      onFilterMaxChange(nextMax);
     }
   };
 
@@ -174,7 +191,7 @@ export function ControlPanel(props: ControlPanelProps) {
           marginBottom: "4px",
         }}
       >
-        <span>Range</span>
+        <span>Rescale range</span>
         <span>
           {rescaleMin}°C – {rescaleMax}°C
         </span>
@@ -184,7 +201,7 @@ export function ControlPanel(props: ControlPanelProps) {
         max={TEMP_SLIDER_MAX}
         step={TEMP_SLIDER_STEP}
         value={[rescaleMin, rescaleMax]}
-        onValueChange={handleRangeChange}
+        onValueChange={handleRescaleChange}
         minStepsBetweenThumbs={1}
         style={{
           position: "relative",
@@ -193,7 +210,7 @@ export function ControlPanel(props: ControlPanelProps) {
           userSelect: "none",
           touchAction: "none",
           height: "20px",
-          marginBottom: "16px",
+          marginBottom: "12px",
         }}
       >
         <Slider.Track
@@ -233,6 +250,74 @@ export function ControlPanel(props: ControlPanelProps) {
         ))}
       </Slider.Root>
 
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: "12px",
+          color: "#666",
+          marginBottom: "4px",
+        }}
+      >
+        <span>Filter range</span>
+        <span>
+          {filterMin}°C - {filterMax}°C
+        </span>
+      </div>
+      <Slider.Root
+        min={TEMP_SLIDER_MIN}
+        max={TEMP_SLIDER_MAX}
+        step={TEMP_SLIDER_STEP}
+        value={[filterMin, filterMax]}
+        onValueChange={handleFilterChange}
+        minStepsBetweenThumbs={1}
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          userSelect: "none",
+          touchAction: "none",
+          height: "20px",
+          marginBottom: "16px",
+        }}
+      >
+        <Slider.Track
+          style={{
+            position: "relative",
+            flexGrow: 1,
+            height: "4px",
+            background: "#ddd",
+            borderRadius: "2px",
+          }}
+        >
+          <Slider.Range
+            style={{
+              position: "absolute",
+              height: "100%",
+              background: "#b36a49",
+              borderRadius: "2px",
+            }}
+          />
+        </Slider.Track>
+        {(["min", "max"] as const).map((key) => (
+          <Slider.Thumb
+            key={key}
+            aria-label={key === "min" ? "Filter min (°C)" : "Filter max (°C)"}
+            style={{
+              display: "block",
+              width: "16px",
+              height: "16px",
+              borderRadius: "50%",
+              background: "#b36a49",
+              border: "2px solid white",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+              cursor: "pointer",
+              outline: "none",
+            }}
+          />
+        ))}
+      </Slider.Root>
+
       <label
         style={{
           display: "flex",
@@ -242,7 +327,12 @@ export function ControlPanel(props: ControlPanelProps) {
           color: "#666",
         }}
       >
-        <span style={{ whiteSpace: "nowrap" }}>Frame: {frameDurationMs} ms</span>
+        <span
+          style={{ whiteSpace: "nowrap" }}
+          title="Dwell time per 3 h lead-time step. 6 h steps (after +144 h) dwell twice as long so simulated-time pacing stays constant."
+        >
+          3 h step: {frameDurationMs} ms
+        </span>
         <input
           type="range"
           min={FRAME_MS_MIN}
