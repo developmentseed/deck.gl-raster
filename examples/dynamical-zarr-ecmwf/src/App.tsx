@@ -41,7 +41,6 @@ const ZARR_URL =
   "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/dynamical/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.zarr";
 
 const VARIABLE = "temperature_2m";
-const INIT_TIME_IDX = 746; // most recent (adjust for actual dataset length)
 const ENSEMBLE_MEMBER_IDX = 0; // control run
 const INITIAL_RESCALE_MIN = -40; // °C
 const INITIAL_RESCALE_MAX = 50; // °C
@@ -56,10 +55,14 @@ function DeckGLOverlay(props: MapboxOverlayProps) {
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [leadTimeIdx, setLeadTimeIdx] = useState(0);
+  const [initTimeIdx, setInitTimeIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
     null,
   );
+  // Number of init_time values in the dataset (= first dim of the array),
+  // known once the zarr array is opened.
+  const initTimeCount = arr ? arr.shape[0]! : 0;
   const [colormapId, setColormapId] = useState<ColormapId>(DEFAULT_COLORMAP_ID);
   const [rescaleMin, setRescaleMin] = useState(INITIAL_RESCALE_MIN);
   const [rescaleMax, setRescaleMax] = useState(INITIAL_RESCALE_MAX);
@@ -165,10 +168,10 @@ export default function App() {
   const selection = useMemo(
     () =>
       buildSelection({
-        initTimeIdx: INIT_TIME_IDX,
+        initTimeIdx,
         ensembleMemberIdx: ENSEMBLE_MEMBER_IDX,
       }),
-    [],
+    [initTimeIdx],
   );
 
   const renderTile = useCallback(
@@ -203,7 +206,9 @@ export default function App() {
     arr && colormapTexture
       ? [
           new ZarrLayer<zarr.Readable, "float32", EcmwfTileData>({
-            id: "ecmwf-zarr-layer",
+            // Include initTimeIdx in the id so switching init_time discards
+            // cached tiles from the previous forecast run.
+            id: `ecmwf-zarr-layer-${initTimeIdx}`,
             source: arr,
             metadata: ECMWF_GEOZARR_ATTRS,
             selection,
@@ -254,6 +259,8 @@ export default function App() {
       >
         <ControlPanel
           leadTimeIdx={leadTimeIdx}
+          initTimeIdx={initTimeIdx}
+          initTimeCount={initTimeCount}
           isPlaying={isPlaying}
           colormapId={colormapId}
           rescaleMin={rescaleMin}
@@ -261,6 +268,7 @@ export default function App() {
           filterMin={filterMin}
           filterMax={filterMax}
           frameDurationMs={frameDurationMs}
+          onInitTimeIdxChange={setInitTimeIdx}
           onLeadTimeIdxChange={setLeadTimeIdx}
           onPlayPauseToggle={() => setIsPlaying((p) => !p)}
           onColormapIdChange={setColormapId}

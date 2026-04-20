@@ -5,8 +5,12 @@ import { useState } from "react";
 import type { ColormapId } from "../ecmwf/colormap-choices.js";
 import { COLORMAP_CHOICES } from "../ecmwf/colormap-choices.js";
 import {
+  dateFromInitTimeIdx,
+  ECMWF_INIT_TIME_ORIGIN,
   ECMWF_LEAD_TIME_COUNT,
   ECMWF_LEAD_TIME_HOURS,
+  initTimeIdxFromDate,
+  isoDateString,
 } from "../ecmwf/metadata.js";
 
 /** Total number of rows in the shipped colormap sprite. */
@@ -29,6 +33,9 @@ const FRAME_MS_STEP = 10;
  */
 export type ControlPanelProps = {
   leadTimeIdx: number;
+  initTimeIdx: number;
+  /** Number of init_time values in the dataset; `0` while the zarr array is still opening. */
+  initTimeCount: number;
   isPlaying: boolean;
   colormapId: ColormapId;
   rescaleMin: number;
@@ -37,6 +44,7 @@ export type ControlPanelProps = {
   filterMax: number;
   frameDurationMs: number;
   onLeadTimeIdxChange: (idx: number) => void;
+  onInitTimeIdxChange: (idx: number) => void;
   onPlayPauseToggle: () => void;
   onColormapIdChange: (id: ColormapId) => void;
   onRescaleMinChange: (v: number) => void;
@@ -53,6 +61,8 @@ export type ControlPanelProps = {
 export function ControlPanel(props: ControlPanelProps) {
   const {
     leadTimeIdx,
+    initTimeIdx,
+    initTimeCount,
     isPlaying,
     colormapId,
     rescaleMin,
@@ -61,6 +71,7 @@ export function ControlPanel(props: ControlPanelProps) {
     filterMax,
     frameDurationMs,
     onLeadTimeIdxChange,
+    onInitTimeIdxChange,
     onPlayPauseToggle,
     onColormapIdChange,
     onRescaleMinChange,
@@ -140,256 +151,293 @@ export function ControlPanel(props: ControlPanelProps) {
       </button>
       {panelOpen && (
         <>
-      <div style={{ fontSize: "12px", color: "#666", marginBottom: "12px" }}>
-        Lead time: +{hours} h
-      </div>
-      <div
-        style={{
-          display: "flex",
-          gap: "8px",
-          alignItems: "center",
-          marginBottom: "16px",
-        }}
-      >
-        <button
-          type="button"
-          onClick={onPlayPauseToggle}
-          style={{ padding: "4px 10px", cursor: "pointer" }}
-        >
-          {isPlaying ? "Pause" : "Play"}
-        </button>
-        <input
-          type="range"
-          min={0}
-          max={ECMWF_LEAD_TIME_COUNT - 1}
-          value={leadTimeIdx}
-          onChange={(e) => onLeadTimeIdxChange(Number(e.target.value))}
-          style={{ flex: 1, cursor: "pointer" }}
-        />
-      </div>
-
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          fontSize: "12px",
-          color: "#666",
-          marginBottom: "8px",
-        }}
-      >
-        <span>Colormap:</span>
-        <select
-          value={colormapId}
-          onChange={(e) => onColormapIdChange(e.target.value as ColormapId)}
-          style={{ flex: 1, cursor: "pointer" }}
-        >
-          {COLORMAP_CHOICES.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div
-        role="img"
-        aria-label={`Colormap preview: ${selectedChoice.label}`}
-        style={{
-          width: "100%",
-          height: `${PREVIEW_ROW_HEIGHT}px`,
-          borderRadius: "2px",
-          border: "1px solid #ddd",
-          backgroundImage: `url(${colormapsPngUrl})`,
-          backgroundRepeat: "no-repeat",
-          backgroundSize: `100% ${COLORMAP_SPRITE_HEIGHT * PREVIEW_ROW_HEIGHT}px`,
-          backgroundPosition: `0 -${selectedChoice.colormapIndex * PREVIEW_ROW_HEIGHT}px`,
-          transform: selectedChoice.reversed ? "scaleX(-1)" : undefined,
-          imageRendering: "pixelated",
-          marginBottom: "16px",
-        }}
-      />
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: "12px",
-          color: "#666",
-          marginBottom: "4px",
-        }}
-      >
-        <span>Rescale range</span>
-        <span>
-          {rescaleMin}°C – {rescaleMax}°C
-        </span>
-      </div>
-      <Slider.Root
-        min={TEMP_SLIDER_MIN}
-        max={TEMP_SLIDER_MAX}
-        step={TEMP_SLIDER_STEP}
-        value={[rescaleMin, rescaleMax]}
-        onValueChange={handleRescaleChange}
-        minStepsBetweenThumbs={1}
-        style={{
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          userSelect: "none",
-          touchAction: "none",
-          height: "20px",
-          marginBottom: "12px",
-        }}
-      >
-        <Slider.Track
-          style={{
-            position: "relative",
-            flexGrow: 1,
-            height: "4px",
-            background: "#ddd",
-            borderRadius: "2px",
-          }}
-        >
-          <Slider.Range
+          <label
             style={{
-              position: "absolute",
-              height: "100%",
-              background: "#4a7c59",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "12px",
+              color: "#666",
+              marginBottom: "12px",
+            }}
+          >
+            <span style={{ whiteSpace: "nowrap" }}>Forecast date:</span>
+            <input
+              type="date"
+              min={isoDateString(ECMWF_INIT_TIME_ORIGIN)}
+              max={
+                initTimeCount > 0
+                  ? isoDateString(dateFromInitTimeIdx(initTimeCount - 1))
+                  : undefined
+              }
+              value={isoDateString(dateFromInitTimeIdx(initTimeIdx))}
+              disabled={initTimeCount === 0}
+              onChange={(e) => {
+                const next = initTimeIdxFromDate(
+                  new Date(`${e.target.value}T00:00:00Z`),
+                  Math.max(0, initTimeCount - 1),
+                );
+                onInitTimeIdxChange(next);
+              }}
+              style={{ flex: 1, cursor: "pointer" }}
+            />
+          </label>
+          <div
+            style={{ fontSize: "12px", color: "#666", marginBottom: "12px" }}
+          >
+            Lead time: +{hours} h
+          </div>
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              marginBottom: "16px",
+            }}
+          >
+            <button
+              type="button"
+              onClick={onPlayPauseToggle}
+              style={{ padding: "4px 10px", cursor: "pointer" }}
+            >
+              {isPlaying ? "Pause" : "Play"}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={ECMWF_LEAD_TIME_COUNT - 1}
+              value={leadTimeIdx}
+              onChange={(e) => onLeadTimeIdxChange(Number(e.target.value))}
+              style={{ flex: 1, cursor: "pointer" }}
+            />
+          </div>
+
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "12px",
+              color: "#666",
+              marginBottom: "8px",
+            }}
+          >
+            <span>Colormap:</span>
+            <select
+              value={colormapId}
+              onChange={(e) => onColormapIdChange(e.target.value as ColormapId)}
+              style={{ flex: 1, cursor: "pointer" }}
+            >
+              {COLORMAP_CHOICES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div
+            role="img"
+            aria-label={`Colormap preview: ${selectedChoice.label}`}
+            style={{
+              width: "100%",
+              height: `${PREVIEW_ROW_HEIGHT}px`,
               borderRadius: "2px",
+              border: "1px solid #ddd",
+              backgroundImage: `url(${colormapsPngUrl})`,
+              backgroundRepeat: "no-repeat",
+              backgroundSize: `100% ${COLORMAP_SPRITE_HEIGHT * PREVIEW_ROW_HEIGHT}px`,
+              backgroundPosition: `0 -${selectedChoice.colormapIndex * PREVIEW_ROW_HEIGHT}px`,
+              transform: selectedChoice.reversed ? "scaleX(-1)" : undefined,
+              imageRendering: "pixelated",
+              marginBottom: "16px",
             }}
           />
-        </Slider.Track>
-        {(["min", "max"] as const).map((key) => (
-          <Slider.Thumb
-            key={key}
-            aria-label={key === "min" ? "Rescale min (°C)" : "Rescale max (°C)"}
-            style={{
-              display: "block",
-              width: "16px",
-              height: "16px",
-              borderRadius: "50%",
-              background: "#4a7c59",
-              border: "2px solid white",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-              cursor: "pointer",
-              outline: "none",
-            }}
-          />
-        ))}
-      </Slider.Root>
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: "12px",
-          color: "#666",
-          marginBottom: "4px",
-        }}
-      >
-        <span>Filter range</span>
-        <span>
-          {filterMin}°C - {filterMax}°C
-        </span>
-      </div>
-      <Slider.Root
-        min={TEMP_SLIDER_MIN}
-        max={TEMP_SLIDER_MAX}
-        step={TEMP_SLIDER_STEP}
-        value={[filterMin, filterMax]}
-        onValueChange={handleFilterChange}
-        minStepsBetweenThumbs={1}
-        style={{
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          userSelect: "none",
-          touchAction: "none",
-          height: "20px",
-          marginBottom: "16px",
-        }}
-      >
-        <Slider.Track
-          style={{
-            position: "relative",
-            flexGrow: 1,
-            height: "4px",
-            background: "#ddd",
-            borderRadius: "2px",
-          }}
-        >
-          <Slider.Range
+          <div
             style={{
-              position: "absolute",
-              height: "100%",
-              background: "#b36a49",
-              borderRadius: "2px",
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: "12px",
+              color: "#666",
+              marginBottom: "4px",
             }}
-          />
-        </Slider.Track>
-        {(["min", "max"] as const).map((key) => (
-          <Slider.Thumb
-            key={key}
-            aria-label={key === "min" ? "Filter min (°C)" : "Filter max (°C)"}
+          >
+            <span>Rescale range</span>
+            <span>
+              {rescaleMin}°C – {rescaleMax}°C
+            </span>
+          </div>
+          <Slider.Root
+            min={TEMP_SLIDER_MIN}
+            max={TEMP_SLIDER_MAX}
+            step={TEMP_SLIDER_STEP}
+            value={[rescaleMin, rescaleMax]}
+            onValueChange={handleRescaleChange}
+            minStepsBetweenThumbs={1}
             style={{
-              display: "block",
-              width: "16px",
-              height: "16px",
-              borderRadius: "50%",
-              background: "#b36a49",
-              border: "2px solid white",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-              cursor: "pointer",
-              outline: "none",
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              userSelect: "none",
+              touchAction: "none",
+              height: "20px",
+              marginBottom: "12px",
             }}
-          />
-        ))}
-      </Slider.Root>
+          >
+            <Slider.Track
+              style={{
+                position: "relative",
+                flexGrow: 1,
+                height: "4px",
+                background: "#ddd",
+                borderRadius: "2px",
+              }}
+            >
+              <Slider.Range
+                style={{
+                  position: "absolute",
+                  height: "100%",
+                  background: "#4a7c59",
+                  borderRadius: "2px",
+                }}
+              />
+            </Slider.Track>
+            {(["min", "max"] as const).map((key) => (
+              <Slider.Thumb
+                key={key}
+                aria-label={
+                  key === "min" ? "Rescale min (°C)" : "Rescale max (°C)"
+                }
+                style={{
+                  display: "block",
+                  width: "16px",
+                  height: "16px",
+                  borderRadius: "50%",
+                  background: "#4a7c59",
+                  border: "2px solid white",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              />
+            ))}
+          </Slider.Root>
 
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          fontSize: "12px",
-          color: "#666",
-        }}
-      >
-        <span
-          style={{ whiteSpace: "nowrap" }}
-          title="Dwell time per 3 h lead-time step. 6 h steps (after +144 h) dwell twice as long so simulated-time pacing stays constant."
-        >
-          3 h step: {frameDurationMs} ms
-        </span>
-        <input
-          type="range"
-          min={FRAME_MS_MIN}
-          max={FRAME_MS_MAX}
-          step={FRAME_MS_STEP}
-          value={frameDurationMs}
-          onChange={(e) => onFrameDurationMsChange(Number(e.target.value))}
-          style={{ flex: 1, cursor: "pointer" }}
-        />
-      </label>
-      <div
-        style={{
-          marginTop: "16px",
-          paddingTop: "12px",
-          borderTop: "1px solid #eee",
-          fontSize: "11px",
-          color: "#888",
-          lineHeight: 1.4,
-        }}
-      >
-        <a
-          href="https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "inherit" }}
-        >
-          ECMWF IFS ENS Forecast data
-        </a>{" "}
-        processed by dynamical.org from ECMWF Open Data.
-      </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: "12px",
+              color: "#666",
+              marginBottom: "4px",
+            }}
+          >
+            <span>Filter range</span>
+            <span>
+              {filterMin}°C - {filterMax}°C
+            </span>
+          </div>
+          <Slider.Root
+            min={TEMP_SLIDER_MIN}
+            max={TEMP_SLIDER_MAX}
+            step={TEMP_SLIDER_STEP}
+            value={[filterMin, filterMax]}
+            onValueChange={handleFilterChange}
+            minStepsBetweenThumbs={1}
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              userSelect: "none",
+              touchAction: "none",
+              height: "20px",
+              marginBottom: "16px",
+            }}
+          >
+            <Slider.Track
+              style={{
+                position: "relative",
+                flexGrow: 1,
+                height: "4px",
+                background: "#ddd",
+                borderRadius: "2px",
+              }}
+            >
+              <Slider.Range
+                style={{
+                  position: "absolute",
+                  height: "100%",
+                  background: "#b36a49",
+                  borderRadius: "2px",
+                }}
+              />
+            </Slider.Track>
+            {(["min", "max"] as const).map((key) => (
+              <Slider.Thumb
+                key={key}
+                aria-label={
+                  key === "min" ? "Filter min (°C)" : "Filter max (°C)"
+                }
+                style={{
+                  display: "block",
+                  width: "16px",
+                  height: "16px",
+                  borderRadius: "50%",
+                  background: "#b36a49",
+                  border: "2px solid white",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              />
+            ))}
+          </Slider.Root>
+
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "12px",
+              color: "#666",
+            }}
+          >
+            <span
+              style={{ whiteSpace: "nowrap" }}
+              title="Dwell time per 3 h lead-time step. 6 h steps (after +144 h) dwell twice as long so simulated-time pacing stays constant."
+            >
+              3 h step: {frameDurationMs} ms
+            </span>
+            <input
+              type="range"
+              min={FRAME_MS_MIN}
+              max={FRAME_MS_MAX}
+              step={FRAME_MS_STEP}
+              value={frameDurationMs}
+              onChange={(e) => onFrameDurationMsChange(Number(e.target.value))}
+              style={{ flex: 1, cursor: "pointer" }}
+            />
+          </label>
+          <div
+            style={{
+              marginTop: "16px",
+              paddingTop: "12px",
+              borderTop: "1px solid #eee",
+              fontSize: "11px",
+              color: "#888",
+              lineHeight: 1.4,
+            }}
+          >
+            <a
+              href="https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "inherit" }}
+            >
+              ECMWF IFS ENS Forecast data
+            </a>{" "}
+            processed by dynamical.org from ECMWF Open Data.
+          </div>
         </>
       )}
     </div>

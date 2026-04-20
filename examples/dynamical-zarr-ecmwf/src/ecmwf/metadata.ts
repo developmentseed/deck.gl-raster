@@ -29,6 +29,36 @@ export const ECMWF_NON_SPATIAL_DIMS = [
 ] as const;
 
 /**
+ * UTC midnight of the first forecast init_time in the dataset. Each index
+ * along `init_time` is exactly one day later than the previous one, so
+ * `init_time[i]` corresponds to `ECMWF_INIT_TIME_ORIGIN + i days`.
+ */
+export const ECMWF_INIT_TIME_ORIGIN = new Date("2024-04-01T00:00:00Z");
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Convert an `init_time` array index to its UTC Date. */
+export function dateFromInitTimeIdx(idx: number): Date {
+  return new Date(ECMWF_INIT_TIME_ORIGIN.getTime() + idx * MS_PER_DAY);
+}
+
+/**
+ * Convert a UTC Date to the matching `init_time` index, clamped into
+ * `[0, maxIdx]`. Only the date portion matters; time of day is truncated.
+ */
+export function initTimeIdxFromDate(date: Date, maxIdx: number): number {
+  const dayDiff = Math.round(
+    (date.getTime() - ECMWF_INIT_TIME_ORIGIN.getTime()) / MS_PER_DAY,
+  );
+  return Math.max(0, Math.min(maxIdx, dayDiff));
+}
+
+/** Format a Date as `YYYY-MM-DD` (UTC) for an `<input type="date">`. */
+export function isoDateString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
  * Lead-time schedule in hours from init_time. 3-hourly from 0 to 144h, then
  * 6-hourly to 360h. 85 entries total, matches dim length.
  */
