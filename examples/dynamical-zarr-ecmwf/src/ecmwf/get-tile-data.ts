@@ -31,32 +31,32 @@ export async function getTileData(
     width,
     height,
   });
-  const result = await zarr.get(arr, sliceSpec, { opts: { signal } });
-  const data = result.data;
+  const chunk = await zarr.get(arr, sliceSpec, { opts: { signal } });
+  const { data } = chunk;
 
   console.log("[getTileData] sliced", {
-    shape: result.shape,
+    shape: chunk.shape,
     byteLength: data.byteLength,
     first5: Array.from(data.slice(0, 5)),
     any_nonnan: data.some((v) => !Number.isNaN(v)),
   });
 
   // Shape must be [depth, height, width] where depth is the kept lead_time dim.
-  if (result.shape.length !== 3) {
+  if (chunk.shape.length !== 3) {
     throw new Error(
-      `Expected 3D sliced result (lead_time, y, x), got shape ` +
-        `[${result.shape.join(", ")}]`,
+      `Expected 3D sliced chunk (lead_time, y, x), got shape ` +
+        `[${chunk.shape.join(", ")}]`,
     );
   }
-  if (result.shape[0] !== ECMWF_LEAD_TIME_COUNT) {
+  if (chunk.shape[0] !== ECMWF_LEAD_TIME_COUNT) {
     throw new Error(
-      `Expected depth = ${ECMWF_LEAD_TIME_COUNT}, got ${result.shape[0]}`,
+      `Expected depth = ${ECMWF_LEAD_TIME_COUNT}, got ${chunk.shape[0]}`,
     );
   }
-  if (result.shape[1] !== height || result.shape[2] !== width) {
+  if (chunk.shape[1] !== height || chunk.shape[2] !== width) {
     throw new Error(
       `Tile shape mismatch: expected [${ECMWF_LEAD_TIME_COUNT}, ${height}, ` +
-        `${width}], got [${result.shape.join(", ")}]`,
+        `${width}], got [${chunk.shape.join(", ")}]`,
     );
   }
 
