@@ -36,14 +36,16 @@ import { ControlPanel } from "./ui/control-panel.js";
 // Set to the actual ECMWF IFS ENS zarr store URL from Dynamical.org.
 // Inspect the store's consolidated metadata to confirm init_time length
 // before setting INIT_TIME_IDX below.
+// Direct S3 link is faster than dynamical.org proxy
 const ZARR_URL =
-  "https://data.dynamical.org/ecmwf/ifs-ens/forecast-15-day-0-25-degree/latest.zarr";
+  "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/dynamical/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.zarr";
+
 const VARIABLE = "temperature_2m";
 const INIT_TIME_IDX = 746; // most recent (adjust for actual dataset length)
 const ENSEMBLE_MEMBER_IDX = 0; // control run
 const INITIAL_RESCALE_MIN = -40; // °C
 const INITIAL_RESCALE_MAX = 50; // °C
-const INITIAL_FRAME_DURATION_MS = 200;
+const INITIAL_FRAME_DURATION_MS = 100;
 
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
