@@ -10,7 +10,12 @@ import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
 import type { AnomalyTileData } from "./anomaly/get-tile-data.js";
 import { getTileData } from "./anomaly/get-tile-data.js";
-import { ANOMALY_GEOZARR_ATTRS, DATE_COUNT } from "./anomaly/metadata.js";
+import {
+  ANOMALY_GEOZARR_ATTRS,
+  DATE_COUNT,
+  VARIABLES,
+  type VariableKey,
+} from "./anomaly/metadata.js";
 import { makeRenderTile } from "./anomaly/render-tile.js";
 import { buildSelection } from "./anomaly/selection.js";
 import { createAnomalyColormapTexture } from "./gpu/colormap.js";
@@ -20,25 +25,7 @@ import { ControlPanel } from "./ui/control-panel.js";
 // zarrita requires an absolute URL.
 const ZARR_URL = `${window.location.origin}/anomaly.zarr`;
 
-// Which anomaly variable to display. Options:
-//   temp_mean_anom, temp_min_anom, temp_max_anom  (°C, use RESCALE below)
-//   temp_mean_std, temp_min_std, temp_max_std      (σ, set rescale to -3/3)
-const VARIABLE = "temp_mean_anom";
-
-// Rescale range: maps data values to [0, 1] for the colormap.
-// ±10 °C captures most anomalies; white (centre) = 0 = no anomaly.
-const RESCALE_MIN = -10;
-const RESCALE_MAX = 10;
-
 const FRAME_DURATION_MS = 400;
-
-// Derive display dates from today. The daily pipeline always produces
-// today + 7 days, so this matches the zarr without needing to read coordinates.
-const DATES: string[] = Array.from({ length: DATE_COUNT }, (_, i) => {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + i);
-  return d.toISOString().slice(0, 10);
-});
 
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -50,12 +37,17 @@ export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [dateIdx, setDateIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
-    null,
-  );
+  const [variable, setVariable] = useState<VariableKey>(VARIABLES[0].value);
+  const [arrays, setArrays] = useState<Record<VariableKey, zarr.Array<"float32", zarr.Readable>> | null>(null);
+  const [dates, setDates] = useState<string[]>([]);
   const colormapRef = useRef<Texture | null>(null);
 
-  // Open the zarr v2 store and variable array.
+  // Derive current array and rescale range from selected variable.
+  const arr = arrays?.[variable] ?? null;
+  const varConfig = VARIABLES.find((v) => v.value === variable)!;
+  const { rescaleMin, rescaleMax } = varConfig;
+
+  // Open all variable arrays and read valid_date coordinate in one pass.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -64,9 +56,25 @@ export default function App() {
         { format: "v3" },
       );
       const root = await zarr.open.v3(store, { kind: "group" });
-      const opened = await zarr.open.v3(root.resolve(VARIABLE), { kind: "array" });
+
+      // Open all variable arrays in parallel.
+      const entries = await Promise.all(
+        VARIABLES.map(async ({ value }) => [
+          value,
+          await zarr.open.v3(root.resolve(value), { kind: "array" }),
+        ]),
+      );
+
+      // Read valid_date coordinate (int64 nanoseconds since Unix epoch).
+      const dateCoord = await zarr.open.v3(root.resolve("valid_date"), { kind: "array" });
+      const dateResult = await zarr.get(dateCoord, [null]);
+      const parsedDates = Array.from(dateResult.data as BigInt64Array).map((ns) =>
+        new Date(Number(ns) / 1_000_000).toISOString().slice(0, 10),
+      );
+
       if (cancelled) return;
-      setArr(opened as zarr.Array<"float32", zarr.Readable>);
+      setArrays(Object.fromEntries(entries) as Record<VariableKey, zarr.Array<"float32", zarr.Readable>>);
+      setDates(parsedDates);
     })();
     return () => {
       cancelled = true;
@@ -111,11 +119,11 @@ export default function App() {
       return makeRenderTile({
         dateIdx,
         colormapTexture,
-        rescaleMin: RESCALE_MIN,
-        rescaleMax: RESCALE_MAX,
+        rescaleMin,
+        rescaleMax,
       })(data);
     },
-    [dateIdx],
+    [dateIdx, rescaleMin, rescaleMax],
   );
 
   const layers = arr
@@ -128,7 +136,7 @@ export default function App() {
           getTileData: getTileDataWithColormap,
           renderTile,
           updateTriggers: {
-            renderTile: [dateIdx],
+            renderTile: [dateIdx, rescaleMin, rescaleMax],
           },
           // @ts-expect-error beforeId is injected by @deck.gl/mapbox
           beforeId: "boundary_country_outline",
@@ -158,9 +166,11 @@ export default function App() {
       >
         <ControlPanel
           dateIdx={dateIdx}
-          dates={DATES}
+          dates={dates}
+          variable={variable}
           isPlaying={isPlaying}
           onDateIdxChange={setDateIdx}
+          onVariableChange={setVariable}
           onPlayPauseToggle={() => setIsPlaying((p) => !p)}
         />
       </div>

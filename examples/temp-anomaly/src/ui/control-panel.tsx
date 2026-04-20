@@ -1,16 +1,25 @@
-import { DATE_COUNT } from "../anomaly/metadata.js";
+import { DATE_COUNT, VARIABLES, type VariableKey } from "../anomaly/metadata.js";
 
 export type ControlPanelProps = {
   dateIdx: number;
   dates: string[];
+  variable: VariableKey;
   isPlaying: boolean;
   onDateIdxChange: (idx: number) => void;
+  onVariableChange: (v: VariableKey) => void;
   onPlayPauseToggle: () => void;
 };
 
 export function ControlPanel(props: ControlPanelProps) {
-  const { dateIdx, dates, isPlaying, onDateIdxChange, onPlayPauseToggle } =
-    props;
+  const {
+    dateIdx,
+    dates,
+    variable,
+    isPlaying,
+    onDateIdxChange,
+    onVariableChange,
+    onPlayPauseToggle,
+  } = props;
   const currentDate = dates[dateIdx] ?? "—";
 
   return (
@@ -35,6 +44,17 @@ export function ControlPanel(props: ControlPanelProps) {
       <div style={{ fontSize: "12px", color: "#666", marginBottom: "12px" }}>
         vs 1990–2020 climatology · {currentDate}
       </div>
+      <select
+        value={variable}
+        onChange={(e) => onVariableChange(e.target.value as VariableKey)}
+        style={{ width: "100%", marginBottom: "12px", padding: "4px", cursor: "pointer" }}
+      >
+        {VARIABLES.map((v) => (
+          <option key={v.value} value={v.value}>
+            {v.label}
+          </option>
+        ))}
+      </select>
       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
         <button
           type="button"
