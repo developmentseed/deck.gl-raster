@@ -23,7 +23,12 @@ import { getTileData } from "./ecmwf/get-tile-data.js";
 import {
   ECMWF_GEOZARR_ATTRS,
   ECMWF_LEAD_TIME_COUNT,
+  ECMWF_LEAD_TIME_STEP_HOURS,
 } from "./ecmwf/metadata.js";
+
+/** Base step (hours) that `frameDurationMs` applies to. 3-hour steps dwell
+ *  for `frameDurationMs`; 6-hour steps dwell for 2× that. */
+const BASE_STEP_HOURS = 3;
 import { makeRenderTile } from "./ecmwf/render-tile.js";
 import { buildSelection } from "./ecmwf/selection.js";
 import { ControlPanel } from "./ui/control-panel.js";
@@ -121,14 +126,28 @@ export default function App() {
     };
   }, []);
 
-  // Animation loop: advance leadTimeIdx every frameDurationMs while playing.
-  // Uses requestAnimationFrame so it auto-pauses when the tab is hidden.
+  // Animation loop: advance leadTimeIdx at a rate proportional to each
+  // frame's lead-time step, so a 3 h step dwells for `frameDurationMs` and a
+  // 6 h step dwells for 2× that. Keeps simulated-time pacing constant across
+  // the 3 h → 6 h regime shift at t=144 h. Uses requestAnimationFrame so it
+  // auto-pauses when the tab is hidden.
+  //
+  // Reads current leadTimeIdx from a ref so the loop doesn't need to resubscribe
+  // on every tick.
+  const leadTimeIdxRef = useRef(leadTimeIdx);
+  useEffect(() => {
+    leadTimeIdxRef.current = leadTimeIdx;
+  }, [leadTimeIdx]);
   useEffect(() => {
     if (!isPlaying) return;
     let raf = 0;
     let last = performance.now();
     const loop = (now: number) => {
-      if (now - last >= frameDurationMs) {
+      const curIdx = leadTimeIdxRef.current;
+      const curStepHours =
+        ECMWF_LEAD_TIME_STEP_HOURS[curIdx] ?? BASE_STEP_HOURS;
+      const dwell = frameDurationMs * (curStepHours / BASE_STEP_HOURS);
+      if (now - last >= dwell) {
         setLeadTimeIdx((i) => (i + 1) % ECMWF_LEAD_TIME_COUNT);
         last = now;
       }

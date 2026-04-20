@@ -20,8 +20,8 @@ const TEMP_SLIDER_STEP = 1;
 
 /** Bounds for the frame-duration slider (ms). */
 const FRAME_MS_MIN = 50;
-const FRAME_MS_MAX = 1000;
-const FRAME_MS_STEP = 50;
+const FRAME_MS_MAX = 300;
+const FRAME_MS_STEP = 10;
 
 /**
  * Props for {@link ControlPanel}.

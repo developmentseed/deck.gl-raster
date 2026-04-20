@@ -43,3 +43,18 @@ export const ECMWF_LEAD_TIME_HOURS: readonly number[] = (() => {
  * Number of lead_time frames (= animation length).
  */
 export const ECMWF_LEAD_TIME_COUNT = ECMWF_LEAD_TIME_HOURS.length;
+
+/**
+ * Step (in hours) between frame `i` and frame `i + 1`. The last entry
+ * repeats the final known step so the array has the same length as
+ * {@link ECMWF_LEAD_TIME_HOURS}, and wrap-around (returning from frame
+ * count−1 back to frame 0) uses it too.
+ */
+export const ECMWF_LEAD_TIME_STEP_HOURS: readonly number[] = (() => {
+  const steps: number[] = [];
+  for (let i = 0; i < ECMWF_LEAD_TIME_HOURS.length - 1; i++) {
+    steps.push(ECMWF_LEAD_TIME_HOURS[i + 1]! - ECMWF_LEAD_TIME_HOURS[i]!);
+  }
+  steps.push(steps[steps.length - 1] ?? 3);
+  return steps;
+})();
