@@ -1,5 +1,10 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
+import {
+  createColormapTexture,
+  decodeColormapSprite,
+} from "@developmentseed/deck.gl-raster/gpu-modules";
+import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import type { Texture } from "@luma.gl/core";
@@ -8,6 +13,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
+import type { ColormapId } from "./ecmwf/colormap-choices.js";
+import {
+  COLORMAP_CHOICES,
+  DEFAULT_COLORMAP_ID,
+} from "./ecmwf/colormap-choices.js";
 import type { EcmwfTileData } from "./ecmwf/get-tile-data.js";
 import { getTileData } from "./ecmwf/get-tile-data.js";
 import {
@@ -16,7 +26,6 @@ import {
 } from "./ecmwf/metadata.js";
 import { makeRenderTile } from "./ecmwf/render-tile.js";
 import { buildSelection } from "./ecmwf/selection.js";
-import { createTemperatureColormapTexture } from "./gpu/colormap.js";
 import { ControlPanel } from "./ui/control-panel.js";
 
 // Set to the actual ECMWF IFS ENS zarr store URL from Dynamical.org.
@@ -44,13 +53,36 @@ export default function App() {
   const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
     null,
   );
+  const [colormapId, setColormapId] =
+    useState<ColormapId>(DEFAULT_COLORMAP_ID);
+  const colormapChoice = useMemo(
+    () =>
+      COLORMAP_CHOICES.find((c) => c.id === colormapId) ?? COLORMAP_CHOICES[0]!,
+    [colormapId],
+  );
 
-  // The colormap texture is created lazily on the first tile load (when a
-  // luma.gl Device first becomes available via options.device). We store it
-  // in a ref, not state, because the first renderTile call for the first
+  // Decode the shipped colormap sprite once at mount. This returns ImageData
+  // and doesn't need a GPU device, so it can run in parallel with zarr
+  // opening.
+  const [colormapImage, setColormapImage] = useState<ImageData | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const bytes = await (await fetch(colormapsPngUrl)).arrayBuffer();
+      const image = await decodeColormapSprite(bytes);
+      if (cancelled) return;
+      setColormapImage(image);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The colormap 2d-array texture is created lazily on the first tile load
+  // (when the luma.gl Device becomes available via options.device). We store
+  // it in a ref, not state, because the first renderTile call for the first
   // tile happens synchronously after its getTileData resolves, and deck.gl
-  // guarantees getTileData → renderTile ordering for a given tile. No React
-  // re-render needed between the two.
+  // guarantees getTileData → renderTile ordering for a given tile.
   const colormapRef = useRef<Texture | null>(null);
 
   // Open the Zarr store + variable once. The Dynamical.org ECMWF store uses
@@ -106,19 +138,23 @@ export default function App() {
     [],
   );
 
-  // getTileData wrapper: lazily creates the shared colormap texture on the
+  // getTileData wrapper: lazily uploads the shared colormap sprite on the
   // first tile load (options.device is the luma.gl Device owned by deck.gl).
+  // Requires the sprite PNG to be decoded already (colormapImage set).
   const getTileDataWithColormap = useCallback(
     async (
       openedArr: zarr.Array<zarr.DataType, zarr.Readable>,
       options: GetTileDataOptions,
     ) => {
-      if (!colormapRef.current) {
-        colormapRef.current = createTemperatureColormapTexture(options.device);
+      if (!colormapRef.current && colormapImage) {
+        colormapRef.current = createColormapTexture(
+          options.device,
+          colormapImage,
+        );
       }
       return getTileData(openedArr, options);
     },
-    [],
+    [colormapImage],
   );
 
   // renderTile reads colormap from the ref. Safe because deck.gl always runs
@@ -134,11 +170,13 @@ export default function App() {
       return makeRenderTile({
         layerIndex: leadTimeIdx,
         colormapTexture,
+        colormapIndex: colormapChoice.colormapIndex,
+        colormapReversed: colormapChoice.reversed,
         rescaleMin: RESCALE_MIN,
         rescaleMax: RESCALE_MAX,
       })(data);
     },
-    [leadTimeIdx],
+    [leadTimeIdx, colormapChoice],
   );
 
   const layers = arr
@@ -153,7 +191,7 @@ export default function App() {
           // debug: true,
           // debugOpacity: 0.2,
           updateTriggers: {
-            renderTile: [leadTimeIdx],
+            renderTile: [leadTimeIdx, colormapId],
           },
           // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
           // doesn't know about it.
@@ -185,8 +223,10 @@ export default function App() {
         <ControlPanel
           leadTimeIdx={leadTimeIdx}
           isPlaying={isPlaying}
+          colormapId={colormapId}
           onLeadTimeIdxChange={setLeadTimeIdx}
           onPlayPauseToggle={() => setIsPlaying((p) => !p)}
+          onColormapIdChange={setColormapId}
         />
       </div>
     </div>

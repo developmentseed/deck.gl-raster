@@ -13,8 +13,12 @@ import type { EcmwfTileData } from "./get-tile-data.js";
 export type MakeRenderTileArgs = {
   /** Current animation frame (0 .. depth-1). */
   layerIndex: number;
-  /** Colormap texture (shared across tiles). */
+  /** Colormap sprite texture (2d-array; shared across tiles). */
   colormapTexture: Texture;
+  /** Which layer of the sprite to sample. */
+  colormapIndex: number;
+  /** Whether to reverse the colormap. */
+  colormapReversed: boolean;
   /** Minimum value for rescale (same units as the variable). */
   rescaleMin: number;
   /** Maximum value for rescale. */
@@ -28,7 +32,14 @@ export type MakeRenderTileArgs = {
  * changed uniforms flow through.
  */
 export function makeRenderTile(args: MakeRenderTileArgs) {
-  const { layerIndex, colormapTexture, rescaleMin, rescaleMax } = args;
+  const {
+    layerIndex,
+    colormapTexture,
+    colormapIndex,
+    colormapReversed,
+    rescaleMin,
+    rescaleMax,
+  } = args;
   return function renderTile(data: EcmwfTileData): RenderTileResult {
     return {
       renderPipeline: [
@@ -42,7 +53,11 @@ export function makeRenderTile(args: MakeRenderTileArgs) {
         },
         {
           module: Colormap,
-          props: { colormapTexture },
+          props: {
+            colormapTexture,
+            colormapIndex,
+            reversed: colormapReversed,
+          },
         },
       ],
     };
