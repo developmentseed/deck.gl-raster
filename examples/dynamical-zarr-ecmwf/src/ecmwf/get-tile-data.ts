@@ -20,7 +20,7 @@ export type EcmwfTileData = MinimalZarrTileData & {
  * as a Texture2DArray (one layer per lead_time).
  */
 export async function getTileData(
-  arr: zarr.Array<zarr.DataType, zarr.Readable>,
+  arr: zarr.Array<"float32", zarr.Readable>,
   options: GetTileDataOptions,
 ): Promise<EcmwfTileData> {
   const { device, sliceSpec, width, height, signal } = options;
@@ -31,11 +31,7 @@ export async function getTileData(
     width,
     height,
   });
-  const result = await zarr.get(
-    arr as zarr.Array<"float32", zarr.Readable>,
-    sliceSpec as Parameters<typeof zarr.get>[1],
-    { opts: { signal } },
-  );
+  const result = await zarr.get(arr, sliceSpec, { opts: { signal } });
   const data = result.data;
 
   console.log("[getTileData] sliced", {
