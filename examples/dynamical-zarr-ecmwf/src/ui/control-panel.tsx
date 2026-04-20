@@ -1,6 +1,7 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import * as Slider from "@radix-ui/react-slider";
+import { useState } from "react";
 import type { ColormapId } from "../ecmwf/colormap-choices.js";
 import { COLORMAP_CHOICES } from "../ecmwf/colormap-choices.js";
 import {
@@ -94,6 +95,8 @@ export function ControlPanel(props: ControlPanelProps) {
     }
   };
 
+  const [panelOpen, setPanelOpen] = useState(true);
+
   return (
     <div
       style={{
@@ -108,11 +111,35 @@ export function ControlPanel(props: ControlPanelProps) {
         pointerEvents: "auto",
       }}
     >
-      <div
-        style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "8px" }}
+      <button
+        type="button"
+        onClick={() => setPanelOpen((o) => !o)}
+        style={{
+          all: "unset",
+          width: "100%",
+          fontSize: "16px",
+          fontWeight: "bold",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          userSelect: "none",
+          marginBottom: panelOpen ? "8px" : 0,
+        }}
       >
         ECMWF IFS ENS — 2 m Temperature
-      </div>
+        <span
+          style={{
+            fontSize: "12px",
+            transition: "transform 0.2s",
+            transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
+          }}
+        >
+          ▼
+        </span>
+      </button>
+      {panelOpen && (
+        <>
       <div style={{ fontSize: "12px", color: "#666", marginBottom: "12px" }}>
         Lead time: +{hours} h
       </div>
@@ -364,6 +391,8 @@ export function ControlPanel(props: ControlPanelProps) {
         </a>{" "}
         from ECMWF Open Data.
       </div>
+        </>
+      )}
     </div>
   );
 }
