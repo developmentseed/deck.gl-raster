@@ -128,6 +128,8 @@ export default function App() {
 
       if (cancelled) return;
       setArr(opened as zarr.Array<"float32", zarr.Readable>);
+      // Default to the latest available forecast run.
+      setInitTimeIdx(opened.shape[0]! - 1);
     })();
     return () => {
       cancelled = true;

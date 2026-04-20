@@ -28,6 +28,108 @@ const FRAME_MS_MIN = 50;
 const FRAME_MS_MAX = 300;
 const FRAME_MS_STEP = 10;
 
+/** Filled right-pointing triangle — play icon. */
+function PlayIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <title>Play</title>
+      <path d="M3 2 L12 7 L3 12 Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/**
+ * A small circled "i" that reveals a tooltip immediately on hover/focus —
+ * avoids the long delay on the browser's native `title` attribute.
+ */
+function InfoTooltip({ label, body }: { label: string; body: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "14px",
+        height: "14px",
+        padding: 0,
+        borderRadius: "50%",
+        border: "1px solid #aaa",
+        background: "transparent",
+        fontSize: "10px",
+        fontStyle: "italic",
+        fontFamily: "serif",
+        fontWeight: "bold",
+        color: "#666",
+        cursor: "help",
+        outline: "none",
+      }}
+    >
+      i
+      {open && (
+        <span
+          role="tooltip"
+          style={{
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
+            top: "calc(100% + 6px)",
+            width: "260px",
+            padding: "8px 10px",
+            background: "#222",
+            color: "white",
+            fontSize: "13px",
+            fontStyle: "normal",
+            fontFamily:
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            fontWeight: "normal",
+            lineHeight: 1.45,
+            letterSpacing: "normal",
+            borderRadius: "4px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+            pointerEvents: "none",
+            zIndex: 1100,
+            textAlign: "left",
+            whiteSpace: "normal",
+          }}
+        >
+          {body}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** Two vertical bars — pause icon. */
+function PauseIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <title>Pause</title>
+      <rect x="3" y="2" width="3" height="10" fill="currentColor" />
+      <rect x="8" y="2" width="3" height="10" fill="currentColor" />
+    </svg>
+  );
+}
+
 /**
  * Props for {@link ControlPanel}.
  */
@@ -183,9 +285,38 @@ export function ControlPanel(props: ControlPanelProps) {
             />
           </label>
           <div
-            style={{ fontSize: "12px", color: "#666", marginBottom: "12px" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "12px",
+              color: "#666",
+              marginBottom: "12px",
+            }}
           >
-            Lead time: +{hours} h
+            <span>
+              Lead time: +
+              <span
+                style={{
+                  display: "inline-block",
+                  minWidth: "3ch",
+                  textAlign: "right",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {hours}
+              </span>{" "}
+              h
+            </span>
+            <InfoTooltip
+              label="Lead time resolution info"
+              body={
+                "Forecast steps are 3-hourly from +0 h to +144 h (48 steps), " +
+                "then 6-hourly from +150 h to +360 h (37 steps). " +
+                "6 h steps dwell twice as long during animation so the " +
+                "simulated-time pacing stays constant."
+              }
+            />
           </div>
           <div
             style={{
@@ -198,9 +329,19 @@ export function ControlPanel(props: ControlPanelProps) {
             <button
               type="button"
               onClick={onPlayPauseToggle}
-              style={{ padding: "4px 10px", cursor: "pointer" }}
+              aria-label={isPlaying ? "Pause" : "Play"}
+              title={isPlaying ? "Pause" : "Play"}
+              style={{
+                width: "32px",
+                height: "32px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                padding: 0,
+              }}
             >
-              {isPlaying ? "Pause" : "Play"}
+              {isPlaying ? <PauseIcon /> : <PlayIcon />}
             </button>
             <input
               type="range"
