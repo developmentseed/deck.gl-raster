@@ -1,10 +1,15 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
+import type {
+  GetTileDataOptions,
+  MinimalZarrTileData,
+} from "@developmentseed/deck.gl-zarr";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import * as zarr from "zarrita";
 
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -16,18 +21,111 @@ function DeckGLOverlay(props: MapboxOverlayProps) {
 // https://github.com/developmentseed/geozarr-examples/pull/36
 const ZARR_URL = "http://localhost:8080/TCI.zarr";
 
+type SentinelTileData = MinimalZarrTileData & {
+  image: ImageData;
+};
+
+/**
+ * Fetch one spatial chunk as an RGBA ImageData ready to upload as a texture.
+ */
+async function getTileData(
+  arr: zarr.Array<zarr.DataType, zarr.Readable>,
+  options: GetTileDataOptions,
+): Promise<SentinelTileData> {
+  const result = await zarr.get(
+    arr as zarr.Array<zarr.NumberDataType, zarr.Readable>,
+    options.sliceSpec,
+    { signal: options.signal },
+  );
+  const image = toImageData(result, options.width, options.height);
+  return {
+    image,
+    width: options.width,
+    height: options.height,
+    byteLength: image.data.byteLength,
+  };
+}
+
+function renderTile(data: SentinelTileData) {
+  return { image: data.image };
+}
+
+/**
+ * Convert a band-planar zarr result to an RGBA ImageData.
+ *
+ * Supports:
+ *  - shape `[3, H, W]` → RGB (alpha = 255)
+ *  - shape `[1, H, W]` → grayscale (R=G=B, alpha = 255)
+ *  - shape `[H, W]`    → grayscale (R=G=B, alpha = 255)
+ */
+function toImageData(
+  result: zarr.Chunk<zarr.NumberDataType>,
+  width: number,
+  height: number,
+): ImageData {
+  const { data, shape } = result;
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  const numBands = shape.length >= 3 ? shape[shape.length - 3]! : 1;
+  const pixelCount = width * height;
+
+  if (numBands >= 3) {
+    const rOffset = 0;
+    const gOffset = pixelCount;
+    const bOffset = pixelCount * 2;
+    for (let i = 0; i < pixelCount; i++) {
+      rgba[i * 4 + 0] = data[rOffset + i]!;
+      rgba[i * 4 + 1] = data[gOffset + i]!;
+      rgba[i * 4 + 2] = data[bOffset + i]!;
+      rgba[i * 4 + 3] = 255;
+    }
+  } else {
+    for (let i = 0; i < pixelCount; i++) {
+      const v = data[i]!;
+      rgba[i * 4 + 0] = v;
+      rgba[i * 4 + 1] = v;
+      rgba[i * 4 + 2] = v;
+      rgba[i * 4 + 3] = 255;
+    }
+  }
+
+  return new ImageData(rgba, width, height);
+}
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [source, setSource] = useState<zarr.Group<zarr.Readable> | null>(null);
 
-  const zarrLayer = new ZarrLayer({
-    id: "zarr-layer",
-    source: ZARR_URL,
-    debug,
-    debugOpacity,
-  });
+  // Open the store ourselves so we own version/consolidation decisions,
+  // then hand the Group to the layer.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const store = new zarr.FetchStore(ZARR_URL);
+      const group = await zarr.open(store, { kind: "group" });
+      if (cancelled) return;
+      setSource(group);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const zarrLayer = source
+    ? new ZarrLayer<zarr.Readable, zarr.DataType, SentinelTileData>({
+        id: "zarr-layer",
+        source,
+        // Keep all 3 bands; `toImageData` consumes the band-planar RGB and
+        // packs it into RGBA ImageData.
+        selection: { band: null },
+        getTileData,
+        renderTile,
+        debug,
+        debugOpacity,
+      })
+    : null;
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -40,7 +138,7 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={[zarrLayer]} interleaved />
+        <DeckGLOverlay layers={zarrLayer ? [zarrLayer] : []} interleaved />
       </MaplibreMap>
 
       <div

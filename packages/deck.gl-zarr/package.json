@@ -53,7 +53,7 @@
     "@developmentseed/raster-reproject": "workspace:^",
     "proj4": "^2.20.4",
     "wkt-parser": "^1.5.3",
-    "zarrita": "^0.6.1"
+    "zarrita": "^0.7.1"
   },
   "peerDependencies": {
     "@deck.gl/core": "^9.3.0",

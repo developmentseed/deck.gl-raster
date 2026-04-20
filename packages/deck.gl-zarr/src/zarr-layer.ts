@@ -14,7 +14,10 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import * as affine from "@developmentseed/affine";
-import type { TileMetadata } from "@developmentseed/deck.gl-raster";
+import type {
+  RenderTileResult,
+  TileMetadata,
+} from "@developmentseed/deck.gl-raster";
 import {
   RasterLayer,
   RasterTileset2D,
@@ -34,8 +37,10 @@ import {
   parseWkt,
 } from "@developmentseed/proj";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
+import type { Device } from "@luma.gl/core";
 import proj4 from "proj4";
 import * as zarr from "zarrita";
+import { validateSelection, validateSpatialDimOrder } from "./validation.js";
 import { geoZarrToDescriptor } from "./zarr-tileset.js";
 
 /** Size of deck.gl's common coordinate space in world units. */
@@ -49,11 +54,67 @@ const WEB_MERCATOR_TO_WORLD_SCALE =
   TILE_SIZE / WEB_MERCATOR_METER_CIRCUMFERENCE;
 
 /**
+ * A single dimension selector: a fixed integer index, a `zarr.Slice` range,
+ * or `null` to use zarrita's default (full extent).
+ */
+type SliceInput = number | zarr.Slice | null;
+
+/**
+ * Minimum interface that a `DataT` returned from `getTileData` must satisfy.
+ */
+export type MinimalZarrTileData = {
+  /** Pixel width of the fetched tile. */
+  width: number;
+  /** Pixel height of the fetched tile. */
+  height: number;
+  /**
+   * Optional byte count used by deck.gl's `maxCacheByteSize` eviction.
+   * Omitting it disables byte-based eviction for this tile.
+   */
+  byteLength?: number;
+};
+
+/**
+ * Options bag passed to the user's {@link ZarrLayerProps.getTileData} callback.
+ */
+export type GetTileDataOptions = {
+  /** The luma.gl device, for GPU-side operations. */
+  device: Device;
+  /** Tile column index. */
+  x: number;
+  /** Tile row index. */
+  y: number;
+  /** Tile zoom level (0 = coarsest). */
+  z: number;
+  /**
+   * Pre-computed slice spec for the tile. Pass directly to `zarr.get(arr,
+   * sliceSpec)`. Spatial dims are sliced to the tile bounds; non-spatial dims
+   * are filled from the layer's `selection` prop.
+   */
+  sliceSpec: SliceInput[];
+  /**
+   * Actual pixel width of this tile. All tiles are the same chunk size except
+   * at the right and bottom edges of the array, where the valid region may be
+   * narrower (analogous to edge tiles in a Cloud-Optimized GeoTIFF).
+   */
+  width: number;
+  /**
+   * Actual pixel height of this tile. All tiles are the same chunk size except
+   * at the right and bottom edges of the array, where the valid region may be
+   * shorter (analogous to edge tiles in a Cloud-Optimized GeoTIFF).
+   */
+  height: number;
+  /** AbortSignal forwarded from the TileLayer's tile lifecycle. */
+  signal?: AbortSignal;
+};
+
+/**
  * Props for the {@link ZarrLayer}.
  */
 export type ZarrLayerProps<
   Store extends zarr.Readable = zarr.Readable,
   Dtype extends zarr.DataType = zarr.DataType,
+  DataT extends MinimalZarrTileData = MinimalZarrTileData,
 > = CompositeLayerProps &
   Pick<
     TileLayerProps,
@@ -63,20 +124,63 @@ export type ZarrLayerProps<
     | "maxRequests"
     | "refinementStrategy"
   > & {
-    /** URL to the Zarr v3 store root. */
-    source: string | URL | zarr.Array<Dtype, Store> | zarr.Group<Store>;
+    /**
+     * A pre-opened zarrita {@link zarr.Array} or {@link zarr.Group}. Callers
+     * must build and configure the underlying store themselves (for example, a
+     * user may want to wrap a {@link zarr.FetchStore} with
+     * `withConsolidatedMetadata`, `withRangeCoalescing`.
+     *
+     * Pass an Array to render it directly as a single-level source; pass a
+     * Group to let the layer resolve a `variable` path and use the GeoZarr
+     * multiscale layout from its attrs.
+     */
+    source: zarr.Array<Dtype, Store> | zarr.Group<Store>;
 
     /**
-     * Optional path within the store to the variable group.
-     * If omitted, the root group is used.
+     * Optional path within the store to the variable group. Only applies
+     * when `source` is a {@link zarr.Group}; ignored when an Array is passed
+     * directly. If omitted, the group itself is used.
      */
     variable?: string;
 
     /**
-     * Index to use for non-spatial dimensions (e.g. `{ time: 0, band: 2 }`).
-     * Defaults to 0 for any unspecified dimension.
+     * Selection for non-spatial dimensions. Must include exactly one entry
+     * per non-spatial dim in the array. Use a number to pin to a single index,
+     * `null` to use zarr's default slice, or a `zarr.Slice` for a range.
+     *
+     * For datasets with only spatial dimensions (e.g. a plain [H, W] or
+     * [bands, H, W] array whose non-spatial dims are already accounted for),
+     * pass an empty object `{}`.
      */
-    dimensionIndices?: Record<string, number>;
+    selection: Record<string, SliceInput>;
+
+    /**
+     * Optional raw group attrs to use in place of `group.attrs` when parsing
+     * GeoZarr metadata. Useful when you have already fetched the metadata
+     * out-of-band (e.g. from a STAC item).
+     */
+    metadata?: unknown;
+
+    /**
+     * Fetch and return the tile data for a given tile coordinate.
+     *
+     * The layer opens the appropriate zarr array for the requested zoom level
+     * and passes it along with a pre-built `sliceSpec` (one entry per array
+     * dim). Call `zarr.get(arr, sliceSpec)` and convert the result to whatever
+     * format your `renderTile` callback expects.
+     */
+    getTileData: (
+      arr: zarr.Array<Dtype, Store>,
+      options: GetTileDataOptions,
+    ) => Promise<DataT>;
+
+    /**
+     * Convert a loaded `DataT` tile into a {@link RenderTileResult} that the
+     * layer can pass to `RasterLayer`. Return `{ image }` for a simple
+     * `ImageData` / texture, or `{ renderPipeline }` for a GPU shader
+     * pipeline.
+     */
+    renderTile: (data: DataT) => RenderTileResult;
 
     /**
      * Resolver for authority:code CRS strings (e.g. "EPSG:4326").
@@ -92,14 +196,6 @@ export type ZarrLayerProps<
 
     /** Opacity of the debug mesh overlay (0-1). @default 0.5 */
     debugOpacity?: number;
-
-    /** Called when Zarr metadata has been loaded and parsed. */
-    // TODO: restore onZarrLoad once we understand what metadata we should pass
-    // through it.
-    // onZarrLoad?: (meta: GeoZarrMetadata) => void;
-
-    /** User-provided AbortSignal to cancel loading. */
-    signal?: AbortSignal;
   };
 
 const defaultProps: Partial<ZarrLayerProps> = {
@@ -109,27 +205,32 @@ const defaultProps: Partial<ZarrLayerProps> = {
   debugOpacity: 0.5,
 };
 
-type TileData = {
-  image: ImageData;
-  forwardTransform: ReprojectionFns["forwardTransform"];
-  inverseTransform: ReprojectionFns["inverseTransform"];
-  width: number;
-  height: number;
-};
+type TileData<DataT extends MinimalZarrTileData = MinimalZarrTileData> =
+  DataT & {
+    forwardTransform: ReprojectionFns["forwardTransform"];
+    inverseTransform: ReprojectionFns["inverseTransform"];
+  };
 
 /**
  * ZarrLayer renders a GeoZarr dataset using a tiled approach with reprojection.
+ *
+ * The caller is responsible for supplying `getTileData` (which fetches and
+ * converts the zarr chunk) and `renderTile` (which converts the result into a
+ * {@link RenderTileResult} for the GPU). This keeps the layer agnostic about
+ * data format and rendering pipeline.
  */
-export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
+export class ZarrLayer<
+  Store extends zarr.Readable = zarr.Readable,
+  Dtype extends zarr.DataType = zarr.DataType,
+  DataT extends MinimalZarrTileData = MinimalZarrTileData,
+> extends CompositeLayer<ZarrLayerProps<Store, Dtype, DataT>> {
   static override layerName = "ZarrLayer";
   static override defaultProps = defaultProps;
 
   declare state: {
     meta?: GeoZarrMetadata;
+    spatialDims?: [string, string];
 
-    // TODO: arrays should be a named record, since the GeoZarr levels array
-    // isn't ordered. And we might need to support multiple separate arrays
-    // (different variables) in a single render
     /** One opened array per level, finest-first (matches meta.levels order). */
     arrays?: zarr.Array<zarr.DataType, zarr.Readable>[];
     forwardTo4326?: ReprojectionFns["forwardReproject"];
@@ -154,16 +255,17 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
       props.variable !== oldProps.variable;
 
     if (needsUpdate) {
-      // Clear stale state so renderLayers returns null until the new GeoTIFF is
-      // ready
+      // Clear stale state so renderLayers returns null until the new Zarr is ready
       this._clearState();
       void this._parseZarr();
     }
   }
 
+  /** Reset all async-loaded state. */
   _clearState() {
     this.setState({
       meta: undefined,
+      spatialDims: undefined,
       arrays: undefined,
       forwardTo4326: undefined,
       inverseFrom4326: undefined,
@@ -173,14 +275,25 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     });
   }
 
+  /** Open the Zarr store, parse GeoZarr metadata, validate dims, build reprojection fns. */
   async _parseZarr(): Promise<void> {
-    const { source, variable } = this.props;
+    const { source, variable, metadata: metadataOverride } = this.props;
 
-    const store = new zarr.FetchStore(source.toString());
-    // @ts-expect-error - for debugging
-    window.store = store;
-
-    const root = await zarr.open(store);
+    // Callers own the store. We accept a pre-opened Array (rendered as a
+    // single-level source) or Group (used directly, with optional `variable`
+    // resolution to a child group).
+    let preopenedArray: zarr.Array<zarr.DataType, zarr.Readable> | null = null;
+    let root:
+      | zarr.Group<zarr.Readable>
+      | zarr.Array<zarr.DataType, zarr.Readable>;
+    if ("shape" in source) {
+      // zarr.Array — reuse directly as the (single) level's array.
+      preopenedArray = source;
+      root = source;
+    } else {
+      // zarr.Group
+      root = source;
+    }
     // @ts-expect-error - for debugging
     window.root = root;
 
@@ -190,17 +303,57 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     // @ts-expect-error - for debugging
     window.group = group;
 
-    const meta = parseGeoZarrMetadata(group.attrs);
+    const rawAttrs = metadataOverride ?? group.attrs;
+    const meta = parseGeoZarrMetadata(rawAttrs);
     // @ts-expect-error - for debugging
     window.meta = meta;
 
-    // Open each level's array once and keep the references in state.
-    // This avoids re-fetching array metadata on every tile request.
-    const arrays = await Promise.all(
-      meta.levels.map((level) =>
-        zarr.open(group.resolve(level.path), { kind: "array" }),
-      ),
+    // Open each level's array once and keep the references in state. If the
+    // caller passed a pre-opened array and the metadata describes a single
+    // level, reuse that array directly.
+    const arrays: zarr.Array<zarr.DataType, zarr.Readable>[] =
+      preopenedArray && meta.levels.length === 1
+        ? [preopenedArray]
+        : await Promise.all(
+            meta.levels.map((level) =>
+              zarr.open(group.resolve(level.path), { kind: "array" }),
+            ),
+          );
+
+    // Derive spatial dim names from GeoZarr metadata.
+    // `meta.axes` lists only the *spatial* dims (from the `spatial:dimensions`
+    // convention). The full ordered dim list comes from the zarr array's own
+    // `dimension_names`, which includes non-spatial dims (e.g. time, band).
+    if (!meta.axes || meta.axes.length === 0) {
+      throw new Error(
+        "ZarrLayer requires named axes in GeoZarr metadata (spatial:dimensions). " +
+          "Arrays without named dims are not supported.",
+      );
+    }
+    const spatialDims: [string, string] = [
+      meta.axes[meta.yAxisIndex]!,
+      meta.axes[meta.xAxisIndex]!,
+    ];
+
+    // Use the first array's dim names as the canonical list. All levels of a
+    // multiscale pyramid share the same dim names by spec.
+    const arrDimNames: (string | null)[] = arrays[0]?.dimensionNames ?? [];
+    const dimensionNames: string[] = arrDimNames.filter(
+      (d): d is string => d !== null,
     );
+    if (dimensionNames.length !== arrDimNames.length) {
+      throw new Error(
+        "ZarrLayer requires every zarr array dimension to have a name. " +
+          `Got dimension_names = ${JSON.stringify(arrDimNames)}.`,
+      );
+    }
+
+    validateSpatialDimOrder({ dimensionNames, spatialDims });
+    validateSelection({
+      dimensionNames,
+      spatialDims,
+      selection: this.props.selection,
+    });
 
     const sourceProjection = await parseCrs(meta.crs, this.props.epsgResolver!);
 
@@ -237,6 +390,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
 
     this.setState({
       meta,
+      spatialDims,
       arrays,
       forwardTo4326,
       inverseFrom4326,
@@ -246,30 +400,33 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     });
   }
 
-  // TODO: I need to go through _getTileData again and understand how slicing is
-  // fetched.
+  /**
+   * Fetch data for a single tile. Builds the slice spec from tile bounds and
+   * the layer's `selection` prop, then delegates to the user's `getTileData`.
+   */
   async _getTileData(
     tile: TileLoadProps,
     meta: GeoZarrMetadata,
     arrays: zarr.Array<zarr.DataType, zarr.Readable>[],
-  ): Promise<TileData> {
+    spatialDims: [string, string],
+  ): Promise<TileData<DataT>> {
     const { x, y, z } = tile.index;
-    const { dimensionIndices = {} } = this.props;
 
     // descriptor z=0 is coarsest; meta.levels is finest-first
     // so descriptor level z maps to meta.levels[numLevels - 1 - z]
     const zarrLevelIdx = meta.levels.length - 1 - z;
     const level = meta.levels[zarrLevelIdx]!;
-    const arr = arrays[zarrLevelIdx]!;
+    // TODO: the cast is needed because `arrays` is typed as the widest
+    // zarr.Array<DataType, Readable> to avoid threading Store/Dtype through
+    // the state declaration. Revisit if zarrita exposes a narrower getter.
+    const arr = arrays[zarrLevelIdx]! as zarr.Array<Dtype, Store>;
 
-    // TODO: don't hard-code y/x as the last two dims; look at spatial
-    // convention metadata
-    // chunks is [...otherDims, chunkHeight, chunkWidth]
+    // Use the zarr array's actual ordered dim names (includes non-spatial
+    // dims like time/band), not meta.axes (spatial only).
+    const arrDimNames = arr.dimensionNames ?? [];
     const tileWidth = arr.chunks[arr.chunks.length - 1]!;
     const tileHeight = arr.chunks[arr.chunks.length - 2]!;
 
-    // Build slice spec for all dimensions
-    // The last two dims are y (height) and x (width); others use dimensionIndices
     const rowStart = y * tileHeight;
     const rowEnd = Math.min((y + 1) * tileHeight, level.arrayHeight);
     const colStart = x * tileWidth;
@@ -278,25 +435,18 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     const actualHeight = rowEnd - rowStart;
     const actualWidth = colEnd - colStart;
 
-    // Build slice for each dimension
-    const slices: (zarr.Slice | number)[] = arr.shape.map((_, dimIdx) => {
-      const numDims = arr.shape.length;
-      // TODO: don't hard-code y/x as the last two dims; look at spatial
-      // convention metadata
-      if (dimIdx === numDims - 2) {
-        // y dimension
+    // Build slice per array dim: spatial dims get tile-bounded slices,
+    // non-spatial dims are filled from the user's `selection` prop.
+    const sliceSpec: SliceInput[] = arrDimNames.map((dimName) => {
+      if (dimName === spatialDims[0]) {
         return zarr.slice(rowStart, rowEnd);
       }
-      if (dimIdx === numDims - 1) {
-        // x dimension
+      if (dimName === spatialDims[1]) {
         return zarr.slice(colStart, colEnd);
       }
-      // Other dimensions: use dimensionIndices or 0
-      const dimName = meta.axes[dimIdx] ?? String(dimIdx);
-      return dimensionIndices[dimName] ?? 0;
+      // validateSelection guarantees presence for all non-spatial dims.
+      return this.props.selection[dimName!]!;
     });
-
-    const result = await zarr.get(arr, slices);
 
     // Compute per-tile affine: compose level affine with pixel offset of this tile
     const tileOffset = affine.translation(colStart, rowStart);
@@ -308,23 +458,35 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     const inverseTransform = (cx: number, cy: number) =>
       affine.apply(invTileAffine, cx, cy);
 
-    const image = toImageData(result, actualWidth, actualHeight);
-
-    return {
-      image,
-      forwardTransform,
-      inverseTransform,
+    const userData = await this.props.getTileData(arr, {
+      device: this.context.device,
+      x,
+      y,
+      z,
+      sliceSpec,
       width: actualWidth,
       height: actualHeight,
+      signal: tile.signal,
+    });
+
+    return {
+      ...userData,
+      forwardTransform,
+      inverseTransform,
     };
   }
 
+  /**
+   * Render a single tile. Calls the user's `renderTile` and plugs the result
+   * into a `RasterLayer` with the appropriate reprojection functions.
+   * Preserves both globe (EPSG:4326) and mercator projection paths.
+   */
   _renderSubLayers(
-    props: TileLayerProps<TileData> & {
+    props: TileLayerProps<TileData<DataT>> & {
       id: string;
-      data?: TileData;
+      data?: TileData<DataT>;
       _offset: number;
-      tile: Tile2DHeader<TileData>;
+      tile: Tile2DHeader<TileData<DataT>>;
     },
     forwardTo4326: ReprojectionFns["forwardReproject"],
     inverseFrom4326: ReprojectionFns["inverseReproject"],
@@ -333,9 +495,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
   ): Layer | LayersList | null {
     const { maxError, debug, debugOpacity } = this.props;
 
-    // Cast to include TileMetadata from raster-tileset's `getTileMetadata`
-    // method.
-    // TODO: implement generic handling of tile metadata upstream in TileLayer
+    // Cast to include TileMetadata from raster-tileset's `getTileMetadata` method.
     const tile = props.tile as Tile2DHeader & TileMetadata;
 
     const layers: Layer[] = [];
@@ -353,8 +513,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
       return layers;
     }
 
-    const { image, forwardTransform, inverseTransform, width, height } =
-      props.data;
+    const { forwardTransform, inverseTransform, width, height } = props.data;
 
     const isGlobe = this.context.viewport.resolution !== undefined;
     let reprojectionFns: ReprojectionFns;
@@ -388,10 +547,18 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
       };
     }
 
+    const { image, renderPipeline }: RenderTileResult = this.props.renderTile(
+      props.data as DataT,
+    );
+    // Only forward `image` when the user actually supplied one. RasterLayer
+    // treats `image` as an async "type: image" prop and chokes on an
+    // explicit `undefined` (it calls createTexture on whatever was passed).
+    // Its documented default is `null`.
     const rasterLayer = new RasterLayer(
       this.getSubLayerProps({
         id: `${props.id}-raster`,
-        image,
+        image: image ?? null,
+        renderPipeline: renderPipeline ?? [],
         width,
         height,
         maxError,
@@ -404,17 +571,20 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     return [rasterLayer, ...layers];
   }
 
+  /**
+   * Construct the inner `TileLayer` with the appropriate `RasterTileset2D`
+   * tiling scheme derived from the GeoZarr metadata.
+   */
   renderTileLayer(
     meta: GeoZarrMetadata,
     arrays: zarr.Array<zarr.DataType, zarr.Readable>[],
+    spatialDims: [string, string],
     mpu: number,
     forwardTo4326: ReprojectionFns["forwardReproject"],
     inverseFrom4326: ReprojectionFns["inverseReproject"],
     forwardTo3857: ReprojectionFns["forwardReproject"],
     inverseFrom3857: ReprojectionFns["inverseReproject"],
   ): TileLayer {
-    // TODO: don't hard-code y/x as the last two dims; look at spatial
-    // convention metadata
     const chunkSizes = arrays.map((arr) => ({
       width: arr.chunks[arr.chunks.length - 1]!,
       height: arr.chunks[arr.chunks.length - 2]!,
@@ -441,10 +611,10 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
       refinementStrategy,
     } = this.props;
 
-    return new TileLayer<TileData>({
+    return new TileLayer<TileData<DataT>>({
       id: `zarr-tile-layer-${this.id}`,
       TilesetClass: ZarrTilesetFactory,
-      getTileData: (tile) => this._getTileData(tile, meta, arrays),
+      getTileData: (tile) => this._getTileData(tile, meta, arrays, spatialDims),
       renderSubLayers: (props) =>
         this._renderSubLayers(
           props,
@@ -453,6 +623,9 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
           forwardTo3857,
           inverseFrom3857,
         ),
+      updateTriggers: {
+        renderSubLayers: this.props.updateTriggers?.renderTile,
+      },
       debounceTime,
       maxCacheByteSize,
       maxCacheSize,
@@ -464,6 +637,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
   override renderLayers() {
     const {
       meta,
+      spatialDims,
       arrays,
       mpu,
       forwardTo4326,
@@ -474,6 +648,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
 
     if (
       !meta ||
+      !spatialDims ||
       !arrays ||
       mpu === undefined ||
       !forwardTo4326 ||
@@ -487,6 +662,7 @@ export class ZarrLayer extends CompositeLayer<ZarrLayerProps> {
     return this.renderTileLayer(
       meta,
       arrays,
+      spatialDims,
       mpu,
       forwardTo4326,
       inverseFrom4326,
@@ -520,47 +696,4 @@ async function parseCrs(
   } else {
     throw new Error("No CRS information found in GeoZarr metadata");
   }
-}
-
-/**
- * Convert a band-planar zarr result to an RGBA ImageData.
- *
- * Supports:
- *  - shape [3, H, W]  → RGB  (alpha = 255)
- *  - shape [1, H, W]  → grayscale (R=G=B, alpha = 255)
- *  - shape [H, W]     → grayscale (R=G=B, alpha = 255)
- */
-function toImageData(
-  result: zarr.Chunk<zarr.NumberDataType>,
-  width: number,
-  height: number,
-): ImageData {
-  const { data, shape } = result;
-  const rgba = new Uint8ClampedArray(width * height * 4);
-  const numBands = shape.length >= 3 ? shape[shape.length - 3]! : 1;
-  const pixelCount = width * height;
-
-  if (numBands >= 3) {
-    // Band-planar RGB: [3, H, W]
-    const rOffset = 0;
-    const gOffset = pixelCount;
-    const bOffset = pixelCount * 2;
-    for (let i = 0; i < pixelCount; i++) {
-      rgba[i * 4 + 0] = data[rOffset + i]!;
-      rgba[i * 4 + 1] = data[gOffset + i]!;
-      rgba[i * 4 + 2] = data[bOffset + i]!;
-      rgba[i * 4 + 3] = 255;
-    }
-  } else {
-    // Single band: [1, H, W] or [H, W]
-    for (let i = 0; i < pixelCount; i++) {
-      const v = data[i]!;
-      rgba[i * 4 + 0] = v;
-      rgba[i * 4 + 1] = v;
-      rgba[i * 4 + 2] = v;
-      rgba[i * 4 + 3] = 255;
-    }
-  }
-
-  return new ImageData(rgba, width, height);
 }

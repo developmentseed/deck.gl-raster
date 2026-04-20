@@ -41,13 +41,19 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
 
   // --- Axes ---
   const axes = spatial["spatial:dimensions"];
-  // Case-insensitive: the spec examples use both "y"/"x" and "Y"/"X"
-  const yAxisIndex = axes.findIndex((a) => a.toLowerCase() === "y");
-  const xAxisIndex = axes.findIndex((a) => a.toLowerCase() === "x");
+  // Accept the spec's "y"/"x" (case-insensitive) as well as the common
+  // CF-style names "latitude"/"longitude". Matching is purely label-based;
+  // positional inference is not used.
+  const Y_LABELS = new Set(["y", "latitude", "lat"]);
+  const X_LABELS = new Set(["x", "longitude", "lon"]);
+  const yAxisIndex = axes.findIndex((a) => Y_LABELS.has(a.toLowerCase()));
+  const xAxisIndex = axes.findIndex((a) => X_LABELS.has(a.toLowerCase()));
 
   if (yAxisIndex === -1 || xAxisIndex === -1) {
     throw new Error(
-      `spatial:dimensions must contain "x" and "y" (case-insensitive), got: ${JSON.stringify(axes)}`,
+      `spatial:dimensions must contain a Y axis ("y"/"latitude"/"lat") and ` +
+        `an X axis ("x"/"longitude"/"lon") (case-insensitive), got: ` +
+        `${JSON.stringify(axes)}`,
     );
   }
 

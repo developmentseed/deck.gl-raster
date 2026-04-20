@@ -82,10 +82,22 @@ export class RasterTileset2D extends Tileset2D {
     this.descriptor = descriptor;
     this.projectTo4326 = projectTo4326;
 
-    this.wgs84Bounds = transformBounds(
+    const rawBounds = transformBounds(
       projectTo4326,
       ...this.descriptor.projectedBounds,
     );
+    // Web Mercator cannot represent latitudes outside ~±85.051°, and the
+    // downstream tile traversal calls `lngLatToWorld` on these bounds which
+    // asserts against that range. Global data at ±90° (e.g. reanalysis grids)
+    // would otherwise crash tile selection. Clamp here; any polar rows beyond
+    // ±MAX_LAT are unreachable on a Mercator map anyway.
+    const MAX_LAT = 85.0511287798066;
+    this.wgs84Bounds = [
+      rawBounds[0],
+      Math.max(rawBounds[1], -MAX_LAT),
+      rawBounds[2],
+      Math.min(rawBounds[3], MAX_LAT),
+    ];
   }
 
   /**
