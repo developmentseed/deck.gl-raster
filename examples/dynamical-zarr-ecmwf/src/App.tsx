@@ -118,13 +118,10 @@ export default function App() {
         new zarr.FetchStore(ZARR_URL),
         { format: "v3" },
       );
-      console.log("Opened Zarr store:", store);
       const root = await zarr.open.v3(store, { kind: "group" });
-      console.log("Opened Zarr root group:", root);
       const opened = await zarr.open.v3(root.resolve(VARIABLE), {
         kind: "array",
       });
-      console.log("Opened Zarr array:", opened);
 
       if (cancelled) return;
       setArr(opened as zarr.Array<"float32", zarr.Readable>);
