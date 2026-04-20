@@ -311,10 +311,14 @@ needed — mock `Device` / `Texture` with `as any` as elsewhere in this repo.
 
 - Given a mocked `ImageData` of width 256 and height 3, calls
   `device.createTexture` once with `dimension: "2d-array"`, `format:
-  "rgba8unorm"`, and `size: [256, 1, 3]`.
+  "rgba8unorm"`, width 256, height 1, depth 3.
 - Throws when the source's width is not 256.
-- Returns `index === COLORMAP_INDEX` when no `options.names` is supplied.
-- Returns `index === options.names` when one is supplied.
+- Returns the same `Texture` instance that `device.createTexture` produced.
+
+The URL / `ArrayBuffer` / `Uint8Array` branches of the normalization logic
+depend on browser-only APIs (`fetch`, `createImageBitmap`, canvas
+`getImageData`) that jsdom does not fully implement — they are exercised
+via the manual visual verification app, not unit tests.
 
 ### Manual visual verification
 
