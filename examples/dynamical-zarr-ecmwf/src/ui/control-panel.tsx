@@ -1,5 +1,6 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
+import * as Slider from "@radix-ui/react-slider";
 import type { ColormapId } from "../ecmwf/colormap-choices.js";
 import { COLORMAP_CHOICES } from "../ecmwf/colormap-choices.js";
 import {
@@ -12,6 +13,16 @@ const COLORMAP_SPRITE_HEIGHT = Object.keys(COLORMAP_INDEX).length;
 /** Displayed row height for the preview strip (vertically stretched from 1px). */
 const PREVIEW_ROW_HEIGHT = 14;
 
+/** Bounds for the rescale min/max sliders (°C). */
+const TEMP_SLIDER_MIN = -80;
+const TEMP_SLIDER_MAX = 60;
+const TEMP_SLIDER_STEP = 1;
+
+/** Bounds for the frame-duration slider (ms). */
+const FRAME_MS_MIN = 50;
+const FRAME_MS_MAX = 1000;
+const FRAME_MS_STEP = 50;
+
 /**
  * Props for {@link ControlPanel}.
  */
@@ -19,28 +30,52 @@ export type ControlPanelProps = {
   leadTimeIdx: number;
   isPlaying: boolean;
   colormapId: ColormapId;
+  rescaleMin: number;
+  rescaleMax: number;
+  frameDurationMs: number;
   onLeadTimeIdxChange: (idx: number) => void;
   onPlayPauseToggle: () => void;
   onColormapIdChange: (id: ColormapId) => void;
+  onRescaleMinChange: (v: number) => void;
+  onRescaleMaxChange: (v: number) => void;
+  onFrameDurationMsChange: (v: number) => void;
 };
 
 /**
- * Overlay panel with play/pause toggle, lead-time slider, current-hour
- * display, and colormap picker for the ECMWF animation.
+ * Overlay panel with play/pause, lead-time slider, colormap picker,
+ * temperature-range (rescale) sliders, and frame-duration slider.
  */
 export function ControlPanel(props: ControlPanelProps) {
   const {
     leadTimeIdx,
     isPlaying,
     colormapId,
+    rescaleMin,
+    rescaleMax,
+    frameDurationMs,
     onLeadTimeIdxChange,
     onPlayPauseToggle,
     onColormapIdChange,
+    onRescaleMinChange,
+    onRescaleMaxChange,
+    onFrameDurationMsChange,
   } = props;
   const hours = ECMWF_LEAD_TIME_HOURS[leadTimeIdx] ?? 0;
 
   const selectedChoice =
     COLORMAP_CHOICES.find((c) => c.id === colormapId) ?? COLORMAP_CHOICES[0];
+
+  // Radix Slider.Root with two thumbs emits [min, max] pairs and keeps the
+  // thumbs ordered internally, so no manual clamping is needed.
+  const handleRangeChange = (range: number[]) => {
+    const [nextMin, nextMax] = range;
+    if (nextMin !== undefined && nextMin !== rescaleMin) {
+      onRescaleMinChange(nextMin);
+    }
+    if (nextMax !== undefined && nextMax !== rescaleMax) {
+      onRescaleMaxChange(nextMax);
+    }
+  };
 
   return (
     <div
@@ -52,7 +87,7 @@ export function ControlPanel(props: ControlPanelProps) {
         padding: "16px",
         borderRadius: "8px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        width: "300px",
+        width: "320px",
         pointerEvents: "auto",
       }}
     >
@@ -69,7 +104,7 @@ export function ControlPanel(props: ControlPanelProps) {
           display: "flex",
           gap: "8px",
           alignItems: "center",
-          marginBottom: "12px",
+          marginBottom: "16px",
         }}
       >
         <button
@@ -88,6 +123,7 @@ export function ControlPanel(props: ControlPanelProps) {
           style={{ flex: 1, cursor: "pointer" }}
         />
       </div>
+
       <label
         style={{
           display: "flex",
@@ -115,10 +151,6 @@ export function ControlPanel(props: ControlPanelProps) {
         role="img"
         aria-label={`Colormap preview: ${selectedChoice.label}`}
         style={{
-          // The sprite is 256 px wide, 1 px tall per row. Scale by showing
-          // the full sprite vertically at N × PREVIEW_ROW_HEIGHT and offset
-          // by `-colormapIndex * PREVIEW_ROW_HEIGHT` so only the selected
-          // row is visible through the container.
           width: "100%",
           height: `${PREVIEW_ROW_HEIGHT}px`,
           borderRadius: "2px",
@@ -127,12 +159,100 @@ export function ControlPanel(props: ControlPanelProps) {
           backgroundRepeat: "no-repeat",
           backgroundSize: `100% ${COLORMAP_SPRITE_HEIGHT * PREVIEW_ROW_HEIGHT}px`,
           backgroundPosition: `0 -${selectedChoice.colormapIndex * PREVIEW_ROW_HEIGHT}px`,
-          // Reverse horizontally for colormaps flagged `reversed`, matching
-          // what the GPU shader does with the `reversed` uniform.
           transform: selectedChoice.reversed ? "scaleX(-1)" : undefined,
           imageRendering: "pixelated",
+          marginBottom: "16px",
         }}
       />
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: "12px",
+          color: "#666",
+          marginBottom: "4px",
+        }}
+      >
+        <span>Range</span>
+        <span>
+          {rescaleMin}°C – {rescaleMax}°C
+        </span>
+      </div>
+      <Slider.Root
+        min={TEMP_SLIDER_MIN}
+        max={TEMP_SLIDER_MAX}
+        step={TEMP_SLIDER_STEP}
+        value={[rescaleMin, rescaleMax]}
+        onValueChange={handleRangeChange}
+        minStepsBetweenThumbs={1}
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          userSelect: "none",
+          touchAction: "none",
+          height: "20px",
+          marginBottom: "16px",
+        }}
+      >
+        <Slider.Track
+          style={{
+            position: "relative",
+            flexGrow: 1,
+            height: "4px",
+            background: "#ddd",
+            borderRadius: "2px",
+          }}
+        >
+          <Slider.Range
+            style={{
+              position: "absolute",
+              height: "100%",
+              background: "#4a7c59",
+              borderRadius: "2px",
+            }}
+          />
+        </Slider.Track>
+        {(["min", "max"] as const).map((key) => (
+          <Slider.Thumb
+            key={key}
+            aria-label={key === "min" ? "Rescale min (°C)" : "Rescale max (°C)"}
+            style={{
+              display: "block",
+              width: "16px",
+              height: "16px",
+              borderRadius: "50%",
+              background: "#4a7c59",
+              border: "2px solid white",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+              cursor: "pointer",
+              outline: "none",
+            }}
+          />
+        ))}
+      </Slider.Root>
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          fontSize: "12px",
+          color: "#666",
+        }}
+      >
+        <span style={{ whiteSpace: "nowrap" }}>Frame: {frameDurationMs} ms</span>
+        <input
+          type="range"
+          min={FRAME_MS_MIN}
+          max={FRAME_MS_MAX}
+          step={FRAME_MS_STEP}
+          value={frameDurationMs}
+          onChange={(e) => onFrameDurationMsChange(Number(e.target.value))}
+          style={{ flex: 1, cursor: "pointer" }}
+        />
+      </label>
     </div>
   );
 }

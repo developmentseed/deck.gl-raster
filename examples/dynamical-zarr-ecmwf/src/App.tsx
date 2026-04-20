@@ -36,9 +36,9 @@ const ZARR_URL =
 const VARIABLE = "temperature_2m";
 const INIT_TIME_IDX = 746; // most recent (adjust for actual dataset length)
 const ENSEMBLE_MEMBER_IDX = 0; // control run
-const RESCALE_MIN = -40; // °C
-const RESCALE_MAX = 50; // °C
-const FRAME_DURATION_MS = 200;
+const INITIAL_RESCALE_MIN = -40; // °C
+const INITIAL_RESCALE_MAX = 50; // °C
+const INITIAL_FRAME_DURATION_MS = 200;
 
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -55,6 +55,11 @@ export default function App() {
   );
   const [colormapId, setColormapId] =
     useState<ColormapId>(DEFAULT_COLORMAP_ID);
+  const [rescaleMin, setRescaleMin] = useState(INITIAL_RESCALE_MIN);
+  const [rescaleMax, setRescaleMax] = useState(INITIAL_RESCALE_MAX);
+  const [frameDurationMs, setFrameDurationMs] = useState(
+    INITIAL_FRAME_DURATION_MS,
+  );
   const colormapChoice = useMemo(
     () =>
       COLORMAP_CHOICES.find((c) => c.id === colormapId) ?? COLORMAP_CHOICES[0]!,
@@ -112,14 +117,14 @@ export default function App() {
     };
   }, []);
 
-  // Animation loop: advance leadTimeIdx every FRAME_DURATION_MS while playing.
+  // Animation loop: advance leadTimeIdx every frameDurationMs while playing.
   // Uses requestAnimationFrame so it auto-pauses when the tab is hidden.
   useEffect(() => {
     if (!isPlaying) return;
     let raf = 0;
     let last = performance.now();
     const loop = (now: number) => {
-      if (now - last >= FRAME_DURATION_MS) {
+      if (now - last >= frameDurationMs) {
         setLeadTimeIdx((i) => (i + 1) % ECMWF_LEAD_TIME_COUNT);
         last = now;
       }
@@ -127,7 +132,7 @@ export default function App() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [isPlaying]);
+  }, [isPlaying, frameDurationMs]);
 
   const selection = useMemo(
     () =>
@@ -143,7 +148,7 @@ export default function App() {
   // Requires the sprite PNG to be decoded already (colormapImage set).
   const getTileDataWithColormap = useCallback(
     async (
-      openedArr: zarr.Array<zarr.DataType, zarr.Readable>,
+      openedArr: zarr.Array<"float32", zarr.Readable>,
       options: GetTileDataOptions,
     ) => {
       if (!colormapRef.current && colormapImage) {
@@ -172,11 +177,11 @@ export default function App() {
         colormapTexture,
         colormapIndex: colormapChoice.colormapIndex,
         colormapReversed: colormapChoice.reversed,
-        rescaleMin: RESCALE_MIN,
-        rescaleMax: RESCALE_MAX,
+        rescaleMin,
+        rescaleMax,
       })(data);
     },
-    [leadTimeIdx, colormapChoice],
+    [leadTimeIdx, colormapChoice, rescaleMin, rescaleMax],
   );
 
   const layers = arr
@@ -191,7 +196,7 @@ export default function App() {
           // debug: true,
           // debugOpacity: 0.2,
           updateTriggers: {
-            renderTile: [leadTimeIdx, colormapId],
+            renderTile: [leadTimeIdx, colormapId, rescaleMin, rescaleMax],
           },
           // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
           // doesn't know about it.
@@ -224,9 +229,15 @@ export default function App() {
           leadTimeIdx={leadTimeIdx}
           isPlaying={isPlaying}
           colormapId={colormapId}
+          rescaleMin={rescaleMin}
+          rescaleMax={rescaleMax}
+          frameDurationMs={frameDurationMs}
           onLeadTimeIdxChange={setLeadTimeIdx}
           onPlayPauseToggle={() => setIsPlaying((p) => !p)}
           onColormapIdChange={setColormapId}
+          onRescaleMinChange={setRescaleMin}
+          onRescaleMaxChange={setRescaleMax}
+          onFrameDurationMsChange={setFrameDurationMs}
         />
       </div>
     </div>
