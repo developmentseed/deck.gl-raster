@@ -196,9 +196,6 @@ export type ZarrLayerProps<
 
     /** Opacity of the debug mesh overlay (0-1). @default 0.5 */
     debugOpacity?: number;
-
-    /** User-provided AbortSignal to cancel loading. */
-    signal?: AbortSignal;
   };
 
 const defaultProps: Partial<ZarrLayerProps> = {
