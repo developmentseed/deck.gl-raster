@@ -380,16 +380,15 @@ export function ControlPanel(props: ControlPanelProps) {
           lineHeight: 1.4,
         }}
       >
-        ECMWF IFS ENS Forecast data processed by{" "}
         <a
-          href="https://dynamical.org/"
+          href="https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/"
           target="_blank"
           rel="noopener noreferrer"
           style={{ color: "inherit" }}
         >
-          dynamical.org
+          ECMWF IFS ENS Forecast data
         </a>{" "}
-        from ECMWF Open Data.
+        processed by dynamical.org from ECMWF Open Data.
       </div>
         </>
       )}
