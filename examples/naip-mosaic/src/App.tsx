@@ -6,27 +6,36 @@ import type {
   RenderTileResult,
 } from "@developmentseed/deck.gl-raster";
 import {
+  COLORMAP_INDEX,
   Colormap,
   CreateTexture,
   createColormapTexture,
+  decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
+import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import type { Overview } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 import * as Slider from "@radix-ui/react-slider";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer";
-import colormap from "./cfastie";
+import type { ColormapId } from "./colormap-choices";
+import { COLORMAP_CHOICES, DEFAULT_COLORMAP_ID } from "./colormap-choices";
 import "./proj";
 import STAC_DATA from "./minimal_stac.json";
 import { epsgResolver } from "./proj";
 
 /** Bounding box query passed to Microsoft Planetary Computer STAC API */
 const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];
+
+/** Total number of rows in the shipped colormap sprite. */
+const COLORMAP_SPRITE_HEIGHT = Object.keys(COLORMAP_INDEX).length;
+/** Displayed row height for the preview strip (vertically stretched from 1px). */
+const PREVIEW_ROW_HEIGHT = 14;
 
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -206,6 +215,20 @@ function renderFalseColor(tileData: TextureDataT): RenderTileResult {
 }
 
 /**
+ * Options for {@link renderNDVI} beyond the tile payload.
+ */
+type RenderNDVIOptions = {
+  /** The sprite texture holding all colormaps. */
+  colormapTexture: Texture;
+  /** [min, max] NDVI values to keep; pixels outside are discarded. */
+  ndviRange: [number, number];
+  /** Layer index into `colormapTexture` selecting which colormap to sample. */
+  colormapIndex: number;
+  /** Whether to sample the colormap in reverse. */
+  colormapReversed: boolean;
+};
+
+/**
  * Create a rendering pipeline for NDVI rendering.
  *
  * Calculates NDVI in a shader module, then applies a color map based on the
@@ -214,9 +237,10 @@ function renderFalseColor(tileData: TextureDataT): RenderTileResult {
  */
 function renderNDVI(
   tileData: TextureDataT,
-  colormapTexture: Texture,
-  ndviRange: [number, number],
+  options: RenderNDVIOptions,
 ): RenderTileResult {
+  const { colormapTexture, ndviRange, colormapIndex, colormapReversed } =
+    options;
   const { texture } = tileData;
   const renderPipeline: RasterModule[] = [
     { module: CreateTexture, props: { textureName: texture } },
@@ -225,7 +249,14 @@ function renderNDVI(
       module: ndviFilter,
       props: { ndviMin: ndviRange[0], ndviMax: ndviRange[1] },
     },
-    { module: Colormap, props: { colormapTexture } },
+    {
+      module: Colormap,
+      props: {
+        colormapTexture,
+        colormapIndex,
+        reversed: colormapReversed,
+      },
+    },
     { module: SetAlpha1 },
   ];
   return { renderPipeline };
@@ -276,6 +307,14 @@ export default function App() {
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [colormapId, setColormapId] = useState<ColormapId>(DEFAULT_COLORMAP_ID);
+  const [colormapImage, setColormapImage] = useState<ImageData | null>(null);
+
+  const colormapChoice = useMemo(
+    () =>
+      COLORMAP_CHOICES.find((c) => c.id === colormapId) ?? COLORMAP_CHOICES[0],
+    [colormapId],
+  );
 
   // Fetch STAC items on mount
   useEffect(() => {
@@ -298,10 +337,32 @@ export default function App() {
     wrappedFetchSTACItems();
   }, []);
 
+  // Decode the shipped colormap sprite once at mount. Returns ImageData and
+  // doesn't need a GPU device, so it can run in parallel with STAC fetch.
   useEffect(() => {
-    if (!device) return;
-    setColormapTexture(createColormapTexture(device, colormap));
-  }, [device]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await fetch(colormapsPngUrl);
+        const bytes = await resp.arrayBuffer();
+        const image = await decodeColormapSprite(bytes);
+        if (cancelled) return;
+        setColormapImage(image);
+      } catch (err) {
+        if (!cancelled) console.error("Failed to load colormap sprite:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Upload the colormap sprite once both the Device and the decoded ImageData
+  // are available.
+  useEffect(() => {
+    if (!device || !colormapImage) return;
+    setColormapTexture(createColormapTexture(device, colormapImage));
+  }, [device, colormapImage]);
 
   const layers = [];
 
@@ -332,7 +393,12 @@ export default function App() {
               : renderMode === "falseColor"
                 ? renderFalseColor
                 : (tileData) =>
-                    renderNDVI(tileData, colormapTexture, ndviRange),
+                    renderNDVI(tileData, {
+                      colormapTexture,
+                      ndviRange,
+                      colormapIndex: colormapChoice.colormapIndex,
+                      colormapReversed: colormapChoice.reversed,
+                    }),
           signal,
         });
       },
@@ -516,7 +582,62 @@ export default function App() {
 
               {renderMode === "ndvi" && (
                 <div style={{ marginTop: "16px" }}>
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>
+                  <div>
+                    <label
+                      htmlFor="colormap-select"
+                      style={{ fontSize: "14px", fontWeight: 500 }}
+                    >
+                      Colormap
+                    </label>
+                    <select
+                      id="colormap-select"
+                      value={colormapId}
+                      onChange={(e) =>
+                        setColormapId(e.target.value as ColormapId)
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        marginTop: "4px",
+                        fontSize: "14px",
+                        borderRadius: "4px",
+                        border: "1px solid #ccc",
+                      }}
+                    >
+                      {COLORMAP_CHOICES.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div
+                      role="img"
+                      aria-label={`Colormap preview: ${colormapChoice.label}`}
+                      style={{
+                        width: "100%",
+                        height: `${PREVIEW_ROW_HEIGHT}px`,
+                        marginTop: "8px",
+                        borderRadius: "2px",
+                        border: "1px solid #ddd",
+                        backgroundImage: `url(${colormapsPngUrl})`,
+                        backgroundRepeat: "no-repeat",
+                        backgroundSize: `100% ${COLORMAP_SPRITE_HEIGHT * PREVIEW_ROW_HEIGHT}px`,
+                        backgroundPosition: `0 -${colormapChoice.colormapIndex * PREVIEW_ROW_HEIGHT}px`,
+                        transform: colormapChoice.reversed
+                          ? "scaleX(-1)"
+                          : undefined,
+                        imageRendering: "pixelated",
+                      }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: 500,
+                      display: "block",
+                      marginTop: "16px",
+                    }}
+                  >
                     NDVI Range
                   </span>
                   <Slider.Root
