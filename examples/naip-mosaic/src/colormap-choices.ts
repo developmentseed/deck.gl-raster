@@ -25,7 +25,7 @@ type ColormapChoiceShape = {
 export const COLORMAP_CHOICES = [
   {
     id: "cfastie",
-    label: "classic NDVI",
+    label: "Classic NDVI",
     colormapIndex: COLORMAP_INDEX.cfastie,
     reversed: false,
   },
