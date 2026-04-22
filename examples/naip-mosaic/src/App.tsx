@@ -6,6 +6,7 @@ import type {
   RenderTileResult,
 } from "@developmentseed/deck.gl-raster";
 import {
+  COLORMAP_INDEX,
   Colormap,
   CreateTexture,
   createColormapTexture,
@@ -30,6 +31,11 @@ import { epsgResolver } from "./proj";
 
 /** Bounding box query passed to Microsoft Planetary Computer STAC API */
 const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];
+
+/** Total number of rows in the shipped colormap sprite. */
+const COLORMAP_SPRITE_HEIGHT = Object.keys(COLORMAP_INDEX).length;
+/** Displayed row height for the preview strip (vertically stretched from 1px). */
+const PREVIEW_ROW_HEIGHT = 14;
 
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
@@ -310,9 +316,6 @@ export default function App() {
     [colormapId],
   );
 
-  // setColormapId is wired to the UI in Task 4.
-  void setColormapId;
-
   // Fetch STAC items on mount
   useEffect(() => {
     async function wrappedFetchSTACItems() {
@@ -579,6 +582,54 @@ export default function App() {
 
               {renderMode === "ndvi" && (
                 <div style={{ marginTop: "16px" }}>
+                  <div style={{ marginTop: "16px" }}>
+                    <label
+                      htmlFor="colormap-select"
+                      style={{ fontSize: "14px", fontWeight: 500 }}
+                    >
+                      Colormap
+                    </label>
+                    <select
+                      id="colormap-select"
+                      value={colormapId}
+                      onChange={(e) =>
+                        setColormapId(e.target.value as ColormapId)
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        marginTop: "4px",
+                        fontSize: "14px",
+                        borderRadius: "4px",
+                        border: "1px solid #ccc",
+                      }}
+                    >
+                      {COLORMAP_CHOICES.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div
+                      role="img"
+                      aria-label={`Colormap preview: ${colormapChoice.label}`}
+                      style={{
+                        width: "100%",
+                        height: `${PREVIEW_ROW_HEIGHT}px`,
+                        marginTop: "8px",
+                        borderRadius: "2px",
+                        border: "1px solid #ddd",
+                        backgroundImage: `url(${colormapsPngUrl})`,
+                        backgroundRepeat: "no-repeat",
+                        backgroundSize: `100% ${COLORMAP_SPRITE_HEIGHT * PREVIEW_ROW_HEIGHT}px`,
+                        backgroundPosition: `0 -${colormapChoice.colormapIndex * PREVIEW_ROW_HEIGHT}px`,
+                        transform: colormapChoice.reversed
+                          ? "scaleX(-1)"
+                          : undefined,
+                        imageRendering: "pixelated",
+                      }}
+                    />
+                  </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>
                     NDVI Range
                   </span>
