@@ -23,7 +23,7 @@ import { ControlPanel } from "./ui/control-panel.js";
 
 // Served locally via vite proxy → python -m http.server 8080 in weather-extremes/data/
 // zarrita requires an absolute URL.
-const ZARR_URL = `${window.location.origin}/anomaly.zarr`;
+const ZARR_URL = `https://weather-anomaly-zarr.s3.us-east-1.amazonaws.com/anomaly.zarr/`;
 
 const FRAME_DURATION_MS = 400;
 
@@ -46,7 +46,10 @@ export default function App() {
   > | null>(null);
   const [dates, setDates] = useState<string[]>([]);
   const [clickedCell, setClickedCell] = useState<ClickedCell | null>(null);
-  const [queryValue, setQueryValue] = useState<{ anom: number; std: number } | null>(null);
+  const [queryValue, setQueryValue] = useState<{
+    anom: number;
+    std: number;
+  } | null>(null);
   const colormapRef = useRef<Texture | null>(null);
 
   // Derive current array and rescale range from selected variable.
@@ -99,7 +102,10 @@ export default function App() {
     let cancelled = false;
     // Derive the base name (e.g. "temp_mean") from whatever variable is selected,
     // then always fetch both the _anom and _std versions for the query panel.
-    const base = variable.replace(/_anom$|_std$/, "") as "temp_mean" | "temp_min" | "temp_max";
+    const base = variable.replace(/_anom$|_std$/, "") as
+      | "temp_mean"
+      | "temp_min"
+      | "temp_max";
     const anomKey = `${base}_anom` as VariableKey;
     const stdKey = `${base}_std` as VariableKey;
     const idx = [dateIdx, clickedCell.latIdx, clickedCell.lonIdx] as const;
@@ -111,7 +117,8 @@ export default function App() {
       if (cancelled) return;
       const anom = anomResult as unknown as number;
       const std = stdResult as unknown as number;
-      if (!Number.isNaN(anom) && !Number.isNaN(std)) setQueryValue({ anom, std });
+      if (!Number.isNaN(anom) && !Number.isNaN(std))
+        setQueryValue({ anom, std });
     })();
     return () => {
       cancelled = true;
