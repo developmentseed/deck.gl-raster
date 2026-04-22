@@ -9,6 +9,12 @@ describe("Colormap", () => {
     );
   });
 
+  it("declares precision for sampler2DArray in fs:#decl", () => {
+    expect(Colormap.inject["fs:#decl"]).toContain(
+      "precision highp sampler2DArray;",
+    );
+  });
+
   it("declares colormapIndex and reversed in the uniform block", () => {
     expect(Colormap.fs).toContain("int colormapIndex;");
     expect(Colormap.fs).toContain("float reversed;");

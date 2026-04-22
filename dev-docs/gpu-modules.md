@@ -69,6 +69,28 @@ export const MyTextureModule = {
 
 **The prop key, `getUniforms` return key, and GLSL uniform name must all be identical.**
 
+### Non-default sampler precision (`sampler2DArray`, `sampler3D`, integer samplers)
+
+WebGL2 / GLSL ES 3.00 only defines a default precision for `sampler2D` (and `samplerCube`) in fragment shaders. Every other sampler type — `sampler2DArray`, `sampler3D`, `isampler*`, `usampler*`, shadow samplers — requires an **explicit** precision qualifier or the shader fails to compile with:
+
+```
+ERROR: 'sampler2DArray' : No precision specified
+```
+
+A module that uses one of these samplers must declare its own precision in its `fs:#decl` injection so the module is self-sufficient (it works no matter which other modules are or aren't in the pipeline):
+
+```ts
+inject: {
+  "fs:#decl": `\
+precision highp sampler2DArray;
+uniform sampler2DArray myArrayTex;
+`,
+  // ...
+},
+```
+
+Don't rely on a sibling module or the host layer's fragment shader to declare the precision — the module would silently break the moment it's used in isolation or in a different layer. Multiple `precision` declarations at global scope are legal in GLSL ES 3.00, so duplication across modules is harmless.
+
 ### Mixing Textures and Scalars
 
 A single module can use both paths. Textures go through `inject` + `getUniforms`; scalars go through `fs:` uniform block + `uniformTypes` + `getUniforms`. The `getUniforms` function returns both textures and scalars together.
@@ -87,6 +109,7 @@ See `CompositeBands` for a working example of this pattern.
 - **Uniform is always 0**: Missing `uniformTypes` or `fs:` uniform block declaration
 - **Texture not bound / "Binding not found"**: Prop key doesn't match GLSL uniform name, or texture declared in uniform block instead of `inject`
 - **All textures sample the same value**: Textures declared but not actually bound — check that `getUniforms` returns them with matching keys
+- **`'samplerXXX' : No precision specified`**: Module uses a sampler type other than `sampler2D` (e.g. `sampler2DArray`, `sampler3D`, `isampler2D`) without declaring `precision highp samplerXXX;` in `fs:#decl`. See the non-default sampler precision section above.
 
 ## Existing Module Patterns
 
