@@ -8,18 +8,22 @@ import type {
 import {
   Colormap,
   CreateTexture,
+  createColormapTexture,
+  decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
+import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import type { Overview } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 import * as Slider from "@radix-ui/react-slider";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer";
-import colormap from "./cfastie";
+import type { ColormapId } from "./colormap-choices";
+import { COLORMAP_CHOICES, DEFAULT_COLORMAP_ID } from "./colormap-choices";
 import "./proj";
 import STAC_DATA from "./minimal_stac.json";
 import { epsgResolver } from "./proj";
@@ -275,6 +279,18 @@ export default function App() {
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [colormapId, setColormapId] = useState<ColormapId>(DEFAULT_COLORMAP_ID);
+  const [colormapImage, setColormapImage] = useState<ImageData | null>(null);
+
+  const colormapChoice = useMemo(
+    () =>
+      COLORMAP_CHOICES.find((c) => c.id === colormapId) ?? COLORMAP_CHOICES[0],
+    [colormapId],
+  );
+
+  // setColormapId and colormapChoice are wired to the UI in Task 3.
+  void setColormapId;
+  void colormapChoice;
 
   // Fetch STAC items on mount
   useEffect(() => {
@@ -297,23 +313,28 @@ export default function App() {
     wrappedFetchSTACItems();
   }, []);
 
+  // Decode the shipped colormap sprite once at mount. Returns ImageData and
+  // doesn't need a GPU device, so it can run in parallel with STAC fetch.
   useEffect(() => {
-    if (!device) return;
+    let cancelled = false;
+    (async () => {
+      const resp = await fetch(colormapsPngUrl);
+      const bytes = await resp.arrayBuffer();
+      const image = await decodeColormapSprite(bytes);
+      if (cancelled) return;
+      setColormapImage(image);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-    // Create colormap texture
-    const texture = device.createTexture({
-      data: colormap.data,
-      width: colormap.width,
-      height: colormap.height,
-      format: "rgba8unorm",
-      sampler: {
-        addressModeU: "clamp-to-edge",
-        addressModeV: "clamp-to-edge",
-      },
-    });
-
-    setColormapTexture(texture);
-  }, [device]);
+  // Upload the colormap sprite once both the Device and the decoded ImageData
+  // are available.
+  useEffect(() => {
+    if (!device || !colormapImage) return;
+    setColormapTexture(createColormapTexture(device, colormapImage));
+  }, [device, colormapImage]);
 
   const layers = [];
 
