@@ -7,6 +7,8 @@ export type ColormapProps = {
    * The colormap sprite as a 2D array texture. Each layer of the array is
    * one 256×1 RGBA8 colormap. Build from the shipped `colormaps.png` with
    * `decodeColormapSprite` + `createColormapTexture`, or bring your own.
+   *
+   * Note this must be a Texture2DArray, not a Texture2D.
    */
   colormapTexture: Texture;
   /**
