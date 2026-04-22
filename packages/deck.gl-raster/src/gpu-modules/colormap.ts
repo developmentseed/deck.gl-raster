@@ -37,7 +37,10 @@ uniform ${MODULE_NAME}Uniforms {
 } ${MODULE_NAME};
 `,
   inject: {
-    "fs:#decl": `uniform sampler2DArray colormapTexture;`,
+    "fs:#decl": `\
+precision highp sampler2DArray;
+uniform sampler2DArray colormapTexture;
+`,
     "fs:DECKGL_FILTER_COLOR": /* glsl */ `
       float idx = mix(color.r, 1.0 - color.r, ${MODULE_NAME}.reversed);
       color = texture(
