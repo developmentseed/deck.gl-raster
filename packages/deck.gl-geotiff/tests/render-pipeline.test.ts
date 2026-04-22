@@ -31,7 +31,12 @@ describe("land cover, single-band uint8", async () => {
     expect(renderPipeline[1]?.props?.value).toEqual(250 / 255.0);
 
     expect(renderPipeline[2]?.module.name).toEqual("colormap");
-    expect(renderPipeline[2]?.props?.colormapTexture).toBeDefined();
+    const cmapTexture = renderPipeline[2]?.props?.colormapTexture as any;
+    expect(cmapTexture).toBeDefined();
+    // Colormap shader module samples a sampler2DArray, so the texture must be
+    // created as a 2d-array (with depth=1 for a single Palette colormap).
+    expect(cmapTexture.dimension).toEqual("2d-array");
+    expect(cmapTexture.depth).toEqual(1);
   });
 });
 

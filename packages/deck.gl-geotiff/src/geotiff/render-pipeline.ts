@@ -256,15 +256,19 @@ function photometricInterpretationToRGB({
       }
       const { data, width, height } = parseColormap(colorMap);
       const cmapTexture = device.createTexture({
+        dimension: "2d-array",
         data,
         format: "rgba8unorm",
         width,
         height,
+        depth: 1,
+        mipLevels: 1,
         sampler: {
           minFilter: "nearest",
           magFilter: "nearest",
           addressModeU: "clamp-to-edge",
           addressModeV: "clamp-to-edge",
+          addressModeW: "clamp-to-edge",
         },
       });
       return {
