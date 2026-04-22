@@ -219,6 +219,8 @@ function renderNDVI(
   tileData: TextureDataT,
   colormapTexture: Texture,
   ndviRange: [number, number],
+  colormapIndex: number,
+  colormapReversed: boolean,
 ): RenderTileResult {
   const { texture } = tileData;
   const renderPipeline: RasterModule[] = [
@@ -228,7 +230,14 @@ function renderNDVI(
       module: ndviFilter,
       props: { ndviMin: ndviRange[0], ndviMax: ndviRange[1] },
     },
-    { module: Colormap, props: { colormapTexture } },
+    {
+      module: Colormap,
+      props: {
+        colormapTexture,
+        colormapIndex,
+        reversed: colormapReversed,
+      },
+    },
     { module: SetAlpha1 },
   ];
   return { renderPipeline };
@@ -288,9 +297,8 @@ export default function App() {
     [colormapId],
   );
 
-  // setColormapId and colormapChoice are wired to the UI in Task 3.
+  // setColormapId is wired to the UI in Task 4.
   void setColormapId;
-  void colormapChoice;
 
   // Fetch STAC items on mount
   useEffect(() => {
@@ -369,7 +377,13 @@ export default function App() {
               : renderMode === "falseColor"
                 ? renderFalseColor
                 : (tileData) =>
-                    renderNDVI(tileData, colormapTexture, ndviRange),
+                    renderNDVI(
+                      tileData,
+                      colormapTexture,
+                      ndviRange,
+                      colormapChoice.colormapIndex,
+                      colormapChoice.reversed,
+                    ),
           signal,
         });
       },
