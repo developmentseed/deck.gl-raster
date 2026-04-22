@@ -8,6 +8,7 @@ import type {
 import {
   Colormap,
   CreateTexture,
+  createColormapTexture,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Overview } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
@@ -299,20 +300,7 @@ export default function App() {
 
   useEffect(() => {
     if (!device) return;
-
-    // Create colormap texture
-    const texture = device.createTexture({
-      data: colormap.data,
-      width: colormap.width,
-      height: colormap.height,
-      format: "rgba8unorm",
-      sampler: {
-        addressModeU: "clamp-to-edge",
-        addressModeV: "clamp-to-edge",
-      },
-    });
-
-    setColormapTexture(texture);
+    setColormapTexture(createColormapTexture(device, colormap));
   }, [device]);
 
   const layers = [];
