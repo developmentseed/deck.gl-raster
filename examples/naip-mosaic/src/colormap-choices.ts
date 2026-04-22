@@ -25,37 +25,37 @@ type ColormapChoiceShape = {
 export const COLORMAP_CHOICES = [
   {
     id: "cfastie",
-    label: "cfastie (default NDVI)",
+    label: "classic NDVI",
     colormapIndex: COLORMAP_INDEX.cfastie,
     reversed: false,
   },
   {
     id: "rdylgn",
-    label: "RdYlGn (red → yellow → green)",
+    label: "Red → Yellow → Green",
     colormapIndex: COLORMAP_INDEX.rdylgn,
     reversed: false,
   },
   {
     id: "greens",
-    label: "greens (sequential)",
+    label: "Greens (sequential)",
     colormapIndex: COLORMAP_INDEX.greens,
     reversed: false,
   },
   {
     id: "ylgn",
-    label: "YlGn (yellow → green)",
+    label: "Yellow → Green (sequential)",
     colormapIndex: COLORMAP_INDEX.ylgn,
     reversed: false,
   },
   {
     id: "viridis",
-    label: "viridis (perceptually uniform)",
+    label: "Viridis (perceptually uniform)",
     colormapIndex: COLORMAP_INDEX.viridis,
     reversed: false,
   },
   {
     id: "spectral",
-    label: "spectral (diverging)",
+    label: "Spectral (diverging)",
     colormapIndex: COLORMAP_INDEX.spectral,
     reversed: false,
   },
