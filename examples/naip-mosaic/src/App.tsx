@@ -318,11 +318,15 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const resp = await fetch(colormapsPngUrl);
-      const bytes = await resp.arrayBuffer();
-      const image = await decodeColormapSprite(bytes);
-      if (cancelled) return;
-      setColormapImage(image);
+      try {
+        const resp = await fetch(colormapsPngUrl);
+        const bytes = await resp.arrayBuffer();
+        const image = await decodeColormapSprite(bytes);
+        if (cancelled) return;
+        setColormapImage(image);
+      } catch (err) {
+        if (!cancelled) console.error("Failed to load colormap sprite:", err);
+      }
     })();
     return () => {
       cancelled = true;
