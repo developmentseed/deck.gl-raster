@@ -582,7 +582,7 @@ export default function App() {
 
               {renderMode === "ndvi" && (
                 <div style={{ marginTop: "16px" }}>
-                  <div style={{ marginTop: "16px" }}>
+                  <div>
                     <label
                       htmlFor="colormap-select"
                       style={{ fontSize: "14px", fontWeight: 500 }}
@@ -630,7 +630,14 @@ export default function App() {
                       }}
                     />
                   </div>
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>
+                  <span
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: 500,
+                      display: "block",
+                      marginTop: "16px",
+                    }}
+                  >
                     NDVI Range
                   </span>
                   <Slider.Root
