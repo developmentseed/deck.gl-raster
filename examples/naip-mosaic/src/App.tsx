@@ -209,6 +209,20 @@ function renderFalseColor(tileData: TextureDataT): RenderTileResult {
 }
 
 /**
+ * Options for {@link renderNDVI} beyond the tile payload.
+ */
+type RenderNDVIOptions = {
+  /** The sprite texture holding all colormaps. */
+  colormapTexture: Texture;
+  /** [min, max] NDVI values to keep; pixels outside are discarded. */
+  ndviRange: [number, number];
+  /** Layer index into `colormapTexture` selecting which colormap to sample. */
+  colormapIndex: number;
+  /** Whether to sample the colormap in reverse. */
+  colormapReversed: boolean;
+};
+
+/**
  * Create a rendering pipeline for NDVI rendering.
  *
  * Calculates NDVI in a shader module, then applies a color map based on the
@@ -217,11 +231,10 @@ function renderFalseColor(tileData: TextureDataT): RenderTileResult {
  */
 function renderNDVI(
   tileData: TextureDataT,
-  colormapTexture: Texture,
-  ndviRange: [number, number],
-  colormapIndex: number,
-  colormapReversed: boolean,
+  options: RenderNDVIOptions,
 ): RenderTileResult {
+  const { colormapTexture, ndviRange, colormapIndex, colormapReversed } =
+    options;
   const { texture } = tileData;
   const renderPipeline: RasterModule[] = [
     { module: CreateTexture, props: { textureName: texture } },
@@ -377,13 +390,12 @@ export default function App() {
               : renderMode === "falseColor"
                 ? renderFalseColor
                 : (tileData) =>
-                    renderNDVI(
-                      tileData,
+                    renderNDVI(tileData, {
                       colormapTexture,
                       ndviRange,
-                      colormapChoice.colormapIndex,
-                      colormapChoice.reversed,
-                    ),
+                      colormapIndex: colormapChoice.colormapIndex,
+                      colormapReversed: colormapChoice.reversed,
+                    }),
           signal,
         });
       },
