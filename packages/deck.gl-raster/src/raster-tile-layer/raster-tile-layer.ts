@@ -91,6 +91,10 @@ export type RasterTileLayerProps<DataT extends MinimalDataT = MinimalDataT> =
        * Turn cached tile data into a render result (image and/or shader pipeline).
        * Called on every render; does not re-fetch.
        *
+       * To invalidate the inner TileLayer's rendered sub-layers when a dependency
+       * changes (e.g. a colormap choice), pass
+       * `updateTriggers: { renderTile: [dep1, dep2] }` on the layer props.
+       *
        * Subclasses may supply this via state by overriding `_getRenderTile()`.
        */
       renderTile?: (data: DataT) => RenderTileResult;
@@ -206,6 +210,9 @@ export class RasterTileLayer<
           descriptor,
           renderTile,
         ),
+      updateTriggers: {
+        renderSubLayers: this.props.updateTriggers?.renderTile,
+      },
       tileSize,
       zoomOffset,
       maxZoom,

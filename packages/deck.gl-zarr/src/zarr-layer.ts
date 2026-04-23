@@ -368,9 +368,11 @@ export class ZarrLayer<
     if (!meta || !arrays || !spatialDims) return undefined;
     const userFn = this.props.getTileData;
     if (!userFn) return undefined;
-    // Capture current-prop values at closure time (selection is per-render).
-    // The base RasterTileLayer recalls this accessor on every re-render, so
-    // selection changes will flow through naturally.
+    // Capture selection at closure time. The base RasterTileLayer re-invokes
+    // this accessor on every render, so new fetches always see the latest
+    // selection. Note: deck.gl's inner TileLayer only calls getTileData for
+    // uncached tiles — to invalidate cached tiles when selection changes,
+    // pass `updateTriggers: { renderTile: [selection] }` on the ZarrLayer.
     const selection = this.props.selection;
     type RasterGetTileData = NonNullable<
       RasterTileLayerProps<DataT>["getTileData"]
