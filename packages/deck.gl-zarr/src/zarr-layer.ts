@@ -592,15 +592,14 @@ export class ZarrLayer<
 
     class ZarrTilesetFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
-        const descriptor = geoZarrToDescriptor(
-          meta,
-          forwardTo4326,
-          inverseFrom4326,
-          forwardTo3857,
-          inverseFrom3857,
+        const descriptor = geoZarrToDescriptor(meta, {
+          projectTo4326: forwardTo4326,
+          projectFrom4326: inverseFrom4326,
+          projectTo3857: forwardTo3857,
+          projectFrom3857: inverseFrom3857,
           chunkSizes,
           mpu,
-        );
+        });
         super(opts, descriptor);
       }
     }

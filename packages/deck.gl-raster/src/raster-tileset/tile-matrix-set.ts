@@ -1,3 +1,4 @@
+import * as affine from "@developmentseed/affine";
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
 import { tileTransform, xy_bounds } from "@developmentseed/morecantile";
 import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface";
@@ -124,7 +125,8 @@ class TileMatrixAdaptor implements TilesetLevel {
 
   /**
    * Compute forward and inverse per-tile pixel↔CRS transforms for the tile
-   * at `(col, row)` using morecantile's 6-element affine.
+   * at `(col, row)`. Uses morecantile's `tileTransform` for the forward affine
+   * and inverts it via `@developmentseed/affine`.
    */
   tileTransform(
     col: number,
@@ -133,27 +135,11 @@ class TileMatrixAdaptor implements TilesetLevel {
     forwardTransform: (x: number, y: number) => [number, number];
     inverseTransform: (x: number, y: number) => [number, number];
   } {
-    const affine = tileTransform(this.inner, { col, row });
-    const [a, b, c, d, e, f] = affine;
-    // Invert the 2x2 linear part (a,b / d,e) and compose with translation.
-    const det = a * e - b * d;
-    if (det === 0) {
-      throw new Error(
-        "TileMatrix affine is singular; cannot invert tile transform",
-      );
-    }
-    const invA = e / det;
-    const invB = -b / det;
-    const invD = -d / det;
-    const invE = a / det;
-    const invC = -(invA * c + invB * f);
-    const invF = -(invD * c + invE * f);
+    const fwd = tileTransform(this.inner, { col, row });
+    const inv = affine.invert(fwd);
     return {
-      forwardTransform: (x, y) => [a * x + b * y + c, d * x + e * y + f],
-      inverseTransform: (x, y) => [
-        invA * x + invB * y + invC,
-        invD * x + invE * y + invF,
-      ],
+      forwardTransform: (x, y) => affine.apply(fwd, x, y),
+      inverseTransform: (x, y) => affine.apply(inv, x, y),
     };
   }
 }

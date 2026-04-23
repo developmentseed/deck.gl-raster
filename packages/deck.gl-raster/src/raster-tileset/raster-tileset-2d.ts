@@ -20,7 +20,6 @@ import type {
   Bounds,
   Corners,
   ProjectedBoundingBox,
-  ProjectionFunction,
   TileIndex,
   ZRange,
 } from "./types";
@@ -67,15 +66,13 @@ export type TileMetadata = {
 export class RasterTileset2D extends Tileset2D {
   private descriptor: TilesetDescriptor;
   private wgs84Bounds: Bounds;
-  private projectTo4326: ProjectionFunction;
 
   constructor(opts: Tileset2DProps, descriptor: TilesetDescriptor) {
     super(opts);
     this.descriptor = descriptor;
-    this.projectTo4326 = descriptor.projectTo4326;
 
     const rawBounds = transformBounds(
-      this.projectTo4326,
+      this.descriptor.projectTo4326,
       ...this.descriptor.projectedBounds,
     );
     // Web Mercator cannot represent latitudes outside ~±85.051°, and the
@@ -193,7 +190,7 @@ export class RasterTileset2D extends Tileset2D {
     // would pass (or fail) the cull-rect test and the refinementStrategy
     // (best-available) would not show parent tiles correctly.
     const [west, south, east, north] = transformBounds(
-      this.projectTo4326,
+      this.descriptor.projectTo4326,
       ...projectedBounds,
     );
 

@@ -66,6 +66,11 @@ class ZarrTilesetLevel implements TilesetLevel {
     return { topLeft, topRight, bottomLeft, bottomRight };
   }
 
+  /**
+   * Compute forward and inverse per-tile pixel↔CRS transforms for the tile at
+   * `(col, row)`. Composes the level affine with a pixel-offset translation so
+   * that pixel `(0, 0)` of the tile maps to the correct CRS coordinate.
+   */
   tileTransform(
     col: number,
     row: number,
@@ -126,24 +131,36 @@ class ZarrTilesetLevel implements TilesetLevel {
  * Convert a `GeoZarrMetadata` object into a `TilesetDescriptor` for use with
  * `RasterTileset2D`.
  *
- * @param meta            Parsed GeoZarr metadata (from `parseGeoZarrMetadata`).
- * @param projectTo4326   Forward projection function: source CRS → EPSG:4326.
- * @param projectFrom4326 Inverse projection function: EPSG:4326 → source CRS.
- * @param projectTo3857   Forward projection function: source CRS → EPSG:3857.
- * @param projectFrom3857 Inverse projection function: EPSG:3857 → source CRS.
- * @param chunkSizes      Chunk (tile) width/height per level, in the same
+ * @param meta  Parsed GeoZarr metadata (from `parseGeoZarrMetadata`).
+ * @param opts  Projection functions and tiling parameters:
+ *   - `projectTo4326`:   Forward projection function: source CRS → EPSG:4326.
+ *   - `projectFrom4326`: Inverse projection function: EPSG:4326 → source CRS.
+ *   - `projectTo3857`:   Forward projection function: source CRS → EPSG:3857.
+ *   - `projectFrom3857`: Inverse projection function: EPSG:3857 → source CRS.
+ *   - `chunkSizes`:      Chunk (tile) width/height per level, in the same
  *                        finest-first order as `meta.levels`.
- * @param mpu             Meters per CRS unit (computed from the resolved CRS).
+ *   - `mpu`:             Meters per CRS unit (computed from the resolved CRS).
  */
 export function geoZarrToDescriptor(
   meta: GeoZarrMetadata,
-  projectTo4326: ProjectionFunction,
-  projectFrom4326: ProjectionFunction,
-  projectTo3857: ProjectionFunction,
-  projectFrom3857: ProjectionFunction,
-  chunkSizes: Array<{ width: number; height: number }>,
-  mpu: number,
+  opts: {
+    projectTo4326: ProjectionFunction;
+    projectFrom4326: ProjectionFunction;
+    projectTo3857: ProjectionFunction;
+    projectFrom3857: ProjectionFunction;
+    chunkSizes: Array<{ width: number; height: number }>;
+    mpu: number;
+  },
 ): TilesetDescriptor {
+  const {
+    projectTo4326,
+    projectFrom4326,
+    projectTo3857,
+    projectFrom3857,
+    chunkSizes,
+    mpu,
+  } = opts;
+
   if (chunkSizes.length !== meta.levels.length) {
     throw new Error(
       `chunkSizes length (${chunkSizes.length}) must match meta.levels length (${meta.levels.length})`,

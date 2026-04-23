@@ -20,15 +20,14 @@ const META: GeoZarrMetadata = {
 } as unknown as GeoZarrMetadata;
 
 describe("ZarrTilesetLevel.tileTransform", () => {
-  const descriptor = geoZarrToDescriptor(
-    META,
-    identityProjection,
-    identityProjection,
-    identityProjection,
-    identityProjection,
-    [{ width: 4, height: 4 }],
-    1,
-  );
+  const descriptor = geoZarrToDescriptor(META, {
+    projectTo4326: identityProjection,
+    projectFrom4326: identityProjection,
+    projectTo3857: identityProjection,
+    projectFrom3857: identityProjection,
+    chunkSizes: [{ width: 4, height: 4 }],
+    mpu: 1,
+  });
   const level = descriptor.levels[0]!;
 
   it("maps the origin pixel of tile (1,1) through the composed affine", () => {
