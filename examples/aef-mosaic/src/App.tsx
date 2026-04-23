@@ -1,18 +1,96 @@
+import type { MapboxOverlayProps } from "@deck.gl/mapbox";
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { Map as MaplibreMap } from "react-map-gl/maplibre";
+import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import * as zarr from "zarrita";
+import { VARIABLE, ZARR_URL } from "./aef/constants.js";
+import type { AefTileData } from "./aef/get-tile-data.js";
+import { getTileData } from "./aef/get-tile-data.js";
+import { LOCATIONS } from "./aef/locations.js";
+import { makeRenderTile } from "./aef/render-tile.js";
+import { buildSelection } from "./aef/selection.js";
+
+const DEFAULT_LOCATION = LOCATIONS[0]!;
+const DEFAULT_YEAR_IDX = 8; // 2025
+const DEFAULT_R_BAND = 0;
+const DEFAULT_G_BAND = 16;
+const DEFAULT_B_BAND = 32;
+const DEFAULT_RESCALE_MIN = -0.3;
+const DEFAULT_RESCALE_MAX = 0.3;
+
+function DeckGLOverlay(props: MapboxOverlayProps) {
+  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
+  overlay.setProps(props);
+  return null;
+}
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
+  const [arr, setArr] = useState<zarr.Array<"int8", zarr.Readable> | null>(
+    null,
+  );
+  const [rootAttrs, setRootAttrs] = useState<unknown>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const store = new zarr.FetchStore(ZARR_URL);
+      const root = await zarr.open.v3(store, { kind: "group" });
+      const opened = await zarr.open.v3(root.resolve(VARIABLE), {
+        kind: "array",
+      });
+      if (cancelled) return;
+      setArr(opened as zarr.Array<"int8", zarr.Readable>);
+      setRootAttrs(root.attrs);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const yearIdx = DEFAULT_YEAR_IDX;
+  const selection = buildSelection({ yearIdx });
+  const renderTile = makeRenderTile({
+    rBandIdx: DEFAULT_R_BAND,
+    gBandIdx: DEFAULT_G_BAND,
+    bBandIdx: DEFAULT_B_BAND,
+    rescaleMin: DEFAULT_RESCALE_MIN,
+    rescaleMax: DEFAULT_RESCALE_MAX,
+  });
+
+  const layers =
+    arr && rootAttrs
+      ? [
+          new ZarrLayer<zarr.Readable, "int8", AefTileData>({
+            id: `aef-zarr-layer-${yearIdx}`,
+            source: arr,
+            metadata: rootAttrs,
+            selection,
+            getTileData,
+            renderTile,
+            // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+            // doesn't know about it.
+            beforeId: "boundary_country_outline",
+          }),
+        ]
+      : [];
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
         ref={mapRef}
-        initialViewState={{ longitude: -122.3, latitude: 37.75, zoom: 13 }}
+        initialViewState={{
+          longitude: DEFAULT_LOCATION.longitude,
+          latitude: DEFAULT_LOCATION.latitude,
+          zoom: DEFAULT_LOCATION.zoom,
+        }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-      />
+      >
+        <DeckGLOverlay layers={layers} interleaved />
+      </MaplibreMap>
     </div>
   );
 }
