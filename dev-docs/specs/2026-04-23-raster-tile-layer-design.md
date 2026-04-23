@@ -21,7 +21,7 @@ Duplicated logic across these consumers includes:
 - Make it subclassable so source-specific layers like `COGLayer` and `ZarrLayer` can expose a single "parse this source" prop to end users.
 - Migrate `COGLayer` and `ZarrLayer` to subclass `RasterTileLayer` without changing their public API.
 
-Inspired by `@deck.gl/geo-layers`'s [`MVTLayer extends TileLayer`](https://github.com/visgl/deck.gl/blob/master/modules/geo-layers/src/mvt-layer/mvt-layer.ts) pattern: the base class is usable directly, and subclasses customize by overriding protected methods and adding their own props.
+Inspired by `@deck.gl/geo-layers`'s [`MVTLayer extends TileLayer`](https://github.com/visgl/deck.gl/blob/ddb6fc26e54683f81170105044b7fe8eee69d286/modules/geo-layers/src/mvt-layer/mvt-layer.ts#L111-L117) pattern: the base class is usable directly, and subclasses customize by overriding protected methods and adding their own props.
 
 ## Non-Goals
 
