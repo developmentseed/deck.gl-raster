@@ -403,7 +403,9 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     for (const cogSource of cogSources) {
       const descriptor = new TileMatrixSetAdaptor(cogSource.tms, {
         projectTo4326: forwardTo4326,
+        projectFrom4326: inverseFrom4326,
         projectTo3857: forwardTo3857,
+        projectFrom3857: inverseFrom3857,
       });
       tilesetMap.set(cogSource.name, descriptor);
       sourceMap.set(cogSource.name, {
@@ -995,9 +997,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     // Create a factory class that wraps RasterTileset2D with the primary descriptor
     class PrimaryTilesetFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
-        super(opts, primary, {
-          projectTo4326: forwardTo4326,
-        });
+        super(opts, primary);
       }
     }
 

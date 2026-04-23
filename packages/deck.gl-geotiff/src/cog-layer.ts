@@ -533,11 +533,11 @@ export class COGLayer<
       constructor(opts: Tileset2DProps) {
         const descriptor = new TileMatrixSetAdaptor(tms, {
           projectTo4326: forwardTo4326,
+          projectFrom4326: inverseFrom4326,
           projectTo3857: forwardTo3857,
+          projectFrom3857: inverseFrom3857,
         });
-        super(opts, descriptor, {
-          projectTo4326: forwardTo4326,
-        });
+        super(opts, descriptor);
       }
     }
 

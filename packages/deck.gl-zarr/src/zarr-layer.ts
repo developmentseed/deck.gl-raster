@@ -595,11 +595,13 @@ export class ZarrLayer<
         const descriptor = geoZarrToDescriptor(
           meta,
           forwardTo4326,
+          inverseFrom4326,
           forwardTo3857,
+          inverseFrom3857,
           chunkSizes,
           mpu,
         );
-        super(opts, descriptor, { projectTo4326: forwardTo4326 });
+        super(opts, descriptor);
       }
     }
 

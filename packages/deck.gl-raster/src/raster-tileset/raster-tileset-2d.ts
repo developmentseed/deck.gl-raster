@@ -69,21 +69,13 @@ export class RasterTileset2D extends Tileset2D {
   private wgs84Bounds: Bounds;
   private projectTo4326: ProjectionFunction;
 
-  constructor(
-    opts: Tileset2DProps,
-    descriptor: TilesetDescriptor,
-    {
-      projectTo4326,
-    }: {
-      projectTo4326: ProjectionFunction;
-    },
-  ) {
+  constructor(opts: Tileset2DProps, descriptor: TilesetDescriptor) {
     super(opts);
     this.descriptor = descriptor;
-    this.projectTo4326 = projectTo4326;
+    this.projectTo4326 = descriptor.projectTo4326;
 
     const rawBounds = transformBounds(
-      projectTo4326,
+      this.projectTo4326,
       ...this.descriptor.projectedBounds,
     );
     // Web Mercator cannot represent latitudes outside ~±85.051°, and the

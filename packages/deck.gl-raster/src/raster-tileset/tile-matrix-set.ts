@@ -1,5 +1,5 @@
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
-import { xy_bounds } from "@developmentseed/morecantile";
+import { tileTransform, xy_bounds } from "@developmentseed/morecantile";
 import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface";
 import type { Bounds, Corners, ProjectionFunction } from "./types";
 
@@ -121,6 +121,41 @@ class TileMatrixAdaptor implements TilesetLevel {
 
     return { minCol, maxCol, minRow, maxRow };
   }
+
+  /**
+   * Compute forward and inverse per-tile pixel↔CRS transforms for the tile
+   * at `(col, row)` using morecantile's 6-element affine.
+   */
+  tileTransform(
+    col: number,
+    row: number,
+  ): {
+    forwardTransform: (x: number, y: number) => [number, number];
+    inverseTransform: (x: number, y: number) => [number, number];
+  } {
+    const affine = tileTransform(this.inner, { col, row });
+    const [a, b, c, d, e, f] = affine;
+    // Invert the 2x2 linear part (a,b / d,e) and compose with translation.
+    const det = a * e - b * d;
+    if (det === 0) {
+      throw new Error(
+        "TileMatrix affine is singular; cannot invert tile transform",
+      );
+    }
+    const invA = e / det;
+    const invB = -b / det;
+    const invD = -d / det;
+    const invE = a / det;
+    const invC = -(invA * c + invB * f);
+    const invF = -(invD * c + invE * f);
+    return {
+      forwardTransform: (x, y) => [a * x + b * y + c, d * x + e * y + f],
+      inverseTransform: (x, y) => [
+        invA * x + invB * y + invC,
+        invD * x + invE * y + invF,
+      ],
+    };
+  }
 }
 
 /**
@@ -131,19 +166,30 @@ export class TileMatrixSetAdaptor implements TilesetDescriptor {
   tms: TileMatrixSet;
   private _levels: TileMatrixAdaptor[];
   projectTo3857: ProjectionFunction;
+  projectFrom3857: ProjectionFunction;
   projectTo4326: ProjectionFunction;
+  projectFrom4326: ProjectionFunction;
 
   constructor(
     tms: TileMatrixSet,
     {
       projectTo3857,
+      projectFrom3857,
       projectTo4326,
-    }: { projectTo3857: ProjectionFunction; projectTo4326: ProjectionFunction },
+      projectFrom4326,
+    }: {
+      projectTo3857: ProjectionFunction;
+      projectFrom3857: ProjectionFunction;
+      projectTo4326: ProjectionFunction;
+      projectFrom4326: ProjectionFunction;
+    },
   ) {
     this.tms = tms;
     this._levels = tms.tileMatrices.map((tm) => new TileMatrixAdaptor(tm));
     this.projectTo3857 = projectTo3857;
+    this.projectFrom3857 = projectFrom3857;
     this.projectTo4326 = projectTo4326;
+    this.projectFrom4326 = projectFrom4326;
   }
 
   get levels(): TilesetLevel[] {

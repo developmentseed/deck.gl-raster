@@ -55,6 +55,26 @@ export interface TilesetLevel {
     projectedMaxX: number,
     projectedMaxY: number,
   ) => { minCol: number; maxCol: number; minRow: number; maxRow: number };
+
+  /**
+   * Get per-tile forward/inverse coordinate transforms for the tile at
+   * `(col, row)`.
+   *
+   * - `forwardTransform(px, py)` maps a pixel coordinate within the tile
+   *   (origin at the top-left of the tile, (0,0) at the top-left pixel)
+   *   to a coordinate in the source CRS.
+   * - `inverseTransform(cx, cy)` is its inverse.
+   *
+   * For axis-aligned tilesets these are affine; the interface allows
+   * non-affine transforms (e.g. GCPs) in the future.
+   */
+  tileTransform: (
+    col: number,
+    row: number,
+  ) => {
+    forwardTransform: (x: number, y: number) => [number, number];
+    inverseTransform: (x: number, y: number) => [number, number];
+  };
 }
 
 /**
@@ -82,6 +102,20 @@ export interface TilesetDescriptor {
    * proj4 dependency.
    */
   projectTo4326: ProjectionFunction;
+
+  /**
+   * Inverse projection function from EPSG:4326 → source CRS.
+   *
+   * Provided by the caller alongside `projectTo4326`.
+   */
+  projectFrom4326: ProjectionFunction;
+
+  /**
+   * Inverse projection function from EPSG:3857 → source CRS.
+   *
+   * Provided by the caller alongside `projectTo3857`.
+   */
+  projectFrom3857: ProjectionFunction;
 
   /** Bounding box of the dataset in the source CRS. */
   projectedBounds: Bounds;

@@ -66,6 +66,24 @@ class ZarrTilesetLevel implements TilesetLevel {
     return { topLeft, topRight, bottomLeft, bottomRight };
   }
 
+  tileTransform(
+    col: number,
+    row: number,
+  ): {
+    forwardTransform: (x: number, y: number) => [number, number];
+    inverseTransform: (x: number, y: number) => [number, number];
+  } {
+    const colStart = col * this._tileWidth;
+    const rowStart = row * this._tileHeight;
+    const tileOffset = affine.translation(colStart, rowStart);
+    const tileAffine = affine.compose(this.level.affine, tileOffset);
+    const invTileAffine = affine.invert(tileAffine);
+    return {
+      forwardTransform: (x, y) => affine.apply(tileAffine, x, y),
+      inverseTransform: (x, y) => affine.apply(invTileAffine, x, y),
+    };
+  }
+
   crsBoundsToTileRange(
     projectedMinX: number,
     projectedMinY: number,
@@ -108,17 +126,21 @@ class ZarrTilesetLevel implements TilesetLevel {
  * Convert a `GeoZarrMetadata` object into a `TilesetDescriptor` for use with
  * `RasterTileset2D`.
  *
- * @param meta          Parsed GeoZarr metadata (from `parseGeoZarrMetadata`).
- * @param projectTo4326 Forward projection function: source CRS → EPSG:4326.
- * @param projectTo3857 Forward projection function: source CRS → EPSG:3857.
- * @param chunkSizes    Chunk (tile) width/height per level, in the same
- *                      finest-first order as `meta.levels`.
- * @param mpu           Meters per CRS unit (computed from the resolved CRS).
+ * @param meta            Parsed GeoZarr metadata (from `parseGeoZarrMetadata`).
+ * @param projectTo4326   Forward projection function: source CRS → EPSG:4326.
+ * @param projectFrom4326 Inverse projection function: EPSG:4326 → source CRS.
+ * @param projectTo3857   Forward projection function: source CRS → EPSG:3857.
+ * @param projectFrom3857 Inverse projection function: EPSG:3857 → source CRS.
+ * @param chunkSizes      Chunk (tile) width/height per level, in the same
+ *                        finest-first order as `meta.levels`.
+ * @param mpu             Meters per CRS unit (computed from the resolved CRS).
  */
 export function geoZarrToDescriptor(
   meta: GeoZarrMetadata,
   projectTo4326: ProjectionFunction,
+  projectFrom4326: ProjectionFunction,
   projectTo3857: ProjectionFunction,
+  projectFrom3857: ProjectionFunction,
   chunkSizes: Array<{ width: number; height: number }>,
   mpu: number,
 ): TilesetDescriptor {
@@ -155,5 +177,12 @@ export function geoZarrToDescriptor(
     Math.max(...ys),
   ];
 
-  return { levels, projectTo4326, projectTo3857, projectedBounds };
+  return {
+    levels,
+    projectTo4326,
+    projectFrom4326,
+    projectTo3857,
+    projectFrom3857,
+    projectedBounds,
+  };
 }
