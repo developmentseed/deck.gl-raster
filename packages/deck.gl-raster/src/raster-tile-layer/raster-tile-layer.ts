@@ -133,34 +133,80 @@ const defaultProps: DefaultProps<RasterTileLayerProps> = {
 };
 
 /**
+ * Base-class prop shape that excludes the overridable fields.
+ *
+ * The three overridable fields (`tilesetDescriptor`, `getTileData`,
+ * `renderTile`) are declared by `ExtraProps` instead — either via the generic
+ * default (for direct use) or by a subclass that provides its own signatures
+ * (e.g. `COGLayer`'s `getTileData(image, options)`).
+ */
+type RasterTileLayerBaseProps<DataT extends MinimalDataT> = Omit<
+  RasterTileLayerProps<DataT>,
+  "tilesetDescriptor" | "getTileData" | "renderTile"
+>;
+
+/**
+ * Default `ExtraProps` for direct use of `RasterTileLayer`: brings the three
+ * overridable fields back in with the generic signatures. Subclasses supply
+ * their own `ExtraProps` to override these.
+ */
+type RasterTileLayerDefaultExtraProps<DataT extends MinimalDataT> = Pick<
+  RasterTileLayerProps<DataT>,
+  "tilesetDescriptor" | "getTileData" | "renderTile"
+>;
+
+/**
  * Base layer that renders a tiled raster source driven by a generic
  * {@link TilesetDescriptor}.
  *
  * Usable directly (provide `tilesetDescriptor`, `getTileData`, and `renderTile`
  * as props) or as a base class (override the protected `_getTilesetDescriptor`,
  * `_getGetTileData`, `_getRenderTile` accessors to source them from state).
+ *
+ * The generic `ExtraProps` parameter lets a subclass redeclare any of the
+ * overridable fields with a domain-specific signature (e.g. `COGLayer`'s
+ * `getTileData(image, options)`).
  */
 export class RasterTileLayer<
   DataT extends MinimalDataT = MinimalDataT,
-  // biome-ignore lint/complexity/noBannedTypes: matches CompositeLayer's generic default shape
-  ExtraProps extends {} = {},
-> extends CompositeLayer<Required<RasterTileLayerProps<DataT>> & ExtraProps> {
+  ExtraProps extends object = RasterTileLayerDefaultExtraProps<DataT>,
+> extends CompositeLayer<RasterTileLayerBaseProps<DataT> & ExtraProps> {
   static override layerName = "RasterTileLayer";
   static override defaultProps = defaultProps;
 
+  /**
+   * Typed view of `this.props` as the canonical `RasterTileLayerProps` shape.
+   *
+   * The class's generic uses `RasterTileLayerBaseProps & ExtraProps` so that
+   * subclasses can redeclare the overridable fields with their own
+   * signatures. That means the default `this.props` typing does not include
+   * those fields — this cast gives the base class a stable way to access them
+   * (and the defaulted scalar props) without threading the `ExtraProps`
+   * generic through every call site.
+   *
+   * Runtime-safe: `defaultProps` fills the scalar fields we rely on, and for
+   * overridable fields we either (a) have them present on `this.props`
+   * because the direct-use default `ExtraProps` brings them in, or (b) a
+   * subclass overrides the protected accessor below and the base-class
+   * version is never invoked.
+   */
+  private get _baseProps(): Required<RasterTileLayerProps<DataT>> {
+    return this.props as unknown as Required<RasterTileLayerProps<DataT>>;
+  }
+
   /** @returns the descriptor, or `undefined` if not yet available. */
   protected _getTilesetDescriptor(): TilesetDescriptor | undefined {
-    return this.props.tilesetDescriptor;
+    return this._baseProps.tilesetDescriptor;
   }
 
   /** @returns the tile-fetch callback, or `undefined` if not yet available. */
   protected _getGetTileData(): RasterTileLayerProps<DataT>["getTileData"] {
-    return this.props.getTileData;
+    return this._baseProps.getTileData;
   }
 
   /** @returns the per-tile render callback, or `undefined` if not yet available. */
   protected _getRenderTile(): RasterTileLayerProps<DataT>["renderTile"] {
-    return this.props.renderTile;
+    return this._baseProps.renderTile;
   }
 
   override renderLayers(): Layer | null {
@@ -193,7 +239,8 @@ export class RasterTileLayer<
       maxCacheByteSize,
       maxRequests,
       refinementStrategy,
-    } = this.props;
+      updateTriggers,
+    } = this._baseProps;
 
     return new TileLayer<DataT>({
       id: `raster-tile-layer-${this.id}`,
@@ -211,7 +258,7 @@ export class RasterTileLayer<
           renderTile,
         ),
       updateTriggers: {
-        renderSubLayers: this.props.updateTriggers?.renderTile,
+        renderSubLayers: updateTriggers?.renderTile,
       },
       tileSize,
       zoomOffset,
@@ -231,7 +278,7 @@ export class RasterTileLayer<
     getTileData: NonNullable<RasterTileLayerProps<DataT>["getTileData"]>,
   ): Promise<DataT> {
     const { signal: tileSignal } = tile;
-    const userSignal = this.props.signal;
+    const userSignal = this._baseProps.signal;
     const signal =
       userSignal && tileSignal
         ? AbortSignal.any([userSignal, tileSignal])
@@ -253,7 +300,7 @@ export class RasterTileLayer<
     descriptor: TilesetDescriptor,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): Layer[] {
-    const { maxError, debug, debugOpacity } = this.props;
+    const { maxError, debug, debugOpacity } = this._baseProps;
     const tile = props.tile as Tile2DHeader<DataT> & TileMetadata;
 
     const layers: Layer[] = [];
