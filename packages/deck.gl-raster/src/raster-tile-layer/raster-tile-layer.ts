@@ -1,4 +1,9 @@
-import type { CompositeLayerProps, Layer, LayerProps } from "@deck.gl/core";
+import type {
+  CompositeLayerProps,
+  DefaultProps,
+  Layer,
+  LayerProps,
+} from "@deck.gl/core";
 import { COORDINATE_SYSTEM, CompositeLayer } from "@deck.gl/core";
 import type {
   _Tile2DHeader as Tile2DHeader,
@@ -116,7 +121,7 @@ export type RasterTileLayerProps<DataT extends MinimalDataT = MinimalDataT> =
       signal?: AbortSignal;
     };
 
-const defaultProps: Partial<RasterTileLayerProps> = {
+const defaultProps: DefaultProps<RasterTileLayerProps> = {
   ...TileLayer.defaultProps,
   maxError: 0.125,
   debug: false,
