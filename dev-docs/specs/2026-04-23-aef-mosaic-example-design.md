@@ -14,10 +14,15 @@ and map them to R/G/B. Doing this on the GPU — uploading the full 64-band
 stack per tile and switching the three sampled layers via uniforms — gives
 instant band-switching with no refetch.
 
-This exercise also drives one change to `ZarrLayer`: the AEF store uses Zarr v3
-sharding with a 4096×4096 outer shard and a 256×256 inner chunk. Tiles must be
-sized by the inner shard chunk, not the outer shard, or each tile would hold
-gigabytes of data.
+The AEF store uses Zarr v3 sharding with a 4096×4096 outer shard and a 256×256
+inner chunk. Tiles must be sized by the inner shard chunk, or each tile would
+hold gigabytes of data. Zarrita already exposes the inner shard chunk shape
+via `arr.chunks` for sharded arrays — verified in `zarrita@0.7.1`'s
+`hierarchy.js` `createContext()`, which sets `chunkShape =
+configuration.chunk_shape` (the sharding codec's inner config) when a
+sharding codec is detected. So `ZarrLayer`'s existing
+`arr.chunks[arr.chunks.length - 1]` tile-size derivation is already correct
+for this store; no upstream change is needed.
 
 ## Goals
 
@@ -29,11 +34,8 @@ gigabytes of data.
 - Treat the sentinel `-128` as nodata (transparent pixel).
 - Expose year, R/G/B band indices, rescale range, and a preset-location picker
   in a side control panel.
-- Update `ZarrLayer` (and its `RasterTileset2D` descriptor wiring) to derive
-  the tile size from the inner sharding codec chunk shape when the array uses
-  `sharding_indexed`; fall back to `arr.chunks` otherwise.
-- Add unit tests covering both the sharded and non-sharded branches of the new
-  tile-shape helper.
+- No upstream `ZarrLayer` code changes needed — zarrita already returns the
+  inner sharding chunk via `arr.chunks`.
 
 ## Non-Goals
 
@@ -174,45 +176,14 @@ Integer textures (`isampler2DArray`) force `nearest` filtering — acceptable,
 matches the other GPU modules in this repo. Default rescale `[-0.3, 0.3]`
 based on Earth Engine's published AEF visualizations.
 
-### Upstream `ZarrLayer` change: tile size from inner shard chunk
+### Tile size
 
-**File:** `packages/deck.gl-zarr/src/zarr-layer.ts`
-
-Replace the two lines
-
-```ts
-const tileWidth = arr.chunks[arr.chunks.length - 1]!;
-const tileHeight = arr.chunks[arr.chunks.length - 2]!;
-```
-
-and the corresponding `chunkSizes` construction in `renderTileLayer` with a
-helper:
-
-```ts
-function getTileShape(
-  arr: zarr.Array<zarr.DataType, zarr.Readable>,
-): [number, number] {
-  const sharding = findShardingCodec(arr);
-  const shape = sharding?.configuration.chunk_shape ?? arr.chunks;
-  return [shape[shape.length - 2]!, shape[shape.length - 1]!];
-}
-```
-
-`findShardingCodec` walks the array's codec pipeline (zarrita's
-`arr.codec`/codec list — exact member name confirmed at implementation time)
-and returns the first codec with `name === "sharding_indexed"`, or `undefined`.
-
-Both call sites — `_getTileData` and `renderTileLayer` — use the helper so the
-tileset descriptor and the per-tile slice computation stay in sync.
-
-**Rationale:** without this, the AEF store produces 4096×4096 tiles with
-64-layer textures → ~1 GiB per tile. Other sharded stores would have the same
-problem. Treating the inner chunk as authoritative for tiling is correct in
-general; the outer shard is an I/O grouping, not a display unit.
-
-**Ripple effect:** the non-sharded examples (`dynamical-zarr-ecmwf`,
-`zarr-sentinel2-tci`) exercise the fallback branch — `arr.chunks` — so no
-regression expected. Verified by typechecks + existing tests + local run.
+`ZarrLayer` reads `arr.chunks` to size tiles. For the AEF store zarrita
+returns `[1, 64, 256, 256]` — the inner sharding chunk, not the outer
+4096×4096 shard. So no layer code change is required. This is worth
+documenting in the example's README so future readers understand why a
+sharded store behaves identically to a non-sharded one from the layer's
+perspective.
 
 ### Example file layout
 
@@ -263,19 +234,19 @@ Zoom level 13–14 so tiles load immediately.
 
 ### Testing
 
-- Unit test: `getTileShape` returns inner chunk when a `sharding_indexed`
-  codec is present; returns `arr.chunks` otherwise.
 - Manual verification: open the example, confirm (a) tiles load at zoom 13–14,
   (b) band dropdowns change the display without refetching, (c) year slider
   refetches, (d) nodata pixels at the AEF bbox boundary render transparent,
   (e) no regression on `dynamical-zarr-ecmwf` and `zarr-sentinel2-tci`.
+- Assert in a small unit test that opening the AEF array surfaces
+  `arr.chunks[-2:] === [256, 256]` — a regression guard for the zarrita
+  behavior we're relying on.
 - Typecheck at repo root.
 
 ## Open Questions
 
 None blocking. Decisions deferred to implementation time:
 
-- Exact zarrita API for codec inspection (`arr.codec` vs. `arr.codecs` etc.).
 - Initial default band triad — probably chosen empirically once the example
   renders.
 
