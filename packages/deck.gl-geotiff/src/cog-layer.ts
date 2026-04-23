@@ -1,6 +1,6 @@
 import type { UpdateParameters } from "@deck.gl/core";
 import type {
-  MinimalDataT as RasterMinimalDataT,
+  MinimalDataT,
   RasterTileLayerProps,
   RenderTileResult,
   TilesetDescriptor,
@@ -26,18 +26,7 @@ import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 
-/**
- * Minimum interface that **must** be returned from getTileData.
- */
-export type MinimalDataT = {
-  /** The height of the tile in pixels. */
-  height: number;
-  /** The width of the tile in pixels. */
-  width: number;
-
-  /** Byte length of the data, required for cache management when `maxCacheByteSize` is set. */
-  byteLength?: number;
-};
+export type { MinimalDataT } from "@developmentseed/deck.gl-raster";
 
 type DefaultDataT = MinimalDataT & {
   texture: Texture;
@@ -93,7 +82,7 @@ type COGLayerDataProps<DataT extends MinimalDataT> =
  * Props that can be passed into the {@link COGLayer}.
  */
 export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> = Omit<
-  RasterTileLayerProps<DataT & RasterMinimalDataT>,
+  RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
 > &
   COGLayerDataProps<DataT> & {
@@ -159,7 +148,7 @@ export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> = Omit<
  */
 export class COGLayer<
   DataT extends MinimalDataT = DefaultDataT,
-> extends RasterTileLayer<DataT & RasterMinimalDataT, COGLayerProps<DataT>> {
+> extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
   static override layerName = "COGLayer";
   // COGLayer's getTileData signature differs from the base class's, so
   // `DefaultProps<COGLayerProps>` is not assignable to
@@ -280,19 +269,23 @@ export class COGLayer<
     const userFn = this.props.getTileData ?? this.state.defaultGetTileData;
     if (!userFn) return undefined;
     type RasterGetTileData = NonNullable<
-      RasterTileLayerProps<DataT & RasterMinimalDataT>["getTileData"]
+      RasterTileLayerProps<DataT>["getTileData"]
     >;
     const wrapped: RasterGetTileData = async (tile, options) => {
       const { x, y, z } = tile.index;
+      // TODO: should be able to (micro) optimize this to not create the array
+      // Something like:
+      // const image = z === geotiff.overviews.length - 1 ? geotiff :
+      //   geotiff.overviews[geotiff.overviews.length - 1 - z]!;
       const images = [geotiff, ...geotiff.overviews];
       const image = images[images.length - 1 - z]!;
       return userFn(image, {
-        device: options.device ?? this.context.device,
+        device: options.device!,
         x,
         y,
         signal: options.signal,
         pool: this.props.pool ?? defaultDecoderPool(),
-      }) as Promise<DataT & RasterMinimalDataT>;
+      }) as Promise<DataT>;
     };
     return wrapped;
   }
@@ -300,8 +293,6 @@ export class COGLayer<
   protected override _getRenderTile() {
     const userFn = this.props.renderTile ?? this.state.defaultRenderTile;
     if (!userFn) return undefined;
-    return userFn as NonNullable<
-      RasterTileLayerProps<DataT & RasterMinimalDataT>["renderTile"]
-    >;
+    return userFn as NonNullable<RasterTileLayerProps<DataT>["renderTile"]>;
   }
 }
