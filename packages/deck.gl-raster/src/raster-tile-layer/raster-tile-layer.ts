@@ -1,4 +1,4 @@
-import type { Layer, LayerProps } from "@deck.gl/core";
+import type { CompositeLayerProps, Layer, LayerProps } from "@deck.gl/core";
 import { COORDINATE_SYSTEM, CompositeLayer } from "@deck.gl/core";
 import type {
   _Tile2DHeader as Tile2DHeader,
@@ -8,17 +8,113 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
+import type { Device } from "@luma.gl/core";
 import { renderDebugTileOutline } from "../layer-utils.js";
+import type { RenderTileResult } from "../raster-layer.js";
 import { RasterLayer } from "../raster-layer.js";
 import type { TilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
 import type { TileMetadata } from "../raster-tileset/raster-tileset-2d.js";
 import { TILE_SIZE, WEB_MERCATOR_TO_WORLD_SCALE } from "./constants.js";
-import type {
-  GetTileDataOptions,
-  MinimalDataT,
-  RasterTileLayerProps,
-} from "./types.js";
+
+/**
+ * Minimum interface returned by `getTileData`.
+ */
+export type MinimalDataT = {
+  /** Tile height in pixels. */
+  height: number;
+  /** Tile width in pixels. */
+  width: number;
+  /**
+   * Byte length of the tile data, used by deck.gl's TileLayer for
+   * byte-based cache eviction when `maxCacheByteSize` is set. Optional.
+   */
+  byteLength?: number;
+};
+
+/**
+ * Options passed to a user-supplied `getTileData` callback.
+ */
+export type GetTileDataOptions = {
+  /** The luma.gl Device. Optional — consumers that don't touch GPU may ignore. */
+  device?: Device;
+  /**
+   * Combined AbortSignal: the layer's `signal` prop composed with the
+   * TileLayer's per-tile lifecycle signal. Fires when either aborts.
+   */
+  signal?: AbortSignal;
+};
+
+/**
+ * Props for {@link RasterTileLayer}.
+ */
+export type RasterTileLayerProps<DataT extends MinimalDataT = MinimalDataT> =
+  CompositeLayerProps &
+    Pick<
+      TileLayerProps,
+      | "tileSize"
+      | "zoomOffset"
+      | "maxZoom"
+      | "minZoom"
+      | "extent"
+      | "debounceTime"
+      | "maxCacheSize"
+      | "maxCacheByteSize"
+      | "maxRequests"
+      | "refinementStrategy"
+    > & {
+      /**
+       * Tile pyramid + CRS projection descriptor.
+       *
+       * Subclasses may supply this via state by overriding the protected
+       * `_getTilesetDescriptor()` method.
+       */
+      tilesetDescriptor?: TilesetDescriptor;
+
+      /**
+       * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
+       * is cached by the underlying TileLayer.
+       *
+       * Subclasses may supply this via state by overriding `_getGetTileData()`.
+       */
+      getTileData?: (
+        tile: TileLoadProps,
+        options: GetTileDataOptions,
+      ) => Promise<DataT>;
+
+      /**
+       * Turn cached tile data into a render result (image and/or shader pipeline).
+       * Called on every render; does not re-fetch.
+       *
+       * Subclasses may supply this via state by overriding `_getRenderTile()`.
+       */
+      renderTile?: (data: DataT) => RenderTileResult;
+
+      /**
+       * Maximum reprojection error in pixels for mesh refinement.
+       * Lower values create denser meshes.
+       * @default 0.125
+       */
+      maxError?: number;
+
+      /**
+       * Show triangulation mesh + tile outlines.
+       * @default false
+       */
+      debug?: boolean;
+
+      /**
+       * Opacity of the debug mesh overlay (0–1).
+       * @default 0.5
+       */
+      debugOpacity?: number;
+
+      /**
+       * AbortSignal applied to every tile fetch, composed with TileLayer's
+       * per-tile signal.
+       */
+      signal?: AbortSignal;
+    };
 
 const defaultProps: Partial<RasterTileLayerProps> = {
   ...TileLayer.defaultProps,
@@ -43,26 +139,18 @@ export class RasterTileLayer<
   static override layerName = "RasterTileLayer";
   static override defaultProps = defaultProps;
 
-  override initializeState(): void {
-    this.setState({});
-  }
-
   /** @returns the descriptor, or `undefined` if not yet available. */
   protected _getTilesetDescriptor(): TilesetDescriptor | undefined {
     return this.props.tilesetDescriptor;
   }
 
   /** @returns the tile-fetch callback, or `undefined` if not yet available. */
-  protected _getGetTileData():
-    | RasterTileLayerProps<DataT>["getTileData"]
-    | undefined {
+  protected _getGetTileData(): RasterTileLayerProps<DataT>["getTileData"] {
     return this.props.getTileData;
   }
 
   /** @returns the per-tile render callback, or `undefined` if not yet available. */
-  protected _getRenderTile():
-    | RasterTileLayerProps<DataT>["renderTile"]
-    | undefined {
+  protected _getRenderTile(): RasterTileLayerProps<DataT>["renderTile"] {
     return this.props.renderTile;
   }
 
@@ -169,9 +257,11 @@ export class RasterTileLayer<
     if (!props.data) return layers;
 
     const { x, y, z } = tile.index;
-    const { forwardTransform, inverseTransform } = descriptor.levels[
-      z
-    ]!.tileTransform(x, y);
+    const level = descriptor.levels[z];
+    if (!level) {
+      return layers;
+    }
+    const { forwardTransform, inverseTransform } = level.tileTransform(x, y);
     const { image, renderPipeline } = renderTile(props.data);
     const { width, height } = props.data;
 
