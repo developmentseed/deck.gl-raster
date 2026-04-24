@@ -10,7 +10,7 @@ export { MosaicLayer } from "./mosaic-layer/mosaic-layer.js";
 export {
   type MosaicSource,
   MosaicTileset2D,
-} from "./mosaic-layer/mosaic-tileset-2d";
+} from "./mosaic-layer/mosaic-tileset-2d.js";
 // Don't export GeoTIFF Layer for now; nudge people towards COGLayer
 // export type { GeoTIFFLayerProps } from "./geotiff-layer.js";
 // export { GeoTIFFLayer } from "./geotiff-layer.js";

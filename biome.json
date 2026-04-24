@@ -20,7 +20,8 @@
       "!!packages/geozarr/geo-proj",
       "!!packages/geozarr/multiscales",
       "!!packages/geozarr/spatial",
-      "!!packages/morecantile/spec"
+      "!!packages/morecantile/spec",
+      "!!docs/api-sidebars"
     ]
   },
   "formatter": {
@@ -41,6 +42,19 @@
     "enabled": true,
     "rules": {
       "recommended": true,
+      "correctness": {
+        "useImportExtensions": {
+          "level": "error",
+          "options": {
+            "extensionMappings": {
+              "ts": "js",
+              "tsx": "js",
+              "mts": "mjs",
+              "cts": "cjs"
+            }
+          }
+        }
+      },
       "style": {
         "noNonNullAssertion": "off",
         "useBlockStatements": "error",

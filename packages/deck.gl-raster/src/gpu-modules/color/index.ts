@@ -1,5 +1,5 @@
-export { BlackIsZero } from "./black-is-zero";
-export { cieLabToRGB } from "./cielab";
-export { CMYKToRGB } from "./cmyk";
-export { WhiteIsZero } from "./white-is-zero";
-export { YCbCrToRGB } from "./ycbcr";
+export { BlackIsZero } from "./black-is-zero.js";
+export { cieLabToRGB } from "./cielab.js";
+export { CMYKToRGB } from "./cmyk.js";
+export { WhiteIsZero } from "./white-is-zero.js";
+export { YCbCrToRGB } from "./ycbcr.js";

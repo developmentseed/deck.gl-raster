@@ -7,8 +7,8 @@ import type { DecodedPixels, DecoderMetadata } from "./decode.js";
 import { decode } from "./decode.js";
 import type { CachedTags } from "./ifd.js";
 import type { DecoderPool } from "./pool/pool.js";
-import type { Tile } from "./tile";
-import type { HasTransform } from "./transform";
+import type { Tile } from "./tile.js";
+import type { HasTransform } from "./transform.js";
 
 /** Protocol for objects that hold a TIFF reference and can request tiles. */
 interface HasTiffReference extends HasTransform {
