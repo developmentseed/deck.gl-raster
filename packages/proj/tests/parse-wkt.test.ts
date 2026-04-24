@@ -1,23 +1,25 @@
 import { describe, expect, it } from "vitest";
+import type { ProjJson } from "../../proj/src/index.js";
 import { parseWkt } from "../../proj/src/index.js";
 
 describe("parseWkt", () => {
   it("produces degree units for EPSG:4326 PROJJSON (from epsg.io)", () => {
-    // Literal response body from https://epsg.io/4326.json. Units are declared
-    // per-axis on coordinate_system.axis[].unit, not at the top level. When
-    // wkt-parser fails to resolve that, parseWkt normalizes longlat to degree.
-    const projjson = {
+    // Simplified response body from https://epsg.io/4326.json. Units are
+    // declared per-axis on coordinate_system.axis[].unit, not at the top level.
+    // When wkt-parser fails to resolve that, parseWkt normalizes longlat to
+    // degree.
+    const projjson: ProjJson = {
       $schema: "https://proj.org/schemas/v0.7/projjson.schema.json",
       type: "GeographicCRS",
       name: "WGS 84",
       datum_ensemble: {
         name: "World Geodetic System 1984 ensemble",
+        members: [],
         ellipsoid: {
           name: "WGS 84",
           semi_major_axis: 6378137,
           inverse_flattening: 298.257223563,
         },
-        id: { authority: "EPSG", code: 6326 },
       },
       coordinate_system: {
         subtype: "ellipsoidal",
@@ -36,8 +38,7 @@ describe("parseWkt", () => {
           },
         ],
       },
-      id: { authority: "EPSG", code: 4326 },
-    } as const;
+    };
 
     const def = parseWkt(projjson);
 
@@ -48,7 +49,7 @@ describe("parseWkt", () => {
 
   it("normalizes longlat with units 'unknown' to degree", () => {
     // GEOGCS WKT without a UNIT directive can cause wkt-parser to emit
-    // units: "unknown", to_meter: null. This verifies the fallback.
+    // units: "unknown" or undefined. This verifies the fallback.
     const wkt =
       'GEOGCS["WGS 84",' +
       'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],' +
