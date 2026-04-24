@@ -9,6 +9,74 @@ const RESCALE_MAX_BOUND = 1;
 const RESCALE_STEP = 0.01;
 
 /**
+ * A small circled "i" that reveals a tooltip immediately on hover/focus —
+ * avoids the long delay on the browser's native `title` attribute.
+ */
+function InfoTooltip({ label, body }: { label: string; body: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "14px",
+        height: "14px",
+        padding: 0,
+        borderRadius: "50%",
+        border: "1px solid #aaa",
+        background: "transparent",
+        fontSize: "10px",
+        fontStyle: "italic",
+        fontFamily: "serif",
+        fontWeight: "bold",
+        color: "#666",
+        cursor: "help",
+        outline: "none",
+      }}
+    >
+      i
+      {open && (
+        <span
+          role="tooltip"
+          style={{
+            position: "absolute",
+            left: 0,
+            top: "calc(100% + 6px)",
+            width: "260px",
+            padding: "8px 10px",
+            background: "#222",
+            color: "white",
+            fontSize: "13px",
+            fontStyle: "normal",
+            fontFamily:
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            fontWeight: "normal",
+            lineHeight: 1.45,
+            letterSpacing: "normal",
+            borderRadius: "4px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+            pointerEvents: "none",
+            zIndex: 1100,
+            textAlign: "left",
+            whiteSpace: "normal",
+          }}
+        >
+          {body}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/**
  * Props for {@link ControlPanel}.
  */
 export type ControlPanelProps = {
@@ -194,7 +262,26 @@ export function ControlPanel(props: ControlPanelProps) {
               marginTop: "8px",
             }}
           >
-            <span>Rescale range</span>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              Rescale range
+              <InfoTooltip
+                label="Rescale range info"
+                body={
+                  "Maps dequantized band values (roughly −1…1 after " +
+                  "(v/127.5)² · sign(v)) onto the 0…1 display range before " +
+                  "RGB assembly. Values below the lower bound clamp to 0; " +
+                  "above the upper bound clamp to 1. Narrower = higher " +
+                  "contrast; wider = more headroom at the extremes. Same " +
+                  "range is applied to all three channels."
+                }
+              />
+            </span>
             <span>
               {rescaleMin.toFixed(2)} – {rescaleMax.toFixed(2)}
             </span>

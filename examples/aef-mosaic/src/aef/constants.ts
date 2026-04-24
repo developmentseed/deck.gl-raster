@@ -30,4 +30,4 @@ export const DEQUANT_DIVISOR = 127.5;
  * user zooms out one level. The root-tile cull bounds the fetch count
  * at lower zooms.
  */
-export const MIN_ZOOM = 11;
+export const MIN_ZOOM = 10;
