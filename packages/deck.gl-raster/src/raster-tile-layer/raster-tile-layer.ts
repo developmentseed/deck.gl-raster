@@ -80,7 +80,8 @@ export type RasterTileLayerProps<DataT extends MinimalDataT = MinimalDataT> =
        * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
        * is cached by the underlying TileLayer.
        *
-       * Subclasses may supply this via state by overriding `_tileDataFn()`.
+       * Subclasses may supply this via state by overriding
+       * `_getTileDataCallback()`.
        */
       getTileData?: (
         tile: TileLoadProps,
@@ -95,7 +96,7 @@ export type RasterTileLayerProps<DataT extends MinimalDataT = MinimalDataT> =
        * dependency changes (e.g. a colormap choice), pass
        * `updateTriggers: { renderTile: [dep1, dep2] }` on the layer props.
        *
-       * Subclasses may supply this via state by overriding `_renderTileFn()`.
+       * Subclasses may supply this via state by overriding `_renderTileCallback()`.
        */
       renderTile?: (data: DataT) => RenderTileResult;
 
@@ -161,7 +162,8 @@ type RasterTileLayerDefaultExtraProps<DataT extends MinimalDataT> = Pick<
  *
  * Usable directly (provide `tilesetDescriptor`, `getTileData`, and `renderTile`
  * as props) or as a base class (override the protected `_tilesetDescriptor`,
- * `_tileDataFn`, `_renderTileFn` accessors to source them from state).
+ * `_getTileDataCallback`, `_renderTileCallback` accessors to source them from
+ * state).
  *
  * The generic `ExtraProps` parameter lets a subclass redeclare any of the
  * overridable fields with a domain-specific signature (e.g. `COGLayer`'s
@@ -212,7 +214,7 @@ export class RasterTileLayer<
    * signature into the base's `(tile, options) => Promise<DataT>` shape.
    * Returns `undefined` when the callback is not yet available.
    */
-  protected _tileDataFn(): RasterTileLayerProps<DataT>["getTileData"] {
+  protected _getTileDataCallback(): RasterTileLayerProps<DataT>["getTileData"] {
     return this._baseProps.getTileData;
   }
 
@@ -222,15 +224,19 @@ export class RasterTileLayer<
    * Subclasses override this to thread their user-facing `renderTile` and
    * any inferred default. Returns `undefined` when no callback is available.
    */
-  protected _renderTileFn(): RasterTileLayerProps<DataT>["renderTile"] {
+  protected _renderTileCallback(): RasterTileLayerProps<DataT>["renderTile"] {
     return this._baseProps.renderTile;
   }
 
   override renderLayers(): Layer | null {
     const descriptor = this._tilesetDescriptor();
-    const getTileData = this._tileDataFn();
-    const renderTile = this._renderTileFn();
-    if (!descriptor || !getTileData || !renderTile) return null;
+    const getTileData = this._getTileDataCallback();
+    const renderTile = this._renderTileCallback();
+
+    if (!descriptor || !getTileData || !renderTile) {
+      return null;
+    }
+
     return this._renderTileLayer(descriptor, getTileData, renderTile);
   }
 

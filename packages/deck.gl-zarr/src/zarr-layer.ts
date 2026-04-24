@@ -363,7 +363,7 @@ export class ZarrLayer<
    * Adapts the user-facing `(arr, { x, y, z, sliceSpec, ... }) => Promise<DataT>`
    * signature into RasterTileLayer's `(tile, { signal, device }) => Promise<DataT>`.
    */
-  protected override _tileDataFn() {
+  protected override _getTileDataCallback() {
     const { meta, arrays, spatialDims } = this.state;
     if (!meta || !arrays || !spatialDims) return undefined;
     const userFn = this.props.getTileData;
@@ -429,7 +429,7 @@ export class ZarrLayer<
     return wrapped;
   }
 
-  protected override _renderTileFn() {
+  protected override _renderTileCallback() {
     const userFn = this.props.renderTile;
     if (!userFn) return undefined;
     return userFn as NonNullable<RasterTileLayerProps<DataT>["renderTile"]>;
