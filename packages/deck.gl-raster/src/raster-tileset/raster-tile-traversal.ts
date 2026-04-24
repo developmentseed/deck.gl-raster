@@ -572,6 +572,40 @@ function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
 }
 
 /**
+ * Find the range of root (z=0) tiles that intersect a WGS84 viewport
+ * bounding box.
+ *
+ * Projects the 4 WGS84 corners into the source CRS, takes the axis-aligned
+ * bbox of the projected quad, then asks the root level which of its tiles
+ * that bbox covers. Clamped inside `crsBoundsToTileRange`, so a viewport
+ * outside the dataset collapses to a single (out-of-frustum) root tile.
+ *
+ * Exported for unit testing; the production call site is
+ * {@link getTileIndices}.
+ */
+export function getRootTileRange(
+  rootLevel: TilesetLevel,
+  wgs84Bounds: Bounds,
+  descriptor: Pick<TilesetDescriptor, "projectFrom4326">,
+): { minCol: number; maxCol: number; minRow: number; maxRow: number } {
+  const [minLng, minLat, maxLng, maxLat] = wgs84Bounds;
+  const corners: Array<[number, number]> = [
+    descriptor.projectFrom4326(minLng, minLat),
+    descriptor.projectFrom4326(maxLng, minLat),
+    descriptor.projectFrom4326(maxLng, maxLat),
+    descriptor.projectFrom4326(minLng, maxLat),
+  ];
+  const xs = corners.map(([x]) => x);
+  const ys = corners.map(([, y]) => y);
+  return rootLevel.crsBoundsToTileRange(
+    Math.min(...xs),
+    Math.min(...ys),
+    Math.max(...xs),
+    Math.max(...ys),
+  );
+}
+
+/**
  * Get tile indices visible in viewport.
  *
  * Uses frustum culling driven by a {@link TilesetDescriptor}, which abstracts
@@ -649,11 +683,27 @@ export function getTileIndices(
 
   // Create root tiles at coarsest level.
   // In contrary to OSM tiling, we might have more than one tile at the
-  // coarsest level (z=0).
+  // coarsest level (z=0). For large single-level descriptors (e.g. a global
+  // 10 m raster tiled at 256×256 → 15000×7000 root tiles) iterating the full
+  // matrix before frustum culling is catastrophic.
+  //
+  // Cull to the intersection of the dataset extent (`wgs84Bounds`) and the
+  // viewport's WGS84 bounds before instantiating. If the two don't overlap,
+  // skip traversal entirely.
+  const vpBounds = viewport.getBounds();
+  const cullBounds: Bounds = [
+    Math.max(wgs84Bounds[0], vpBounds[0]),
+    Math.max(wgs84Bounds[1], vpBounds[1]),
+    Math.min(wgs84Bounds[2], vpBounds[2]),
+    Math.min(wgs84Bounds[3], vpBounds[3]),
+  ];
   const roots: RasterTileNode[] = [];
-  for (let y = 0; y < rootLevel.matrixHeight; y++) {
-    for (let x = 0; x < rootLevel.matrixWidth; x++) {
-      roots.push(new RasterTileNode(x, y, 0, { descriptor }));
+  if (cullBounds[0] <= cullBounds[2] && cullBounds[1] <= cullBounds[3]) {
+    const rootRange = getRootTileRange(rootLevel, cullBounds, descriptor);
+    for (let y = rootRange.minRow; y <= rootRange.maxRow; y++) {
+      for (let x = rootRange.minCol; x <= rootRange.maxCol; x++) {
+        roots.push(new RasterTileNode(x, y, 0, { descriptor }));
+      }
     }
   }
 
