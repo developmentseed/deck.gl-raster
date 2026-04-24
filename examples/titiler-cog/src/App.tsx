@@ -1,9 +1,25 @@
+import type { _TileLoadProps as TileLoadProps } from "@deck.gl/geo-layers";
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import type { TilesetDescriptor } from "@developmentseed/deck.gl-raster";
-import { TileMatrixSetAdaptor } from "@developmentseed/deck.gl-raster";
+import type {
+  GetTileDataOptions,
+  MinimalTileData,
+  RasterModule,
+  RenderTileResult,
+  TilesetDescriptor,
+} from "@developmentseed/deck.gl-raster";
+import {
+  RasterTileLayer,
+  TileMatrixSetAdaptor,
+} from "@developmentseed/deck.gl-raster";
+import {
+  CreateTexture,
+  MaskTexture,
+} from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { TileMatrixSet } from "@developmentseed/morecantile";
+import type { Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
+import npyjs from "npyjs";
 import proj4 from "proj4";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -41,6 +57,103 @@ function buildDescriptor(tms: TileMatrixSet): TilesetDescriptor {
   });
 }
 
+type TileData = MinimalTileData & {
+  texture: Texture;
+  mask?: Texture;
+};
+
+/**
+ * Repack a band-separate uint8 buffer of shape [B, H, W] into an
+ * interleaved RGBA uint8 buffer of length H*W*4. Bands 0-2 go to R/G/B;
+ * alpha is always 255 (the 4th titiler band is a mask, handled separately).
+ */
+function repackToRGBA(
+  bandSeparate: Uint8Array,
+  height: number,
+  width: number,
+): Uint8Array {
+  const pixelCount = height * width;
+  const rgba = new Uint8Array(pixelCount * 4);
+  const bandOffset0 = 0;
+  const bandOffset1 = pixelCount;
+  const bandOffset2 = 2 * pixelCount;
+  for (let i = 0; i < pixelCount; i++) {
+    rgba[i * 4] = bandSeparate[bandOffset0 + i]!;
+    rgba[i * 4 + 1] = bandSeparate[bandOffset1 + i]!;
+    rgba[i * 4 + 2] = bandSeparate[bandOffset2 + i]!;
+    rgba[i * 4 + 3] = 255;
+  }
+  return rgba;
+}
+
+function tileNpyUrl(x: number, y: number, z: number): string {
+  return `${TITILER_BASE}/cog/tiles/WebMercatorQuad/${z}/${x}/${y}.npy?url=${encodeURIComponent(COG_URL)}`;
+}
+
+async function getTileData(
+  tile: TileLoadProps,
+  options: GetTileDataOptions,
+): Promise<TileData> {
+  const { device, signal } = options;
+  const { x, y, z } = tile.index;
+  const response = await fetch(tileNpyUrl(x, y, z), { signal });
+  if (!response.ok) {
+    throw new Error(
+      `titiler tile ${z}/${x}/${y} ${response.status}: ${await response.text()}`,
+    );
+  }
+  const buffer = await response.arrayBuffer();
+  const parsed = await new npyjs().load(buffer);
+  if (parsed.dtype !== "u1") {
+    throw new Error(`Expected uint8 (u1) npy, got dtype=${parsed.dtype}`);
+  }
+  if (parsed.shape.length !== 3) {
+    throw new Error(
+      `Expected shape [B, H, W], got [${parsed.shape.join(", ")}]`,
+    );
+  }
+  const [bands, height, width] = parsed.shape as [number, number, number];
+  if (bands !== 3 && bands !== 4) {
+    throw new Error(`Expected 3 or 4 bands, got ${bands}`);
+  }
+  const data = parsed.data as Uint8Array;
+  const rgba = repackToRGBA(data, height, width);
+  const texture = device.createTexture({
+    data: rgba,
+    format: "rgba8unorm",
+    width,
+    height,
+    sampler: { minFilter: "linear", magFilter: "linear" },
+  });
+  let mask: Texture | undefined;
+  let byteLength = rgba.byteLength;
+  if (bands === 4) {
+    const maskBand = data.subarray(3 * height * width, 4 * height * width);
+    mask = device.createTexture({
+      data: maskBand,
+      format: "r8unorm",
+      width,
+      height,
+      sampler: { minFilter: "nearest", magFilter: "nearest" },
+    });
+    byteLength += maskBand.byteLength;
+  }
+  return { width, height, byteLength, texture, mask };
+}
+
+function renderTile(data: TileData): RenderTileResult {
+  const pipeline: RasterModule[] = [
+    { module: CreateTexture, props: { textureName: data.texture } },
+  ];
+  if (data.mask) {
+    pipeline.push({
+      module: MaskTexture,
+      props: { maskTexture: data.mask },
+    });
+  }
+  return { renderPipeline: pipeline };
+}
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [debug, setDebug] = useState(false);
@@ -48,7 +161,6 @@ export default function App() {
   const [panelOpen, setPanelOpen] = useState(true);
   const [descriptor, setDescriptor] = useState<TilesetDescriptor | undefined>();
   const [error, setError] = useState<string | undefined>();
-  void descriptor;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -93,6 +205,17 @@ export default function App() {
     return () => controller.abort();
   }, []);
 
+  const layers = descriptor
+    ? [
+        new RasterTileLayer<TileData>({
+          id: "titiler-raster",
+          tilesetDescriptor: descriptor,
+          getTileData,
+          renderTile,
+        }),
+      ]
+    : [];
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
@@ -106,7 +229,7 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={[]} interleaved />
+        <DeckGLOverlay layers={layers} interleaved />
       </MaplibreMap>
 
       <div
