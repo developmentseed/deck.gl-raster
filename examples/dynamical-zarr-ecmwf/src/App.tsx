@@ -38,7 +38,7 @@ import { ControlPanel } from "./ui/control-panel.js";
 // before setting INIT_TIME_IDX below.
 // Direct S3 link is faster than dynamical.org proxy
 const ZARR_URL =
-  "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/dynamical/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.zarr";
+  "https://data.source.coop/dynamical/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.zarr";
 
 const VARIABLE = "temperature_2m";
 const ENSEMBLE_MEMBER_IDX = 0; // control run
@@ -225,6 +225,7 @@ export default function App() {
             selection,
             getTileData,
             renderTile,
+            maxRequests: 0,
             updateTriggers: {
               renderTile: [
                 leadTimeIdx,
