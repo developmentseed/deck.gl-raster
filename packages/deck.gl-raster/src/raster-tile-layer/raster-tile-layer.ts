@@ -4,7 +4,7 @@ import type {
   Layer,
   LayerProps,
 } from "@deck.gl/core";
-import { COORDINATE_SYSTEM, CompositeLayer } from "@deck.gl/core";
+import { CompositeLayer } from "@deck.gl/core";
 import type {
   _Tile2DHeader as Tile2DHeader,
   TileLayerProps,
@@ -357,7 +357,7 @@ export class RasterTileLayer<
     const deckProjectionProps: Partial<LayerProps> = isGlobe
       ? {}
       : {
-          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          coordinateSystem: "cartesian",
           coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
           // biome-ignore format: array
           modelMatrix: [
