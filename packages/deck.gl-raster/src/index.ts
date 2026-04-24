@@ -17,7 +17,7 @@ export type { RasterLayerProps, RenderTileResult } from "./raster-layer.js";
 export { RasterLayer } from "./raster-layer.js";
 export type {
   GetTileDataOptions,
-  MinimalDataT,
+  MinimalTileData,
   RasterTileLayerProps,
 } from "./raster-tile-layer/index.js";
 export { RasterTileLayer } from "./raster-tile-layer/index.js";

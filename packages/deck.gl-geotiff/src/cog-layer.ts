@@ -1,6 +1,6 @@
 import type { UpdateParameters } from "@deck.gl/core";
 import type {
-  MinimalDataT,
+  MinimalTileData,
   RasterTileLayerProps,
   RenderTileResult,
   TilesetDescriptor,
@@ -26,9 +26,9 @@ import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 
-export type { MinimalDataT } from "@developmentseed/deck.gl-raster";
+export type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 
-type DefaultDataT = MinimalDataT & {
+type DefaultDataT = MinimalTileData & {
   texture: Texture;
   byteLength: number;
 };
@@ -51,7 +51,7 @@ export type GetTileDataOptions = {
   pool: DecoderPool;
 };
 
-type COGLayerDataProps<DataT extends MinimalDataT> =
+type COGLayerDataProps<DataT extends MinimalTileData> =
   | {
       /**
        * User-defined method to load data for a tile.
@@ -81,7 +81,7 @@ type COGLayerDataProps<DataT extends MinimalDataT> =
 /**
  * Props that can be passed into the {@link COGLayer}.
  */
-export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> = Omit<
+export type COGLayerProps<DataT extends MinimalTileData = DefaultDataT> = Omit<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
 > &
@@ -147,7 +147,7 @@ export type COGLayerProps<DataT extends MinimalDataT = DefaultDataT> = Omit<
  * COGLayer renders a COG using a tiled approach with reprojection.
  */
 export class COGLayer<
-  DataT extends MinimalDataT = DefaultDataT,
+  DataT extends MinimalTileData = DefaultDataT,
 > extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
   static override layerName = "COGLayer";
   // COGLayer's getTileData signature differs from the base class's, so

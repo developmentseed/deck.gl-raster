@@ -25,7 +25,7 @@ import { TILE_SIZE, WEB_MERCATOR_TO_WORLD_SCALE } from "./constants.js";
 /**
  * Minimum interface returned by `getTileData`.
  */
-export type MinimalDataT = {
+export type MinimalTileData = {
   /** Tile height in pixels. */
   height: number;
   /** Tile width in pixels. */
@@ -56,78 +56,79 @@ export type GetTileDataOptions = {
 /**
  * Props for {@link RasterTileLayer}.
  */
-export type RasterTileLayerProps<DataT extends MinimalDataT = MinimalDataT> =
-  CompositeLayerProps &
-    Pick<
-      TileLayerProps,
-      | "tileSize"
-      | "zoomOffset"
-      | "maxZoom"
-      | "minZoom"
-      | "extent"
-      | "debounceTime"
-      | "maxCacheSize"
-      | "maxCacheByteSize"
-      | "maxRequests"
-      | "refinementStrategy"
-    > & {
-      /**
-       * Tile pyramid + CRS projection descriptor.
-       *
-       * Subclasses may supply this via state by overriding the protected
-       * `_tilesetDescriptor()` method.
-       */
-      tilesetDescriptor?: TilesetDescriptor;
+export type RasterTileLayerProps<
+  DataT extends MinimalTileData = MinimalTileData,
+> = CompositeLayerProps &
+  Pick<
+    TileLayerProps,
+    | "tileSize"
+    | "zoomOffset"
+    | "maxZoom"
+    | "minZoom"
+    | "extent"
+    | "debounceTime"
+    | "maxCacheSize"
+    | "maxCacheByteSize"
+    | "maxRequests"
+    | "refinementStrategy"
+  > & {
+    /**
+     * Tile pyramid + CRS projection descriptor.
+     *
+     * Subclasses may supply this via state by overriding the protected
+     * `_tilesetDescriptor()` method.
+     */
+    tilesetDescriptor?: TilesetDescriptor;
 
-      /**
-       * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
-       * is cached by the underlying TileLayer.
-       *
-       * Subclasses may supply this via state by overriding
-       * `_getTileDataCallback()`.
-       */
-      getTileData?: (
-        tile: TileLoadProps,
-        options: GetTileDataOptions,
-      ) => Promise<DataT>;
+    /**
+     * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
+     * is cached by the underlying TileLayer.
+     *
+     * Subclasses may supply this via state by overriding
+     * `_getTileDataCallback()`.
+     */
+    getTileData?: (
+      tile: TileLoadProps,
+      options: GetTileDataOptions,
+    ) => Promise<DataT>;
 
-      /**
-       * Turn cached tile data into a render result (image and/or shader
-       * pipeline). Called on every render; does not re-fetch.
-       *
-       * To invalidate the inner TileLayer's rendered sub-layers when a
-       * dependency changes (e.g. a colormap choice), pass
-       * `updateTriggers: { renderTile: [dep1, dep2] }` on the layer props.
-       *
-       * Subclasses may supply this via state by overriding `_renderTileCallback()`.
-       */
-      renderTile?: (data: DataT) => RenderTileResult;
+    /**
+     * Turn cached tile data into a render result (image and/or shader
+     * pipeline). Called on every render; does not re-fetch.
+     *
+     * To invalidate the inner TileLayer's rendered sub-layers when a
+     * dependency changes (e.g. a colormap choice), pass
+     * `updateTriggers: { renderTile: [dep1, dep2] }` on the layer props.
+     *
+     * Subclasses may supply this via state by overriding `_renderTileCallback()`.
+     */
+    renderTile?: (data: DataT) => RenderTileResult;
 
-      /**
-       * Maximum reprojection error in pixels for mesh refinement.
-       * Lower values create denser meshes.
-       * @default 0.125
-       */
-      maxError?: number;
+    /**
+     * Maximum reprojection error in pixels for mesh refinement.
+     * Lower values create denser meshes.
+     * @default 0.125
+     */
+    maxError?: number;
 
-      /**
-       * Show triangulation mesh + tile outlines.
-       * @default false
-       */
-      debug?: boolean;
+    /**
+     * Show triangulation mesh + tile outlines.
+     * @default false
+     */
+    debug?: boolean;
 
-      /**
-       * Opacity of the debug mesh overlay (0–1).
-       * @default 0.5
-       */
-      debugOpacity?: number;
+    /**
+     * Opacity of the debug mesh overlay (0–1).
+     * @default 0.5
+     */
+    debugOpacity?: number;
 
-      /**
-       * AbortSignal applied to every tile fetch, composed with TileLayer's
-       * per-tile signal.
-       */
-      signal?: AbortSignal;
-    };
+    /**
+     * AbortSignal applied to every tile fetch, composed with TileLayer's
+     * per-tile signal.
+     */
+    signal?: AbortSignal;
+  };
 
 const defaultProps: DefaultProps<RasterTileLayerProps> = {
   ...TileLayer.defaultProps,
@@ -144,7 +145,7 @@ const defaultProps: DefaultProps<RasterTileLayerProps> = {
  * default (for direct use) or by a subclass that provides its own signatures
  * (e.g. `COGLayer`'s `getTileData(image, options)`).
  */
-type RasterTileLayerBaseProps<DataT extends MinimalDataT> = Omit<
+type RasterTileLayerBaseProps<DataT extends MinimalTileData> = Omit<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
 >;
@@ -154,7 +155,7 @@ type RasterTileLayerBaseProps<DataT extends MinimalDataT> = Omit<
  * overridable fields back in with the generic signatures. Subclasses supply
  * their own `ExtraProps` to override these.
  */
-type RasterTileLayerDefaultExtraProps<DataT extends MinimalDataT> = Pick<
+type RasterTileLayerDefaultExtraProps<DataT extends MinimalTileData> = Pick<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
 >;
@@ -173,7 +174,7 @@ type RasterTileLayerDefaultExtraProps<DataT extends MinimalDataT> = Pick<
  * `getTileData(image, options)`).
  */
 export class RasterTileLayer<
-  DataT extends MinimalDataT = MinimalDataT,
+  DataT extends MinimalTileData = MinimalTileData,
   ExtraProps extends object = RasterTileLayerDefaultExtraProps<DataT>,
 > extends CompositeLayer<RasterTileLayerBaseProps<DataT> & ExtraProps> {
   static override layerName = "RasterTileLayer";

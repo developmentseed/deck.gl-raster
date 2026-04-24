@@ -1,5 +1,6 @@
 import type { UpdateParameters } from "@deck.gl/core";
 import type {
+  GetTileDataOptions as RasterTileGetTileDataOptions,
   RasterTileLayerProps,
   RenderTileResult,
   TilesetDescriptor,
@@ -18,7 +19,6 @@ import {
   metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
-import type { Device } from "@luma.gl/core";
 import proj4 from "proj4";
 import * as zarr from "zarrita";
 import { validateSelection, validateSpatialDimOrder } from "./validation.js";
@@ -48,9 +48,7 @@ export type MinimalZarrTileData = {
 /**
  * Options bag passed to the user's {@link ZarrLayerProps.getTileData} callback.
  */
-export type GetTileDataOptions = {
-  /** The luma.gl device, for GPU-side operations. */
-  device: Device;
+export type GetTileDataOptions = RasterTileGetTileDataOptions & {
   /** Tile column index. */
   x: number;
   /** Tile row index. */
@@ -75,8 +73,6 @@ export type GetTileDataOptions = {
    * shorter (analogous to edge tiles in a Cloud-Optimized GeoTIFF).
    */
   height: number;
-  /** AbortSignal forwarded from the TileLayer's tile lifecycle. */
-  signal: AbortSignal;
 };
 
 /**
