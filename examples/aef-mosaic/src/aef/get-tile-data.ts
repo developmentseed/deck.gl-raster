@@ -58,7 +58,7 @@ export async function getTileData(
     height,
     depth: NUM_BANDS,
     mipLevels: 1,
-    data: data as Int8Array,
+    data,
     sampler: {
       minFilter: "nearest",
       magFilter: "nearest",
@@ -71,6 +71,6 @@ export async function getTileData(
     texture,
     width,
     height,
-    byteLength: (data as Int8Array).byteLength,
+    byteLength: data.byteLength,
   };
 }
