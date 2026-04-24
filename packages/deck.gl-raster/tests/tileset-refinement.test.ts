@@ -104,9 +104,10 @@ function makeTileset(opts?: Partial<Tileset2DProps>): ControlledTileset {
     },
     new TileMatrixSetAdaptor(MOCK_TMS, {
       projectTo4326: identity,
+      projectFrom4326: identity,
       projectTo3857: identity,
+      projectFrom3857: identity,
     }),
-    { projectTo4326: identity },
   );
 }
 
@@ -280,9 +281,10 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
       { getTileData: () => new Promise(() => {}) },
       new TileMatrixSetAdaptor(sentinel2TMS, {
         projectTo4326: identity,
+        projectFrom4326: identity,
         projectTo3857: identity,
+        projectFrom3857: identity,
       }),
-      { projectTo4326: identity },
     );
 
     // Every z=4 tile should map 1:1 to the z=3 tile at the same x,y.

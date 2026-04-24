@@ -48,10 +48,18 @@ export function transformBounds(
         fromY + (toY - fromY) * t,
       );
 
-      if (px < outMinX) outMinX = px;
-      if (py < outMinY) outMinY = py;
-      if (px > outMaxX) outMaxX = px;
-      if (py > outMaxY) outMaxY = py;
+      if (px < outMinX) {
+        outMinX = px;
+      }
+      if (py < outMinY) {
+        outMinY = py;
+      }
+      if (px > outMaxX) {
+        outMaxX = px;
+      }
+      if (py > outMaxY) {
+        outMaxY = py;
+      }
     }
   }
 

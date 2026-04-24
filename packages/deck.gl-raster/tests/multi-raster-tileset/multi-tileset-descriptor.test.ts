@@ -18,6 +18,7 @@ function mockLevel(opts: {
   tileHeight: number;
   metersPerPixel: number;
 }): TilesetLevel {
+  const identityTransform = (x: number, y: number): [number, number] => [x, y];
   return {
     ...opts,
     projectedTileCorners: (_col: number, _row: number): Corners => ({
@@ -32,6 +33,10 @@ function mockLevel(opts: {
       minRow: 0,
       maxRow: 0,
     }),
+    tileTransform: () => ({
+      forwardTransform: identityTransform,
+      inverseTransform: identityTransform,
+    }),
   };
 }
 
@@ -41,7 +46,9 @@ function mockDescriptor(levels: TilesetLevel[]): TilesetDescriptor {
   return {
     levels,
     projectTo3857: identity,
+    projectFrom3857: identity,
     projectTo4326: identity,
+    projectFrom4326: identity,
     projectedBounds: [600000, 7890000, 710000, 8000000],
   };
 }

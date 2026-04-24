@@ -64,8 +64,12 @@ export function isoDateString(date: Date): string {
  */
 export const ECMWF_LEAD_TIME_HOURS: readonly number[] = (() => {
   const hours: number[] = [];
-  for (let h = 0; h <= 144; h += 3) hours.push(h);
-  for (let h = 150; h <= 360; h += 6) hours.push(h);
+  for (let h = 0; h <= 144; h += 3) {
+    hours.push(h);
+  }
+  for (let h = 150; h <= 360; h += 6) {
+    hours.push(h);
+  }
   return hours;
 })();
 

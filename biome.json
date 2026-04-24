@@ -43,6 +43,7 @@
       "recommended": true,
       "style": {
         "noNonNullAssertion": "off",
+        "useBlockStatements": "error",
         "useImportType": {
           "level": "error",
           "options": {

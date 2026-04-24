@@ -18,7 +18,9 @@ const WorldCRS84 = _WorldCRS84 as TileMatrixSet;
 
 function findMatrix(tms: TileMatrixSet, id: string): TileMatrix {
   const m = tms.tileMatrices.find((m) => m.id === id);
-  if (!m) throw new Error(`no matrix with id "${id}"`);
+  if (!m) {
+    throw new Error(`no matrix with id "${id}"`);
+  }
   return m;
 }
 

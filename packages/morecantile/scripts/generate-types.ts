@@ -53,12 +53,16 @@ const SCHEMA_DEPS: Record<string, string[]> = {
 /** Build an import block, only including types that appear in the generated code. */
 function buildImports(schemaName: string, generatedCode: string): string {
   const deps = SCHEMA_DEPS[schemaName];
-  if (!deps || deps.length === 0) return "";
+  if (!deps || deps.length === 0) {
+    return "";
+  }
 
   const lines: string[] = [];
   for (const dep of deps) {
     const types = SCHEMA_EXPORTS[dep];
-    if (!types) throw new Error(`Unknown schema dependency: ${dep}`);
+    if (!types) {
+      throw new Error(`Unknown schema dependency: ${dep}`);
+    }
     // Only import types that are actually referenced in the generated output
     const usedTypes = types.filter((t) =>
       new RegExp(`\\b${t}\\b`).test(generatedCode),
