@@ -19,6 +19,7 @@
 
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport, assert } from "@deck.gl/core";
+import { transformBounds } from "@developmentseed/proj";
 import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
   CullingVolume,
@@ -572,6 +573,83 @@ function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
 }
 
 /**
+ * Above this root-tile count, `createRootTiles` culls to the viewport
+ * before instantiation. Below it, every root tile is created and downstream
+ * frustum culling filters the unused ones. Typical OGC pyramids have 1–a
+ * few dozen tiles at z=0, so they stay on the unchanged path. Large
+ * single-level zarr descriptors (e.g. AEF mosaic: ~15000 × 7000 ≈ 100M root
+ * tiles) must take the culled path or instantiation hangs the page.
+ */
+const MAX_ROOT_TILES_NO_CULL = 100;
+
+/**
+ * Build the list of root (z=0) `RasterTileNode`s for the traversal.
+ *
+ * Small root matrices (≤ {@link MAX_ROOT_TILES_NO_CULL}) are enumerated
+ * directly — traditional pyramids with a 1×1 or 4×5 root grid skip any
+ * projection work and keep bit-identical behavior to the pre-optimization
+ * traversal.
+ *
+ * Large root matrices are culled to the intersection of the dataset extent
+ * (`datasetWgs84Bounds`) and the viewport's WGS84 bounds, projected into
+ * the source CRS via `transformBounds` (which densifies the edges so a
+ * curving projection doesn't escape the 4-corner hull). If the viewport
+ * and dataset don't overlap, an empty array is returned and the rest of
+ * the traversal short-circuits.
+ *
+ * Exported for unit testing.
+ */
+export function createRootTiles(opts: {
+  descriptor: TilesetDescriptor;
+  viewport: Pick<Viewport, "getBounds">;
+  datasetWgs84Bounds: Bounds;
+}): RasterTileNode[] {
+  const { descriptor, viewport, datasetWgs84Bounds } = opts;
+  const rootLevel = descriptor.levels[0]!;
+
+  const roots: RasterTileNode[] = [];
+  const rootTileCount = rootLevel.matrixWidth * rootLevel.matrixHeight;
+
+  if (rootTileCount <= MAX_ROOT_TILES_NO_CULL) {
+    // Small root matrix → enumerate every tile; downstream frustum culling
+    // handles the small amount of waste.
+    for (let y = 0; y < rootLevel.matrixHeight; y++) {
+      for (let x = 0; x < rootLevel.matrixWidth; x++) {
+        roots.push(new RasterTileNode(x, y, 0, { descriptor }));
+      }
+    }
+    return roots;
+  }
+
+  // Large root matrix → intersect dataset extent with viewport, project
+  // to source CRS, use the root level's tile-range helper.
+  const vpBounds = viewport.getBounds();
+  const cullBounds: Bounds = [
+    Math.max(datasetWgs84Bounds[0], vpBounds[0]),
+    Math.max(datasetWgs84Bounds[1], vpBounds[1]),
+    Math.min(datasetWgs84Bounds[2], vpBounds[2]),
+    Math.min(datasetWgs84Bounds[3], vpBounds[3]),
+  ];
+  if (cullBounds[0] > cullBounds[2] || cullBounds[1] > cullBounds[3]) {
+    return roots;
+  }
+  const [minX, minY, maxX, maxY] = transformBounds(
+    descriptor.projectFrom4326,
+    cullBounds[0],
+    cullBounds[1],
+    cullBounds[2],
+    cullBounds[3],
+  );
+  const rootRange = rootLevel.crsBoundsToTileRange(minX, minY, maxX, maxY);
+  for (let y = rootRange.minRow; y <= rootRange.maxRow; y++) {
+    for (let x = rootRange.minCol; x <= rootRange.maxCol; x++) {
+      roots.push(new RasterTileNode(x, y, 0, { descriptor }));
+    }
+  }
+  return roots;
+}
+
+/**
  * Get tile indices visible in viewport.
  *
  * Uses frustum culling driven by a {@link TilesetDescriptor}, which abstracts
@@ -644,18 +722,11 @@ export function getTileIndices(
     topRight[1],
   ];
 
-  // Start from coarsest level
-  const rootLevel = descriptor.levels[0]!;
-
-  // Create root tiles at coarsest level.
-  // In contrary to OSM tiling, we might have more than one tile at the
-  // coarsest level (z=0).
-  const roots: RasterTileNode[] = [];
-  for (let y = 0; y < rootLevel.matrixHeight; y++) {
-    for (let x = 0; x < rootLevel.matrixWidth; x++) {
-      roots.push(new RasterTileNode(x, y, 0, { descriptor }));
-    }
-  }
+  const roots = createRootTiles({
+    descriptor,
+    viewport,
+    datasetWgs84Bounds: wgs84Bounds,
+  });
 
   // Traverse and update visibility
   const traversalParams = {
