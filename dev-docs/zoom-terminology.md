@@ -43,50 +43,65 @@ each +1 doubles the on-screen scale.
 
 - Read from `this.context.viewport.zoom` in layer code or
   `opts.viewport.zoom` in a tileset.
-- Drives visibility / fetch gates: `minZoom`, `maxZoom`, `visibleMinZoom`,
-  `visibleMaxZoom` on `TileLayer` compare against *this*, not against
-  tileset z-index.
+- Drives the `minZoom` / `maxZoom` props on `TileLayer`, which compare
+  against *this*, not against tileset z-index.
 - Independent of the descriptor — a 1-level descriptor still experiences
   `viewport.zoom` ranging from 0 to 20+ as the user pans the map.
 
-## How deck.gl's upstream props behave
+## How `minZoom` and `maxZoom` work for descriptor-driven layers
 
-Upstream `TileLayer` defines four numeric props that sound like they all
-mean the same thing. In deck.gl 9.3 their semantics are:
-
-| Prop | Compared against | Controls |
-|---|---|---|
-| `minZoom` | `viewport.zoom` | **Fetching.** If `viewport.zoom < minZoom`, the tileset's `getTileIndices` returns `[]` → no new tile fetches. Already-cached tiles are untouched and may still render. |
-| `maxZoom` | `viewport.zoom` | **Fetching.** Deck.gl's default tileset clamps the selected z to `maxZoom` when the viewport exceeds it (overzoom — displays the finest-available level). Our `RasterTileset2D` instead clamps to `min(maxZoom, levels.length - 1)`. |
-| `visibleMinZoom` | `viewport.zoom` | **Rendering.** If `viewport.zoom < visibleMinZoom`, `TileLayer.renderLayers()` returns `[]`. Cached tiles are not deleted, just hidden. |
-| `visibleMaxZoom` | `viewport.zoom` | **Rendering.** Mirror of `visibleMinZoom` on the other end. |
-
-Note that `min/maxZoom` (fetching) and `visibleMin/MaxZoom` (rendering)
-are independent. A common pattern is `minZoom < visibleMinZoom` to pre-load
-one or two zoom levels before the user reaches the visible band, or
-`minZoom > visibleMinZoom` so already-cached tiles keep showing a zoom
-level after the user zooms below the fetch threshold.
-
-## What this package does differently
-
-`RasterTileset2D` (our subclass of `Tileset2D`) overrides `getTileIndices`
-to drive LOD selection from a `TilesetDescriptor` rather than OSM math.
-Two consequences:
+`RasterTileset2D` overrides `Tileset2D.getTileIndices` to drive LOD from a
+`TilesetDescriptor` rather than OSM math. Two consequences:
 
 1. **Tile z comes from `descriptor.levels`, not `viewport.zoom`.**
    `getTileIndices` still returns `TileIndex` objects, but `TileIndex.z`
    is an index into `descriptor.levels` (0 = coarsest). For a COG with 5
    overviews the range is 0–4. For a single-level zarr it's always 0.
 
-2. **Viewport zoom gates are applied explicitly.** We re-implement the
-   four fetch/render gates in `RasterTileset2D.getTileIndices`
-   (`raster-tileset-2d.ts`) against `opts.viewport.zoom` and
-   `this.opts.visibleMin/MaxZoom`, because our overridden traversal would
-   otherwise ignore them. This is the block that does
-   `if (viewport.zoom < minZoom) return []`. Without it, a user who sets
-   `minZoom: 12` on a `ZarrLayer` would see tiles continue loading at
-   viewport zoom 11, 10, 9, … because nothing would tell the traversal to
-   stop.
+2. **`minZoom` gates fetching by viewport zoom, explicitly.** We
+   re-implement the `viewport.zoom < minZoom` check in
+   `RasterTileset2D.getTileIndices` — `if (viewport.zoom < minZoom)
+   return []` — because our overridden traversal would otherwise ignore
+   it. Without that, a caller who sets `minZoom: 12` on a `ZarrLayer`
+   over a global-extent single-level dataset would see tiles continue
+   loading at viewport zoom 11, 10, 9 … because nothing would tell the
+   traversal to stop.
+
+   A `maxZoom` similarly clamps the tile z-index to
+   `min(maxZoom, descriptor.levels.length - 1)`. There is no "overzoom"
+   behavior (deck.gl's default tileset clamps z to `maxZoom` and keeps
+   rendering when the viewport exceeds it; our equivalent is "render the
+   finest descriptor level" which happens automatically).
+
+## Why not `visibleMinZoom` / `visibleMaxZoom`
+
+Deck.gl 9.3 adds `visibleMinZoom` and `visibleMaxZoom` on top of the
+`min/maxZoom` pair. The intent is to decouple fetching from rendering:
+`minZoom` says "don't fetch below this", `visibleMinZoom` says "don't
+render below this", and — in OSM-style tiling — `extent` gives the
+tileset a way to clamp `z` to a coarser LOD and keep showing tiles at
+that level when underzoomed. The two props together let a layer pre-load
+or persist tiles across the visible boundary.
+
+That decoupling doesn't port to our descriptor-driven world. When our
+`getTileIndices` returns `[]` (for any reason, including a `minZoom`
+gate), deck.gl's `Tileset2D.updateTileStates` marks every cached tile
+`isVisible = false`, and `TileLayer.filterSubLayer` early-outs on
+`!tile.isVisible`. So returning `[]` kills both fetch and render, and
+`visibleMinZoom` has no daylight to operate in. The mechanism upstream
+uses to sidestep this — clamping the selected z to `minZoom` instead of
+returning `[]` — depends on a dense OSM-style LOD stack. For a
+single-level zarr there's no coarser z to clamp to, and for sparse COG
+pyramids the coarsest real level may be many viewport-zoom steps away.
+
+Rather than ship props that nominally exist but behave identically to
+`minZoom` / `maxZoom`, `RasterTileset2D` does not honor
+`visibleMinZoom` / `visibleMaxZoom`. Use `minZoom` / `maxZoom` instead.
+If you want to stop rendering one viewport-zoom below where the layer
+should "feel" loaded, lower `minZoom` to that level and accept the
+extra load cost — the root-tile culling in `createRootTiles`
+(`raster-tile-traversal.ts`) bounds how many tiles that actually
+generates in practice.
 
 ## Recommended names
 
@@ -97,22 +112,21 @@ alone in API surface or comments:
 - `tileZ` or `levelIdx` — integer index into `descriptor.levels`.
 - `viewportZoom` — the continuous `viewport.zoom` value.
 
-Deck.gl's prop names (`minZoom`, `visibleMinZoom`, etc.) are fixed by the
-upstream API and always refer to `viewportZoom`.
+Deck.gl's prop names (`minZoom`, `maxZoom`) are fixed by the upstream
+API and always refer to `viewportZoom`.
 
 ## Example: `examples/aef-mosaic`
 
 - Dataset: single-level zarr at ~10 m/px native resolution.
 - Descriptor has `levels.length = 1`, so `tileZ` is always 0.
-- User sets `minZoom: 12` and `visibleMinZoom: 11` on the `ZarrLayer`.
+- Caller sets `minZoom: 11` on the `ZarrLayer`.
 - At `viewportZoom = 14`: viewport culling produces a handful of `z = 0`
   tiles; fetched, rendered.
 - At `viewportZoom = 12`: viewport bounds are wider; more `z = 0` tiles
   are fetched and rendered.
-- At `viewportZoom = 11`: `minZoom` gate trips → `getTileIndices` returns
-  `[]`, no new fetches. But tiles cached from 12+ remain in
-  `tileset.tiles` and `renderLayers()` still draws them
-  (`visibleMinZoom` permits 11).
-- At `viewportZoom = 10`: `visibleMinZoom` gate trips → `renderLayers()`
-  returns `[]`, nothing drawn. Cached tiles stay in memory in case the
-  user zooms back in.
+- At `viewportZoom = 11`: more still. At native resolution each tile
+  occupies roughly `tileWidth / 2` screen pixels, which looks
+  coarse-but-acceptable.
+- At `viewportZoom = 10`: `minZoom` gate trips → `getTileIndices`
+  returns `[]`, cached tiles go `isVisible = false`, nothing draws.
+  Cached tiles stay in memory in case the user zooms back in.

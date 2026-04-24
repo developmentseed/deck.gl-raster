@@ -95,15 +95,16 @@ export class RasterTileset2D extends Tileset2D {
    *
    * Overviews follow TileMatrixSet ordering: index 0 = coarsest, higher = finer
    *
-   * `minZoom`, `visibleMinZoom`, `visibleMaxZoom` gate against
-   * `viewport.zoom` (not the tileset z-index, which is an overview level in
-   * our descriptor). When the viewport zoom is outside these bounds this
-   * method returns an empty list — no new tile fetches. Already-cached
-   * tiles from previous calls remain in `tileset.tiles` and, if
-   * `visibleMinZoom` / `visibleMaxZoom` permit, are still rendered by
-   * `TileLayer.renderLayers`. This mirrors deck.gl's default Tileset2D
-   * behavior, which this subclass overrides for our descriptor-driven
-   * traversal.
+   * `minZoom` and `maxZoom` gate against `viewport.zoom` (not the tileset
+   * z-index, which is an overview level in our descriptor). When the
+   * viewport zoom is outside these bounds this method returns an empty
+   * list — no new tile fetches, and because deck.gl's `updateTileStates`
+   * marks unselected cached tiles invisible, no rendering either.
+   * `visibleMinZoom` / `visibleMaxZoom` (deck.gl 9.3+) are deliberately
+   * not honored: their documented "fetch but don't render" semantic
+   * requires a notion of clamping to a coarser z, which doesn't
+   * generalize to descriptors with sparse or single overviews. See
+   * `dev-docs/zoom-terminology.md` for the rationale.
    */
   override getTileIndices(opts: {
     viewport: Viewport;
@@ -114,14 +115,7 @@ export class RasterTileset2D extends Tileset2D {
     modelMatrixInverse?: Matrix4;
   }): TileIndex[] {
     const { viewport, minZoom } = opts;
-    const { visibleMinZoom, visibleMaxZoom } = this.opts;
 
-    if (visibleMinZoom != null && viewport.zoom < visibleMinZoom) {
-      return [];
-    }
-    if (visibleMaxZoom != null && viewport.zoom > visibleMaxZoom) {
-      return [];
-    }
     if (typeof minZoom === "number" && viewport.zoom < minZoom) {
       return [];
     }
