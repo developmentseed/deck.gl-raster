@@ -39,9 +39,9 @@ export default function App() {
       try {
         const [tilejsonRes, tmsRes] = await Promise.all([
           fetch(
-            `${TITILER_BASE}/cog/tilejson.json?url=${encodeURIComponent(
+            `${TITILER_BASE}/cog/WebMercatorQuad/tilejson.json?url=${encodeURIComponent(
               COG_URL,
-            )}&tileMatrixSetId=WebMercatorQuad`,
+            )}`,
             { signal: controller.signal },
           ),
           fetch(`${TITILER_BASE}/tileMatrixSets/WebMercatorQuad`, {
