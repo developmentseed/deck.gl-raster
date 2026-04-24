@@ -94,6 +94,16 @@ export class RasterTileset2D extends Tileset2D {
    * Uses frustum culling similar to OSM implementation
    *
    * Overviews follow TileMatrixSet ordering: index 0 = coarsest, higher = finer
+   *
+   * `minZoom`, `visibleMinZoom`, `visibleMaxZoom` gate against
+   * `viewport.zoom` (not the tileset z-index, which is an overview level in
+   * our descriptor). When the viewport zoom is outside these bounds this
+   * method returns an empty list — no new tile fetches. Already-cached
+   * tiles from previous calls remain in `tileset.tiles` and, if
+   * `visibleMinZoom` / `visibleMaxZoom` permit, are still rendered by
+   * `TileLayer.renderLayers`. This mirrors deck.gl's default Tileset2D
+   * behavior, which this subclass overrides for our descriptor-driven
+   * traversal.
    */
   override getTileIndices(opts: {
     viewport: Viewport;
@@ -103,15 +113,27 @@ export class RasterTileset2D extends Tileset2D {
     modelMatrix?: Matrix4;
     modelMatrixInverse?: Matrix4;
   }): TileIndex[] {
-    const maxAvailableZ = this.descriptor.levels.length - 1;
+    const { viewport, minZoom } = opts;
+    const { visibleMinZoom, visibleMaxZoom } = this.opts;
 
+    if (visibleMinZoom != null && viewport.zoom < visibleMinZoom) {
+      return [];
+    }
+    if (visibleMaxZoom != null && viewport.zoom > visibleMaxZoom) {
+      return [];
+    }
+    if (typeof minZoom === "number" && viewport.zoom < minZoom) {
+      return [];
+    }
+
+    const maxAvailableZ = this.descriptor.levels.length - 1;
     const maxZ =
       typeof opts.maxZoom === "number"
         ? Math.min(opts.maxZoom, maxAvailableZ)
         : maxAvailableZ;
 
     const tileIndices = getTileIndices(this.descriptor, {
-      viewport: opts.viewport,
+      viewport,
       maxZ,
       zRange: opts.zRange ?? null,
       wgs84Bounds: this.wgs84Bounds,
