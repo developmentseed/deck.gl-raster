@@ -1,6 +1,7 @@
 import type { UpdateParameters } from "@deck.gl/core";
 import type {
   MinimalTileData,
+  GetTileDataOptions as RasterTileGetTileDataOptions,
   RasterTileLayerProps,
   RenderTileResult,
   TilesetDescriptor,
@@ -20,7 +21,7 @@ import {
   makeClampedForwardTo3857,
   parseWkt,
 } from "@developmentseed/proj";
-import type { Device, Texture } from "@luma.gl/core";
+import type { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
@@ -34,18 +35,12 @@ type DefaultDataT = MinimalTileData & {
 };
 
 /** Options passed to `getTileData`. */
-export type GetTileDataOptions = {
-  /** The luma.gl Device */
-  device: Device;
-
+export type GetTileDataOptions = RasterTileGetTileDataOptions & {
   /** The x coordinate of the tile within the IFD. */
   x: number;
 
   /** The y coordinate of the tile within the IFD. */
   y: number;
-
-  /** An AbortSignal that may be signalled if the request is to be aborted */
-  signal: AbortSignal;
 
   /** The decoder pool to use. */
   pool: DecoderPool;

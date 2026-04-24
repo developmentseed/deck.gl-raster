@@ -50,7 +50,7 @@ export type GetTileDataOptions = {
    * Combined AbortSignal: the layer's `signal` prop composed with the
    * TileLayer's per-tile lifecycle signal. Fires when either aborts.
    */
-  signal: AbortSignal;
+  signal?: AbortSignal;
 };
 
 /**
@@ -181,34 +181,21 @@ export class RasterTileLayer<
   static override defaultProps = defaultProps;
 
   /**
-   * Typed view of `this.props` as the canonical `RasterTileLayerProps` shape.
-   *
-   * The class's generic uses `RasterTileLayerBaseProps & ExtraProps` so that
-   * subclasses can redeclare the overridable fields with their own
-   * signatures. That means the default `this.props` typing does not include
-   * those fields — this cast gives the base class a stable way to access them
-   * (and the defaulted scalar props) without threading the `ExtraProps`
-   * generic through every call site.
-   *
-   * Runtime-safe: `defaultProps` fills the scalar fields we rely on, and for
-   * overridable fields we either (a) have them present on `this.props`
-   * because the direct-use default `ExtraProps` brings them in, or (b) a
-   * subclass overrides the protected accessor below and the base-class
-   * version is never invoked.
-   */
-  private get _baseProps(): Required<RasterTileLayerProps<DataT>> {
-    return this.props as unknown as Required<RasterTileLayerProps<DataT>>;
-  }
-
-  /**
    * The currently effective {@link TilesetDescriptor}.
    *
    * Subclasses override this to return a descriptor built from their own
    * async-parsed state. Returns `undefined` while the source is still
    * loading; `renderLayers()` returns `null` in that case.
+   *
+   * The inline cast to `RasterTileLayerProps<DataT>` is required because
+   * `tilesetDescriptor` is declared on `ExtraProps`, not on the base's
+   * `RasterTileLayerBaseProps`. For direct use the default `ExtraProps`
+   * brings it in; for subclass use this method is overridden and the cast
+   * is never reached.
    */
   protected _tilesetDescriptor(): TilesetDescriptor | undefined {
-    return this._baseProps.tilesetDescriptor;
+    return (this.props as unknown as RasterTileLayerProps<DataT>)
+      .tilesetDescriptor;
   }
 
   /**
@@ -219,7 +206,7 @@ export class RasterTileLayer<
    * Returns `undefined` when the callback is not yet available.
    */
   protected _getTileDataCallback(): RasterTileLayerProps<DataT>["getTileData"] {
-    return this._baseProps.getTileData;
+    return (this.props as unknown as RasterTileLayerProps<DataT>).getTileData;
   }
 
   /**
@@ -229,7 +216,7 @@ export class RasterTileLayer<
    * any inferred default. Returns `undefined` when no callback is available.
    */
   protected _renderTileCallback(): RasterTileLayerProps<DataT>["renderTile"] {
-    return this._baseProps.renderTile;
+    return (this.props as unknown as RasterTileLayerProps<DataT>).renderTile;
   }
 
   override renderLayers(): Layer | null {
@@ -267,7 +254,7 @@ export class RasterTileLayer<
       maxRequests,
       refinementStrategy,
       updateTriggers,
-    } = this._baseProps;
+    } = this.props;
 
     return new TileLayer<DataT>({
       id: `raster-tile-layer-${this.id}`,
@@ -305,7 +292,7 @@ export class RasterTileLayer<
     getTileData: NonNullable<RasterTileLayerProps<DataT>["getTileData"]>,
   ): Promise<DataT> {
     const { signal: tileSignal } = tile;
-    const userSignal = this._baseProps.signal;
+    const userSignal = this.props.signal;
     const signal =
       userSignal && tileSignal
         ? AbortSignal.any([userSignal, tileSignal])
@@ -327,7 +314,7 @@ export class RasterTileLayer<
     descriptor: TilesetDescriptor,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): Layer[] {
-    const { maxError, debug, debugOpacity } = this._baseProps;
+    const { maxError, debug, debugOpacity } = this.props;
     const tile = props.tile as Tile2DHeader<DataT> & TileMetadata;
 
     const layers: Layer[] = [];
