@@ -416,7 +416,7 @@ export class ZarrLayer<
       });
 
       return userFn(arr, {
-        device: options.device!,
+        device: options.device,
         x,
         y,
         z,

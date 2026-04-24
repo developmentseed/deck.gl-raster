@@ -280,7 +280,7 @@ export class COGLayer<
       const images = [geotiff, ...geotiff.overviews];
       const image = images[images.length - 1 - z]!;
       return userFn(image, {
-        device: options.device!,
+        device: options.device,
         x,
         y,
         signal: options.signal,
