@@ -43,14 +43,14 @@ export type MinimalDataT = {
 export type GetTileDataOptions = {
   /**
    * The luma.gl Device. Always populated by the base layer from
-   * `this.context.device` — consumers that don't touch the GPU may ignore it.
+   * `this.context.device`.
    */
   device: Device;
   /**
    * Combined AbortSignal: the layer's `signal` prop composed with the
    * TileLayer's per-tile lifecycle signal. Fires when either aborts.
    */
-  signal?: AbortSignal;
+  signal: AbortSignal;
 };
 
 /**

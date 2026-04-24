@@ -45,7 +45,7 @@ export type GetTileDataOptions = {
   y: number;
 
   /** An AbortSignal that may be signalled if the request is to be aborted */
-  signal?: AbortSignal;
+  signal: AbortSignal;
 
   /** The decoder pool to use. */
   pool: DecoderPool;

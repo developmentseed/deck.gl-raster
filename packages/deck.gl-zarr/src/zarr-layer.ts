@@ -76,7 +76,7 @@ export type GetTileDataOptions = {
    */
   height: number;
   /** AbortSignal forwarded from the TileLayer's tile lifecycle. */
-  signal?: AbortSignal;
+  signal: AbortSignal;
 };
 
 /**
