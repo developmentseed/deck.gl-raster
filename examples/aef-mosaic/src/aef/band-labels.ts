@@ -14,7 +14,7 @@ export async function fetchBandLabels(
 ): Promise<string[]> {
   const bandArr = await zarr.open.v3(root.resolve("band"), { kind: "array" });
   const chunk = await zarr.get(bandArr as zarr.Array<"string", zarr.Readable>);
-  const labels = Array.from(chunk.data as Array<string>);
+  const labels = chunk.data;
   if (labels.length !== NUM_BANDS) {
     throw new Error(`Expected ${NUM_BANDS} band labels, got ${labels.length}`);
   }

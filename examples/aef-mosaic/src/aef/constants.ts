@@ -25,9 +25,15 @@ export const DEQUANT_DIVISOR = 127.5;
 
 /**
  * Minimum viewport zoom at which the layer fetches and renders tiles.
- * Below this, `getTileIndices` returns `[]` and nothing draws. Set
- * lower than the "feels sharp" zoom to let tiles stay visible as the
- * user zooms out one level. The root-tile cull bounds the fetch count
- * at lower zooms.
+ *
+ * Below this, `RasterTileset2D.getTileIndices` returns `[]` and nothing
+ * draws — there is no separate fetch-vs-render threshold (see
+ * `dev-docs/zoom-terminology.md`).
+ *
+ * The AEF source is a single-level zarr at ~10 m/px with no overviews, so
+ * lowering this value increases the number of native-resolution tiles fetched
+ * per viewport (roughly 4× per step) and shrinks their on-screen footprint.
+ * Empirically, zoom 10 is the point where the tile count stays manageable and
+ * tiles are still large enough to be legible.
  */
 export const MIN_ZOOM = 10;

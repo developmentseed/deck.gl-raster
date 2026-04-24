@@ -124,9 +124,6 @@ export default function App() {
           latitude: DEFAULT_LOCATION.latitude,
           zoom: DEFAULT_LOCATION.zoom,
         }}
-        onMoveEnd={(e) =>
-          console.log("viewport.zoom =", e.viewState.zoom.toFixed(2))
-        }
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
         <DeckGLOverlay layers={layers} interleaved />
