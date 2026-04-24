@@ -59,5 +59,14 @@ export interface ProjectionDefinition {
  * This is a typed wrapper around the `wkt-parser` package.
  */
 export function parseWkt(input: string | ProjJson): ProjectionDefinition {
-  return wktParser(input);
+  const def = wktParser(input);
+
+  // wkt-parser doesn't always resolve per-axis units from GeographicCRS
+  // PROJJSON, leaving units: "unknown". longlat is always degrees by definition.
+  if (def.projName === "longlat" && (!def.units || def.units === "unknown")) {
+    def.units = "degree";
+    def.to_meter = undefined;
+  }
+
+  return def;
 }

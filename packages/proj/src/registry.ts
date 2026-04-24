@@ -11,8 +11,6 @@ export type EpsgResolver = (epsg: number) => Promise<ProjectionDefinition>;
 
 export async function epsgResolver(epsg: number) {
   const key = `EPSG:${epsg}`;
-  // TODO: override global proj4 EPSG:4326 definition because it doesn't include
-  // semi major axis
   const cachedProj = PROJECTION_REGISTRY.get(key);
   if (cachedProj !== undefined) {
     return cachedProj;
