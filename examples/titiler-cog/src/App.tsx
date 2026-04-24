@@ -212,6 +212,8 @@ export default function App() {
           tilesetDescriptor: descriptor,
           getTileData,
           renderTile,
+          debug,
+          debugOpacity,
         }),
       ]
     : [];
