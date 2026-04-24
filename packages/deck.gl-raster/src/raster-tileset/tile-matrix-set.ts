@@ -1,8 +1,8 @@
 import * as affine from "@developmentseed/affine";
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
 import { tileTransform, xy_bounds } from "@developmentseed/morecantile";
-import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface";
-import type { Bounds, Corners, ProjectionFunction } from "./types";
+import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
+import type { Bounds, Corners, ProjectionFunction } from "./types.js";
 
 // 0.28 mm per pixel — OGC TMS 2.0 standard screen pixel size
 // https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15

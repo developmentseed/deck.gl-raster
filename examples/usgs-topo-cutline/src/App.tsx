@@ -16,7 +16,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer";
+import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer.js";
 
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));

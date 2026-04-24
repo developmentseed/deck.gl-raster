@@ -1,4 +1,4 @@
-import type { TileMatrix, TileMatrixSet } from "./types";
+import type { TileMatrix, TileMatrixSet } from "./types/index.js";
 
 export function narrowTileMatrixSet(
   obj: TileMatrix | TileMatrixSet,

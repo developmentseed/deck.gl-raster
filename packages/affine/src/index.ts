@@ -1,2 +1,2 @@
-export type { Affine } from "./affine";
-export * from "./affine";
+export type { Affine } from "./affine.js";
+export * from "./affine.js";

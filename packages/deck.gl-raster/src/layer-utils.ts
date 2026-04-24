@@ -1,7 +1,7 @@
 import type { _Tile2DHeader as Tile2DHeader } from "@deck.gl/geo-layers";
 import { PathLayer, TextLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { TileMetadata } from "./raster-tileset";
+import type { TileMetadata } from "./raster-tileset/index.js";
 
 export function renderDebugTileOutline(
   id: string,

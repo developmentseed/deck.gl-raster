@@ -1,7 +1,7 @@
 import * as affine from "@developmentseed/affine";
-import { tileTransform } from "./transform";
-import type { BoundingBox, TileMatrix, TileMatrixSet } from "./types";
-import { narrowTileMatrixSet } from "./utils";
+import { tileTransform } from "./transform.js";
+import type { BoundingBox, TileMatrix, TileMatrixSet } from "./types/index.js";
+import { narrowTileMatrixSet } from "./utils.js";
 
 /**
  * Return the bounding box of the tile in the TMS's native coordinate reference

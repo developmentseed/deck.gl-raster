@@ -14,9 +14,9 @@ import {
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import { parseColormap } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
-import type { GetTileDataOptions } from "../cog-layer";
-import { addAlphaChannel } from "./geotiff";
-import { inferTextureFormat } from "./texture";
+import type { GetTileDataOptions } from "../cog-layer.js";
+import { addAlphaChannel } from "./geotiff.js";
+import { inferTextureFormat } from "./texture.js";
 
 export type TextureDataT = {
   height: number;

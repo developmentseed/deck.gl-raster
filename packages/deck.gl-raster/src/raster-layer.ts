@@ -9,8 +9,8 @@ import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
-import type { RasterModule } from "./gpu-modules/types";
-import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
+import type { RasterModule } from "./gpu-modules/types.js";
+import { MeshTextureLayer } from "./mesh-layer/mesh-layer.js";
 
 const DEFAULT_MAX_ERROR = 0.125;
 

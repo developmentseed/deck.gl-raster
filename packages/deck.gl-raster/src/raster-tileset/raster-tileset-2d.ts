@@ -14,15 +14,15 @@ import type {
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
-import { getTileIndices } from "./raster-tile-traversal";
-import type { TilesetDescriptor } from "./tileset-interface";
+import { getTileIndices } from "./raster-tile-traversal.js";
+import type { TilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
   Corners,
   ProjectedBoundingBox,
   TileIndex,
   ZRange,
-} from "./types";
+} from "./types.js";
 
 /** Type returned by `getTileMetadata` */
 export type TileMetadata = {
