@@ -126,11 +126,15 @@ export default function App() {
       const opened = await zarr.open.v3(root.resolve(VARIABLE), {
         kind: "array",
       });
-
+      if (!opened.is("float32")) {
+        throw new Error(
+          `Expected ${VARIABLE} to be float32, got ${opened.dtype}`,
+        );
+      }
       if (cancelled) {
         return;
       }
-      setArr(opened as zarr.Array<"float32", zarr.Readable>);
+      setArr(opened);
       // Default to the latest available forecast run.
       setInitTimeIdx(opened.shape[0]! - 1);
     })();
