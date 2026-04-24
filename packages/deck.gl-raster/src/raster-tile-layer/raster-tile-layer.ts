@@ -72,7 +72,7 @@ export type RasterTileLayerProps<DataT extends MinimalDataT = MinimalDataT> =
        * Tile pyramid + CRS projection descriptor.
        *
        * Subclasses may supply this via state by overriding the protected
-       * `_getTilesetDescriptor()` method.
+       * `_tilesetDescriptor()` method.
        */
       tilesetDescriptor?: TilesetDescriptor;
 
@@ -80,7 +80,7 @@ export type RasterTileLayerProps<DataT extends MinimalDataT = MinimalDataT> =
        * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
        * is cached by the underlying TileLayer.
        *
-       * Subclasses may supply this via state by overriding `_getGetTileData()`.
+       * Subclasses may supply this via state by overriding `_tileDataFn()`.
        */
       getTileData?: (
         tile: TileLoadProps,
@@ -88,14 +88,14 @@ export type RasterTileLayerProps<DataT extends MinimalDataT = MinimalDataT> =
       ) => Promise<DataT>;
 
       /**
-       * Turn cached tile data into a render result (image and/or shader pipeline).
-       * Called on every render; does not re-fetch.
+       * Turn cached tile data into a render result (image and/or shader
+       * pipeline). Called on every render; does not re-fetch.
        *
-       * To invalidate the inner TileLayer's rendered sub-layers when a dependency
-       * changes (e.g. a colormap choice), pass
+       * To invalidate the inner TileLayer's rendered sub-layers when a
+       * dependency changes (e.g. a colormap choice), pass
        * `updateTriggers: { renderTile: [dep1, dep2] }` on the layer props.
        *
-       * Subclasses may supply this via state by overriding `_getRenderTile()`.
+       * Subclasses may supply this via state by overriding `_renderTileFn()`.
        */
       renderTile?: (data: DataT) => RenderTileResult;
 
@@ -160,8 +160,8 @@ type RasterTileLayerDefaultExtraProps<DataT extends MinimalDataT> = Pick<
  * {@link TilesetDescriptor}.
  *
  * Usable directly (provide `tilesetDescriptor`, `getTileData`, and `renderTile`
- * as props) or as a base class (override the protected `_getTilesetDescriptor`,
- * `_getGetTileData`, `_getRenderTile` accessors to source them from state).
+ * as props) or as a base class (override the protected `_tilesetDescriptor`,
+ * `_tileDataFn`, `_renderTileFn` accessors to source them from state).
  *
  * The generic `ExtraProps` parameter lets a subclass redeclare any of the
  * overridable fields with a domain-specific signature (e.g. `COGLayer`'s
@@ -194,25 +194,42 @@ export class RasterTileLayer<
     return this.props as unknown as Required<RasterTileLayerProps<DataT>>;
   }
 
-  /** @returns the descriptor, or `undefined` if not yet available. */
-  protected _getTilesetDescriptor(): TilesetDescriptor | undefined {
+  /**
+   * The currently effective {@link TilesetDescriptor}.
+   *
+   * Subclasses override this to return a descriptor built from their own
+   * async-parsed state. Returns `undefined` while the source is still
+   * loading; `renderLayers()` returns `null` in that case.
+   */
+  protected _tilesetDescriptor(): TilesetDescriptor | undefined {
     return this._baseProps.tilesetDescriptor;
   }
 
-  /** @returns the tile-fetch callback, or `undefined` if not yet available. */
-  protected _getGetTileData(): RasterTileLayerProps<DataT>["getTileData"] {
+  /**
+   * The currently effective tile-fetch callback.
+   *
+   * Subclasses override this to adapt their user-facing `getTileData`
+   * signature into the base's `(tile, options) => Promise<DataT>` shape.
+   * Returns `undefined` when the callback is not yet available.
+   */
+  protected _tileDataFn(): RasterTileLayerProps<DataT>["getTileData"] {
     return this._baseProps.getTileData;
   }
 
-  /** @returns the per-tile render callback, or `undefined` if not yet available. */
-  protected _getRenderTile(): RasterTileLayerProps<DataT>["renderTile"] {
+  /**
+   * The currently effective per-tile render callback.
+   *
+   * Subclasses override this to thread their user-facing `renderTile` and
+   * any inferred default. Returns `undefined` when no callback is available.
+   */
+  protected _renderTileFn(): RasterTileLayerProps<DataT>["renderTile"] {
     return this._baseProps.renderTile;
   }
 
   override renderLayers(): Layer | null {
-    const descriptor = this._getTilesetDescriptor();
-    const getTileData = this._getGetTileData();
-    const renderTile = this._getRenderTile();
+    const descriptor = this._tilesetDescriptor();
+    const getTileData = this._tileDataFn();
+    const renderTile = this._renderTileFn();
     if (!descriptor || !getTileData || !renderTile) return null;
     return this._renderTileLayer(descriptor, getTileData, renderTile);
   }

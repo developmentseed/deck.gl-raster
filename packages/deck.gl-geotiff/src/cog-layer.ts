@@ -255,7 +255,7 @@ export class COGLayer<
     });
   }
 
-  protected override _getTilesetDescriptor() {
+  protected override _tilesetDescriptor() {
     return this.state.tilesetDescriptor;
   }
 
@@ -263,7 +263,7 @@ export class COGLayer<
    * Adapts the user-facing `(image, { x, y, ... }) => Promise<DataT>` signature
    * into RasterTileLayer's `(tile, { signal, device }) => Promise<DataT>`.
    */
-  protected override _getGetTileData() {
+  protected override _tileDataFn() {
     const geotiff = this.state.geotiff;
     if (!geotiff) return undefined;
     const userFn = this.props.getTileData ?? this.state.defaultGetTileData;
@@ -290,7 +290,7 @@ export class COGLayer<
     return wrapped;
   }
 
-  protected override _getRenderTile() {
+  protected override _renderTileFn() {
     const userFn = this.props.renderTile ?? this.state.defaultRenderTile;
     if (!userFn) return undefined;
     return userFn as NonNullable<RasterTileLayerProps<DataT>["renderTile"]>;
