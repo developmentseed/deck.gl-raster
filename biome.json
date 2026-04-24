@@ -41,6 +41,19 @@
     "enabled": true,
     "rules": {
       "recommended": true,
+      "correctness": {
+        "useImportExtensions": {
+          "level": "error",
+          "options": {
+            "extensionMappings": {
+              "ts": "js",
+              "tsx": "js",
+              "mts": "mjs",
+              "cts": "cjs"
+            }
+          }
+        }
+      },
       "style": {
         "noNonNullAssertion": "off",
         "useBlockStatements": "error",
