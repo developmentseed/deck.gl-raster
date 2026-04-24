@@ -443,10 +443,18 @@ export class RasterTileNode {
     let maxY = Number.NEGATIVE_INFINITY;
 
     for (const [x, y] of commonSpacePositions) {
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
+      if (x < minX) {
+        minX = x;
+      }
+      if (y < minY) {
+        minY = y;
+      }
+      if (x > maxX) {
+        maxX = x;
+      }
+      if (y > maxY) {
+        maxY = y;
+      }
     }
 
     const commonSpaceBounds: Bounds = [minX, minY, maxX, maxY];

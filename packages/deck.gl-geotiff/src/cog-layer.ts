@@ -260,9 +260,17 @@ export class COGLayer<
    */
   protected override _getTileDataCallback() {
     const geotiff = this.state.geotiff;
-    if (!geotiff) return undefined;
+
+    if (!geotiff) {
+      return undefined;
+    }
+
     const userFn = this.props.getTileData ?? this.state.defaultGetTileData;
-    if (!userFn) return undefined;
+
+    if (!userFn) {
+      return undefined;
+    }
+
     type RasterGetTileData = NonNullable<
       RasterTileLayerProps<DataT>["getTileData"]
     >;
@@ -287,7 +295,11 @@ export class COGLayer<
 
   protected override _renderTileCallback() {
     const userFn = this.props.renderTile ?? this.state.defaultRenderTile;
-    if (!userFn) return undefined;
+
+    if (!userFn) {
+      return undefined;
+    }
+
     return userFn as NonNullable<RasterTileLayerProps<DataT>["renderTile"]>;
   }
 }

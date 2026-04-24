@@ -361,9 +361,13 @@ export class ZarrLayer<
    */
   protected override _getTileDataCallback() {
     const { meta, arrays, spatialDims } = this.state;
-    if (!meta || !arrays || !spatialDims) return undefined;
+    if (!meta || !arrays || !spatialDims) {
+      return undefined;
+    }
     const userFn = this.props.getTileData;
-    if (!userFn) return undefined;
+    if (!userFn) {
+      return undefined;
+    }
     // Capture selection at closure time. The base RasterTileLayer re-invokes
     // this accessor on every render, so new fetches always see the latest
     // selection. Note: deck.gl's inner TileLayer only calls getTileData for
@@ -427,7 +431,9 @@ export class ZarrLayer<
 
   protected override _renderTileCallback() {
     const userFn = this.props.renderTile;
-    if (!userFn) return undefined;
+    if (!userFn) {
+      return undefined;
+    }
     return userFn as NonNullable<RasterTileLayerProps<DataT>["renderTile"]>;
   }
 }

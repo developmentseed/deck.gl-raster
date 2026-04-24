@@ -70,7 +70,9 @@ export function tileTransform(
  * coalesced (or the matrix has no variableMatrixWidths at all).
  */
 function coalesceForRow(matrix: TileMatrix, row: number): number {
-  if (!matrix.variableMatrixWidths) return 1;
+  if (!matrix.variableMatrixWidths) {
+    return 1;
+  }
 
   for (const vmw of matrix.variableMatrixWidths) {
     if (row >= vmw.minTileRow && row <= vmw.maxTileRow) {

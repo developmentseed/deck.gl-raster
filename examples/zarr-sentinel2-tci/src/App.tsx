@@ -105,7 +105,9 @@ export default function App() {
     (async () => {
       const store = new zarr.FetchStore(ZARR_URL);
       const group = await zarr.open(store, { kind: "group" });
-      if (cancelled) return;
+      if (cancelled) {
+        return;
+      }
       setSource(group);
     })();
     return () => {

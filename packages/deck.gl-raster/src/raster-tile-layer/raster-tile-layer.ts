@@ -327,7 +327,9 @@ export class RasterTileLayer<
         ),
       );
     }
-    if (!props.data) return layers;
+    if (!props.data) {
+      return layers;
+    }
 
     const { x, y, z } = tile.index;
     const level = descriptor.levels[z];

@@ -89,7 +89,9 @@ export default function App() {
       const resp = await fetch(colormapsPngUrl);
       const bytes = await resp.arrayBuffer();
       const image = await decodeColormapSprite(bytes);
-      if (cancelled) return;
+      if (cancelled) {
+        return;
+      }
       setColormapImage(image);
     })();
     return () => {
@@ -103,7 +105,9 @@ export default function App() {
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
   useEffect(() => {
-    if (!device || !colormapImage) return;
+    if (!device || !colormapImage) {
+      return;
+    }
     setColormapTexture(createColormapTexture(device, colormapImage));
   }, [device, colormapImage]);
 
@@ -123,7 +127,9 @@ export default function App() {
         kind: "array",
       });
 
-      if (cancelled) return;
+      if (cancelled) {
+        return;
+      }
       setArr(opened as zarr.Array<"float32", zarr.Readable>);
       // Default to the latest available forecast run.
       setInitTimeIdx(opened.shape[0]! - 1);
@@ -146,7 +152,9 @@ export default function App() {
     leadTimeIdxRef.current = leadTimeIdx;
   }, [leadTimeIdx]);
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying) {
+      return;
+    }
     let raf = 0;
     let last = performance.now();
     const loop = (now: number) => {

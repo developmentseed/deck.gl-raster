@@ -346,10 +346,14 @@ export default function App() {
         const resp = await fetch(colormapsPngUrl);
         const bytes = await resp.arrayBuffer();
         const image = await decodeColormapSprite(bytes);
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         setColormapImage(image);
       } catch (err) {
-        if (!cancelled) console.error("Failed to load colormap sprite:", err);
+        if (!cancelled) {
+          console.error("Failed to load colormap sprite:", err);
+        }
       }
     })();
     return () => {
@@ -360,7 +364,9 @@ export default function App() {
   // Upload the colormap sprite once both the Device and the decoded ImageData
   // are available.
   useEffect(() => {
-    if (!device || !colormapImage) return;
+    if (!device || !colormapImage) {
+      return;
+    }
     setColormapTexture(createColormapTexture(device, colormapImage));
   }, [device, colormapImage]);
 

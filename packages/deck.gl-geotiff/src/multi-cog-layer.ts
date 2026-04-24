@@ -849,11 +849,15 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     const layers: Layer[] = [];
     const debugLevel = this.props.debugLevel ?? 1;
     const { multiDescriptor } = this.state;
-    if (!multiDescriptor) return layers;
+    if (!multiDescriptor) {
+      return layers;
+    }
 
     const { x, y, z } = tile.index;
     const primaryLevel = multiDescriptor.primary.levels[z];
-    if (!primaryLevel) return layers;
+    if (!primaryLevel) {
+      return layers;
+    }
 
     // --- Primary tile outline and label ---
     const primaryCrsCorners = primaryLevel.projectedTileCorners(x, y);
@@ -913,7 +917,9 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     );
 
     // --- Secondary tile outlines and labels ---
-    if (!data.debugInfo) return layers;
+    if (!data.debugInfo) {
+      return layers;
+    }
 
     let secondaryIdx = 0;
     for (const [name, info] of data.debugInfo.bands) {
