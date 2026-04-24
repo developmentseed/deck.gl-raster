@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { metersPerUnit } from "../../proj/src";
+import { metersPerUnit } from "../../proj/src/index.js";
 
 describe("metersPerUnit", () => {
   it("handles lowercase us survey foot", () => {

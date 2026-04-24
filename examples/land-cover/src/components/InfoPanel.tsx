@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { HelpIcon } from "./HelpIcon";
-import { Legend } from "./Legend";
+import { HelpIcon } from "./HelpIcon.js";
+import { Legend } from "./Legend.js";
 
 interface InfoPanelProps {
   debug: boolean;

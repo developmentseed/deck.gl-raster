@@ -1,6 +1,6 @@
-import type { ProjectionDefinition } from "./parse-wkt";
-import { parseWkt } from "./parse-wkt";
-import type { ProjJson } from "./projjson";
+import type { ProjectionDefinition } from "./parse-wkt.js";
+import { parseWkt } from "./parse-wkt.js";
+import type { ProjJson } from "./projjson.js";
 
 /**
  * A global registry holding parsed projection definitions.

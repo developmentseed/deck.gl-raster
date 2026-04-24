@@ -22,12 +22,12 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer";
-import type { ColormapId } from "./colormap-choices";
-import { COLORMAP_CHOICES, DEFAULT_COLORMAP_ID } from "./colormap-choices";
-import "./proj";
+import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer.js";
+import type { ColormapId } from "./colormap-choices.js";
+import { COLORMAP_CHOICES, DEFAULT_COLORMAP_ID } from "./colormap-choices.js";
+import "./proj.js";
 import STAC_DATA from "./minimal_stac.json";
-import { epsgResolver } from "./proj";
+import { epsgResolver } from "./proj.js";
 
 /** Bounding box query passed to Microsoft Planetary Computer STAC API */
 const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];

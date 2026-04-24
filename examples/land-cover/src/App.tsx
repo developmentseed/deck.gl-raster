@@ -8,8 +8,8 @@ import { parseWkt } from "@developmentseed/proj";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-import { InfoPanel } from "./components/InfoPanel";
-import { UIOverlay } from "./components/UIOverlay";
+import { InfoPanel } from "./components/InfoPanel.js";
+import { UIOverlay } from "./components/UIOverlay.js";
 
 function DeckGLOverlay(props: MapboxOverlayProps) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
