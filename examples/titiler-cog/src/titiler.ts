@@ -20,11 +20,19 @@ export const COG_URL =
   "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif";
 export const TITILER_BASE = "https://titiler.xyz";
 
-export type InfoResponse = {
-  /** WGS84 [west, south, east, north]. */
+/**
+ * Subset of the TileJSON response from titiler's
+ * `/cog/tilejson.json?url=...&tileMatrixSetId=WebMercatorQuad`.
+ *
+ * `bounds` is in WGS84 — unlike `/cog/info`, which returns bounds in the
+ * COG's native CRS (e.g. UTM for Sentinel-2) that can't be handed to a
+ * MapLibre map directly.
+ */
+export type TileJSON = {
   bounds: [number, number, number, number];
-  band_descriptions?: [string, Record<string, unknown>][];
-  dtype?: string;
+  minzoom: number;
+  maxzoom: number;
+  tiles: string[];
   [key: string]: unknown;
 };
 
@@ -37,15 +45,30 @@ export type TileData = MinimalTileData & {
  * Build a TilesetDescriptor for a WebMercatorQuad tile pyramid. The CRS of
  * WebMercatorQuad is EPSG:3857, so the to/from 3857 projections are identity;
  * to/from 4326 use proj4.
+ *
+ * `geographicBounds` (WGS84 [w, s, e, n]) is required: titiler's
+ * `/tileMatrixSets/WebMercatorQuad` response omits the optional
+ * `boundingBox`, but `TileMatrixSetAdaptor` needs one for viewport culling.
+ * We project the dataset's geographic bounds to EPSG:3857 and attach them.
  */
-export function buildDescriptor(tms: TileMatrixSet): TilesetDescriptor {
+export function buildDescriptor(
+  tms: TileMatrixSet,
+  geographicBounds: [number, number, number, number],
+): TilesetDescriptor {
   const converter = proj4("EPSG:3857", "EPSG:4326");
   const projectTo4326 = (x: number, y: number) =>
     converter.forward<[number, number]>([x, y], false);
   const projectFrom4326 = (x: number, y: number) =>
     converter.inverse<[number, number]>([x, y], false);
   const identity = (x: number, y: number): [number, number] => [x, y];
-  return new TileMatrixSetAdaptor(tms, {
+  const [w, s, e, n] = geographicBounds;
+  const lowerLeft = projectFrom4326(w, s);
+  const upperRight = projectFrom4326(e, n);
+  const tmsWithBbox: TileMatrixSet = {
+    ...tms,
+    boundingBox: { lowerLeft, upperRight, crs: tms.crs },
+  };
+  return new TileMatrixSetAdaptor(tmsWithBbox, {
     projectTo3857: identity,
     projectFrom3857: identity,
     projectTo4326,

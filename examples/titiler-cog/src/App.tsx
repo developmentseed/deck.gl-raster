@@ -7,7 +7,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-import type { InfoResponse, TileData } from "./titiler";
+import type { TileData, TileJSON } from "./titiler";
 import {
   buildDescriptor,
   COG_URL,
@@ -28,23 +28,29 @@ export default function App() {
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [panelOpen, setPanelOpen] = useState(true);
   const [descriptor, setDescriptor] = useState<TilesetDescriptor | undefined>();
+  const [zoomRange, setZoomRange] = useState<
+    { minZoom: number; maxZoom: number } | undefined
+  >();
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
     const controller = new AbortController();
     (async () => {
       try {
-        const [infoRes, tmsRes] = await Promise.all([
-          fetch(`${TITILER_BASE}/cog/info?url=${encodeURIComponent(COG_URL)}`, {
-            signal: controller.signal,
-          }),
+        const [tilejsonRes, tmsRes] = await Promise.all([
+          fetch(
+            `${TITILER_BASE}/cog/tilejson.json?url=${encodeURIComponent(
+              COG_URL,
+            )}&tileMatrixSetId=WebMercatorQuad`,
+            { signal: controller.signal },
+          ),
           fetch(`${TITILER_BASE}/tileMatrixSets/WebMercatorQuad`, {
             signal: controller.signal,
           }),
         ]);
-        if (!infoRes.ok) {
+        if (!tilejsonRes.ok) {
           throw new Error(
-            `cog/info ${infoRes.status}: ${await infoRes.text()}`,
+            `tilejson ${tilejsonRes.status}: ${await tilejsonRes.text()}`,
           );
         }
         if (!tmsRes.ok) {
@@ -52,10 +58,14 @@ export default function App() {
             `tileMatrixSets ${tmsRes.status}: ${await tmsRes.text()}`,
           );
         }
-        const info = (await infoRes.json()) as InfoResponse;
+        const tilejson = (await tilejsonRes.json()) as TileJSON;
         const tms = (await tmsRes.json()) as TileMatrixSet;
-        setDescriptor(buildDescriptor(tms));
-        const [w, s, e, n] = info.bounds;
+        setDescriptor(buildDescriptor(tms, tilejson.bounds));
+        setZoomRange({
+          minZoom: tilejson.minzoom,
+          maxZoom: tilejson.maxzoom,
+        });
+        const [w, s, e, n] = tilejson.bounds;
         mapRef.current?.fitBounds(
           [
             [w, s],
@@ -73,18 +83,21 @@ export default function App() {
     return () => controller.abort();
   }, []);
 
-  const layers = descriptor
-    ? [
-        new RasterTileLayer<TileData>({
-          id: "titiler-raster",
-          tilesetDescriptor: descriptor,
-          getTileData,
-          renderTile,
-          debug,
-          debugOpacity,
-        }),
-      ]
-    : [];
+  const layers =
+    descriptor && zoomRange
+      ? [
+          new RasterTileLayer<TileData>({
+            id: "titiler-raster",
+            tilesetDescriptor: descriptor,
+            getTileData,
+            renderTile,
+            minZoom: zoomRange.minZoom,
+            maxZoom: zoomRange.maxZoom,
+            debug,
+            debugOpacity,
+          }),
+        ]
+      : [];
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
