@@ -320,3 +320,114 @@ describe("TileMatrixSetTileset – best-available refinement", () => {
     expect(bbox.south).toBeLessThan(bbox.north);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Center-out tile ordering
+// ---------------------------------------------------------------------------
+
+describe("RasterTileset2D center-out tile ordering", () => {
+  class SortTestTileset extends RasterTileset2D {
+    callSort(indices: TileIndex[], viewport: Viewport) {
+      return (
+        this as unknown as {
+          sortTileIndicesByDistance(
+            indices: TileIndex[],
+            viewport: Viewport,
+          ): TileIndex[];
+        }
+      ).sortTileIndicesByDistance(indices, viewport);
+    }
+  }
+
+  function makeCenteredViewport(center: [number, number]): Viewport {
+    return {
+      equals: () => false,
+      resolution: undefined,
+      center,
+      zoom: 1,
+    } as unknown as Viewport;
+  }
+
+  function makeTileset(maxRequests?: number): SortTestTileset {
+    return new SortTestTileset(
+      {
+        getTileData: () => new Promise(() => {}),
+        ...(maxRequests !== undefined ? { maxRequests } : {}),
+      } as unknown as Tileset2DProps,
+      new TileMatrixSetAdaptor(MOCK_TMS, {
+        projectTo4326: identity,
+        projectFrom4326: identity,
+        projectTo3857: identity,
+        projectFrom3857: identity,
+      }),
+    );
+  }
+
+  function tileCenterDistanceSquared(
+    idx: TileIndex,
+    reference: [number, number],
+  ): number {
+    const descriptor = new TileMatrixSetAdaptor(MOCK_TMS, identity, identity);
+    const corners = descriptor.levels[idx.z]!.projectedTileCorners(
+      idx.x,
+      idx.y,
+    );
+    const cx = (corners.topLeft[0] + corners.bottomRight[0]) * 0.5;
+    const cy = (corners.topLeft[1] + corners.bottomRight[1]) * 0.5;
+    const dx = cx - reference[0];
+    const dy = cy - reference[1];
+    return dx * dx + dy * dy;
+  }
+
+  it("places the tile whose center is closest to viewport.center first", () => {
+    const indices: TileIndex[] = [
+      { x: 0, y: 0, z: 1 },
+      { x: 1, y: 0, z: 1 },
+      { x: 0, y: 1, z: 1 },
+      { x: 1, y: 1, z: 1 },
+    ];
+    const reference: [number, number] = [0.25, 0.75];
+    const viewport = makeCenteredViewport(reference);
+    const tileset = makeTileset();
+    const sorted = tileset.callSort(indices, viewport);
+
+    const minDist = Math.min(
+      ...indices.map((i) => tileCenterDistanceSquared(i, reference)),
+    );
+    expect(tileCenterDistanceSquared(sorted[0]!, reference)).toBeCloseTo(
+      minDist,
+      12,
+    );
+  });
+
+  it("short-circuits when tile count <= maxRequests", () => {
+    const indices: TileIndex[] = [
+      { x: 1, y: 1, z: 1 },
+      { x: 0, y: 0, z: 1 },
+    ];
+    const viewport = makeCenteredViewport([0.0, 0.0]);
+    const tileset = makeTileset(6);
+    const sorted = tileset.callSort(indices, viewport);
+    expect(sorted.map((t) => `${t.x},${t.y}`)).toEqual(["1,1", "0,0"]);
+  });
+
+  it("sorts when tile count > maxRequests", () => {
+    const indices: TileIndex[] = [
+      { x: 1, y: 1, z: 1 },
+      { x: 0, y: 1, z: 1 },
+      { x: 1, y: 0, z: 1 },
+      { x: 0, y: 0, z: 1 },
+    ];
+    const reference: [number, number] = [0.0, 0.0];
+    const viewport = makeCenteredViewport(reference);
+    const tileset = makeTileset(2);
+    const sorted = tileset.callSort(indices, viewport);
+    const minDist = Math.min(
+      ...indices.map((i) => tileCenterDistanceSquared(i, reference)),
+    );
+    expect(tileCenterDistanceSquared(sorted[0]!, reference)).toBeCloseTo(
+      minDist,
+      12,
+    );
+  });
+});

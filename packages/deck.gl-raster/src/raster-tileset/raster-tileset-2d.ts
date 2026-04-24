@@ -15,6 +15,7 @@ import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
 import { getTileIndices } from "./raster-tile-traversal.js";
+import { sortByDistanceFromPoint } from "./sort-by-distance.js";
 import type { TilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -133,7 +134,47 @@ export class RasterTileset2D extends Tileset2D {
       wgs84Bounds: this.wgs84Bounds,
     });
 
-    return tileIndices;
+    return this.sortTileIndicesByDistance(tileIndices, viewport);
+  }
+
+  /**
+   * Sort tile indices by ascending distance from the viewport center in
+   * projected (common/world) space so loads initiate center-out.
+   *
+   * Short-circuits when `tileIndices.length <= maxRequests` — all fetches
+   * would start concurrently regardless of order in that case. Mutates and
+   * returns `tileIndices`.
+   */
+  private sortTileIndicesByDistance(
+    tileIndices: TileIndex[],
+    viewport: Viewport,
+  ): TileIndex[] {
+    const maxRequests = (this.opts as { maxRequests?: number }).maxRequests;
+    const threshold =
+      typeof maxRequests === "number" && maxRequests > 0 ? maxRequests : 1;
+    if (tileIndices.length <= threshold) {
+      return tileIndices;
+    }
+
+    const vpCenter = (viewport as unknown as { center?: number[] }).center;
+    if (!vpCenter) {
+      return tileIndices;
+    }
+    const reference: readonly [number, number] = [vpCenter[0]!, vpCenter[1]!];
+
+    const descriptor = this.descriptor;
+    return sortByDistanceFromPoint(tileIndices, {
+      reference,
+      getCenter: (idx) => {
+        const corners = descriptor.levels[idx.z]!.projectedTileCorners(
+          idx.x,
+          idx.y,
+        );
+        const cx = (corners.topLeft[0] + corners.bottomRight[0]) * 0.5;
+        const cy = (corners.topLeft[1] + corners.bottomRight[1]) * 0.5;
+        return [cx, cy];
+      },
+    });
   }
 
   override getTileId(index: TileIndex): string {
