@@ -149,18 +149,28 @@ export class RasterTileset2D extends Tileset2D {
     tileIndices: TileIndex[],
     viewport: Viewport,
   ): TileIndex[] {
-    const maxRequests = (this.opts as { maxRequests?: number }).maxRequests;
+    console.log("unsorted", tileIndices);
+    const maxRequests = this.opts.maxRequests;
     const threshold =
       typeof maxRequests === "number" && maxRequests > 0 ? maxRequests : 1;
     if (tileIndices.length <= threshold) {
       return tileIndices;
     }
 
-    const vpCenter = (viewport as unknown as { center?: number[] }).center;
-    if (!vpCenter) {
+    // Work in WGS84 throughout. `viewport.center` is in deck.gl common
+    // space (e.g. ~[270, 327] for a WebMercator viewport), which isn't
+    // directly comparable to projected tile corners in the tileset's CRS.
+    // `viewport.getBounds()` always returns [minLng, minLat, maxLng, maxLat]
+    // in WGS84, and we convert projected tile centers through the
+    // descriptor's `projectTo4326` to match.
+    const bounds = viewport.getBounds();
+    if (!bounds) {
       return tileIndices;
     }
-    const reference: readonly [number, number] = [vpCenter[0]!, vpCenter[1]!];
+    const reference: readonly [number, number] = [
+      (bounds[0] + bounds[2]) * 0.5,
+      (bounds[1] + bounds[3]) * 0.5,
+    ];
 
     const descriptor = this.descriptor;
     return sortByDistanceFromPoint(tileIndices, {
@@ -170,9 +180,9 @@ export class RasterTileset2D extends Tileset2D {
           idx.x,
           idx.y,
         );
-        const cx = (corners.topLeft[0] + corners.bottomRight[0]) * 0.5;
-        const cy = (corners.topLeft[1] + corners.bottomRight[1]) * 0.5;
-        return [cx, cy];
+        const pcx = (corners.topLeft[0] + corners.bottomRight[0]) * 0.5;
+        const pcy = (corners.topLeft[1] + corners.bottomRight[1]) * 0.5;
+        return descriptor.projectTo4326(pcx, pcy);
       },
     });
   }

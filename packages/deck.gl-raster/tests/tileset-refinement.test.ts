@@ -340,11 +340,18 @@ describe("RasterTileset2D center-out tile ordering", () => {
   }
 
   function makeCenteredViewport(center: [number, number]): Viewport {
+    const halfSpan = 0.5;
+    const bounds: [number, number, number, number] = [
+      center[0] - halfSpan,
+      center[1] - halfSpan,
+      center[0] + halfSpan,
+      center[1] + halfSpan,
+    ];
     return {
       equals: () => false,
       resolution: undefined,
-      center,
       zoom: 1,
+      getBounds: () => bounds,
     } as unknown as Viewport;
   }
 
