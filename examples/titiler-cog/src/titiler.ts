@@ -13,7 +13,7 @@ import {
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { TileMatrixSet } from "@developmentseed/morecantile";
 import type { Texture } from "@luma.gl/core";
-import npyjs from "npyjs";
+import { load } from "npyjs";
 import proj4 from "proj4";
 
 export const COG_URL =
@@ -125,7 +125,7 @@ export async function getTileData(
     );
   }
   const buffer = await response.arrayBuffer();
-  const parsed = await new npyjs().load(buffer);
+  const parsed = await load(buffer);
   if (parsed.dtype !== "u1") {
     throw new Error(`Expected uint8 (u1) npy, got dtype=${parsed.dtype}`);
   }
