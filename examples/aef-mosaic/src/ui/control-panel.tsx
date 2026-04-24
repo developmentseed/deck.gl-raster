@@ -138,7 +138,7 @@ export function ControlPanel(props: ControlPanelProps) {
             </select>
           </label>
 
-          <div
+          <label
             style={{
               display: "flex",
               alignItems: "center",
@@ -148,32 +148,36 @@ export function ControlPanel(props: ControlPanelProps) {
               marginBottom: "16px",
             }}
           >
-            <span style={{ whiteSpace: "nowrap" }}>
-              Year: {YEAR_ORIGIN + yearIdx}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={NUM_YEARS - 1}
+            <span style={{ whiteSpace: "nowrap" }}>Year:</span>
+            <select
               value={yearIdx}
               onChange={(e) => onYearIdxChange(Number(e.target.value))}
               style={{ flex: 1, cursor: "pointer" }}
-            />
-          </div>
+            >
+              {Array.from({ length: NUM_YEARS }, (_, i) => {
+                const year = YEAR_ORIGIN + i;
+                return (
+                  <option key={year} value={i}>
+                    {year}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
 
-          <BandDropdown
+          <BandSlider
             label="Red band"
             value={rBandIdx}
             labels={bandLabels}
             onChange={onRBandIdxChange}
           />
-          <BandDropdown
+          <BandSlider
             label="Green band"
             value={gBandIdx}
             labels={bandLabels}
             onChange={onGBandIdxChange}
           />
-          <BandDropdown
+          <BandSlider
             label="Blue band"
             value={bBandIdx}
             labels={bandLabels}
@@ -274,15 +278,16 @@ export function ControlPanel(props: ControlPanelProps) {
   );
 }
 
-type BandDropdownProps = {
+type BandSliderProps = {
   label: string;
   value: number;
   labels: readonly string[] | null;
   onChange: (idx: number) => void;
 };
 
-function BandDropdown(props: BandDropdownProps) {
+function BandSlider(props: BandSliderProps) {
   const { label, value, labels, onChange } = props;
+  const bandLabel = labels?.[value] ?? `Band ${value}`;
   return (
     <label
       style={{
@@ -294,21 +299,24 @@ function BandDropdown(props: BandDropdownProps) {
         marginBottom: "6px",
       }}
     >
-      <span style={{ whiteSpace: "nowrap", minWidth: "70px" }}>{label}:</span>
-      <select
+      <span
+        style={{
+          whiteSpace: "nowrap",
+          minWidth: "130px",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {label}: {bandLabel}
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={63}
+        step={1}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        disabled={labels === null}
         style={{ flex: 1, cursor: "pointer" }}
-      >
-        {(labels ?? Array.from({ length: 64 }, (_, i) => `Band ${i}`)).map(
-          (lbl, i) => (
-            <option key={lbl} value={i}>
-              {lbl}
-            </option>
-          ),
-        )}
-      </select>
+      />
     </label>
   );
 }
