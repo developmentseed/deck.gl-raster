@@ -225,7 +225,7 @@ export default function App() {
             selection,
             getTileData,
             renderTile,
-            maxRequests: 0,
+            maxRequests: 20,
             updateTriggers: {
               renderTile: [
                 leadTimeIdx,
