@@ -32,5 +32,6 @@ export type {
 } from "./raster-tileset/index.js";
 export {
   RasterTileset2D,
+  sortByDistanceFromPoint,
   TileMatrixSetAdaptor,
 } from "./raster-tileset/index.js";
