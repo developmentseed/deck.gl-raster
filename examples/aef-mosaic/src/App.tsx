@@ -54,11 +54,16 @@ export default function App() {
       const opened = await zarr.open.v3(root.resolve(VARIABLE), {
         kind: "array",
       });
+      if (!opened.is("int8")) {
+        throw new Error(
+          `Expected AEF embeddings to be int8, got ${opened.dtype}`,
+        );
+      }
       const labels = await fetchBandLabels(root);
       if (cancelled) {
         return;
       }
-      setArr(opened as zarr.Array<"int8", zarr.Readable>);
+      setArr(opened);
       setRootAttrs(root.attrs);
       setBandLabels(labels);
     })();
