@@ -1,7 +1,7 @@
 export type {
   COGLayerProps,
   GetTileDataOptions,
-  MinimalDataT,
+  MinimalTileData,
 } from "./cog-layer.js";
 export { COGLayer } from "./cog-layer.js";
 export * as texture from "./geotiff/texture.js";

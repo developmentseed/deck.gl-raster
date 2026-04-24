@@ -100,8 +100,9 @@ describe("test GeoKey CRS parsing", () => {
 
     // Verify wkt-parser can consume our PROJJSON and extract the fields
     // needed for TileMatrixSet construction (semi-major axis, units).
-    if (typeof crs === "number")
+    if (typeof crs === "number") {
       throw new Error("expected PROJJSON, got EPSG code");
+    }
     const proj = parseWkt(crs);
     expect(proj.a).toBe(6378137);
     expect(proj.units).toBe("meter");

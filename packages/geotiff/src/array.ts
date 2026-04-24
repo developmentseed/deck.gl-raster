@@ -258,7 +258,9 @@ function validateRasterShape(array: RasterArray): void {
 
 function isIdentityOrder(order: readonly number[]): boolean {
   for (let i = 0; i < order.length; i++) {
-    if (order[i] !== i) return false;
+    if (order[i] !== i) {
+      return false;
+    }
   }
   return true;
 }

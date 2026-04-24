@@ -322,7 +322,9 @@ async function getTile(
 } | null> {
   const { size, tileSize: tiles } = image;
 
-  if (tiles == null) throw new Error("Tiff is not tiled");
+  if (tiles == null) {
+    throw new Error("Tiff is not tiled");
+  }
 
   // TODO support GhostOptionTileOrder
   const nyTiles = Math.ceil(size.height / tiles.height);
@@ -336,10 +338,11 @@ async function getTile(
 
   const idx = y * nxTiles + x;
   const totalTiles = nxTiles * nyTiles;
-  if (idx >= totalTiles)
+  if (idx >= totalTiles) {
     throw new Error(
       `Tile index is outside of tile range: ${idx} >= ${totalTiles}`,
     );
+  }
 
   const { offset, imageSize } = await image.getTileSize(idx);
 
@@ -366,7 +369,9 @@ async function getBytes(
   bytes: ArrayBuffer;
   compression: Compression;
 } | null> {
-  if (byteCount === 0) return null;
+  if (byteCount === 0) {
+    return null;
+  }
 
   const bytes = await source.fetch(offset, byteCount, options);
   if (bytes.byteLength < byteCount) {

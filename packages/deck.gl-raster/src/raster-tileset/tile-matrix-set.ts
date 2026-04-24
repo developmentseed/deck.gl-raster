@@ -1,5 +1,6 @@
+import * as affine from "@developmentseed/affine";
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
-import { xy_bounds } from "@developmentseed/morecantile";
+import { tileTransform, xy_bounds } from "@developmentseed/morecantile";
 import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface";
 import type { Bounds, Corners, ProjectionFunction } from "./types";
 
@@ -121,6 +122,26 @@ class TileMatrixAdaptor implements TilesetLevel {
 
     return { minCol, maxCol, minRow, maxRow };
   }
+
+  /**
+   * Compute forward and inverse per-tile pixel↔CRS transforms for the tile
+   * at `(col, row)`. Uses morecantile's `tileTransform` for the forward affine
+   * and inverts it via `@developmentseed/affine`.
+   */
+  tileTransform(
+    col: number,
+    row: number,
+  ): {
+    forwardTransform: (x: number, y: number) => [number, number];
+    inverseTransform: (x: number, y: number) => [number, number];
+  } {
+    const fwd = tileTransform(this.inner, { col, row });
+    const inv = affine.invert(fwd);
+    return {
+      forwardTransform: (x, y) => affine.apply(fwd, x, y),
+      inverseTransform: (x, y) => affine.apply(inv, x, y),
+    };
+  }
 }
 
 /**
@@ -131,19 +152,30 @@ export class TileMatrixSetAdaptor implements TilesetDescriptor {
   tms: TileMatrixSet;
   private _levels: TileMatrixAdaptor[];
   projectTo3857: ProjectionFunction;
+  projectFrom3857: ProjectionFunction;
   projectTo4326: ProjectionFunction;
+  projectFrom4326: ProjectionFunction;
 
   constructor(
     tms: TileMatrixSet,
     {
       projectTo3857,
+      projectFrom3857,
       projectTo4326,
-    }: { projectTo3857: ProjectionFunction; projectTo4326: ProjectionFunction },
+      projectFrom4326,
+    }: {
+      projectTo3857: ProjectionFunction;
+      projectFrom3857: ProjectionFunction;
+      projectTo4326: ProjectionFunction;
+      projectFrom4326: ProjectionFunction;
+    },
   ) {
     this.tms = tms;
     this._levels = tms.tileMatrices.map((tm) => new TileMatrixAdaptor(tm));
     this.projectTo3857 = projectTo3857;
+    this.projectFrom3857 = projectFrom3857;
     this.projectTo4326 = projectTo4326;
+    this.projectFrom4326 = projectFrom4326;
   }
 
   get levels(): TilesetLevel[] {

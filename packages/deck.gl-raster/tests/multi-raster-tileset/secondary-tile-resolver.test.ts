@@ -27,12 +27,17 @@ function gridLevel(opts: {
   } = opts;
   const tileCrsWidth = tileWidth * cellSize;
   const tileCrsHeight = tileHeight * cellSize;
+  const identityTransform = (x: number, y: number): [number, number] => [x, y];
   return {
     matrixWidth,
     matrixHeight,
     tileWidth,
     tileHeight,
     metersPerPixel: cellSize,
+    tileTransform: () => ({
+      forwardTransform: identityTransform,
+      inverseTransform: identityTransform,
+    }),
     projectedTileCorners: (col: number, row: number): Corners => {
       const minX = originX + col * tileCrsWidth;
       const maxX = minX + tileCrsWidth;
