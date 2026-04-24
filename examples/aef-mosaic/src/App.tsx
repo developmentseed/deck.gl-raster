@@ -7,7 +7,12 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
 import { fetchBandLabels } from "./aef/band-labels.js";
-import { MIN_VISIBLE_ZOOM, VARIABLE, ZARR_URL } from "./aef/constants.js";
+import {
+  FETCH_MIN_ZOOM,
+  VARIABLE,
+  VISIBLE_MIN_ZOOM,
+  ZARR_URL,
+} from "./aef/constants.js";
 import type { AefTileData } from "./aef/get-tile-data.js";
 import { getTileData } from "./aef/get-tile-data.js";
 import type { Location } from "./aef/locations.js";
@@ -40,7 +45,6 @@ export default function App() {
 
   const [locationId, setLocationId] = useState(DEFAULT_LOCATION.id);
   const [yearIdx, setYearIdx] = useState(DEFAULT_YEAR_IDX);
-  const [viewportZoom, setViewportZoom] = useState(DEFAULT_LOCATION.zoom);
   const [rBandIdx, setRBandIdx] = useState(DEFAULT_R_BAND);
   const [gBandIdx, setGBandIdx] = useState(DEFAULT_G_BAND);
   const [bBandIdx, setBBandIdx] = useState(DEFAULT_B_BAND);
@@ -56,7 +60,9 @@ export default function App() {
         kind: "array",
       });
       const labels = await fetchBandLabels(root);
-      if (cancelled) return;
+      if (cancelled) {
+        return;
+      }
       setArr(opened as zarr.Array<"int8", zarr.Readable>);
       setRootAttrs(root.attrs);
       setBandLabels(labels);
@@ -88,7 +94,7 @@ export default function App() {
   }, []);
 
   const layers =
-    arr && rootAttrs && viewportZoom >= MIN_VISIBLE_ZOOM
+    arr && rootAttrs
       ? [
           new ZarrLayer<zarr.Readable, "int8", AefTileData>({
             id: `aef-zarr-layer-${yearIdx}`,
@@ -97,6 +103,8 @@ export default function App() {
             selection,
             getTileData,
             renderTile,
+            minZoom: FETCH_MIN_ZOOM,
+            visibleMinZoom: VISIBLE_MIN_ZOOM,
             updateTriggers: {
               renderTile: [
                 rBandIdx,
@@ -122,7 +130,6 @@ export default function App() {
           latitude: DEFAULT_LOCATION.latitude,
           zoom: DEFAULT_LOCATION.zoom,
         }}
-        onMove={(e) => setViewportZoom(e.viewState.zoom)}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
         <DeckGLOverlay layers={layers} interleaved />

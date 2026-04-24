@@ -56,7 +56,9 @@ export function ControlPanel(props: ControlPanelProps) {
 
   const handleLocationSelect = (id: string) => {
     const next = LOCATIONS.find((l) => l.id === id);
-    if (next) onLocationChange(next);
+    if (next) {
+      onLocationChange(next);
+    }
   };
 
   const handleRescaleChange = (range: number[]) => {
