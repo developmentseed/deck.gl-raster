@@ -65,8 +65,6 @@ export type RasterTileLayerProps<
     | "zoomOffset"
     | "maxZoom"
     | "minZoom"
-    | "visibleMinZoom"
-    | "visibleMaxZoom"
     | "extent"
     | "debounceTime"
     | "maxCacheSize"
@@ -249,8 +247,6 @@ export class RasterTileLayer<
       zoomOffset,
       maxZoom,
       minZoom,
-      visibleMinZoom,
-      visibleMaxZoom,
       extent,
       debounceTime,
       maxCacheSize,
@@ -282,8 +278,6 @@ export class RasterTileLayer<
       zoomOffset,
       maxZoom,
       minZoom,
-      visibleMinZoom,
-      visibleMaxZoom,
       extent,
       debounceTime,
       maxCacheSize,

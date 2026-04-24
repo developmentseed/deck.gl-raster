@@ -7,12 +7,7 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
 import { fetchBandLabels } from "./aef/band-labels.js";
-import {
-  FETCH_MIN_ZOOM,
-  VARIABLE,
-  VISIBLE_MIN_ZOOM,
-  ZARR_URL,
-} from "./aef/constants.js";
+import { MIN_ZOOM, VARIABLE, ZARR_URL } from "./aef/constants.js";
 import type { AefTileData } from "./aef/get-tile-data.js";
 import { getTileData } from "./aef/get-tile-data.js";
 import type { Location } from "./aef/locations.js";
@@ -103,8 +98,7 @@ export default function App() {
             selection,
             getTileData,
             renderTile,
-            minZoom: FETCH_MIN_ZOOM,
-            visibleMinZoom: VISIBLE_MIN_ZOOM,
+            minZoom: MIN_ZOOM,
             updateTriggers: {
               renderTile: [
                 rBandIdx,
@@ -130,6 +124,9 @@ export default function App() {
           latitude: DEFAULT_LOCATION.latitude,
           zoom: DEFAULT_LOCATION.zoom,
         }}
+        onMoveEnd={(e) =>
+          console.log("viewport.zoom =", e.viewState.zoom.toFixed(2))
+        }
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
         <DeckGLOverlay layers={layers} interleaved />

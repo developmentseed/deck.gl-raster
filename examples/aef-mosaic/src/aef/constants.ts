@@ -24,16 +24,10 @@ export const NODATA_INT8 = -128;
 export const DEQUANT_DIVISOR = 127.5;
 
 /**
- * Minimum viewport zoom at which the layer fetches tiles. Below this,
- * tile requests stop — but already-cached tiles may keep rendering down
- * to {@link VISIBLE_MIN_ZOOM}, controlled independently by the layer.
+ * Minimum viewport zoom at which the layer fetches and renders tiles.
+ * Below this, `getTileIndices` returns `[]` and nothing draws. Set
+ * lower than the "feels sharp" zoom to let tiles stay visible as the
+ * user zooms out one level. The root-tile cull bounds the fetch count
+ * at lower zooms.
  */
-export const FETCH_MIN_ZOOM = 12;
-
-/**
- * Minimum viewport zoom at which the layer renders anything. Tiles that
- * have already been fetched at zoom ≥ {@link FETCH_MIN_ZOOM} keep showing
- * down to this level, so zooming out by one level stays smooth instead of
- * snapping to blank. Below this the layer is invisible.
- */
-export const VISIBLE_MIN_ZOOM = 11;
+export const MIN_ZOOM = 11;
