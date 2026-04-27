@@ -4,7 +4,7 @@
 // project's outDir, and tsconfig.build.json excludes tests/ from emission.
 import { resolve } from "node:path";
 import { SourceFile } from "@chunkd/source-file";
-import { GeoTIFF } from "@developmentseed/geotiff";
+import { GeoTIFF } from "../src/geotiff.js";
 
 // ── Fixture helpers ─────────────────────────────────────────────────────
 

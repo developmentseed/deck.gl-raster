@@ -1,6 +1,6 @@
-import { GeoTIFF } from "@developmentseed/geotiff";
 import { parseWkt } from "@developmentseed/proj";
 import { describe, expect, it } from "vitest";
+import { GeoTIFF } from "../src/geotiff.js";
 import { generateTileMatrixSet } from "../src/tile-matrix-set.js";
 import { loadGeoTIFF } from "./helpers.js";
 
