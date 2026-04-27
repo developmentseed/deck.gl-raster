@@ -6,7 +6,7 @@
   "scripts": {
     "build": "pnpm --recursive --filter=!docs build",
     "build:watch": "tsc --build --watch",
-    "clean": "pnpm --recursive exec rm -rf dist",
+    "clean": "pnpm --recursive exec sh -c 'rm -rf dist *.tsbuildinfo'",
     "format": "biome format .",
     "format:fix": "biome format --write .",
     "lint": "biome lint .",
