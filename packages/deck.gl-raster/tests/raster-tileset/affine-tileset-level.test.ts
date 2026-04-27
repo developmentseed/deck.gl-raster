@@ -174,6 +174,23 @@ describe("AffineTilesetLevel", () => {
       expect(range).toEqual({ minCol: 0, maxCol: 1, minRow: 0, maxRow: 1 });
     });
 
+    it("returns an empty range (min > max) when the bbox lies entirely outside the array", () => {
+      const level = new AffineTilesetLevel({
+        affine: SQUARE_AFFINE,
+        arrayWidth: 8,
+        arrayHeight: 8,
+        tileWidth: 4,
+        tileHeight: 4,
+        mpu: 1,
+      });
+      // Array CRS extent: x ∈ [100, 180), y ∈ [200, 120). Pick a bbox far to
+      // the right of the array.
+      const range = level.crsBoundsToTileRange(1000, 1000, 2000, 2000);
+      // minCol > maxCol means the consumer's `for (col=min; col<=max)` loop
+      // emits no tiles — which is what we want for a non-overlapping bbox.
+      expect(range.minCol).toBeGreaterThan(range.maxCol);
+    });
+
     it("handles non-square pixels correctly", () => {
       const level = new AffineTilesetLevel({
         affine: NON_SQUARE_AFFINE,
