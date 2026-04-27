@@ -31,50 +31,32 @@ export interface AffineTilesetLevelOptions {
  * implementing {@link TilesetLevel} manually.
  */
 export class AffineTilesetLevel implements TilesetLevel {
+  readonly tileWidth: number;
+  readonly tileHeight: number;
+  readonly matrixWidth: number;
+  readonly matrixHeight: number;
+  readonly metersPerPixel: number;
+
   private readonly _affine: Affine;
   private readonly _invAffine: Affine;
-  private readonly _arrayWidth: number;
-  private readonly _arrayHeight: number;
-  private readonly _tileWidth: number;
-  private readonly _tileHeight: number;
-  private readonly _mpu: number;
 
   constructor(options: AffineTilesetLevelOptions) {
     this._affine = options.affine;
     this._invAffine = affine.invert(options.affine);
-    this._arrayWidth = options.arrayWidth;
-    this._arrayHeight = options.arrayHeight;
-    this._tileWidth = options.tileWidth;
-    this._tileHeight = options.tileHeight;
-    this._mpu = options.mpu;
-  }
+    this.tileWidth = options.tileWidth;
+    this.tileHeight = options.tileHeight;
+    this.matrixWidth = Math.ceil(options.arrayWidth / options.tileWidth);
+    this.matrixHeight = Math.ceil(options.arrayHeight / options.tileHeight);
 
-  get matrixWidth(): number {
-    return Math.ceil(this._arrayWidth / this._tileWidth);
-  }
-
-  get matrixHeight(): number {
-    return Math.ceil(this._arrayHeight / this._tileHeight);
-  }
-
-  get tileWidth(): number {
-    return this._tileWidth;
-  }
-
-  get tileHeight(): number {
-    return this._tileHeight;
-  }
-
-  get metersPerPixel(): number {
     // Geometric mean of the two pixel-edge scales handles non-square pixels.
-    const a = affine.a(this._affine);
-    const e = affine.e(this._affine);
-    return Math.sqrt(Math.abs(a * e)) * this._mpu;
+    const a = affine.a(options.affine);
+    const e = affine.e(options.affine);
+    this.metersPerPixel = Math.sqrt(Math.abs(a * e)) * options.mpu;
   }
 
   projectedTileCorners(col: number, row: number): Corners {
-    const tw = this._tileWidth;
-    const th = this._tileHeight;
+    const tw = this.tileWidth;
+    const th = this.tileHeight;
     const af = this._affine;
 
     return {
@@ -93,8 +75,8 @@ export class AffineTilesetLevel implements TilesetLevel {
     inverseTransform: (x: number, y: number) => [number, number];
   } {
     const tileOffset = affine.translation(
-      col * this._tileWidth,
-      row * this._tileHeight,
+      col * this.tileWidth,
+      row * this.tileHeight,
     );
     const tileAffine = affine.compose(this._affine, tileOffset);
     const invTileAffine = affine.invert(tileAffine);
@@ -128,8 +110,8 @@ export class AffineTilesetLevel implements TilesetLevel {
     const pixMinY = Math.min(...ys);
     const pixMaxY = Math.max(...ys);
 
-    const tw = this._tileWidth;
-    const th = this._tileHeight;
+    const tw = this.tileWidth;
+    const th = this.tileHeight;
     const maxColIdx = this.matrixWidth - 1;
     const maxRowIdx = this.matrixHeight - 1;
 
