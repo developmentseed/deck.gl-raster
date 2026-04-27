@@ -225,6 +225,8 @@ export default function App() {
             selection,
             getTileData,
             renderTile,
+            // Set higher maxRequests because this data is served over HTTP/2
+            // and can be multiplexed
             maxRequests: 20,
             updateTriggers: {
               renderTile: [
