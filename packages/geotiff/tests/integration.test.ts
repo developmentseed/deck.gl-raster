@@ -9,11 +9,11 @@
  * are intentionally omitted here.
  */
 
-import type { GeoTIFF } from "@developmentseed/geotiff";
 import type { GeoTIFFImage, GeoTIFF as GeotiffJs } from "geotiff";
 import { fromFile } from "geotiff";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { toBandSeparate } from "../src/array.js";
+import type { GeoTIFF } from "../src/geotiff.js";
 import { fixturePath, loadGeoTIFF } from "./helpers.js";
 
 const FIXTURES = [

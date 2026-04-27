@@ -22,6 +22,8 @@ export type {
 } from "./raster-tile-layer/index.js";
 export { RasterTileLayer } from "./raster-tile-layer/index.js";
 export type {
+  AffineTilesetLevelOptions,
+  AffineTilesetOptions,
   Bounds,
   CornerBounds,
   Corners,
@@ -31,6 +33,8 @@ export type {
   TilesetLevel,
 } from "./raster-tileset/index.js";
 export {
+  AffineTileset,
+  AffineTilesetLevel,
   RasterTileset2D,
   TileMatrixSetAdaptor,
 } from "./raster-tileset/index.js";

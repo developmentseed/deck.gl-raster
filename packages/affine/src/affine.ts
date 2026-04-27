@@ -59,6 +59,63 @@ export function scale(sx: number, sy: number = sx): Affine {
 }
 
 /**
+ * Create a rotation transform.
+ *
+ * Rotates counter-clockwise by `angle` degrees about the given pivot point
+ * (defaults to the origin `(0, 0)`). Ported from the Python
+ * [`affine`](https://github.com/rasterio/affine) library.
+ *
+ * @param angle  Rotation angle in degrees, counter-clockwise about the pivot.
+ * @param pivot  Optional pivot point `[px, py]`. Defaults to `[0, 0]`.
+ *
+ * @return Transform that applies the given rotation.
+ */
+export function rotation(
+  angle: number,
+  pivot: readonly [number, number] = [0, 0],
+): Affine {
+  const [ca, sa] = cosSinDeg(angle);
+  const [px, py] = pivot;
+  if (px === 0 && py === 0) {
+    return [ca, -sa, 0, sa, ca, 0];
+  }
+  // biome-ignore format: array
+  return [
+    ca, -sa, px - px * ca + py * sa,
+    sa, ca, py - px * sa - py * ca,
+  ];
+}
+
+/**
+ * Return the cosine and sine of an angle in degrees, special-casing exact
+ * multiples of 90° so right angles produce exact 0 / ±1 instead of the
+ * floating-point error that `Math.cos(Math.PI/2)` etc. would emit.
+ *
+ * Ported from the Python `affine` library's `cos_sin_deg`.
+ */
+function cosSinDeg(deg: number): [number, number] {
+  // JS `%` preserves the dividend's sign (`-90 % 360 === -90`), unlike
+  // Python's modulo which normalizes to [0, 360). The `+ 360) % 360`
+  // dance gives us Python-style wrapping so the right-angle short-circuits
+  // below also fire for negative angles like `-90`.
+  const wrapped = ((deg % 360) + 360) % 360;
+  if (wrapped === 0) {
+    return [1, 0];
+  }
+  if (wrapped === 90) {
+    return [0, 1];
+  }
+  if (wrapped === 180) {
+    return [-1, 0];
+  }
+  if (wrapped === 270) {
+    return [0, -1];
+  }
+  const rad = (wrapped * Math.PI) / 180;
+  return [Math.cos(rad), Math.sin(rad)];
+}
+
+/**
  * Apply a geotransform to a coordinate.
  *
  * That is, we apply this series of equations:
@@ -87,7 +144,7 @@ export function apply(
 }
 
 /**
- * Compose two affine transforms: A×B (apply B first, then A).
+ * Compose two affine transforms: A×B (apply B **first**, then A).
  *
  * This is equivalent to `a @ b` in Python's `affine` library, and is equivalent
  * to multiplying the 3×3 matrices:

@@ -6,19 +6,14 @@ import type {
   RenderTileResult,
   TilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
-import {
-  RasterTileLayer,
-  TileMatrixSetAdaptor,
-} from "@developmentseed/deck.gl-raster";
+import { RasterTileLayer } from "@developmentseed/deck.gl-raster";
 import type { DecoderPool, GeoTIFF, Overview } from "@developmentseed/geotiff";
-import {
-  defaultDecoderPool,
-  generateTileMatrixSet,
-} from "@developmentseed/geotiff";
+import { defaultDecoderPool } from "@developmentseed/geotiff";
 import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
 import {
   epsgResolver,
   makeClampedForwardTo3857,
+  metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
 import type { Texture } from "@luma.gl/core";
@@ -26,6 +21,7 @@ import proj4 from "proj4";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
+import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 
 export type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 
@@ -199,8 +195,6 @@ export class COGLayer<
         ? await this.props.epsgResolver!(crs)
         : parseWkt(crs);
 
-    const tms = generateTileMatrixSet(geotiff, sourceProjection);
-
     // @ts-expect-error - proj4 typings are incomplete and don't support
     // wkt-parser input
     const converter4326 = proj4(sourceProjection, "EPSG:4326");
@@ -220,11 +214,22 @@ export class COGLayer<
     const projectFrom3857 = (x: number, y: number) =>
       converter3857.inverse<[number, number]>([x, y], false);
 
-    const tilesetDescriptor = new TileMatrixSetAdaptor(tms, {
+    const units = sourceProjection.units;
+    if (!units) {
+      throw new Error(
+        "Source projection is missing 'units' property, cannot compute meters per unit",
+      );
+    }
+    const mpu = metersPerUnit(units as Parameters<typeof metersPerUnit>[0], {
+      semiMajorAxis: sourceProjection.datum?.a ?? sourceProjection.a,
+    });
+
+    const tilesetDescriptor = geoTiffToDescriptor(geotiff, {
       projectTo4326,
       projectFrom4326,
       projectTo3857,
       projectFrom3857,
+      mpu,
     });
 
     if (this.props.onGeoTIFFLoad) {
@@ -276,12 +281,13 @@ export class COGLayer<
     >;
     const wrapped: RasterGetTileData = async (tile, options) => {
       const { x, y, z } = tile.index;
-      // TODO: should be able to (micro) optimize this to not create the array
-      // Something like:
-      // const image = z === geotiff.overviews.length - 1 ? geotiff :
-      //   geotiff.overviews[geotiff.overviews.length - 1 - z]!;
-      const images = [geotiff, ...geotiff.overviews];
-      const image = images[images.length - 1 - z]!;
+      // Levels are emitted coarsest-first with the full-res geotiff appended
+      // last, so z === overviews.length picks the full-res image and lower z
+      // picks the corresponding overview from the finest-first list.
+      const image =
+        z === geotiff.overviews.length
+          ? geotiff
+          : geotiff.overviews[geotiff.overviews.length - 1 - z]!;
       return userFn(image, {
         device: options.device,
         x,
