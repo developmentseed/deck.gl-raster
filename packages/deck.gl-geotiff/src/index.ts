@@ -5,7 +5,6 @@ export type {
 } from "./cog-layer.js";
 export { COGLayer } from "./cog-layer.js";
 export * as texture from "./geotiff/texture.js";
-export { geoTiffToDescriptor } from "./geotiff-tileset.js";
 export type { MosaicLayerProps } from "./mosaic-layer/mosaic-layer.js";
 export { MosaicLayer } from "./mosaic-layer/mosaic-layer.js";
 export {
