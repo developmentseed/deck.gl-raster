@@ -5,6 +5,7 @@ import {
   compose,
   identity,
   invert,
+  rotation,
   scale,
   translation,
 } from "../src/affine.js";
@@ -71,5 +72,44 @@ describe("compose", () => {
     const t = translation(10, 20);
     const s = scale(2, 3);
     expect(compose(t, s)).not.toEqual(compose(s, t));
+  });
+});
+
+describe("rotation", () => {
+  it("rotates 90° CCW about the origin", () => {
+    const r = rotation(90);
+    const [x, y] = apply(r, 1, 0);
+    expect(x).toBeCloseTo(0, 10);
+    expect(y).toBeCloseTo(1, 10);
+  });
+
+  it("rotates 180° about the origin", () => {
+    const r = rotation(180);
+    const [x, y] = apply(r, 3, 4);
+    expect(x).toBeCloseTo(-3, 10);
+    expect(y).toBeCloseTo(-4, 10);
+  });
+
+  it("identity at 0°", () => {
+    const r = rotation(0);
+    const [x, y] = apply(r, 7, 11);
+    expect(x).toBeCloseTo(7, 10);
+    expect(y).toBeCloseTo(11, 10);
+  });
+
+  it("rotates about a non-origin pivot", () => {
+    // 90° CCW about (5, 5): point (5, 6) should go to (4, 5).
+    const r = rotation(90, [5, 5]);
+    const [x, y] = apply(r, 5, 6);
+    expect(x).toBeCloseTo(4, 10);
+    expect(y).toBeCloseTo(5, 10);
+  });
+
+  it("leaves the pivot point fixed", () => {
+    const pivot: [number, number] = [3, 7];
+    const r = rotation(45, pivot);
+    const [x, y] = apply(r, ...pivot);
+    expect(x).toBeCloseTo(pivot[0], 10);
+    expect(y).toBeCloseTo(pivot[1], 10);
   });
 });

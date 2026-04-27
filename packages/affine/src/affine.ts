@@ -59,6 +59,32 @@ export function scale(sx: number, sy: number = sx): Affine {
 }
 
 /**
+ * Create a rotation transform.
+ *
+ * Rotates counter-clockwise by `angle` degrees about the given pivot point
+ * (defaults to the origin `(0, 0)`). Ported from the Python
+ * [`affine`](https://github.com/rasterio/affine) library.
+ *
+ * @param angle  Rotation angle in degrees, counter-clockwise about the pivot.
+ * @param pivot  Optional pivot point `[px, py]`. Defaults to `[0, 0]`.
+ *
+ * @return Transform that applies the given rotation.
+ */
+export function rotation(
+  angle: number,
+  pivot: readonly [number, number] = [0, 0],
+): Affine {
+  const rad = (angle * Math.PI) / 180;
+  const ca = Math.cos(rad);
+  const sa = Math.sin(rad);
+  const [px, py] = pivot;
+  if (px === 0 && py === 0) {
+    return [ca, -sa, 0, sa, ca, 0];
+  }
+  return [ca, -sa, px - px * ca + py * sa, sa, ca, py - px * sa - py * ca];
+}
+
+/**
  * Apply a geotransform to a coordinate.
  *
  * That is, we apply this series of equations:

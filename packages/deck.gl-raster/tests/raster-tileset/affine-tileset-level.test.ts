@@ -1,24 +1,19 @@
+import { compose, rotation, scale, translation } from "@developmentseed/affine";
 import { describe, expect, it } from "vitest";
 import { AffineTilesetLevel } from "../../src/raster-tileset/affine-tileset-level.js";
 
-// Top-left origin, 10 CRS units per pixel, square pixels.
-// x = 10*col + 100, y = -10*row + 200
-const SQUARE_AFFINE = [10, 0, 100, 0, -10, 200] as const;
+// Top-left origin, 10 CRS units per pixel, square pixels (Y axis flipped).
+const SQUARE_AFFINE = compose(translation(100, 200), scale(10, -10));
 
-// Non-square pixels: 10 CRS units wide, 5 CRS units tall.
-// x = 10*col + 100, y = -5*row + 200
-const NON_SQUARE_AFFINE = [10, 0, 100, 0, -5, 200] as const;
+// Non-square pixels: 10 CRS units wide, 5 CRS units tall (Y axis flipped).
+const NON_SQUARE_AFFINE = compose(translation(100, 200), scale(10, -5));
 
-// 30° rotation around origin, 10 unit scale.
-const ROT30 = (Math.PI * 30) / 180;
-const ROTATED_AFFINE = [
-  10 * Math.cos(ROT30),
-  -10 * Math.sin(ROT30),
-  100,
-  10 * Math.sin(ROT30),
-  10 * Math.cos(ROT30),
-  200,
-] as const;
+// 30° rotation around the origin, then 10× scale, translated to (100, 200).
+const ROT30_DEG = 30;
+const ROTATED_AFFINE = compose(
+  translation(100, 200),
+  compose(rotation(ROT30_DEG), scale(10)),
+);
 
 describe("AffineTilesetLevel", () => {
   describe("matrix dimensions", () => {
@@ -103,14 +98,9 @@ describe("AffineTilesetLevel", () => {
       const corners = level.projectedTileCorners(0, 0);
       expect(corners.topLeft[0]).toBeCloseTo(100, 10);
       expect(corners.topLeft[1]).toBeCloseTo(200, 10);
-      expect(corners.topRight[0]).toBeCloseTo(
-        100 + 4 * 10 * Math.cos(ROT30),
-        10,
-      );
-      expect(corners.topRight[1]).toBeCloseTo(
-        200 + 4 * 10 * Math.sin(ROT30),
-        10,
-      );
+      const rad = (ROT30_DEG * Math.PI) / 180;
+      expect(corners.topRight[0]).toBeCloseTo(100 + 4 * 10 * Math.cos(rad), 10);
+      expect(corners.topRight[1]).toBeCloseTo(200 + 4 * 10 * Math.sin(rad), 10);
     });
   });
 
