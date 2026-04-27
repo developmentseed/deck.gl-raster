@@ -2,6 +2,7 @@ import type { PlanarConfiguration, Predictor } from "@cogeotiff/core";
 import { Compression, SampleFormat } from "@cogeotiff/core";
 import type { RasterTypedArray } from "./array.js";
 import { decode as decodeViaCanvas } from "./codecs/canvas.js";
+import { decode as decodeDeflate } from "./codecs/deflate.js";
 import { applyPredictor } from "./codecs/predictor.js";
 
 /** Raster stored in one pixel-interleaved typed array. */
@@ -67,11 +68,9 @@ export const DECODER_REGISTRY = new Map<Compression, () => Promise<Decoder>>();
 DECODER_REGISTRY.set(Compression.None, () =>
   Promise.resolve(decodeUncompressed),
 );
-DECODER_REGISTRY.set(Compression.Deflate, () =>
-  import("./codecs/deflate.js").then((m) => m.decode),
-);
+DECODER_REGISTRY.set(Compression.Deflate, () => Promise.resolve(decodeDeflate));
 DECODER_REGISTRY.set(Compression.DeflateOther, () =>
-  import("./codecs/deflate.js").then((m) => m.decode),
+  Promise.resolve(decodeDeflate),
 );
 DECODER_REGISTRY.set(Compression.Lzw, () =>
   import("./codecs/lzw.js").then((m) => m.decode),
