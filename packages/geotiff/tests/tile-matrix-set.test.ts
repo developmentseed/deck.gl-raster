@@ -1,6 +1,7 @@
-import { GeoTIFF, generateTileMatrixSet } from "@developmentseed/geotiff";
+import { GeoTIFF } from "@developmentseed/geotiff";
 import { parseWkt } from "@developmentseed/proj";
 import { describe, expect, it } from "vitest";
+import { generateTileMatrixSet } from "../src/tile-matrix-set.js";
 import { loadGeoTIFF } from "./helpers.js";
 
 const EPSG_4326 = {
