@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/raster-reproject",
-  "version": "0.6.0-alpha.1",
+  "version": "0.7.0-alpha.1",
   "description": "Mesh generation for client-side raster reprojection.",
   "type": "module",
   "main": "./dist/index.js",
