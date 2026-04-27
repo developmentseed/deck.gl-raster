@@ -1,7 +1,7 @@
 import type { Affine } from "@developmentseed/affine";
 import * as affine from "@developmentseed/affine";
 import type { TilesetLevel } from "./tileset-interface.js";
-import type { Corners } from "./types.js";
+import type { Bounds, Corners } from "./types.js";
 
 /**
  * Constructor options for {@link AffineTilesetLevel}.
@@ -36,6 +36,11 @@ export class AffineTilesetLevel implements TilesetLevel {
   readonly matrixWidth: number;
   readonly matrixHeight: number;
   readonly metersPerPixel: number;
+  /**
+   * Source-CRS bounding box of the level's array `[minX, minY, maxX, maxY]`.
+   * Computed from the affine applied to the four array corners.
+   */
+  readonly projectedBounds: Bounds;
 
   private readonly _affine: Affine;
   private readonly _invAffine: Affine;
@@ -52,6 +57,21 @@ export class AffineTilesetLevel implements TilesetLevel {
     const a = affine.a(options.affine);
     const e = affine.e(options.affine);
     this.metersPerPixel = Math.sqrt(Math.abs(a * e)) * options.mpu;
+
+    const corners = [
+      affine.apply(options.affine, 0, 0),
+      affine.apply(options.affine, options.arrayWidth, 0),
+      affine.apply(options.affine, 0, options.arrayHeight),
+      affine.apply(options.affine, options.arrayWidth, options.arrayHeight),
+    ];
+    const xs = corners.map(([x]) => x);
+    const ys = corners.map(([, y]) => y);
+    this.projectedBounds = [
+      Math.min(...xs),
+      Math.min(...ys),
+      Math.max(...xs),
+      Math.max(...ys),
+    ];
   }
 
   projectedTileCorners(col: number, row: number): Corners {
