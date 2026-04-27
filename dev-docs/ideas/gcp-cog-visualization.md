@@ -1,27 +1,33 @@
-# GCP Tileset Design
+# Idea: GCP COG Visualization
+
+**Status:** Future work. Not currently implemented.
+
+**Related:** [geotiff-georef-type-split.md](geotiff-georef-type-split.md) is a cleaner foundation for this work and should likely happen first (or alongside) — without it, the GCP path either makes `RasterArray.transform` virally nullable or requires a hacky placeholder.
+
+**Origin:** Brainstormed and designed during exploratory work on `kyle/cog-gcp-explore`. The original feasibility writeup lives at `dev-docs/plans/gcp-rendering-feasibility.md` (gitignored, on-branch only).
 
 ## Problem
 
 `COGLayer` currently throws when opening a GeoTIFF whose georeferencing is supplied as Ground Control Points (GCPs) rather than as an affine geotransform — `createTransform` in [`packages/geotiff/src/transform.ts`](../../packages/geotiff/src/transform.ts) raises `"The image does not have an affine transformation"` when no `ModelPixelScaleTag` / `ModelTransformationTag` is present, even though the file does carry valid georeferencing in `ModelTiepointTag`. Sentinel-1 GRD products and many scanned-map and L1 satellite COGs fall into this bucket.
 
-The recent affine-tileset refactor ([dev-docs/specs/2026-04-27-affine-tileset-design.md](2026-04-27-affine-tileset-design.md)) made `TilesetLevel` polymorphic with the explicit intent of accepting a future GCP implementation alongside `AffineTilesetLevel`, but didn't ship one. The `RasterReprojector` core in [`packages/raster-reproject/src/delatin.ts`](../../packages/raster-reproject/src/delatin.ts) is already CRS-agnostic — it consumes arbitrary `forwardTransform` / `inverseTransform` callbacks, so it doesn't need to change.
+The recent affine-tileset refactor ([dev-docs/specs/2026-04-27-affine-tileset-design.md](../specs/2026-04-27-affine-tileset-design.md)) made `TilesetLevel` polymorphic with the explicit intent of accepting a future GCP implementation alongside `AffineTilesetLevel`, but didn't ship one. The `RasterReprojector` core in [`packages/raster-reproject/src/delatin.ts`](../../packages/raster-reproject/src/delatin.ts) is already CRS-agnostic — it consumes arbitrary `forwardTransform` / `inverseTransform` callbacks, so it doesn't need to change.
 
-The hard part of the original "long-term" plan from [dev-docs/plans/gcp-rendering-feasibility.md](../plans/gcp-rendering-feasibility.md) — fitting a non-linear model to GCPs with both forward and inverse evaluation — is provided by [`@allmaps/project`](https://www.npmjs.com/package/@allmaps/project) (transform types: `straight`, `helmert`, `polynomial` 1–3, `projective`, `thinPlateSpline`; all with forward and inverse). MIT, pure ESM, browser-safe.
+The hard part of the original "long-term" plan — fitting a non-linear model to GCPs with both forward and inverse evaluation — is provided by [`@allmaps/project`](https://www.npmjs.com/package/@allmaps/project) (transform types: `straight`, `helmert`, `polynomial` 1–3, `projective`, `thinPlateSpline`; all with forward and inverse). MIT, pure ESM, browser-safe.
 
 ## Goals
 
 - Render COGs georeferenced by Ground Control Points end-to-end through `COGLayer` (and `MultiCOGLayer`) without changes to consumer code beyond detecting the variant.
 - Add `GcpTilesetLevel` and `GcpTileset` as siblings to `AffineTilesetLevel` / `AffineTileset` in `@developmentseed/deck.gl-raster`, both implementing the existing `TilesetLevel` / `TilesetDescriptor` interfaces.
-- Surface `gcps` and `gcpCrs` on `GeoTIFF` in `@developmentseed/geotiff`.
+- Surface `gcps` on `GeoTIFF` in `@developmentseed/geotiff`. Existing `geotiff.crs` works for both variants — GeoTIFF stores one CRS in `GeoKeyDirectoryTag` regardless of whether georeferencing is affine or GCP, so a separate `gcpCrs` property is unnecessary.
 - Support multiple `@allmaps/project` transform types as a `GcpTilesetLevel` constructor option, defaulting to `polynomial` (order 1) for stability.
-- Validate against a real Sentinel-1 GRD VH scene (210 GCPs in 21×10 grid, EPSG:4326) rendered in `examples/cog-basic`.
+- Validate against a real Sentinel-1 GRD VH scene (210 GCPs in 21×10 grid, EPSG:4326). The exact test asset used during design exploration: `s3://sentinel-s1-l1c/GRD/2026/4/26/IW/DV/S1D_IW_GRDH_1SDV_20260426T231832_20260426T231857_002524_0042D6_2BC9/measurement/iw-vh.tiff`.
 
 ## Non-Goals
 
-- **RPC support.** Different math (rational polynomials with elevation), different reader, different model. Reuses `~70%` of this work but is its own project. Tracked in the feasibility appendix.
-- **GCP-exact mesh seeding for `RasterReprojector`.** The original short-term plan called for seeding the Delatin mesh from a Delaunay triangulation of GCPs to force pixel-exact pass-through at GCP locations. With `@allmaps/project` providing a smooth model, this becomes a refinement that's worth deferring until a concrete need surfaces.
+- **RPC support.** Different math (rational polynomials with elevation), different reader, different model. Reuses ~70% of this work but is its own project.
+- **GCP-exact mesh seeding for `RasterReprojector`.** The original short-term plan called for seeding the Delatin mesh from a Delaunay triangulation of GCPs to force pixel-exact pass-through at GCP locations. With `@allmaps/project` providing a smooth model, this is a refinement worth deferring until a concrete need surfaces.
 - **3D / terrain-aware reprojection using GCP `z` values.** Allmaps's 2D API ignores `z`. Real elevation handling is a much bigger feature (DEM lookup) and out of scope.
-- **Configurable fit CRS (a.k.a. `internalProjection`).** v1 fits the model in the file's GCP CRS only; see Design §1 for why. A constructor option to override (for polar / high-distortion scenes) is a natural follow-up but not part of v1.
+- **Configurable fit CRS (a.k.a. `internalProjection`).** v1 fits the model in the file's GCP CRS only; see Design §1. A constructor option to override (for polar / high-distortion scenes) is a natural follow-up.
 - **Unit tests against a fixture COG.** Deferred until [`geotiff-test-data`](https://github.com/developmentseed/geotiff-test-data) gets a GCP fixture; v1 ships with visual verification only.
 
 ## Design
@@ -40,7 +46,7 @@ This means both paths produce a `TilesetDescriptor` with the same notion of "sou
 - polar (>~70°): 3857 is *worse* than 4326; UTM or polar stereographic are right
 - equatorial: 4326 ≈ 3857
 
-The right choice is a per-dataset call. v1 takes the boring, intuitive default (= file CRS), avoids the source-CRS-relabeling that a 3857-fit configuration would require, and **leaves room to revisit**: a future `internalProjection` constructor option on `GcpTilesetLevel` lets users pick a metric CRS (3857, UTM, etc.) for higher-order fits when needed. See Open Questions §4.
+The right choice is a per-dataset call. v1 takes the boring, intuitive default (= file CRS), avoids the source-CRS-relabeling that a 3857-fit configuration would require, and **leaves room to revisit**: a future `internalProjection` constructor option on `GcpTilesetLevel` lets users pick a metric CRS (3857, UTM, etc.) for higher-order fits when needed.
 
 The implementation should leave a comment near the `ProjectedGcpTransformer` construction explaining this default and pointing at the eventual override hook.
 
@@ -100,16 +106,19 @@ Mirrors `AffineTileset`: holds levels and the four projection callbacks; derives
 
 ### 5. GeoTIFF reader changes
 
-**Location**: `packages/geotiff/src/gcp.ts` (new), `packages/geotiff/src/geotiff.ts` (modify), `packages/geotiff/src/transform.ts` (modify).
+**Location**: `packages/geotiff/src/gcp.ts` (new), `packages/geotiff/src/geotiff.ts` (modify).
 
-A new `Gcp` interface mirroring the `ModelTiepointTag` row layout (`pixel`, `line`, `k`, `x`, `y`, `z`) and a `parseGcps()` helper that returns `Gcp[] | null`. The `null` case covers the affine variant (single tie point) and the no-georeferencing case.
+Add `gcps: Gcp[] | null` to `GeoTIFF`, populated via `parseGcps(cachedTags.modelTiepoint)` during the static factory. The `Gcp` interface mirrors the `ModelTiepointTag` row layout (`pixel`, `line`, `k`, `x`, `y`, `z`); the parser returns `null` for the affine variant (single tie point) and the no-georeferencing case.
 
-`createTransform` is relaxed: when `ModelTiepointTag` has multiple tie points and neither `ModelPixelScaleTag` nor `ModelTransformationTag` is present, it returns `null` rather than throwing. The `GeoTIFF` class gains:
+The existing `geotiff.crs` getter works unchanged for both variants — GeoTIFF stores exactly one CRS in `GeoKeyDirectoryTag` regardless of the georeferencing mode, so no `gcpCrs` property is needed.
 
-- `gcps: Gcp[] | null` — populated via `parseGcps` during `open()`.
-- `gcpCrs: number | ProjJson | null` — populated via the existing `crsFromGeoKeys(gkd)` when `gcps != null`.
+**Open question (significant): how does tile fetching work for GCP variants?** The current `geotiff.fetchTile` path bakes a per-tile affine into `RasterArray.transform`, which doesn't make sense for GCP COGs. Three viable shapes, none of them ideal in isolation:
 
-Per-IFD `Overview` instances continue to require an affine — overview transforms are derived from the primary affine via scaling, and the GCP-variant case has no affine to scale. The GCP-path `Overview` traversal works against pixel grids only; CRS coordinates are derived through the per-level `GcpTilesetLevel` instead.
+1. **Type-split `GeoTIFF` / `Overview` / `Tile` / `RasterArray`** — see [geotiff-georef-type-split.md](geotiff-georef-type-split.md). The principled fix; resolves this question cleanly. Likely the prerequisite for shipping this idea.
+2. **Add a separate `fetchTilePixels` method that returns un-wrapped decoded data** — sidesteps `RasterArray.transform` for GCP tiles. Smaller scope but introduces a parallel API.
+3. **Use a placeholder identity transform** — `RasterArray.transform` is set to identity for GCP tiles. `Tile.array.transform` becomes a footgun (presents a meaningful-looking field that's secretly wrong). The render pipeline doesn't read it, so this is technically safe today, but fragile against future code.
+
+Recommendation: do (1) first, then this work fits naturally on top.
 
 ### 6. COG glue: `geoTiffToDescriptor` becomes a dispatcher
 
@@ -143,29 +152,30 @@ Public API surface adds `GcpTileset`, `GcpTilesetLevel`, options interfaces, and
 
 The existing call to `geoTiffToDescriptor` branches on `geotiff.gcps != null`. Both branches use the same `mpu` derivation and the same projection-callback construction; the only differences are which CRS feeds those callbacks and which `kind` is passed:
 
-- Affine path: source CRS = `crsFromGeoKeys(geotiff.gkd)`, `mpu` from `metersPerUnit(crs.units, ...)`, `kind: "affine"`. Unchanged behavior.
-- GCP path: source CRS = `geotiff.gcpCrs` (also from `crsFromGeoKeys`, populated in §5), same `mpu` derivation, `kind: "gcp"`, plus `gcpCrs` formatted as an EPSG string. The four `projectTo*` / `projectFrom*` callbacks are real proj4 reprojections — the existing helpers (`makeClampedForwardTo3857`, etc.) work as-is.
+- Affine path: source CRS = `crsFromGeoKeys(geotiff.gkd)` (i.e. `geotiff.crs`), `mpu` from `metersPerUnit(crs.units, ...)`, `kind: "affine"`. Unchanged behavior.
+- GCP path: source CRS = `geotiff.crs` (same getter, same value), same `mpu` derivation, `kind: "gcp"`, plus the same value formatted as an EPSG string. The four `projectTo*` / `projectFrom*` callbacks are real proj4 reprojections — the existing helpers (`makeClampedForwardTo3857`, etc.) work as-is.
 
 The `RasterReprojector` plumbing inside `RasterTileLayer` does not change — both paths produce a `TilesetDescriptor` whose `level.tileTransform(x, y)` returns the right `forwardTransform` / `inverseTransform` callbacks.
 
 ### 8. Tests
 
-- New `packages/geotiff/tests/gcp.test.ts` covering `parseGcps` (null cases, malformed input, multi-tiepoint parsing).
-- No new unit tests for `GcpTilesetLevel` in v1 — full coverage requires a fixture COG, deferred until `geotiff-test-data` ships one. Visual verification via `examples/cog-basic` against the Sentinel-1 GRD test scene is the v1 acceptance gate.
-- Existing tests in `packages/deck.gl-raster`, `packages/deck.gl-geotiff`, and `packages/geotiff` continue to pass — the changes are additive plus a relaxation of `createTransform`'s throw behavior.
+- `packages/geotiff/tests/gcp.test.ts` covering `parseGcps` (null cases, malformed input, multi-tiepoint parsing).
+- No new unit tests for `GcpTilesetLevel` initially — full coverage requires a fixture COG, deferred until `geotiff-test-data` ships one. Visual verification against the Sentinel-1 GRD test scene is the initial acceptance gate.
 
-## Acceptance criteria
+## Open questions
 
-- Opening the Sentinel-1 GRD test scene (`s3://sentinel-s1-l1c/.../iw-vh.tiff`) in `examples/cog-basic` renders the COG in approximately the correct geographic location (Tibetan Plateau, ~99°E–103°E × 36°N–38°N) with the expected SAR-typical orientation.
-- Tile selection at all overview levels visibly tracks pan/zoom — no obvious "missing tile" artifacts beyond what the affine path exhibits at the same zoom.
-- All existing affine-COG examples (NAIP, Sentinel-2, etc.) continue to render identically — the dispatcher refactor is non-breaking.
-- `pnpm -r typecheck` is clean.
-- All existing tests still pass: `pnpm test` from repo root.
-- `parseGcps` is unit-tested.
-
-## Open questions / follow-ups
-
-1. **Verifying `ProjectedGcpTransformer`'s exact constructor signature.** The 1.0.0-beta.x API for `gcpCrs` / `internalProjection` / `viewportProjection` / `transformationOptions` should be confirmed against the installed package's `.d.ts` during implementation; if option names differ, adjust the call site without changing the design.
+1. **`ProjectedGcpTransformer`'s exact constructor signature.** The 1.0.0-beta.x API for `gcpCrs` / `internalProjection` / `viewportProjection` / `transformationOptions` should be confirmed against the installed package's `.d.ts` during implementation; if option names differ, adjust the call site without changing the design.
 2. **`proj4` deduplication in pnpm.** `@allmaps/project` brings its own `proj4` dep. The workspace already uses `proj4`; pnpm should dedupe, but verify with `pnpm ls proj4 --depth 2` after install. If two copies appear, pin via `pnpm.overrides`.
 3. **Beta dependency churn.** `@allmaps/project` is `1.0.0-beta.8`; expect minor API changes before 1.0. Pin tightly in `package.json`. Plan a churn-tracking pass before any 1.0 of `@developmentseed/deck.gl-raster`.
-4. **Future: configurable fit CRS (`internalProjection`).** v1 fits in the file's GCP CRS, which is fine for the default polynomial-1 transform but not always optimal for higher-order or TPS fits. Mid-latitude scanned-map TPS fits would benefit from fitting in 3857 (locally isotropic in meters); polar scenes need UTM or polar stereographic (3857 explodes near the poles). A `GcpTilesetLevel` constructor option to override the internal projection is the natural extension — the `ProjectedGcpTransformer` underneath already supports it via `internalProjection`. Defer until a concrete failing case (or user request) appears.
+4. **Configurable fit CRS (`internalProjection`).** Default of file-CRS fit is fine for polynomial-1 but not optimal for higher-order or TPS at non-equatorial latitudes. A `GcpTilesetLevel` constructor option to override the internal projection is the natural extension — `ProjectedGcpTransformer` already supports it. Defer until a concrete failing case appears.
+
+## Why deferred
+
+The clean way to ship this requires the type-split refactor in [geotiff-georef-type-split.md](geotiff-georef-type-split.md). Without that, the GCP fetch path either makes `RasterArray.transform` virally nullable, introduces a parallel `fetchTilePixels` API, or relies on a placeholder identity transform that's a footgun for future maintenance. None of those tradeoffs are worth shipping for the current state of demand.
+
+When this work resumes:
+
+1. Decide on the type-split (do it first, or commit to one of the workaround shapes in §5 option 2/3).
+2. Re-validate `@allmaps/project`'s exact API against whatever's current at the time.
+3. Acquire (or hard-code) the Sentinel-1 test asset into `examples/cog-basic`.
+4. Walk the design above, adjusting for whichever foundation ended up under it.
