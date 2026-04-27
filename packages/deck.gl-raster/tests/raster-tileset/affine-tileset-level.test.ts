@@ -8,7 +8,7 @@ const SQUARE_AFFINE = compose(translation(100, 200), scale(10, -10));
 // Non-square pixels: 10 CRS units wide, 5 CRS units tall (Y axis flipped).
 const NON_SQUARE_AFFINE = compose(translation(100, 200), scale(10, -5));
 
-// 30° rotation around the origin, then 10× scale, translated to (100, 200).
+// Pixel → CRS: scale by 10, rotate 30° CCW about origin, translate to (100, 200).
 const ROT30_DEG = 30;
 const ROTATED_AFFINE = compose(
   translation(100, 200),
