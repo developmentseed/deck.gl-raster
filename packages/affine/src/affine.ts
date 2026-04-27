@@ -113,7 +113,7 @@ export function apply(
 }
 
 /**
- * Compose two affine transforms: A×B (apply B first, then A).
+ * Compose two affine transforms: A×B (apply B **first**, then A).
  *
  * This is equivalent to `a @ b` in Python's `affine` library, and is equivalent
  * to multiplying the 3×3 matrices:
