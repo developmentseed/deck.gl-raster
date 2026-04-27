@@ -8,6 +8,28 @@
 * feat: Initial, most basic GeoZarr example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/399
 * feat: Web Mercator axis-aligned cutline support by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/424
 
+## [0.7.0-alpha.1](https://github.com/developmentseed/deck.gl-raster/compare/v0.6.0-alpha.1...v0.7.0-alpha.1) (2026-04-27)
+
+
+### Features
+
+* inject Plausible analytics into example sites via CI ([0ffe155](https://github.com/developmentseed/deck.gl-raster/commit/0ffe15544e2c505253f4f010d4ef3a25f0258772))
+* Update naip-mosaic example with choice of colormap ([#460](https://github.com/developmentseed/deck.gl-raster/issues/460)) ([2756cf6](https://github.com/developmentseed/deck.gl-raster/commit/2756cf68571e2991572d1350a66f14ad1eb6a592))
+* Zarr AEF example ([#467](https://github.com/developmentseed/deck.gl-raster/issues/467)) ([186478b](https://github.com/developmentseed/deck.gl-raster/commit/186478bbbd11169096b87fa45ab7c61183c08330))
+
+
+### Bug Fixes
+
+* Define texture2darray precision in colormap module ([#459](https://github.com/developmentseed/deck.gl-raster/issues/459)) ([361228f](https://github.com/developmentseed/deck.gl-raster/commit/361228f8c856beaece809fe516bf5d7fd7c4ecbb))
+* Handle EPSG:4326 projection with missing `units` ([#473](https://github.com/developmentseed/deck.gl-raster/issues/473)) ([af671b5](https://github.com/developmentseed/deck.gl-raster/commit/af671b5bce6c63152eb3471f739310c3a1338f4d))
+* Respect minZoom / visibleMin/MaxZoom in RasterTileset2D ([#465](https://github.com/developmentseed/deck.gl-raster/issues/465)) ([94f81b6](https://github.com/developmentseed/deck.gl-raster/commit/94f81b69abbc82b7c83100e7e02776e8c3ef20d9))
+
+
+### Performance Improvements
+
+* Cull root tiles in raster-tileset to viewport ([#464](https://github.com/developmentseed/deck.gl-raster/issues/464)) ([844349c](https://github.com/developmentseed/deck.gl-raster/commit/844349cfa12d9aca75e1854d91fce59cbd99b746))
+* use source.coop proxy for dynamical Zarr example ([#471](https://github.com/developmentseed/deck.gl-raster/issues/471)) ([958e4d7](https://github.com/developmentseed/deck.gl-raster/commit/958e4d7d805c0529fff8211162dba118f0fec9fb))
+
 ## v0.5.0 - 2026-05-16
 
 ### Breaking Changes
