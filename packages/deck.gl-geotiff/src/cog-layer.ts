@@ -283,12 +283,13 @@ export class COGLayer<
     >;
     const wrapped: RasterGetTileData = async (tile, options) => {
       const { x, y, z } = tile.index;
-      // TODO: should be able to (micro) optimize this to not create the array
-      // Something like:
-      // const image = z === geotiff.overviews.length - 1 ? geotiff :
-      //   geotiff.overviews[geotiff.overviews.length - 1 - z]!;
-      const images = [geotiff, ...geotiff.overviews];
-      const image = images[images.length - 1 - z]!;
+      // Levels are emitted coarsest-first with the full-res geotiff appended
+      // last, so z === overviews.length picks the full-res image and lower z
+      // picks the corresponding overview from the finest-first list.
+      const image =
+        z === geotiff.overviews.length
+          ? geotiff
+          : geotiff.overviews[geotiff.overviews.length - 1 - z]!;
       return userFn(image, {
         device: options.device,
         x,
