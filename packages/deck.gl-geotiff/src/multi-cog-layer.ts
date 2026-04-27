@@ -394,10 +394,8 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
         "Source projection is missing 'units' property, cannot compute meters per unit",
       );
     }
-    const semiMajorAxis: number | undefined =
-      sourceProjection.datum?.a ?? sourceProjection.a;
     const mpu = metersPerUnit(units as Parameters<typeof metersPerUnit>[0], {
-      semiMajorAxis,
+      semiMajorAxis: sourceProjection.datum?.a ?? sourceProjection.a,
     });
 
     // Build TilesetDescriptors
