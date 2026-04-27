@@ -28,7 +28,6 @@ import {
   RasterTileset2D,
   resolveSecondaryTiles,
   selectSecondaryLevel,
-  TileMatrixSetAdaptor,
   tilesetLevelsEqual,
 } from "@developmentseed/deck.gl-raster";
 import {
@@ -41,24 +40,19 @@ import type {
   Overview,
   RasterArray,
 } from "@developmentseed/geotiff";
-import {
-  assembleTiles,
-  defaultDecoderPool,
-  generateTileMatrixSet,
-} from "@developmentseed/geotiff";
-import type { TileMatrixSet } from "@developmentseed/morecantile";
-import { tileTransform } from "@developmentseed/morecantile";
+import { assembleTiles, defaultDecoderPool } from "@developmentseed/geotiff";
 import type { EpsgResolver } from "@developmentseed/proj";
 import {
   epsgResolver as defaultEpsgResolver,
   makeClampedForwardTo3857,
+  metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import proj4 from "proj4";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
-import { fromAffine } from "./geotiff-reprojection.js";
+import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 
 /** Size of deck.gl's common coordinate space in world units. */
 const TILE_SIZE = 512;
@@ -161,7 +155,6 @@ export interface MultiCOGSourceConfig {
 /** Internal state for a single opened COG source. */
 interface SourceState {
   geotiff: GeoTIFF;
-  tms: TileMatrixSet;
 }
 
 /**
@@ -302,7 +295,7 @@ const defaultProps = {
  *
  * @see {@link MultiCOGLayerProps} for accepted props.
  * @see {@link createMultiTilesetDescriptor} for the grouping logic.
- * @see {@link TileMatrixSetAdaptor} for the per-source tileset adapter.
+ * @see {@link geoTiffToDescriptor} for the per-source tileset descriptor.
  */
 export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
   static override layerName = "MultiCOGLayer";
@@ -367,8 +360,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
           typeof crs === "number"
             ? await this.props.epsgResolver!(crs)
             : parseWkt(crs);
-        const tms = generateTileMatrixSet(geotiff, sourceProjection);
-        return { name, geotiff, tms, sourceProjection };
+        return { name, geotiff, sourceProjection };
       }),
     );
 
@@ -396,22 +388,32 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     const inverseFrom3857 = (x: number, y: number) =>
       converter3857.inverse<[number, number]>([x, y], false);
 
+    const units = sourceProjection.units;
+    if (!units) {
+      throw new Error(
+        "Source projection is missing 'units' property, cannot compute meters per unit",
+      );
+    }
+    const semiMajorAxis: number | undefined =
+      sourceProjection.datum?.a ?? sourceProjection.a;
+    const mpu = metersPerUnit(units as Parameters<typeof metersPerUnit>[0], {
+      semiMajorAxis,
+    });
+
     // Build TilesetDescriptors
     const tilesetMap = new Map<string, TilesetDescriptor>();
     const sourceMap = new Map<string, SourceState>();
 
     for (const cogSource of cogSources) {
-      const descriptor = new TileMatrixSetAdaptor(cogSource.tms, {
+      const descriptor = geoTiffToDescriptor(cogSource.geotiff, {
         projectTo4326: forwardTo4326,
         projectFrom4326: inverseFrom4326,
         projectTo3857: forwardTo3857,
         projectFrom3857: inverseFrom3857,
+        mpu,
       });
       tilesetMap.set(cogSource.name, descriptor);
-      sourceMap.set(cogSource.name, {
-        geotiff: cogSource.geotiff,
-        tms: cogSource.tms,
-      });
+      sourceMap.set(cogSource.name, { geotiff: cogSource.geotiff });
     }
 
     const multiDescriptor = createMultiTilesetDescriptor(tilesetMap);
@@ -464,15 +466,13 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
         ? AbortSignal.any([signal, this.props.signal])
         : signal || this.props.signal;
 
-    // Compute reprojection transforms from the primary TMS
+    // Compute per-tile reprojection transforms from the primary descriptor
     const primaryKey = multiDescriptor!.primaryKey;
-    const primarySource = sources!.get(primaryKey)!;
-    const primaryTms = primarySource.tms;
-    const tileMatrix = primaryTms.tileMatrices[z]!;
-    const tileAffine = tileTransform(tileMatrix, { col: x, row: y });
-    const { forwardTransform, inverseTransform } = fromAffine(tileAffine);
-
     const primaryLevel = multiDescriptor!.primary.levels[z]!;
+    const { forwardTransform, inverseTransform } = primaryLevel.tileTransform(
+      x,
+      y,
+    );
 
     // Collect fetch promises for all bands
     const bandPromises: Array<
