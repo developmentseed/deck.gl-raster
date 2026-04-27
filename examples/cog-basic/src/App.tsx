@@ -58,6 +58,19 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
     title: "Anderson Co. Ortho Pan 2ft (2000)",
     url: "https://data.source.coop/giswqs/tn-imagery/imagery/AndersonCo_OrthoPan_2ft_2000.tif",
   },
+  {
+    title: "Umbra Port of Rotterdam (rotated COG)",
+    url: "http://umbra-open-data-catalog.s3.amazonaws.com/sar-data/tasks/Port%20of%20Rotterdam%2C%20Netherlands/00864c2c-0b0f-49ef-b283-997735b27878/2025-07-29-11-17-12_UMBRA-08/2025-07-29-11-17-12_UMBRA-08_GEC.tif",
+    attribution: (
+      <>
+        Umbra Synthetic Aperture Radar (SAR) Open Data accessed from{" "}
+        <a href="https://registry.opendata.aws/umbra-open-data">
+          https://registry.opendata.aws/umbra-open-data
+        </a>
+        .
+      </>
+    ),
+  },
 ];
 
 export default function App() {
