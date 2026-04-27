@@ -83,6 +83,17 @@ describe("rotation", () => {
     expect(y).toBeCloseTo(1, 10);
   });
 
+  it("returns exact 0/±1 entries for right-angle rotations", () => {
+    // Math.cos(Math.PI / 2) is ~6e-17, not 0; cosSinDeg short-circuits these
+    // multiples of 90° so the resulting matrix has exact zeros. Slots derived
+    // from `-sa` carry `-0` when `sa === 0`, matching upstream Python `affine`.
+    expect(rotation(90)).toEqual([0, -1, 0, 1, 0, 0]);
+    expect(rotation(180)).toEqual([-1, -0, 0, 0, -1, 0]);
+    expect(rotation(270)).toEqual([0, 1, 0, -1, 0, 0]);
+    expect(rotation(360)).toEqual([1, -0, 0, 0, 1, 0]);
+    expect(rotation(-90)).toEqual([0, 1, 0, -1, 0, 0]);
+  });
+
   it("rotates 180° about the origin", () => {
     const r = rotation(180);
     const [x, y] = apply(r, 3, 4);
