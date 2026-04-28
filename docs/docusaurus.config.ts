@@ -29,12 +29,12 @@ const packages = [
     entry: "../packages/deck.gl-raster/src/index.ts",
     readme: "../packages/deck.gl-raster/README.md",
   },
-  // {
-  //   id: "deck-gl-zarr",
-  //   label: "deck.gl-zarr",
-  //   entry: "../packages/deck.gl-zarr/src/index.ts",
-  //   readme: "../packages/deck.gl-zarr/README.md",
-  // },
+  {
+    id: "deck-gl-zarr",
+    label: "deck.gl-zarr",
+    entry: "../packages/deck.gl-zarr/src/index.ts",
+    readme: "../packages/deck.gl-zarr/README.md",
+  },
   {
     id: "epsg",
     label: "epsg",
@@ -46,6 +46,12 @@ const packages = [
     label: "geotiff",
     entry: "../packages/geotiff/src/index.ts",
     readme: "../packages/geotiff/README.md",
+  },
+  {
+    id: "geozarr",
+    label: "geozarr",
+    entry: "../packages/geozarr/src/index.ts",
+    readme: "../packages/geozarr/README.md",
   },
   {
     id: "morecantile",
@@ -72,7 +78,9 @@ const BASE_AFFINE = `${BASE}/api/affine`;
 const BASE_DECK_GL = "https://deck.gl/docs/api-reference";
 const BASE_DECK_GL_GEOTIFF = `${BASE}/api/deck-gl-geotiff`;
 const BASE_DECK_GL_RASTER = `${BASE}/api/deck-gl-raster`;
+const BASE_DECK_GL_ZARR = `${BASE}/api/deck-gl-zarr`;
 const BASE_GEOTIFF = `${BASE}/api/geotiff`;
+const BASE_GEOZARR = `${BASE}/api/geozarr`;
 const BASE_MORECANTILE = `${BASE}/api/morecantile`;
 const BASE_RASTER_REPROJECT = `${BASE}/api/raster-reproject`;
 const BASE_LUMA_GL = "https://luma.gl/docs/api-reference";
@@ -94,6 +102,14 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
   },
   "@developmentseed/deck.gl-raster": {
     RasterLayer: `${BASE_DECK_GL_RASTER}/classes/RasterLayer/`,
+    RasterTileLayer: `${BASE_DECK_GL_RASTER}/classes/RasterTileLayer/`,
+    RasterTileLayerProps: `${BASE_DECK_GL_RASTER}/interfaces/RasterTileLayerProps/`,
+    RenderTileResult: `${BASE_DECK_GL_RASTER}/type-aliases/RenderTileResult/`,
+    TilesetDescriptor: `${BASE_DECK_GL_RASTER}/interfaces/TilesetDescriptor/`,
+  },
+  "@developmentseed/deck.gl-zarr": {
+    ZarrLayer: `${BASE_DECK_GL_ZARR}/classes/ZarrLayer/`,
+    ZarrLayerProps: `${BASE_DECK_GL_ZARR}/interfaces/ZarrLayerProps/`,
   },
   "@developmentseed/geotiff": {
     GeoTIFF: `${BASE_GEOTIFF}/classes/GeoTIFF/`,
@@ -106,6 +122,12 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     DecoderMetadata: `${BASE_GEOTIFF}/type-aliases/DecoderMetadata/`,
     DecoderPoolOptions: `${BASE_GEOTIFF}/type-aliases/DecoderPoolOptions/`,
     parseColormap: `${BASE_GEOTIFF}/functions/parseColormap/`,
+  },
+  "@developmentseed/geozarr": {
+    parseGeoZarrMetadata: `${BASE_GEOZARR}/functions/parseGeoZarrMetadata/`,
+    GeoZarrMetadata: `${BASE_GEOZARR}/interfaces/GeoZarrMetadata/`,
+    MultiscaleLevel: `${BASE_GEOZARR}/interfaces/MultiscaleLevel/`,
+    CRSInfo: `${BASE_GEOZARR}/interfaces/CRSInfo/`,
   },
   "@developmentseed/morecantile": {
     TileMatrixSet: `${BASE_MORECANTILE}/interfaces/TileMatrixSet/`,
@@ -173,7 +195,7 @@ const contentDocsPlugins = packages.map((pkg) => [
 const config: Config = {
   title: "deck.gl-raster",
   tagline:
-    "Client-side Cloud-Optimized GeoTIFF (and soon Zarr) visualization in deck.gl.",
+    "Client-side Cloud-Optimized GeoTIFF and Zarr visualization in deck.gl.",
   favicon: "img/ds_favicon.png",
 
   future: {
