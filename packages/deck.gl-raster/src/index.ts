@@ -36,5 +36,6 @@ export {
   AffineTileset,
   AffineTilesetLevel,
   RasterTileset2D,
+  sortByDistanceFromPoint,
   TileMatrixSetAdaptor,
 } from "./raster-tileset/index.js";

@@ -15,6 +15,7 @@ import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
 import { getTileIndices } from "./raster-tile-traversal.js";
+import { sortByDistanceFromPoint } from "./sort-by-distance.js";
 import type { TilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -133,7 +134,57 @@ export class RasterTileset2D extends Tileset2D {
       wgs84Bounds: this.wgs84Bounds,
     });
 
-    return tileIndices;
+    return this.sortTileIndicesByDistance(tileIndices, viewport);
+  }
+
+  /**
+   * Sort tile indices by ascending distance from the viewport center in
+   * projected (common/world) space so loads initiate center-out.
+   *
+   * Short-circuits when `tileIndices.length <= maxRequests` — all fetches
+   * would start concurrently regardless of order in that case. Mutates and
+   * returns `tileIndices`.
+   */
+  private sortTileIndicesByDistance(
+    tileIndices: TileIndex[],
+    viewport: Viewport,
+  ): TileIndex[] {
+    console.log("unsorted", tileIndices);
+    const maxRequests = this.opts.maxRequests;
+    const threshold =
+      typeof maxRequests === "number" && maxRequests > 0 ? maxRequests : 1;
+    if (tileIndices.length <= threshold) {
+      return tileIndices;
+    }
+
+    // Work in WGS84 throughout. `viewport.center` is in deck.gl common
+    // space (e.g. ~[270, 327] for a WebMercator viewport), which isn't
+    // directly comparable to projected tile corners in the tileset's CRS.
+    // `viewport.getBounds()` always returns [minLng, minLat, maxLng, maxLat]
+    // in WGS84, and we convert projected tile centers through the
+    // descriptor's `projectTo4326` to match.
+    const bounds = viewport.getBounds();
+    if (!bounds) {
+      return tileIndices;
+    }
+    const reference: readonly [number, number] = [
+      (bounds[0] + bounds[2]) * 0.5,
+      (bounds[1] + bounds[3]) * 0.5,
+    ];
+
+    const descriptor = this.descriptor;
+    return sortByDistanceFromPoint(tileIndices, {
+      reference,
+      getCenter: (idx) => {
+        const corners = descriptor.levels[idx.z]!.projectedTileCorners(
+          idx.x,
+          idx.y,
+        );
+        const pcx = (corners.topLeft[0] + corners.bottomRight[0]) * 0.5;
+        const pcy = (corners.topLeft[1] + corners.bottomRight[1]) * 0.5;
+        return descriptor.projectTo4326(pcx, pcy);
+      },
+    });
   }
 
   override getTileId(index: TileIndex): string {
