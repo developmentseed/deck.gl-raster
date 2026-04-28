@@ -25,23 +25,20 @@ import { TILE_SIZE, WEB_MERCATOR_TO_WORLD_SCALE } from "./constants.js";
 /**
  * Minimum interface returned by `getTileData`.
  *
- * null and undefined are allowed to support failed tile loads, which then avoid
- * rendering any layer.
+ * `null` is permitted to describe failed tile loads that do not produce any
+ * data, which then do not render any layer.
  */
-export type MinimalTileData =
-  | null
-  | undefined
-  | {
-      /** Tile height in pixels. */
-      height: number;
-      /** Tile width in pixels. */
-      width: number;
-      /**
-       * Byte length of the tile data, used by deck.gl's TileLayer for
-       * byte-based cache eviction when `maxCacheByteSize` is set. Optional.
-       */
-      byteLength?: number;
-    };
+export type MinimalTileData = null | {
+  /** Tile height in pixels. */
+  height: number;
+  /** Tile width in pixels. */
+  width: number;
+  /**
+   * Byte length of the tile data, used by deck.gl's TileLayer for
+   * byte-based cache eviction when `maxCacheByteSize` is set. Optional.
+   */
+  byteLength?: number;
+};
 
 /**
  * Options passed to a user-supplied `getTileData` callback.
