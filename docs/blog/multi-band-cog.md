@@ -15,7 +15,7 @@ deck.gl-raster now supports rendering multi-band [Cloud-Optimized GeoTIFFs][coge
 
 [sentinel-2-example]: https://developmentseed.org/deck.gl-raster/examples/sentinel-2/
 
-<!-- truncate -->
+{/* truncate */}
 
 ## Multi-band COG support
 
