@@ -33,10 +33,6 @@ import { makeRenderTile } from "./ecmwf/render-tile.js";
 import { buildSelection } from "./ecmwf/selection.js";
 import { ControlPanel } from "./ui/control-panel.js";
 
-// Set to the actual ECMWF IFS ENS zarr store URL from Dynamical.org.
-// Inspect the store's consolidated metadata to confirm init_time length
-// before setting INIT_TIME_IDX below.
-// Direct S3 link is faster than dynamical.org proxy
 const ZARR_URL =
   "https://data.source.coop/dynamical/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.zarr";
 
@@ -225,7 +221,11 @@ export default function App() {
             selection,
             getTileData,
             renderTile,
+            // source.coop supports HTTP/2 multiplexing, so increase concurrent
+            // requests beyond browser limit of 6 per HTTP/1.1 domain
             maxRequests: 20,
+            // Tiles are heavy, so limit GPU pressure with small cache size
+            maxCacheSize: 10,
             updateTriggers: {
               renderTile: [
                 leadTimeIdx,

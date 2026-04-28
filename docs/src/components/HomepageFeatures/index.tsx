@@ -38,12 +38,11 @@ const FeatureList: FeatureItem[] = [
         <a target="_blank" rel="noopener noreferrer" href="https://cogeo.org">
           Cloud-Optimized GeoTIFFs
         </a>{" "}
-        and (<em>soon</em>){" "}
+        and{" "}
         <a target="_blank" rel="noopener noreferrer" href="https://zarr.dev">
-          Zarr
+          Zarr arrays
         </a>{" "}
-        arrays directly from object storage with range requests — no tiling
-        server required. Works with any HTTP-accessible data source.
+        directly from object storage — no tiling server required.
       </>
     ),
   },

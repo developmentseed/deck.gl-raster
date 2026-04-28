@@ -1,9 +1,7 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import type {
-  GetTileDataOptions,
-  MinimalZarrTileData,
-} from "@developmentseed/deck.gl-zarr";
+import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
+import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
@@ -21,7 +19,7 @@ function DeckGLOverlay(props: MapboxOverlayProps) {
 // https://github.com/developmentseed/geozarr-examples/pull/36
 const ZARR_URL = "http://localhost:8080/TCI.zarr";
 
-type SentinelTileData = MinimalZarrTileData & {
+type SentinelTileData = MinimalTileData & {
   image: ImageData;
 };
 
