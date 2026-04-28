@@ -79,6 +79,22 @@ const examples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/sentinel-2",
   },
+  {
+    title: "Zarr Temporal Animation",
+    description: (
+      <>
+        Use the{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-zarr/classes/ZarrLayer/">
+          ZarrLayer
+        </Link>{" "}
+        to animate over 4-dimensional numerical data.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/dynamical-zarr-ecmwf/",
+    image: "/deck.gl-raster/img/dynamical-zarr-ecmwf.gif",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/dynamical-zarr-ecmwf",
+  },
 ];
 
 function ExampleCard({
