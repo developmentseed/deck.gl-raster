@@ -83,7 +83,7 @@ const cogExamples: Example[] = [
 
 const zarrExamples: Example[] = [
   {
-    title: "Zarr Temporal Animation",
+    title: "ECMWF Temperature Forecast",
     description: (
       <>
         Use the{" "}
@@ -97,6 +97,22 @@ const zarrExamples: Example[] = [
     image: "/deck.gl-raster/img/dynamical-zarr-ecmwf.gif",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/dynamical-zarr-ecmwf",
+  },
+  {
+    title: "AEF Mosaic Embeddings",
+    description: (
+      <>
+        Use the{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-zarr/classes/ZarrLayer/">
+          ZarrLayer
+        </Link>{" "}
+        to visualize embeddings data.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/aef-mosaic/",
+    image: "/deck.gl-raster/img/aef-mosaic.gif",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/aef-mosaic",
   },
 ];
 

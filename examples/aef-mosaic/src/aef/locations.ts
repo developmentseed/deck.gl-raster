@@ -24,8 +24,8 @@ export const LOCATIONS: readonly Location[] = [
   {
     id: "sf-bay",
     label: "San Francisco Bay (urban + water)",
-    longitude: -122.35,
-    latitude: 37.8,
+    longitude: -122.4500106165,
+    latitude: 37.7691860287,
     zoom: 13,
   },
   {
