@@ -47,3 +47,5 @@ This split keeps {@link ZarrLayer} agnostic about data type and rendering pipeli
 - **Single- and multi-resolution support**: A plain `[H, W]` or `[bands, H, W]` Zarr array works as a single-level source; a multiscale group is rendered as a pyramid.
 - **On-the-fly reprojection**: Source CRS → Web Mercator using [`@developmentseed/raster-reproject`], with no server-side tile service.
 - **Caller-owned store**: Pass a pre-opened `zarr.Array` or `zarr.Group` so you control consolidation, range coalescing, authentication, and version selection.
+
+[`@developmentseed/raster-reproject`]: https://developmentseed.org/deck.gl-raster/api/raster-reproject/
