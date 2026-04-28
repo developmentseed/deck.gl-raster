@@ -14,7 +14,7 @@ type Example = {
   source: string;
 };
 
-const examples: Example[] = [
+const cogExamples: Example[] = [
   {
     title: "RGB GeoTIFF",
     description: (
@@ -79,6 +79,9 @@ const examples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/sentinel-2",
   },
+];
+
+const zarrExamples: Example[] = [
   {
     title: "Zarr Temporal Animation",
     description: (
@@ -154,8 +157,15 @@ export default function Examples(): ReactNode {
             Interactive demos built with deck.gl-raster. Each example opens as a
             standalone application.
           </p>
+          <Heading as="h2">COG Examples</Heading>
           <div className={styles.grid}>
-            {examples.map((ex) => (
+            {cogExamples.map((ex) => (
+              <ExampleCard key={ex.title} {...ex} />
+            ))}
+          </div>
+          <Heading as="h2">Zarr Examples</Heading>
+          <div className={styles.grid}>
+            {zarrExamples.map((ex) => (
               <ExampleCard key={ex.title} {...ex} />
             ))}
           </div>
