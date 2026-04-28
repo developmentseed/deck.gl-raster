@@ -101,6 +101,9 @@ importers:
       typedoc-plugin-markdown:
         specifier: ^4.11.0
         version: 4.11.0(typedoc@0.28.19(typescript@6.0.3))
+      typedoc-plugin-no-inherit:
+        specifier: ^1.6.1
+        version: 1.6.1(typedoc@0.28.19(typescript@6.0.3))
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
@@ -8107,6 +8110,11 @@ packages:
     resolution: {integrity: sha512-fLlYudnlGkE9uspOEm/SBXwr+G0RbxoDZiHAVsCg+5NwKe2aUxjZK1YyQfleNZydImanzkX2oUJF29xbEeOSWw==}
     peerDependencies:
       typedoc: 0.27.x || 0.28.x
+
+  typedoc-plugin-no-inherit@1.6.1:
+    resolution: {integrity: sha512-+qf0RkO5YR9kUBBS1HqzzDOsWOnLcXTtGL0f2ia4jDQAjGrtF0+po/0R8k3UNtBqyDzL273aaV3FIGHEX+U/tg==}
+    peerDependencies:
+      typedoc: 0.26.x || 0.27.x || 0.28.x
 
   typedoc@0.28.19:
     resolution: {integrity: sha512-wKh+lhdmMFivMlc6vRRcMGXeGEHGU2g8a2CkPTJjJlwRf1iXbimWIPcFolCqe4E0d/FRtGszpIrsp3WLpDB8Pw==}
@@ -17386,6 +17394,10 @@ snapshots:
       typedoc: 0.28.19(typescript@6.0.3)
 
   typedoc-plugin-mdn-links@5.1.1(typedoc@0.28.19(typescript@6.0.3)):
+    dependencies:
+      typedoc: 0.28.19(typescript@6.0.3)
+
+  typedoc-plugin-no-inherit@1.6.1(typedoc@0.28.19(typescript@6.0.3)):
     dependencies:
       typedoc: 0.28.19(typescript@6.0.3)
 

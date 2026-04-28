@@ -171,10 +171,12 @@ const typedocPlugins = packages.map((pkg) => [
     out: `api/${pkg.id}`,
     docsPath: `api/${pkg.id}`,
     excludePrivate: true,
+    excludeProtected: true,
     excludeInternal: true,
     readme: pkg.readme,
     mergeReadme: true,
-    plugin: ["typedoc-plugin-mdn-links"],
+    plugin: ["typedoc-plugin-mdn-links", "typedoc-plugin-no-inherit"],
+    inheritNone: true,
     externalSymbolLinkMappings: crossPackageLinks,
   },
 ]);
