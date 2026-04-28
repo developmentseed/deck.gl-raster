@@ -103,13 +103,13 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
   "@developmentseed/deck.gl-raster": {
     RasterLayer: `${BASE_DECK_GL_RASTER}/classes/RasterLayer/`,
     RasterTileLayer: `${BASE_DECK_GL_RASTER}/classes/RasterTileLayer/`,
-    RasterTileLayerProps: `${BASE_DECK_GL_RASTER}/interfaces/RasterTileLayerProps/`,
+    RasterTileLayerProps: `${BASE_DECK_GL_RASTER}/type-aliases/RasterTileLayerProps/`,
     RenderTileResult: `${BASE_DECK_GL_RASTER}/type-aliases/RenderTileResult/`,
     TilesetDescriptor: `${BASE_DECK_GL_RASTER}/interfaces/TilesetDescriptor/`,
   },
   "@developmentseed/deck.gl-zarr": {
     ZarrLayer: `${BASE_DECK_GL_ZARR}/classes/ZarrLayer/`,
-    ZarrLayerProps: `${BASE_DECK_GL_ZARR}/interfaces/ZarrLayerProps/`,
+    ZarrLayerProps: `${BASE_DECK_GL_ZARR}/type-aliases/ZarrLayerProps/`,
   },
   "@developmentseed/geotiff": {
     GeoTIFF: `${BASE_GEOTIFF}/classes/GeoTIFF/`,
