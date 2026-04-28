@@ -1,6 +1,7 @@
 ---
 slug: multi-band-cog
 title: Multi-band COG support
+date: 2026-04-16
 authors:
   - kylebarron
 tags: [release]
