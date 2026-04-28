@@ -1,6 +1,6 @@
 # deck.gl-raster
 
-GPU-accelerated [GeoTIFF][geotiff] and [Cloud-Optimized GeoTIFF][cogeo] (COG) (and _soon_ [Zarr]) visualization in [deck.gl].
+GPU-accelerated [GeoTIFF][geotiff], [Cloud-Optimized GeoTIFF][cogeo] (COG), and [Zarr] visualization in [deck.gl].
 
 Fully client-side with direct image loading, no server required.
 
@@ -20,14 +20,5 @@ Torres del Paine, Chile: Sentinel-2 Infrared False Color composite
 
 [![](docs/static/img/sentinel-2-sossusvlei.jpg)][sentinel-2-example]
 Sossusvlei, Namibia: Sentinel-2 Agriculture composite
-
-[![](docs/static/img/sentinel-2-kamchatka.jpg)][sentinel-2-example]
-Kamchatka, Russia: Sentinel-2 Vegetation composite
-
-[![](docs/static/img/sentinel-2-mt-etna.jpg)][sentinel-2-example]
-Mt Etna, Italy: Sentinel-2 SWIR composite
-
-[![](docs/static/img/sentinel-2-nile-delta.jpg)][sentinel-2-example]
-Nile Delta, Egypt: Sentinel-2 Agriculture composite
 
 [sentinel-2-example]: https://developmentseed.org/deck.gl-raster/examples/sentinel-2/
