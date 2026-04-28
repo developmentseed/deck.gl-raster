@@ -15,6 +15,7 @@
     "@deck.gl/layers": "^9.3.1",
     "@deck.gl/mapbox": "^9.3.1",
     "@deck.gl/mesh-layers": "^9.3.1",
+    "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/deck.gl-zarr": "workspace:^",
     "@luma.gl/core": "^9.3.2",
     "maplibre-gl": "^5.19.0",
