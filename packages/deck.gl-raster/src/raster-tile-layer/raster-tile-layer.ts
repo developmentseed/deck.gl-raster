@@ -24,8 +24,11 @@ import { TILE_SIZE, WEB_MERCATOR_TO_WORLD_SCALE } from "./constants.js";
 
 /**
  * Minimum interface returned by `getTileData`.
+ *
+ * `null` is permitted to describe failed tile loads that do not produce any
+ * data, which then do not render any layer.
  */
-export type MinimalTileData = {
+export type MinimalTileData = null | {
   /** Tile height in pixels. */
   height: number;
   /** Tile width in pixels. */
@@ -327,6 +330,7 @@ export class RasterTileLayer<
         ),
       );
     }
+
     if (!props.data) {
       return layers;
     }
