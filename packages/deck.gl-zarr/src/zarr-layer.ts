@@ -1,5 +1,6 @@
 import type { UpdateParameters } from "@deck.gl/core";
 import type {
+  MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
   RasterTileLayerProps,
   RenderTileResult,
@@ -28,22 +29,7 @@ import { geoZarrToDescriptor } from "./zarr-tileset.js";
  * A single dimension selector: a fixed integer index, a `zarr.Slice` range,
  * or `null` to use zarrita's default (full extent).
  */
-type SliceInput = number | zarr.Slice | null;
-
-/**
- * Minimum interface that a `DataT` returned from `getTileData` must satisfy.
- */
-export type MinimalZarrTileData = {
-  /** Pixel width of the fetched tile. */
-  width: number;
-  /** Pixel height of the fetched tile. */
-  height: number;
-  /**
-   * Optional byte count used by deck.gl's `maxCacheByteSize` eviction.
-   * Omitting it disables byte-based eviction for this tile.
-   */
-  byteLength?: number;
-};
+export type SliceInput = number | zarr.Slice | null;
 
 /**
  * Options bag passed to the user's {@link ZarrLayerProps.getTileData} callback.
@@ -81,7 +67,7 @@ export type GetTileDataOptions = RasterTileGetTileDataOptions & {
 export type ZarrLayerProps<
   Store extends zarr.Readable = zarr.Readable,
   Dtype extends zarr.DataType = zarr.DataType,
-  DataT extends MinimalZarrTileData = MinimalZarrTileData,
+  DataT extends MinimalTileData = MinimalTileData,
 > = Omit<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
@@ -151,8 +137,6 @@ export type ZarrLayerProps<
   epsgResolver?: EpsgResolver;
 };
 
-export type { SliceInput };
-
 /**
  * ZarrLayer renders a GeoZarr dataset using a tiled approach with reprojection.
  *
@@ -164,7 +148,7 @@ export type { SliceInput };
 export class ZarrLayer<
   Store extends zarr.Readable = zarr.Readable,
   Dtype extends zarr.DataType = zarr.DataType,
-  DataT extends MinimalZarrTileData = MinimalZarrTileData,
+  DataT extends MinimalTileData = MinimalTileData,
 > extends RasterTileLayer<DataT, ZarrLayerProps<Store, Dtype, DataT>> {
   static override layerName = "ZarrLayer";
   // ZarrLayer's getTileData signature differs from the base class's, so
