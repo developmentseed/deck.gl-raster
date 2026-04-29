@@ -256,6 +256,8 @@ const config: Config = {
     "./plugins/changelog.js",
   ],
 
+  clientModules: ["./src/clientModules/searchHotkey.ts"],
+
   presets: [
     [
       "classic",
