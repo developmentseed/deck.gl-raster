@@ -89,42 +89,25 @@ This is what the improved [`Colormap` GPU module] supports. The default colormap
 
 Then the module automatically manages which bar to read from when applying the lookup table.
 
-## New `RasterTileLayer`
+## New `RasterTileLayer` for rendering tiled raster data from _any source_
 
-We have a new [`RasterTileLayer`]() abstraction
+We have a new [`RasterTileLayer`] abstraction that underlies both the [`COGLayer`] and the [`ZarrLayer`]. Besides cleaner internal architecture, this allows for applications to render image data from _any tiled source_ without being tied to COG or Zarr.
 
-* refactor: Create `RasterTileLayer` abstraction in `deck.gl-raster` package by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/462
+[`COGLayer`]: /api/deck-gl-geotiff/classes/COGLayer/
+[`RasterTileLayer`]: /api/deck-gl-raster/classes/RasterTileLayer/
+
+Essentially, `COGLayer` and `ZarrLayer` are now just small shims on top of the `RasterTileLayer` to manage COG and Zarr semantics for loading data chunks.
+
+For example, Lonboard [uses this layer](https://github.com/developmentseed/lonboard/blob/746092728c95510a0ee5c3ac6517e2b8f1c193b3/src/model/layer/raster.ts#L165-L177) to provide chunked image data on demand that is loaded by Python-based COG and Zarr readers.
+
+We also have a [work-in-progress demo](https://github.com/developmentseed/deck.gl-raster/pull/469) that uses this layer to load image tiles from a backend [titiler](https://github.com/developmentseed/titiler) instance.
 
 ## Support for COGs with rotated or non-square pixels
 
-* feat: Split COG tile traversal off TileMatrixSet by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/480
+[#480](https://github.com/developmentseed/deck.gl-raster/issues/480) changed the internal tile grid representation for COGs to not use OGC TileMatrixSets.
 
-## Performance improvements
-
-* perf: Cull root tiles in raster-tileset to viewport by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/464
-* perf: Don't dynamic-import builtin deflate decoder by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/483
+This ensures that we can accurately render COGs with a rotated affine transform ([#327](https://github.com/developmentseed/deck.gl-raster/issues/327)) or with non-square pixels ([#375](https://github.com/developmentseed/deck.gl-raster/issues/375)).
 
 ## Future Work
 
-Brainstorming and planning for how to support rendering generic Zarr and Xarray datasets through Lonboard in Python.
-
-
------
-
-
-Many COGs are distributed as a collection of multiple inter-related files, where they all represent the same scene with the same spatial extent. For example, [Sentinel-2][s2-aws-bucket] or [Landsat](https://registry.opendata.aws/usgs-landsat/) images are distributed in this type of COG layout.
-
-We have a new [`MultiCOGLayer`] to support rendering this type of COG source. This layer is intended to be used whenever multiple separate COG files represent **one single composite image**. If you want to render multiple image sources as a mosaic, use the [`MosaicLayer`].
-
-[s2-aws-bucket]: https://registry.opendata.aws/sentinel-2-l2a-cogs/
-[`MultiCOGLayer`]: https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGLayer/
-[`MosaicLayer`]: https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MosaicLayer/
-
-The `MultiCOGLayer` abstracts many technical implementation details away from the end user. When the source has bands at different resolutions, it will automatically resample across mixed band resolutions — _all on the GPU_.
-
-For example, consider rendering a Sentinel-2 vegetation composite with the near-infrared, short-wave infrared, and red bands. The short-wave band's finest pixel resolution is 20 meters while the other bands have a finest pixel resolution of 10 meters. The `MultiCOGLayer` will _automatically upsample_ the short-wave infrared band up to 10m so that the three can be rendered together at full resolution.
-
-We have a [new example application][sentinel-2-example] to visualize various selected Sentinel-2 scenes, directly from the [Sentinel-2 AWS Open Data bucket][s2-aws-bucket]. Below are screenshots from this example application.
-
-
-[sentinel-2-example]: https://developmentseed.org/deck.gl-raster/examples/sentinel-2/
+We're brainstorming the architecture for supporting visualization of generic Zarr and Xarray datasets through [Lonboard](https://github.com/developmentseed/lonboard).
