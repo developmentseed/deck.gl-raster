@@ -216,7 +216,7 @@ export default function App() {
             // Include initTimeIdx in the id so switching init_time discards
             // cached tiles from the previous forecast run.
             id: `ecmwf-zarr-layer-${initTimeIdx}`,
-            source: arr,
+            node: arr,
             metadata: ECMWF_GEOZARR_ATTRS,
             selection,
             getTileData,

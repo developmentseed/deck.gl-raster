@@ -82,11 +82,11 @@ export type ZarrLayerProps<
    * Group to let the layer resolve a `variable` path and use the GeoZarr
    * multiscale layout from its attrs.
    */
-  source: zarr.Array<Dtype, Store> | zarr.Group<Store>;
+  node: zarr.Array<Dtype, Store> | zarr.Group<Store>;
 
   /**
    * Optional path within the store to the variable group. Only applies
-   * when `source` is a {@link zarr.Group}; ignored when an Array is passed
+   * when `node` is a {@link zarr.Group}; ignored when an Array is passed
    * directly. If omitted, the group itself is used.
    */
   variable?: string;
@@ -104,8 +104,10 @@ export type ZarrLayerProps<
 
   /**
    * Optional raw group attrs to use in place of `group.attrs` when parsing
-   * GeoZarr metadata. Useful when you have already fetched the metadata
-   * out-of-band (e.g. from a STAC item).
+   * GeoZarr metadata.
+   *
+   * Use this to hard-code GeoZarr metadata when the Zarr data source does not
+   * include it.
    */
   metadata?: unknown;
 
@@ -180,7 +182,7 @@ export class ZarrLayer<
 
     const needsUpdate =
       Boolean(changeFlags.dataChanged) ||
-      props.source !== oldProps.source ||
+      props.node !== oldProps.node ||
       props.variable !== oldProps.variable;
 
     if (needsUpdate) {
@@ -202,7 +204,7 @@ export class ZarrLayer<
 
   /** Open the Zarr store, parse GeoZarr metadata, validate dims, build reprojection fns. */
   async _parseZarr(): Promise<void> {
-    const { source, variable, metadata: metadataOverride } = this.props;
+    const { node, variable, metadata: metadataOverride } = this.props;
 
     // Callers own the store. We accept a pre-opened Array (rendered as a
     // single-level source) or Group (used directly, with optional `variable`
@@ -211,13 +213,13 @@ export class ZarrLayer<
     let root:
       | zarr.Group<zarr.Readable>
       | zarr.Array<zarr.DataType, zarr.Readable>;
-    if ("shape" in source) {
+    if ("shape" in node) {
       // zarr.Array — reuse directly as the (single) level's array.
-      preopenedArray = source;
-      root = source;
+      preopenedArray = node;
+      root = node;
     } else {
       // zarr.Group
-      root = source;
+      root = node;
     }
     // @ts-expect-error - for debugging
     window.root = root;

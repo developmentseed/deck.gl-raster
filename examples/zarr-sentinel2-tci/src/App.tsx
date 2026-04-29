@@ -94,7 +94,7 @@ export default function App() {
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [panelOpen, setPanelOpen] = useState(true);
-  const [source, setSource] = useState<zarr.Group<zarr.Readable> | null>(null);
+  const [node, setNode] = useState<zarr.Group<zarr.Readable> | null>(null);
 
   // Open the store ourselves so we own version/consolidation decisions,
   // then hand the Group to the layer.
@@ -106,17 +106,17 @@ export default function App() {
       if (cancelled) {
         return;
       }
-      setSource(group);
+      setNode(group);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const zarrLayer = source
+  const zarrLayer = node
     ? new ZarrLayer<zarr.Readable, zarr.DataType, SentinelTileData>({
         id: "zarr-layer",
-        source,
+        node,
         // Keep all 3 bands; `toImageData` consumes the band-planar RGB and
         // packs it into RGBA ImageData.
         selection: { band: null },

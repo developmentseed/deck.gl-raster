@@ -98,7 +98,7 @@ export default function App() {
       ? [
           new ZarrLayer<zarr.Readable, "int8", AefTileData>({
             id: `aef-zarr-layer-${yearIdx}`,
-            source: arr,
+            node: arr,
             metadata: rootAttrs,
             selection,
             getTileData,

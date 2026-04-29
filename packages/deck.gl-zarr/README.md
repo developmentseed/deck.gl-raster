@@ -13,17 +13,16 @@ This package builds on [`@developmentseed/deck.gl-raster`] and [`@developmentsee
 ## Quick Start
 
 ```ts
-import { Deck } from "@deck.gl/core";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import * as zarr from "zarrita";
 
 // The user creates the zarrita store; wrap it with middleware as needed
 const store = new zarr.FetchStore("https://example.com/my-dataset.zarr");
-const source = await zarr.open(store, { kind: "group" });
+const node = await zarr.open(store, { kind: "group" });
 
 const layer = new ZarrLayer({
   id: "zarr-layer",
-  source,
+  node,
   // One entry per non-spatial dim. Use `null` for the default slice,
   // a number to pin to an index, or a `zarr.Slice` for a range.
   selection: { band: null },
