@@ -1,14 +1,56 @@
 # Changelog
 
-
 ## Unreleased
 
-* feat: Create `@developmentseed/geozarr` package and define zod schema by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/395
-* feat: Create zarr-tileset as implementation of generic tile traversal by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/397
-* feat: Initial, most basic GeoZarr example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/399
 * feat: Web Mercator axis-aligned cutline support by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/424
 
-## v0.5.0 - 2026-05-16
+## v0.6.0 - 2026-04-29
+
+### New Features
+
+* Zarr support:
+    * feat: Create `@developmentseed/geozarr` package and define zod schema by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/395
+    * feat: Create zarr-tileset as implementation of generic tile traversal by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/397
+    * feat: Initial, most basic GeoZarr example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/399
+    * feat: Zarr temporal animation by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/445
+    * feat: Zarr AEF example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/467
+* feat: Sprite-based colormap by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/447
+    * feat: Support reversing colormaps on the GPU by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/446
+    * feat: Update naip-mosaic example with choice of colormap by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/460
+* refactor: Create `RasterTileLayer` abstraction in `deck.gl-raster` package by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/462
+* feat: Split COG tile traversal off TileMatrixSet by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/480
+
+### Fixes
+
+* fix: Define texture2darray precision in colormap module by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/459
+* fix: Handle EPSG:4326 projection with missing `units` by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/473
+* fix: Allow `MinimalTileData` to be `null` in RasterTileLayer by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/484
+
+### Performance
+
+* perf: Cull root tiles in raster-tileset to viewport by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/464
+* perf: use source.coop proxy for dynamical Zarr example by @alukach in https://github.com/developmentseed/deck.gl-raster/pull/471
+* perf: Don't dynamic-import builtin deflate decoder by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/483
+
+### Documentation
+
+* docs: Expose Zarr package through docs site by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/486
+* docs: inject Plausible analytics into example sites via CI by @aboydnw in https://github.com/developmentseed/deck.gl-raster/pull/478
+
+### Other
+
+* feat: Brainstorming for COG GCPs support by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/485
+* chore: Fix `clean` script, fix lockfile by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/481
+* chore: Remove usage of deprecated deck.gl enum by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/474
+
+### New Contributors
+
+* @alukach made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/471
+* @jcoyne made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/468
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.5.0...v0.6.0
+
+## v0.5.0 - 2026-04-16
 
 ### Breaking Changes
 

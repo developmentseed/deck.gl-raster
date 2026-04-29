@@ -1,14 +1,16 @@
 import type { Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 
-// Props expected by the CreateTexture shader module
+/** Props for the {@link CreateTexture} shader module. */
 export type CreateTextureProps = {
+  /** The input image texture to sample. */
   textureName: Texture;
 };
 
 /**
- * A shader module that injects a unorm texture and uses a sampler2D to assign
- * to a color.
+ * The base shader module for a render pipeline: samples a single input
+ * texture into `color` so subsequent modules can transform it. Use this
+ * when no decoding step (e.g. {@link CompositeBands}) is needed.
  */
 export const CreateTexture = {
   name: "create-texture-unorm",

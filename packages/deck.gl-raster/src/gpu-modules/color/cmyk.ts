@@ -14,8 +14,9 @@ const shader = /* glsl */ `
 `;
 
 /**
- * A shader module that injects a unorm texture and uses a sampler2D to assign
- * to a color.
+ * A shader module that converts CMYK input (RGBA channels read as C, M, Y,
+ * K) to RGB. For TIFFs with `PhotometricInterpretation = 5` (Separated /
+ * CMYK).
  */
 export const CMYKToRGB = {
   name: "cmyk-to-rgb",

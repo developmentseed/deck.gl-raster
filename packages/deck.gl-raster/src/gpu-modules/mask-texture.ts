@@ -1,18 +1,20 @@
 import type { Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 
-// Props expected by the MaskTexture shader module
+/** Props for the {@link MaskTexture} shader module. */
 export type MaskTextureProps = {
+  /** Single-channel mask texture; pixels with value 0 are discarded. */
   maskTexture: Texture;
 };
 
 /**
- * A shader module that injects a unorm texture and uses a sampler2D to assign
- * to a color.
+ * A shader module that discards fragments where a separate single-channel
+ * mask texture reads zero. Useful for COG / GeoTIFF transparency masks
+ * stored as a sibling IFD.
+ *
+ * Compares directly against 0.0; assumes the mask is sampled with nearest-
+ * neighbor filtering so there are no interpolated intermediate values.
  */
-// Note, we compare directly against 0.0 because we use nearest neighbor
-// sampling for the mask texture. So there will never be any interpolated values
-// between 0 and 1.
 export const MaskTexture = {
   name: "mask-texture",
   inject: {

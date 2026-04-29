@@ -16,8 +16,10 @@ const shader = /* glsl */ `
 `;
 
 /**
- * A shader module that injects a unorm texture and uses a sampler2D to assign
- * to a color.
+ * A shader module that converts YCbCr input (RGB channels read as Y, Cb,
+ * Cr) to RGB using the JFIF / JPEG conversion. For TIFFs with
+ * `PhotometricInterpretation = 6` (YCbCr) where the decoder has not
+ * already converted to RGB.
  */
 export const YCbCrToRGB = {
   name: "ycbcr-to-rgb",

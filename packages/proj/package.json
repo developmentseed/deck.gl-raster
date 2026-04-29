@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/proj",
-  "version": "0.6.0-beta.1",
+  "version": "0.6.0",
   "description": "Utilities for geographic reprojections.",
   "type": "module",
   "main": "./dist/index.js",

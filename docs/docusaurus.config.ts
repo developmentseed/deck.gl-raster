@@ -30,6 +30,12 @@ const packages = [
     readme: "../packages/deck.gl-raster/README.md",
   },
   {
+    id: "deck-gl-raster-gpu-modules",
+    label: "deck.gl-raster/gpu-modules",
+    entry: "../packages/deck.gl-raster/src/gpu-modules/index.ts",
+    readme: "../packages/deck.gl-raster/GPU_MODULES.md",
+  },
+  {
     id: "deck-gl-zarr",
     label: "deck.gl-zarr",
     entry: "../packages/deck.gl-zarr/src/index.ts",
@@ -78,6 +84,7 @@ const BASE_AFFINE = `${BASE}/api/affine`;
 const BASE_DECK_GL = "https://deck.gl/docs/api-reference";
 const BASE_DECK_GL_GEOTIFF = `${BASE}/api/deck-gl-geotiff`;
 const BASE_DECK_GL_RASTER = `${BASE}/api/deck-gl-raster`;
+const BASE_DECK_GL_RASTER_GPU_MODULES = `${BASE}/api/deck-gl-raster-gpu-modules`;
 const BASE_DECK_GL_ZARR = `${BASE}/api/deck-gl-zarr`;
 const BASE_GEOTIFF = `${BASE}/api/geotiff`;
 const BASE_GEOZARR = `${BASE}/api/geozarr`;
@@ -106,6 +113,32 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     RasterTileLayerProps: `${BASE_DECK_GL_RASTER}/type-aliases/RasterTileLayerProps/`,
     RenderTileResult: `${BASE_DECK_GL_RASTER}/type-aliases/RenderTileResult/`,
     TilesetDescriptor: `${BASE_DECK_GL_RASTER}/interfaces/TilesetDescriptor/`,
+  },
+  "@developmentseed/deck.gl-raster/gpu-modules": {
+    BlackIsZero: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/BlackIsZero/`,
+    CMYKToRGB: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/CMYKToRGB/`,
+    cieLabToRGB: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/cieLabToRGB/`,
+    WhiteIsZero: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/WhiteIsZero/`,
+    YCbCrToRGB: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/YCbCrToRGB/`,
+    Colormap: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/Colormap/`,
+    ColormapProps: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/ColormapProps/`,
+    COLORMAP_INDEX: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/COLORMAP_INDEX/`,
+    ColormapName: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/ColormapName/`,
+    CompositeBands: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/CompositeBands/`,
+    CompositeBandsProps: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/CompositeBandsProps/`,
+    buildCompositeBandsProps: `${BASE_DECK_GL_RASTER_GPU_MODULES}/functions/buildCompositeBandsProps/`,
+    createColormapTexture: `${BASE_DECK_GL_RASTER_GPU_MODULES}/functions/createColormapTexture/`,
+    CreateTexture: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/CreateTexture/`,
+    CutlineBbox: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/CutlineBbox/`,
+    CutlineBboxProps: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/CutlineBboxProps/`,
+    lngLatToMercator: `${BASE_DECK_GL_RASTER_GPU_MODULES}/functions/lngLatToMercator/`,
+    ColormapSpriteSource: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/ColormapSpriteSource/`,
+    decodeColormapSprite: `${BASE_DECK_GL_RASTER_GPU_MODULES}/functions/decodeColormapSprite/`,
+    FilterNoDataVal: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/FilterNoDataVal/`,
+    LinearRescale: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/LinearRescale/`,
+    LinearRescaleProps: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/LinearRescaleProps/`,
+    MaskTexture: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/MaskTexture/`,
+    RasterModule: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/RasterModule/`,
   },
   "@developmentseed/deck.gl-zarr": {
     ZarrLayer: `${BASE_DECK_GL_ZARR}/classes/ZarrLayer/`,
@@ -245,9 +278,18 @@ const config: Config = {
   plugins: [
     ...typedocPlugins,
     ...contentDocsPlugins,
-    "@cmfcmf/docusaurus-search-local",
+    [
+      "@easyops-cn/docusaurus-search-local",
+      {
+        hashed: true,
+        indexBlog: true,
+        docsRouteBasePath: ["docs", "api"],
+      },
+    ],
     "./plugins/changelog.js",
   ],
+
+  clientModules: ["./src/clientModules/searchHotkey.ts"],
 
   presets: [
     [
