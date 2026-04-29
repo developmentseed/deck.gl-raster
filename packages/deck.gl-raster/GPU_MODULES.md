@@ -9,7 +9,7 @@ import {
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 
 const renderPipeline = [
-  { module: FilterNoDataVal, props: { noDataValue: 0 } },
+  { module: FilterNoDataVal, props: { value: 0 } },
   { module: LinearRescale, props: { rescaleMin: 0, rescaleMax: 0.05 } },
 ];
 ```
