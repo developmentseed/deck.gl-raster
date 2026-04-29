@@ -1,75 +1,75 @@
 {
-  "name": "@developmentseed/deck.gl-raster",
-  "version": "0.6.0-beta.1",
-  "description": "Georeferenced image data visualization in deck.gl",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+    "name": "@developmentseed/deck.gl-raster",
+    "version": "0.6.0",
+    "description": "Georeferenced image data visualization in deck.gl",
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./gpu-modules": {
+            "types": "./dist/gpu-modules/index.d.ts",
+            "default": "./dist/gpu-modules/index.js"
+        },
+        "./gpu-modules/colormaps.png": "./dist/gpu-modules/colormaps.png"
     },
-    "./gpu-modules": {
-      "types": "./dist/gpu-modules/index.d.ts",
-      "default": "./dist/gpu-modules/index.js"
+    "sideEffects": false,
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc --build tsconfig.build.json && cp src/gpu-modules/colormaps.png dist/gpu-modules/colormaps.png",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "prepublishOnly": "npm run build"
     },
-    "./gpu-modules/colormaps.png": "./dist/gpu-modules/colormaps.png"
-  },
-  "sideEffects": false,
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "tsc --build tsconfig.build.json && cp src/gpu-modules/colormaps.png dist/gpu-modules/colormaps.png",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
-  },
-  "keywords": [
-    "deck.gl",
-    "geotiff",
-    "zarr",
-    "cog",
-    "cloud-optimized-geotiff",
-    "raster",
-    "visualization",
-    "webgl",
-    "gpu"
-  ],
-  "author": "Development Seed",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
-  },
-  "devDependencies": {
-    "@luma.gl/core": "^9.3.2",
-    "@luma.gl/shadertools": "^9.3.2",
-    "@types/node": "^25.6.0",
-    "jsdom": "^29.0.2",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.5"
-  },
-  "peerDependencies": {
-    "@developmentseed/morecantile": "workspace:^",
-    "@deck.gl/core": "^9.3.0",
-    "@deck.gl/geo-layers": "^9.3.0",
-    "@deck.gl/layers": "^9.3.0",
-    "@deck.gl/mesh-layers": "^9.3.0",
-    "@luma.gl/core": "^9.3.2",
-    "@luma.gl/shadertools": "^9.3.2"
-  },
-  "dependencies": {
-    "@developmentseed/affine": "workspace:^",
-    "@developmentseed/proj": "workspace:^",
-    "@developmentseed/raster-reproject": "workspace:^",
-    "@math.gl/core": "^4.1.0",
-    "@math.gl/culling": "^4.1.0",
-    "@math.gl/web-mercator": "^4.1.0"
-  },
-  "volta": {
-    "extends": "../../package.json"
-  }
+    "keywords": [
+        "deck.gl",
+        "geotiff",
+        "zarr",
+        "cog",
+        "cloud-optimized-geotiff",
+        "raster",
+        "visualization",
+        "webgl",
+        "gpu"
+    ],
+    "author": "Development Seed",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
+    },
+    "devDependencies": {
+        "@luma.gl/core": "^9.3.2",
+        "@luma.gl/shadertools": "^9.3.2",
+        "@types/node": "^25.6.0",
+        "jsdom": "^29.0.2",
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.5"
+    },
+    "peerDependencies": {
+        "@developmentseed/morecantile": "workspace:^",
+        "@deck.gl/core": "^9.3.0",
+        "@deck.gl/geo-layers": "^9.3.0",
+        "@deck.gl/layers": "^9.3.0",
+        "@deck.gl/mesh-layers": "^9.3.0",
+        "@luma.gl/core": "^9.3.2",
+        "@luma.gl/shadertools": "^9.3.2"
+    },
+    "dependencies": {
+        "@developmentseed/affine": "workspace:^",
+        "@developmentseed/proj": "workspace:^",
+        "@developmentseed/raster-reproject": "workspace:^",
+        "@math.gl/core": "^4.1.0",
+        "@math.gl/culling": "^4.1.0",
+        "@math.gl/web-mercator": "^4.1.0"
+    },
+    "volta": {
+        "extends": "../../package.json"
+    }
 }
