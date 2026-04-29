@@ -1,51 +1,51 @@
 {
-    "name": "@developmentseed/epsg",
-    "version": "0.6.0",
-    "description": "The full EPSG projection database, compressed to 309kb for the web.",
-    "type": "module",
-    "exports": {
-        "./all": {
-            "types": "./dist/all.d.ts",
-            "default": "./dist/all.js"
-        },
-        "./all.csv.gz": "./dist/all.csv.gz"
+  "name": "@developmentseed/epsg",
+  "version": "0.6.0",
+  "description": "The full EPSG projection database, compressed to 309kb for the web.",
+  "type": "module",
+  "exports": {
+    "./all": {
+      "types": "./dist/all.d.ts",
+      "default": "./dist/all.js"
     },
-    "sideEffects": false,
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "tsc --build tsconfig.build.json && cp src/all.csv.gz dist/all.csv.gz",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "typecheck": "tsc --noEmit",
-        "prepublishOnly": "npm run build"
-    },
-    "keywords": [
-        "proj4",
-        "geotiff",
-        "zarr",
-        "cog",
-        "cloud-optimized-geotiff",
-        "raster",
-        "visualization",
-        "webgl",
-        "gpu"
-    ],
-    "author": "Development Seed",
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
-    },
-    "devDependencies": {
-        "@types/node": "^25.6.0",
-        "jsdom": "^29.0.2",
-        "proj4": "^2.20.4",
-        "typescript": "^6.0.3",
-        "vitest": "^4.1.5"
-    },
-    "volta": {
-        "extends": "../../package.json"
-    }
+    "./all.csv.gz": "./dist/all.csv.gz"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json && cp src/all.csv.gz dist/all.csv.gz",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "proj4",
+    "geotiff",
+    "zarr",
+    "cog",
+    "cloud-optimized-geotiff",
+    "raster",
+    "visualization",
+    "webgl",
+    "gpu"
+  ],
+  "author": "Development Seed",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "jsdom": "^29.0.2",
+    "proj4": "^2.20.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  },
+  "volta": {
+    "extends": "../../package.json"
+  }
 }

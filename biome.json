@@ -17,6 +17,7 @@
       "!!**/fixtures",
       "!!**/minimal_stac.json",
       "!!**/node_modules",
+      "!!docs/build",
       "!!packages/geozarr/geo-proj",
       "!!packages/geozarr/multiscales",
       "!!packages/geozarr/spatial",
