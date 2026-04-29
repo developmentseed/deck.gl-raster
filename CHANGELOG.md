@@ -4,6 +4,10 @@
 
 * feat: Web Mercator axis-aligned cutline support by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/424
 
+## v0.6.1 - 2026-04-29
+
+feat: Allow `renderTile` prop in `RasterTileLayer` to return `null`
+
 ## v0.6.0 - 2026-04-29
 
 ### New Features

@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/morecantile",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "TypeScript port of Python morecantile — TileMatrixSet utilities.",
   "type": "module",
   "main": "./dist/index.js",

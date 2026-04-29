@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/geozarr",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "GeoZarr metadata parsing.",
   "type": "module",
   "main": "./dist/index.js",
