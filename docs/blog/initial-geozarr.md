@@ -77,7 +77,7 @@ A naive approach would be to manage all possible color ramps as different GPU re
 
 Instead, we can use what are called [_sprites_](https://www.w3schools.com/css/css_image_sprites.asp). The general idea is: instead of representing many icons or images with many small, independent files, ship them all as **one single image**, alongside an index that keeps track of _which image part_ is in which pixel region.
 
-This is what the improved `Colormap` GPU module supports.
+This is what the improved [`Colormap`](/api/deck-gl-raster-gpu-modules/variables/Colormap/) GPU module supports.
 
 The default colormap source now includes [_all Matplotlib's colormaps_][Matplotlib cmaps], compressed into a single 16KB image.
 
