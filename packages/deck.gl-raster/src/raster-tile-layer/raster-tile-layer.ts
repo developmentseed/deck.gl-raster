@@ -105,7 +105,7 @@ export type RasterTileLayerProps<
      *
      * Subclasses may supply this via state by overriding `_renderTileCallback()`.
      */
-    renderTile?: (data: DataT) => RenderTileResult;
+    renderTile?: (data: DataT) => RenderTileResult | null;
 
     /**
      * Maximum reprojection error in pixels for mesh refinement.
@@ -341,7 +341,11 @@ export class RasterTileLayer<
       return layers;
     }
     const { forwardTransform, inverseTransform } = level.tileTransform(x, y);
-    const { image, renderPipeline } = renderTile(props.data);
+    const tileResult = renderTile(props.data);
+    if (!tileResult) {
+      return layers;
+    }
+    const { image, renderPipeline } = tileResult;
     const { width, height } = props.data;
 
     const isGlobe = this.context.viewport.resolution !== undefined;
