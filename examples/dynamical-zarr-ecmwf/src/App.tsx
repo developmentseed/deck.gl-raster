@@ -52,7 +52,7 @@ export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [leadTimeIdx, setLeadTimeIdx] = useState(0);
   const [initTimeIdx, setInitTimeIdx] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
   const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
     null,
   );
