@@ -6,8 +6,6 @@
 
 ## v0.6.0 - 2026-04-29
 
-### Breaking Changes
-
 ### New Features
 
 * Zarr support:
