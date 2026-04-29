@@ -24,13 +24,13 @@ A new `ZarrLayer` now supports rendering and animating [Zarr] and [GeoZarr] data
 The new [`ZarrLayer`] manages loading and rendering data chunks from Zarr and GeoZarr data sources.
 
 - The [`ZarrLayer`] connects to a deck.gl [`TileLayer`], ensuring that only chunks visible in the current map viewport will be loaded and rendered.
-- The `ZarrLayer` will **automatically** look for and use any available GeoZarr conventions, including the [spatial](https://github.com/zarr-conventions/spatial), [multiscales](https://github.com/zarr-conventions/multiscales), and [geo-proj](https://github.com/zarr-conventions/geo-proj) conventions.
+- The `ZarrLayer` will **automatically** look for and use any available [GeoZarr] conventions, including the [spatial](https://github.com/zarr-conventions/spatial), [multiscales](https://github.com/zarr-conventions/multiscales), and [geo-proj](https://github.com/zarr-conventions/geo-proj) conventions.
 
 Our Zarr support is designed around [Zarrita], the modern standard for Zarr on the web.
 
 We have two new public modules:
 
-- [`deck.gl-zarr`]: Manages connection between deck.gl rendering and Zarr chunks
+- [`deck.gl-zarr`]: Manages connection between deck.gl rendering and Zarr chunks.
 - [`geozarr`]: A helper library for parsing GeoZarr metadata. This is used inside of `deck.gl-zarr` and most users won't need to depend on this directly.
 
     For now, we assume that input Zarr datasets will contain GeoZarr metadata, but in the future, this will be extended to infer geospatial metadata where possible, such as from CF-conventions.
@@ -56,9 +56,9 @@ In the future, we may also support chunking over non-spatial dimensions, see [#4
 
 [#457]: https://github.com/developmentseed/deck.gl-raster/issues/457
 
-### Example: ECMWF temperature forecasts
+### [Example: ECMWF temperature forecasts][dynamical-example]
 
-We have a new example for visualizing temperature forecasts over time, using [ECMWF data](https://www.ecmwf.int/en/forecasts/datasets/open-data) hosted by [Dynamical](https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/).
+We have a [new example][dynamical-example] for visualizing temperature forecasts over time, using [ECMWF data](https://www.ecmwf.int/en/forecasts/datasets/open-data) hosted by [Dynamical](https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/).
 
 Each Zarr chunk fetched to the browser contains a 15-day temperature forecast, allowing for animation over the time dimension.
 
@@ -66,9 +66,11 @@ Since the rescaling and colormaps are applied on the GPU, you can modify visuali
 
 [![](../static/img/dynamical-zarr-ecmwf.gif)][dynamical-example]
 
-### Example: AlphaEarth Foundations Satellite Embeddings
+This data source does not supply multiscales, so data may be slower to load as you zoom out.
 
-We also have a new example for visualizing Google's [AlphaEarth Foundations Satellite Embeddings](https://deepmind.google/blog/alphaearth-foundations-helps-map-our-planet-in-unprecedented-detail/).
+### [Example: AlphaEarth Foundations Satellite Embeddings][aef-example]
+
+We also have a [new example][aef-example] for visualizing Google's [AlphaEarth Foundations Satellite Embeddings](https://deepmind.google/blog/alphaearth-foundations-helps-map-our-planet-in-unprecedented-detail/).
 
 This loads GeoZarr data directly from the [aef-mosaic bucket on Source Cooperative][aef-mosaic-source-coop].
 
