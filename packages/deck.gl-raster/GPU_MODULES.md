@@ -1,6 +1,6 @@
 # @developmentseed/deck.gl-raster/gpu-modules
 
-GPU shader modules for raster rendering. Each module is a [luma.gl `ShaderModule`](https://luma.gl/docs/api-reference/shadertools/shader-module/) that performs one transformation on raw pixel data — decoding, rescaling, masking, colorization, etc. Compose them into a render pipeline by passing an array of {@link RasterModule} entries to the `renderPipeline` prop on {@link RasterLayer} or {@link RasterTileLayer}.
+GPU shader modules for raster rendering. Each module is a [luma.gl `ShaderModule`](https://luma.gl/docs/api-reference/shadertools/shader-module/) that performs one transformation on raw pixel data — decoding, rescaling, masking, colorization, etc. Compose them into a render pipeline by passing an array of {@link RasterModule} entries to the `renderPipeline` prop on `RasterLayer` or `RasterTileLayer`.
 
 ```ts
 import {
