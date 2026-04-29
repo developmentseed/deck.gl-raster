@@ -64,30 +64,30 @@ In the future, we may also support chunking over non-spatial dimensions, see [#4
 
 ## Improved efficiency for colormap selection
 
+The updated [`Colormap` GPU module] allows applications to **seamlessly switch between colormaps on the fly, with no pausing or flashing**. You can see this in the [ECMWF temperature example][dynamical-example] or the [NAIP mosaic example][naip-mosaic] (selecting NDVI mode).
 
-deck.gl-raster applies colormaps on the GPU as a "lookup table". Think of a single color bar ranging from left to right.
+[naip-mosaic]: https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/
+[`Colormap` GPU module]: /api/deck-gl-raster-gpu-modules/variables/Colormap/
+
+deck.gl-raster applies colormaps on the GPU as a ["lookup table"](https://homepages.inf.ed.ac.uk/rbf/HIPR2/colmap.htm). Think of a single color bar ranging from left to right:
 
 ![](../static/img/spectral-colormap.png)
 
 With the _color-map_, we can _map_ numeric values from a range to a _color_. If our numeric range is, say, `[0 - 1]`, then assign `0` to the left side of the image and `1` to the right side of the image. Consequently a value of `0.5` would map to the middle of the colormap, and so on.
 
-Performing a lookup is an efficient process on the GPU. But let's say you have an application where you don't know what color ramp the user might want to use.
+Performing this lookup is a very efficient process on the GPU.
 
-A naive approach would be to manage all possible color ramps as different GPU resources. But since there are many possible colormaps, managing each one individually would require a bunch of limited GPU references.
+But let's say you have an application where you don't know what color ramp the user might want to use. A naive approach would be to manage all possible color ramps as different GPU resources. But this would be inefficient given the number of colormaps users might want to choose from.
 
-Instead, we can use what are called [_sprites_](https://www.w3schools.com/css/css_image_sprites.asp). The general idea is: instead of representing many icons or images with many small, independent files, ship them all as **one single image**, alongside an index that keeps track of _which image part_ is in which pixel region.
+Instead, we can use the concept of [_sprites_](https://www.w3schools.com/css/css_image_sprites.asp). The general idea is: instead of representing many icons or images with many small, independent files, ship them all as **one single image**, alongside an index that keeps track of _which image part_ is in which pixel region.
 
-This is what the improved [`Colormap`](/api/deck-gl-raster-gpu-modules/variables/Colormap/) GPU module supports.
-
-The default colormap source now includes [_all Matplotlib's colormaps_][Matplotlib cmaps], compressed into a single 16KB image.
+This is what the improved [`Colormap` GPU module] supports. The default colormap image now includes [_all Matplotlib's colormaps_][Matplotlib cmaps], compressed into a single 16KB image:
 
 [Matplotlib cmaps]: https://matplotlib.org/stable/gallery/color/colormap_reference.html
 
 ![](../static/img/colormaps.png)
 
-This allows applications to seamlessly switch between colormaps on the fly, with no pausing or flashing. You can see this in the [ECMWF temperature example][dynamical-example] or the [NAIP mosaic example][naip-mosaic] (selecting NDVI mode).
-
-[naip-mosaic]: https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/
+Then the module automatically manages which bar to read from when applying the lookup table.
 
 ## New `RasterTileLayer`
 
