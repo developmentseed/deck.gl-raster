@@ -245,7 +245,14 @@ const config: Config = {
   plugins: [
     ...typedocPlugins,
     ...contentDocsPlugins,
-    "@cmfcmf/docusaurus-search-local",
+    [
+      "@easyops-cn/docusaurus-search-local",
+      {
+        hashed: true,
+        indexBlog: true,
+        docsRouteBasePath: ["docs", "api"],
+      },
+    ],
     "./plugins/changelog.js",
   ],
 
