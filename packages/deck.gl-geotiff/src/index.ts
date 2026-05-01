@@ -4,6 +4,7 @@ export type {
   MinimalTileData,
 } from "./cog-layer.js";
 export { COGLayer } from "./cog-layer.js";
+export { addAlphaChannel } from "./geotiff/geotiff.js";
 export * as texture from "./geotiff/texture.js";
 export type { MosaicLayerProps } from "./mosaic-layer/mosaic-layer.js";
 export { MosaicLayer } from "./mosaic-layer/mosaic-layer.js";
