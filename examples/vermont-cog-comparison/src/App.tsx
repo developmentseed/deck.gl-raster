@@ -311,7 +311,8 @@ export default function App() {
   const inFlightRef = useRef<Set<string>>(new Set());
 
   const ensureGeoTIFF = useCallback(
-    (url: string): GeoTIFF | null => {
+    (file: VTFile): GeoTIFF | null => {
+      const { url, headerByteLength } = file;
       const existing = geotiffs.get(url);
       if (existing) {
         return existing;
@@ -322,12 +323,16 @@ export default function App() {
       inFlightRef.current.add(url);
       void (async () => {
         try {
+          // Pad each tunable up to the file's known header size so the
+          // header walk completes in a single HTTP range request:
+          // - prefetch sizes the initial Tiff read,
+          // - chunkSize >= prefetch so the read fits in one source chunk
+          //   (otherwise SourceChunk splits it into chunkSize-aligned pieces).
+          // - cacheSize >= chunkSize to actually retain the header chunk.
           const gt = await GeoTIFF.fromUrl(url, {
-            // Vermont COGs are huge; pad header reads aggressively to avoid
-            // the 32KB-chunk death by a thousand requests.
-            chunkSize: 4 * 1024 * 1024,
-            cacheSize: 32 * 1024 * 1024,
-            prefetch: 1024 * 1024,
+            chunkSize: headerByteLength,
+            cacheSize: Math.max(headerByteLength, 16 * 1024 * 1024),
+            prefetch: headerByteLength,
           });
           setGeotiffs((prev) => new Map(prev).set(url, gt));
         } catch (err) {
@@ -390,7 +395,7 @@ export default function App() {
 
     const result: unknown[] = [];
     const leftFile = getVTFile(left.fileId);
-    const leftGeoTIFF = ensureGeoTIFF(leftFile.url);
+    const leftGeoTIFF = ensureGeoTIFF(leftFile);
     if (leftGeoTIFF) {
       const leftCog = makeCOGLayer({
         side: "left",
@@ -405,7 +410,7 @@ export default function App() {
       }
     }
     const rightFile = getVTFile(right.fileId);
-    const rightGeoTIFF = ensureGeoTIFF(rightFile.url);
+    const rightGeoTIFF = ensureGeoTIFF(rightFile);
     if (rightGeoTIFF) {
       const rightCog = makeCOGLayer({
         side: "right",
