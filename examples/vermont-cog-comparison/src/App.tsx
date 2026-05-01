@@ -157,31 +157,166 @@ function makeCOGLayer(args: CogLayerArgs): COGLayer<TileTextureData> | null {
   });
 }
 
-/** Floating control panel anchored to one canvas corner. */
-function SidePanel(props: {
+/** Width of the inline "LEFT"/"RIGHT" caption column, in px. */
+const SIDE_LABEL_WIDTH = 44;
+
+/**
+ * Year + (optional) render-mode controls for one side, laid out as
+ * inline rows: a small uppercase side caption on the left, the dropdown
+ * filling the remaining width.
+ */
+function SideControls(props: {
   side: Side;
   state: SideState;
   onChange: (next: SideState) => void;
 }) {
   const { side, state, onChange } = props;
-  const [open, setOpen] = useState(true);
   const file = getVTFile(state.fileId);
   const modes = validRenderModes(file.bands);
 
-  const anchorStyle: CSSProperties =
-    side === "left" ? { left: 12, top: 12 } : { right: 12, top: 12 };
+  const sideLabelStyle: CSSProperties = {
+    width: SIDE_LABEL_WIDTH,
+    flexShrink: 0,
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#444",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  };
 
+  return (
+    <>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          marginTop: 8,
+        }}
+      >
+        <span style={sideLabelStyle}>{side}</span>
+        <select
+          aria-label={`${side} year`}
+          value={state.fileId}
+          onChange={(e) => {
+            const nextId = e.target.value as VTFileId;
+            const nextBands = getVTFile(nextId).bands;
+            const nextModes = validRenderModes(nextBands);
+            const nextMode = nextModes.includes(state.renderMode)
+              ? state.renderMode
+              : nextModes[0];
+            onChange({ fileId: nextId, renderMode: nextMode });
+          }}
+          style={{ flex: 1, padding: 4, minWidth: 0 }}
+        >
+          <optgroup label="Statewide composites">
+            {VT_FILES.filter((f) => f.category === "statewide").map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Single-year imagery">
+            {VT_FILES.filter((f) => f.category === "yearly").map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+      </div>
+
+      {modes.length > 1 ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            marginTop: 4,
+          }}
+        >
+          <span style={{ width: SIDE_LABEL_WIDTH, flexShrink: 0 }} />
+          <select
+            aria-label={`${side} render mode`}
+            value={state.renderMode}
+            onChange={(e) =>
+              onChange({ ...state, renderMode: e.target.value as RenderMode })
+            }
+            style={{ flex: 1, padding: 4, minWidth: 0 }}
+          >
+            {modes.map((m) => (
+              <option key={m} value={m}>
+                {RENDER_MODE_LABELS[m]}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
+      {file.category === "yearly" ? (
+        <p
+          style={{
+            margin: `4px 0 0 ${SIDE_LABEL_WIDTH + 6}px`,
+            fontSize: 11,
+            color: "#777",
+            fontStyle: "italic",
+          }}
+        >
+          Single-year images may not have full statewide coverage.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/** Bottom-of-panel attribution link. Single source of truth. */
+function AttributionFooter() {
+  return (
+    <p
+      style={{
+        margin: "12px 0 0 0",
+        paddingTop: 8,
+        borderTop: "1px solid #eee",
+        fontSize: 11,
+        color: "#888",
+      }}
+    >
+      <a
+        href="https://registry.opendata.aws/vt-opendata/"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: "#555" }}
+      >
+        Vermont Open Geospatial on AWS ↗
+      </a>
+    </p>
+  );
+}
+
+/**
+ * Single floating panel anchored to the top-left corner. Always shown,
+ * regardless of viewport — keeps the layout consistent and avoids the
+ * per-side panels overlapping each other on narrow viewports.
+ */
+function ComparePanel(props: {
+  left: SideState;
+  right: SideState;
+  onLeftChange: (s: SideState) => void;
+  onRightChange: (s: SideState) => void;
+}) {
+  const [open, setOpen] = useState(true);
   return (
     <div
       style={{
         position: "absolute",
-        ...anchorStyle,
+        left: 12,
+        top: 12,
+        width: 320,
+        maxWidth: "calc(100vw - 24px)",
         background: "white",
         padding: 12,
         borderRadius: 8,
         boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
-        width: 260,
-        maxWidth: "calc(50vw - 24px)",
         pointerEvents: "auto",
         zIndex: 10,
         fontSize: 13,
@@ -190,6 +325,7 @@ function SidePanel(props: {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-label="Toggle compare panel"
         style={{
           all: "unset",
           width: "100%",
@@ -201,7 +337,7 @@ function SidePanel(props: {
           justifyContent: "space-between",
         }}
       >
-        {side === "left" ? "Left side" : "Right side"}
+        <span>Compare</span>
         <span
           style={{
             fontSize: 11,
@@ -214,95 +350,17 @@ function SidePanel(props: {
       </button>
       {open ? (
         <>
-          <label
-            htmlFor={`${side}-file`}
-            style={{ display: "block", marginTop: 8, fontWeight: 500 }}
-          >
-            Year
-          </label>
-          <select
-            id={`${side}-file`}
-            value={state.fileId}
-            onChange={(e) => {
-              const nextId = e.target.value as VTFileId;
-              const nextBands = getVTFile(nextId).bands;
-              const nextModes = validRenderModes(nextBands);
-              const nextMode = nextModes.includes(state.renderMode)
-                ? state.renderMode
-                : nextModes[0];
-              onChange({ fileId: nextId, renderMode: nextMode });
-            }}
-            style={{ width: "100%", marginTop: 4, padding: 4 }}
-          >
-            <optgroup label="Statewide composites">
-              {VT_FILES.filter((f) => f.category === "statewide").map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Single-year imagery">
-              {VT_FILES.filter((f) => f.category === "yearly").map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-
-          <label
-            htmlFor={`${side}-mode`}
-            style={{ display: "block", marginTop: 8, fontWeight: 500 }}
-          >
-            Render mode
-          </label>
-          <select
-            id={`${side}-mode`}
-            value={state.renderMode}
-            onChange={(e) =>
-              onChange({ ...state, renderMode: e.target.value as RenderMode })
-            }
-            disabled={modes.length === 1}
-            style={{ width: "100%", marginTop: 4, padding: 4 }}
-          >
-            {modes.map((m) => (
-              <option key={m} value={m}>
-                {RENDER_MODE_LABELS[m]}
-              </option>
-            ))}
-          </select>
-
-          {file.category === "yearly" ? (
-            <p
-              style={{
-                margin: "8px 0 0 0",
-                fontSize: 12,
-                color: "#777",
-                fontStyle: "italic",
-              }}
-            >
-              Single-year images may not have full statewide coverage.
-            </p>
-          ) : null}
-
-          <p
-            style={{
-              margin: "12px 0 0 0",
-              paddingTop: 8,
-              borderTop: "1px solid #eee",
-              fontSize: 11,
-              color: "#888",
-            }}
-          >
-            <a
-              href="https://registry.opendata.aws/vt-opendata/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: "#555" }}
-            >
-              Vermont Open Geospatial on AWS ↗
-            </a>
-          </p>
+          <SideControls
+            side="left"
+            state={props.left}
+            onChange={props.onLeftChange}
+          />
+          <SideControls
+            side="right"
+            state={props.right}
+            onChange={props.onRightChange}
+          />
+          <AttributionFooter />
         </>
       ) : null}
     </div>
@@ -497,8 +555,12 @@ export default function App() {
           zIndex: 5,
         }}
       >
-        <SidePanel side="left" state={left} onChange={setLeft} />
-        <SidePanel side="right" state={right} onChange={setRight} />
+        <ComparePanel
+          left={left}
+          right={right}
+          onLeftChange={setLeft}
+          onRightChange={setRight}
+        />
       </div>
     </div>
   );
