@@ -1,9 +1,7 @@
-import type { MapViewState } from "@deck.gl/core";
-import { MapView, WebMercatorViewport } from "@deck.gl/core";
+import { WebMercatorViewport } from "@deck.gl/core";
 import { ClipExtension } from "@deck.gl/extensions";
-import { TileLayer } from "@deck.gl/geo-layers";
-import { BitmapLayer } from "@deck.gl/layers";
-import { DeckGL } from "@deck.gl/react";
+import type { MapboxOverlayProps } from "@deck.gl/mapbox";
+import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type { RenderTileResult } from "@developmentseed/deck.gl-raster";
 import {
@@ -13,8 +11,11 @@ import {
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import type { Device, Texture } from "@luma.gl/core";
+import "maplibre-gl/dist/maplibre-gl.css";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
+import type { MapRef, ViewState } from "react-map-gl/maplibre";
+import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { epsgResolver } from "./proj.js";
 import {
   renderFalseColor,
@@ -41,15 +42,21 @@ type RenderMode = "trueColor" | "falseColor" | "ndvi" | "grayscale";
 /** Fixed colormap for NDVI; spec says no per-side colormap selector. */
 const NDVI_COLORMAP_INDEX = COLORMAP_INDEX.rdylgn;
 
-const INITIAL_VIEW_STATE: MapViewState = {
+/** Half the equatorial circumference of Earth in EPSG:3857 mercator meters. */
+const MERCATOR_HALF_EQUATOR = 20037508.342789244;
+
+/** CARTO dark style; first label layer is `waterway_label` so we anchor the COG just below it. */
+const MAP_STYLE =
+  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+const COG_BEFORE_ID = "waterway_label";
+
+const INITIAL_VIEW_STATE = {
   longitude: -73.218,
   latitude: 44.476,
   zoom: 13,
   pitch: 0,
   bearing: 0,
 };
-
-const MAP_VIEW = new MapView({ id: "map", controller: true });
 
 type SideState = {
   fileId: VTFileId;
@@ -75,12 +82,6 @@ const RENDER_MODE_LABELS: Record<RenderMode, string> = {
 };
 
 /**
- * Half the equatorial circumference of Earth in EPSG:3857 mercator meters.
- * `lng=±180°` maps to `x=±MERCATOR_HALF_EQUATOR`.
- */
-const MERCATOR_HALF_EQUATOR = 20037508.342789244;
-
-/**
  * Convert the swipe handle's screen-space x position to a Web Mercator x
  * coordinate in **meters** (EPSG:3857), the coordinate space `COGLayer`'s
  * sub-tile geometry is rendered in. `ClipExtension`'s `clipBounds` are
@@ -94,30 +95,6 @@ function splitMercatorMeterX(
   const splitPx = viewport.width * splitFraction;
   const [splitLng] = viewport.unproject([splitPx, 0]);
   return (splitLng * MERCATOR_HALF_EQUATOR) / 180;
-}
-
-/** Build the shared CARTO dark raster basemap. Always full-canvas, never clipped. */
-function makeBasemapLayer(): TileLayer {
-  return new TileLayer({
-    id: "basemap",
-    data: "https://basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
-    minZoom: 0,
-    maxZoom: 19,
-    tileSize: 256,
-    renderSubLayers: (props) => {
-      const { boundingBox } = props.tile;
-      return new BitmapLayer(props, {
-        data: undefined,
-        image: props.data,
-        bounds: [
-          boundingBox[0][0],
-          boundingBox[0][1],
-          boundingBox[1][0],
-          boundingBox[1][1],
-        ],
-      });
-    },
-  });
 }
 
 type CogLayerArgs = {
@@ -162,8 +139,9 @@ function makeCOGLayer(args: CogLayerArgs): COGLayer<TileTextureData> | null {
     getTileData: useGrayLoader ? getTileDataGray : getTileDataRGBA,
     renderTile,
     extensions: [new ClipExtension()],
-    // @ts-expect-error clipBounds + clipByInstance are injected by
-    // ClipExtension; LayerProps doesn't know about extension-added props.
+    // @ts-expect-error clipBounds + clipByInstance + beforeId are injected
+    // by ClipExtension and @deck.gl/mapbox; LayerProps doesn't know about
+    // extension- or interleaved-injected props.
     clipBounds,
     // Force per-pixel clipping. ClipExtension's auto-detect sees
     // `instancePositions` on the underlying SimpleMeshLayer and defaults
@@ -171,6 +149,9 @@ function makeCOGLayer(args: CogLayerArgs): COGLayer<TileTextureData> | null {
     // across each triangle and cuts at the 0.5-isoline, producing chunky
     // edges. Per-pixel mode samples the fragment's common position directly.
     clipByInstance: false,
+    // Insert just below the basemap's first label layer so place names and
+    // road labels render on top of the imagery.
+    beforeId: COG_BEFORE_ID,
   });
 }
 
@@ -285,8 +266,22 @@ function SidePanel(props: {
   );
 }
 
+/**
+ * Wrap MapboxOverlay in a react-map-gl control. `interleaved` mixes deck.gl
+ * layers into the maplibre layer stack so vector labels can render above the
+ * COG via `beforeId`.
+ */
+function DeckGLOverlay(props: MapboxOverlayProps) {
+  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
+  overlay.setProps(props);
+  return null;
+}
+
 export default function App() {
-  const [viewState, setViewState] = useState<MapViewState>(INITIAL_VIEW_STATE);
+  const [viewState, setViewState] = useState<ViewState>({
+    ...INITIAL_VIEW_STATE,
+    padding: { top: 0, bottom: 0, left: 0, right: 0 },
+  });
   const [splitFraction, setSplitFraction] = useState(0.5);
   const [left, setLeft] = useState<SideState>({
     fileId: DEFAULT_LEFT_ID,
@@ -320,19 +315,19 @@ export default function App() {
   }, [device]);
 
   const layers = useMemo(() => {
-    // Reconstruct the live viewport from `viewState`. For full-canvas
-    // examples its width/height match the window — keeps the splitter line
-    // anchored to a fixed screen-x as the user pans.
+    // Reconstruct a deck.gl viewport from the current maplibre view state so
+    // we can convert the swipe handle's pixel-space x into a longitude
+    // (and from there into mercator meters for ClipExtension).
     const vp = new WebMercatorViewport({
-      ...viewState,
+      longitude: viewState.longitude,
+      latitude: viewState.latitude,
+      zoom: viewState.zoom,
+      pitch: viewState.pitch,
+      bearing: viewState.bearing,
       width: typeof window !== "undefined" ? window.innerWidth : 1024,
       height: typeof window !== "undefined" ? window.innerHeight : 768,
     });
     const splitMx = splitMercatorMeterX(vp, splitFraction);
-    // ClipExtension's `clipBounds` are evaluated in the layer's pre-modelMatrix
-    // coordinate space. COGLayer's sub-tile geometry lives in EPSG:3857 meters
-    // (modelMatrix scales by WEB_MERCATOR_TO_WORLD_SCALE), so bounds must be
-    // in meters too. Y bounds span the full mercator world.
     const leftClip: [number, number, number, number] = [
       -MERCATOR_HALF_EQUATOR,
       -MERCATOR_HALF_EQUATOR,
@@ -346,7 +341,7 @@ export default function App() {
       MERCATOR_HALF_EQUATOR,
     ];
 
-    const result: unknown[] = [makeBasemapLayer()];
+    const result: unknown[] = [];
     const leftCog = makeCOGLayer({
       side: "left",
       file: getVTFile(left.fileId),
@@ -372,15 +367,18 @@ export default function App() {
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      <DeckGL
-        views={MAP_VIEW}
-        viewState={viewState}
-        onViewStateChange={({ viewState: vs }) => {
-          setViewState(vs as unknown as MapViewState);
-        }}
-        layers={layers as []}
-        onDeviceInitialized={setDevice}
-      />
+      <MaplibreMap
+        ref={(_ref: MapRef | null) => {}}
+        mapStyle={MAP_STYLE}
+        initialViewState={INITIAL_VIEW_STATE}
+        onMove={(e) => setViewState(e.viewState)}
+      >
+        <DeckGLOverlay
+          layers={layers as []}
+          interleaved
+          onDeviceInitialized={setDevice}
+        />
+      </MaplibreMap>
       <SwipeHandle fraction={splitFraction} onChange={setSplitFraction} />
       <div
         style={{
