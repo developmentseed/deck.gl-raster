@@ -271,6 +271,38 @@ function SidePanel(props: {
               </option>
             ))}
           </select>
+
+          {file.category === "yearly" ? (
+            <p
+              style={{
+                margin: "8px 0 0 0",
+                fontSize: 12,
+                color: "#777",
+                fontStyle: "italic",
+              }}
+            >
+              Single-year images may not have full statewide coverage.
+            </p>
+          ) : null}
+
+          <p
+            style={{
+              margin: "12px 0 0 0",
+              paddingTop: 8,
+              borderTop: "1px solid #eee",
+              fontSize: 11,
+              color: "#888",
+            }}
+          >
+            <a
+              href="https://registry.opendata.aws/vt-opendata/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#555" }}
+            >
+              Vermont Open Geospatial on AWS ↗
+            </a>
+          </p>
         </>
       ) : null}
     </div>
