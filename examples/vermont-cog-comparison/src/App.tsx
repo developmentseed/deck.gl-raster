@@ -1,17 +1,10 @@
-import type { MapViewState, View } from "@deck.gl/core";
+import type { MapViewState } from "@deck.gl/core";
 import { MapView } from "@deck.gl/core";
 import { TileLayer } from "@deck.gl/geo-layers";
 import { BitmapLayer } from "@deck.gl/layers";
 import { DeckGL } from "@deck.gl/react";
-import {
-  LightTheme,
-  _SplitterWidget as SplitterWidget,
-} from "@deck.gl/widgets";
-import "@deck.gl/widgets/stylesheet.css";
 import { useState } from "react";
-
-type Side = "left" | "right";
-const SIDES: readonly Side[] = ["left", "right"] as const;
+import { SwipeHandle } from "./swipe-handle.js";
 
 const INITIAL_VIEW_STATE: MapViewState = {
   longitude: -73.218,
@@ -21,23 +14,15 @@ const INITIAL_VIEW_STATE: MapViewState = {
   bearing: 0,
 };
 
-const VIEW_LAYOUT = {
-  orientation: "horizontal" as const,
-  views: [
-    new MapView({ id: "left", controller: true }),
-    new MapView({ id: "right", controller: true }),
-  ] as [MapView, MapView],
-};
+const MAP_VIEW = new MapView({ id: "map", controller: true });
 
 /**
- * Build a CARTO dark raster basemap layer for one side.
- *
- * Returns a TileLayer whose id ends with the side name, so `layerFilter`
- * can route it to the matching MapView.
+ * Build the shared CARTO dark raster basemap layer. Renders edge-to-edge
+ * underneath both COG layers — never clipped by the swipe handle.
  */
-function makeBasemapLayer(side: Side): TileLayer {
+function makeBasemapLayer(): TileLayer {
   return new TileLayer({
-    id: `basemap-${side}`,
+    id: "basemap",
     data: "https://basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
     minZoom: 0,
     maxZoom: 19,
@@ -59,31 +44,22 @@ function makeBasemapLayer(side: Side): TileLayer {
 }
 
 export default function App() {
-  const [views, setViews] = useState<View[]>([]);
-  const [viewState, setViewState] = useState<Record<Side, MapViewState>>({
-    left: INITIAL_VIEW_STATE,
-    right: INITIAL_VIEW_STATE,
-  });
+  const [viewState, setViewState] = useState<MapViewState>(INITIAL_VIEW_STATE);
+  const [splitFraction, setSplitFraction] = useState(0.5);
 
-  const layers = SIDES.map((side) => makeBasemapLayer(side));
+  const layers = [makeBasemapLayer()];
 
   return (
-    <DeckGL
-      views={views}
-      viewState={viewState}
-      onViewStateChange={({ viewState: vs }) => {
-        const next = vs as unknown as MapViewState;
-        setViewState({ left: next, right: next });
-      }}
-      layers={layers}
-      layerFilter={({ layer, viewport }) => layer.id.endsWith(viewport.id)}
-      widgets={[
-        new SplitterWidget({
-          viewLayout: VIEW_LAYOUT,
-          onChange: setViews,
-          style: LightTheme,
-        }),
-      ]}
-    />
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      <DeckGL
+        views={MAP_VIEW}
+        viewState={viewState}
+        onViewStateChange={({ viewState: vs }) => {
+          setViewState(vs as unknown as MapViewState);
+        }}
+        layers={layers}
+      />
+      <SwipeHandle fraction={splitFraction} onChange={setSplitFraction} />
+    </div>
   );
 }
