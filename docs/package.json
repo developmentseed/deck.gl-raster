@@ -31,9 +31,9 @@
     "typedoc-plugin-mdn-links": "^5.1.1"
   },
   "devDependencies": {
-    "@docusaurus/module-type-aliases": "3.10.0",
-    "@docusaurus/tsconfig": "3.10.0",
-    "@docusaurus/types": "3.10.0",
+    "@docusaurus/module-type-aliases": "3.10.1",
+    "@docusaurus/tsconfig": "3.10.1",
+    "@docusaurus/types": "3.10.1",
     "@types/react": "^19.2.14",
     "docusaurus-plugin-typedoc": "^1.4.0",
     "typedoc": "^0.28.19",
