@@ -17,4 +17,18 @@ describe("RasterTileLayer", () => {
   it("can be constructed with no props without throwing", () => {
     expect(() => new RasterTileLayer({ id: "test" })).not.toThrow();
   });
+
+  it("exposes a _renderExtraSubLayers hook returning [] by default", () => {
+    class ProbeLayer extends RasterTileLayer {
+      callExtra(tile: unknown, data: unknown) {
+        return (
+          this as unknown as {
+            _renderExtraSubLayers: (t: unknown, d: unknown) => unknown[];
+          }
+        )._renderExtraSubLayers(tile, data);
+      }
+    }
+    const layer = new ProbeLayer({ id: "probe" });
+    expect(layer.callExtra({}, { width: 1, height: 1 })).toEqual([]);
+  });
 });

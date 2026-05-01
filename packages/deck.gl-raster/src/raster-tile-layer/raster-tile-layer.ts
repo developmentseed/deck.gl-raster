@@ -222,6 +222,24 @@ export class RasterTileLayer<
     return (this.props as unknown as RasterTileLayerProps<DataT>).renderTile;
   }
 
+  /**
+   * Hook for subclasses to append additional sub-layers to each rendered tile.
+   *
+   * Called once per tile from `_renderSubLayers`, after the main {@link RasterLayer}
+   * is constructed and only when the tile has fetched data. The default returns
+   * an empty array.
+   *
+   * Subclasses may use this to render tile-scoped overlays that depend on the
+   * fetched `DataT` — for example, a multi-band debug overlay that draws
+   * outlines and labels for each source's contributing tiles.
+   */
+  protected _renderExtraSubLayers(
+    _tile: Tile2DHeader<DataT>,
+    _data: NonNullable<DataT>,
+  ): Layer[] {
+    return [];
+  }
+
   override renderLayers(): Layer | null {
     const descriptor = this._tilesetDescriptor();
     const getTileData = this._getTileDataCallback();
@@ -392,6 +410,7 @@ export class RasterTileLayer<
         ...deckProjectionProps,
       }),
     );
-    return [rasterLayer, ...layers];
+    const extra = this._renderExtraSubLayers(tile, props.data);
+    return [rasterLayer, ...extra, ...layers];
   }
 }
