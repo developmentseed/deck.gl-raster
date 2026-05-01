@@ -234,11 +234,20 @@ function SidePanel(props: {
             }}
             style={{ width: "100%", marginTop: 4, padding: 4 }}
           >
-            {VT_FILES.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.label}
-              </option>
-            ))}
+            <optgroup label="Statewide composites">
+              {VT_FILES.filter((f) => f.category === "statewide").map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Single-year imagery">
+              {VT_FILES.filter((f) => f.category === "yearly").map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+            </optgroup>
           </select>
 
           <label
@@ -312,7 +321,7 @@ export default function App() {
 
   const ensureGeoTIFF = useCallback(
     (file: VTFile): GeoTIFF | null => {
-      const { url, headerByteLength } = file;
+      const { url } = file;
       const existing = geotiffs.get(url);
       if (existing) {
         return existing;
@@ -323,16 +332,19 @@ export default function App() {
       inFlightRef.current.add(url);
       void (async () => {
         try {
-          // Pad each tunable up to the file's known header size so the
-          // header walk completes in a single HTTP range request:
+          // Pad each tunable to (the file's known header size) OR a
+          // generic 16 MB default for files that haven't been measured.
+          // Vermont COGs scale wildly (3-band 30 cm = 60 MB header,
+          // 1-band yearly = ~3 MB), so a per-file value is a big win.
           // - prefetch sizes the initial Tiff read,
           // - chunkSize >= prefetch so the read fits in one source chunk
           //   (otherwise SourceChunk splits it into chunkSize-aligned pieces).
           // - cacheSize >= chunkSize to actually retain the header chunk.
+          const headerBytes = file.headerByteLength ?? 16 * 1024 * 1024;
           const gt = await GeoTIFF.fromUrl(url, {
-            chunkSize: headerByteLength,
-            cacheSize: Math.max(headerByteLength, 16 * 1024 * 1024),
-            prefetch: headerByteLength,
+            chunkSize: headerBytes,
+            cacheSize: Math.max(headerBytes, 16 * 1024 * 1024),
+            prefetch: headerBytes,
           });
           setGeotiffs((prev) => new Map(prev).set(url, gt));
         } catch (err) {
