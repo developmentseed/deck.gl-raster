@@ -577,7 +577,17 @@ export function ControlPanel(props: ControlPanelProps) {
             >
               ECMWF IFS ENS Forecast data
             </a>{" "}
-            processed by dynamical.org from ECMWF Open Data.
+            processed by dynamical.org from ECMWF Open Data. Client-side
+            rendered with{" "}
+            <a
+              href="https://developmentseed.org/deck.gl-raster/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "inherit" }}
+            >
+              deck.gl-raster ↗
+            </a>
+            .
           </div>
         </>
       )}

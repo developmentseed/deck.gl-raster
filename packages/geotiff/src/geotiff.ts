@@ -227,14 +227,16 @@ export class GeoTIFF {
    * @param options Optional parameters for chunk size and cache size.
    * @param options.chunkSize The minimum size for each request made to the source while reading header metadata. Defaults to 32KB.
    * @param options.cacheSize The size of the cache for recently accessed header chunks. Currently no caching is applied to data fetches. Defaults to 1MB.
+   * @param options.prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
     url: string | URL,
     {
-      chunkSize = 32 * 1024,
-      cacheSize = 1024 * 1024,
-    }: { chunkSize?: number; cacheSize?: number } = {},
+      chunkSize = 1024 * 1024,
+      cacheSize = 10 * 1024 * 1024,
+      prefetch = 32 * 1024,
+    }: { chunkSize?: number; cacheSize?: number; prefetch?: number } = {},
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url, {});
 
@@ -255,6 +257,7 @@ export class GeoTIFF {
       // cache and chunk layers.
       dataSource: source,
       headerSource: view,
+      prefetch,
     });
   }
 
