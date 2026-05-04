@@ -269,26 +269,30 @@ function SideControls(props: {
   );
 }
 
-/** Bottom-of-panel attribution link. Single source of truth. */
-function AttributionFooter() {
+/**
+ * Header subtitle: one-line attribution sitting under the panel title with
+ * the link to the source bucket inline.
+ */
+function HeaderSubtitle() {
   return (
     <p
       style={{
-        margin: "12px 0 0 0",
-        paddingTop: 8,
-        borderTop: "1px solid #eee",
-        fontSize: 11,
-        color: "#888",
+        margin: "6px 0 0 0",
+        fontSize: 12,
+        color: "#666",
+        lineHeight: 1.4,
       }}
     >
+      From the{" "}
       <a
         href="https://registry.opendata.aws/vt-opendata/"
         target="_blank"
         rel="noopener noreferrer"
         style={{ color: "#555" }}
       >
-        Vermont Open Geospatial on AWS ↗
+        Vermont Open Geospatial bucket on AWS ↗
       </a>
+      .
     </p>
   );
 }
@@ -337,7 +341,7 @@ function ComparePanel(props: {
           justifyContent: "space-between",
         }}
       >
-        <span>Compare</span>
+        <span>Vermont Aerial Imagery</span>
         <span
           style={{
             fontSize: 11,
@@ -350,6 +354,7 @@ function ComparePanel(props: {
       </button>
       {open ? (
         <>
+          <HeaderSubtitle />
           <SideControls
             side="left"
             state={props.left}
@@ -360,7 +365,6 @@ function ComparePanel(props: {
             state={props.right}
             onChange={props.onRightChange}
           />
-          <AttributionFooter />
         </>
       ) : null}
     </div>
