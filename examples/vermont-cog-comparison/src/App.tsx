@@ -290,9 +290,18 @@ function HeaderSubtitle() {
         rel="noopener noreferrer"
         style={{ color: "#555" }}
       >
-        Vermont Open Geospatial bucket on AWS ↗
+        Vermont Open Geospatial bucket
+      </a>{" "}
+      on AWS. Client-side rendered with{" "}
+      <a
+        href="https://developmentseed.org/deck.gl-raster/"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: "#555" }}
+      >
+        deck.gl-raster
       </a>
-      .
+      , without a server.
     </p>
   );
 }

@@ -357,7 +357,16 @@ export function ControlPanel(props: ControlPanelProps) {
             >
               AlphaEarth Foundations GeoZarr Mosaic
             </a>{" "}
-            — annual 10 m embeddings, 2017–2025.
+            — annual 10 m embeddings, 2017-2025. Client-side rendered with{" "}
+            <a
+              href="https://developmentseed.org/deck.gl-raster/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "inherit" }}
+            >
+              deck.gl-raster ↗
+            </a>
+            .
           </div>
         </>
       )}
