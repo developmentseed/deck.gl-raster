@@ -18,17 +18,17 @@ describe("RasterTileLayer", () => {
     expect(() => new RasterTileLayer({ id: "test" })).not.toThrow();
   });
 
-  it("exposes a _renderExtraSubLayers hook returning [] by default", () => {
+  it("exposes a _renderDebug hook returning [] when no descriptor is configured", () => {
     class ProbeLayer extends RasterTileLayer {
-      callExtra(tile: unknown, data: unknown) {
+      callDebug(tile: unknown, data: unknown) {
         return (
           this as unknown as {
-            _renderExtraSubLayers: (t: unknown, d: unknown) => unknown[];
+            _renderDebug: (t: unknown, d: unknown) => unknown[];
           }
-        )._renderExtraSubLayers(tile, data);
+        )._renderDebug(tile, data);
       }
     }
     const layer = new ProbeLayer({ id: "probe" });
-    expect(layer.callExtra({}, { width: 1, height: 1 })).toEqual([]);
+    expect(layer.callDebug({ id: "x" }, null)).toEqual([]);
   });
 });

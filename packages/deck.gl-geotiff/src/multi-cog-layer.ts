@@ -544,16 +544,16 @@ export class MultiCOGLayer extends RasterTileLayer<
       this._buildRenderResult(data);
   }
 
-  protected override _renderExtraSubLayers(
+  protected override _renderDebug(
     tile: Tile2DHeader<MultiTileResult>,
-    data: MultiTileResult,
+    data: MultiTileResult | null,
   ): Layer[] {
-    if (!this.props.debug || !data.debugInfo) {
-      return [];
+    if (!data?.debugInfo) {
+      return super._renderDebug(tile, data);
     }
     const projectTo4326 = this.state.multiDescriptor?.primary.projectTo4326;
     if (!projectTo4326) {
-      return [];
+      return super._renderDebug(tile, data);
     }
     return this._renderDebugLayers(
       `${this.id}-${tile.id}`,

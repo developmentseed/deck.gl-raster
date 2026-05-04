@@ -223,21 +223,36 @@ export class RasterTileLayer<
   }
 
   /**
-   * Hook for subclasses to append additional sub-layers to each rendered tile.
+   * Hook for rendering per-tile debug overlay sub-layers.
    *
-   * Called once per tile from `_renderSubLayers`, after the main {@link RasterLayer}
-   * is constructed and only when the tile has fetched data. The default returns
-   * an empty array.
+   * Called once per tile from `_renderSubLayers` only when `props.debug` is
+   * `true`. The hook fires both before data has arrived (`data` is `null`) and
+   * after (`data` is the fetched `DataT`), so the default outline can render
+   * during loading.
    *
-   * Subclasses may use this to render tile-scoped overlays that depend on the
-   * fetched `DataT` — for example, a multi-band debug overlay that draws
-   * outlines and labels for each source's contributing tiles.
+   * Default behavior renders the primary tile boundary via
+   * {@link renderDebugTileOutline} using the active descriptor. Subclasses can
+   * override to replace, extend (via `super._renderDebug(...)`), or suppress
+   * the default — for example, a multi-source layer can replace the default
+   * with per-band tile outlines and tiered metadata labels once `data` is
+   * available.
    */
-  protected _renderExtraSubLayers(
-    _tile: Tile2DHeader<DataT>,
-    _data: NonNullable<DataT>,
+  protected _renderDebug(
+    tile: Tile2DHeader<DataT>,
+    _data: DataT | null,
   ): Layer[] {
-    return [];
+    const descriptor = this._tilesetDescriptor();
+    if (!descriptor) {
+      return [];
+    }
+    // Tiles built by RasterTileset2D are augmented with TileMetadata
+    // (projectedBbox/Corners, tileWidth/Height) at construction time. The cast
+    // makes that runtime augmentation visible to the typed helper.
+    return renderDebugTileOutline(
+      `${this.id}-${tile.id}-bounds`,
+      tile as Tile2DHeader<DataT> & TileMetadata,
+      descriptor.projectTo4326,
+    );
   }
 
   override renderLayers(): Layer | null {
@@ -338,30 +353,23 @@ export class RasterTileLayer<
     const { maxError, debug, debugOpacity } = this.props;
     const tile = props.tile as Tile2DHeader<DataT> & TileMetadata;
 
-    const layers: Layer[] = [];
-    if (debug) {
-      layers.push(
-        ...renderDebugTileOutline(
-          `${this.id}-${tile.id}-bounds`,
-          tile,
-          descriptor.projectTo4326,
-        ),
-      );
-    }
+    const debugLayers = debug
+      ? this._renderDebug(tile, props.data ?? null)
+      : [];
 
     if (!props.data) {
-      return layers;
+      return debugLayers;
     }
 
     const { x, y, z } = tile.index;
     const level = descriptor.levels[z];
     if (!level) {
-      return layers;
+      return debugLayers;
     }
     const { forwardTransform, inverseTransform } = level.tileTransform(x, y);
     const tileResult = renderTile(props.data);
     if (!tileResult) {
-      return layers;
+      return debugLayers;
     }
     const { image, renderPipeline } = tileResult;
     const { width, height } = props.data;
@@ -410,7 +418,6 @@ export class RasterTileLayer<
         ...deckProjectionProps,
       }),
     );
-    const extra = this._renderExtraSubLayers(tile, props.data);
-    return [rasterLayer, ...extra, ...layers];
+    return [rasterLayer, ...debugLayers];
   }
 }
