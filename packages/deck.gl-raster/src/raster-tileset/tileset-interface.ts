@@ -72,8 +72,8 @@ export interface TilesetLevel {
     col: number,
     row: number,
   ) => {
-    forwardTransform: (x: number, y: number) => [number, number];
-    inverseTransform: (x: number, y: number) => [number, number];
+    forwardTransform: ProjectionFunction;
+    inverseTransform: ProjectionFunction;
   };
 }
 

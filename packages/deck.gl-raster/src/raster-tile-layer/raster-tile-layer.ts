@@ -222,6 +222,39 @@ export class RasterTileLayer<
     return (this.props as unknown as RasterTileLayerProps<DataT>).renderTile;
   }
 
+  /**
+   * Hook for rendering per-tile debug overlay sub-layers.
+   *
+   * Called once per tile from `_renderSubLayers` only when `props.debug` is
+   * `true`. The hook fires both before data has arrived (`data` is `null`) and
+   * after (`data` is the fetched `DataT`), so the default outline can render
+   * during loading.
+   *
+   * Default behavior renders the primary tile boundary via
+   * {@link renderDebugTileOutline} using the active descriptor. Subclasses can
+   * override to replace, extend (via `super._renderDebug(...)`), or suppress
+   * the default — for example, a multi-source layer can replace the default
+   * with per-band tile outlines and tiered metadata labels once `data` is
+   * available.
+   */
+  protected _renderDebug(
+    tile: Tile2DHeader<DataT>,
+    _data: DataT | null,
+  ): Layer[] {
+    const descriptor = this._tilesetDescriptor();
+    if (!descriptor) {
+      return [];
+    }
+    // Tiles built by RasterTileset2D are augmented with TileMetadata
+    // (projectedBbox/Corners, tileWidth/Height) at construction time. The cast
+    // makes that runtime augmentation visible to the typed helper.
+    return renderDebugTileOutline(
+      `${this.id}-${tile.id}-bounds`,
+      tile as Tile2DHeader<DataT> & TileMetadata,
+      descriptor.projectTo4326,
+    );
+  }
+
   override renderLayers(): Layer | null {
     const descriptor = this._tilesetDescriptor();
     const getTileData = this._getTileDataCallback();
@@ -320,30 +353,23 @@ export class RasterTileLayer<
     const { maxError, debug, debugOpacity } = this.props;
     const tile = props.tile as Tile2DHeader<DataT> & TileMetadata;
 
-    const layers: Layer[] = [];
-    if (debug) {
-      layers.push(
-        ...renderDebugTileOutline(
-          `${this.id}-${tile.id}-bounds`,
-          tile,
-          descriptor.projectTo4326,
-        ),
-      );
-    }
+    const debugLayers = debug
+      ? this._renderDebug(tile, props.data ?? null)
+      : [];
 
     if (!props.data) {
-      return layers;
+      return debugLayers;
     }
 
     const { x, y, z } = tile.index;
     const level = descriptor.levels[z];
     if (!level) {
-      return layers;
+      return debugLayers;
     }
     const { forwardTransform, inverseTransform } = level.tileTransform(x, y);
     const tileResult = renderTile(props.data);
     if (!tileResult) {
-      return layers;
+      return debugLayers;
     }
     const { image, renderPipeline } = tileResult;
     const { width, height } = props.data;
@@ -392,6 +418,6 @@ export class RasterTileLayer<
         ...deckProjectionProps,
       }),
     );
-    return [rasterLayer, ...layers];
+    return [rasterLayer, ...debugLayers];
   }
 }

@@ -1,31 +1,28 @@
 import type {
   CompositeLayerProps,
   Layer,
-  LayerProps,
-  LayersList,
   UpdateParameters,
 } from "@deck.gl/core";
-import { CompositeLayer } from "@deck.gl/core";
 import type {
   _Tile2DHeader as Tile2DHeader,
   TileLayerProps,
   _TileLoadProps as TileLoadProps,
-  _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
-import { TileLayer } from "@deck.gl/geo-layers";
 import { PathLayer, TextLayer } from "@deck.gl/layers";
 import type {
   Corners,
+  GetTileDataOptions,
   MultiTilesetDescriptor,
+  ProjectionFunction,
   RasterModule,
+  RenderTileResult,
   TilesetDescriptor,
   TilesetLevel,
   UvTransform,
 } from "@developmentseed/deck.gl-raster";
 import {
   createMultiTilesetDescriptor,
-  RasterLayer,
-  RasterTileset2D,
+  RasterTileLayer,
   resolveSecondaryTiles,
   selectSecondaryLevel,
   tilesetLevelsEqual,
@@ -48,24 +45,10 @@ import {
   metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
-import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import proj4 from "proj4";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
-
-/** Size of deck.gl's common coordinate space in world units. */
-const TILE_SIZE = 512;
-
-/** The size of the globe in web mercator meters. */
-const WEB_MERCATOR_METER_CIRCUMFERENCE = 40075016.686;
-
-/**
- * Scale factor for converting EPSG:3857 meters into deck.gl world units
- * (512x512).
- */
-const WEB_MERCATOR_TO_WORLD_SCALE =
-  TILE_SIZE / WEB_MERCATOR_METER_CIRCUMFERENCE;
 
 /**
  * Color palette for debug overlays.
@@ -127,9 +110,9 @@ interface MultiTileResult {
   /** Per-band texture data, keyed by source name. */
   bands: Map<string, BandTileData>;
   /** Forward transform from pixel coordinates to CRS coordinates. */
-  forwardTransform: (x: number, y: number) => [number, number];
+  forwardTransform: ProjectionFunction;
   /** Inverse transform from CRS coordinates to pixel coordinates. */
-  inverseTransform: (x: number, y: number) => [number, number];
+  inverseTransform: ProjectionFunction;
   /** Width of the primary tile in pixels. */
   width: number;
   /** Height of the primary tile in pixels. */
@@ -277,10 +260,8 @@ export type MultiCOGLayerProps = CompositeLayerProps &
   };
 
 const defaultProps = {
+  ...RasterTileLayer.defaultProps,
   epsgResolver: { type: "accessor" as const, value: defaultEpsgResolver },
-  maxError: { type: "number" as const, value: 0.125 },
-  debug: { type: "boolean" as const, value: false },
-  debugOpacity: { type: "number" as const, value: 0.5 },
   debugLevel: { type: "number" as const, value: 1 },
 };
 
@@ -297,27 +278,26 @@ const defaultProps = {
  * @see {@link createMultiTilesetDescriptor} for the grouping logic.
  * @see {@link geoTiffToDescriptor} for the per-source tileset descriptor.
  */
-export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
+export class MultiCOGLayer extends RasterTileLayer<
+  MultiTileResult,
+  MultiCOGLayerProps
+> {
   static override layerName = "MultiCOGLayer";
-  static override defaultProps = defaultProps;
+  // Same casting trick as COGLayer: defaultProps shape diverges from the
+  // base's parameterized type, so cast through to satisfy the static-side
+  // check while keeping subclass-specific defaults.
+  static override defaultProps =
+    defaultProps as unknown as typeof RasterTileLayer.defaultProps;
 
   declare state: {
     sources: Map<string, SourceState> | null;
     multiDescriptor: MultiTilesetDescriptor | null;
-    forwardTo4326: ReprojectionFns["forwardReproject"] | null;
-    inverseFrom4326: ReprojectionFns["inverseReproject"] | null;
-    forwardTo3857: ReprojectionFns["forwardReproject"] | null;
-    inverseFrom3857: ReprojectionFns["inverseReproject"] | null;
   };
 
   override initializeState(): void {
     this.setState({
       sources: null,
       multiDescriptor: null,
-      forwardTo4326: null,
-      inverseFrom4326: null,
-      forwardTo3857: null,
-      inverseFrom3857: null,
     });
   }
 
@@ -419,10 +399,6 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     this.setState({
       sources: sourceMap,
       multiDescriptor,
-      forwardTo4326,
-      inverseFrom4326,
-      forwardTo3857,
-      inverseFrom3857,
     });
 
     if (this.props.onGeoTIFFLoad) {
@@ -451,18 +427,14 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
    * @param tile - Tile load props from the TileLayer, containing index and signal.
    * @returns Per-band textures, UV transforms, and reprojection functions.
    */
-  async _getTileData(tile: TileLoadProps): Promise<MultiTileResult> {
-    const { signal } = tile;
+  async _getTileData(
+    tile: TileLoadProps,
+    options: GetTileDataOptions,
+  ): Promise<MultiTileResult> {
     const { x, y, z } = tile.index;
     const { multiDescriptor, sources } = this.state;
     const pool = this.props.pool ?? defaultDecoderPool();
-    const device = this.context.device;
-
-    // Combine abort signals if both are defined
-    const combinedSignal =
-      signal && this.props.signal
-        ? AbortSignal.any([signal, this.props.signal])
-        : signal || this.props.signal;
+    const { device, signal: combinedSignal } = options;
 
     // Compute per-tile reprojection transforms from the primary descriptor
     const primaryKey = multiDescriptor!.primaryKey;
@@ -540,10 +512,6 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       0,
     );
 
-    console.log(
-      `Tile (${x}, ${y}, ${z}): fetched bands [${[...bands.keys()].join(", ")}], total byte length: ${byteLength}`,
-    );
-
     return {
       bands,
       forwardTransform,
@@ -553,6 +521,85 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
       byteLength,
       debugInfo,
     };
+  }
+
+  protected override _tilesetDescriptor(): TilesetDescriptor | undefined {
+    return this.state.multiDescriptor?.primary;
+  }
+
+  protected override _getTileDataCallback() {
+    if (!this.state.multiDescriptor || !this.state.sources) {
+      return undefined;
+    }
+    return (
+      tile: TileLoadProps,
+      options: GetTileDataOptions,
+    ): Promise<MultiTileResult> => this._getTileData(tile, options);
+  }
+
+  protected override _renderTileCallback() {
+    if (!this.state.multiDescriptor) {
+      return undefined;
+    }
+    return (data: MultiTileResult): RenderTileResult | null =>
+      this._buildRenderResult(data);
+  }
+
+  protected override _renderDebug(
+    tile: Tile2DHeader<MultiTileResult>,
+    data: MultiTileResult | null,
+  ): Layer[] {
+    if (!data?.debugInfo) {
+      return super._renderDebug(tile, data);
+    }
+    const projectTo4326 = this.state.multiDescriptor?.primary.projectTo4326;
+    if (!projectTo4326) {
+      return super._renderDebug(tile, data);
+    }
+    return this._renderDebugLayers(
+      `${this.id}-${tile.id}`,
+      tile,
+      data,
+      projectTo4326,
+    );
+  }
+
+  /**
+   * Build the per-tile render pipeline. Mirrors the band-binding logic that
+   * previously lived inline in `_renderSubLayers`.
+   *
+   * Returns `null` when the configured `composite` references a band that
+   * isn't present in the cached tile data (happens transiently while sources
+   * are switching).
+   */
+  private _buildRenderResult(data: MultiTileResult): RenderTileResult | null {
+    const { bands } = data;
+
+    const composite = this.props.composite ?? {
+      r: [...bands.keys()][0]!,
+    };
+
+    const requiredBands = [
+      composite.r,
+      composite.g,
+      composite.b,
+      composite.a,
+    ].filter((n): n is string => n != null);
+    if (requiredBands.some((name) => !bands.has(name))) {
+      return null;
+    }
+
+    const compositeBandsProps = buildCompositeBandsProps(composite, bands);
+
+    const renderPipeline: RasterModule[] = [
+      {
+        module: CompositeBands as RasterModule["module"],
+        props: compositeBandsProps as RasterModule["props"],
+      },
+      ...(this.props.renderPipeline ?? []),
+    ];
+
+    return { renderPipeline };
   }
 
   /**
@@ -709,126 +756,6 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
   }
 
   /**
-   * Create sub-layers for a single loaded tile.
-   *
-   * Builds a {@link RasterLayer} with reprojection functions and a render
-   * pipeline that starts with a {@link CompositeBands} module binding all
-   * band textures, followed by any user-provided pipeline modules.
-   */
-  _renderSubLayers(
-    props: TileLayerProps<MultiTileResult> & {
-      id: string;
-      data?: MultiTileResult;
-      _offset: number;
-      tile: Tile2DHeader<MultiTileResult>;
-    },
-    forwardTo4326: ReprojectionFns["forwardReproject"],
-    inverseFrom4326: ReprojectionFns["inverseReproject"],
-    forwardTo3857: ReprojectionFns["forwardReproject"],
-    inverseFrom3857: ReprojectionFns["inverseReproject"],
-  ): Layer | LayersList | null {
-    const { maxError, debug, debugOpacity } = this.props;
-
-    if (!props.data) {
-      return null;
-    }
-
-    const { bands, forwardTransform, inverseTransform, width, height } =
-      props.data;
-
-    // Build the composite bands mapping — default to first source for R if
-    // no composite mapping is provided
-    const composite = this.props.composite ?? {
-      r: [...bands.keys()][0]!,
-    };
-
-    // Skip rendering if cached tile data doesn't have the required bands
-    // (happens when switching presets — old tiles will be re-fetched)
-    const requiredBands = [
-      composite.r,
-      composite.g,
-      composite.b,
-      composite.a,
-    ].filter((n): n is string => n != null);
-    if (requiredBands.some((name) => !bands.has(name))) {
-      return null;
-    }
-
-    // Map named bands to fixed slot indices and build module props
-    const compositeBandsProps = buildCompositeBandsProps(composite, bands);
-
-    const renderPipeline: RasterModule[] = [
-      {
-        module: CompositeBands as RasterModule["module"],
-        props: compositeBandsProps as RasterModule["props"],
-      },
-      ...(this.props.renderPipeline ?? []),
-    ];
-
-    // Determine projection mode (globe vs web mercator)
-    const isGlobe = this.context.viewport.resolution !== undefined;
-    let reprojectionFns: ReprojectionFns;
-    let deckProjectionProps: Partial<LayerProps>;
-
-    if (isGlobe) {
-      reprojectionFns = {
-        forwardTransform,
-        inverseTransform,
-        forwardReproject: forwardTo4326,
-        inverseReproject: inverseFrom4326,
-      };
-      deckProjectionProps = {};
-    } else {
-      reprojectionFns = {
-        forwardTransform,
-        inverseTransform,
-        forwardReproject: forwardTo3857,
-        inverseReproject: inverseFrom3857,
-      };
-      deckProjectionProps = {
-        coordinateSystem: "cartesian",
-        coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
-        // biome-ignore format: array
-        modelMatrix: [
-            WEB_MERCATOR_TO_WORLD_SCALE, 0, 0, 0,
-            0, WEB_MERCATOR_TO_WORLD_SCALE, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1
-          ],
-      };
-    }
-
-    const rasterLayer = new RasterLayer(
-      this.getSubLayerProps({
-        id: `${props.id}-raster`,
-        width,
-        height,
-        renderPipeline,
-        maxError,
-        reprojectionFns,
-        debug,
-        debugOpacity,
-        ...deckProjectionProps,
-      }),
-    );
-
-    const sublayers: Layer[] = [rasterLayer];
-
-    if (debug && props.data) {
-      sublayers.push(
-        ...this._renderDebugLayers(
-          props.id,
-          props.tile,
-          props.data,
-          forwardTo4326,
-        ),
-      );
-    }
-
-    return sublayers;
-  }
-
-  /**
    * Render debug overlay layers for a single tile: colored outlines for
    * primary and secondary tile boundaries, and tiered text labels.
    *
@@ -842,7 +769,7 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
     tileId: string,
     tile: Tile2DHeader<MultiTileResult>,
     data: MultiTileResult,
-    forwardTo4326: ReprojectionFns["forwardReproject"],
+    forwardTo4326: ProjectionFunction,
   ): Layer[] {
     const layers: Layer[] = [];
     const debugLevel = this.props.debugLevel ?? 1;
@@ -981,96 +908,6 @@ export class MultiCOGLayer extends CompositeLayer<MultiCOGLayerProps> {
 
     return layers;
   }
-
-  /**
-   * Build the tile layer that drives tile traversal and rendering.
-   *
-   * Creates a {@link RasterTileset2D} factory from the primary tileset,
-   * then returns a {@link TileLayer} wired up with tile fetching and
-   * sub-layer rendering.
-   */
-  renderTileLayer(
-    multiDescriptor: MultiTilesetDescriptor,
-    forwardTo4326: ReprojectionFns["forwardReproject"],
-    inverseFrom4326: ReprojectionFns["inverseReproject"],
-    forwardTo3857: ReprojectionFns["forwardReproject"],
-    inverseFrom3857: ReprojectionFns["inverseReproject"],
-  ): TileLayer {
-    const { primary } = multiDescriptor;
-
-    // Create a factory class that wraps RasterTileset2D with the primary descriptor
-    class PrimaryTilesetFactory extends RasterTileset2D {
-      constructor(opts: Tileset2DProps) {
-        super(opts, primary);
-      }
-    }
-
-    const {
-      maxRequests,
-      maxCacheSize,
-      maxCacheByteSize,
-      debounceTime,
-      refinementStrategy,
-    } = this.props;
-
-    // Stringify sources to detect when the set of COG URLs changes.
-    // This triggers TileLayer to invalidate its cache and re-fetch.
-    const sourceKeys = Object.keys(this.props.sources).sort().join(",");
-    const sourceUrls = Object.values(this.props.sources)
-      .map((s) => String(s.url))
-      .sort()
-      .join(",");
-
-    return new TileLayer<MultiTileResult>({
-      id: `multi-cog-tile-layer-${this.id}-${sourceUrls}`,
-      TilesetClass: PrimaryTilesetFactory,
-      getTileData: async (tile) => this._getTileData(tile),
-      renderSubLayers: (props) =>
-        this._renderSubLayers(
-          props,
-          forwardTo4326,
-          inverseFrom4326,
-          forwardTo3857,
-          inverseFrom3857,
-        ),
-      updateTriggers: {
-        getTileData: [sourceKeys, sourceUrls],
-      },
-      debounceTime,
-      maxCacheByteSize,
-      maxCacheSize,
-      maxRequests,
-      refinementStrategy,
-    });
-  }
-
-  override renderLayers(): Layer | LayersList | null {
-    const {
-      multiDescriptor,
-      forwardTo4326,
-      inverseFrom4326,
-      forwardTo3857,
-      inverseFrom3857,
-    } = this.state;
-
-    if (
-      !multiDescriptor ||
-      !forwardTo4326 ||
-      !inverseFrom4326 ||
-      !forwardTo3857 ||
-      !inverseFrom3857
-    ) {
-      return null;
-    }
-
-    return this.renderTileLayer(
-      multiDescriptor,
-      forwardTo4326,
-      inverseFrom4326,
-      forwardTo3857,
-      inverseFrom3857,
-    );
-  }
 }
 
 /**
@@ -1130,7 +967,7 @@ function createBandTexture(device: Device, array: RasterArray): Texture {
  */
 function cornersToWgs84Path(
   corners: Corners,
-  projectTo4326: ReprojectionFns["forwardReproject"],
+  projectTo4326: ProjectionFunction,
 ): { path: [number, number][]; center: [number, number] } {
   const topLeft = projectTo4326(corners.topLeft[0], corners.topLeft[1]);
   const topRight = projectTo4326(corners.topRight[0], corners.topRight[1]);
