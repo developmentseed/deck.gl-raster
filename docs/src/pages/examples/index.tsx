@@ -79,6 +79,14 @@ const cogExamples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/sentinel-2",
   },
+  {
+    title: "Before/After Comparison",
+    description: <>Use a slider to compare Vermont state imagery over time.</>,
+    href: "https://developmentseed.org/deck.gl-raster/examples/vermont-cog-comparison/",
+    image: "/deck.gl-raster/img/vermont-opendata-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/vermont-cog-comparison",
+  },
 ];
 
 const zarrExamples: Example[] = [

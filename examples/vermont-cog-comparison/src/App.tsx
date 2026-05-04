@@ -41,7 +41,7 @@ type Side = "left" | "right";
 type RenderMode = "trueColor" | "falseColor" | "ndvi" | "grayscale";
 
 /** Fixed colormap for NDVI; spec says no per-side colormap selector. */
-const NDVI_COLORMAP_INDEX = COLORMAP_INDEX.rdylgn;
+const NDVI_COLORMAP_INDEX = COLORMAP_INDEX.cfastie;
 
 /** Half the equatorial circumference of Earth in EPSG:3857 mercator meters. */
 const MERCATOR_HALF_EQUATOR = 20037508.342789244;
@@ -216,7 +216,7 @@ function SideControls(props: {
               </option>
             ))}
           </optgroup>
-          <optgroup label="Single-year imagery">
+          <optgroup label="Single-year imagery (does not span the full state)">
             {VT_FILES.filter((f) => f.category === "yearly").map((f) => (
               <option key={f.id} value={f.id}>
                 {f.label}
@@ -543,6 +543,17 @@ export default function App() {
         mapStyle={MAP_STYLE}
         initialViewState={INITIAL_VIEW_STATE}
         onMove={(e) => setViewState(e.viewState)}
+        // Lock the camera to north-up + flat. ClipExtension's clipBounds
+        // are computed assuming a non-rotated mercator viewport, so rotation
+        // would visually misalign the swipe handle from the imagery split.
+        dragRotate={false}
+        pitchWithRotate={false}
+        touchPitch={false}
+        maxPitch={0}
+        onLoad={(e) => {
+          // dragRotate covers mouse; this disables two-finger rotate on touch.
+          e.target.touchZoomRotate.disableRotation();
+        }}
       >
         <DeckGLOverlay
           layers={layers as []}
