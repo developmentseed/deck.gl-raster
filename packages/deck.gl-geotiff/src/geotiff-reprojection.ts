@@ -1,5 +1,6 @@
 import type { Affine } from "@developmentseed/affine";
 import * as affine from "@developmentseed/affine";
+import type { ProjectionFunction } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF } from "@developmentseed/geotiff";
 import type { ProjectionDefinition } from "@developmentseed/proj";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
@@ -32,8 +33,8 @@ export async function extractGeotiffReprojectors(
 }
 
 export function fromAffine(geotransform: Affine): {
-  forwardTransform: (x: number, y: number) => [number, number];
-  inverseTransform: (x: number, y: number) => [number, number];
+  forwardTransform: ProjectionFunction;
+  inverseTransform: ProjectionFunction;
 } {
   const inverseGeotransform = affine.invert(geotransform);
   return {

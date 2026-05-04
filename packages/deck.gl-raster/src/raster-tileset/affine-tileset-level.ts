@@ -1,7 +1,7 @@
 import type { Affine } from "@developmentseed/affine";
 import * as affine from "@developmentseed/affine";
 import type { TilesetLevel } from "./tileset-interface.js";
-import type { Bounds, Corners } from "./types.js";
+import type { Bounds, Corners, ProjectionFunction } from "./types.js";
 
 /**
  * Constructor options for {@link AffineTilesetLevel}.
@@ -91,8 +91,8 @@ export class AffineTilesetLevel implements TilesetLevel {
     col: number,
     row: number,
   ): {
-    forwardTransform: (x: number, y: number) => [number, number];
-    inverseTransform: (x: number, y: number) => [number, number];
+    forwardTransform: ProjectionFunction;
+    inverseTransform: ProjectionFunction;
   } {
     const tileOffset = affine.translation(
       col * this.tileWidth,

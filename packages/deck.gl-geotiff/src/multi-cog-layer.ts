@@ -13,6 +13,7 @@ import type {
   Corners,
   GetTileDataOptions,
   MultiTilesetDescriptor,
+  ProjectionFunction,
   RasterModule,
   RenderTileResult,
   TilesetDescriptor,
@@ -109,9 +110,9 @@ interface MultiTileResult {
   /** Per-band texture data, keyed by source name. */
   bands: Map<string, BandTileData>;
   /** Forward transform from pixel coordinates to CRS coordinates. */
-  forwardTransform: (x: number, y: number) => [number, number];
+  forwardTransform: ProjectionFunction;
   /** Inverse transform from CRS coordinates to pixel coordinates. */
-  inverseTransform: (x: number, y: number) => [number, number];
+  inverseTransform: ProjectionFunction;
   /** Width of the primary tile in pixels. */
   width: number;
   /** Height of the primary tile in pixels. */
@@ -768,7 +769,7 @@ export class MultiCOGLayer extends RasterTileLayer<
     tileId: string,
     tile: Tile2DHeader<MultiTileResult>,
     data: MultiTileResult,
-    forwardTo4326: (x: number, y: number) => [number, number],
+    forwardTo4326: ProjectionFunction,
   ): Layer[] {
     const layers: Layer[] = [];
     const debugLevel = this.props.debugLevel ?? 1;
@@ -966,7 +967,7 @@ function createBandTexture(device: Device, array: RasterArray): Texture {
  */
 function cornersToWgs84Path(
   corners: Corners,
-  projectTo4326: (x: number, y: number) => [number, number],
+  projectTo4326: ProjectionFunction,
 ): { path: [number, number][]; center: [number, number] } {
   const topLeft = projectTo4326(corners.topLeft[0], corners.topLeft[1]);
   const topRight = projectTo4326(corners.topRight[0], corners.topRight[1]);
