@@ -308,6 +308,9 @@ importers:
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
+      '@developmentseed/deck.gl-raster':
+        specifier: workspace:^
+        version: link:../../packages/deck.gl-raster
       '@developmentseed/epsg':
         specifier: workspace:^
         version: link:../../packages/epsg
