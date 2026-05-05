@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { NlcdCategoryGroup } from "../nlcd/categories.js";
-import { NLCD_CATEGORY_GROUPS } from "../nlcd/categories.js";
+import { ALL_NLCD_CODES, NLCD_CATEGORY_GROUPS } from "../nlcd/categories.js";
 
 /** Props for {@link CategoryFilter}. */
 export interface CategoryFilterProps {
@@ -13,12 +13,17 @@ export interface CategoryFilterProps {
 /**
  * Nested checkbox tree for toggling NLCD category visibility.
  *
- * Each heading has its own checkbox that toggles every leaf below it;
- * the heading checkbox shows an indeterminate state when its leaves are
- * a partial selection.
+ * - A master "All categories" checkbox toggles every leaf, with an
+ *   indeterminate state when the selection is partial.
+ * - Each heading has its own checkbox that toggles every leaf below it,
+ *   also with an indeterminate state when its leaves are partial.
+ * - Each heading is independently expandable/collapsible.
  */
 export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [expandedHeadings, setExpandedHeadings] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const setSelectedFor = (codes: number[], shouldSelect: boolean) => {
     const next = new Set(selected);
@@ -31,6 +36,22 @@ export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
     }
     onChange(next);
   };
+
+  const toggleHeadingExpanded = (heading: string) => {
+    const next = new Set(expandedHeadings);
+    if (next.has(heading)) {
+      next.delete(heading);
+    } else {
+      next.add(heading);
+    }
+    setExpandedHeadings(next);
+  };
+
+  const allSelectedCount = ALL_NLCD_CODES.filter((code) =>
+    selected.has(code),
+  ).length;
+  const allSelected = allSelectedCount === ALL_NLCD_CODES.length;
+  const someSelected = allSelectedCount > 0 && !allSelected;
 
   return (
     <div
@@ -75,12 +96,44 @@ export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
               paddingBottom: "8px",
             }}
           >
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "13px",
+                fontWeight: 600,
+                marginBottom: "12px",
+                paddingBottom: "8px",
+                borderBottom: "1px solid #eee",
+                cursor: "pointer",
+                color: "#333",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={allSelected}
+                ref={(el) => {
+                  if (el) {
+                    el.indeterminate = someSelected;
+                  }
+                }}
+                onChange={(e) =>
+                  setSelectedFor(ALL_NLCD_CODES, e.target.checked)
+                }
+                style={{ cursor: "pointer" }}
+              />
+              <span>All categories</span>
+            </label>
+
             {NLCD_CATEGORY_GROUPS.map((group) => (
               <CategoryGroupBlock
                 key={group.heading}
                 group={group}
                 selected={selected}
                 onSelectedChange={setSelectedFor}
+                isExpanded={expandedHeadings.has(group.heading)}
+                onToggleExpanded={() => toggleHeadingExpanded(group.heading)}
               />
             ))}
           </div>
@@ -112,12 +165,16 @@ interface CategoryGroupBlockProps {
   group: NlcdCategoryGroup;
   selected: Set<number>;
   onSelectedChange: (codes: number[], shouldSelect: boolean) => void;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
 }
 
 function CategoryGroupBlock({
   group,
   selected,
   onSelectedChange,
+  isExpanded,
+  onToggleExpanded,
 }: CategoryGroupBlockProps) {
   const groupCodes = group.items.map((item) => item.value);
   const selectedCount = groupCodes.filter((code) => selected.has(code)).length;
@@ -125,16 +182,14 @@ function CategoryGroupBlock({
   const someSelected = selectedCount > 0 && !allSelected;
 
   return (
-    <div style={{ marginBottom: "12px" }}>
-      <label
+    <div style={{ marginBottom: "8px" }}>
+      <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: "8px",
           fontSize: "13px",
           fontWeight: 600,
-          marginBottom: "6px",
-          cursor: "pointer",
           color: "#333",
         }}
       >
@@ -147,51 +202,77 @@ function CategoryGroupBlock({
             }
           }}
           onChange={(e) => onSelectedChange(groupCodes, e.target.checked)}
-          style={{ cursor: "pointer" }}
+          style={{ cursor: "pointer", flexShrink: 0 }}
+          aria-label={`Toggle all ${group.heading} categories`}
         />
-        <span>{group.heading}</span>
-      </label>
-
-      {group.items.map((item) => (
-        <label
-          key={item.value}
+        <button
+          type="button"
+          onClick={onToggleExpanded}
           style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "8px",
-            marginLeft: "24px",
-            marginBottom: "8px",
-            fontSize: "12px",
+            all: "unset",
             cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flex: 1,
+            padding: "4px 0",
           }}
         >
-          <input
-            type="checkbox"
-            checked={selected.has(item.value)}
-            onChange={(e) => onSelectedChange([item.value], e.target.checked)}
-            style={{ marginTop: "3px", cursor: "pointer" }}
-          />
+          <span>{group.heading}</span>
           <span
             style={{
-              width: "16px",
-              height: "16px",
-              borderRadius: "2px",
-              flexShrink: 0,
-              marginTop: "2px",
-              backgroundColor: `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`,
-              border: "1px solid rgba(0,0,0,0.1)",
+              fontSize: "10px",
+              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s",
+              color: "#666",
             }}
-          />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 500, marginBottom: "2px" }}>
-              {item.label}
+          >
+            ▼
+          </span>
+        </button>
+      </div>
+
+      {isExpanded &&
+        group.items.map((item) => (
+          <label
+            key={item.value}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "8px",
+              marginLeft: "24px",
+              marginTop: "8px",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={selected.has(item.value)}
+              onChange={(e) => onSelectedChange([item.value], e.target.checked)}
+              style={{ marginTop: "3px", cursor: "pointer" }}
+            />
+            <span
+              style={{
+                width: "16px",
+                height: "16px",
+                borderRadius: "2px",
+                flexShrink: 0,
+                marginTop: "2px",
+                backgroundColor: `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`,
+                border: "1px solid rgba(0,0,0,0.1)",
+              }}
+            />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 500, marginBottom: "2px" }}>
+                {item.label}
+              </div>
+              <div style={{ color: "#666", lineHeight: "1.3" }}>
+                {item.description}
+              </div>
             </div>
-            <div style={{ color: "#666", lineHeight: "1.3" }}>
-              {item.description}
-            </div>
-          </div>
-        </label>
-      ))}
+          </label>
+        ))}
     </div>
   );
 }
