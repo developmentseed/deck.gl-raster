@@ -92,16 +92,14 @@ export function InfoPanel({
               Cloud-Optimized GeoTIFF
             </a>{" "}
             rendered in the browser with <b>no server</b> using{" "}
-            <code>deck.gl-raster</code>.
-          </p>
-          <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
             <a
               href="https://developmentseed.org/deck.gl-raster/"
               target="_blank"
               rel="noopener noreferrer"
             >
-              deck.gl-raster Documentation ↗
+              <code>deck.gl-raster</code>
             </a>
+            .
           </p>
 
           <CategoryFilter selected={selected} onChange={onSelectedChange} />
