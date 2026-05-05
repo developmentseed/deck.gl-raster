@@ -42,25 +42,43 @@ Three shader modules, all local to the example:
 [CreateTextureUint] → [FilterCategory] → [PaletteColormap]
 ```
 
+#### Inter-module bus convention: `ivec4 icolor`
+
+The framework macro signature is unchanged
+(`DECKGL_FILTER_COLOR(color, geometry)`). Modules in this pipeline pass
+integer pixel data through a function-local `ivec4 icolor` declared by
+the producer module and consumed by the rest. luma.gl concatenates all
+`fs:DECKGL_FILTER_COLOR` injections into one function body, so the
+declaration is in scope for every subsequent injection.
+
+This is a documented convention, not a framework feature. The producer
+must come before consumers in the pipeline (same constraint that
+already governs `color`-writers like `Colormap`). If consumers run
+without a producer, the GLSL compiler reports `icolor` as undeclared
+and the layer fails to compile.
+
+A separate, future effort can wrap this convention in a typed
+TypeScript abstraction that compiles into luma.gl shader modules and
+verifies producer/consumer pairings at TS compile time. That is out of
+scope here.
+
 #### `CreateTextureUint`
 
 Replaces the default `CreateTexture` (which is `r8unorm`-only).
-Declares the source as an integer sampler and exposes the integer
-category code to downstream modules through `color.r`.
+Declares the source as an integer sampler and introduces the `icolor`
+bus.
 
 ```glsl
 // fs:#decl
 uniform highp usampler2D textureName;
 
 // fs:DECKGL_FILTER_COLOR
-uvec4 raw = texture(textureName, geometry.uv);
-color = vec4(float(raw.r), 0.0, 0.0, 1.0);
+ivec4 icolor = ivec4(texture(textureName, geometry.uv));
 ```
 
-Convention used by the rest of this pipeline: `color.r` carries the
-*integer category code as a float* (not a normalized [0,1] value).
-Downstream modules recover the integer with `int(color.r)`. Because the
-texture is `r8uint` and we never divide by 255, the round-trip is exact.
+This module does not touch `color`. Subsequent modules in the pipeline
+are responsible for writing `color` before `DECKGL_FILTER_COLOR`
+returns.
 
 #### `FilterCategory`
 
@@ -72,14 +90,14 @@ the category is not selected.
 uniform sampler2D categoryFilterLUT;
 
 // fs:DECKGL_FILTER_COLOR
-int code = int(color.r);
-if (texelFetch(categoryFilterLUT, ivec2(code, 0), 0).r < 0.5) {
+if (texelFetch(categoryFilterLUT, ivec2(icolor.r, 0), 0).r < 0.5) {
   discard;
 }
 ```
 
 Prop: `categoryFilterLUT: Texture` (256×1, `r8unorm`, value `255` for
-selected codes, `0` for unselected).
+selected codes, `0` for unselected). Reads `icolor.r`. Must come after a
+module that introduces `ivec4 icolor`.
 
 #### `PaletteColormap`
 
@@ -92,11 +110,12 @@ unorm `Colormap` module *for this pipeline only*.
 uniform sampler2D colormapTexture;
 
 // fs:DECKGL_FILTER_COLOR
-int code = int(color.r);
-color = texelFetch(colormapTexture, ivec2(code, 0), 0);
+color = texelFetch(colormapTexture, ivec2(icolor.r, 0), 0);
 ```
 
-Prop: `colormapTexture: Texture` (256×1, `rgba8unorm`).
+Prop: `colormapTexture: Texture` (256×1, `rgba8unorm`). Reads
+`icolor.r`, writes `color`. Must come after a module that introduces
+`ivec4 icolor`.
 
 The colormap is built once at COG load time from the GeoTIFF's embedded
 `ColorMap` tag, using the existing
@@ -190,9 +209,9 @@ User toggles a checkbox:
     → stored in App state, passed into renderTile
 
 Per tile render:
-  CreateTextureUint samples the r8uint tile texture → color.r = float(category)
-  FilterCategory texelFetches the LUT → discards if 0
-  PaletteColormap texelFetches the colormap → final RGBA
+  CreateTextureUint samples the r8uint tile texture → introduces ivec4 icolor
+  FilterCategory texelFetches the LUT at icolor.r → discards if 0
+  PaletteColormap texelFetches the colormap at icolor.r → writes final RGBA into color
 ```
 
 ## Testing
@@ -214,6 +233,12 @@ contact point is the example overriding `getTileData`/`renderTile`.
 
 ## Open follow-ups (out of scope here)
 
+- **Typed shader-module abstraction.** A TS-level API that lets module
+  authors declare `reads`/`writes` of typed inter-module buses and
+  compiles down to luma.gl shader modules, with TS-compile-time
+  verification of pipeline composition. This would supersede the
+  `ivec4 icolor` convention used here with a checked, self-documenting
+  alternative. Needs its own brainstorm + spec.
 - Promotion of `CreateTextureUint`, `FilterCategory`, and
   `PaletteColormap` into `@developmentseed/deck.gl-raster` if other
   examples or downstream consumers want them.

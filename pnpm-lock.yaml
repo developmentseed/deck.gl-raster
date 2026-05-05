@@ -317,6 +317,9 @@ importers:
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.3
+      '@luma.gl/shadertools':
+        specifier: ^9.3.3
+        version: 9.3.3(@luma.gl/core@9.3.3)
       maplibre-gl:
         specifier: ^5.19.0
         version: 5.19.0
