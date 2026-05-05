@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { CategoryFilter } from "./CategoryFilter.js";
 import { HelpIcon } from "./HelpIcon.js";
-import { Legend } from "./Legend.js";
 
 interface InfoPanelProps {
   debug: boolean;
   debugOpacity: number;
   meshMaxError: number;
+  selected: Set<number>;
+  onSelectedChange: (next: Set<number>) => void;
   onDebugChange: (checked: boolean) => void;
   onDebugOpacityChange: (opacity: number) => void;
   onMeshMaxErrorChange: (error: number) => void;
@@ -27,6 +29,8 @@ export function InfoPanel({
   debug,
   debugOpacity,
   meshMaxError,
+  selected,
+  onSelectedChange,
   onDebugChange,
   onDebugOpacityChange,
   onMeshMaxErrorChange,
@@ -100,7 +104,7 @@ export function InfoPanel({
             </a>
           </p>
 
-          <Legend />
+          <CategoryFilter selected={selected} onChange={onSelectedChange} />
 
           <div
             style={{
