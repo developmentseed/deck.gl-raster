@@ -111,11 +111,20 @@ uniform sampler2D colormapTexture;
 
 // fs:DECKGL_FILTER_COLOR
 color = texelFetch(colormapTexture, ivec2(icolor.r, 0), 0);
+if (color.a == 0.0) {
+  discard;
+}
 ```
 
 Prop: `colormapTexture: Texture` (256×1, `rgba8unorm`). Reads
 `icolor.r`, writes `color`. Must come after a module that introduces
 `ivec4 icolor`.
+
+The `discard` on alpha=0 covers the nodata case: `parseColormap` zeroes
+alpha at the nodata index, so the same texelFetch that resolves color
+also signals "this pixel doesn't render". Using `discard` rather than
+relying on alpha-blended-to-zero avoids depth-buffer pollution and
+saves blend bandwidth for invisible fragments.
 
 The colormap is built once at COG load time from the GeoTIFF's embedded
 `ColorMap` tag, using the existing

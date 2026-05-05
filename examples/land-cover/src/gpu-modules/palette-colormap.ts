@@ -13,6 +13,8 @@ export type PaletteColormapProps = {
 /**
  * Resolves the integer category code (read from `icolor.r`) into a final
  * RGBA color via integer-indexed lookup into a 256×1 colormap texture.
+ * Discards the fragment when the colormap entry is fully transparent
+ * (alpha=0), which `parseColormap` produces for the nodata index.
  *
  * Pipeline contract:
  * - Reads: `ivec4 icolor` (introduced by an upstream module such as
@@ -29,6 +31,9 @@ export const PaletteColormap = {
     "fs:#decl": `uniform sampler2D colormapTexture;`,
     "fs:DECKGL_FILTER_COLOR": /* glsl */ `
       color = texelFetch(colormapTexture, ivec2(icolor.r, 0), 0);
+      if (color.a == 0.0) {
+        discard;
+      }
     `,
   },
   getUniforms: (props: Partial<PaletteColormapProps>) => {
