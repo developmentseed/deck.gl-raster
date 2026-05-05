@@ -311,6 +311,9 @@ importers:
       '@developmentseed/epsg':
         specifier: workspace:^
         version: link:../../packages/epsg
+      '@developmentseed/geotiff':
+        specifier: workspace:^
+        version: link:../../packages/geotiff
       '@developmentseed/proj':
         specifier: workspace:^
         version: link:../../packages/proj

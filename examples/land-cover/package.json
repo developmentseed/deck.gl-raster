@@ -16,6 +16,7 @@
     "@deck.gl/mapbox": "^9.3.1",
     "@deck.gl/mesh-layers": "^9.3.1",
     "@developmentseed/deck.gl-geotiff": "workspace:^",
+    "@developmentseed/geotiff": "workspace:^",
     "@developmentseed/proj": "workspace:^",
     "@developmentseed/epsg": "workspace:^",
     "@luma.gl/core": "^9.3.2",
