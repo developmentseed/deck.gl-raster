@@ -91,7 +91,15 @@ export function InfoPanel({
             >
               Cloud-Optimized GeoTIFF
             </a>{" "}
-            rendered in the browser with <b>no server</b> using{" "}
+            of{" "}
+            <a
+              href="https://www.usgs.gov/annualnlcd"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              USGS Annual NLCD
+            </a>{" "}
+            data rendered in the browser with <b>no server</b> using{" "}
             <a
               href="https://developmentseed.org/deck.gl-raster/"
               target="_blank"
