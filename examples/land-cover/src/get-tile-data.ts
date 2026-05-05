@@ -36,7 +36,7 @@ export async function getTileData(
   const { width, height } = array;
 
   if (array.layout === "band-separate") {
-    throw new Error("Band-separate images not yet implemented.");
+    throw new Error("NLCD data is pixel interleaved");
   }
 
   const texture = device.createTexture({

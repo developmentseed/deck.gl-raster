@@ -44,7 +44,7 @@ async function epsgResolver(epsg: number) {
 }
 
 const COG_URL =
-  "https://s3.us-east-1.amazonaws.com/ds-deck.gl-raster-public/cog/Annual_NLCD_LndCov_2024_CU_C1V1.tif";
+  "https://data.source.coop/kylebarron/usgs-landcover/annual-nlcd/c1/v1/cu/mosaic/Annual_NLCD_LndCov_2024_CU_C1V1.tif";
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -121,6 +121,9 @@ export default function App() {
     epsgResolver,
     getTileData: customGetTileData,
     renderTile,
+    // Set to higher than default of 6 because source.coop proxy supports HTTP/2
+    // with multiplexing
+    maxRequests: 20,
     onGeoTIFFLoad: (tiff, options) => {
       // For debugging
       (window as any).tiff = tiff;
