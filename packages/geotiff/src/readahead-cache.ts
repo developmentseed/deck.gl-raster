@@ -1,3 +1,10 @@
+import type {
+  SourceCallback,
+  SourceMiddleware,
+  SourceRequest,
+} from "@chunkd/source";
+import { mutex } from "./concurrency.js";
+
 /**
  * Contiguous-from-zero buffer cache.
  *
@@ -20,7 +27,7 @@ export class SequentialBlockCache {
   }
 
   /** True iff the byte range `[start, end)` is fully cached. */
-  contains(start: number, end: number): boolean {
+  contains(_start: number, end: number): boolean {
     return end <= this.len;
   }
 
@@ -75,5 +82,86 @@ export class SequentialBlockCache {
       offset += part.byteLength;
     }
     return out.buffer;
+  }
+}
+
+/**
+ * Options for {@link SourceReadaheadCache}.
+ */
+export interface SourceReadaheadCacheOptions {
+  /** Bytes fetched on the first underlying read. */
+  initial: number;
+  /** Multiplier applied to the previous fetch size on each subsequent read. */
+  multiplier: number;
+}
+
+/**
+ * A chunkd {@link SourceMiddleware} that caches sequential reads from offset 0
+ * and grows underlying fetch sizes exponentially.
+ *
+ * Designed for TIFF metadata access, which is laid out near the start of the
+ * file: an initial small fetch covers most files, and subsequent fetches grow
+ * by `multiplier` to handle larger header structures with few round trips.
+ *
+ * Bypasses requests with negative offsets or undefined length (full-file
+ * reads) — those go directly to the next layer.
+ *
+ * Stateful per instance: pairs one-to-one with a single source's lifetime.
+ *
+ * @internal
+ */
+export class SourceReadaheadCache implements SourceMiddleware {
+  readonly name = "source:readahead-cache";
+
+  private readonly cache = new SequentialBlockCache();
+  private readonly initial: number;
+  private readonly multiplier: number;
+  private readonly lock = mutex();
+
+  constructor(options: SourceReadaheadCacheOptions) {
+    this.initial = options.initial;
+    this.multiplier = options.multiplier;
+  }
+
+  async fetch(req: SourceRequest, next: SourceCallback): Promise<ArrayBuffer> {
+    if (req.offset < 0 || req.length == null) {
+      return next(req);
+    }
+    const start = req.offset;
+    const end = req.offset + req.length;
+    const sourceSize = req.source.metadata?.size;
+
+    return this.lock(async () => {
+      while (!this.cache.contains(start, end)) {
+        const cacheLen = this.cache.len;
+        const needed = end - cacheLen;
+        let fetchSize = Math.max(this.nextFetchSize(cacheLen), needed);
+        if (sourceSize != null) {
+          const remaining = sourceSize - cacheLen;
+          if (remaining <= 0) {
+            break;
+          }
+          fetchSize = Math.min(fetchSize, remaining);
+        }
+        const buf = await next({
+          ...req,
+          offset: cacheLen,
+          length: fetchSize,
+        });
+        if (buf.byteLength === 0) {
+          break;
+        }
+        this.cache.appendBuffer(buf);
+      }
+      const sliceEnd = Math.min(end, this.cache.len);
+      return this.cache.slice(start, sliceEnd);
+    });
+  }
+
+  private nextFetchSize(existingLen: number): number {
+    if (existingLen === 0) {
+      return this.initial;
+    }
+    return Math.round(existingLen * this.multiplier);
   }
 }
