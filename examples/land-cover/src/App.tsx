@@ -107,8 +107,6 @@ export default function App() {
     getTileData,
     renderTile,
     onGeoTIFFLoad: (tiff, options) => {
-      // For debugging
-      (window as any).tiff = tiff;
       setGeotiff(tiff);
       const { west, south, east, north } = options.geographicBounds;
       mapRef.current?.fitBounds(

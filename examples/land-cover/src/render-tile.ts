@@ -20,8 +20,6 @@ export interface MakeRenderTileOptions {
  * pipeline.
  *
  * Returns `null` (skip rendering) until both shared textures are ready.
- * The recent fix in RasterTileLayer (#489) lets `renderTile` return null
- * to signal "no layer this frame".
  */
 export function makeRenderTile(
   options: MakeRenderTileOptions,
