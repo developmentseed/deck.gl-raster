@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { CategoryFilter } from "./CategoryFilter.js";
 import { HelpIcon } from "./HelpIcon.js";
-import { Legend } from "./Legend.js";
 
 interface InfoPanelProps {
   debug: boolean;
   debugOpacity: number;
   meshMaxError: number;
+  selected: Set<number>;
+  onSelectedChange: (next: Set<number>) => void;
   onDebugChange: (checked: boolean) => void;
   onDebugOpacityChange: (opacity: number) => void;
   onMeshMaxErrorChange: (error: number) => void;
@@ -27,6 +29,8 @@ export function InfoPanel({
   debug,
   debugOpacity,
   meshMaxError,
+  selected,
+  onSelectedChange,
   onDebugChange,
   onDebugOpacityChange,
   onMeshMaxErrorChange,
@@ -87,20 +91,26 @@ export function InfoPanel({
             >
               Cloud-Optimized GeoTIFF
             </a>{" "}
-            rendered in the browser with <b>no server</b> using{" "}
-            <code>deck.gl-raster</code>.
-          </p>
-          <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
+            of{" "}
+            <a
+              href="https://www.usgs.gov/annualnlcd"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              USGS Annual NLCD
+            </a>{" "}
+            data rendered in the browser with <b>no server</b> using{" "}
             <a
               href="https://developmentseed.org/deck.gl-raster/"
               target="_blank"
               rel="noopener noreferrer"
             >
-              deck.gl-raster Documentation ↗
+              <code>deck.gl-raster</code>
             </a>
+            .
           </p>
 
-          <Legend />
+          <CategoryFilter selected={selected} onChange={onSelectedChange} />
 
           <div
             style={{

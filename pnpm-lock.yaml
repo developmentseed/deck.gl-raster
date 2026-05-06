@@ -308,15 +308,24 @@ importers:
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
+      '@developmentseed/deck.gl-raster':
+        specifier: workspace:^
+        version: link:../../packages/deck.gl-raster
       '@developmentseed/epsg':
         specifier: workspace:^
         version: link:../../packages/epsg
+      '@developmentseed/geotiff':
+        specifier: workspace:^
+        version: link:../../packages/geotiff
       '@developmentseed/proj':
         specifier: workspace:^
         version: link:../../packages/proj
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.3
+      '@luma.gl/shadertools':
+        specifier: ^9.3.3
+        version: 9.3.3(@luma.gl/core@9.3.3)
       maplibre-gl:
         specifier: ^5.19.0
         version: 5.19.0

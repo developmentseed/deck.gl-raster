@@ -60,9 +60,10 @@ type COGLayerDataProps<DataT extends MinimalTileData> =
        * User-defined method to render data for a tile.
        *
        * Must be provided together with `getTileData`. Receives the value
-       * returned by `getTileData` and must return a render pipeline.
+       * returned by `getTileData` and must return a render pipeline, or
+       * `null` to skip rendering for this tile.
        */
-      renderTile: (data: DataT) => RenderTileResult;
+      renderTile: (data: DataT) => RenderTileResult | null;
     }
   | {
       getTileData?: undefined;
