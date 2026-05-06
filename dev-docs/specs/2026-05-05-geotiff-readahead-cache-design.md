@@ -1,8 +1,8 @@
 # GeoTIFF exponential read-ahead cache
 
-**Date:** 2026-05-05
+**Date:** 2026-05-05 (revised 2026-05-06)
 **Issue:** [#500](https://github.com/developmentseed/deck.gl-raster/issues/500)
-**Status:** Approved, ready for implementation plan
+**Status:** Initial implementation in PR [#509](https://github.com/developmentseed/deck.gl-raster/pull/509); follow-up refinements specified below.
 
 ## Problem
 
@@ -142,9 +142,85 @@ Mock a `Source.fetch` with a counter and assert that opening a real fixture take
 - No timeouts or cancellation in `mutex()`.
 - No per-source registry — one middleware instance is created per `fromUrl` call and tied to that source's lifetime, same as the existing `SourceChunk`/`SourceCache` lifecycle.
 
+## Revision (2026-05-06): scope cache to the open phase
+
+After live-testing PR [#509](https://github.com/developmentseed/deck.gl-raster/pull/509) against the land-cover example, the readahead cache caused catastrophic over-fetching when zooming. The middleware was being consulted *throughout the lifetime* of the `Tiff` instance — not just during initial `Tiff.create()` — because cogeotiff/core lazily reads tile metadata from the `headerSource` whenever a tile from a previously-untouched IFD is requested.
+
+Concretely, with default settings, panning the land-cover fixture issued underlying fetches of 14 MiB, 42 MiB, 127 MiB, 382 MiB. Each new far-offset request landed past `cache.len`, and the exponential growth (`fetchSize = round(cache.len * multiplier)`) blew up.
+
+### Root causes
+
+1. **cogeotiff lazy IFD reads.** When `Overview.fetchTile()` runs against an IFD whose tag values weren't bulk-read at open time, cogeotiff issues per-entry 4–8 byte reads against the `headerSource` for `TileOffsets`/`TileByteCounts`. Today's [`prefetchTags`](../../packages/geotiff/src/ifd.ts) only runs on the *primary* image — overviews and masks are not prefetched.
+2. **Cache strategy mismatch.** `SourceReadaheadCache` is a sequential-from-zero cache. It's right for the open phase (IFDs and tag values cluster near the start of the file), but wrong for arbitrary-offset reads after open. Each far-offset request pulls the cache forward exponentially.
+3. **Initial size too small for some files.** Default `prefetch = 32 KiB` requires 3 underlying fetches even for moderate metadata. geotiff.js uses 65536 (64 KiB) blocks; async-tiff uses 32 KiB.
+
+### Decisions
+
+1. **The readahead cache runs *only during the open phase*.** After `Tiff.create()` and the initial `prefetchTags(primaryImage)` complete, `SourceReadaheadCache.disable()` is called. From that point on, every call to `SourceReadaheadCache.fetch(req, next)` short-circuits to `next(req)` — the cache is neither consulted nor extended. Cogeotiff still holds a reference to the wrapped `SourceView`, but the middleware becomes a no-op pass-through. We do not mutate the `Tiff` instance; we don't need to.
+2. **Lazy per-IFD bulk prefetch on first tile request.** Each `Overview` lazily triggers a one-shot bulk read of `TileOffsets` + `TileByteCounts` (via cogeotiff's `image.fetch(TiffTag.…)` API) on its first `fetchTile`. The overview caches the resulting promise so concurrent first-tile requests share a single underlying fetch. Since these calls happen post-`disable()`, they bypass the readahead cache and go straight to raw HTTP — exactly one bulk request per array, per overview.
+3. **Default `prefetch` bumped from 32 KiB to 64 KiB.** Aligns with geotiff.js's default block size; cuts one round trip on moderately-sized COGs without measurably penalizing tiny ones. The multiplier dominates open-time round-trip count, but a slightly larger initial moves us closer to one-shot opens for typical files.
+4. **Background pre-warming is *not* in scope.** Hooking into `onTilesLoaded` to prefetch unvisited overviews is appealing but adds scheduling complexity. Track as a follow-up issue once the lazy mechanism above is in place — it can be layered on by calling the same per-IFD prefetch path opportunistically.
+
+### `SourceReadaheadCache.disable()` contract
+
+```ts
+class SourceReadaheadCache implements SourceMiddleware {
+  // ...
+  /**
+   * Permanently bypass the cache.
+   *
+   * After this is called, every {@link fetch} returns `next(req)` immediately
+   * — no cache consultation, no cache extension. Existing in-flight requests
+   * complete normally (the mutex preserves serialization).
+   *
+   * Intended to be called once `GeoTIFF.fromUrl` has finished its open-phase
+   * reads (`Tiff.create` + `prefetchTags(primaryImage)`). At that point the
+   * readahead cache has done its job; subsequent reads from cogeotiff are at
+   * arbitrary offsets (lazy IFD lookups, GDAL ghost-header probes) and do
+   * not benefit from sequential-from-zero growth.
+   *
+   * Idempotent. One-way: there is no `enable()`.
+   */
+  disable(): void;
+}
+```
+
+### Per-overview lazy prefetch contract
+
+`Overview.fetchTile` becomes:
+
+```ts
+async fetchTile(x, y, options): Promise<Tile> {
+  await this.ensureTagsLoaded();  // memoized; resolves once
+  return /* existing fetch path */;
+}
+
+private ensureTagsLoaded(): Promise<void> {
+  if (!this._tagsPromise) {
+    this._tagsPromise = Promise.all([
+      this.dataImage.fetch(TiffTag.TileOffsets),
+      this.dataImage.fetch(TiffTag.TileByteCounts),
+      this.maskImage?.fetch(TiffTag.TileOffsets) ?? Promise.resolve(null),
+      this.maskImage?.fetch(TiffTag.TileByteCounts) ?? Promise.resolve(null),
+    ]).then(() => undefined);
+  }
+  return this._tagsPromise;
+}
+```
+
+`Overview.fetchTiles` calls `ensureTagsLoaded` once before launching parallel tile fetches. The primary image's `GeoTIFF.fetchTile` doesn't need this — `prefetchTags` has already loaded those tags during open.
+
+### Tests
+
+Update existing tests and add new ones:
+- `readahead-cache.test.ts`: add a test for `disable()` — fetches before disable hit the cache normally; fetches after disable always pass through, never grow `cache.len`.
+- `integration-readahead.test.ts`: add an assertion that after open, simulated tile-offset reads at far offsets do *not* trigger cache growth (count underlying fetches; there should be one fetch per requested tag, not exponential growth).
+- New: `overview.test.ts` (or extend an existing test): assert that the second tile request from an overview does not trigger any new underlying tag fetches (i.e. `ensureTagsLoaded` is memoized).
+
 ## References
 
 - Issue: [developmentseed/deck.gl-raster#500](https://github.com/developmentseed/deck.gl-raster/issues/500)
+- Initial PR: [developmentseed/deck.gl-raster#509](https://github.com/developmentseed/deck.gl-raster/pull/509)
 - Reference implementation: [developmentseed/async-tiff PR #140](https://github.com/developmentseed/async-tiff/pull/140), file [`src/metadata/cache.rs`](https://github.com/developmentseed/async-tiff/blob/3dd77e3/src/metadata/cache.rs)
 - Existing source pipeline: [`packages/geotiff/src/geotiff.ts:233-262`](../../packages/geotiff/src/geotiff.ts#L233-L262)
 - chunkd `SourceMiddleware` interface: `@chunkd/source/build/src/middleware.d.ts`
