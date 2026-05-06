@@ -7,12 +7,12 @@ import epsgCsvUrl from "@developmentseed/epsg/all.csv.gz?url";
 import type { GeoTIFF } from "@developmentseed/geotiff";
 import { parseWkt } from "@developmentseed/proj";
 import type { Device } from "@luma.gl/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { InfoPanel } from "./components/InfoPanel.js";
 import { UIOverlay } from "./components/UIOverlay.js";
-import { getTileData as fetchLandCoverTile } from "./get-tile-data.js";
+import { getTileData } from "./get-tile-data.js";
 import { buildColormapTexture } from "./nlcd/build-colormap-texture.js";
 import {
   buildFilterLUT,
@@ -56,21 +56,6 @@ export default function App() {
   );
   const [device, setDevice] = useState<Device | null>(null);
   const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
-
-  // Capture the luma.gl Device from the first tile-load call. Identity
-  // changes once (null → Device) and then stays stable.
-  const customGetTileData = useCallback(
-    (
-      image: Parameters<typeof fetchLandCoverTile>[0],
-      options: Parameters<typeof fetchLandCoverTile>[1],
-    ) => {
-      if (!device) {
-        setDevice(options.device);
-      }
-      return fetchLandCoverTile(image, options);
-    },
-    [device],
-  );
 
   const colormapTexture = useMemo(() => {
     if (!device || !geotiff) {
@@ -119,7 +104,7 @@ export default function App() {
     debugOpacity,
     maxError: meshMaxError,
     epsgResolver,
-    getTileData: customGetTileData,
+    getTileData,
     renderTile,
     onGeoTIFFLoad: (tiff, options) => {
       // For debugging
@@ -155,7 +140,11 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={[cog_layer]} interleaved />
+        <DeckGLOverlay
+          layers={[cog_layer]}
+          interleaved
+          onDeviceInitialized={setDevice}
+        />
       </MaplibreMap>
 
       <UIOverlay>
