@@ -1,4 +1,3 @@
-import { SourceCache, SourceChunk } from "@chunkd/middleware";
 import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
@@ -14,6 +13,7 @@ import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
+import { SourceReadaheadCache } from "./readahead-cache.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 
@@ -223,38 +223,36 @@ export class GeoTIFF {
   /**
    * Create a new GeoTIFF from a URL.
    *
+   * Wraps the HTTP source with a sequential exponential read-ahead cache
+   * tuned for TIFF metadata: the first underlying fetch is `prefetch` bytes,
+   * and each subsequent fetch grows by `multiplier`. Tile data reads bypass
+   * the cache and use the raw HTTP source directly.
+   *
    * @param url The URL of the GeoTIFF to open.
-   * @param options Optional parameters for chunk size and cache size.
-   * @param options.chunkSize The minimum size for each request made to the source while reading header metadata. Defaults to 32KB.
-   * @param options.cacheSize The size of the cache for recently accessed header chunks. Currently no caching is applied to data fetches. Defaults to 1MB.
-   * @param options.prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
+   * @param options Optional parameters for the read-ahead cache.
+   * @param options.prefetch Initial fetch size in bytes for header/metadata reads. Defaults to 32KB, which covers most COGs in a single round trip.
+   * @param options.multiplier Growth factor applied to the previous fetch size on each subsequent header read. Defaults to 2.0.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
     url: string | URL,
     {
-      chunkSize = 1024 * 1024,
-      cacheSize = 10 * 1024 * 1024,
       prefetch = 32 * 1024,
-    }: { chunkSize?: number; cacheSize?: number; prefetch?: number } = {},
+      multiplier = 2,
+    }: { prefetch?: number; multiplier?: number } = {},
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url, {});
 
-    // Figure out optimal defaults in light of
-    // https://github.com/blacha/cogeotiff/issues/1431
-    // Defaulting to 32KB chunks is too small for tile data.
-    // https://github.com/developmentseed/deck.gl-raster/issues/294
+    const readahead = new SourceReadaheadCache({
+      initial: prefetch,
+      multiplier,
+    });
 
-    // read files in chunks
-    const chunk = new SourceChunk({ size: chunkSize });
-    // 10MB cache for recently accessed chunks
-    const cache = new SourceCache({ size: cacheSize });
-
-    const view = new SourceView(source, [chunk, cache]);
+    const view = new SourceView(source, [readahead]);
 
     return await GeoTIFF.open({
       // Use raw source for tile data to avoid unnecessary copying through the
-      // cache and chunk layers.
+      // read-ahead cache layer.
       dataSource: source,
       headerSource: view,
       prefetch,

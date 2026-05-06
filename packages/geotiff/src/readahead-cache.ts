@@ -69,10 +69,9 @@ export class SequentialBlockCache {
 
     if (parts.length === 1) {
       const part = parts[0]!;
-      return part.buffer.slice(
-        part.byteOffset,
-        part.byteOffset + part.byteLength,
-      );
+      const out = new Uint8Array(part.byteLength);
+      out.set(part);
+      return out.buffer;
     }
 
     const out = new Uint8Array(outLen);
