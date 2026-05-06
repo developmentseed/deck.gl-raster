@@ -116,13 +116,39 @@ export class SourceReadaheadCache implements SourceMiddleware {
   private readonly initial: number;
   private readonly multiplier: number;
   private readonly lock = mutex();
+  private disabled = false;
 
   constructor(options: SourceReadaheadCacheOptions) {
     this.initial = options.initial;
     this.multiplier = options.multiplier;
   }
 
+  /**
+   * Permanently bypass the cache.
+   *
+   * After this is called, every {@link fetch} returns `next(req)` immediately
+   * — no cache consultation, no cache extension. The flag is checked before
+   * acquiring the serialization mutex, so post-disable requests do not queue
+   * behind in-flight work.
+   *
+   * Intended to be called once `GeoTIFF.fromUrl` has finished its open-phase
+   * reads (`Tiff.create` + `prefetchTags(primaryImage)`). At that point the
+   * sequential read-ahead cache has done its job; subsequent reads from
+   * cogeotiff are at arbitrary offsets (lazy IFD lookups, GDAL ghost-header
+   * probes) and do not benefit from sequential-from-zero growth — in fact
+   * they cause catastrophic over-fetching as the cache grows exponentially
+   * to encompass each new far-offset request.
+   *
+   * Idempotent. One-way: there is no `enable()`.
+   */
+  disable(): void {
+    this.disabled = true;
+  }
+
   async fetch(req: SourceRequest, next: SourceCallback): Promise<ArrayBuffer> {
+    if (this.disabled) {
+      return next(req);
+    }
     if (req.offset < 0 || req.length == null) {
       return next(req);
     }

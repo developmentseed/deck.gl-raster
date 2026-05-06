@@ -254,3 +254,68 @@ describe("SourceReadaheadCache", () => {
     expect(buf.byteLength).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe("SourceReadaheadCache.disable()", () => {
+  it("after disable, every fetch passes through to next without consulting cache", async () => {
+    const { next, count } = makeNext("abcdefghijklmnop");
+    const m = new SourceReadaheadCache({ initial: 4, multiplier: 2 });
+
+    // Pre-disable fetch: cache extends.
+    await m.fetch(makeReq(0, 4), next);
+    expect(count()).toBe(1);
+
+    m.disable();
+
+    // Post-disable: cache is bypassed. Each request hits next directly.
+    await m.fetch(makeReq(0, 4), next);
+    expect(count()).toBe(2);
+    await m.fetch(makeReq(0, 4), next);
+    expect(count()).toBe(3);
+  });
+
+  it("after disable, far-offset reads do not trigger cache growth", async () => {
+    const { next, count } = makeNext("a".repeat(1024));
+    const m = new SourceReadaheadCache({ initial: 4, multiplier: 2 });
+
+    // Establish some cache.
+    await m.fetch(makeReq(0, 4), next);
+    expect(count()).toBe(1);
+
+    m.disable();
+
+    // A far-offset read post-disable issues exactly one underlying fetch
+    // — no exponential growth.
+    await m.fetch(makeReq(512, 4), next);
+    expect(count()).toBe(2);
+  });
+
+  it("disable() is idempotent", () => {
+    const m = new SourceReadaheadCache({ initial: 4, multiplier: 2 });
+    m.disable();
+    m.disable();
+    m.disable();
+    // No throw; still works as a pass-through.
+    expect(m.name).toBe("source:readahead-cache");
+  });
+
+  it("preserves bypass behavior for negative offsets and undefined length after disable", async () => {
+    const { next, count } = makeNext("abcd");
+    const m = new SourceReadaheadCache({ initial: 4, multiplier: 2 });
+    m.disable();
+
+    const negReq: SourceRequest = {
+      source: { metadata: undefined } as never,
+      offset: -2,
+      length: 2,
+    };
+    const fullReq: SourceRequest = {
+      source: { metadata: undefined } as never,
+      offset: 0,
+      length: undefined,
+    };
+
+    await m.fetch(negReq, next);
+    await m.fetch(fullReq, next);
+    expect(count()).toBe(2);
+  });
+});
