@@ -228,16 +228,31 @@ export class GeoTIFF {
    * and each subsequent fetch grows by `multiplier`. Tile data reads bypass
    * the cache and use the raw HTTP source directly.
    *
+   * The cache is **only active during the open phase**. Once `Tiff.create`
+   * and `prefetchTags(primaryImage)` finish, {@link SourceReadaheadCache.disable}
+   * is called: every subsequent fetch through the wrapped source becomes a
+   * pass-through to raw HTTP. This is intentional — cogeotiff/core lazily
+   * reads tile-offset/bytecount entries from the header source whenever a
+   * tile from a previously-untouched IFD is requested, and those reads are
+   * at arbitrary far offsets. With the cache active they would each pull
+   * the cache forward exponentially (e.g. a tile lookup at offset 8 MB with
+   * cache.len = 2 MB triggers a 4 MB underlying fetch). With it disabled,
+   * they go straight to raw HTTP and the cache stops mattering.
+   *
+   * Per-IFD bulk loading of `TileOffsets`/`TileByteCounts` happens lazily
+   * in {@link Overview.fetchTile} on first use — see {@link Overview} for
+   * details.
+   *
    * @param url The URL of the GeoTIFF to open.
    * @param options Optional parameters for the read-ahead cache.
-   * @param options.prefetch Initial fetch size in bytes for header/metadata reads. Defaults to 32KB, which covers most COGs in a single round trip.
+   * @param options.prefetch Initial fetch size in bytes for header/metadata reads. Defaults to 64KB, which covers most COGs in a single round trip.
    * @param options.multiplier Growth factor applied to the previous fetch size on each subsequent header read. Defaults to 2.0.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
     url: string | URL,
     {
-      prefetch = 32 * 1024,
+      prefetch = 64 * 1024,
       multiplier = 2,
     }: { prefetch?: number; multiplier?: number } = {},
   ): Promise<GeoTIFF> {
@@ -250,13 +265,20 @@ export class GeoTIFF {
 
     const view = new SourceView(source, [readahead]);
 
-    return await GeoTIFF.open({
+    const geotiff = await GeoTIFF.open({
       // Use raw source for tile data to avoid unnecessary copying through the
       // read-ahead cache layer.
       dataSource: source,
       headerSource: view,
       prefetch,
     });
+
+    // Open phase complete: scope the cache to the open phase only. From here
+    // on, all reads (lazy overview tag lookups, GDAL ghost-header probes,
+    // etc.) bypass the cache and go straight to raw HTTP.
+    readahead.disable();
+
+    return geotiff;
   }
 
   // ── Properties from the primary image ─────────────────────────────────
