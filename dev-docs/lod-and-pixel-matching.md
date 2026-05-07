@@ -136,11 +136,32 @@ device pixels (units cancel to `device-pixel / source-pixel`). When it
 is at most 1, a source pixel spans no more than a device pixel — the
 source is at least as fine as the display can resolve.
 
-The ratio is read from
-`this.context.device.canvasContext.cssToDeviceRatio()` inside the
-layer (which honors deck's `useDevicePixels` setting, including
-explicit numeric overrides) and threaded through `getTileIndices` into
-the traversal params.
+The ratio is computed inline in the layer as
+`drawingBufferWidth / cssWidth` (read off
+`this.context.device.getDefaultCanvasContext()` per traversal) and
+threaded through `getTileIndices` into the traversal params.
+
+This is the **drawing-buffer ratio**, not the system DPR
+(`window.devicePixelRatio` /
+`canvasContext.getDevicePixelRatio()`). The two are equal under
+`useDevicePixels: true` (deck.gl's default), and diverge when the
+user sets:
+
+- `useDevicePixels: false` → drawing buffer matches CSS, ratio = 1.
+- `useDevicePixels: <number>` → explicit override.
+- `setDrawingBufferSize()` called directly, or `maxDrawingBufferSize`
+  capping a 4K canvas → drawing buffer smaller than the screen's
+  physical pixels.
+
+We use the drawing-buffer ratio because it reflects what deck.gl is
+actually rendering to — which is the right thing for LOD to match.
+The luma.gl maintainers deprecated `cssToDeviceRatio()` (which
+historically returned this value) in part because the name conflated
+"drawing buffer" with "device pixel"; computing
+`drawingBufferWidth / cssWidth` explicitly avoids that ambiguity.
+The variable names elsewhere in our code (`pixelRatio`,
+`devicePixelsPerSourcePixel`) follow deck.gl's convention of using
+"device pixel" colloquially to mean "rendered framebuffer pixel."
 
 Behavior change: on a 2× display, ~4× more tiles fetched per view (one
 finer overview level, four times the tile count over the same area).
