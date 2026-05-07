@@ -68,6 +68,36 @@ type TextureDataT = {
   texture: Texture;
 };
 
+/**
+ * Module-level cache of opened GeoTIFFs keyed by URL.
+ *
+ * Header reads are small and the resulting GeoTIFF instance can be reused
+ * across the example's lifetime. Holding this outside the MosaicLayer's
+ * TileLayer cache lets us drop `maxCacheSize: Infinity` (which was previously
+ * needed to keep header data, but had the side-effect of pinning every parent
+ * tile — and its inner COGLayer's in-flight requests — in memory forever).
+ *
+ * The signal from the parent tile is intentionally ignored here: we want the
+ * header read to complete and stay cached even if the tile that triggered it
+ * is no longer on screen, since other tiles or a later pan-back will reuse it.
+ * Cancellation that matters (per-tile data reads) still flows through the
+ * COGLayer's signal prop.
+ */
+const geotiffCache = new Map<string, Promise<GeoTIFF>>();
+
+function getCachedGeoTIFF(url: string): Promise<GeoTIFF> {
+  let promise = geotiffCache.get(url);
+  if (!promise) {
+    promise = GeoTIFF.fromUrl(url).catch((err) => {
+      // Don't poison the cache on transient failures.
+      geotiffCache.delete(url);
+      throw err;
+    });
+    geotiffCache.set(url, promise);
+  }
+  return promise;
+}
+
 /** Custom tile loader that creates a GPU texture from the GeoTIFF image data. */
 async function getTileData(
   image: GeoTIFF | Overview,
@@ -376,14 +406,12 @@ export default function App() {
     const mosaicLayer = new MosaicLayer<PartialSTACItem, GeoTIFF>({
       id: "naip-mosaic-layer",
       sources: stacItems,
-      // For each source, fetch the GeoTIFF instance
-      // Doing this in getSource allows us to cache the results using TileLayer
-      // mechanisms.
-      getSource: async (source, { signal }) => {
-        const url = source.assets.image.href;
-        const tiff = await GeoTIFF.fromUrl(url, { signal });
-        return tiff;
-      },
+      // For each source, fetch the GeoTIFF instance from a module-level cache
+      // (see `geotiffCache` above). The cache is intentionally separate from
+      // the MosaicLayer's TileLayer cache so we can keep cheap header metadata
+      // around indefinitely without pinning every parent tile (and its inner
+      // COGLayer's in-flight tile requests) in memory.
+      getSource: async (source) => getCachedGeoTIFF(source.assets.image.href),
       renderSource: (source, { data, signal }) => {
         const url = source.assets.image.href;
         return new COGLayer<TextureDataT>({
@@ -406,10 +434,6 @@ export default function App() {
           signal,
         });
       },
-      // We have a max of 1000 STAC items fetched from the Microsoft STAC API;
-      // this isn't so large that we can't just cache all the GeoTIFF header
-      // metadata instances
-      maxCacheSize: Infinity,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.
       beforeId: "boundary_country_outline",
