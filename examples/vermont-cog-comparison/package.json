@@ -10,21 +10,21 @@
     "publish": "pnpm build && gh-pages -d dist -b gh-pages -e examples/vermont-cog-comparison"
   },
   "dependencies": {
-    "@deck.gl/core": "^9.3.1",
-    "@deck.gl/extensions": "^9.3.1",
-    "@deck.gl/geo-layers": "^9.3.1",
-    "@deck.gl/layers": "^9.3.1",
-    "@deck.gl/mapbox": "^9.3.1",
+    "@deck.gl/core": "^9.3.2",
+    "@deck.gl/extensions": "^9.3.2",
+    "@deck.gl/geo-layers": "^9.3.2",
+    "@deck.gl/layers": "^9.3.2",
+    "@deck.gl/mapbox": "^9.3.2",
     "@developmentseed/deck.gl-geotiff": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/geotiff": "workspace:^",
     "@luma.gl/core": "^9.3.2",
     "@luma.gl/shadertools": "^9.3.2",
-    "maplibre-gl": "^5.19.0",
-    "proj4": "^2.20.4",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "react-map-gl": "^8.1.0"
+    "maplibre-gl": "^5.24.0",
+    "proj4": "^2.20.8",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-map-gl": "^8.1.1"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",

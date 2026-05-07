@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "proj4": "^2.20.4",
+    "proj4": "^2.20.8",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
