@@ -74,7 +74,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
    * array, rebuilding only if the closure has produced a new array reference
    * since the last call. Returns `null` when the sources list is empty.
    */
-  private ensureIndex(): BuiltIndex<MosaicT> | null {
+  private buildSpatialIndex(): BuiltIndex<MosaicT> | null {
     const raw = this.getSources();
     if (raw === this.cachedRaw) {
       return this.cached;
@@ -123,7 +123,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       return [];
     }
 
-    const built = this.ensureIndex();
+    const built = this.buildSpatialIndex();
     if (built === null) {
       return [];
     }
