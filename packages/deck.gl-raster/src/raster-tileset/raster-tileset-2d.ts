@@ -63,13 +63,35 @@ export type TileMetadata = {
  *
  * Handles tile lifecycle, caching, and viewport-based loading.
  */
+/**
+ * Optional configuration for a {@link RasterTileset2D}.
+ */
+export interface RasterTileset2DOptions {
+  /**
+   * Returns the current device-pixels-per-CSS-pixel ratio. Read at every
+   * `getTileIndices` call so that runtime changes (e.g. dragging the
+   * window between displays of different DPR) take effect on the next
+   * tile evaluation. Defaults to a constant `1` if omitted, which makes
+   * LOD selection CSS-pixel-accurate but blurry on HiDPI displays. The
+   * `RasterTileLayer` wires this to `device.canvasContext.cssToDeviceRatio()`.
+   * See `dev-docs/lod-and-pixel-matching.md` § (A).
+   */
+  getPixelRatio?: () => number;
+}
+
 export class RasterTileset2D extends Tileset2D {
   private descriptor: TilesetDescriptor;
   private wgs84Bounds: Bounds;
+  private getPixelRatio: () => number;
 
-  constructor(opts: Tileset2DProps, descriptor: TilesetDescriptor) {
+  constructor(
+    opts: Tileset2DProps,
+    descriptor: TilesetDescriptor,
+    { getPixelRatio }: RasterTileset2DOptions = {},
+  ) {
     super(opts);
     this.descriptor = descriptor;
+    this.getPixelRatio = getPixelRatio ?? (() => 1);
 
     const rawBounds = transformBounds(
       this.descriptor.projectTo4326,
@@ -131,6 +153,7 @@ export class RasterTileset2D extends Tileset2D {
       maxZ,
       zRange: opts.zRange ?? null,
       wgs84Bounds: this.wgs84Bounds,
+      pixelRatio: this.getPixelRatio(),
     });
 
     return tileIndices;
