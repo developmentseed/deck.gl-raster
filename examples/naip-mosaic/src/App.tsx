@@ -77,19 +77,17 @@ type TextureDataT = {
  * needed to keep header data, but had the side-effect of pinning every parent
  * tile — and its inner COGLayer's in-flight requests — in memory forever).
  *
- * The signal from the parent tile is intentionally ignored here: we want the
- * header read to complete and stay cached even if the tile that triggered it
- * is no longer on screen, since other tiles or a later pan-back will reuse it.
- * Cancellation that matters (per-tile data reads) still flows through the
- * COGLayer's signal prop.
+ * The caller's signal is forwarded into `GeoTIFF.fromUrl` so an in-flight
+ * header read can be aborted when the parent tile leaves view. On any
+ * rejection (including `AbortError`) the entry is evicted, so a later visit
+ * to the same source restarts the fetch rather than reusing a failed promise.
  */
 const geotiffCache = new Map<string, Promise<GeoTIFF>>();
 
-function getCachedGeoTIFF(url: string): Promise<GeoTIFF> {
+function getCachedGeoTIFF(url: string, signal?: AbortSignal): Promise<GeoTIFF> {
   let promise = geotiffCache.get(url);
   if (!promise) {
-    promise = GeoTIFF.fromUrl(url).catch((err) => {
-      // Don't poison the cache on transient failures.
+    promise = GeoTIFF.fromUrl(url, { signal }).catch((err) => {
       geotiffCache.delete(url);
       throw err;
     });
@@ -411,7 +409,8 @@ export default function App() {
       // the MosaicLayer's TileLayer cache so we can keep cheap header metadata
       // around indefinitely without pinning every parent tile (and its inner
       // COGLayer's in-flight tile requests) in memory.
-      getSource: async (source) => getCachedGeoTIFF(source.assets.image.href),
+      getSource: async (source, { signal }) =>
+        getCachedGeoTIFF(source.assets.image.href, signal),
       renderSource: (source, { data, signal }) => {
         const url = source.assets.image.href;
         return new COGLayer<TextureDataT>({
