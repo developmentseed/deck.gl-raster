@@ -42,6 +42,10 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
       </>
     ),
   },
+  {
+    title: "Swisstopo National Map 1:1 million",
+    url: "https://data.geo.admin.ch/ch.swisstopo.pixelkarte-farbe-pk1000.noscale/swiss-map-raster1000_1000/swiss-map-raster1000_1000_krel_50_2056.tif",
+  },
   // {
   //   title: "Fields of the World — Denmark S2",
   //   url: "https://data.source.coop/kerner-lab/fields-of-the-world/denmark/s2_images/window_a/g22_00002_10.tif",
