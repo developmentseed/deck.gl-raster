@@ -18,7 +18,25 @@ export type MosaicLayerProps<
     | "maxCacheSize"
     | "maxRequests"
   > & {
-    /** List of mosaic sources to render */
+    /**
+     * List of mosaic sources to render.
+     *
+     * The mosaic updates reactively when this prop is replaced with a new
+     * array reference. Mutating the array in place will not trigger an
+     * update — pass a fresh array (e.g. `[...sources, newItem]`) to add or
+     * remove items.
+     *
+     * Tile cache reuse depends on stable tile IDs. By default, each source's
+     * tile ID is derived from its position in this array (see `MosaicSource`'s
+     * `x` / `y` / `z` for the exact derivation), so:
+     *
+     * - Appending items preserves all existing rendered tiles.
+     * - Reordering or removing items from the middle of the array invalidates
+     *   the cache slots of shifted items, causing them to re-fetch.
+     *
+     * Supply explicit `x`, `y`, and `z` identifiers per source if you need
+     * cache stability across arbitrary mutations of `sources`.
+     */
     sources: MosaicT[];
 
     /** Fetch data for this source. */
@@ -53,7 +71,6 @@ export class MosaicLayer<
   static override defaultProps = defaultProps;
 
   renderTileLayer(
-    mosaicSources: MosaicT[],
     renderSource: MosaicLayerProps<MosaicT, DataT>["renderSource"],
   ): TileLayer {
     const {
@@ -66,9 +83,13 @@ export class MosaicLayer<
       maxRequests,
     } = this.props;
 
+    // The arrow function is defined here so its lexical `this` is the
+    // MosaicLayer instance (which deck.gl reuses across prop updates),
+    // ensuring `this.props.sources` returns the latest array on every call.
+    const getSources = () => this.props.sources;
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
       constructor(opts: any) {
-        super(mosaicSources, opts);
+        super(getSources, opts);
       }
     }
 
@@ -112,10 +133,13 @@ export class MosaicLayer<
   override renderLayers(): Layer | null | LayersList {
     const { sources, renderSource } = this.props;
 
-    if (!sources || sources.length === 0) {
+    if (!sources) {
       return null;
     }
 
-    return this.renderTileLayer(sources, renderSource);
+    // Note: we deliberately render the inner TileLayer even when `sources` is
+    // empty so the same Tileset2D instance lives across empty -> non-empty
+    // transitions and picks up later updates without recreation.
+    return this.renderTileLayer(renderSource);
   }
 }

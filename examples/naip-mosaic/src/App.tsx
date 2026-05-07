@@ -414,7 +414,7 @@ export default function App() {
       maxCacheSize: Infinity,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.
-      beforeId: "tunnel_service_case",
+      beforeId: "boundary_country_outline",
     });
     layers.push(mosaicLayer);
   }
