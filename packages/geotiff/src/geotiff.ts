@@ -10,6 +10,8 @@ import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile, fetchTiles } from "./fetch.js";
 import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";
 import { parseGDALMetadata } from "./gdal-metadata.js";
+import type { ColorInterp } from "./colorinterp.js";
+import { inferColorInterpretation } from "./colorinterp.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
@@ -347,6 +349,15 @@ export class GeoTIFF {
   /** Number of bands (samples per pixel). */
   get count(): number {
     return this.image.value(TiffTag.SamplesPerPixel) ?? 1;
+  }
+
+  /** The color interpretation of each band in index order. */
+  get colorInterp(): ColorInterp[] {
+    return inferColorInterpretation({
+      count: this.count,
+      photometric: this.cachedTags.photometric,
+      extraSamples: this.cachedTags.extraSamples,
+    });
   }
 
   /** Bounding box [minX, minY, maxX, maxY] in the CRS. */
