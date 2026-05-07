@@ -68,6 +68,46 @@ type TextureDataT = {
   texture: Texture;
 };
 
+/**
+ * Module-level cache of opened GeoTIFFs keyed by URL.
+ *
+ * Header reads are small and the resulting GeoTIFF instance can be reused
+ * across the example's lifetime. Holding this outside the MosaicLayer's
+ * TileLayer cache lets us drop `maxCacheSize: Infinity` (which was previously
+ * needed to keep header data, but had the side-effect of pinning every parent
+ * tile — and its inner COGLayer's in-flight requests — in memory forever).
+ *
+ * We cache the `Promise<GeoTIFF>` rather than the resolved `GeoTIFF` so that
+ * concurrent callers for the same URL share one in-flight fetch instead of
+ * each kicking off a duplicate request before any of them sets the cache.
+ *
+ * The caller's signal is forwarded into `GeoTIFF.fromUrl` so an in-flight
+ * header read can be aborted when the parent tile leaves view. On any
+ * rejection (including `AbortError`) the entry is evicted, so a later visit
+ * to the same source restarts the fetch rather than reusing a failed promise.
+ *
+ * Caveat: this assumes at most one interested caller per URL at a time. If a
+ * second caller joined an in-flight fetch and the first caller aborted, the
+ * second would see an `AbortError` even though it never wanted to abort. In
+ * this example each STAC item maps to a unique parent tile so the assumption
+ * holds; promoting this pattern into library code would want refcounted
+ * cancellation (one underlying `AbortController`, abort only when all callers
+ * have signalled).
+ */
+const geotiffCache = new Map<string, Promise<GeoTIFF>>();
+
+function getCachedGeoTIFF(url: string, signal?: AbortSignal): Promise<GeoTIFF> {
+  let promise = geotiffCache.get(url);
+  if (!promise) {
+    promise = GeoTIFF.fromUrl(url, { signal }).catch((err) => {
+      geotiffCache.delete(url);
+      throw err;
+    });
+    geotiffCache.set(url, promise);
+  }
+  return promise;
+}
+
 /** Custom tile loader that creates a GPU texture from the GeoTIFF image data. */
 async function getTileData(
   image: GeoTIFF | Overview,
@@ -376,16 +416,13 @@ export default function App() {
     const mosaicLayer = new MosaicLayer<PartialSTACItem, GeoTIFF>({
       id: "naip-mosaic-layer",
       sources: stacItems,
-      // For each source, fetch the GeoTIFF instance
-      // Doing this in getSource allows us to cache the results using TileLayer
-      // mechanisms.
-      getSource: async (source, { signal: _ }) => {
-        const url = source.assets.image.href;
-        // TODO: restore passing down signal
-        // https://github.com/developmentseed/deck.gl-raster/issues/292
-        const tiff = await GeoTIFF.fromUrl(url);
-        return tiff;
-      },
+      // For each source, fetch the GeoTIFF instance from a module-level cache
+      // (see `geotiffCache` above). The cache is intentionally separate from
+      // the MosaicLayer's TileLayer cache so we can keep cheap header metadata
+      // around indefinitely without pinning every parent tile (and its inner
+      // COGLayer's in-flight tile requests) in memory.
+      getSource: async (source, { signal }) =>
+        getCachedGeoTIFF(source.assets.image.href, signal),
       renderSource: (source, { data, signal }) => {
         const url = source.assets.image.href;
         return new COGLayer<TextureDataT>({
@@ -408,10 +445,9 @@ export default function App() {
           signal,
         });
       },
-      // We have a max of 1000 STAC items fetched from the Microsoft STAC API;
-      // this isn't so large that we can't just cache all the GeoTIFF header
-      // metadata instances
-      maxCacheSize: Infinity,
+      // Smaller cache for MosaicLayer cache, since it caches full COGLayer
+      // instances
+      maxCacheSize: 5,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.
       beforeId: "boundary_country_outline",

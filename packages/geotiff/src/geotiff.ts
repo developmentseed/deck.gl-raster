@@ -98,17 +98,20 @@ export class GeoTIFF {
    * @param options.dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
    * @param options.headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs.
    * @param options.prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
+   * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    */
   static async open(options: {
     dataSource: Pick<Source, "fetch">;
     headerSource: Source;
     prefetch?: number;
+    signal?: AbortSignal;
   }): Promise<GeoTIFF> {
-    const { dataSource, headerSource, prefetch = 32 * 1024 } = options;
+    const { dataSource, headerSource, prefetch = 32 * 1024, signal } = options;
     const tiff = await Tiff.create(headerSource, {
       defaultReadSize: prefetch,
+      signal,
     });
-    return GeoTIFF.fromTiff(tiff, dataSource);
+    return GeoTIFF.fromTiff(tiff, dataSource, { signal });
   }
 
   /**
@@ -118,11 +121,14 @@ export class GeoTIFF {
    * (width, height).  Overviews are sorted from finest to coarsest resolution.
    *
    * @param dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
+   * @param options.signal An optional {@link AbortSignal} to cancel header tag reads.
    */
   static async fromTiff(
     tiff: Tiff,
     dataSource: Pick<Source, "fetch">,
+    options: { signal?: AbortSignal } = {},
   ): Promise<GeoTIFF> {
+    const { signal } = options;
     const images = tiff.images;
     if (images.length === 0) {
       throw new Error("TIFF does not contain any IFDs");
@@ -130,7 +136,7 @@ export class GeoTIFF {
 
     // Force loading of important tags in sub-images
     // https://github.com/blacha/cogeotiff/blob/4781a6375adf419da9f0319d15c8a67284dfb0c4/packages/core/src/tiff.image.ts#L72-L88
-    await Promise.all(images.map((image) => image.init(true)));
+    await Promise.all(images.map((image) => image.init(true, { signal })));
 
     const primaryImage = images[0]!;
     const gkd = extractGeoKeyDirectory(primaryImage);
@@ -165,7 +171,7 @@ export class GeoTIFF {
       return sb.width * sb.height - sa.width * sa.height;
     });
 
-    const cachedTags = await prefetchTags(primaryImage);
+    const cachedTags = await prefetchTags(primaryImage, { signal });
     const gdalMetadata = parseGDALMetadata(cachedTags.gdalMetadata, {
       count: cachedTags.samplesPerPixel,
     });
@@ -228,6 +234,7 @@ export class GeoTIFF {
    * @param options.chunkSize The minimum size for each request made to the source while reading header metadata. Defaults to 32KB.
    * @param options.cacheSize The size of the cache for recently accessed header chunks. Currently no caching is applied to data fetches. Defaults to 1MB.
    * @param options.prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
+   * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
@@ -236,7 +243,13 @@ export class GeoTIFF {
       chunkSize = 1024 * 1024,
       cacheSize = 10 * 1024 * 1024,
       prefetch = 32 * 1024,
-    }: { chunkSize?: number; cacheSize?: number; prefetch?: number } = {},
+      signal,
+    }: {
+      chunkSize?: number;
+      cacheSize?: number;
+      prefetch?: number;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url, {});
 
@@ -258,6 +271,7 @@ export class GeoTIFF {
       dataSource: source,
       headerSource: view,
       prefetch,
+      signal,
     });
   }
 
