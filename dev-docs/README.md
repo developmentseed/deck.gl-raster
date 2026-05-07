@@ -1,7 +1,6 @@
 # dev-docs
 
-Internal developer documentation for `deck.gl-raster`. Primary
-audience: contributors and future maintainers, including future-you.
+Internal developer documentation for `deck.gl-raster`.
 
 ## Layout
 
