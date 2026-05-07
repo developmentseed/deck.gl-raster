@@ -83,13 +83,13 @@ export class MosaicLayer<
       maxRequests,
     } = this.props;
 
-    // Capture `this` so the factory's getter resolves the latest sources prop
-    // on every Tileset2D update cycle, allowing the spatial index to rebuild
-    // when the consumer passes a new sources array.
-    const self = this;
+    // The arrow function is defined here so its lexical `this` is the
+    // MosaicLayer instance (which deck.gl reuses across prop updates),
+    // ensuring `this.props.sources` returns the latest array on every call.
+    const getSources = () => this.props.sources;
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
       constructor(opts: any) {
-        super(() => self.props.sources, opts);
+        super(getSources, opts);
       }
     }
 

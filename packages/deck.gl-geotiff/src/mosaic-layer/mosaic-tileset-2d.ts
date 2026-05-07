@@ -43,11 +43,26 @@ export type MosaicSource = {
  * closure returns a new array reference (compared by `===`); mutating the
  * array in place will not be detected.
  */
+/** Sources prepared for spatial querying: each source augmented with the
+ * `TileIndex` fields, paired with a Flatbush index over their bboxes. */
+type BuiltIndex<MosaicT> = {
+  sources: (TileIndex & MosaicT)[];
+  index: Flatbush;
+};
+
 export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
+  /** Closure returning the parent layer's current sources array. Re-evaluated
+   * on each `getTileIndices` call so updates to the layer's `sources` prop
+   * propagate without recreating the tileset. */
   private getSources: () => MosaicT[];
+
+  /** Last sources array reference the index was built from. Compared by `===`
+   * against the closure's next return value to decide whether to rebuild. */
   private cachedRaw: MosaicT[] | null = null;
-  private sources: (TileIndex & MosaicT)[] = [];
-  private index: Flatbush | null = null;
+
+  /** Sources + spatial index built from `cachedRaw`. `null` means the last
+   * observed sources list was empty (Flatbush requires at least one item). */
+  private cached: BuiltIndex<MosaicT> | null = null;
 
   constructor(getSources: () => MosaicT[], opts: Tileset2DProps) {
     super(opts);
@@ -55,33 +70,31 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
   }
 
   /**
-   * Rebuild the spatial index if the closure returns a new sources array
-   * reference. No-op when the reference is unchanged.
+   * Returns the prepared sources + spatial index for the current sources
+   * array, rebuilding only if the closure has produced a new array reference
+   * since the last call. Returns `null` when the sources list is empty.
    */
-  private ensureIndex(): void {
+  private ensureIndex(): BuiltIndex<MosaicT> | null {
     const raw = this.getSources();
     if (raw === this.cachedRaw) {
-      return;
+      return this.cached;
     }
     this.cachedRaw = raw;
+
+    if (raw.length === 0) {
+      this.cached = null;
+      return null;
+    }
 
     // Add x,y,z to each source for TileIndex compatibility
     // This is mostly just a hack to satisfy deck.gl typing requirements for
     // getTileIndices
-    this.sources = raw.map((source, i) => ({
+    const sources: (TileIndex & MosaicT)[] = raw.map((source, i) => ({
       x: source.x === undefined ? i : source.x,
       y: source.y === undefined ? 0 : source.y,
       z: source.z === undefined ? 0 : source.z,
       ...source,
     }));
-
-    // Flatbush requires numItems >= 1 and that all declared items are added
-    // before finish(); skip the build when there are no sources and let
-    // getTileIndices short-circuit on the empty cachedRaw.
-    if (raw.length === 0) {
-      this.index = null;
-      return;
-    }
 
     const index = new Flatbush(raw.length);
     for (const source of raw) {
@@ -89,7 +102,9 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       index.add(minX, minY, maxX, maxY);
     }
     index.finish();
-    this.index = index;
+
+    this.cached = { sources, index };
+    return this.cached;
   }
 
   override getTileIndices({
@@ -101,20 +116,20 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     maxZoom?: number;
     minZoom?: number;
   }): (TileIndex & MosaicT)[] {
-    this.ensureIndex();
-
     if (viewport.zoom < (minZoom ?? -Infinity)) {
       return [];
     }
     if (viewport.zoom > (maxZoom ?? Infinity)) {
       return [];
     }
-    if (this.cachedRaw === null || this.cachedRaw.length === 0) {
+
+    const built = this.ensureIndex();
+    if (built === null) {
       return [];
     }
 
     const bounds = viewport.getBounds();
-    const indices = this.index!.search(...bounds);
-    return indices.map((sourceIndex) => this.sources[sourceIndex]!);
+    const indices = built.index.search(...bounds);
+    return indices.map((sourceIndex) => built.sources[sourceIndex]!);
   }
 }
