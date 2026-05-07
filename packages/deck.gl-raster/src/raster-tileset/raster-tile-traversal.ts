@@ -243,6 +243,13 @@ export class RasterTileNode {
     maxZ?: number;
     /** Optional geographic bounds filter */
     bounds?: Bounds;
+    /**
+     * Device pixels per CSS pixel. The LOD test selects a tile when its
+     * source pixels are at most one *device* pixel wide; on HiDPI displays
+     * (`pixelRatio > 1`) this picks a finer overview than the CSS-pixel
+     * comparison would. See `dev-docs/lod-and-pixel-matching.md` § (A).
+     */
+    pixelRatio: number;
   }): boolean {
     // Reset state
     this.childVisible = false;
@@ -256,6 +263,7 @@ export class RasterTileNode {
       maxZ = this.descriptor.levels.length - 1,
       project,
       bounds,
+      pixelRatio,
     } = params;
 
     // Get bounding volume for this tile
@@ -284,19 +292,24 @@ export class RasterTileNode {
     // Only select this tile if no child is visible (prevents overlapping tiles)
     // "When pitch is low, force selection at maxZ."
     if (!this.childVisible && this.z >= minZ) {
-      const metersPerScreenPixel = getMetersPerPixelAtBoundingVolume(
+      const metersPerCSSPixel = getMetersPerPixelAtBoundingVolume(
         boundingVolume,
         viewport.zoom,
       );
 
       const tileMetersPerPixel = this.level.metersPerPixel;
 
+      // On-screen size of one source pixel, measured in device pixels.
+      // ≤ 1 means the source can fully resolve the rendered framebuffer.
+      // See dev-docs/lod-and-pixel-matching.md.
+      const devicePixelsPerSourcePixel =
+        (tileMetersPerPixel * pixelRatio) / metersPerCSSPixel;
+
       if (
-        tileMetersPerPixel <= metersPerScreenPixel ||
+        devicePixelsPerSourcePixel <= 1 ||
         this.z >= maxZ ||
         (children === null && this.z >= minZ)
       ) {
-        // "Select this tile when its scale is at least as detailed as the screen."
         this.selected = true;
         return true;
       }
@@ -664,9 +677,16 @@ export function getTileIndices(
     maxZ: number;
     zRange: ZRange | null;
     wgs84Bounds: Bounds;
+    /**
+     * Device pixels per CSS pixel for the LOD criterion. Defaults to 1
+     * (CSS-pixel-accurate selection). Pass deck.gl's
+     * `device.canvasContext.cssToDeviceRatio()` for device-pixel accuracy
+     * on HiDPI displays. See `dev-docs/lod-and-pixel-matching.md` § (A).
+     */
+    pixelRatio?: number;
   },
 ): TileIndex[] {
-  const { viewport, maxZ, zRange, wgs84Bounds } = opts;
+  const { viewport, maxZ, zRange, wgs84Bounds, pixelRatio = 1 } = opts;
 
   // Only define `project` function for Globe viewports, same as upstream
   const project: ((xyz: number[]) => number[]) | null =
@@ -737,6 +757,7 @@ export function getTileIndices(
     minZ,
     maxZ,
     bounds,
+    pixelRatio,
   };
 
   for (const root of roots) {
