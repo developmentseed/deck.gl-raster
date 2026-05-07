@@ -77,10 +77,22 @@ type TextureDataT = {
  * needed to keep header data, but had the side-effect of pinning every parent
  * tile — and its inner COGLayer's in-flight requests — in memory forever).
  *
+ * We cache the `Promise<GeoTIFF>` rather than the resolved `GeoTIFF` so that
+ * concurrent callers for the same URL share one in-flight fetch instead of
+ * each kicking off a duplicate request before any of them sets the cache.
+ *
  * The caller's signal is forwarded into `GeoTIFF.fromUrl` so an in-flight
  * header read can be aborted when the parent tile leaves view. On any
  * rejection (including `AbortError`) the entry is evicted, so a later visit
  * to the same source restarts the fetch rather than reusing a failed promise.
+ *
+ * Caveat: this assumes at most one interested caller per URL at a time. If a
+ * second caller joined an in-flight fetch and the first caller aborted, the
+ * second would see an `AbortError` even though it never wanted to abort. In
+ * this example each STAC item maps to a unique parent tile so the assumption
+ * holds; promoting this pattern into library code would want refcounted
+ * cancellation (one underlying `AbortController`, abort only when all callers
+ * have signalled).
  */
 const geotiffCache = new Map<string, Promise<GeoTIFF>>();
 
