@@ -379,11 +379,9 @@ export default function App() {
       // For each source, fetch the GeoTIFF instance
       // Doing this in getSource allows us to cache the results using TileLayer
       // mechanisms.
-      getSource: async (source, { signal: _ }) => {
+      getSource: async (source, { signal }) => {
         const url = source.assets.image.href;
-        // TODO: restore passing down signal
-        // https://github.com/developmentseed/deck.gl-raster/issues/292
-        const tiff = await GeoTIFF.fromUrl(url);
+        const tiff = await GeoTIFF.fromUrl(url, { signal });
         return tiff;
       },
       renderSource: (source, { data, signal }) => {
