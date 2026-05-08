@@ -12,7 +12,8 @@ top-level doc covers, update the doc in the same change. Examples:
 [`lod-and-pixel-matching.md`](lod-and-pixel-matching.md),
 [`gpu-modules.md`](gpu-modules.md),
 [`texture-alignment.md`](texture-alignment.md),
-[`boundless-tiles.md`](boundless-tiles.md).
+[`boundless-tiles.md`](boundless-tiles.md),
+[`world-copies.md`](world-copies.md).
 
 [`specs/`](specs/) contains *historical* design documents committed at
 the time a non-trivial change was being designed. They preserve the
