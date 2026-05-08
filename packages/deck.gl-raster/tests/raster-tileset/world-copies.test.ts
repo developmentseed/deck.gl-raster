@@ -1,13 +1,16 @@
-import { WebMercatorViewport } from "@deck.gl/core";
+import { _GlobeViewport, WebMercatorViewport } from "@deck.gl/core";
 import { CullingVolume, Plane } from "@math.gl/culling";
 import { lngLatToWorld } from "@math.gl/web-mercator";
 import { describe, expect, it } from "vitest";
-import { RasterTileNode } from "../../src/raster-tileset/raster-tile-traversal.js";
+import {
+  getTileIndices,
+  RasterTileNode,
+} from "../../src/raster-tileset/raster-tile-traversal.js";
 import type {
   TilesetDescriptor,
   TilesetLevel,
 } from "../../src/raster-tileset/tileset-interface.js";
-import type { Corners } from "../../src/raster-tileset/types.js";
+import type { Bounds, Corners } from "../../src/raster-tileset/types.js";
 
 const TILE_SIZE = 512;
 
@@ -89,8 +92,8 @@ describe("RasterTileNode.getBoundingVolume — worldOffset translation", () => {
     expect(aabb1[1]).toBeCloseTo(aabb0[1], 6);
     expect(aabb1[3]).toBeCloseTo(aabb0[3], 6);
 
-    expect(bv1.center[0]).toBeCloseTo(bv0.center[0] + TILE_SIZE, 6);
-    expect(bv1.center[1]).toBeCloseTo(bv0.center[1], 6);
+    expect(bv1.center[0]!).toBeCloseTo(bv0.center[0]! + TILE_SIZE, 6);
+    expect(bv1.center[1]!).toBeCloseTo(bv0.center[1]!, 6);
   });
 
   it("worldOffset=-2 shifts AABB and OBB center by -2*TILE_SIZE in X", () => {
@@ -102,7 +105,7 @@ describe("RasterTileNode.getBoundingVolume — worldOffset translation", () => {
 
     expect(aabb2[0]).toBeCloseTo(aabb0[0] - 2 * TILE_SIZE, 6);
     expect(aabb2[2]).toBeCloseTo(aabb0[2] - 2 * TILE_SIZE, 6);
-    expect(bv2.center[0]).toBeCloseTo(bv0.center[0] - 2 * TILE_SIZE, 6);
+    expect(bv2.center[0]!).toBeCloseTo(bv0.center[0]! - 2 * TILE_SIZE, 6);
   });
 
   it("does not mutate the cached offset-0 result when called with non-zero offsets", () => {
@@ -115,7 +118,7 @@ describe("RasterTileNode.getBoundingVolume — worldOffset translation", () => {
 
     const after = node.getBoundingVolume([0, 0], null, 0);
     expect(after.commonSpaceBounds).toEqual(beforeAabb);
-    expect(after.boundingVolume.center[0]).toBeCloseTo(beforeCenterX, 12);
+    expect(after.boundingVolume.center[0]!).toBeCloseTo(beforeCenterX!, 12);
   });
 });
 
@@ -186,5 +189,254 @@ describe("RasterTileNode.update — additive selection across worldOffset", () =
     const visible1 = node.update({ ...baseParams, worldOffset: 1 });
     expect(visible1).toBe(false);
     expect(node.getSelected()).toHaveLength(1);
+  });
+});
+
+// Convert (lng, lat) in WGS84 to EPSG:3857 meters. The traversal expects
+// `projectTo3857` to return EPSG:3857 meters, which is what the
+// `rescaleEPSG3857ToCommonSpace` step then re-scales into deck.gl common
+// space (0..512). The `lod-pixel-ratio.test.ts` identity-projection trick
+// only works for tiny coordinates near (0, 0); these tests place the
+// dataset away from origin so a real WGS84→3857 conversion is required.
+const WGS84_RADIUS = 6378137;
+function wgs84To3857(lng: number, lat: number): [number, number] {
+  const x = (lng * Math.PI * WGS84_RADIUS) / 180;
+  const y =
+    Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) * WGS84_RADIUS;
+  return [x, y];
+}
+function epsg3857ToWgs84(x: number, y: number): [number, number] {
+  const lng = (x * 180) / (Math.PI * WGS84_RADIUS);
+  const lat = (Math.atan(Math.exp(y / WGS84_RADIUS)) * 360) / Math.PI - 90;
+  return [lng, lat];
+}
+
+function makeWgs84Descriptor(opts: { corners: Corners }): TilesetDescriptor {
+  // Corners are stored in EPSG:3857 meters here (so projectedTileCorners
+  // returns 3857). projectTo3857 is then identity, projectTo4326 converts.
+  const corners = opts.corners;
+  return {
+    levels: [
+      {
+        matrixWidth: 1,
+        matrixHeight: 1,
+        tileWidth: 256,
+        tileHeight: 256,
+        metersPerPixel: 1,
+        projectedTileCorners: () => corners,
+        tileTransform: () => {
+          throw new Error("not used in this test");
+        },
+        crsBoundsToTileRange: () => ({
+          minCol: 0,
+          maxCol: 0,
+          minRow: 0,
+          maxRow: 0,
+        }),
+      },
+    ],
+    projectTo3857: (x, y) => [x, y],
+    projectTo4326: epsg3857ToWgs84,
+    projectFrom3857: (x, y) => [x, y],
+    projectFrom4326: wgs84To3857,
+    projectedBounds: [
+      Math.min(corners.topLeft[0], corners.bottomRight[0]),
+      Math.min(corners.topLeft[1], corners.bottomRight[1]),
+      Math.max(corners.topLeft[0], corners.bottomRight[0]),
+      Math.max(corners.topLeft[1], corners.bottomRight[1]),
+    ],
+  };
+}
+
+function cornersFromWgs84(
+  west: number,
+  south: number,
+  east: number,
+  north: number,
+): Corners {
+  const tl = wgs84To3857(west, north);
+  const tr = wgs84To3857(east, north);
+  const bl = wgs84To3857(west, south);
+  const br = wgs84To3857(east, south);
+  return { topLeft: tl, topRight: tr, bottomLeft: bl, bottomRight: br };
+}
+
+describe("getTileIndices — multi-world copy traversal", () => {
+  // Dataset just west of the antimeridian (lng [170, 180]).
+  const westOfAntimeridianCorners = cornersFromWgs84(170, -10, 180, 10);
+  const westOfAntimeridianBounds: Bounds = [170, -10, 180, 10];
+  const westOfAntimeridianDescriptor = makeWgs84Descriptor({
+    corners: westOfAntimeridianCorners,
+  });
+
+  // Dataset just east of the antimeridian (lng [-180, -170]).
+  const eastOfAntimeridianCorners = cornersFromWgs84(-180, -10, -170, 10);
+  const eastOfAntimeridianBounds: Bounds = [-180, -10, -170, 10];
+  const eastOfAntimeridianDescriptor = makeWgs84Descriptor({
+    corners: eastOfAntimeridianCorners,
+  });
+
+  // Centered dataset (lng [-10, 10]) for parity tests.
+  const centeredCorners = cornersFromWgs84(-10, -10, 10, 10);
+  const centeredBounds: Bounds = [-10, -10, 10, 10];
+  const centeredDescriptor = makeWgs84Descriptor({
+    corners: centeredCorners,
+  });
+
+  it("camera east of antimeridian sees dataset west of antimeridian via offset+1 (single-world traversal would miss it)", () => {
+    // Camera at lng=-179, zoom=4. Bounds straddle the antimeridian
+    // (~[-190, -168]) → subViewports.length === 2. The dataset's offset-0
+    // position (common-space x ≈ [497, 512]) is far outside the frustum
+    // (which is near x=0 / x=512 wrap). Only the offset+1 traversal places
+    // the dataset's translated AABB (x ≈ [-15, 0]) in the frustum.
+    const viewport = new WebMercatorViewport({
+      longitude: -179,
+      latitude: 0,
+      zoom: 4,
+      width: 400,
+      height: 400,
+      repeat: true,
+    });
+    expect(viewport.subViewports?.length ?? 0).toBeGreaterThan(1);
+
+    const indices = getTileIndices(westOfAntimeridianDescriptor, {
+      viewport,
+      maxZ: 0,
+      zRange: null,
+      wgs84Bounds: westOfAntimeridianBounds,
+    });
+    expect(indices.length).toBeGreaterThan(0);
+  });
+
+  it("camera west of antimeridian sees dataset east of antimeridian via offset-1", () => {
+    // Mirror of the previous test.
+    const viewport = new WebMercatorViewport({
+      longitude: 179,
+      latitude: 0,
+      zoom: 4,
+      width: 400,
+      height: 400,
+      repeat: true,
+    });
+    expect(viewport.subViewports?.length ?? 0).toBeGreaterThan(1);
+
+    const indices = getTileIndices(eastOfAntimeridianDescriptor, {
+      viewport,
+      maxZ: 0,
+      zRange: null,
+      wgs84Bounds: eastOfAntimeridianBounds,
+    });
+    expect(indices.length).toBeGreaterThan(0);
+  });
+
+  it("centered viewport returns a non-empty selection (parity baseline)", () => {
+    const viewport = new WebMercatorViewport({
+      longitude: 0,
+      latitude: 0,
+      zoom: 4,
+      width: 400,
+      height: 400,
+    });
+    const indices = getTileIndices(centeredDescriptor, {
+      viewport,
+      maxZ: 0,
+      zRange: null,
+      wgs84Bounds: centeredBounds,
+    });
+    expect(indices.length).toBeGreaterThan(0);
+  });
+
+  it("single-world parity: subViewports==null path returns the same selection as before the multi-world wiring", () => {
+    // repeat: false → subViewports is null. This is a snapshot of pre-fix
+    // behavior; if this test ever changes, it indicates we accidentally
+    // perturbed the offset-0 selection.
+    const viewport = new WebMercatorViewport({
+      longitude: 0,
+      latitude: 0,
+      zoom: 4,
+      width: 400,
+      height: 400,
+    });
+    expect(viewport.subViewports).toBeNull();
+
+    const indices = getTileIndices(centeredDescriptor, {
+      viewport,
+      maxZ: 0,
+      zRange: null,
+      wgs84Bounds: centeredBounds,
+    });
+    // Single root tile descriptor → exactly 1 selected tile at this zoom.
+    expect(indices).toHaveLength(1);
+    expect(indices[0]).toMatchObject({ x: 0, y: 0, z: 0 });
+  });
+
+  it("subViewports.length === 1 (narrow repeat:true viewport) does not run extra passes", () => {
+    // repeat: true with longitude/zoom that doesn't cross the antimeridian:
+    // subViewports populates with exactly one entry, so the multi-world
+    // branch must not fire. Selection should match the single-world case.
+    const viewport = new WebMercatorViewport({
+      longitude: 0,
+      latitude: 0,
+      zoom: 4,
+      width: 200,
+      height: 200,
+      repeat: true,
+    });
+    expect(viewport.subViewports?.length).toBe(1);
+
+    const indices = getTileIndices(centeredDescriptor, {
+      viewport,
+      maxZ: 0,
+      zRange: null,
+      wgs84Bounds: centeredBounds,
+    });
+    expect(indices).toHaveLength(1);
+    expect(indices[0]).toMatchObject({ x: 0, y: 0, z: 0 });
+  });
+
+  it("Globe view: subViewports is null, so the multi-world branch is gated off", () => {
+    // We don't call getTileIndices here because Globe view currently asserts
+    // in getBoundingVolume (the assert(false, "TODO: implement getBoundingVolume
+    // in Globe view") path). What this test actually protects: the activation
+    // gate is `viewport.subViewports?.length > 1`, and `_GlobeViewport` does
+    // not expose subViewports. If deck.gl ever wires it up this assumption
+    // breaks and this test goes red.
+    const globe = new _GlobeViewport({
+      longitude: 0,
+      latitude: 0,
+      zoom: 1,
+      width: 400,
+      height: 400,
+    });
+    expect(globe.subViewports).toBeNull();
+  });
+
+  it("MAX_MAPS cap: extreme zoom-out terminates without infinite loop", () => {
+    // zoom=0 with a 4000px-wide canvas → bounds span > 360° many times over,
+    // so subViewports.length is ~9. Without the MAX_MAPS cap the eastward
+    // and westward walks would not terminate on "no visible tiles" until
+    // they ran far further than necessary.
+    const viewport = new WebMercatorViewport({
+      longitude: 0,
+      latitude: 0,
+      zoom: 0,
+      width: 4000,
+      height: 1000,
+      repeat: true,
+    });
+    expect((viewport.subViewports?.length ?? 0) > 1).toBe(true);
+
+    const start = performance.now();
+    const indices = getTileIndices(centeredDescriptor, {
+      viewport,
+      maxZ: 0,
+      zRange: null,
+      wgs84Bounds: centeredBounds,
+    });
+    const elapsed = performance.now() - start;
+
+    expect(indices.length).toBeGreaterThan(0);
+    // 1s is generous for a single-root traversal — guards against runaway loops.
+    expect(elapsed).toBeLessThan(1000);
   });
 });

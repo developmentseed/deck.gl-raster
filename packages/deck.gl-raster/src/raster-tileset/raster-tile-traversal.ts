@@ -52,6 +52,13 @@ import type {
  */
 const TILE_SIZE = 512;
 
+/**
+ * Maximum number of world copies to test on each side of the primary world
+ * during multi-world tile traversal. Matches upstream
+ * `@deck.gl/geo-layers/tile-2d-traversal.ts`.
+ */
+const MAX_MAPS = 3;
+
 // Reference points used to sample tile boundaries for bounding volume
 // calculation.
 //
@@ -280,17 +287,28 @@ export class RasterTileNode {
       this.selected = false;
     }
 
-    // Get bounding volume for this tile
-    const { boundingVolume, commonSpaceBounds } = this.getBoundingVolume(
+    // Get bounding volume for this tile (translated for frustum culling at
+    // non-zero worldOffset).
+    const { boundingVolume } = this.getBoundingVolume(
       elevationBounds,
       project,
       worldOffset,
     );
 
     // Step 1: Bounds checking
-    // If geographic bounds are specified, reject tiles outside those bounds
-    if (bounds && !this.insideBounds(bounds, commonSpaceBounds)) {
-      return false;
+    // If geographic bounds are specified, reject tiles outside those bounds.
+    // The dataset's `bounds` live in primary-world common space, and a tile
+    // at `(x, y, z)` represents the same data regardless of which world copy
+    // it's drawn in — so always compare against the offset-0 AABB.
+    if (bounds) {
+      const { commonSpaceBounds } = this.getBoundingVolume(
+        elevationBounds,
+        project,
+        0,
+      );
+      if (!this.insideBounds(bounds, commonSpaceBounds)) {
+        return false;
+      }
     }
 
     // Frustum culling
@@ -809,6 +827,25 @@ export function getTileIndices(
     root.update(traversalParams);
   }
 
+  // World-copy passes: when the viewport spans multiple world copies (e.g.
+  // WebMercatorViewport with repeat: true panned across the antimeridian),
+  // re-run the traversal with the tile bounding volumes shifted by ±1, ±2…
+  // world copies along common-space X. A tile is selected if any pass selects
+  // it. See dev-docs/world-copies.md.
+  const subViewportCount = viewport.subViewports?.length ?? 0;
+  if (subViewportCount > 1) {
+    for (let offset = -1; offset >= -MAX_MAPS; offset--) {
+      if (!runOffsetPass(roots, traversalParams, offset)) {
+        break;
+      }
+    }
+    for (let offset = 1; offset <= MAX_MAPS; offset++) {
+      if (!runOffsetPass(roots, traversalParams, offset)) {
+        break;
+      }
+    }
+  }
+
   // Collect selected tiles
   const selectedNodes: RasterTileNode[] = [];
   for (const root of roots) {
@@ -816,6 +853,28 @@ export function getTileIndices(
   }
 
   return selectedNodes;
+}
+
+/**
+ * Run a non-zero world-offset traversal pass over each root.
+ *
+ * Returns `true` if any root tile was visible at this offset, signaling the
+ * caller to walk further from the primary world. Returns `false` when no
+ * tiles were visible — the offset has gone past the visible range and the
+ * caller stops walking that side.
+ */
+function runOffsetPass(
+  roots: RasterTileNode[],
+  baseParams: Parameters<RasterTileNode["update"]>[0],
+  worldOffset: number,
+): boolean {
+  let anyVisible = false;
+  for (const root of roots) {
+    if (root.update({ ...baseParams, worldOffset })) {
+      anyVisible = true;
+    }
+  }
+  return anyVisible;
 }
 
 /**
@@ -856,7 +915,11 @@ function translateBoundingVolume(
 ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
   const { boundingVolume, commonSpaceBounds } = base;
   const center = boundingVolume.center;
-  const translatedCenter = new Vector3(center[0] + dx, center[1], center[2]);
+  const translatedCenter = new Vector3(
+    (center[0] ?? 0) + dx,
+    center[1] ?? 0,
+    center[2] ?? 0,
+  );
   const translated = new OrientedBoundingBox(
     translatedCenter,
     boundingVolume.halfAxes,
