@@ -20,10 +20,11 @@
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport, assert } from "@deck.gl/core";
 import { transformBounds } from "@developmentseed/proj";
-import type { OrientedBoundingBox } from "@math.gl/culling";
+import { Vector3 } from "@math.gl/core";
 import {
   CullingVolume,
   makeOrientedBoundingBoxFromPoints,
+  OrientedBoundingBox,
   Plane,
 } from "@math.gl/culling";
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
@@ -250,6 +251,14 @@ export class RasterTileNode {
      * comparison would. See `dev-docs/lod-and-pixel-matching.md` § (A).
      */
     pixelRatio: number;
+    /**
+     * Number of world copies to shift this tile's bounding volume by along
+     * common-space X for frustum testing. Default `0` (primary world).
+     * Non-zero passes are additive — they may set `selected = true` but
+     * never override a previous `true` to `false`. See
+     * `dev-docs/world-copies.md`.
+     */
+    worldOffset?: number;
   }): boolean {
     // Reset state
     this.childVisible = false;
@@ -264,12 +273,14 @@ export class RasterTileNode {
       project,
       bounds,
       pixelRatio,
+      worldOffset = 0,
     } = params;
 
     // Get bounding volume for this tile
     const { boundingVolume, commonSpaceBounds } = this.getBoundingVolume(
       elevationBounds,
       project,
+      worldOffset,
     );
 
     // Step 1: Bounds checking
@@ -377,42 +388,64 @@ export class RasterTileNode {
    * Calculate the 3D bounding volume for this tile in deck.gl's common
    * coordinate space for frustum culling.
    *
+   * The cached result is computed once per `zRange` at world offset 0. Non-zero
+   * `worldOffset` values return a translated copy (center shifted by
+   * `worldOffset * TILE_SIZE` along common-space X) without polluting the cache.
+   *
    * TODO: In the future, we can add a fast path in the case that the source
    * tiling is already in EPSG:3857.
+   *
+   * @param zRange       Elevation `[min, max]` in common-space units.
+   * @param project      Projection function for Globe view, or `null` for Web
+   *                     Mercator common space.
+   * @param worldOffset  Number of world copies to translate the result by along
+   *                     common-space X. `0` returns the cached offset-0 volume.
+   *                     Non-zero values return a fresh translated copy. See
+   *                     `dev-docs/world-copies.md`.
    */
   getBoundingVolume(
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
+    worldOffset = 0,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
     const cached = this._boundingVolume;
+    let base: {
+      boundingVolume: OrientedBoundingBox;
+      commonSpaceBounds: Bounds;
+    };
     if (
       cached &&
       cached.zRange[0] === zRange[0] &&
       cached.zRange[1] === zRange[1]
     ) {
-      return cached.result;
+      base = cached.result;
+    } else {
+      // Case 1: Globe view - need to construct an oriented bounding box from
+      // reprojected sample points, but also using the `project` param
+      if (project) {
+        assert(false, "TODO: implement getBoundingVolume in Globe view");
+        // Reproject positions to wgs84 instead, then pass them into `project`
+        // return makeOrientedBoundingBoxFromPoints(refPointPositions);
+      }
+
+      // (Future) Case 2: Web Mercator input image, can directly compute AABB in
+      // common space
+
+      // (Future) Case 3: Source projection is already mercator, like UTM. We
+      // don't need to sample from reference points, we can only use the 4
+      // corners.
+
+      // Case 4: Generic case - sample reference points and reproject to
+      // Web Mercator, then convert to deck.gl common space
+      base = this._getGenericBoundingVolume(zRange);
+      this._boundingVolume = { zRange, result: base };
     }
 
-    // Case 1: Globe view - need to construct an oriented bounding box from
-    // reprojected sample points, but also using the `project` param
-    if (project) {
-      assert(false, "TODO: implement getBoundingVolume in Globe view");
-      // Reproject positions to wgs84 instead, then pass them into `project`
-      // return makeOrientedBoundingBoxFromPoints(refPointPositions);
+    if (worldOffset === 0) {
+      return base;
     }
 
-    // (Future) Case 2: Web Mercator input image, can directly compute AABB in
-    // common space
-
-    // (Future) Case 3: Source projection is already mercator, like UTM. We
-    // don't need to sample from reference points, we can only use the 4
-    // corners.
-
-    // Case 4: Generic case - sample reference points and reproject to
-    // Web Mercator, then convert to deck.gl common space
-    const result = this._getGenericBoundingVolume(zRange);
-    this._boundingVolume = { zRange, result };
-    return result;
+    return translateBoundingVolume(base, worldOffset * TILE_SIZE);
   }
 
   /**
@@ -796,6 +829,36 @@ function getMetersPerPixelAtBoundingVolume(
 ): number {
   const [_lng, lat] = worldToLngLat(boundingVolume.center);
   return getMetersPerPixel(lat, zoom);
+}
+
+/**
+ * Translate a tile's bounding volume by `dx` units along common-space X.
+ *
+ * Returns a fresh OBB and AABB; does not mutate the input. Used by the
+ * world-copy traversal to test the same tile at multiple shifted positions
+ * without recomputing the underlying geometry.
+ */
+function translateBoundingVolume(
+  base: { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds },
+  dx: number,
+): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
+  const { boundingVolume, commonSpaceBounds } = base;
+  const center = boundingVolume.center;
+  const translatedCenter = new Vector3(center[0] + dx, center[1], center[2]);
+  const translated = new OrientedBoundingBox(
+    translatedCenter,
+    boundingVolume.halfAxes,
+  );
+  const translatedBounds: Bounds = [
+    commonSpaceBounds[0] + dx,
+    commonSpaceBounds[1],
+    commonSpaceBounds[2] + dx,
+    commonSpaceBounds[3],
+  ];
+  return {
+    boundingVolume: translated,
+    commonSpaceBounds: translatedBounds,
+  };
 }
 
 /**
