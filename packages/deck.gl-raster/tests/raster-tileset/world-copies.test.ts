@@ -1,3 +1,6 @@
+import { WebMercatorViewport } from "@deck.gl/core";
+import { CullingVolume, Plane } from "@math.gl/culling";
+import { lngLatToWorld } from "@math.gl/web-mercator";
 import { describe, expect, it } from "vitest";
 import { RasterTileNode } from "../../src/raster-tileset/raster-tile-traversal.js";
 import type {
@@ -113,5 +116,75 @@ describe("RasterTileNode.getBoundingVolume — worldOffset translation", () => {
     const after = node.getBoundingVolume([0, 0], null, 0);
     expect(after.commonSpaceBounds).toEqual(beforeAabb);
     expect(after.boundingVolume.center[0]).toBeCloseTo(beforeCenterX, 12);
+  });
+});
+
+function makeCullingVolume(viewport: WebMercatorViewport): CullingVolume {
+  const planes = Object.values(viewport.getFrustumPlanes()).map(
+    ({ normal, distance }) => new Plane(normal.clone().negate(), distance),
+  );
+  return new CullingVolume(planes);
+}
+
+function makeBoundsCommonSpace(
+  west: number,
+  south: number,
+  east: number,
+  north: number,
+): [number, number, number, number] {
+  const bl = lngLatToWorld([west, south]);
+  const tr = lngLatToWorld([east, north]);
+  return [bl[0], bl[1], tr[0], tr[1]];
+}
+
+describe("RasterTileNode.update — additive selection across worldOffset", () => {
+  // Same descriptor as the bounding-volume tests but with a single root tile
+  // covering [-1, -1, 1, 1] near (lng, lat) = (0, 0).
+  const corners: Corners = {
+    topLeft: [-1, 1],
+    topRight: [1, 1],
+    bottomLeft: [-1, -1],
+    bottomRight: [1, -1],
+  };
+  const descriptor = makeDescriptor(corners);
+
+  it("a tile selected at worldOffset=0 stays selected after a worldOffset=+1 pass that doesn't see it", () => {
+    const node = new RasterTileNode(0, 0, 0, { descriptor });
+    // Camera centered on (0, 0) — sees the dataset only at offset 0, not at
+    // offset +1 (which would be at lng=360°).
+    const viewport = new WebMercatorViewport({
+      longitude: 0,
+      latitude: 0,
+      zoom: 5,
+      width: 200,
+      height: 200,
+      repeat: true,
+    });
+    const cullingVolume = makeCullingVolume(viewport);
+    const bounds = makeBoundsCommonSpace(-1, -1, 1, 1);
+
+    const baseParams = {
+      viewport,
+      project: null,
+      cullingVolume,
+      elevationBounds: [0, 0] as [number, number],
+      minZ: 0,
+      maxZ: 0,
+      bounds,
+      pixelRatio: 1,
+    };
+
+    // Primary pass selects the tile.
+    const visible0 = node.update({ ...baseParams, worldOffset: 0 });
+    expect(visible0).toBe(true);
+    // `getSelected()` walks the subtree returning nodes where `selected===true`.
+    // For this single-tile descriptor it is exactly `[node]` when selected.
+    expect(node.getSelected()).toHaveLength(1);
+
+    // Offset +1 pass: tile is far outside the frustum at offset +1, so the
+    // frustum check returns false. Selection from offset 0 must persist.
+    const visible1 = node.update({ ...baseParams, worldOffset: 1 });
+    expect(visible1).toBe(false);
+    expect(node.getSelected()).toHaveLength(1);
   });
 });

@@ -260,10 +260,6 @@ export class RasterTileNode {
      */
     worldOffset?: number;
   }): boolean {
-    // Reset state
-    this.childVisible = false;
-    this.selected = false;
-
     const {
       viewport,
       cullingVolume,
@@ -275,6 +271,14 @@ export class RasterTileNode {
       pixelRatio,
       worldOffset = 0,
     } = params;
+
+    // Reset per-frame state on the primary pass only. Non-zero worldOffset
+    // passes are additive — they can flip selected/childVisible from
+    // false → true but never the reverse. See dev-docs/world-copies.md.
+    if (worldOffset === 0) {
+      this.childVisible = false;
+      this.selected = false;
+    }
 
     // Get bounding volume for this tile
     const { boundingVolume, commonSpaceBounds } = this.getBoundingVolume(
@@ -331,7 +335,9 @@ export class RasterTileNode {
     // Note that if `this.children` is `null`, then there are no children
     // available because we're already at the finest tile resolution available
     if (children && children.length > 0) {
-      this.selected = false;
+      if (worldOffset === 0) {
+        this.selected = false;
+      }
 
       let anyChildVisible = false;
 
@@ -341,7 +347,13 @@ export class RasterTileNode {
         }
       }
 
-      this.childVisible = anyChildVisible;
+      // Only set childVisible to true; never override a previous true to
+      // false on a subsequent pass. Offset-0 already starts with
+      // childVisible=false (reset above), so this preserves the
+      // "any pass that finds a visible child wins" semantics.
+      if (anyChildVisible) {
+        this.childVisible = true;
+      }
       return anyChildVisible;
     }
 
