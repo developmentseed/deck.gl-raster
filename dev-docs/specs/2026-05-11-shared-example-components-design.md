@@ -356,3 +356,36 @@ None blocking. Resolved during brainstorming:
 - `Field` wrapper: kept.
 - Theme: port healpix's `createColorPalette` + `polished`.
 - Pilots: `sentinel-2` (rich) and `cog-basic` (minimal).
+
+## Addendum (2026-05-11): example links + GitHub icon
+
+Same-day iteration on the pilot branch, after eyeballing the rendered panels:
+
+- **`ExternalLink` is styled.** Chakra v3's `Link` is unstyled (inherits body
+  text), so links read as plain text. `ExternalLink` now renders with
+  `color="brand.600"`, `textDecorationLine="underline"`,
+  `textUnderlineOffset="2px"`, and `_hover={{ color: "brand.700" }}`. This
+  propagates to `DocsLink`, the new footer links, and inline prose links.
+
+- **`ControlPanel` renders an auto footer.** Two new optional props:
+  `docsHref?: string` (default `https://developmentseed.org/deck.gl-raster/`,
+  rendered as "Documentation ↗") and `sourcePath?: string` (e.g.
+  `"examples/cog-basic"`, rendered as "View source ↗" →
+  `https://github.com/developmentseed/deck.gl-raster/tree/main/{sourcePath}`).
+  The footer is a `borderTopWidth="1px"` row at the bottom of the collapsible
+  body: text links left, a GitHub-icon link to the repo root
+  (`https://github.com/developmentseed/deck.gl-raster`) right. The repo-icon
+  link and "Documentation" always show; "View source" shows when `sourcePath`
+  is set. `REPO_URL` + `sourceUrl(path)` constants live in `control-panel.tsx`.
+
+- **New dependency:** `@devseed-ui/collecticons-chakra@^4.0.0` added to
+  `examples/_shared/package.json` for the `CollecticonBrandGithub` icon (Chakra
+  v3-compatible; peers `@chakra-ui/react ^3.8.1` / `@emotion/react ^11.14.0`).
+
+- **Example changes:** `cog-basic` and `sentinel-2` pass `sourcePath` to
+  `ControlPanel` and drop their standalone `<DocsLink />` lines (now in the
+  footer). `sentinel-2` keeps its inline prose links. `DocsLink` stays exported.
+
+- **Also fixed in this iteration:** `DebugControls`' opacity `Slider.Root` was
+  zero-width (Chakra v3 sliders don't fill their parent by default) — now
+  `width="full"`.
