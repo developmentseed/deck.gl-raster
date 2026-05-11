@@ -1,3 +1,3 @@
 // Public surface of the shared example components package.
-// Exports are added as components are implemented.
-export {};
+export { createColorPalette } from "./styles/color-palette.js";
+export { system } from "./styles/theme.js";
