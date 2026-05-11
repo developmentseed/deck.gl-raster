@@ -317,21 +317,25 @@ should fail loudly in dev, as today).
 
 ## Follow-up roadmap
 
-Not in this PR; recorded so the v1 API is shaped with them in mind:
+Status after the remaining-examples migration (see
+[`2026-05-11-migrate-remaining-examples-to-shared-design.md`](./2026-05-11-migrate-remaining-examples-to-shared-design.md)):
 
-1. Migrate the remaining seven examples to `_shared` (`aef-mosaic`,
+1. ✅ **Done.** Migrated the remaining seven examples to `_shared` (`aef-mosaic`,
    `dynamical-zarr-ecmwf`, `land-cover`, `naip-mosaic`, `usgs-topo-cutline`,
    `vermont-cog-comparison`, `zarr-sentinel2-tci`).
-2. `HelpTooltip` — consolidates `aef-mosaic`'s `InfoTooltip` and `land-cover`'s
-   `HelpIcon` (Chakra `Tooltip`).
-3. `RangeSlider` (dual-thumb) — Chakra v3 `Slider` is multi-thumb natively;
-   consolidates the three raw `@radix-ui/react-slider` usages and lets those
-   examples drop the dep.
-4. `CategoryFilter` — `land-cover`'s nested indeterminate checkbox tree.
-5. `SwipeHandle` — `vermont-cog-comparison`'s draggable divider.
-6. `Colorbar` / `ColormapPreview` + `utils/sequential-color-scale.ts` —
-   colormap legend and picker (used by `naip-mosaic`, `dynamical-zarr-ecmwf`,
-   and a port of `land-cover`'s legend).
+2. ✅ **Done.** `HelpTooltip` — consolidates the local `InfoTooltip` / `HelpIcon`
+   widgets (built on Chakra `Tooltip` + a `@devseed-ui/collecticons-chakra` icon).
+3. ✅ **Done.** `RangeSlider` (dual-thumb, on Chakra v3's multi-thumb `Slider`) —
+   the four raw `@radix-ui/react-slider` usages now use it, and
+   `@radix-ui/react-slider` is dropped from the repo.
+4. `CategoryFilter` — `land-cover`'s nested indeterminate checkbox tree. Still
+   local to `land-cover` (rewritten on Chakra `Checkbox`); promote to `_shared`
+   if a second consumer appears.
+5. `SwipeHandle` — `vermont-cog-comparison`'s draggable divider. Still local.
+6. ◑ **Partial.** `ColormapPreview` (the sprite-strip preview) shipped and is
+   used by `naip-mosaic` and `dynamical-zarr-ecmwf`. A richer `Colorbar` with
+   tick labels + `utils/sequential-color-scale.ts`, and a port of `land-cover`'s
+   category legend, remain future work.
 7. *(Optional, low priority)* shared CSS reset import and/or
    `createExampleViteConfig` helper — only if per-example boilerplate proves
    annoying; deliberately deferred to keep examples copy-pasteable.

@@ -22,6 +22,7 @@ pnpm dev
 
 [`_shared/`](_shared/) is a private workspace package
 (`deck.gl-raster-examples-shared`) of reusable React UI components built on
-[Chakra UI](https://chakra-ui.com/). Examples that adopt it list
+[Chakra UI](https://chakra-ui.com/). All examples use it: they list
 `"deck.gl-raster-examples-shared": "workspace:*"` and import from the package
-root.
+root, e.g.
+`import { ControlPanel, DeckGlOverlay } from "deck.gl-raster-examples-shared"`.
