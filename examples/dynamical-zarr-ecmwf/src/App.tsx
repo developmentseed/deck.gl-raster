@@ -1,5 +1,3 @@
-import type { MapboxOverlayProps } from "@deck.gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
 import {
   createColormapTexture,
   decodeColormapSprite,
@@ -7,10 +5,11 @@ import {
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import type { Device, Texture } from "@luma.gl/core";
+import { DeckGlOverlay } from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
 import type { ColormapId } from "./ecmwf/colormap-choices.js";
 import {
@@ -24,14 +23,13 @@ import {
   ECMWF_LEAD_TIME_COUNT,
   ECMWF_LEAD_TIME_STEP_HOURS,
 } from "./ecmwf/metadata.js";
+import { makeRenderTile } from "./ecmwf/render-tile.js";
+import { buildSelection } from "./ecmwf/selection.js";
+import { ControlPanel } from "./ui/control-panel.js";
 
 /** Base step (hours) that `frameDurationMs` applies to. 3-hour steps dwell
  *  for `frameDurationMs`; 6-hour steps dwell for 2× that. */
 const BASE_STEP_HOURS = 3;
-
-import { makeRenderTile } from "./ecmwf/render-tile.js";
-import { buildSelection } from "./ecmwf/selection.js";
-import { ControlPanel } from "./ui/control-panel.js";
 
 const ZARR_URL =
   "https://data.source.coop/dynamical/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.zarr";
@@ -41,12 +39,6 @@ const ENSEMBLE_MEMBER_IDX = 0; // control run
 const INITIAL_RESCALE_MIN = -40; // °C
 const INITIAL_RESCALE_MAX = 50; // °C
 const INITIAL_FRAME_DURATION_MS = 100;
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
-}
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -238,7 +230,7 @@ export default function App() {
             },
             // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
             // doesn't know about it.
-            beforeId: "boundary_country_outline",
+            beforeId: "boundary_county",
           }),
         ]
       : [];
@@ -250,45 +242,33 @@ export default function App() {
         initialViewState={{ longitude: 10, latitude: 45, zoom: 4.5 }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay
+        <DeckGlOverlay
           layers={layers}
           interleaved
           onDeviceInitialized={setDevice}
         />
       </MaplibreMap>
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-          zIndex: 1000,
-        }}
-      >
-        <ControlPanel
-          leadTimeIdx={leadTimeIdx}
-          initTimeIdx={initTimeIdx}
-          initTimeCount={initTimeCount}
-          isPlaying={isPlaying}
-          colormapId={colormapId}
-          rescaleMin={rescaleMin}
-          rescaleMax={rescaleMax}
-          filterMin={filterMin}
-          filterMax={filterMax}
-          frameDurationMs={frameDurationMs}
-          onInitTimeIdxChange={setInitTimeIdx}
-          onLeadTimeIdxChange={setLeadTimeIdx}
-          onPlayPauseToggle={() => setIsPlaying((p) => !p)}
-          onColormapIdChange={setColormapId}
-          onRescaleMinChange={setRescaleMin}
-          onRescaleMaxChange={setRescaleMax}
-          onFilterMinChange={setFilterMin}
-          onFilterMaxChange={setFilterMax}
-          onFrameDurationMsChange={setFrameDurationMs}
-        />
-      </div>
+      <ControlPanel
+        leadTimeIdx={leadTimeIdx}
+        initTimeIdx={initTimeIdx}
+        initTimeCount={initTimeCount}
+        isPlaying={isPlaying}
+        colormapId={colormapId}
+        rescaleMin={rescaleMin}
+        rescaleMax={rescaleMax}
+        filterMin={filterMin}
+        filterMax={filterMax}
+        frameDurationMs={frameDurationMs}
+        onInitTimeIdxChange={setInitTimeIdx}
+        onLeadTimeIdxChange={setLeadTimeIdx}
+        onPlayPauseToggle={() => setIsPlaying((p) => !p)}
+        onColormapIdChange={setColormapId}
+        onRescaleMinChange={setRescaleMin}
+        onRescaleMaxChange={setRescaleMax}
+        onFilterMinChange={setFilterMin}
+        onFilterMaxChange={setFilterMax}
+        onFrameDurationMsChange={setFrameDurationMs}
+      />
     </div>
   );
 }
