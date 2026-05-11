@@ -179,8 +179,8 @@ const setFalseColorInfrared = {
  * (also `[-1, 1]`). A {@link LinearRescale} step later in the pipeline maps it
  * to `[0, 1]` for the {@link Colormap} texture lookup.
  */
-const ndvi = {
-  name: "ndvi",
+const normalizedDifference = {
+  name: "normalizedDifference",
   inject: {
     // Colors in the original image are ordered as: R, G, B, NIR
     "fs:DECKGL_FILTER_COLOR": /* glsl */ `
@@ -290,12 +290,15 @@ function renderNDVI(
   const { texture } = tileData;
   const renderPipeline: RasterModule[] = [
     { module: CreateTexture, props: { textureName: texture } },
-    { module: ndvi },
+    // Call normalized difference, creating a range of [-1, 1] in the red
+    // channel
+    { module: normalizedDifference },
+    // Filter pixels based on range of [-1, 1]
     {
       module: ndviFilter,
       props: { ndviMin: ndviRange[0], ndviMax: ndviRange[1] },
     },
-    // NDVI is computed in [-1, 1]; remap to [0, 1] for the colormap lookup.
+    // Rescale channel from [-1, 1] to [0, 1] for the colormap lookup
     { module: LinearRescale, props: { rescaleMin: -1, rescaleMax: 1 } },
     {
       module: Colormap,
