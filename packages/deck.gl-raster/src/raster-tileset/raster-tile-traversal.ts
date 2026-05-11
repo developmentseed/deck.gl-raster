@@ -28,6 +28,7 @@ import {
 } from "@math.gl/culling";
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
+import type { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -153,16 +154,31 @@ export class RasterTileNode {
     result: { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds };
   };
 
+  /**
+   * Optional cross-traversal bounding-volume cache, shared by every node in a
+   * traversal. When set, {@link getBoundingVolume} reads/writes it instead of
+   * the per-node `_boundingVolume` field, so bounding volumes survive across
+   * `getTileIndices` calls. Provided by `RasterTileset2D`.
+   */
+  private boundingVolumeCache?: BoundingVolumeCache;
+
   constructor(
     x: number,
     y: number,
     z: number,
-    { descriptor }: { descriptor: TilesetDescriptor },
+    {
+      descriptor,
+      boundingVolumeCache,
+    }: {
+      descriptor: TilesetDescriptor;
+      boundingVolumeCache?: BoundingVolumeCache;
+    },
   ) {
     this.x = x;
     this.y = y;
     this.z = z;
     this.descriptor = descriptor;
+    this.boundingVolumeCache = boundingVolumeCache;
   }
 
   /** Get the level info for this tile's z index. */
@@ -200,9 +216,15 @@ export class RasterTileNode {
 
       const children: RasterTileNode[] = [];
       const { descriptor } = this;
+      const boundingVolumeCache = this.boundingVolumeCache;
       for (let y = minRow; y <= maxRow; y++) {
         for (let x = minCol; x <= maxCol; x++) {
-          children.push(new RasterTileNode(x, y, childZ, { descriptor }));
+          children.push(
+            new RasterTileNode(x, y, childZ, {
+              descriptor,
+              boundingVolumeCache,
+            }),
+          );
         }
       }
 
@@ -384,13 +406,27 @@ export class RasterTileNode {
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
-    const cached = this._boundingVolume;
-    if (
-      cached &&
-      cached.zRange[0] === zRange[0] &&
-      cached.zRange[1] === zRange[1]
-    ) {
-      return cached.result;
+    const boundingVolumeCache = this.boundingVolumeCache;
+
+    // Cache lookup. A tile's bounding volume depends only on (z, x, y, zRange)
+    // for a given descriptor, so the shared cache (when the tileset provides
+    // one) is reused across getTileIndices calls / animation frames. Without a
+    // shared cache we fall back to the per-node `_boundingVolume` field (good
+    // for one traversal only), so standalone callers behave exactly as before.
+    if (boundingVolumeCache) {
+      const hit = boundingVolumeCache.get(this.z, this.x, this.y);
+      if (hit && hit.zRange[0] === zRange[0] && hit.zRange[1] === zRange[1]) {
+        return hit;
+      }
+    } else {
+      const cached = this._boundingVolume;
+      if (
+        cached &&
+        cached.zRange[0] === zRange[0] &&
+        cached.zRange[1] === zRange[1]
+      ) {
+        return cached.result;
+      }
     }
 
     // Case 1: Globe view - need to construct an oriented bounding box from
@@ -411,7 +447,11 @@ export class RasterTileNode {
     // Case 4: Generic case - sample reference points and reproject to
     // Web Mercator, then convert to deck.gl common space
     const result = this._getGenericBoundingVolume(zRange);
-    this._boundingVolume = { zRange, result };
+    if (boundingVolumeCache) {
+      boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...result });
+    } else {
+      this._boundingVolume = { zRange, result };
+    }
     return result;
   }
 
@@ -616,8 +656,10 @@ export function createRootTiles(opts: {
   descriptor: TilesetDescriptor;
   viewport: Pick<Viewport, "getBounds">;
   datasetWgs84Bounds: Bounds;
+  boundingVolumeCache?: BoundingVolumeCache;
 }): RasterTileNode[] {
-  const { descriptor, viewport, datasetWgs84Bounds } = opts;
+  const { descriptor, viewport, datasetWgs84Bounds, boundingVolumeCache } =
+    opts;
   const rootLevel = descriptor.levels[0]!;
 
   const roots: RasterTileNode[] = [];
@@ -628,7 +670,9 @@ export function createRootTiles(opts: {
     // handles the small amount of waste.
     for (let y = 0; y < rootLevel.matrixHeight; y++) {
       for (let x = 0; x < rootLevel.matrixWidth; x++) {
-        roots.push(new RasterTileNode(x, y, 0, { descriptor }));
+        roots.push(
+          new RasterTileNode(x, y, 0, { descriptor, boundingVolumeCache }),
+        );
       }
     }
     return roots;
@@ -656,7 +700,9 @@ export function createRootTiles(opts: {
   const rootRange = rootLevel.crsBoundsToTileRange(minX, minY, maxX, maxY);
   for (let y = rootRange.minRow; y <= rootRange.maxRow; y++) {
     for (let x = rootRange.minCol; x <= rootRange.maxCol; x++) {
-      roots.push(new RasterTileNode(x, y, 0, { descriptor }));
+      roots.push(
+        new RasterTileNode(x, y, 0, { descriptor, boundingVolumeCache }),
+      );
     }
   }
   return roots;
@@ -684,9 +730,28 @@ export function getTileIndices(
      * on HiDPI displays. See `dev-docs/lod-and-pixel-matching.md` § (A).
      */
     pixelRatio?: number;
+    /**
+     * Optional cross-traversal cache for tile bounding volumes. When provided,
+     * a tile's bounding volume (proj4 reprojections + an oriented-bounding-box
+     * fit) is computed once and reused on subsequent `getTileIndices` calls.
+     * Pass the {@link BoundingVolumeCache} owned by the `RasterTileset2D`. Omit
+     * it for a one-shot traversal with no cross-call caching.
+     */
+    boundingVolumeCache?: BoundingVolumeCache;
   },
 ): TileIndex[] {
-  const { viewport, maxZ, zRange, wgs84Bounds, pixelRatio = 1 } = opts;
+  const {
+    viewport,
+    maxZ,
+    zRange,
+    wgs84Bounds,
+    pixelRatio = 1,
+    boundingVolumeCache,
+  } = opts;
+
+  // Trim the cache (no-op when under cap) before the traversal — never during,
+  // so this frame can never evict an entry it will need again this frame.
+  boundingVolumeCache?.sweep();
 
   // Only define `project` function for Globe viewports, same as upstream
   const project: ((xyz: number[]) => number[]) | null =
@@ -746,6 +811,7 @@ export function getTileIndices(
     descriptor,
     viewport,
     datasetWgs84Bounds: wgs84Bounds,
+    boundingVolumeCache,
   });
 
   // Traverse and update visibility
