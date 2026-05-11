@@ -1,0 +1,27 @@
+{
+  "name": "deck.gl-raster-examples-shared",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "description": "Shared React UI components for deck.gl-raster examples.",
+  "license": "MIT",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^3.34.0",
+    "@deck.gl/mapbox": "^9.3.1",
+    "maplibre-gl": "^5.19.0",
+    "polished": "^4.3.1",
+    "react": "^19.2.4",
+    "react-map-gl": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
+  }
+}
