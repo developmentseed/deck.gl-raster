@@ -25,7 +25,29 @@ export async function getTileData(
 ): Promise<AefTileData> {
   const { device, sliceSpec, width, height, signal } = options;
 
-  const chunk = await zarr.get(arr, sliceSpec, { signal });
+  // TEMP DIAGNOSTIC
+  const sigTag =
+    signal && (signal as AbortSignal & { __id?: string }).__id !== undefined
+      ? (signal as AbortSignal & { __id: string }).__id
+      : signal
+        ? "sig#?"
+        : "<none>";
+  console.log(
+    `[diag] getTileData enter x=${options.x} y=${options.y} z=${options.z} sig=${sigTag} aborted=${signal?.aborted ?? "<none>"}`,
+  );
+
+  const chunk = await zarr.get(arr, sliceSpec, { signal }).catch((err) => {
+    console.log(
+      `[diag] zarr.get threw for x=${options.x} y=${options.y} z=${options.z}`,
+      {
+        sig: sigTag,
+        signalAborted: signal?.aborted,
+        signalReason: signal?.reason,
+        err,
+      },
+    );
+    throw err;
+  });
   const { data } = chunk;
 
   // Shape after slicing must be [NUM_BANDS, height, width]. The `time` dim
