@@ -1,3 +1,5 @@
+import { Box, Checkbox, chakra, Stack, Text } from "@chakra-ui/react";
+import { ExternalLink } from "deck.gl-raster-examples-shared";
 import { useState } from "react";
 import type { NlcdCategoryGroup } from "../nlcd/categories.js";
 import { ALL_NLCD_CODES, NLCD_CATEGORY_GROUPS } from "../nlcd/categories.js";
@@ -10,14 +12,49 @@ export interface CategoryFilterProps {
   onChange: (next: Set<number>) => void;
 }
 
+/** Tri-state checkbox value for `selectedCount` of `total` leaves checked. */
+function checkedState(
+  selectedCount: number,
+  total: number,
+): boolean | "indeterminate" {
+  if (selectedCount === 0) {
+    return false;
+  }
+  if (selectedCount === total) {
+    return true;
+  }
+  return "indeterminate";
+}
+
+/** The rotating `▼` chevron used in expand/collapse buttons. */
+function Chevron({
+  open,
+  fontSize = "xs",
+}: {
+  open: boolean;
+  fontSize?: string;
+}) {
+  return (
+    <chakra.span
+      fontSize={fontSize}
+      color="gray.500"
+      transition="transform 0.2s"
+      transform={open ? "rotate(0deg)" : "rotate(-90deg)"}
+    >
+      ▼
+    </chakra.span>
+  );
+}
+
 /**
  * Nested checkbox tree for toggling NLCD category visibility.
  *
  * - A master "All categories" checkbox toggles every leaf, with an
  *   indeterminate state when the selection is partial.
  * - Each heading has its own checkbox that toggles every leaf below it,
- *   also with an indeterminate state when its leaves are partial.
- * - Each heading is independently expandable/collapsible.
+ *   also with an indeterminate state when its leaves are partial; clicking
+ *   the heading text expands/collapses that group.
+ * - The whole "Categories" bar expands/collapses the filter.
  */
 export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -50,114 +87,73 @@ export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
   const allSelectedCount = ALL_NLCD_CODES.filter((code) =>
     selected.has(code),
   ).length;
-  const allSelected = allSelectedCount === ALL_NLCD_CODES.length;
-  const someSelected = allSelectedCount > 0 && !allSelected;
 
   return (
-    <div
-      style={{
-        borderTop: "1px solid #eee",
-        marginTop: "12px",
-      }}
-    >
-      <button
+    <Box pt="3" borderTopWidth="1px" borderColor="gray.200">
+      <chakra.button
         type="button"
-        onClick={() => setIsExpanded(!isExpanded)}
-        style={{
-          width: "100%",
-          padding: "12px 0",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          fontSize: "14px",
-          fontWeight: 500,
-        }}
+        onClick={() => setIsExpanded((x) => !x)}
+        aria-expanded={isExpanded}
+        display="flex"
+        alignItems="center"
+        justifyContent="space-between"
+        width="100%"
+        textAlign="left"
+        cursor="pointer"
+        userSelect="none"
+        bg="transparent"
+        border="none"
+        p="0"
+        m="0"
+        fontWeight="medium"
       >
-        <span>Categories</span>
-        <span
-          style={{
-            transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "transform 0.2s",
-          }}
-        >
-          ▼
-        </span>
-      </button>
+        Categories
+        <Chevron open={isExpanded} />
+      </chakra.button>
 
-      {isExpanded && (
+      {isExpanded ? (
         <>
-          <div
-            style={{
-              maxHeight: "400px",
-              overflowY: "auto",
-              paddingBottom: "8px",
-            }}
-          >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "13px",
-                fontWeight: 600,
-                marginBottom: "12px",
-                paddingBottom: "8px",
-                borderBottom: "1px solid #eee",
-                cursor: "pointer",
-                color: "#333",
-              }}
+          <Box maxHeight="400px" overflowY="auto" mt="3" pb="2">
+            <Checkbox.Root
+              display="flex"
+              width="full"
+              mb="3"
+              pb="2"
+              borderBottomWidth="1px"
+              borderColor="gray.200"
+              checked={checkedState(allSelectedCount, ALL_NLCD_CODES.length)}
+              onCheckedChange={(d) =>
+                setSelectedFor(ALL_NLCD_CODES, d.checked === true)
+              }
             >
-              <input
-                type="checkbox"
-                checked={allSelected}
-                ref={(el) => {
-                  if (el) {
-                    el.indeterminate = someSelected;
-                  }
-                }}
-                onChange={(e) =>
-                  setSelectedFor(ALL_NLCD_CODES, e.target.checked)
-                }
-                style={{ cursor: "pointer" }}
-              />
-              <span>All categories</span>
-            </label>
+              <Checkbox.HiddenInput />
+              <Checkbox.Control />
+              <Checkbox.Label fontWeight="semibold">
+                All categories
+              </Checkbox.Label>
+            </Checkbox.Root>
 
-            {NLCD_CATEGORY_GROUPS.map((group) => (
-              <CategoryGroupBlock
-                key={group.heading}
-                group={group}
-                selected={selected}
-                onSelectedChange={setSelectedFor}
-                isExpanded={expandedHeadings.has(group.heading)}
-                onToggleExpanded={() => toggleHeadingExpanded(group.heading)}
-              />
-            ))}
-          </div>
-          <div
-            style={{
-              marginTop: "12px",
-              fontSize: "12px",
-            }}
-          >
-            <a
-              href="https://www.mrlc.gov/data/legends/national-land-cover-database-class-legend-and-description"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: "#0066cc",
-                textDecoration: "none",
-              }}
-            >
-              Classification Reference
-            </a>
-          </div>
+            <Stack gap="2">
+              {NLCD_CATEGORY_GROUPS.map((group) => (
+                <CategoryGroupBlock
+                  key={group.heading}
+                  group={group}
+                  selected={selected}
+                  onSelectedChange={setSelectedFor}
+                  isExpanded={expandedHeadings.has(group.heading)}
+                  onToggleExpanded={() => toggleHeadingExpanded(group.heading)}
+                />
+              ))}
+            </Stack>
+          </Box>
+          <Text mt="3" fontSize="xs">
+            <ExternalLink href="https://www.mrlc.gov/data/legends/national-land-cover-database-class-legend-and-description">
+              Classification Reference ↗
+            </ExternalLink>
+          </Text>
         </>
-      )}
-    </div>
+      ) : null}
+    </Box>
   );
 }
 
@@ -178,101 +174,88 @@ function CategoryGroupBlock({
 }: CategoryGroupBlockProps) {
   const groupCodes = group.items.map((item) => item.value);
   const selectedCount = groupCodes.filter((code) => selected.has(code)).length;
-  const allSelected = selectedCount === groupCodes.length;
-  const someSelected = selectedCount > 0 && !allSelected;
 
   return (
-    <div style={{ marginBottom: "8px" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          fontSize: "13px",
-          fontWeight: 600,
-          color: "#333",
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={allSelected}
-          ref={(el) => {
-            if (el) {
-              el.indeterminate = someSelected;
-            }
-          }}
-          onChange={(e) => onSelectedChange(groupCodes, e.target.checked)}
-          style={{ cursor: "pointer", flexShrink: 0 }}
+    <Box>
+      <Stack direction="row" align="center" gap="2">
+        <Checkbox.Root
+          flexShrink={0}
           aria-label={`Toggle all ${group.heading} categories`}
-        />
-        <button
+          checked={checkedState(selectedCount, groupCodes.length)}
+          onCheckedChange={(d) =>
+            onSelectedChange(groupCodes, d.checked === true)
+          }
+        >
+          <Checkbox.HiddenInput />
+          <Checkbox.Control />
+        </Checkbox.Root>
+        <chakra.button
           type="button"
           onClick={onToggleExpanded}
-          style={{
-            all: "unset",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flex: 1,
-            padding: "4px 0",
-          }}
+          aria-expanded={isExpanded}
+          flex="1"
+          minW="0"
+          display="flex"
+          alignItems="center"
+          justifyContent="space-between"
+          textAlign="left"
+          cursor="pointer"
+          userSelect="none"
+          bg="transparent"
+          border="none"
+          p="0"
+          m="0"
+          fontWeight="semibold"
+          fontSize="sm"
         >
-          <span>{group.heading}</span>
-          <span
-            style={{
-              fontSize: "10px",
-              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.2s",
-              color: "#666",
-            }}
-          >
-            ▼
-          </span>
-        </button>
-      </div>
+          {group.heading}
+          <Chevron open={isExpanded} fontSize="2xs" />
+        </chakra.button>
+      </Stack>
 
-      {isExpanded &&
-        group.items.map((item) => (
-          <label
-            key={item.value}
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "8px",
-              marginLeft: "24px",
-              marginTop: "8px",
-              fontSize: "12px",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
+      {isExpanded ? (
+        <Stack gap="2" mt="2" pl="6">
+          {group.items.map((item) => (
+            <Checkbox.Root
+              key={item.value}
+              alignItems="flex-start"
               checked={selected.has(item.value)}
-              onChange={(e) => onSelectedChange([item.value], e.target.checked)}
-              style={{ marginTop: "3px", cursor: "pointer" }}
-            />
-            <span
-              style={{
-                width: "16px",
-                height: "16px",
-                borderRadius: "2px",
-                flexShrink: 0,
-                marginTop: "2px",
-                backgroundColor: `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`,
-                border: "1px solid rgba(0,0,0,0.1)",
-              }}
-            />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 500, marginBottom: "2px" }}>
-                {item.label}
-              </div>
-              <div style={{ color: "#666", lineHeight: "1.3" }}>
-                {item.description}
-              </div>
-            </div>
-          </label>
-        ))}
-    </div>
+              onCheckedChange={(d) =>
+                onSelectedChange([item.value], d.checked === true)
+              }
+            >
+              <Checkbox.HiddenInput />
+              <Checkbox.Control mt="0.5" />
+              <Box
+                as="span"
+                flexShrink={0}
+                mt="0.5"
+                width="3.5"
+                height="3.5"
+                borderRadius="2px"
+                borderWidth="1px"
+                borderColor="blackAlpha.200"
+                css={{
+                  backgroundColor: `rgb(${item.color[0]}, ${item.color[1]}, ${item.color[2]})`,
+                }}
+              />
+              <Checkbox.Label fontSize="xs">
+                <Text as="span" display="block" fontWeight="medium">
+                  {item.label}
+                </Text>
+                <Text
+                  as="span"
+                  display="block"
+                  color="gray.500"
+                  lineHeight="1.3"
+                >
+                  {item.description}
+                </Text>
+              </Checkbox.Label>
+            </Checkbox.Root>
+          ))}
+        </Stack>
+      ) : null}
+    </Box>
   );
 }

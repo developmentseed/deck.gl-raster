@@ -18,6 +18,8 @@ export interface DebugControlsProps {
   value: DebugState;
   /** Called with the next debug state on any change. */
   onChange: (next: DebugState) => void;
+  /** Label for the on/off checkbox. Defaults to `"Debug overlay"`. */
+  label?: string;
 }
 
 const LEVELS: { value: 1 | 2 | 3; label: string }[] = [
@@ -31,7 +33,11 @@ const LEVELS: { value: 1 | 2 | 3; label: string }[] = [
  * opacity slider, and (when `value.debugLevel` is provided) a detail-level
  * selector. Fully controlled.
  */
-export function DebugControls({ value, onChange }: DebugControlsProps) {
+export function DebugControls({
+  value,
+  onChange,
+  label = "Debug overlay",
+}: DebugControlsProps) {
   const { debug, debugOpacity, debugLevel } = value;
 
   return (
@@ -44,7 +50,7 @@ export function DebugControls({ value, onChange }: DebugControlsProps) {
       >
         <Checkbox.HiddenInput />
         <Checkbox.Control />
-        <Checkbox.Label>Debug overlay</Checkbox.Label>
+        <Checkbox.Label>{label}</Checkbox.Label>
       </Checkbox.Root>
 
       {debug ? (
