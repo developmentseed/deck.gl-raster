@@ -373,16 +373,13 @@ export class RasterTileNode {
   }
 
   /**
-   * Calculate the 3D bounding volume for this tile in deck.gl's common
-   * coordinate space for frustum culling.
+   * The 3D bounding volume for this tile in deck.gl's common coordinate space,
+   * used for frustum culling.
    *
-   * The result is memoized in `boundingVolumeCache` (keyed by `z/x/y`): a
-   * tile's bounding volume depends only on `(z, x, y, zRange)` for a given
-   * descriptor, so it is reused on a cache hit instead of redoing the proj4
-   * reprojections + oriented-bounding-box fit.
-   *
-   * TODO: In the future, we can add a fast path in the case that the source
-   * tiling is already in EPSG:3857.
+   * Memoized in `boundingVolumeCache` (keyed by `z/x/y`): a tile's bounding
+   * volume depends only on `(z, x, y, zRange)` for a given descriptor, so on a
+   * cache hit it is returned without rerunning {@link computeBoundingVolume}'s
+   * proj4 reprojections + oriented-bounding-box fit.
    */
   getBoundingVolume(
     zRange: ZRange,
@@ -393,7 +390,22 @@ export class RasterTileNode {
     if (hit && hit.zRange[0] === zRange[0] && hit.zRange[1] === zRange[1]) {
       return hit;
     }
+    const result = this.computeBoundingVolume(zRange, project);
+    boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...result });
+    return result;
+  }
 
+  /**
+   * Compute (without caching) the 3D bounding volume for this tile in deck.gl's
+   * common coordinate space.
+   *
+   * TODO: In the future, we can add a fast path in the case that the source
+   * tiling is already in EPSG:3857.
+   */
+  private computeBoundingVolume(
+    zRange: ZRange,
+    project: ((xyz: number[]) => number[]) | null,
+  ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
     // Case 1: Globe view - need to construct an oriented bounding box from
     // reprojected sample points, but also using the `project` param
     if (project) {
@@ -411,9 +423,7 @@ export class RasterTileNode {
 
     // Case 4: Generic case - sample reference points and reproject to
     // Web Mercator, then convert to deck.gl common space
-    const result = this._getGenericBoundingVolume(zRange);
-    boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...result });
-    return result;
+    return this._getGenericBoundingVolume(zRange);
   }
 
   /**
