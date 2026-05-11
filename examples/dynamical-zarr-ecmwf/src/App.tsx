@@ -8,6 +8,7 @@ import type { Device, Texture } from "@luma.gl/core";
 import { DeckGlOverlay } from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { StyleSpecification } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
@@ -25,6 +26,7 @@ import {
 } from "./ecmwf/metadata.js";
 import { makeRenderTile } from "./ecmwf/render-tile.js";
 import { buildSelection } from "./ecmwf/selection.js";
+import * as mapStyle from "./map_style.json";
 import { ControlPanel } from "./ui/control-panel.js";
 
 /** Base step (hours) that `frameDurationMs` applies to. 3-hour steps dwell
@@ -240,7 +242,8 @@ export default function App() {
       <MaplibreMap
         ref={mapRef}
         initialViewState={{ longitude: 10, latitude: 45, zoom: 4.5 }}
-        mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+        // Custom style that removes water layers from the basemap
+        mapStyle={mapStyle as StyleSpecification}
       >
         <DeckGlOverlay
           layers={layers}
