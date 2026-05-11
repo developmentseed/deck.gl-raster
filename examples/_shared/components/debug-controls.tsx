@@ -77,6 +77,7 @@ export function DebugControls({ value, onChange }: DebugControlsProps) {
           >
             <Slider.Root
               size="sm"
+              width="full"
               min={0}
               max={1}
               step={0.01}
