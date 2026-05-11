@@ -1,12 +1,9 @@
-import type { MapboxOverlayProps } from "@deck.gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
 import type {
   RasterModule,
   RenderTileResult,
 } from "@developmentseed/deck.gl-raster";
 import {
-  COLORMAP_INDEX,
   Colormap,
   CreateTexture,
   createColormapTexture,
@@ -17,31 +14,22 @@ import type { Overview } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
-import * as Slider from "@radix-ui/react-slider";
+import { DeckGlOverlay } from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer.js";
 import type { ColormapId } from "./colormap-choices.js";
 import { COLORMAP_CHOICES, DEFAULT_COLORMAP_ID } from "./colormap-choices.js";
+import type { RenderMode } from "./control-panel.js";
+import { ControlPanel } from "./control-panel.js";
 import "./proj.js";
 import STAC_DATA from "./minimal_stac.json";
 import { epsgResolver } from "./proj.js";
 
 /** Bounding box query passed to Microsoft Planetary Computer STAC API */
 const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];
-
-/** Total number of rows in the shipped colormap sprite. */
-const COLORMAP_SPRITE_HEIGHT = Object.keys(COLORMAP_INDEX).length;
-/** Displayed row height for the preview strip (vertically stretched from 1px). */
-const PREVIEW_ROW_HEIGHT = 14;
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
-}
 
 /**
  * A subset of STAC Item properties.
@@ -281,6 +269,7 @@ function renderNDVI(
 ): RenderTileResult {
   const { colormapTexture, ndviRange, colormapIndex, colormapReversed } =
     options;
+  console.log("ndviRange", ndviRange);
   const { texture } = tileData;
   const renderPipeline: RasterModule[] = [
     { module: CreateTexture, props: { textureName: texture } },
@@ -301,14 +290,6 @@ function renderNDVI(
   ];
   return { renderPipeline };
 }
-
-type RenderMode = "trueColor" | "falseColor" | "ndvi";
-
-const RENDER_MODE_OPTIONS: { value: RenderMode; label: string }[] = [
-  { value: "trueColor", label: "True Color" },
-  { value: "falseColor", label: "False Color Infrared" },
-  { value: "ndvi", label: "NDVI" },
-];
 
 // @ts-expect-error function kept for reference
 // biome-ignore lint/correctness/noUnusedVariables: For now we hard-code our STAC results instead of fetching from the API. We keep this function around for reference and future use.
@@ -346,7 +327,6 @@ export default function App() {
   const [ndviRange, setNdviRange] = useState<[number, number]>([-1, 1]);
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
-  const [panelOpen, setPanelOpen] = useState(true);
   const [colormapId, setColormapId] = useState<ColormapId>(DEFAULT_COLORMAP_ID);
   const [colormapImage, setColormapImage] = useState<ImageData | null>(null);
 
@@ -473,287 +453,25 @@ export default function App() {
         minZoom={4}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay
+        <DeckGlOverlay
           layers={layers}
           interleaved
           onDeviceInitialized={setDevice}
         />
       </MaplibreMap>
 
-      {/* UI Overlay Container */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-          zIndex: 1000,
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "20px",
-            background: "white",
-            padding: "16px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            width: "300px",
-            pointerEvents: "auto",
-          }}
-        >
-          <button
-            type="button"
-            style={{
-              all: "unset",
-              width: "100%",
-              margin: 0,
-              fontSize: "16px",
-              fontWeight: "bold",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              userSelect: "none",
-            }}
-            onClick={() => setPanelOpen((o) => !o)}
-          >
-            NAIP Mosaic
-            <span
-              style={{
-                fontSize: "12px",
-                transition: "transform 0.2s",
-                transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
-              }}
-            >
-              ▼
-            </span>
-          </button>
-          {panelOpen && (
-            <>
-              <p
-                style={{
-                  margin: "8px 0 12px 0",
-                  fontSize: "14px",
-                  color: "#666",
-                }}
-              >
-                {loading && "Loading STAC items... "}
-                {error && `Error: ${error}`}
-                {!loading && !error && `Fetched ${stacItems.length} `}
-                <a
-                  href="https://stacspec.org/en"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  STAC
-                </a>
-                {" Items "}
-                from{" "}
-                <a
-                  href="https://planetarycomputer.microsoft.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Microsoft Planetary Computer
-                </a>
-                's{" "}
-                <a
-                  href="https://planetarycomputer.microsoft.com/dataset/naip"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  NAIP dataset
-                </a>
-                .
-                <br />
-                <br />
-                All imagery is rendered client-side with{" "}
-                <b>no server involved</b> using{" "}
-                <a
-                  href="https://github.com/developmentseed/deck.gl-raster"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    fontFamily: "monospace",
-                  }}
-                >
-                  @developmentseed/deck.gl-raster
-                </a>
-                .
-              </p>
-              <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
-                <a
-                  href="https://developmentseed.org/deck.gl-raster/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  deck.gl-raster Documentation ↗
-                </a>
-              </p>
-
-              <div>
-                <label
-                  htmlFor="render-mode"
-                  style={{ fontSize: "14px", fontWeight: 500 }}
-                >
-                  Render Mode
-                </label>
-                <select
-                  id="render-mode"
-                  value={renderMode}
-                  onChange={(e) => setRenderMode(e.target.value as RenderMode)}
-                  style={{
-                    width: "100%",
-                    padding: "8px",
-                    fontSize: "14px",
-                    borderRadius: "4px",
-                    border: "1px solid #ccc",
-                  }}
-                >
-                  {RENDER_MODE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {renderMode === "ndvi" && (
-                <div style={{ marginTop: "16px" }}>
-                  <div>
-                    <label
-                      htmlFor="colormap-select"
-                      style={{ fontSize: "14px", fontWeight: 500 }}
-                    >
-                      Colormap
-                    </label>
-                    <select
-                      id="colormap-select"
-                      value={colormapId}
-                      onChange={(e) =>
-                        setColormapId(e.target.value as ColormapId)
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        marginTop: "4px",
-                        fontSize: "14px",
-                        borderRadius: "4px",
-                        border: "1px solid #ccc",
-                      }}
-                    >
-                      {COLORMAP_CHOICES.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                    <div
-                      role="img"
-                      aria-label={`Colormap preview: ${colormapChoice.label}`}
-                      style={{
-                        width: "100%",
-                        height: `${PREVIEW_ROW_HEIGHT}px`,
-                        marginTop: "8px",
-                        borderRadius: "2px",
-                        border: "1px solid #ddd",
-                        backgroundImage: `url(${colormapsPngUrl})`,
-                        backgroundRepeat: "no-repeat",
-                        backgroundSize: `100% ${COLORMAP_SPRITE_HEIGHT * PREVIEW_ROW_HEIGHT}px`,
-                        backgroundPosition: `0 -${colormapChoice.colormapIndex * PREVIEW_ROW_HEIGHT}px`,
-                        transform: colormapChoice.reversed
-                          ? "scaleX(-1)"
-                          : undefined,
-                        imageRendering: "pixelated",
-                      }}
-                    />
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "14px",
-                      fontWeight: 500,
-                      display: "block",
-                      marginTop: "16px",
-                    }}
-                  >
-                    NDVI Range
-                  </span>
-                  <Slider.Root
-                    min={-1}
-                    max={1}
-                    step={0.01}
-                    value={ndviRange}
-                    onValueChange={(v) => setNdviRange(v as [number, number])}
-                    style={{
-                      position: "relative",
-                      display: "flex",
-                      alignItems: "center",
-                      userSelect: "none",
-                      touchAction: "none",
-                      height: "20px",
-                      marginTop: "12px",
-                    }}
-                  >
-                    <Slider.Track
-                      style={{
-                        position: "relative",
-                        flexGrow: 1,
-                        height: "4px",
-                        background: "#ddd",
-                        borderRadius: "2px",
-                      }}
-                    >
-                      <Slider.Range
-                        style={{
-                          position: "absolute",
-                          height: "100%",
-                          background: "#4a7c59",
-                          borderRadius: "2px",
-                        }}
-                      />
-                    </Slider.Track>
-                    {(["min", "max"] as const).map((key) => (
-                      <Slider.Thumb
-                        key={key}
-                        style={{
-                          display: "block",
-                          width: "16px",
-                          height: "16px",
-                          borderRadius: "50%",
-                          background: "#4a7c59",
-                          border: "2px solid white",
-                          boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-                          cursor: "pointer",
-                          outline: "none",
-                        }}
-                      />
-                    ))}
-                  </Slider.Root>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginTop: "6px",
-                      fontSize: "12px",
-                      color: "#666",
-                    }}
-                  >
-                    <span>-1</span>
-                    <span>
-                      {ndviRange[0].toFixed(2)} – {ndviRange[1].toFixed(2)}
-                    </span>
-                    <span>+1</span>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+      <ControlPanel
+        loading={loading}
+        error={error}
+        stacItemCount={stacItems.length}
+        renderMode={renderMode}
+        onRenderModeChange={setRenderMode}
+        colormapId={colormapId}
+        onColormapIdChange={setColormapId}
+        colormapChoice={colormapChoice}
+        ndviRange={ndviRange}
+        onNdviRangeChange={setNdviRange}
+      />
     </div>
   );
 }
