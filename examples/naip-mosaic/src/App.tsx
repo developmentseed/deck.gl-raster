@@ -11,6 +11,7 @@ import {
   CreateTexture,
   createColormapTexture,
   decodeColormapSprite,
+  LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import type { Overview } from "@developmentseed/geotiff";
@@ -170,17 +171,22 @@ const setFalseColorInfrared = {
   },
 } as const satisfies ShaderModule;
 
-/** Shader module that calculates NDVI. */
-const ndvi = {
-  name: "ndvi",
+/**
+ * Shader module that computes NDVI into `color.r`.
+ *
+ * The result is the raw NDVI value in `[-1, 1]`, so the downstream
+ * {@link ndviFilter} can compare it directly against the user-facing range
+ * (also `[-1, 1]`). A {@link LinearRescale} step later in the pipeline maps it
+ * to `[0, 1]` for the {@link Colormap} texture lookup.
+ */
+const normalizedDifference = {
+  name: "normalizedDifference",
   inject: {
     // Colors in the original image are ordered as: R, G, B, NIR
     "fs:DECKGL_FILTER_COLOR": /* glsl */ `
       float nir = color[3];
       float red = color[0];
-      float ndvi = (nir - red) / (nir + red);
-      // normalize to 0-1 range
-      color.r = (ndvi + 1.0) / 2.0;
+      color.r = (nir - red) / (nir + red);
     `,
   },
 };
@@ -217,8 +223,8 @@ const ndviFilter = {
   },
   getUniforms: (props) => {
     return {
-      ndviMin: props.ndviMin || -1.0,
-      ndviMax: props.ndviMax || 1.0,
+      ndviMin: props.ndviMin ?? -1.0,
+      ndviMax: props.ndviMax ?? 1.0,
     };
   },
 } as const satisfies ShaderModule<{ ndviMin: number; ndviMax: number }>;
@@ -284,11 +290,16 @@ function renderNDVI(
   const { texture } = tileData;
   const renderPipeline: RasterModule[] = [
     { module: CreateTexture, props: { textureName: texture } },
-    { module: ndvi },
+    // Call normalized difference, creating a range of [-1, 1] in the red
+    // channel
+    { module: normalizedDifference },
+    // Filter pixels based on range of [-1, 1]
     {
       module: ndviFilter,
       props: { ndviMin: ndviRange[0], ndviMax: ndviRange[1] },
     },
+    // Rescale channel from [-1, 1] to [0, 1] for the colormap lookup
+    { module: LinearRescale, props: { rescaleMin: -1, rescaleMax: 1 } },
     {
       module: Colormap,
       props: {
