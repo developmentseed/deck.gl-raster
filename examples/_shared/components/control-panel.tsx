@@ -60,8 +60,8 @@ export interface ControlPanelProps {
  *
  * Self-positioning (`position: absolute`, high `z-index`, `pointerEvents: auto`)
  * — does not need a `UIOverlay` wrapper unless an example stacks several
- * overlay widgets. Manages its own open/closed state. Renders a footer with
- * documentation / source / repository links.
+ * overlay widgets. Manages its own open/closed state. The body collapses; the
+ * footer (documentation / source / repository links) stays visible.
  */
 export function ControlPanel({
   title,
@@ -118,49 +118,49 @@ export function ControlPanel({
       {open ? (
         <Box mt="3" fontSize="sm">
           {children}
-          <Flex
-            mt="3"
-            pt="2"
-            borderTopWidth="1px"
-            borderColor="gray.200"
-            alignItems="center"
-            justifyContent="space-between"
-            gap="3"
-            fontSize="xs"
-          >
-            <Flex gap="3" wrap="wrap" alignItems="center">
-              <ExternalLink href={docsHref}>Documentation ↗</ExternalLink>
-              {sourcePath ? (
-                <ExternalLink href={sourceUrl(sourcePath)}>
-                  View source ↗
-                </ExternalLink>
-              ) : null}
-            </Flex>
-            <Flex gap="2" alignItems="center" color="gray.600">
-              <Link
-                href={REPO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="deck.gl-raster on GitHub"
-                color="inherit"
-                _hover={{ color: "gray.900" }}
-              >
-                <CollecticonBrandGithub />
-              </Link>
-              <Link
-                href={DEVSEED_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Development Seed"
-                color="inherit"
-                _hover={{ color: "gray.900" }}
-              >
-                <CollecticonBrandDevelopmentSeed />
-              </Link>
-            </Flex>
-          </Flex>
         </Box>
       ) : null}
+      <Flex
+        mt="3"
+        pt="2"
+        borderTopWidth="1px"
+        borderColor="gray.200"
+        alignItems="center"
+        justifyContent="space-between"
+        gap="3"
+        fontSize="xs"
+      >
+        <Flex gap="3" wrap="wrap" alignItems="center">
+          <ExternalLink href={docsHref}>Documentation ↗</ExternalLink>
+          {sourcePath ? (
+            <ExternalLink href={sourceUrl(sourcePath)}>
+              View source ↗
+            </ExternalLink>
+          ) : null}
+        </Flex>
+        <Flex gap="2" alignItems="center" color="gray.600">
+          <Link
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="deck.gl-raster on GitHub"
+            color="inherit"
+            _hover={{ color: "gray.900" }}
+          >
+            <CollecticonBrandGithub />
+          </Link>
+          <Link
+            href={DEVSEED_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Development Seed"
+            color="inherit"
+            _hover={{ color: "gray.900" }}
+          >
+            <CollecticonBrandDevelopmentSeed />
+          </Link>
+        </Flex>
+      </Flex>
     </Box>
   );
 }
