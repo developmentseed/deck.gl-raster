@@ -253,6 +253,23 @@ export class GeoTIFF {
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url, {});
 
+    // TEMPORARY workaround for
+    // https://github.com/developmentseed/deck.gl-raster/issues/524
+    //
+    // `@chunkd/source-http` records `source.metadata.size` from the first range
+    // response, preferring `Content-Range` and falling back to `Content-Length`.
+    // In a browser, `Content-Range` is only readable when the server lists it in
+    // `Access-Control-Expose-Headers` (S3 does not by default), so the
+    // `Content-Length` fallback — the length of a single *chunk*, not the file —
+    // gets recorded as the file size. `@chunkd/middleware`'s chunk layer then
+    // rejects any later read past that bogus size with
+    // "SourceError: Request outside of bounds".
+    //
+    // Seed `metadata` ourselves so `SourceHttp` never records a size (it only
+    // fills in `metadata` while it is still null), treating the source as having
+    // unbounded length. Remove once the upstream fix lands.
+    source.metadata = { size: Number.POSITIVE_INFINITY };
+
     // Figure out optimal defaults in light of
     // https://github.com/blacha/cogeotiff/issues/1431
     // Defaulting to 32KB chunks is too small for tile data.
