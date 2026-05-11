@@ -9,7 +9,6 @@ import {
   ControlPanel,
   DebugControls,
   DeckGlOverlay,
-  DocsLink,
   ExternalLink,
   Field,
 } from "deck.gl-raster-examples-shared";
@@ -194,7 +193,10 @@ export default function App() {
         <DeckGlOverlay layers={[layer]} interleaved />
       </MaplibreMap>
 
-      <ControlPanel title="Sentinel-2 Multi-Band">
+      <ControlPanel
+        title="Sentinel-2 Multi-Band"
+        sourcePath="examples/sentinel-2"
+      >
         <Text mb="3" color="gray.600">
           These images are loaded directly from the{" "}
           <ExternalLink href="https://registry.opendata.aws/sentinel-2-l2a-cogs/">
@@ -209,9 +211,6 @@ export default function App() {
             <Code>MultiCOGLayer</Code>
           </ExternalLink>{" "}
           automatically handles GPU-based cross-resolution resampling.
-        </Text>
-        <Text mb="3">
-          <DocsLink />
         </Text>
         <Field label="Scene">
           <NativeSelect.Root>

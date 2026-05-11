@@ -10,7 +10,15 @@ export interface ExternalLinkProps {
 /** A link that opens in a new tab with `rel="noopener noreferrer"`. */
 export function ExternalLink({ href, children }: ExternalLinkProps) {
   return (
-    <Link href={href} target="_blank" rel="noopener noreferrer">
+    <Link
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      color="brand.600"
+      textDecorationLine="underline"
+      textUnderlineOffset="2px"
+      _hover={{ color: "brand.700" }}
+    >
       {children}
     </Link>
   );

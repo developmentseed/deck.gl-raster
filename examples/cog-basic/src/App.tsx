@@ -5,7 +5,6 @@ import {
   ControlPanel,
   DebugControls,
   DeckGlOverlay,
-  DocsLink,
   Field,
 } from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -127,13 +126,10 @@ export default function App() {
         <DeckGlOverlay layers={[cogLayer]} interleaved />
       </MaplibreMap>
 
-      <ControlPanel title="COGLayer Example">
+      <ControlPanel title="COGLayer Example" sourcePath="examples/cog-basic">
         <Text mb="3" color="gray.600">
           Renders Cloud-Optimized GeoTIFFs directly from cloud storage, with no
           server in between.
-        </Text>
-        <Text mb="3">
-          <DocsLink />
         </Text>
         <Field label="Source">
           <NativeSelect.Root>
