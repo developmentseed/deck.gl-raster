@@ -1,17 +1,15 @@
-import type { MapboxOverlayProps } from "@deck.gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
-import "maplibre-gl/dist/maplibre-gl.css";
 import loadEpsg from "@developmentseed/epsg/all";
 import epsgCsvUrl from "@developmentseed/epsg/all.csv.gz?url";
 import type { GeoTIFF } from "@developmentseed/geotiff";
 import { parseWkt } from "@developmentseed/proj";
 import type { Device } from "@luma.gl/core";
+import { DeckGlOverlay, UIOverlay } from "deck.gl-raster-examples-shared";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import { InfoPanel } from "./components/InfoPanel.js";
-import { UIOverlay } from "./components/UIOverlay.js";
 import { getTileData } from "./get-tile-data.js";
 import { buildColormapTexture } from "./nlcd/build-colormap-texture.js";
 import {
@@ -20,12 +18,6 @@ import {
 } from "./nlcd/build-filter-texture.js";
 import { ALL_NLCD_CODES } from "./nlcd/categories.js";
 import { makeRenderTile } from "./render-tile.js";
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
-}
 
 /** An example for embedded EPSG code resolution.
  *
@@ -138,7 +130,7 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay
+        <DeckGlOverlay
           layers={[cog_layer]}
           interleaved
           onDeviceInitialized={setDevice}

@@ -342,6 +342,9 @@ importers:
 
   examples/land-cover:
     dependencies:
+      '@chakra-ui/react':
+        specifier: ^3.34.0
+        version: 3.35.0(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@deck.gl/core':
         specifier: ^9.3.1
         version: 9.3.2
@@ -372,12 +375,18 @@ importers:
       '@developmentseed/proj':
         specifier: workspace:^
         version: link:../../packages/proj
+      '@emotion/react':
+        specifier: ^11.14.0
+        version: 11.14.0(@types/react@19.2.14)(react@19.2.5)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.3
       '@luma.gl/shadertools':
         specifier: ^9.3.3
         version: 9.3.3(@luma.gl/core@9.3.3)
+      deck.gl-raster-examples-shared:
+        specifier: workspace:*
+        version: link:../_shared
       maplibre-gl:
         specifier: ^5.24.0
         version: 5.24.0

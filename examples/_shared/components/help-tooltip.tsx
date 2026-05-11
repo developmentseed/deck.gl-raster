@@ -51,7 +51,7 @@ export function HelpTooltip({
             borderRadius="md"
             boxShadow="0 2px 8px rgba(0, 0, 0, 0.25)"
           >
-            <Text fontSize="xs" lineHeight="1.45">
+            <Text fontSize="xs" lineHeight="1.45" whiteSpace="pre-line">
               {children}
             </Text>
           </Tooltip.Content>
