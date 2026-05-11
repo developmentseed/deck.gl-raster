@@ -1,7 +1,11 @@
 // Public surface of the shared example components package.
-
 export type { ControlPanelPosition } from "./components/control-panel.js";
 export { ControlPanel } from "./components/control-panel.js";
+export type {
+  DebugControlsProps,
+  DebugState,
+} from "./components/debug-controls.js";
+export { DebugControls } from "./components/debug-controls.js";
 export { DeckGlOverlay } from "./components/deckgl-overlay.js";
 export { DocsLink, ExternalLink } from "./components/external-link.js";
 export { Field } from "./components/field.js";
