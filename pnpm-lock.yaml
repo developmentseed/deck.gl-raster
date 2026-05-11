@@ -202,6 +202,9 @@ importers:
 
   examples/cog-basic:
     dependencies:
+      '@chakra-ui/react':
+        specifier: ^3.34.0
+        version: 3.35.0(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@deck.gl/core':
         specifier: ^9.3.1
         version: 9.3.1
@@ -220,9 +223,15 @@ importers:
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
+      '@emotion/react':
+        specifier: ^11.14.0
+        version: 11.14.0(@types/react@19.2.14)(react@19.2.4)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.3
+      deck.gl-raster-examples-shared:
+        specifier: workspace:*
+        version: link:../_shared
       maplibre-gl:
         specifier: ^5.19.0
         version: 5.19.0
