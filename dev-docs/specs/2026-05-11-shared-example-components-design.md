@@ -392,3 +392,9 @@ Same-day iteration on the pilot branch, after eyeballing the rendered panels:
 - **Also fixed in this iteration:** `DebugControls`' opacity `Slider.Root` was
   zero-width (Chakra v3 sliders don't fill their parent by default) — now
   `width="full"`.
+
+- **Dropped `createColorPalette` + `polished`** (over-engineered for current
+  use). `theme.ts` now hand-lists the few `brand` shades the components
+  reference (`brand.500/600/700`); `styles/color-palette.ts` and the
+  `createColorPalette` export are removed. The fuller palette generator can
+  come back if/when a richer theme needs it.

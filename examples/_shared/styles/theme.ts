@@ -1,13 +1,16 @@
 import { createSystem, defaultConfig, defineConfig } from "@chakra-ui/react";
-import { createColorPalette } from "./color-palette.js";
 
 const config = defineConfig({
   theme: {
     tokens: {
       colors: {
-        // deck.gl-raster brand blue. Tweak freely; semantic-token wiring for
-        // `colorPalette="brand"` is a possible follow-up.
-        brand: createColorPalette("#1e7bc6"),
+        // deck.gl-raster brand blue. A minimal scale — only the shades the
+        // shared components reference today. Expand as needed.
+        brand: {
+          500: { value: "#1e7bc6" },
+          600: { value: "#1967a6" },
+          700: { value: "#145487" },
+        },
       },
     },
   },

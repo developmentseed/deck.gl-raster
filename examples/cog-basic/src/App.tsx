@@ -81,8 +81,6 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  // `COGLayer` supports `debug`/`debugOpacity` but not `debugLevel`, so the
-  // detail-level selector is intentionally absent from this example's state.
   const [debugState, setDebugState] = useState<DebugState>({
     debug: false,
     debugOpacity: 0.25,

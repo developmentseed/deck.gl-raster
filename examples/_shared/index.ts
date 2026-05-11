@@ -11,5 +11,4 @@ export { DocsLink, ExternalLink } from "./components/external-link.js";
 export { Field } from "./components/field.js";
 export { ExampleProvider } from "./components/provider.js";
 export { UIOverlay } from "./components/ui-overlay.js";
-export { createColorPalette } from "./styles/color-palette.js";
 export { system } from "./styles/theme.js";
