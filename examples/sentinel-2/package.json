@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@chakra-ui/react": "^3.34.0",
     "@deck.gl/core": "^9.3.2",
     "@deck.gl/geo-layers": "^9.3.2",
     "@deck.gl/layers": "^9.3.2",
@@ -16,7 +17,9 @@
     "@deck.gl/mesh-layers": "^9.3.2",
     "@developmentseed/deck.gl-geotiff": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
+    "@emotion/react": "^11.14.0",
     "@luma.gl/core": "^9.3.2",
+    "deck.gl-raster-examples-shared": "workspace:*",
     "maplibre-gl": "^5.24.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
