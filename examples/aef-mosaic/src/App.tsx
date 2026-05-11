@@ -1,10 +1,9 @@
-import type { MapboxOverlayProps } from "@deck.gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
+import { DeckGlOverlay } from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
 import { fetchBandLabels } from "./aef/band-labels.js";
 import { MIN_ZOOM, VARIABLE, ZARR_URL } from "./aef/constants.js";
@@ -23,12 +22,6 @@ const DEFAULT_G_BAND = 16;
 const DEFAULT_B_BAND = 32;
 const DEFAULT_RESCALE_MIN = -0.3;
 const DEFAULT_RESCALE_MAX = 0.3;
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
-}
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -136,37 +129,25 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={layers} interleaved />
+        <DeckGlOverlay layers={layers} interleaved />
       </MaplibreMap>
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-          zIndex: 1000,
-        }}
-      >
-        <ControlPanel
-          locationId={locationId}
-          yearIdx={yearIdx}
-          bandLabels={bandLabels}
-          rBandIdx={rBandIdx}
-          gBandIdx={gBandIdx}
-          bBandIdx={bBandIdx}
-          rescaleMin={rescaleMin}
-          rescaleMax={rescaleMax}
-          onLocationChange={handleLocationChange}
-          onYearIdxChange={setYearIdx}
-          onRBandIdxChange={setRBandIdx}
-          onGBandIdxChange={setGBandIdx}
-          onBBandIdxChange={setBBandIdx}
-          onRescaleMinChange={setRescaleMin}
-          onRescaleMaxChange={setRescaleMax}
-        />
-      </div>
+      <ControlPanel
+        locationId={locationId}
+        yearIdx={yearIdx}
+        bandLabels={bandLabels}
+        rBandIdx={rBandIdx}
+        gBandIdx={gBandIdx}
+        bBandIdx={bBandIdx}
+        rescaleMin={rescaleMin}
+        rescaleMax={rescaleMax}
+        onLocationChange={handleLocationChange}
+        onYearIdxChange={setYearIdx}
+        onRBandIdxChange={setRBandIdx}
+        onGBandIdxChange={setGBandIdx}
+        onBBandIdxChange={setBBandIdx}
+        onRescaleMinChange={setRescaleMin}
+        onRescaleMaxChange={setRescaleMax}
+      />
     </div>
   );
 }
