@@ -1,19 +1,18 @@
-import type { MapboxOverlayProps } from "@deck.gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
+import { Text } from "@chakra-ui/react";
 import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
+import type { DebugState } from "deck.gl-raster-examples-shared";
+import {
+  ControlPanel,
+  DebugControls,
+  DeckGlOverlay,
+} from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
-}
 
 // Currently generated locally from
 // https://github.com/developmentseed/geozarr-examples/pull/36
@@ -91,9 +90,10 @@ function toImageData(
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
-  const [debug, setDebug] = useState(false);
-  const [debugOpacity, setDebugOpacity] = useState(0.25);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [debugState, setDebugState] = useState<DebugState>({
+    debug: false,
+    debugOpacity: 0.25,
+  });
   const [node, setNode] = useState<zarr.Group<zarr.Readable> | null>(null);
 
   // Open the store ourselves so we own version/consolidation decisions,
@@ -122,8 +122,8 @@ export default function App() {
         selection: { band: null },
         getTileData,
         renderTile,
-        debug,
-        debugOpacity,
+        debug: debugState.debug,
+        debugOpacity: debugState.debugOpacity,
       })
     : null;
 
@@ -138,137 +138,22 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={zarrLayer ? [zarrLayer] : []} interleaved />
+        <DeckGlOverlay layers={zarrLayer ? [zarrLayer] : []} interleaved />
       </MaplibreMap>
 
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-          zIndex: 1000,
-        }}
+      <ControlPanel
+        title="ZarrLayer — Sentinel-2 TCI"
+        sourcePath="examples/zarr-sentinel2-tci"
       >
-        <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "20px",
-            background: "white",
-            padding: "16px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            width: "300px",
-            pointerEvents: "auto",
-          }}
-        >
-          <button
-            type="button"
-            style={{
-              all: "unset",
-              width: "100%",
-              margin: 0,
-              fontSize: "16px",
-              fontWeight: "bold",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              userSelect: "none",
-            }}
-            onClick={() => setPanelOpen((o) => !o)}
-          >
-            ZarrLayer — Sentinel-2 TCI
-            <span
-              style={{
-                fontSize: "12px",
-                transition: "transform 0.2s",
-                transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
-              }}
-            >
-              ▼
-            </span>
-          </button>
-          {panelOpen && (
-            <>
-              <p
-                style={{
-                  margin: "8px 0 12px 0",
-                  fontSize: "12px",
-                  color: "#666",
-                }}
-              >
-                GeoZarr multiscale, EPSG:32612
-              </p>
-              <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
-                <a
-                  href="https://developmentseed.org/deck.gl-raster/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  deck.gl-raster Documentation ↗
-                </a>
-              </p>
-
-              <div
-                style={{
-                  padding: "12px 0",
-                  borderTop: "1px solid #eee",
-                  marginTop: "4px",
-                }}
-              >
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={debug}
-                    onChange={(e) => setDebug(e.target.checked)}
-                    style={{ cursor: "pointer" }}
-                  />
-                  <span>Show Debug Mesh</span>
-                </label>
-
-                {debug && (
-                  <div style={{ marginTop: "8px" }}>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        color: "#666",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      Debug Opacity: {debugOpacity.toFixed(2)}
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={debugOpacity}
-                        onChange={(e) =>
-                          setDebugOpacity(parseFloat(e.target.value))
-                        }
-                        style={{ width: "100%", cursor: "pointer" }}
-                      />
-                    </label>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+        <Text mb="3" color="gray.600">
+          GeoZarr multiscale, EPSG:32612.
+        </Text>
+        <DebugControls
+          label="Debug mesh"
+          value={debugState}
+          onChange={setDebugState}
+        />
+      </ControlPanel>
     </div>
   );
 }
