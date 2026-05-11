@@ -24,12 +24,12 @@ export interface BoundingVolumeCacheOptions {
    * so a single frame is never starved of an entry it computed earlier that
    * same frame. `0` makes every traversal start from an empty cache.
    *
-   * @default 65536
+   * @default 65_536
    */
   maxEntries?: number;
 }
 
-const DEFAULT_MAX_ENTRIES = 1 << 16;
+const DEFAULT_MAX_ENTRIES = 65_536;
 
 /**
  * An LRU cache of tile bounding volumes keyed by `"z/x/y"`.
