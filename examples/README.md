@@ -2,6 +2,12 @@
 
 This folder contains runnable examples demonstrating `deck.gl-raster` features.
 
+## Example intent
+
+These examples are intended to show **how to use deck.gl-raster, specifically**. The interaction with deck.gl and API for using deck.gl-raster is carefully considered and is intended for learning/reuse.
+
+The **UI design** is entirely LLM generated and should not be learned from.
+
 ## Running an example
 
 ```sh
