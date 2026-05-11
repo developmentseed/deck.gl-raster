@@ -275,7 +275,6 @@ function renderNDVI(
 ): RenderTileResult {
   const { colormapTexture, ndviRange, colormapIndex, colormapReversed } =
     options;
-  console.log("ndviRange", ndviRange);
   const { texture } = tileData;
   const renderPipeline: RasterModule[] = [
     { module: CreateTexture, props: { textureName: texture } },
