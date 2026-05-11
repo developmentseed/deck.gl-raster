@@ -373,14 +373,17 @@ Same-day iteration on the pilot branch, after eyeballing the rendered panels:
   `"examples/cog-basic"`, rendered as "View source ↗" →
   `https://github.com/developmentseed/deck.gl-raster/tree/main/{sourcePath}`).
   The footer is a `borderTopWidth="1px"` row at the bottom of the collapsible
-  body: text links left, a GitHub-icon link to the repo root
-  (`https://github.com/developmentseed/deck.gl-raster`) right. The repo-icon
-  link and "Documentation" always show; "View source" shows when `sourcePath`
-  is set. `REPO_URL` + `sourceUrl(path)` constants live in `control-panel.tsx`.
+  body: text links left, an icon group right — a GitHub-icon link to the repo
+  root (`https://github.com/developmentseed/deck.gl-raster`) and a Development
+  Seed-logo link (`https://developmentseed.org`). The repo/DS icons and
+  "Documentation" always show; "View source" shows when `sourcePath` is set.
+  `REPO_URL` + `DEVSEED_URL` + `sourceUrl(path)` constants live in
+  `control-panel.tsx`.
 
 - **New dependency:** `@devseed-ui/collecticons-chakra@^4.0.0` added to
-  `examples/_shared/package.json` for the `CollecticonBrandGithub` icon (Chakra
-  v3-compatible; peers `@chakra-ui/react ^3.8.1` / `@emotion/react ^11.14.0`).
+  `examples/_shared/package.json` for the `CollecticonBrandGithub` and
+  `CollecticonBrandDevelopmentSeed` icons (Chakra v3-compatible; peers
+  `@chakra-ui/react ^3.8.1` / `@emotion/react ^11.14.0`).
 
 - **Example changes:** `cog-basic` and `sentinel-2` pass `sourcePath` to
   `ControlPanel` and drop their standalone `<DocsLink />` lines (now in the

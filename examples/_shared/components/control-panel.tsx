@@ -1,11 +1,16 @@
 import { Box, chakra, Flex, Heading, Link } from "@chakra-ui/react";
-import { CollecticonBrandGithub } from "@devseed-ui/collecticons-chakra";
+import {
+  CollecticonBrandDevelopmentSeed,
+  CollecticonBrandGithub,
+} from "@devseed-ui/collecticons-chakra";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { ExternalLink } from "./external-link.js";
 
 /** URL of the deck.gl-raster GitHub repository. */
 const REPO_URL = "https://github.com/developmentseed/deck.gl-raster";
+/** Development Seed company website. */
+const DEVSEED_URL = "https://developmentseed.org";
 /** GitHub URL for a path within the repo on the `main` branch. */
 const sourceUrl = (path: string) => `${REPO_URL}/tree/main/${path}`;
 const DEFAULT_DOCS_URL = "https://developmentseed.org/deck.gl-raster/";
@@ -131,16 +136,28 @@ export function ControlPanel({
                 </ExternalLink>
               ) : null}
             </Flex>
-            <Link
-              href={REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="deck.gl-raster on GitHub"
-              color="gray.600"
-              _hover={{ color: "gray.900" }}
-            >
-              <CollecticonBrandGithub />
-            </Link>
+            <Flex gap="2" alignItems="center" color="gray.600">
+              <Link
+                href={REPO_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="deck.gl-raster on GitHub"
+                color="inherit"
+                _hover={{ color: "gray.900" }}
+              >
+                <CollecticonBrandGithub />
+              </Link>
+              <Link
+                href={DEVSEED_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Development Seed"
+                color="inherit"
+                _hover={{ color: "gray.900" }}
+              >
+                <CollecticonBrandDevelopmentSeed />
+              </Link>
+            </Flex>
           </Flex>
         </Box>
       ) : null}
