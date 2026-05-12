@@ -139,7 +139,7 @@ export class GeoTIFF {
     // that one path, so nulling it here is safe.
     //
     // TODO: replace this with a cleaner opt-out once upstream supports one
-    // (see https://github.com/blacha/cogeotiff/issues/ — TBD).
+    // https://github.com/blacha/cogeotiff/issues/1467
     tiff.options = undefined;
     return GeoTIFF.fromTiff(tiff, dataSource, { signal, debug });
   }
