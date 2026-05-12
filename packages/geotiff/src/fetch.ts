@@ -69,6 +69,23 @@ export async function fetchTile(
 
   const [tileBytes, maskBytes] = await Promise.all([tileFetch, maskFetch]);
 
+  return assembleTile(self, x, y, tileBytes, maskBytes, { boundless, pool });
+}
+
+/**
+ * Decode already-fetched compressed tile (and optional mask) bytes into a
+ * {@link Tile}. Performs no I/O — the bytes are supplied by the caller. Shared
+ * by {@link fetchTile} (single-tile fetch) and {@link fetchTiles} (batched
+ * fetch with range coalescing).
+ */
+async function assembleTile(
+  self: HasTiffReference,
+  x: number,
+  y: number,
+  tileBytes: GetBytesResponse | GetBytesResponse[],
+  maskBytes: GetBytesResponse | null,
+  { boundless, pool }: { boundless: boolean; pool?: DecoderPool },
+): Promise<Tile> {
   const {
     bitsPerSample: bitsPerSamples,
     predictor,
