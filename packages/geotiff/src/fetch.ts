@@ -34,6 +34,13 @@ interface HasTiffReference extends HasTransform {
 
   /** The nodata value for the image, if any. */
   readonly nodata: number | null;
+
+  /**
+   * Internal: when true, the tile-fetch path logs each dataSource fetch to
+   * the console. Set via `GeoTIFF.open({ debug: true })`.
+   * @internal
+   */
+  readonly _debug?: boolean;
 }
 
 export async function fetchTile(
@@ -53,7 +60,10 @@ export async function fetchTile(
   const tileFetch = fetchCogBytes(self, x, y, { signal });
   const maskFetch =
     self.maskImage != null
-      ? getTile(self.maskImage, x, y, self.dataSource, { signal })
+      ? getTile(self.maskImage, x, y, self.dataSource, {
+          signal,
+          debug: self._debug ? { label: "mask" } : undefined,
+        })
       : Promise.resolve(null);
 
   const [tileBytes, maskBytes] = await Promise.all([tileFetch, maskFetch]);
@@ -149,6 +159,13 @@ export async function fetchTiles(
 type GetBytesResponse = { bytes: ArrayBuffer; compression: Compression };
 type ByteRange = Awaited<ReturnType<TiffImage["getTileSize"]>>;
 
+/**
+ * Opt-in debug tag for {@link getTile} / {@link getBytes}. When present,
+ * each underlying `dataSource.fetch` call is logged to the console with the
+ * tag's `label`, the offset, and the byte count. When absent, no logging.
+ */
+type DebugTag = { label: string };
+
 async function decodeMask(
   mask: GetBytesResponse,
   maskImage: TiffImage,
@@ -237,9 +254,15 @@ async function fetchCogBytes(
     signal?: AbortSignal;
   } = {},
 ): Promise<GetBytesResponse | GetBytesResponse[]> {
+  const debug: DebugTag | undefined = self._debug
+    ? { label: "data" }
+    : undefined;
   switch (self.cachedTags.planarConfiguration) {
     case PlanarConfiguration.Contig: {
-      const tile = await getTile(self.image, x, y, self.dataSource, { signal });
+      const tile = await getTile(self.image, x, y, self.dataSource, {
+        signal,
+        debug,
+      });
       if (tile === null) {
         throw new Error(`Tile at (${x}, ${y}) not found`);
       }
@@ -280,6 +303,9 @@ async function fetchBandSeparateTileBytes(
     signal?: AbortSignal;
   } = {},
 ): Promise<GetBytesResponse[]> {
+  const debug: DebugTag | undefined = self._debug
+    ? { label: "data" }
+    : undefined;
   const byteRanges = await findBandSeparateTileByteRanges(self, x, y);
   const buffers = byteRanges.map(async ({ offset, imageSize }) => {
     const tile = await getBytes(
@@ -287,7 +313,7 @@ async function fetchBandSeparateTileBytes(
       offset,
       imageSize,
       self.dataSource,
-      { signal },
+      { signal, debug },
     );
     if (tile === null) {
       throw new Error(`Tile at (${x}, ${y}) not found`);
@@ -298,24 +324,25 @@ async function fetchBandSeparateTileBytes(
 }
 
 /**
- * Load a tile into a ArrayBuffer
+ * Load a tile into an ArrayBuffer.
  *
- * if the tile compression is JPEG, This will also apply the JPEG compression tables to the resulting ArrayBuffer see {@link getJpegHeader}
+ * If the tile compression is JPEG, this will also apply the JPEG compression
+ * tables to the resulting ArrayBuffer (see `image.getJpegHeader`).
  *
- * Though this function lives upstream in @cogeotiff/core, we vendor it here so
- * that we can use a custom fetch.
- *
- * This is to separate the source used for fetching header/IFD data (which is
- * typically small and benefits from caching) from the source used for fetching
- * tile data (which can be large and should avoid unnecessary copying through
- * cache layers).
+ * Though this function lives upstream in @cogeotiff/core, we vendor it here
+ * so we can route the *tile data* read through a separate source. The tile's
+ * byte range is looked up via `image.getTileSize(idx)`, which inside cogeotiff
+ * uses the source that was passed to `Tiff.create` (our header source — cached
+ * for small repeated reads). The actual tile bytes are then fetched from
+ * `dataSource`, which is the raw HTTP source with no caching: tile data is
+ * large and read once, so caching it would just evict header metadata.
  */
 async function getTile(
   image: TiffImage,
   x: number,
   y: number,
-  source: Pick<Source, "fetch">,
-  options?: { signal?: AbortSignal },
+  dataSource: Pick<Source, "fetch">,
+  options?: { signal?: AbortSignal; debug?: DebugTag },
 ): Promise<{
   bytes: ArrayBuffer;
   compression: Compression;
@@ -344,27 +371,31 @@ async function getTile(
     );
   }
 
+  // image.getTileSize() reads TileOffsets[idx] and TileByteCounts[idx] from
+  // the header source (cogeotiff's lazy per-entry path, served by the chunk
+  // cache). It does NOT read tile data — only the 4–8 byte offset/count
+  // entries.
   const { offset, imageSize } = await image.getTileSize(idx);
 
-  return getBytes(image, offset, imageSize, source, options);
+  // The actual tile bytes go through dataSource (uncached HTTP).
+  return getBytes(image, offset, imageSize, dataSource, options);
 }
 
-/** Read image bytes at the given offset.
+/**
+ * Read image bytes at the given offset from `dataSource`.
  *
- * Though this function lives upstream in @cogeotiff/core, we vendor it here so
- * that we can use a custom fetch.
- *
- * This is to separate the source used for fetching header/IFD data (which is
- * typically small and benefits from caching) from the source used for fetching
- * tile data (which can be large and should avoid unnecessary copying through
- * cache layers).
+ * Though this function lives upstream in @cogeotiff/core, we vendor it here
+ * so we can route reads through the data source (uncached) rather than the
+ * header source (cached) that cogeotiff would use by default. Tile data is
+ * large and read once; caching it would evict header metadata and inflate
+ * memory.
  */
 async function getBytes(
   image: TiffImage,
   offset: number,
   byteCount: number,
-  source: Pick<Source, "fetch">,
-  options?: { signal?: AbortSignal },
+  dataSource: Pick<Source, "fetch">,
+  options?: { signal?: AbortSignal; debug?: DebugTag },
 ): Promise<{
   bytes: ArrayBuffer;
   compression: Compression;
@@ -373,7 +404,13 @@ async function getBytes(
     return null;
   }
 
-  const bytes = await source.fetch(offset, byteCount, options);
+  if (options?.debug !== undefined) {
+    console.log(
+      `[geotiff dataSource] ${options.debug.label}: offset=${offset} length=${byteCount}`,
+    );
+  }
+
+  const bytes = await dataSource.fetch(offset, byteCount, options);
   if (bytes.byteLength < byteCount) {
     throw new Error(
       `Failed to fetch bytes from offset:${offset} wanted:${byteCount} got:${bytes.byteLength}`,
