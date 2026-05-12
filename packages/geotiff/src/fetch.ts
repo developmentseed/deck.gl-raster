@@ -298,23 +298,24 @@ async function fetchBandSeparateTileBytes(
 }
 
 /**
- * Load a tile into a ArrayBuffer
+ * Load a tile into an ArrayBuffer.
  *
- * if the tile compression is JPEG, This will also apply the JPEG compression tables to the resulting ArrayBuffer see {@link getJpegHeader}
+ * If the tile compression is JPEG, this will also apply the JPEG compression
+ * tables to the resulting ArrayBuffer (see `image.getJpegHeader`).
  *
- * Though this function lives upstream in @cogeotiff/core, we vendor it here so
- * that we can use a custom fetch.
- *
- * This is to separate the source used for fetching header/IFD data (which is
- * typically small and benefits from caching) from the source used for fetching
- * tile data (which can be large and should avoid unnecessary copying through
- * cache layers).
+ * Though this function lives upstream in @cogeotiff/core, we vendor it here
+ * so we can route the *tile data* read through a separate source. The tile's
+ * byte range is looked up via `image.getTileSize(idx)`, which inside cogeotiff
+ * uses the source that was passed to `Tiff.create` (our header source — cached
+ * for small repeated reads). The actual tile bytes are then fetched from
+ * `dataSource`, which is the raw HTTP source with no caching: tile data is
+ * large and read once, so caching it would just evict header metadata.
  */
 async function getTile(
   image: TiffImage,
   x: number,
   y: number,
-  source: Pick<Source, "fetch">,
+  dataSource: Pick<Source, "fetch">,
   options?: { signal?: AbortSignal },
 ): Promise<{
   bytes: ArrayBuffer;
@@ -344,26 +345,30 @@ async function getTile(
     );
   }
 
+  // image.getTileSize() reads TileOffsets[idx] and TileByteCounts[idx] from
+  // the header source (cogeotiff's lazy per-entry path, served by the chunk
+  // cache). It does NOT read tile data — only the 4–8 byte offset/count
+  // entries.
   const { offset, imageSize } = await image.getTileSize(idx);
 
-  return getBytes(image, offset, imageSize, source, options);
+  // The actual tile bytes go through dataSource (uncached HTTP).
+  return getBytes(image, offset, imageSize, dataSource, options);
 }
 
-/** Read image bytes at the given offset.
+/**
+ * Read image bytes at the given offset from `dataSource`.
  *
- * Though this function lives upstream in @cogeotiff/core, we vendor it here so
- * that we can use a custom fetch.
- *
- * This is to separate the source used for fetching header/IFD data (which is
- * typically small and benefits from caching) from the source used for fetching
- * tile data (which can be large and should avoid unnecessary copying through
- * cache layers).
+ * Though this function lives upstream in @cogeotiff/core, we vendor it here
+ * so we can route reads through the data source (uncached) rather than the
+ * header source (cached) that cogeotiff would use by default. Tile data is
+ * large and read once; caching it would evict header metadata and inflate
+ * memory.
  */
 async function getBytes(
   image: TiffImage,
   offset: number,
   byteCount: number,
-  source: Pick<Source, "fetch">,
+  dataSource: Pick<Source, "fetch">,
   options?: { signal?: AbortSignal },
 ): Promise<{
   bytes: ArrayBuffer;
@@ -373,7 +378,7 @@ async function getBytes(
     return null;
   }
 
-  const bytes = await source.fetch(offset, byteCount, options);
+  const bytes = await dataSource.fetch(offset, byteCount, options);
   if (bytes.byteLength < byteCount) {
     throw new Error(
       `Failed to fetch bytes from offset:${offset} wanted:${byteCount} got:${bytes.byteLength}`,

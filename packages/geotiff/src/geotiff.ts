@@ -118,6 +118,9 @@ export class GeoTIFF {
     // Without this, the leader read pulls image-data bytes into the header
     // cache, evicting metadata. cogeotiff core only reads `tiff.options` in
     // that one path, so nulling it here is safe.
+    //
+    // TODO: replace this with a cleaner opt-out once upstream supports one
+    // (see https://github.com/blacha/cogeotiff/issues/ — TBD).
     tiff.options = undefined;
     return GeoTIFF.fromTiff(tiff, dataSource, { signal });
   }
@@ -289,6 +292,10 @@ export class GeoTIFF {
       // Tile data reads bypass the header cache (raw source).
       dataSource: source,
       headerSource: view,
+      // Read a full block on cogeotiff's first byte fetch. SourceChunk would
+      // pad a smaller request up to chunkSize anyway, but being explicit keeps
+      // the intent local and survives middleware changes.
+      prefetch: chunkSize,
       signal,
     });
   }
