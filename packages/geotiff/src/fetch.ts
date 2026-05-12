@@ -36,7 +36,7 @@ interface HasTiffReference extends HasTransform {
   readonly nodata: number | null;
 
   /** When true, the tile-fetch path logs each dataSource fetch to the console. */
-  readonly debug: boolean;
+  readonly debug?: boolean;
 }
 
 export async function fetchTile(
