@@ -69,6 +69,23 @@ export async function fetchTile(
 
   const [tileBytes, maskBytes] = await Promise.all([tileFetch, maskFetch]);
 
+  return assembleTile(self, x, y, tileBytes, maskBytes, { boundless, pool });
+}
+
+/**
+ * Decode already-fetched compressed tile (and optional mask) bytes into a
+ * {@link Tile}. Performs no I/O — the bytes are supplied by the caller. Shared
+ * by {@link fetchTile} (single-tile fetch) and {@link fetchTiles} (batched
+ * fetch with range coalescing).
+ */
+async function assembleTile(
+  self: HasTiffReference,
+  x: number,
+  y: number,
+  tileBytes: GetBytesResponse | GetBytesResponse[],
+  maskBytes: GetBytesResponse | null,
+  { boundless, pool }: { boundless: boolean; pool?: DecoderPool },
+): Promise<Tile> {
   const {
     bitsPerSample: bitsPerSamples,
     predictor,
@@ -124,12 +141,16 @@ export async function fetchTile(
 }
 
 /**
- * Fetch multiple tiles from a GeoTIFF or Overview in parallel.
+ * Fetch multiple tiles from a GeoTIFF or Overview, batching the underlying
+ * reads.
  *
- * The benefit of using this over multiple calls to {@link fetchTile} is that
- * a future implementation can coalesce requests for tiles stored contiguously
- * on disk, reducing the number of HTTP range requests. For now, this simply
- * calls {@link fetchTile} in parallel for each coordinate.
+ * Unlike repeated {@link fetchTile} calls, this resolves every requested
+ * tile's byte range up front and fetches the data through {@link getTiles} /
+ * {@link getMultipleBytes}, which coalesce nearby ranges into far fewer HTTP
+ * range requests — a big win when the coordinates form a contiguous block, as
+ * they do when assembling a coarse tile from finer covering tiles. Decoding is
+ * still done per tile (via the shared {@link assembleTile}); only the I/O is
+ * batched.
  *
  * @param self - The GeoTIFF or Overview to fetch tiles from.
  * @param xy - Array of `[x, y]` tile coordinates.
@@ -137,6 +158,7 @@ export async function fetchTile(
  * @returns Array of {@link Tile} objects in the same order as `xy`.
  *
  * @see {@link fetchTile} for single-tile fetching.
+ * @see {@link getTiles} for the batched, range-coalescing byte reader.
  */
 export async function fetchTiles(
   self: HasTiffReference,
@@ -151,9 +173,31 @@ export async function fetchTiles(
     signal?: AbortSignal;
   } = {},
 ): Promise<Tile[]> {
-  // TODO: coalesce contiguous byte ranges for fewer HTTP requests
+  if (xy.length === 0) {
+    return [];
+  }
+
+  const dataFetch = fetchCogBytesMultiple(self, xy, { signal });
+  const maskFetch: Promise<Array<GetBytesResponse | null>> =
+    self.maskImage != null
+      ? getTiles(self.maskImage, xy, self.dataSource, {
+          signal,
+          debug: self._debug ? { label: "mask" } : undefined,
+        })
+      : Promise.resolve(xy.map(() => null));
+
+  const [allTileBytes, allMaskBytes] = await Promise.all([
+    dataFetch,
+    maskFetch,
+  ]);
+
   return Promise.all(
-    xy.map(([x, y]) => fetchTile(self, x, y, { boundless, pool, signal })),
+    xy.map(([x, y], i) =>
+      assembleTile(self, x, y, allTileBytes[i]!, allMaskBytes[i] ?? null, {
+        boundless,
+        pool,
+      }),
+    ),
   );
 }
 
@@ -322,6 +366,92 @@ async function fetchBandSeparateTileBytes(
     return tile;
   });
   return Promise.all(buffers);
+}
+
+/**
+ * Batched, range-coalescing counterpart to {@link fetchCogBytes}: fetch the
+ * compressed bytes for many tiles in as few HTTP range requests as possible.
+ * Returns one entry per input coordinate, in input order. Throws (matching
+ * {@link fetchCogBytes}) if a requested tile is sparse / not present.
+ */
+async function fetchCogBytesMultiple(
+  self: HasTiffReference,
+  xy: Array<[number, number]>,
+  {
+    signal,
+  }: {
+    signal?: AbortSignal;
+  } = {},
+): Promise<Array<GetBytesResponse | GetBytesResponse[]>> {
+  const debug: DebugTag | undefined = self._debug
+    ? { label: "data" }
+    : undefined;
+  switch (self.cachedTags.planarConfiguration) {
+    case PlanarConfiguration.Contig: {
+      const tiles = await getTiles(self.image, xy, self.dataSource, {
+        signal,
+        debug,
+      });
+      return tiles.map((tile, i) => {
+        if (tile === null) {
+          const [x, y] = xy[i]!;
+          throw new Error(`Tile at (${x}, ${y}) not found`);
+        }
+        return tile;
+      });
+    }
+    case PlanarConfiguration.Separate:
+      return fetchBandSeparateTileBytesMultiple(self, xy, { signal });
+    default:
+      throw new Error(
+        `Unsupported PlanarConfiguration: ${self.cachedTags.planarConfiguration}`,
+      );
+  }
+}
+
+/**
+ * Batched, range-coalescing counterpart to {@link fetchBandSeparateTileBytes}.
+ * Every band of every requested tile is flattened into a single
+ * {@link getMultipleBytes} call, so coalescing can merge ranges across both
+ * bands and neighbouring tiles; the results are regrouped per tile afterwards.
+ */
+async function fetchBandSeparateTileBytesMultiple(
+  self: HasTiffReference,
+  xy: Array<[number, number]>,
+  {
+    signal,
+  }: {
+    signal?: AbortSignal;
+  } = {},
+): Promise<GetBytesResponse[][]> {
+  const debug: DebugTag | undefined = self._debug
+    ? { label: "data" }
+    : undefined;
+  const numBands = self.cachedTags.samplesPerPixel;
+  const perTileRanges = await Promise.all(
+    xy.map(([x, y]) => findBandSeparateTileByteRanges(self, x, y)),
+  );
+  const flatRanges = perTileRanges.flatMap((ranges) =>
+    ranges.map(({ offset, imageSize }) => ({
+      offset,
+      byteCount: imageSize,
+    })),
+  );
+  const flatResults = await getMultipleBytes(
+    self.image,
+    flatRanges,
+    self.dataSource,
+    { signal, debug },
+  );
+
+  return xy.map(([x, y], t) =>
+    flatResults.slice(t * numBands, t * numBands + numBands).map((res) => {
+      if (res === null) {
+        throw new Error(`Tile at (${x}, ${y}) not found`);
+      }
+      return res;
+    }),
+  );
 }
 
 /**
