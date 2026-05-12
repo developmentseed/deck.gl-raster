@@ -3,6 +3,7 @@ import { Compression, PlanarConfiguration, TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
 import type { RasterArray } from "./array.js";
+import { coalesceRanges } from "./coalesce.js";
 import type { DecodedPixels, DecoderMetadata } from "./decode.js";
 import { decode } from "./decode.js";
 import type { CachedTags } from "./ifd.js";
@@ -425,6 +426,144 @@ async function getBytes(
     };
   }
   return { bytes, compression };
+}
+
+/**
+ * Read image bytes for multiple ranges in a single batched I/O round trip.
+ *
+ * Vectorized counterpart to {@link getBytes}. The non-sparse ranges are
+ * dispatched through {@link coalesceRanges}, which merges nearby byte ranges
+ * into fewer `dataSource.fetch` calls. Returns one entry per input range, in
+ * input order; sparse ranges (`offset === 0` or `byteCount === 0`) yield `null`,
+ * matching {@link getBytes}.
+ *
+ * Vendored from cogeotiff PR #1463 (`TiffImage.getMultipleBytes`) for the same
+ * reason as {@link getBytes}: tile data must read through the uncached
+ * `dataSource` rather than the cached header source. Upstream also lets a
+ * `Source` provide its own `fetchRanges`; `@cogeotiff/core@9.5.0` has no such
+ * interface method and `dataSource` is only `Pick<Source, "fetch">`, so the
+ * coalescing here is always done locally.
+ */
+export async function getMultipleBytes(
+  image: TiffImage,
+  ranges: { offset: number; byteCount: number }[],
+  dataSource: Pick<Source, "fetch">,
+  options?: {
+    signal?: AbortSignal;
+    debug?: DebugTag;
+    coalesce?: number;
+    maxRangeSize?: number;
+  },
+): Promise<Array<{ bytes: ArrayBuffer; compression: Compression } | null>> {
+  if (ranges.length === 0) {
+    return [];
+  }
+
+  const results = new Array<{
+    bytes: ArrayBuffer;
+    compression: Compression;
+  } | null>(ranges.length);
+  const realRanges: { offset: number; length: number }[] = [];
+  const realIndices: number[] = [];
+  for (let i = 0; i < ranges.length; i++) {
+    const range = ranges[i]!;
+    if (range.offset === 0 || range.byteCount === 0) {
+      results[i] = null;
+    } else {
+      realIndices.push(i);
+      realRanges.push({ offset: range.offset, length: range.byteCount });
+    }
+  }
+
+  if (realRanges.length === 0) {
+    return results;
+  }
+
+  if (options?.debug !== undefined) {
+    for (const r of realRanges) {
+      console.log(
+        `[geotiff dataSource] ${options.debug.label}: offset=${r.offset} length=${r.length}`,
+      );
+    }
+  }
+
+  const fetched = await coalesceRanges(dataSource, realRanges, {
+    coalesce: options?.coalesce,
+    maxRangeSize: options?.maxRangeSize,
+    signal: options?.signal,
+  });
+
+  const compression = image.value(TiffTag.Compression) ?? Compression.None;
+  for (let k = 0; k < fetched.length; k++) {
+    const i = realIndices[k]!;
+    const raw = fetched[k]!;
+    const bytes =
+      compression === Compression.Jpeg ? image.getJpegHeader(raw) : raw;
+    results[i] = { bytes, compression };
+  }
+
+  return results;
+}
+
+/**
+ * Load multiple tiles in a single batched I/O round trip.
+ *
+ * Resolves the offset/size of every requested tile via `image.getTileSize`
+ * (header-source reads — small entries, served by the chunk cache), then fetches
+ * the tile data through {@link getMultipleBytes} (uncached `dataSource`, with
+ * range coalescing). Returns one entry per input tile, in input order; sparse
+ * tiles yield `null` matching {@link getBytes}.
+ *
+ * Vendored from cogeotiff PR #1463 (`TiffImage.getTiles`) for the same reason as
+ * {@link getTile}: the tile-data read must route through `dataSource`.
+ */
+export async function getTiles(
+  image: TiffImage,
+  xy: Array<[number, number]>,
+  dataSource: Pick<Source, "fetch">,
+  options?: {
+    signal?: AbortSignal;
+    debug?: DebugTag;
+    coalesce?: number;
+    maxRangeSize?: number;
+  },
+): Promise<Array<{ bytes: ArrayBuffer; compression: Compression } | null>> {
+  if (xy.length === 0) {
+    return [];
+  }
+
+  const { size, tileSize } = image;
+  if (tileSize == null) {
+    throw new Error("Tiff is not tiled");
+  }
+
+  // TODO support GhostOptionTileOrder
+  const nyTiles = Math.ceil(size.height / tileSize.height);
+  const nxTiles = Math.ceil(size.width / tileSize.width);
+  const totalTiles = nxTiles * nyTiles;
+
+  const indices = xy.map(([x, y]) => {
+    if (x >= nxTiles || y >= nyTiles) {
+      throw new Error(
+        `Tile index is outside of range x:${x} >= ${nxTiles} or y:${y} >= ${nyTiles}`,
+      );
+    }
+    const idx = y * nxTiles + x;
+    if (idx >= totalTiles) {
+      throw new Error(
+        `Tile index is outside of tile range: ${idx} >= ${totalTiles}`,
+      );
+    }
+    return idx;
+  });
+
+  const sizes = await Promise.all(indices.map((i) => image.getTileSize(i)));
+  return getMultipleBytes(
+    image,
+    sizes.map((s) => ({ offset: s.offset, byteCount: s.imageSize })),
+    dataSource,
+    options,
+  );
 }
 
 /**
