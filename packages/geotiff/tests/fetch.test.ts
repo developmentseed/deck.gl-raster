@@ -193,4 +193,98 @@ describe("fetchTiles", () => {
     await batched.tiff.fetchTiles(GRID);
     expect(batched.dataSource.calls.length).toBeLessThan(GRID.length);
   });
+
+  it("returns the same tiles as per-tile fetchTile (pixel-interleaved)", async () => {
+    const tiff = await loadGeoTIFF("uint8_rgb_deflate_block64_cog", "rasterio");
+    const batched = await tiff.fetchTiles(GRID);
+    const individual = await Promise.all(
+      GRID.map(([x, y]) => tiff.fetchTile(x, y)),
+    );
+    expect(batched).toEqual(individual);
+  });
+
+  it("returns the same tiles as per-tile fetchTile (band-separate)", async () => {
+    const tiff = await loadGeoTIFF("int8_3band_zstd_block64", "rasterio");
+    const batched = await tiff.fetchTiles(GRID);
+    const individual = await Promise.all(
+      GRID.map(([x, y]) => tiff.fetchTile(x, y)),
+    );
+    expect(batched).toEqual(individual);
+  });
+
+  it("attaches masks the same way fetchTile does", async () => {
+    const tiff = await loadGeoTIFF("cog_uint8_rgb_mask", "rasterio");
+    const batched = await tiff.fetchTiles(GRID);
+    const individual = await Promise.all(
+      GRID.map(([x, y]) => tiff.fetchTile(x, y)),
+    );
+    expect(batched).toEqual(individual);
+    // sanity: this fixture really does carry a mask
+    expect(batched[0]!.array.mask).not.toBeNull();
+  });
+
+  it("preserves input order for a shuffled request", async () => {
+    const tiff = await loadGeoTIFF("uint8_rgb_deflate_block64_cog", "rasterio");
+    const shuffled: Array<[number, number]> = [
+      [1, 1],
+      [0, 0],
+      [1, 0],
+      [0, 1],
+    ];
+    const batched = await tiff.fetchTiles(shuffled);
+    expect(batched.map((t) => [t.x, t.y])).toEqual(shuffled);
+    const individual = await Promise.all(
+      shuffled.map(([x, y]) => tiff.fetchTile(x, y)),
+    );
+    expect(batched).toEqual(individual);
+  });
+
+  it("propagates boundless: false (clips edge tiles)", async () => {
+    const tiff = await loadGeoTIFF(
+      "uint8_1band_deflate_block128_unaligned",
+      "rasterio",
+    );
+    // 265×266 image, 128×128 tiles → 3×3; (2,2) is the partial corner tile.
+    const corner: Array<[number, number]> = [
+      [0, 0],
+      [2, 2],
+    ];
+    const batched = await tiff.fetchTiles(corner, { boundless: false });
+    const individual = await Promise.all(
+      corner.map(([x, y]) => tiff.fetchTile(x, y, { boundless: false })),
+    );
+    expect(batched).toEqual(individual);
+    // sanity: the corner tile really was clipped to the image bounds
+    expect(batched[1]!.array.width).toBe(tiff.width % tiff.tileWidth);
+    expect(batched[1]!.array.height).toBe(tiff.height % tiff.tileHeight);
+  });
+
+  it("coalesces band-separate tiles across bands and tiles", async () => {
+    const perTile = await loadGeoTIFFRecordingData(
+      "int8_3band_zstd_block64",
+      "rasterio",
+    );
+    for (const [x, y] of GRID) {
+      await perTile.tiff.fetchTile(x, y);
+    }
+    // 4 tiles × 3 bands = 12 independent reads via repeated fetchTile.
+    expect(perTile.dataSource.calls).toHaveLength(GRID.length * 3);
+
+    const batched = await loadGeoTIFFRecordingData(
+      "int8_3band_zstd_block64",
+      "rasterio",
+    );
+    await batched.tiff.fetchTiles(GRID);
+    expect(batched.dataSource.calls.length).toBeLessThan(GRID.length * 3);
+  });
+
+  it("returns [] for an empty request without any reads", async () => {
+    const { tiff, dataSource } = await loadGeoTIFFRecordingData(
+      "uint8_rgb_deflate_block64_cog",
+      "rasterio",
+    );
+    const result = await tiff.fetchTiles([]);
+    expect(result).toEqual([]);
+    expect(dataSource.calls).toHaveLength(0);
+  });
 });
