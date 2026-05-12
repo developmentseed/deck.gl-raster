@@ -237,25 +237,28 @@ export class GeoTIFF {
   /**
    * Create a new GeoTIFF from a URL.
    *
+   * Wraps the HTTP source with a fixed-size block-aligned LRU cache tuned for
+   * TIFF metadata. cogeotiff's lazy per-entry reads (for tile offsets, byte
+   * counts, and other tag values) are served by the block cache; adjacent
+   * entries within a single block hit one underlying request. Tile data reads
+   * bypass the cache and go straight to the raw HTTP source.
+   *
    * @param url The URL of the GeoTIFF to open.
-   * @param options Optional parameters for chunk size and cache size.
-   * @param options.chunkSize The minimum size for each request made to the source while reading header metadata. Defaults to 32KB.
-   * @param options.cacheSize The size of the cache for recently accessed header chunks. Currently no caching is applied to data fetches. Defaults to 1MB.
-   * @param options.prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
+   * @param options Optional parameters.
+   * @param options.chunkSize Bytes per chunk for the header cache. Defaults to 64 KiB (matches geotiff.js's BlockedSource).
+   * @param options.cacheSize Total cache size in bytes. Defaults to 8 MiB (~128 blocks at the default chunk size).
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
     url: string | URL,
     {
-      chunkSize = 1024 * 1024,
-      cacheSize = 10 * 1024 * 1024,
-      prefetch = 32 * 1024,
+      chunkSize = 64 * 1024,
+      cacheSize = 8 * 1024 * 1024,
       signal,
     }: {
       chunkSize?: number;
       cacheSize?: number;
-      prefetch?: number;
       signal?: AbortSignal;
     } = {},
   ): Promise<GeoTIFF> {
@@ -269,33 +272,23 @@ export class GeoTIFF {
     // In a browser, `Content-Range` is only readable when the server lists it in
     // `Access-Control-Expose-Headers` (S3 does not by default), so the
     // `Content-Length` fallback — the length of a single *chunk*, not the file —
-    // gets recorded as the file size. `@chunkd/middleware`'s chunk layer then
-    // rejects any later read past that bogus size with
-    // "SourceError: Request outside of bounds".
+    // gets recorded as the file size. Reads past that bogus size would then be
+    // rejected as out-of-bounds.
     //
     // Seed `metadata` ourselves so `SourceHttp` never records a size (it only
     // fills in `metadata` while it is still null), treating the source as having
     // unbounded length. Remove once the upstream fix lands.
     source.metadata = { size: Number.POSITIVE_INFINITY };
 
-    // Figure out optimal defaults in light of
-    // https://github.com/blacha/cogeotiff/issues/1431
-    // Defaulting to 32KB chunks is too small for tile data.
-    // https://github.com/developmentseed/deck.gl-raster/issues/294
-
-    // read files in chunks
-    const chunk = new SourceChunk({ size: chunkSize });
-    // 10MB cache for recently accessed chunks
-    const cache = new SourceCache({ size: cacheSize });
-
-    const view = new SourceView(source, [chunk, cache]);
+    const view = new SourceView(source, [
+      new SourceChunk({ size: chunkSize }),
+      new SourceCache({ size: cacheSize }),
+    ]);
 
     return await GeoTIFF.open({
-      // Use raw source for tile data to avoid unnecessary copying through the
-      // cache and chunk layers.
+      // Tile data reads bypass the header cache (raw source).
       dataSource: source,
       headerSource: view,
-      prefetch,
       signal,
     });
   }
