@@ -255,25 +255,24 @@ describe("SourceReadaheadCache", () => {
   });
 });
 
-describe("SourceReadaheadCache.disable()", () => {
-  it("after disable, every fetch passes through to next without consulting cache", async () => {
+describe("SourceReadaheadCache.freeze()", () => {
+  it("after freeze, cache hits are still served from memory", async () => {
     const { next, count } = makeNext("abcdefghijklmnop");
     const m = new SourceReadaheadCache({ initial: 4, multiplier: 2 });
 
-    // Pre-disable fetch: cache extends.
+    // Pre-freeze fetch: cache extends to 4 bytes.
     await m.fetch(makeReq(0, 4), next);
     expect(count()).toBe(1);
 
-    m.disable();
+    m.freeze();
 
-    // Post-disable: cache is bypassed. Each request hits next directly.
-    await m.fetch(makeReq(0, 4), next);
-    expect(count()).toBe(2);
-    await m.fetch(makeReq(0, 4), next);
-    expect(count()).toBe(3);
+    // Post-freeze: range fully within cache → served from memory, no fetch.
+    const buf = await m.fetch(makeReq(0, 4), next);
+    expect(asString(buf)).toBe("abcd");
+    expect(count()).toBe(1);
   });
 
-  it("after disable, far-offset reads do not trigger cache growth", async () => {
+  it("after freeze, cache misses bypass to next without extending", async () => {
     const { next, count } = makeNext("a".repeat(1024));
     const m = new SourceReadaheadCache({ initial: 4, multiplier: 2 });
 
@@ -281,27 +280,30 @@ describe("SourceReadaheadCache.disable()", () => {
     await m.fetch(makeReq(0, 4), next);
     expect(count()).toBe(1);
 
-    m.disable();
+    m.freeze();
 
-    // A far-offset read post-disable issues exactly one underlying fetch
-    // — no exponential growth.
+    // Far-offset read post-freeze: one direct fetch, no exponential growth.
     await m.fetch(makeReq(512, 4), next);
     expect(count()).toBe(2);
+
+    // Another far-offset read: another single direct fetch.
+    await m.fetch(makeReq(800, 4), next);
+    expect(count()).toBe(3);
   });
 
-  it("disable() is idempotent", () => {
+  it("freeze() is idempotent", () => {
     const m = new SourceReadaheadCache({ initial: 4, multiplier: 2 });
-    m.disable();
-    m.disable();
-    m.disable();
-    // No throw; still works as a pass-through.
+    m.freeze();
+    m.freeze();
+    m.freeze();
+    // No throw; still works.
     expect(m.name).toBe("source:readahead-cache");
   });
 
-  it("preserves bypass behavior for negative offsets and undefined length after disable", async () => {
+  it("preserves bypass behavior for negative offsets and undefined length after freeze", async () => {
     const { next, count } = makeNext("abcd");
     const m = new SourceReadaheadCache({ initial: 4, multiplier: 2 });
-    m.disable();
+    m.freeze();
 
     const negReq: SourceRequest = {
       source: { metadata: undefined } as never,
@@ -316,6 +318,46 @@ describe("SourceReadaheadCache.disable()", () => {
 
     await m.fetch(negReq, next);
     await m.fetch(fullReq, next);
+    expect(count()).toBe(2);
+  });
+});
+
+describe("SourceReadaheadCache maxExtension cap", () => {
+  it("bypasses single requests that would require more than maxExtension", async () => {
+    const { next, count } = makeNext("a".repeat(10000));
+    const m = new SourceReadaheadCache({
+      initial: 4,
+      multiplier: 2,
+      maxExtension: 100,
+    });
+
+    // Establish a small cache.
+    await m.fetch(makeReq(0, 4), next);
+    expect(count()).toBe(1);
+
+    // Request at far offset would require extending the cache by ~9996 bytes.
+    // Cap is 100 → bypass, single direct fetch, cache stays at 4.
+    await m.fetch(makeReq(9000, 4), next);
+    expect(count()).toBe(2);
+
+    // Cache is still small: next near-offset request fetches from cache.len,
+    // not from far offset.
+    await m.fetch(makeReq(4, 4), next);
+    expect(count()).toBe(3);
+  });
+
+  it("does not cap normal sequential growth", async () => {
+    const { next, count } = makeNext("a".repeat(100));
+    const m = new SourceReadaheadCache({
+      initial: 4,
+      multiplier: 2,
+      maxExtension: 100,
+    });
+
+    // 1st extension: 4 bytes — well under cap.
+    await m.fetch(makeReq(0, 4), next);
+    // 2nd extension (sequential): cache.len=4, needed=4, fetchSize=max(8, 4)=8 < cap.
+    await m.fetch(makeReq(4, 4), next);
     expect(count()).toBe(2);
   });
 });
