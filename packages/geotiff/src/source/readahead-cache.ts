@@ -93,18 +93,32 @@ export interface SourceReadaheadCacheOptions {
   /** Multiplier applied to the previous fetch size on each subsequent read. */
   multiplier: number;
   /**
-   * Maximum bytes a single underlying fetch may add to the cache. If
-   * satisfying a request would require extending the cache by more than this,
-   * the middleware bypasses the cache entirely for that request and serves it
-   * with one direct fetch instead. Bounds the worst case when cogeotiff reads
-   * at a far offset during the open phase (e.g. GDAL ghost-header probes at
-   * EOF). Defaults to {@link DEFAULT_MAX_EXTENSION}.
+   * Maximum bytes from the end of the cache to the start of a request before
+   * the middleware bypasses to next(). If a request starts more than this far
+   * past `cache.len`, it is served by one direct fetch instead of triggering
+   * a cache extension that spans the gap.
+   *
+   * Sequential reads (gap ≈ 0) are unaffected — the cache extends naturally
+   * by `nextFetchSize(cache.len)` regardless of how big that is, so even
+   * files with hundreds of megabytes of metadata can be opened in a few
+   * exponentially-growing fetches. The cap only kicks in for far-offset
+   * probes (e.g. GDAL ghost-header reads near EOF on a large file).
+   *
+   * Defaults to {@link DEFAULT_MAX_GAP}.
    */
-  maxExtension?: number;
+  maxGap?: number;
 }
 
-/** Default cap on per-fetch cache extension: 4 MiB. */
-export const DEFAULT_MAX_EXTENSION = 4 * 1024 * 1024;
+/**
+ * Default cap on the distance from `cache.len` to a request's start before
+ * the middleware bypasses: 128 MiB.
+ *
+ * Chosen to be larger than any realistic TIFF metadata region (so sequential
+ * extension of the cache is never artificially stopped) while still small
+ * compared to typical large-COG file sizes (so a far-offset probe near EOF
+ * does not pull hundreds of MB of unused data into the cache).
+ */
+export const DEFAULT_MAX_GAP = 128 * 1024 * 1024;
 
 /**
  * A chunkd {@link SourceMiddleware} that caches sequential reads from offset 0
@@ -130,13 +144,15 @@ export const DEFAULT_MAX_EXTENSION = 4 * 1024 * 1024;
  *
  * # Bounded extension
  *
- * Even while active, a single underlying fetch is capped at
- * {@link SourceReadaheadCacheOptions.maxExtension} bytes. If satisfying a
- * request would require pulling more than the cap in one extension — e.g.
- * the request is at a far offset, or it is just very large — the middleware
- * bypasses for that request and returns `next(req)` directly. The cache
- * stays at its current size; the rare far-offset read pays one round trip
- * but does not pollute the cache.
+ * Sequential extension is unbounded — the cache grows as far as cogeotiff's
+ * sequential reads require, even for files with very large metadata regions
+ * (a 200 GB COG can easily have a 60+ MB header). The bound is on the
+ * *gap* between `cache.len` and the start of a request: if a request lands
+ * more than {@link SourceReadaheadCacheOptions.maxGap} bytes past the
+ * cache, the middleware bypasses for that one request instead of pulling
+ * the entire gap into the cache. This protects against pathological probes
+ * (e.g. GDAL ghost-header reads near the end of the file) without
+ * artificially capping the legitimate sequential growth path.
  *
  * # Bypass cases
  *
@@ -153,14 +169,14 @@ export class SourceReadaheadCache implements SourceMiddleware {
   private readonly cache = new SequentialBlockCache();
   private readonly initial: number;
   private readonly multiplier: number;
-  private readonly maxExtension: number;
+  private readonly maxGap: number;
   private readonly lock = mutex();
   private frozen = false;
 
   constructor(options: SourceReadaheadCacheOptions) {
     this.initial = options.initial;
     this.multiplier = options.multiplier;
-    this.maxExtension = options.maxExtension ?? DEFAULT_MAX_EXTENSION;
+    this.maxGap = options.maxGap ?? DEFAULT_MAX_GAP;
   }
 
   /**
@@ -199,16 +215,13 @@ export class SourceReadaheadCache implements SourceMiddleware {
         return next(req);
       }
 
-      // While active: if extending would exceed the per-fetch cap, bypass
-      // for this request instead of pulling a large chunk into the cache.
-      // This guards against pathological reads during the open phase (e.g.
-      // a tag value or ghost header at the end of the file).
-      const needed = end - this.cache.len;
-      const naiveFetchSize = Math.max(
-        this.nextFetchSize(this.cache.len),
-        needed,
-      );
-      if (naiveFetchSize > this.maxExtension) {
+      // While active: if the request starts too far past the cache, bypass
+      // and serve it with one direct fetch. Sequential extension is fine —
+      // even very large metadata regions are reached by exponential growth
+      // — but a far-offset probe (e.g. GDAL ghost header near EOF on a
+      // large file) shouldn't drag the cache through the gap.
+      const gap = start - this.cache.len;
+      if (gap > this.maxGap) {
         return next(req);
       }
 

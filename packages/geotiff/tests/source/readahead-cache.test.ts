@@ -322,42 +322,63 @@ describe("SourceReadaheadCache.freeze()", () => {
   });
 });
 
-describe("SourceReadaheadCache maxExtension cap", () => {
-  it("bypasses single requests that would require more than maxExtension", async () => {
+describe("SourceReadaheadCache maxGap cap", () => {
+  it("bypasses a request that starts more than maxGap past cache.len", async () => {
     const { next, count } = makeNext("a".repeat(10000));
     const m = new SourceReadaheadCache({
       initial: 4,
       multiplier: 2,
-      maxExtension: 100,
+      maxGap: 100,
     });
 
-    // Establish a small cache.
+    // Establish a small cache: cache.len = 4 after this.
     await m.fetch(makeReq(0, 4), next);
     expect(count()).toBe(1);
 
-    // Request at far offset would require extending the cache by ~9996 bytes.
-    // Cap is 100 → bypass, single direct fetch, cache stays at 4.
+    // Request starts at offset 9000 — gap = 9000 - 4 = 8996, way past the
+    // cap. Bypass: one direct fetch, cache stays at len 4.
     await m.fetch(makeReq(9000, 4), next);
     expect(count()).toBe(2);
 
-    // Cache is still small: next near-offset request fetches from cache.len,
+    // Cache is still small: next near-offset request extends from cache.len,
     // not from far offset.
     await m.fetch(makeReq(4, 4), next);
     expect(count()).toBe(3);
   });
 
-  it("does not cap normal sequential growth", async () => {
-    const { next, count } = makeNext("a".repeat(100));
+  it("does not cap sequential extension by total fetch size", async () => {
+    // multiplier = 4: each fetch is 4× the previous cache.len. With initial
+    // of 4, the second extension would be 16 bytes; absolute cap of 8 wouldn't
+    // stop it — only the *gap* matters now.
+    const { next, count } = makeNext("a".repeat(1024));
+    const m = new SourceReadaheadCache({
+      initial: 4,
+      multiplier: 4,
+      maxGap: 8,
+    });
+
+    // 1st extension: cache.len 0 → 4. Gap 0. Extend.
+    await m.fetch(makeReq(0, 4), next);
+    // 2nd: sequential at offset 4. Gap = 0. Extends by nextFetchSize=16.
+    // cache.len → 20.
+    await m.fetch(makeReq(4, 4), next);
+    // 3rd: sequential at offset 20. Gap = 0. Extends by nextFetchSize=80.
+    // cache.len → 100.
+    await m.fetch(makeReq(20, 4), next);
+    expect(count()).toBe(3);
+  });
+
+  it("allows extending when the gap is exactly at the cap", async () => {
+    const { next, count } = makeNext("a".repeat(1024));
     const m = new SourceReadaheadCache({
       initial: 4,
       multiplier: 2,
-      maxExtension: 100,
+      maxGap: 50,
     });
 
-    // 1st extension: 4 bytes — well under cap.
     await m.fetch(makeReq(0, 4), next);
-    // 2nd extension (sequential): cache.len=4, needed=4, fetchSize=max(8, 4)=8 < cap.
-    await m.fetch(makeReq(4, 4), next);
+    // Gap = 50 - 4 = 46. At cap. Extend.
+    await m.fetch(makeReq(50, 4), next);
     expect(count()).toBe(2);
   });
 });
