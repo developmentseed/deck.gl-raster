@@ -1,12 +1,50 @@
 /**
- * Tests for fetchTile's `boundless` option.
+ * Tests for fetchTile and fetchTiles.
  *
  * Uses the unaligned fixture (265×266, 128×128 tiles) which has partial edge
  * tiles: right edge is 9px wide (265 % 128), bottom edge is 10px tall (266 % 128).
  */
 
+import { SourceFile } from "@chunkd/source-file";
+import type { Source } from "@cogeotiff/core";
 import { describe, expect, it } from "vitest";
-import { loadGeoTIFF } from "./helpers.js";
+import { GeoTIFF } from "../src/geotiff.js";
+import { fixturePath, loadGeoTIFF } from "./helpers.js";
+
+/** A `dataSource` wrapper that records every `fetch` call (offset + length). */
+class RecordingDataSource implements Pick<Source, "fetch"> {
+  readonly calls: Array<{ offset: number; length: number | undefined }> = [];
+
+  constructor(private readonly inner: Pick<Source, "fetch">) {}
+
+  fetch(
+    offset: number,
+    length?: number,
+    options?: { signal: AbortSignal },
+  ): Promise<ArrayBuffer> {
+    this.calls.push({ offset, length });
+    return this.inner.fetch(offset, length, options);
+  }
+}
+
+/**
+ * Open a fixture with the tile-data reads routed through a {@link
+ * RecordingDataSource}, so a test can count how many underlying `fetch`
+ * calls the tile-data path made. Header/metadata reads use a separate plain
+ * source and are not recorded.
+ */
+async function loadGeoTIFFRecordingData(
+  name: string,
+  variant: string,
+): Promise<{ tiff: GeoTIFF; dataSource: RecordingDataSource }> {
+  const path = fixturePath(name, variant);
+  const dataSource = new RecordingDataSource(new SourceFile(path));
+  const tiff = await GeoTIFF.open({
+    dataSource,
+    headerSource: new SourceFile(path),
+  });
+  return { tiff, dataSource };
+}
 
 describe("fetchTile band-separate", () => {
   it("returns band-separate layout for a multi-band planar TIFF", async () => {
@@ -126,5 +164,33 @@ describe("fetchTile boundless option", () => {
         }
       }
     });
+  });
+});
+
+describe("fetchTiles", () => {
+  const GRID: Array<[number, number]> = [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+  ];
+
+  it("coalesces a contiguous grid into fewer reads than per-tile fetches (pixel-interleaved)", async () => {
+    const perTile = await loadGeoTIFFRecordingData(
+      "uint8_rgb_deflate_block64_cog",
+      "rasterio",
+    );
+    for (const [x, y] of GRID) {
+      await perTile.tiff.fetchTile(x, y);
+    }
+    // One data read per tile when fetched individually.
+    expect(perTile.dataSource.calls).toHaveLength(GRID.length);
+
+    const batched = await loadGeoTIFFRecordingData(
+      "uint8_rgb_deflate_block64_cog",
+      "rasterio",
+    );
+    await batched.tiff.fetchTiles(GRID);
+    expect(batched.dataSource.calls.length).toBeLessThan(GRID.length);
   });
 });
