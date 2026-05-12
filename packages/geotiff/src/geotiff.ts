@@ -71,13 +71,15 @@ export class GeoTIFF {
   readonly gdalMetadata: GDALMetadata | null;
 
   /**
-   * When true, log each {@link dataSource} fetch (image tile data and mask
-   * tile data) to the console with offset/length and a `data`/`mask` label.
-   * Useful for diagnosing per-request behavior against the browser network
-   * panel. Enable via the `debug` option on {@link GeoTIFF.open} or
-   * {@link GeoTIFF.fromUrl}.
+   * Internal: when true, log each `dataSource` fetch (image tile data and
+   * mask tile data) to the console with offset/length and a `data`/`mask`
+   * label. Enable via the `debug` option on {@link GeoTIFF.open} or
+   * {@link GeoTIFF.fromUrl}. Read by the tile-fetch path; not part of the
+   * public API surface.
+   *
+   * @internal
    */
-  readonly debug: boolean;
+  readonly _debug: boolean;
 
   private constructor(
     tiff: Tiff,
@@ -98,7 +100,7 @@ export class GeoTIFF {
     this.cachedTags = cachedTags;
     this.dataSource = dataSource;
     this.gdalMetadata = gdalMetadata;
-    this.debug = debug;
+    this._debug = debug;
   }
 
   /**
@@ -118,13 +120,12 @@ export class GeoTIFF {
     debug?: boolean;
   }): Promise<GeoTIFF> {
     const { dataSource, headerSource, signal, debug } = options;
-    // We use cogeotiff's default read size; in the typical fromUrl path,
-    // SourceChunk pads any small request up to the block size anyway, so
-    // tuning this independently of the chunk size is rarely useful.
-    const tiff = await Tiff.create(headerSource, {
-      defaultReadSize: Tiff.DefaultReadSize,
-      signal,
-    });
+    // Construct + init in two steps so we don't have to pass cogeotiff's
+    // `defaultReadSize` ourselves (the constructor defaults it to
+    // `Tiff.DefaultReadSize` when no options are provided). In the typical
+    // fromUrl path, SourceChunk pads any small request up to the block size
+    // anyway, so tuning this independently of the chunk size is rarely useful.
+    const tiff = await new Tiff(headerSource).init({ signal });
     // Disable cogeotiff's GDAL leader-bytes path so `TiffImage.getTileSize`
     // always reads from TileOffsets/TileByteCounts through the header source.
     // The leader-bytes optimization assumes a tile fits in one chunk, which

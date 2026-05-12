@@ -35,8 +35,12 @@ interface HasTiffReference extends HasTransform {
   /** The nodata value for the image, if any. */
   readonly nodata: number | null;
 
-  /** When true, the tile-fetch path logs each dataSource fetch to the console. */
-  readonly debug?: boolean;
+  /**
+   * Internal: when true, the tile-fetch path logs each dataSource fetch to
+   * the console. Set via `GeoTIFF.open({ debug: true })`.
+   * @internal
+   */
+  readonly _debug?: boolean;
 }
 
 export async function fetchTile(
@@ -58,7 +62,7 @@ export async function fetchTile(
     self.maskImage != null
       ? getTile(self.maskImage, x, y, self.dataSource, {
           signal,
-          debug: self.debug ? { label: "mask" } : undefined,
+          debug: self._debug ? { label: "mask" } : undefined,
         })
       : Promise.resolve(null);
 
@@ -250,7 +254,7 @@ async function fetchCogBytes(
     signal?: AbortSignal;
   } = {},
 ): Promise<GetBytesResponse | GetBytesResponse[]> {
-  const debug: DebugTag | undefined = self.debug
+  const debug: DebugTag | undefined = self._debug
     ? { label: "data" }
     : undefined;
   switch (self.cachedTags.planarConfiguration) {
@@ -299,7 +303,7 @@ async function fetchBandSeparateTileBytes(
     signal?: AbortSignal;
   } = {},
 ): Promise<GetBytesResponse[]> {
-  const debug: DebugTag | undefined = self.debug
+  const debug: DebugTag | undefined = self._debug
     ? { label: "data" }
     : undefined;
   const byteRanges = await findBandSeparateTileByteRanges(self, x, y);
