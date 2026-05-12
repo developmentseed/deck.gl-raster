@@ -107,27 +107,22 @@ export class GeoTIFF {
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    *
    * @param options.dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
-   * @param options.headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs.
-   * @param options.prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
+   * @param options.headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs. Callers who want to control the initial read size should compose a `SourceChunk` of the desired block size; cogeotiff's default `defaultReadSize` (16 KiB) gets padded up by the chunking layer anyway.
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console. Off by default.
    */
   static async open(options: {
     dataSource: Pick<Source, "fetch">;
     headerSource: Source;
-    prefetch?: number;
     signal?: AbortSignal;
     debug?: boolean;
   }): Promise<GeoTIFF> {
-    const {
-      dataSource,
-      headerSource,
-      prefetch = 32 * 1024,
-      signal,
-      debug,
-    } = options;
+    const { dataSource, headerSource, signal, debug } = options;
+    // We use cogeotiff's default read size; in the typical fromUrl path,
+    // SourceChunk pads any small request up to the block size anyway, so
+    // tuning this independently of the chunk size is rarely useful.
     const tiff = await Tiff.create(headerSource, {
-      defaultReadSize: prefetch,
+      defaultReadSize: Tiff.DefaultReadSize,
       signal,
     });
     // Disable cogeotiff's GDAL leader-bytes path so `TiffImage.getTileSize`
@@ -316,10 +311,6 @@ export class GeoTIFF {
       // Tile data reads bypass the header cache (raw source).
       dataSource: source,
       headerSource: view,
-      // Read a full block on cogeotiff's first byte fetch. SourceChunk would
-      // pad a smaller request up to chunkSize anyway, but being explicit keeps
-      // the intent local and survives middleware changes.
-      prefetch: chunkSize,
       signal,
       debug,
     });
