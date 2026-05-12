@@ -133,7 +133,8 @@ function createUnormPipeline(
     renderPipeline.push(toRGBModule);
   }
 
-  // For palette images, use nearest-neighbor sampling
+  // For palette images, use nearest-neighbor sampling, because indices into a
+  // colormap can't be interpolated
   const samplerOptions: SamplerProps =
     photometric === Photometric.Palette
       ? {
@@ -182,11 +183,7 @@ function createUnormPipeline(
       format: textureFormat,
       width,
       height,
-      // Use nearest filtering for the mask to avoid interpolated edges/halos
-      sampler: {
-        minFilter: "nearest",
-        magFilter: "nearest",
-      },
+      sampler: samplerOptions,
     });
 
     let maskTexture: Texture | undefined;
@@ -197,7 +194,11 @@ function createUnormPipeline(
         format: "r8unorm",
         width,
         height,
-        sampler: samplerOptions,
+        // Use nearest filtering for the mask to avoid interpolated edges/halos
+        sampler: {
+          minFilter: "nearest",
+          magFilter: "nearest",
+        },
       });
       byteLength += mask.byteLength;
     }

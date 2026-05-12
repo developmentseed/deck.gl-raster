@@ -23,7 +23,11 @@ export interface CachedTags {
 }
 
 /** Pre-fetch TIFF tags for easier visualization. */
-export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
+export async function prefetchTags(
+  image: TiffImage,
+  options: { signal?: AbortSignal } = {},
+): Promise<CachedTags> {
+  const { signal } = options;
   // Compression is pre-fetched in init
   const compression = image.value(TiffTag.Compression);
   if (compression === null) {
@@ -47,24 +51,24 @@ export async function prefetchTags(image: TiffImage): Promise<CachedTags> {
     tileByteCounts,
     tileOffsets,
   ] = await Promise.all([
-    image.fetch(TiffTag.BitsPerSample),
-    image.fetch(TiffTag.ColorMap),
-    image.fetch(TiffTag.GdalNoData),
-    image.fetch(TiffTag.GdalMetadata),
-    image.fetch(TiffTag.LercParameters),
-    image.fetch(TiffTag.ModelPixelScale),
-    image.fetch(TiffTag.ModelTiePoint),
-    image.fetch(TiffTag.ModelTransformation),
-    image.fetch(TiffTag.Photometric),
-    image.fetch(TiffTag.PlanarConfiguration),
-    image.fetch(TiffTag.Predictor),
-    image.fetch(TiffTag.SampleFormat),
-    image.fetch(TiffTag.SamplesPerPixel),
+    image.fetch(TiffTag.BitsPerSample, { signal }),
+    image.fetch(TiffTag.ColorMap, { signal }),
+    image.fetch(TiffTag.GdalNoData, { signal }),
+    image.fetch(TiffTag.GdalMetadata, { signal }),
+    image.fetch(TiffTag.LercParameters, { signal }),
+    image.fetch(TiffTag.ModelPixelScale, { signal }),
+    image.fetch(TiffTag.ModelTiePoint, { signal }),
+    image.fetch(TiffTag.ModelTransformation, { signal }),
+    image.fetch(TiffTag.Photometric, { signal }),
+    image.fetch(TiffTag.PlanarConfiguration, { signal }),
+    image.fetch(TiffTag.Predictor, { signal }),
+    image.fetch(TiffTag.SampleFormat, { signal }),
+    image.fetch(TiffTag.SamplesPerPixel, { signal }),
     // Pre-fetch tile offsets and byte counts. If we don't prefetch them,
     // TiffImage.getTileSize will have to fetch them for each tile, which
     // results in many redundant requests.
-    image.fetch(TiffTag.TileByteCounts),
-    image.fetch(TiffTag.TileOffsets),
+    image.fetch(TiffTag.TileByteCounts, { signal }),
+    image.fetch(TiffTag.TileOffsets, { signal }),
   ]);
 
   const missingTag: (tagName: string) => never = (tagName: string) => {

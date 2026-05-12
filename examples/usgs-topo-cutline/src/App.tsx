@@ -1,5 +1,4 @@
-import type { MapboxOverlayProps } from "@deck.gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
+import { Checkbox, Code, NativeSelect, Text } from "@chakra-ui/react";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type {
   RasterModule,
@@ -12,17 +11,17 @@ import {
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import type { Texture } from "@luma.gl/core";
+import {
+  ControlPanel,
+  DeckGlOverlay,
+  ExternalLink,
+  Field,
+} from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer.js";
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
-}
 
 /**
  * Project a WGS84 lng/lat bbox `[west, south, east, north]` to an EPSG:3857
@@ -170,7 +169,6 @@ export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [cutlineEnabled, setCutlineEnabled] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [panelOpen, setPanelOpen] = useState(true);
   const selected = TOPO_OPTIONS[selectedIndex]!;
 
   const layer = new COGLayer<TextureDataT>({
@@ -203,107 +201,47 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={[layer]} interleaved />
+        <DeckGlOverlay layers={[layer]} interleaved />
       </MaplibreMap>
 
-      <div
-        style={{
-          position: "absolute",
-          top: "20px",
-          left: "20px",
-          background: "white",
-          padding: "16px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          width: "290px",
-          zIndex: 1000,
-        }}
+      <ControlPanel
+        title="USGS Topographic Maps"
+        sourcePath="examples/usgs-topo-cutline"
       >
-        <button
-          type="button"
-          style={{
-            all: "unset",
-            width: "100%",
-            margin: 0,
-            fontSize: "16px",
-            fontWeight: "bold",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            userSelect: "none",
-          }}
-          onClick={() => setPanelOpen((o) => !o)}
-        >
-          USGS Topographic Maps
-          <span
-            style={{
-              fontSize: "12px",
-              transition: "transform 0.2s",
-              transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
-            }}
-          >
-            ▼
-          </span>
-        </button>
-        {panelOpen && (
-          <>
-            <p
-              style={{
-                margin: "8px 0 12px 0",
-                fontSize: "13px",
-                color: "#444",
-              }}
-            >
-              This uses the <code>CutlineBbox</code> shader module to avoid
-              rendering pixels containing the map collar.
-            </p>
-            <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
-              <a
-                href="https://developmentseed.org/deck.gl-raster/"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                deck.gl-raster Documentation ↗
-              </a>
-            </p>
-            <select
+        <Text mb="3" color="gray.600">
+          Uses the{" "}
+          <ExternalLink href="https://developmentseed.org/deck.gl-raster/api/deck-gl-raster-gpu-modules/variables/CutlineBbox/">
+            <Code>CutlineBbox</Code>
+          </ExternalLink>{" "}
+          shader module to avoid rendering pixels containing the map collar.
+        </Text>
+        <Field label="Topographic map">
+          <NativeSelect.Root>
+            <NativeSelect.Field
               value={selectedIndex}
               onChange={(e) => setSelectedIndex(Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: "6px",
-                fontSize: "13px",
-                marginBottom: "12px",
-                cursor: "pointer",
-              }}
             >
               {TOPO_OPTIONS.map((opt, i) => (
                 <option key={opt.url} value={i}>
                   {opt.title}
                 </option>
               ))}
-            </select>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "14px",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={cutlineEnabled}
-                onChange={(e) => setCutlineEnabled(e.target.checked)}
-                style={{ cursor: "pointer" }}
-              />
-              <span>Discard map collar</span>
-            </label>
-          </>
-        )}
-      </div>
+            </NativeSelect.Field>
+            <NativeSelect.Indicator />
+          </NativeSelect.Root>
+        </Field>
+        <Checkbox.Root
+          mt="3"
+          checked={cutlineEnabled}
+          onCheckedChange={(details) =>
+            setCutlineEnabled(details.checked === true)
+          }
+        >
+          <Checkbox.HiddenInput />
+          <Checkbox.Control />
+          <Checkbox.Label>Discard map collar</Checkbox.Label>
+        </Checkbox.Root>
+      </ControlPanel>
     </div>
   );
 }

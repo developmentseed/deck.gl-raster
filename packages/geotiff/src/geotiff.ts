@@ -98,17 +98,20 @@ export class GeoTIFF {
    * @param options.dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
    * @param options.headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs.
    * @param options.prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
+   * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    */
   static async open(options: {
     dataSource: Pick<Source, "fetch">;
     headerSource: Source;
     prefetch?: number;
+    signal?: AbortSignal;
   }): Promise<GeoTIFF> {
-    const { dataSource, headerSource, prefetch = 32 * 1024 } = options;
+    const { dataSource, headerSource, prefetch = 32 * 1024, signal } = options;
     const tiff = await Tiff.create(headerSource, {
       defaultReadSize: prefetch,
+      signal,
     });
-    return GeoTIFF.fromTiff(tiff, dataSource);
+    return GeoTIFF.fromTiff(tiff, dataSource, { signal });
   }
 
   /**
@@ -118,11 +121,14 @@ export class GeoTIFF {
    * (width, height).  Overviews are sorted from finest to coarsest resolution.
    *
    * @param dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
+   * @param options.signal An optional {@link AbortSignal} to cancel header tag reads.
    */
   static async fromTiff(
     tiff: Tiff,
     dataSource: Pick<Source, "fetch">,
+    options: { signal?: AbortSignal } = {},
   ): Promise<GeoTIFF> {
+    const { signal } = options;
     const images = tiff.images;
     if (images.length === 0) {
       throw new Error("TIFF does not contain any IFDs");
@@ -130,7 +136,7 @@ export class GeoTIFF {
 
     // Force loading of important tags in sub-images
     // https://github.com/blacha/cogeotiff/blob/4781a6375adf419da9f0319d15c8a67284dfb0c4/packages/core/src/tiff.image.ts#L72-L88
-    await Promise.all(images.map((image) => image.init(true)));
+    await Promise.all(images.map((image) => image.init(true, { signal })));
 
     const primaryImage = images[0]!;
     const gkd = extractGeoKeyDirectory(primaryImage);
@@ -165,7 +171,7 @@ export class GeoTIFF {
       return sb.width * sb.height - sa.width * sa.height;
     });
 
-    const cachedTags = await prefetchTags(primaryImage);
+    const cachedTags = await prefetchTags(primaryImage, { signal });
     const gdalMetadata = parseGDALMetadata(cachedTags.gdalMetadata, {
       count: cachedTags.samplesPerPixel,
     });
@@ -247,6 +253,7 @@ export class GeoTIFF {
    * @param options Optional parameters for the read-ahead cache.
    * @param options.prefetch Initial fetch size in bytes for header/metadata reads. Defaults to 64KB, which covers most COGs in a single round trip.
    * @param options.multiplier Growth factor applied to the previous fetch size on each subsequent header read. Defaults to 2.0.
+   * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
@@ -254,9 +261,30 @@ export class GeoTIFF {
     {
       prefetch = 64 * 1024,
       multiplier = 2,
-    }: { prefetch?: number; multiplier?: number } = {},
+      signal,
+    }: {
+      prefetch?: number;
+      multiplier?: number;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url, {});
+
+    // TEMPORARY workaround for
+    // https://github.com/developmentseed/deck.gl-raster/issues/524
+    //
+    // `@chunkd/source-http` records `source.metadata.size` from the first range
+    // response, preferring `Content-Range` and falling back to `Content-Length`.
+    // In a browser, `Content-Range` is only readable when the server lists it in
+    // `Access-Control-Expose-Headers` (S3 does not by default), so the
+    // `Content-Length` fallback — the length of a single *chunk*, not the file —
+    // gets recorded as the file size. Reads past that bogus size would then be
+    // rejected as out-of-bounds.
+    //
+    // Seed `metadata` ourselves so `SourceHttp` never records a size (it only
+    // fills in `metadata` while it is still null), treating the source as having
+    // unbounded length. Remove once the upstream fix lands.
+    source.metadata = { size: Number.POSITIVE_INFINITY };
 
     const readahead = new SourceReadaheadCache({
       initial: prefetch,
@@ -271,6 +299,7 @@ export class GeoTIFF {
       dataSource: source,
       headerSource: view,
       prefetch,
+      signal,
     });
 
     // Open phase complete: scope the cache to the open phase only. From here

@@ -272,9 +272,28 @@ export class RasterTileLayer<
     getTileData: NonNullable<RasterTileLayerProps<DataT>["getTileData"]>,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): TileLayer {
+    // Capture the device once so the inner `TilesetFactory` can read
+    // its current effective device-pixel ratio per `getTileIndices`
+    // call. The ratio is sampled lazily so window-drag-between-displays
+    // (or runtime changes to `useDevicePixels`) take effect on the next
+    // traversal. See dev-docs/lod-and-pixel-matching.md § (A).
+    //
+    // We compute drawingBuffer/CSS rather than using
+    // `cssToDeviceRatio()` (deprecated) or the `devicePixelRatio`
+    // property (always reflects the system value, ignoring
+    // `Deck.useDevicePixels`). The drawing-buffer ratio is the
+    // *effective* DPR Deck is rendering at.
+    const device = this.context.device;
     class TilesetFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
-        super(opts, descriptor);
+        super(opts, descriptor, {
+          getPixelRatio: () => {
+            const ctx = device.getDefaultCanvasContext();
+            const [drawingBufferWidth] = ctx.getDrawingBufferSize();
+            const [cssWidth] = ctx.getCSSSize();
+            return cssWidth ? drawingBufferWidth / cssWidth : 1;
+          },
+        });
       }
     }
 

@@ -28,6 +28,7 @@ import {
 } from "@math.gl/culling";
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
+import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -142,17 +143,6 @@ export class RasterTileNode {
   /** A cache of the children of this node. */
   private _children?: RasterTileNode[] | null;
 
-  /**
-   * A cached bounding volume for this tile, used for frustum culling
-   *
-   * This stores the result of `getBoundingVolume`.
-   */
-  private _boundingVolume?: {
-    /** The zrange used to compute this bounding volume. */
-    zRange: ZRange;
-    result: { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds };
-  };
-
   constructor(
     x: number,
     y: number,
@@ -243,6 +233,20 @@ export class RasterTileNode {
     maxZ?: number;
     /** Optional geographic bounds filter */
     bounds?: Bounds;
+    /**
+     * Device pixels per CSS pixel. The LOD test selects a tile when its
+     * source pixels are at most one *device* pixel wide; on HiDPI displays
+     * (`pixelRatio > 1`) this picks a finer overview than the CSS-pixel
+     * comparison would. See `dev-docs/lod-and-pixel-matching.md` § (A).
+     */
+    pixelRatio: number;
+    /**
+     * Bounding-volume cache shared by every node in this traversal. Populated
+     * lazily as tiles are visited; reused across `getTileIndices` calls (so
+     * animation frames don't recompute proj4 reprojections + oriented-bounding-
+     * box fits). See {@link BoundingVolumeCache}.
+     */
+    boundingVolumeCache: BoundingVolumeCache;
   }): boolean {
     // Reset state
     this.childVisible = false;
@@ -256,12 +260,15 @@ export class RasterTileNode {
       maxZ = this.descriptor.levels.length - 1,
       project,
       bounds,
+      pixelRatio,
+      boundingVolumeCache,
     } = params;
 
     // Get bounding volume for this tile
     const { boundingVolume, commonSpaceBounds } = this.getBoundingVolume(
       elevationBounds,
       project,
+      boundingVolumeCache,
     );
 
     // Step 1: Bounds checking
@@ -284,19 +291,24 @@ export class RasterTileNode {
     // Only select this tile if no child is visible (prevents overlapping tiles)
     // "When pitch is low, force selection at maxZ."
     if (!this.childVisible && this.z >= minZ) {
-      const metersPerScreenPixel = getMetersPerPixelAtBoundingVolume(
+      const metersPerCSSPixel = getMetersPerPixelAtBoundingVolume(
         boundingVolume,
         viewport.zoom,
       );
 
       const tileMetersPerPixel = this.level.metersPerPixel;
 
+      // On-screen size of one source pixel, measured in device pixels.
+      // ≤ 1 means the source can fully resolve the rendered framebuffer.
+      // See dev-docs/lod-and-pixel-matching.md.
+      const devicePixelsPerSourcePixel =
+        (tileMetersPerPixel * pixelRatio) / metersPerCSSPixel;
+
       if (
-        tileMetersPerPixel <= metersPerScreenPixel ||
+        devicePixelsPerSourcePixel <= 1 ||
         this.z >= maxZ ||
         (children === null && this.z >= minZ)
       ) {
-        // "Select this tile when its scale is at least as detailed as the screen."
         this.selected = true;
         return true;
       }
@@ -361,25 +373,39 @@ export class RasterTileNode {
   }
 
   /**
-   * Calculate the 3D bounding volume for this tile in deck.gl's common
-   * coordinate space for frustum culling.
+   * The 3D bounding volume for this tile in deck.gl's common coordinate space,
+   * used for frustum culling.
    *
-   * TODO: In the future, we can add a fast path in the case that the source
-   * tiling is already in EPSG:3857.
+   * Memoized in `boundingVolumeCache` (keyed by `z/x/y`): a tile's bounding
+   * volume depends only on `(z, x, y, zRange)` for a given descriptor, so on a
+   * cache hit it is returned without rerunning {@link computeBoundingVolume}'s
+   * proj4 reprojections + oriented-bounding-box fit.
    */
   getBoundingVolume(
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
+    boundingVolumeCache: BoundingVolumeCache,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
-    const cached = this._boundingVolume;
-    if (
-      cached &&
-      cached.zRange[0] === zRange[0] &&
-      cached.zRange[1] === zRange[1]
-    ) {
-      return cached.result;
+    const hit = boundingVolumeCache.get(this.z, this.x, this.y);
+    if (hit && hit.zRange[0] === zRange[0] && hit.zRange[1] === zRange[1]) {
+      return hit;
     }
+    const result = this.computeBoundingVolume(zRange, project);
+    boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...result });
+    return result;
+  }
 
+  /**
+   * Compute (without caching) the 3D bounding volume for this tile in deck.gl's
+   * common coordinate space.
+   *
+   * TODO: In the future, we can add a fast path in the case that the source
+   * tiling is already in EPSG:3857.
+   */
+  private computeBoundingVolume(
+    zRange: ZRange,
+    project: ((xyz: number[]) => number[]) | null,
+  ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
     // Case 1: Globe view - need to construct an oriented bounding box from
     // reprojected sample points, but also using the `project` param
     if (project) {
@@ -397,9 +423,7 @@ export class RasterTileNode {
 
     // Case 4: Generic case - sample reference points and reproject to
     // Web Mercator, then convert to deck.gl common space
-    const result = this._getGenericBoundingVolume(zRange);
-    this._boundingVolume = { zRange, result };
-    return result;
+    return this._getGenericBoundingVolume(zRange);
   }
 
   /**
@@ -664,9 +688,34 @@ export function getTileIndices(
     maxZ: number;
     zRange: ZRange | null;
     wgs84Bounds: Bounds;
+    /**
+     * Device pixels per CSS pixel for the LOD criterion. Defaults to 1
+     * (CSS-pixel-accurate selection). Pass deck.gl's
+     * `device.canvasContext.cssToDeviceRatio()` for device-pixel accuracy
+     * on HiDPI displays. See `dev-docs/lod-and-pixel-matching.md` § (A).
+     */
+    pixelRatio?: number;
+    /**
+     * Cache for tile bounding volumes, reused across `getTileIndices` calls so
+     * repeated traversals (animation frames) don't redo the proj4 reprojections
+     * + oriented-bounding-box fit. Pass the {@link BoundingVolumeCache} owned by
+     * the `RasterTileset2D`. If omitted, a throwaway cache is used — it still
+     * dedups within a single traversal but provides no cross-call benefit.
+     */
+    boundingVolumeCache?: BoundingVolumeCache;
   },
 ): TileIndex[] {
-  const { viewport, maxZ, zRange, wgs84Bounds } = opts;
+  const { viewport, maxZ, zRange, wgs84Bounds, pixelRatio = 1 } = opts;
+
+  // Shared by every node in this traversal (the recursion threads it through
+  // `update`'s params). A throwaway one is fine — it still dedups within the
+  // traversal; only a caller-provided cache survives to the next call.
+  const boundingVolumeCache =
+    opts.boundingVolumeCache ?? new BoundingVolumeCache();
+
+  // Trim the cache (no-op when under cap) before the traversal — never during,
+  // so this frame can never evict an entry it will need again this frame.
+  boundingVolumeCache.sweep();
 
   // Only define `project` function for Globe viewports, same as upstream
   const project: ((xyz: number[]) => number[]) | null =
@@ -737,6 +786,8 @@ export function getTileIndices(
     minZ,
     maxZ,
     bounds,
+    pixelRatio,
+    boundingVolumeCache,
   };
 
   for (const root of roots) {

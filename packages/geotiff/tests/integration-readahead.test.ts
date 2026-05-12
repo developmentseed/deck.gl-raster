@@ -16,7 +16,6 @@ function counting(source: Source): { source: Source; count: () => number } {
     url: source.url,
     metadata: source.metadata,
     head: source.head.bind(source),
-    close: source.close?.bind(source),
     fetch: async (offset, length, options) => {
       count++;
       return source.fetch(offset, length, options);

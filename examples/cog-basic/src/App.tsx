@@ -1,17 +1,18 @@
-import type { MapboxOverlayProps } from "@deck.gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
+import { NativeSelect, Text } from "@chakra-ui/react";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
+import type { DebugState } from "deck.gl-raster-examples-shared";
+import {
+  ControlPanel,
+  DebugControls,
+  DeckGlOverlay,
+  ExternalLink,
+  Field,
+} from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
-}
+import { Map as MaplibreMap } from "react-map-gl/maplibre";
 
 const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
   {
@@ -41,6 +42,10 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
         {" (Contains modified Copernicus Sentinel data 2020)"}
       </>
     ),
+  },
+  {
+    title: "Swisstopo National Map 1:1 million",
+    url: "https://data.geo.admin.ch/ch.swisstopo.pixelkarte-farbe-pk1000.noscale/swiss-map-raster1000_1000/swiss-map-raster1000_1000_krel_50_2056.tif",
   },
   // {
   //   title: "Fields of the World — Denmark S2",
@@ -75,28 +80,28 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
-  const [debug, setDebug] = useState(false);
-  const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [debugState, setDebugState] = useState<DebugState>({
+    debug: false,
+    debugOpacity: 0.25,
+  });
 
-  const cog_layer = new COGLayer({
+  const selected = COG_OPTIONS[selectedIndex];
+
+  const cogLayer = new COGLayer({
     id: "cog-layer",
-    geotiff: COG_OPTIONS[selectedIndex].url,
-    debug,
-    debugOpacity,
+    geotiff: selected.url,
+    debug: debugState.debug,
+    debugOpacity: debugState.debugOpacity,
     onGeoTIFFLoad: (tiff, options) => {
-      (window as any).tiff = tiff;
+      (window as unknown as { tiff: unknown }).tiff = tiff;
       const { west, south, east, north } = options.geographicBounds;
       mapRef.current?.fitBounds(
         [
           [west, south],
           [east, north],
         ],
-        {
-          padding: 40,
-          duration: 1000,
-        },
+        { padding: 40, duration: 1000 },
       );
     },
     // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
@@ -117,168 +122,39 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={[cog_layer]} interleaved />
+        <DeckGlOverlay layers={[cogLayer]} interleaved />
       </MaplibreMap>
 
-      {/* UI Overlay Container */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-          zIndex: 1000,
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "20px",
-            background: "white",
-            padding: "16px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            width: "300px",
-            pointerEvents: "auto",
-          }}
-        >
-          <button
-            type="button"
-            style={{
-              all: "unset",
-              width: "100%",
-              margin: 0,
-              fontSize: "16px",
-              fontWeight: "bold",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              userSelect: "none",
-            }}
-            onClick={() => setPanelOpen((o) => !o)}
-          >
-            COGLayer Example
-            <span
-              style={{
-                fontSize: "12px",
-                transition: "transform 0.2s",
-                transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
-              }}
+      <ControlPanel title="COGLayer Example" sourcePath="examples/cog-basic">
+        <Text mb="3" color="gray.600">
+          Renders{" "}
+          <ExternalLink href="https://cogeo.org">
+            Cloud-Optimized GeoTIFFs
+          </ExternalLink>{" "}
+          directly from cloud storage, with no server in between.
+        </Text>
+        <Field label="Source">
+          <NativeSelect.Root>
+            <NativeSelect.Field
+              value={selectedIndex}
+              onChange={(e) => setSelectedIndex(Number(e.target.value))}
             >
-              ▼
-            </span>
-          </button>
-          {panelOpen && (
-            <>
-              <p
-                style={{
-                  margin: "8px 0 12px 0",
-                  fontSize: "13px",
-                  color: "#666",
-                }}
-              >
-                Renders Cloud-Optimized GeoTIFFs directly from cloud storage,
-                with no server in between.
-              </p>
-              <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
-                <a
-                  href="https://developmentseed.org/deck.gl-raster/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  deck.gl-raster Documentation ↗
-                </a>
-              </p>
-              <select
-                value={selectedIndex}
-                onChange={(e) => setSelectedIndex(Number(e.target.value))}
-                style={{
-                  width: "100%",
-                  padding: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                {COG_OPTIONS.map((opt, i) => (
-                  <option key={opt.url} value={i}>
-                    {opt.title}
-                  </option>
-                ))}
-              </select>
-
-              {/* Attribution */}
-              {COG_OPTIONS[selectedIndex].attribution && (
-                <p
-                  style={{
-                    margin: "8px 0 0 0",
-                    fontSize: "11px",
-                    color: "#666",
-                  }}
-                >
-                  {COG_OPTIONS[selectedIndex].attribution}
-                </p>
-              )}
-
-              {/* Debug Controls */}
-              <div
-                style={{
-                  padding: "12px 0",
-                  borderTop: "1px solid #eee",
-                  marginTop: "12px",
-                }}
-              >
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={debug}
-                    onChange={(e) => setDebug(e.target.checked)}
-                    style={{ cursor: "pointer" }}
-                  />
-                  <span>Show Debug Mesh</span>
-                </label>
-
-                {debug && (
-                  <div style={{ marginTop: "8px" }}>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "12px",
-                        color: "#666",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      Debug Opacity: {debugOpacity.toFixed(2)}
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={debugOpacity}
-                        onChange={(e) =>
-                          setDebugOpacity(parseFloat(e.target.value))
-                        }
-                        style={{ width: "100%", cursor: "pointer" }}
-                      />
-                    </label>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+              {COG_OPTIONS.map((opt, i) => (
+                <option key={opt.url} value={i}>
+                  {opt.title}
+                </option>
+              ))}
+            </NativeSelect.Field>
+            <NativeSelect.Indicator />
+          </NativeSelect.Root>
+        </Field>
+        {selected.attribution ? (
+          <Text mt="2" fontSize="xs" color="gray.600">
+            {selected.attribution}
+          </Text>
+        ) : null}
+        <DebugControls value={debugState} onChange={setDebugState} />
+      </ControlPanel>
     </div>
   );
 }
