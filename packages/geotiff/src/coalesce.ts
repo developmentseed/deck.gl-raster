@@ -7,7 +7,7 @@ export const COALESCE_DEFAULT = 1024 * 1024;
 export const MAX_RANGE_SIZE_DEFAULT = 16 * 1024 * 1024;
 
 /** Up to this number of merged-range requests are dispatched in parallel. */
-export const COALESCE_PARALLEL = 10;
+export const COALESCE_PARALLEL = 6;
 
 /** Options controlling how {@link coalesceRanges} merges and dispatches byte ranges. */
 export interface CoalesceOptions {
