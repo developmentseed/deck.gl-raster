@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mutex } from "../src/concurrency.js";
+import { mutex } from "../../src/source/concurrency.js";
 
 describe("mutex", () => {
   it("runs tasks one at a time", async () => {

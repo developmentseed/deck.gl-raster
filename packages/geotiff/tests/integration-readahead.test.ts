@@ -3,7 +3,7 @@ import { SourceView } from "@chunkd/source";
 import { SourceFile } from "@chunkd/source-file";
 import { describe, expect, it } from "vitest";
 import { GeoTIFF } from "../src/geotiff.js";
-import { SourceReadaheadCache } from "../src/readahead-cache.js";
+import { SourceReadaheadCache } from "../src/source/readahead-cache.js";
 import { fixturePath } from "./helpers.js";
 
 /**

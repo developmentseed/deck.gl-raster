@@ -13,7 +13,7 @@ import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
-import { SourceReadaheadCache } from "./readahead-cache.js";
+import { SourceReadaheadCache } from "./source/readahead-cache.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 

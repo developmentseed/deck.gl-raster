@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   SequentialBlockCache,
   SourceReadaheadCache,
-} from "../src/readahead-cache.js";
+} from "../../src/source/readahead-cache.js";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
