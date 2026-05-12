@@ -1,4 +1,5 @@
 import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
+import { TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
@@ -31,6 +32,9 @@ export class Overview {
 
   /** The IFD for the mask associated with this overview level, if any. */
   readonly maskImage: TiffImage | null = null;
+
+  /** Memoized promise from {@link ensureTagsLoaded}. */
+  private _tagsPromise: Promise<void> | null = null;
 
   constructor(
     geotiff: GeoTIFF,
@@ -118,7 +122,47 @@ export class Overview {
       signal?: AbortSignal;
     } = {},
   ): Promise<Tile> {
+    await this.ensureTagsLoaded();
     return await fetchTile(this, x, y, options);
+  }
+
+  /**
+   * Bulk-load `TileOffsets` and `TileByteCounts` for this overview's data IFD
+   * (and mask IFD, if present) on first call. Subsequent calls return the
+   * same memoized promise — no additional underlying fetches.
+   *
+   * Why this exists: cogeotiff/core lazily reads individual entries from the
+   * tile-offset/bytecount arrays via the header source, one 4–8 byte entry
+   * per tile request. For overviews not pre-loaded by `prefetchTags` (i.e.
+   * everything except the primary image), this means many tiny per-tile
+   * range requests on every tile fetch. Calling
+   * `image.fetch(TiffTag.TileOffsets)` once forces cogeotiff to bulk-load
+   * the full array; thereafter all per-tile lookups are served from memory.
+   *
+   * The bulk fetch goes through the source originally passed to
+   * `Tiff.create` — for {@link GeoTIFF.fromUrl}, that's the wrapped header
+   * source. After {@link GeoTIFF.fromUrl} disables its read-ahead cache,
+   * the wrapper is a pass-through, so this read hits raw HTTP directly.
+   */
+  ensureTagsLoaded(): Promise<void> {
+    if (this._tagsPromise === null) {
+      this._tagsPromise = this.loadTags();
+    }
+    return this._tagsPromise;
+  }
+
+  private async loadTags(): Promise<void> {
+    const dataPromises = [
+      this.image.fetch(TiffTag.TileOffsets),
+      this.image.fetch(TiffTag.TileByteCounts),
+    ];
+    const maskPromises = this.maskImage
+      ? [
+          this.maskImage.fetch(TiffTag.TileOffsets),
+          this.maskImage.fetch(TiffTag.TileByteCounts),
+        ]
+      : [];
+    await Promise.all([...dataPromises, ...maskPromises]);
   }
 
   /**
@@ -141,6 +185,7 @@ export class Overview {
       signal?: AbortSignal;
     } = {},
   ): Promise<Tile[]> {
+    await this.ensureTagsLoaded();
     return await fetchTiles(this, xy, options);
   }
 
