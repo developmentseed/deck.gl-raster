@@ -34,6 +34,9 @@ interface HasTiffReference extends HasTransform {
 
   /** The nodata value for the image, if any. */
   readonly nodata: number | null;
+
+  /** When true, the tile-fetch path logs each dataSource fetch to the console. */
+  readonly debug: boolean;
 }
 
 export async function fetchTile(
@@ -53,7 +56,10 @@ export async function fetchTile(
   const tileFetch = fetchCogBytes(self, x, y, { signal });
   const maskFetch =
     self.maskImage != null
-      ? getTile(self.maskImage, x, y, self.dataSource, { signal })
+      ? getTile(self.maskImage, x, y, self.dataSource, {
+          signal,
+          debug: self.debug ? { label: "mask" } : undefined,
+        })
       : Promise.resolve(null);
 
   const [tileBytes, maskBytes] = await Promise.all([tileFetch, maskFetch]);
@@ -149,6 +155,13 @@ export async function fetchTiles(
 type GetBytesResponse = { bytes: ArrayBuffer; compression: Compression };
 type ByteRange = Awaited<ReturnType<TiffImage["getTileSize"]>>;
 
+/**
+ * Opt-in debug tag for {@link getTile} / {@link getBytes}. When present,
+ * each underlying `dataSource.fetch` call is logged to the console with the
+ * tag's `label`, the offset, and the byte count. When absent, no logging.
+ */
+type DebugTag = { label: string };
+
 async function decodeMask(
   mask: GetBytesResponse,
   maskImage: TiffImage,
@@ -237,9 +250,15 @@ async function fetchCogBytes(
     signal?: AbortSignal;
   } = {},
 ): Promise<GetBytesResponse | GetBytesResponse[]> {
+  const debug: DebugTag | undefined = self.debug
+    ? { label: "data" }
+    : undefined;
   switch (self.cachedTags.planarConfiguration) {
     case PlanarConfiguration.Contig: {
-      const tile = await getTile(self.image, x, y, self.dataSource, { signal });
+      const tile = await getTile(self.image, x, y, self.dataSource, {
+        signal,
+        debug,
+      });
       if (tile === null) {
         throw new Error(`Tile at (${x}, ${y}) not found`);
       }
@@ -280,6 +299,9 @@ async function fetchBandSeparateTileBytes(
     signal?: AbortSignal;
   } = {},
 ): Promise<GetBytesResponse[]> {
+  const debug: DebugTag | undefined = self.debug
+    ? { label: "data" }
+    : undefined;
   const byteRanges = await findBandSeparateTileByteRanges(self, x, y);
   const buffers = byteRanges.map(async ({ offset, imageSize }) => {
     const tile = await getBytes(
@@ -287,7 +309,7 @@ async function fetchBandSeparateTileBytes(
       offset,
       imageSize,
       self.dataSource,
-      { signal },
+      { signal, debug },
     );
     if (tile === null) {
       throw new Error(`Tile at (${x}, ${y}) not found`);
@@ -316,7 +338,7 @@ async function getTile(
   x: number,
   y: number,
   dataSource: Pick<Source, "fetch">,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; debug?: DebugTag },
 ): Promise<{
   bytes: ArrayBuffer;
   compression: Compression;
@@ -369,13 +391,19 @@ async function getBytes(
   offset: number,
   byteCount: number,
   dataSource: Pick<Source, "fetch">,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; debug?: DebugTag },
 ): Promise<{
   bytes: ArrayBuffer;
   compression: Compression;
 } | null> {
   if (byteCount === 0) {
     return null;
+  }
+
+  if (options?.debug !== undefined) {
+    console.log(
+      `[geotiff dataSource] ${options.debug.label}: offset=${offset} length=${byteCount}`,
+    );
   }
 
   const bytes = await dataSource.fetch(offset, byteCount, options);

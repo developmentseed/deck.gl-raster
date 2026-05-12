@@ -70,6 +70,11 @@ export class Overview {
     return this.geotiff.nodata;
   }
 
+  /** Inherits the {@link GeoTIFF.debug} flag from the parent. */
+  get debug(): boolean {
+    return this.geotiff.debug;
+  }
+
   /** The number of tiles in the x and y directions */
   get tileCount(): TiffImageTileCount {
     return this.image.tileCount;

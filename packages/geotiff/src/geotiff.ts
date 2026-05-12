@@ -70,6 +70,15 @@ export class GeoTIFF {
   /** Parsed GDALMetadata tag, if present. */
   readonly gdalMetadata: GDALMetadata | null;
 
+  /**
+   * When true, log each {@link dataSource} fetch (image tile data and mask
+   * tile data) to the console with offset/length and a `data`/`mask` label.
+   * Useful for diagnosing per-request behavior against the browser network
+   * panel. Enable via the `debug` option on {@link GeoTIFF.open} or
+   * {@link GeoTIFF.fromUrl}.
+   */
+  readonly debug: boolean;
+
   private constructor(
     tiff: Tiff,
     image: TiffImage,
@@ -79,6 +88,7 @@ export class GeoTIFF {
     cachedTags: CachedTags,
     dataSource: Pick<Source, "fetch">,
     gdalMetadata: GDALMetadata | null,
+    debug: boolean,
   ) {
     this.tiff = tiff;
     this.image = image;
@@ -88,6 +98,7 @@ export class GeoTIFF {
     this.cachedTags = cachedTags;
     this.dataSource = dataSource;
     this.gdalMetadata = gdalMetadata;
+    this.debug = debug;
   }
 
   /**
@@ -99,14 +110,22 @@ export class GeoTIFF {
    * @param options.headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs.
    * @param options.prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
+   * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console. Off by default.
    */
   static async open(options: {
     dataSource: Pick<Source, "fetch">;
     headerSource: Source;
     prefetch?: number;
     signal?: AbortSignal;
+    debug?: boolean;
   }): Promise<GeoTIFF> {
-    const { dataSource, headerSource, prefetch = 32 * 1024, signal } = options;
+    const {
+      dataSource,
+      headerSource,
+      prefetch = 32 * 1024,
+      signal,
+      debug,
+    } = options;
     const tiff = await Tiff.create(headerSource, {
       defaultReadSize: prefetch,
       signal,
@@ -122,7 +141,7 @@ export class GeoTIFF {
     // TODO: replace this with a cleaner opt-out once upstream supports one
     // (see https://github.com/blacha/cogeotiff/issues/ — TBD).
     tiff.options = undefined;
-    return GeoTIFF.fromTiff(tiff, dataSource, { signal });
+    return GeoTIFF.fromTiff(tiff, dataSource, { signal, debug });
   }
 
   /**
@@ -133,13 +152,14 @@ export class GeoTIFF {
    *
    * @param dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
    * @param options.signal An optional {@link AbortSignal} to cancel header tag reads.
+   * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console.
    */
   static async fromTiff(
     tiff: Tiff,
     dataSource: Pick<Source, "fetch">,
-    options: { signal?: AbortSignal } = {},
+    options: { signal?: AbortSignal; debug?: boolean } = {},
   ): Promise<GeoTIFF> {
-    const { signal } = options;
+    const { signal, debug = false } = options;
     const images = tiff.images;
     if (images.length === 0) {
       throw new Error("TIFF does not contain any IFDs");
@@ -198,6 +218,7 @@ export class GeoTIFF {
       cachedTags,
       dataSource,
       gdalMetadata,
+      debug,
     );
 
     const overviews: Overview[] = dataEntries.map(([key, dataImage]) => {
@@ -251,6 +272,7 @@ export class GeoTIFF {
    * @param options.chunkSize Bytes per chunk for the header cache. Defaults to 64 KiB (matches geotiff.js's BlockedSource).
    * @param options.cacheSize Total cache size in bytes. Defaults to 8 MiB (~128 blocks at the default chunk size).
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
+   * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console with offset/length and a `data`/`mask` label. Off by default.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
@@ -259,10 +281,12 @@ export class GeoTIFF {
       chunkSize = 64 * 1024,
       cacheSize = 8 * 1024 * 1024,
       signal,
+      debug,
     }: {
       chunkSize?: number;
       cacheSize?: number;
       signal?: AbortSignal;
+      debug?: boolean;
     } = {},
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url, {});
@@ -297,6 +321,7 @@ export class GeoTIFF {
       // the intent local and survives middleware changes.
       prefetch: chunkSize,
       signal,
+      debug,
     });
   }
 
