@@ -111,6 +111,14 @@ export class GeoTIFF {
       defaultReadSize: prefetch,
       signal,
     });
+    // Disable cogeotiff's GDAL leader-bytes path so `TiffImage.getTileSize`
+    // always reads from TileOffsets/TileByteCounts through the header source.
+    // The leader-bytes optimization assumes a tile fits in one chunk, which
+    // breaks for typical 256x256x3 tiles (~200 KB) vs. our 64 KiB blocks.
+    // Without this, the leader read pulls image-data bytes into the header
+    // cache, evicting metadata. cogeotiff core only reads `tiff.options` in
+    // that one path, so nulling it here is safe.
+    tiff.options = undefined;
     return GeoTIFF.fromTiff(tiff, dataSource, { signal });
   }
 
