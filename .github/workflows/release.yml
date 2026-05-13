@@ -1,3 +1,4 @@
+# https://docs.npmjs.com/trusted-publishers#step-2-configure-your-cicd-workflow
 name: Publish Package
 
 on:
@@ -36,7 +37,7 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
-          cache: "pnpm"
+          package-manager-cache: false # never use caching in release builds
       - run: pnpm install
       - run: pnpm build
       - run: pnpm test
