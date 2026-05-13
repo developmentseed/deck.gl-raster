@@ -31,9 +31,9 @@ jobs:
         working-directory: ./fixtures/geotiff-test-data
         run: pixi run generate-npy
 
-      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a # v6.0.4
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
       - name: Use Node.js 20
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
@@ -46,7 +46,7 @@ jobs:
           # All packages are expected to have the same version
           VERSION=$(jq -r .version packages/deck.gl-raster/package.json)
           if [[ "$VERSION" == *alpha* || "$VERSION" == *beta* ]]; then
-            pnpm publish --recursive --no-git-checks --tag beta
+            pnpm publish --recursive --no-git-checks --tag beta --verbose
           else
-            pnpm publish --recursive --no-git-checks
+            pnpm publish --recursive --no-git-checks --verbose
           fi
