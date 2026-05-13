@@ -15,16 +15,13 @@ export type TileIndex = { x: number; y: number; z: number };
  */
 export type MosaicSource = {
   /**
-   * Optional tile-cache identifier component. Together with `y` and `z`, forms
-   * the tile ID `${z}-${x}-${y}` used to key the inner Tileset2D cache.
-   * Defaults to the source's index in the `sources` array. Supply an explicit
-   * value when you need cache stability across reordering or removal of items.
+   * Optional stable identifier used as this source's tile-cache key in the
+   * inner Tileset2D. Defaults to the source's position in the `sources`
+   * array. Supply an explicit value when the sources list is reordered or
+   * spliced at runtime, so a given source keeps the same cache slot across
+   * updates.
    */
-  x?: number;
-  /** See `x`. Defaults to `0`. */
-  y?: number;
-  /** See `x`. Defaults to `0`. */
-  z?: number;
+  key?: string;
   /**
    * Geographic bounds (WGS84) of the source in [minX, minY, maxX, maxY] format
    */
@@ -43,10 +40,15 @@ export type MosaicSource = {
  * closure returns a new array reference (compared by `===`); mutating the
  * array in place will not be detected.
  */
-/** Sources prepared for spatial querying: each source augmented with the
- * `TileIndex` fields, paired with a Flatbush index over their bboxes. */
+/** A source augmented with the `TileIndex` fields and a resolved `key`
+ * (defaulting to the array position) so deck.gl typing is satisfied and the
+ * cache identifier is always defined. */
+type ResolvedSource<MosaicT> = TileIndex & MosaicT & { key: string };
+
+/** Sources prepared for spatial querying, paired with a Flatbush index over
+ * their bboxes. */
 type BuiltIndex<MosaicT> = {
-  sources: (TileIndex & MosaicT)[];
+  sources: ResolvedSource<MosaicT>[];
   index: Flatbush;
 };
 
@@ -86,14 +88,18 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       return null;
     }
 
-    // Add x,y,z to each source for TileIndex compatibility
-    // This is mostly just a hack to satisfy deck.gl typing requirements for
-    // getTileIndices
-    const sources: (TileIndex & MosaicT)[] = raw.map((source, i) => ({
-      x: source.x === undefined ? i : source.x,
-      y: source.y === undefined ? 0 : source.y,
-      z: source.z === undefined ? 0 : source.z,
+    // Augment each source with a resolved `key` (used by getTileId for
+    // cache keying) and dummy `x`/`y`/`z` fields to satisfy deck.gl's
+    // TileIndex typing. The x/y/z values are never read because getTileId is
+    // overridden below.
+    const sources: ResolvedSource<MosaicT>[] = raw.map((source, i) => ({
       ...source,
+      key: source.key ?? String(i),
+      // TODO: remove x, y, z fields when merged
+      // https://github.com/visgl/deck.gl/pull/10299
+      x: i,
+      y: 0,
+      z: 0,
     }));
 
     const index = new Flatbush(raw.length);
@@ -107,6 +113,28 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     return this.cached;
   }
 
+  /** The Tileset2D cache key for a source. */
+  override getTileId(tileIndex: TileIndex): string {
+    // `getTileIndices` always returns `ResolvedSource`s, so a `key` is
+    // present on every value deck.gl will pass back here.
+    return (tileIndex as ResolvedSource<MosaicT>).key;
+  }
+
+  /** Must override to provide a zoom level for the tile. */
+  override getTileZoom(_tileIndex: TileIndex): number {
+    return 0;
+  }
+
+  /** Must override because our tileIndex does not have x, y, z */
+  override getTileMetadata(tileIndex: TileIndex): Record<string, any> {
+    const { key, bbox } = tileIndex as unknown as ResolvedSource<MosaicT>;
+    return { key, bbox };
+  }
+
+  override getParentIndex(tileIndex: TileIndex): TileIndex {
+    return tileIndex;
+  }
+
   override getTileIndices({
     viewport,
     maxZoom,
@@ -115,7 +143,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     viewport: Viewport;
     maxZoom?: number;
     minZoom?: number;
-  }): (TileIndex & MosaicT)[] {
+  }): ResolvedSource<MosaicT>[] {
     if (viewport.zoom < (minZoom ?? -Infinity)) {
       return [];
     }
