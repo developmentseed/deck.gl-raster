@@ -1,3 +1,4 @@
+# https://docs.npmjs.com/trusted-publishers#step-2-configure-your-cicd-workflow
 name: Publish Package
 
 on:
