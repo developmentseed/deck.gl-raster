@@ -42,6 +42,11 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - name: Read version and publish
+        env:
+          # Clear the sentinel value setup-node writes; otherwise npm tries to
+          # use it as a bearer token and rejects OIDC.
+          # https://github.com/actions/setup-node/issues/1440#issuecomment-3571890875
+          NODE_AUTH_TOKEN: ""
         run: |
           # All packages are expected to have the same version
           VERSION=$(jq -r .version packages/deck.gl-raster/package.json)
