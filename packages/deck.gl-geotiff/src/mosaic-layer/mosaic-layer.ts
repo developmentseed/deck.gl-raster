@@ -27,15 +27,15 @@ export type MosaicLayerProps<
      * remove items.
      *
      * Tile cache reuse depends on stable tile IDs. By default, each source's
-     * tile ID is derived from its position in this array (see `MosaicSource`'s
-     * `x` / `y` / `z` for the exact derivation), so:
+     * tile ID is derived from its position in this array (see
+     * `MosaicSource.key`), so:
      *
      * - Appending items preserves all existing rendered tiles.
      * - Reordering or removing items from the middle of the array invalidates
      *   the cache slots of shifted items, causing them to re-fetch.
      *
-     * Supply explicit `x`, `y`, and `z` identifiers per source if you need
-     * cache stability across arbitrary mutations of `sources`.
+     * Supply an explicit `key` per source if you need cache stability across
+     * arbitrary mutations of `sources`.
      */
     sources: MosaicT[];
 
@@ -108,9 +108,9 @@ export class MosaicLayer<
       maxRequests,
       getTileData: async (data) => {
         // We hard-cast this because TilesetClass is not generic.
-        // TilesetClass returns MosaicT in `index`, but the known type is only
-        // `TileIndex`, which only defines x,y,z
-        const index = data.index as MosaicT;
+        // MosaicTileset2D returns MosaicT in `index`, but TileLayer's typing
+        // exposes only the plain `TileIndex` here.
+        const index = data.index as unknown as MosaicT;
         const { signal } = data;
         const userData =
           this.props.getSource &&
