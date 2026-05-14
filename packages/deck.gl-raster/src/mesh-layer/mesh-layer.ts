@@ -1,4 +1,8 @@
-import type { DefaultProps, TextureSource } from "@deck.gl/core";
+import type {
+  DefaultProps,
+  TextureSource,
+  UpdateParameters,
+} from "@deck.gl/core";
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import type { Texture } from "@luma.gl/core";
@@ -53,6 +57,40 @@ export class MeshTextureLayer extends SimpleMeshLayer<
       ? [{ module: CreateTexture, props: { textureName: image as Texture } }]
       : [];
     return [...imageModule, ...(renderPipeline ?? [])];
+  }
+
+  override updateState(params: UpdateParameters<this>): void {
+    // Ensure the SimpleMeshLayer rebuilds the model when the renderPipeline has
+    // changed.
+    if (this.hasRenderPipelineChanged(params)) {
+      // Setting extensionsChanged to true causes recompiling the shader
+      // https://github.com/visgl/deck.gl/blob/70adde2f1fcdf5e99195df81512e6d01ee7a5edc/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L284-L297
+      params.changeFlags.extensionsChanged = true;
+    }
+
+    super.updateState(params);
+  }
+
+  /** Returns true if the render pipeline has changed between the old and new props. */
+  private hasRenderPipelineChanged(params: UpdateParameters<this>): boolean {
+    const { oldProps, props: newProps } = params;
+    if (Boolean(oldProps.image) !== Boolean(newProps.image)) {
+      return true;
+    }
+
+    const oldPipeline = oldProps.renderPipeline ?? [];
+    const newPipeline = newProps.renderPipeline ?? [];
+    if (oldPipeline.length !== newPipeline.length) {
+      return true;
+    }
+
+    for (let i = 0; i < oldPipeline.length; i++) {
+      if (oldPipeline[i]?.module.name !== newPipeline[i]?.module.name) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   override getShaders() {
