@@ -3,8 +3,8 @@ import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
   RasterTileLayerProps,
+  RasterTilesetDescriptor,
   RenderTileResult,
-  TilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
 import { RasterTileLayer } from "@developmentseed/deck.gl-raster";
 import type { GeoZarrMetadata } from "@developmentseed/geozarr";
@@ -168,7 +168,7 @@ export class ZarrLayer<
     spatialDims?: [string, string];
     /** One opened array per level, finest-first (matches meta.levels order). */
     arrays?: zarr.Array<zarr.DataType, zarr.Readable>[];
-    tilesetDescriptor?: TilesetDescriptor;
+    tilesetDescriptor?: RasterTilesetDescriptor;
   };
 
   override initializeState(): void {

@@ -6,7 +6,7 @@ import type { Bounds, Corners, ProjectionFunction } from "./types.js";
  * This interface abstracts over both TileMatrixSet levels and Zarr multiscale
  * levels, enabling a single traversal algorithm to work with both.
  */
-export interface TilesetLevel {
+export interface RasterTilesetLevel {
   /** Number of tiles across this level (columns). */
   matrixWidth: number;
 
@@ -83,9 +83,9 @@ export interface TilesetLevel {
  * Index 0 = coarsest level, higher index = finer detail (same ordering as
  * TileMatrixSet).
  */
-export interface TilesetDescriptor {
+export interface RasterTilesetDescriptor {
   /** Ordered levels from coarsest (0) to finest. */
-  levels: TilesetLevel[];
+  levels: RasterTilesetLevel[];
 
   /**
    * Projection function from the source CRS → EPSG:3857.

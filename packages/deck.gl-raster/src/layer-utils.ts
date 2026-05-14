@@ -1,11 +1,11 @@
 import type { _Tile2DHeader as Tile2DHeader } from "@deck.gl/geo-layers";
 import { PathLayer, TextLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import type { TileMetadata } from "./raster-tileset/index.js";
+import type { RasterTileMetadata } from "./raster-tileset/index.js";
 
 export function renderDebugTileOutline(
   id: string,
-  tile: Tile2DHeader & TileMetadata,
+  tile: Tile2DHeader & RasterTileMetadata,
   forwardTo4326: ReprojectionFns["forwardReproject"],
 ) {
   const { projectedCorners } = tile;

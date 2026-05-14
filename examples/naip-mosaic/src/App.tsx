@@ -433,11 +433,12 @@ export default function App() {
                       colormapReversed: colormapChoice.reversed,
                     }),
           signal,
+          maxCacheSize: 10,
         });
       },
       // Smaller cache for MosaicLayer cache, since it caches full COGLayer
       // instances
-      maxCacheSize: 5,
+      maxCacheSize: 0,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.
       beforeId: "boundary_country_outline",
