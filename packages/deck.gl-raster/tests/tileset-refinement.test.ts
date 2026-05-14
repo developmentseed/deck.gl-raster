@@ -374,7 +374,12 @@ describe("RasterTileset2D center-out tile ordering", () => {
     idx: TileIndex,
     reference: [number, number],
   ): number {
-    const descriptor = new TileMatrixSetAdaptor(MOCK_TMS, identity, identity);
+    const descriptor = new TileMatrixSetAdaptor(MOCK_TMS, {
+      projectTo4326: identity,
+      projectFrom4326: identity,
+      projectTo3857: identity,
+      projectFrom3857: identity,
+    });
     const corners = descriptor.levels[idx.z]!.projectedTileCorners(
       idx.x,
       idx.y,

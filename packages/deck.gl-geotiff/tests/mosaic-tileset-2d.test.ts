@@ -17,7 +17,7 @@ function makeTileset(
   sources: MosaicSource[],
   maxRequests?: number,
 ): MosaicTileset2D<MosaicSource> {
-  return new MosaicTileset2D<MosaicSource>(sources, {
+  return new MosaicTileset2D<MosaicSource>(() => sources, {
     getTileData: () => new Promise(() => {}),
     ...(maxRequests !== undefined ? { maxRequests } : {}),
   } as unknown as Tileset2DProps);
