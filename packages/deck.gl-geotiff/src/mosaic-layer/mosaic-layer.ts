@@ -1,7 +1,13 @@
-import type { CompositeLayerProps, Layer, LayersList } from "@deck.gl/core";
+import type {
+  CompositeLayerProps,
+  Layer,
+  LayersList,
+  UpdateParameters,
+} from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
+import Flatbush from "flatbush";
 import type { MosaicSource } from "./mosaic-tileset-2d.js";
 import { MosaicTileset2D } from "./mosaic-tileset-2d.js";
 
@@ -81,7 +87,9 @@ export type MosaicLayerProps<
     ) => void;
   };
 
-const defaultProps: Partial<MosaicLayerProps> = {};
+const defaultProps: Partial<MosaicLayerProps> = {
+  sources: [],
+};
 
 /**
  * A deck.gl layer for rendering a mosaic of raster sources.
@@ -95,6 +103,45 @@ export class MosaicLayer<
 > extends CompositeLayer<MosaicLayerProps<MosaicT, DataT>> {
   static override layerName = "MosaicLayer";
   static override defaultProps = defaultProps;
+
+  declare state: {
+    // The index can be null if sources are empty
+    index: Flatbush | null;
+    /**
+     * Store sources on state as well so it's never out of sync for the tileset
+     */
+    sources: MosaicT[];
+  };
+
+  override initializeState(): void {
+    this._buildSpatialIndex();
+  }
+
+  override updateState(params: UpdateParameters<this>): void {
+    super.updateState(params);
+
+    const { props, oldProps } = params;
+
+    if (props.sources !== oldProps.sources) {
+      this._buildSpatialIndex();
+    }
+  }
+
+  private _buildSpatialIndex(): void {
+    const { sources } = this.props;
+    if (sources.length === 0) {
+      this.setState({ index: null });
+      return;
+    }
+
+    const index = new Flatbush(sources.length);
+    for (const source of sources) {
+      index.add(...source.bbox);
+    }
+    index.finish();
+
+    this.setState({ index, sources });
+  }
 
   renderTileLayer(
     renderSource: MosaicLayerProps<MosaicT, DataT>["renderSource"],
@@ -116,11 +163,12 @@ export class MosaicLayer<
 
     // The arrow function is defined here so its lexical `this` is the
     // MosaicLayer instance (which deck.gl reuses across prop updates),
-    // ensuring `this.props.sources` returns the latest array on every call.
-    const getSources = () => this.props.sources;
+    // ensuring `this.state.sources` returns the latest array on every call.
+    const getSources = () => this.state.sources;
+    const getIndex = () => this.state.index;
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
       constructor(opts: any) {
-        super(getSources, opts);
+        super(getSources, getIndex, opts);
       }
     }
 
