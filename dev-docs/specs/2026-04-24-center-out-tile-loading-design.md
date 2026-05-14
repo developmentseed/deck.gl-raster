@@ -1,7 +1,7 @@
 # Center-out tile loading
 
 **Date:** 2026-04-24
-**Status:** Design
+**Status:** Implemented in [#477](https://github.com/developmentseed/deck.gl-raster/pull/477)
 
 ## Problem
 
@@ -113,23 +113,27 @@ After computing `tileIndices`:
 
 1. If `tileIndices.length <= this.opts.maxRequests` (when available) or
    `< 2` otherwise, return as-is. No sort needed.
-2. Compute the viewport reference point as `viewport.center` (common/world
-   space).
+2. Compute the viewport reference point as the midpoint of
+   `viewport.getBounds()` (WGS84). Returns early if `getBounds()` is null.
 3. For each tile, compute its projected center from
    `descriptor.levels[z].projectedTileCorners(x, y)` as the midpoint of
    `topLeft` and `bottomRight` (two corner reads, one add+shift — no need
-   to touch all four corners).
+   to touch all four corners), then project that center to WGS84 via
+   `descriptor.projectTo4326`.
 4. Pass through `sortByDistanceFromPoint`. Hot path: one
-   `projectedTileCorners` call per tile, one subtract+multiply+add per
-   tile into the distance array, `sort` on the permutation, in-place
-   shuffle.
+   `projectedTileCorners` call plus one `projectTo4326` call per tile, one
+   subtract+multiply+add per tile into the distance array, `sort` on the
+   permutation, in-place shuffle.
 
-For `_GlobeViewport`: `viewport.center` exists but semantics differ.
-To avoid a special case, fall back to the midpoint of
-`viewport.getBounds()` (WGS84) projected into common space via
-`viewport.projectPosition` when the viewport is a `_GlobeViewport`. If this
-turns out to be unnecessary during implementation (i.e. `viewport.center`
-works fine for Globe), the fallback can be dropped.
+**Why WGS84 instead of common/world space.** `viewport.center` exists but
+is in deck.gl common-world space (e.g. ~[270, 327] for a WebMercator
+viewport in the western hemisphere), which is not directly comparable to
+projected tile corners in the tileset's CRS. Working in WGS84 sidesteps
+that mismatch: `viewport.getBounds()` is always WGS84, and the descriptor
+already exposes `projectTo4326` to bring projected tile centers into the
+same space. This also subsumes the `_GlobeViewport` case (no special path
+needed — bounds-based reference works on globe too). The trade-off is one
+extra `projectTo4326` call per tile in the hot path.
 
 ### `MosaicTileset2D.getTileIndices`
 
@@ -192,8 +196,6 @@ file if tighter isolation is preferred):
 
 ## Risks and open questions
 
-- **GlobeViewport center semantics.** Noted above. Implementation will
-  verify behavior and drop the fallback if not needed.
 - **Sort stability across JS engines.** `Array.prototype.sort` is stable
   per spec (ES2019+); this is what gives us deterministic ordering for
   equidistant tiles without an explicit tiebreaker.
