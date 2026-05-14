@@ -11,12 +11,13 @@ export type MosaicLayerProps<
 > = CompositeLayerProps &
   Pick<
     TileLayerProps,
+    | "debounceTime"
     | "extent"
-    | "minZoom"
-    | "maxZoom"
     | "maxCacheByteSize"
     | "maxCacheSize"
     | "maxRequests"
+    | "maxZoom"
+    | "minZoom"
   > & {
     /**
      * List of mosaic sources to render.
@@ -77,6 +78,7 @@ export class MosaicLayer<
       id,
       minZoom,
       maxZoom,
+      debounceTime,
       extent,
       maxCacheByteSize,
       maxCacheSize,
@@ -102,6 +104,7 @@ export class MosaicLayer<
       TilesetClass: MosaicTileset2DFactory,
       minZoom,
       maxZoom,
+      debounceTime,
       extent,
       ...(maxCacheByteSize !== undefined && { maxCacheByteSize }),
       maxCacheSize,
