@@ -21,6 +21,7 @@ import type {
   Bounds,
   Corners,
   ProjectedBoundingBox,
+  ProjectionFunction,
   TileIndex,
   ZRange,
 } from "./types.js";
@@ -55,6 +56,21 @@ export type TileMetadata = {
    * Tile height in pixels.
    */
   tileHeight: number;
+
+  /**
+   * Forward (tile-local pixel → CRS) transform for this tile. Stable across
+   * the tile's lifetime; computed once at tile creation. Stored on the tile
+   * so downstream layers (e.g. `RasterTileLayer._renderSubLayers`) receive a
+   * reference-stable function across renders, which is what `RasterLayer`'s
+   * `reprojectionFnsChanged` check needs to avoid spurious mesh regeneration.
+   */
+  forwardTransform: ProjectionFunction;
+
+  /**
+   * Inverse (CRS → tile-local pixel) transform. Same stability guarantees as
+   * {@link TileMetadata.forwardTransform}.
+   */
+  inverseTransform: ProjectionFunction;
 };
 
 /**
@@ -253,6 +269,9 @@ export class RasterTileset2D extends Tileset2D {
       ...projectedBounds,
     );
 
+    const { forwardTransform, inverseTransform } =
+      levelDescriptor.tileTransform(x, y);
+
     return {
       bbox: {
         west,
@@ -269,6 +288,8 @@ export class RasterTileset2D extends Tileset2D {
       projectedCorners,
       tileWidth,
       tileHeight,
+      forwardTransform,
+      inverseTransform,
     };
   }
 }
