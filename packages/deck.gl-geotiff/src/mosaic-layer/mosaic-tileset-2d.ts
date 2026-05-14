@@ -157,25 +157,25 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       return [];
     }
 
-    const bounds = viewport.getBounds();
-    const indices = built.index.search(...bounds);
+    const viewportBounds = viewport.getBounds();
+    const indices = built.index.search(...viewportBounds);
     const sources = indices.map((sourceIndex) => built.sources[sourceIndex]!);
 
-    const maxRequests = (this.opts as { maxRequests?: number }).maxRequests;
+    const { maxRequests } = this.opts;
     const threshold =
       typeof maxRequests === "number" && maxRequests > 0 ? maxRequests : 1;
     if (sources.length <= threshold) {
       return sources;
     }
 
-    const [minX, minY, maxX, maxY] = bounds;
-    const reference: readonly [number, number] = [
+    const [minX, minY, maxX, maxY] = viewportBounds;
+    const viewportCenter: readonly [number, number] = [
       (minX + maxX) * 0.5,
       (minY + maxY) * 0.5,
     ];
 
     return sortByDistanceFromPoint(sources, {
-      reference,
+      reference: viewportCenter,
       getCenter: (src) => [
         (src.bbox[0] + src.bbox[2]) * 0.5,
         (src.bbox[1] + src.bbox[3]) * 0.5,
