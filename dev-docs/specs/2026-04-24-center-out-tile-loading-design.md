@@ -34,11 +34,12 @@ which are evicted, or how placeholder/parent fallbacks render.
 
 ## Scope
 
-Two files get sort logic appended, plus one new shared helper:
+Two files get sort logic appended, plus one new shared helper module
+exposing two functions (one low-level, one viewport-aware wrapper):
 
 - `packages/deck.gl-raster/src/raster-tileset/raster-tileset-2d.ts` — `RasterTileset2D.getTileIndices`
 - `packages/deck.gl-geotiff/src/mosaic-layer/mosaic-tileset-2d.ts` — `MosaicTileset2D.getTileIndices`
-- `packages/deck.gl-raster/src/raster-tileset/sort-by-distance.ts` — new shared helper (exported for test; not part of public API)
+- `packages/deck.gl-raster/src/raster-tileset/sort-by-distance.ts` — new helper module. The viewport-aware `sortItemsByDistanceFromViewportCenter` is the function call sites use; it's re-exported across packages as `_sortItemsByDistanceFromViewportCenter` (underscore prefix marks it as an internal cross-package API, not a stable public surface). The underlying `sortByDistanceFromPoint` is exported only from the module file for direct unit testing.
 
 ## Design
 
@@ -59,10 +60,10 @@ Implementation constraints to hit this:
    plain `(a, b) => a - b` over a number, not a generic callback.
 4. **Short-circuit when the sort cannot affect initiation order.** If
    `n <= maxRequests` all tiles start in parallel and ordering is moot;
-   skip the sort entirely. Where `maxRequests` is not readily available
-   at the call site, fall back to the cheaper floor `n < 2`. The helper
-   itself short-circuits on `n < 2`; callsites apply the `maxRequests`
-   check before invoking the helper when they have access to it.
+   skip the sort entirely at the call site. `Tileset2DProps.maxRequests`
+   is non-nullable in the call sites we control, so the check is a plain
+   `n <= maxRequests`. The helper additionally short-circuits on `n < 2`
+   so that pathological inputs are still safe.
 5. **Avoid an intermediate `{d, item}[]` array when cheap to do so.**
    Use a parallel `Float64Array` of squared distances plus a
    `Uint32Array` index permutation; reorder the input array in-place (no

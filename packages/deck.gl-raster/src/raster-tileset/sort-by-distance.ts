@@ -16,7 +16,7 @@ import type { Viewport } from "@deck.gl/core";
  * Caller-side short-circuits (e.g. `n <= maxRequests`) should be applied
  * before invoking this helper when they would skip useful work entirely.
  */
-function sortByDistanceFromPoint<T>(
+export function sortByDistanceFromPoint<T>(
   items: T[],
   opts: {
     getCenter: (item: T) => readonly [number, number];
@@ -55,15 +55,28 @@ function sortByDistanceFromPoint<T>(
 }
 
 /**
- * Higher level function to sort
+ * Sort `items` in place by ascending distance of each item's center from
+ * the viewport's bounds-midpoint, so loads initiate center-out. Returns the
+ * same array reference.
  *
- * @return  {<T>}     [return description]
+ * The reference point is the midpoint of `viewport.getBounds()`, which is
+ * always WGS84 `[minLon, minLat, maxLon, maxLat]` regardless of viewport
+ * type (Mercator, Globe, etc.). `getCenter` must return each item's center
+ * in the same WGS84 space so the comparison is meaningful — callers
+ * working in a projected CRS should run their tile/source centers through
+ * the descriptor's `projectTo4326` before returning.
+ *
+ * `getCenter` is called exactly once per item; see
+ * {@link sortByDistanceFromPoint} for the underlying perf contract and the
+ * `items.length < 2` short-circuit. Caller-side short-circuits such as
+ * `length <= maxRequests` should still be applied before invoking this
+ * helper when they would skip useful work entirely.
  */
 export function sortItemsByDistanceFromViewportCenter<T>(
   items: T[],
   viewport: Viewport,
   getCenter: (item: T) => readonly [number, number],
-) {
+): T[] {
   const [minLon, minLat, maxLon, maxLat] = viewport.getBounds();
   const viewportCenter = [
     (minLon + maxLon) / 2,
