@@ -54,6 +54,23 @@ export type MosaicLayerProps<
         signal?: AbortSignal;
       },
     ) => Layer | LayersList | null;
+
+    /**
+     * Called after a source's data has loaded successfully. `data` is the
+     * value returned by `getSource`, or `undefined` when no `getSource` was
+     * supplied.
+     */
+    onSourceLoad?: (source: MosaicT, info: { data?: DataT }) => void;
+
+    /**
+     * Called when fetching a source's data fails.
+     */
+    onSourceError?: (source: MosaicT, info: { error: Error }) => void;
+
+    /**
+     * Called when a source is evicted from the tile cache.
+     */
+    onSourceUnload?: (source: MosaicT, info: { data?: DataT }) => void;
   };
 
 const defaultProps: Partial<MosaicLayerProps> = {};
@@ -83,6 +100,9 @@ export class MosaicLayer<
       maxCacheByteSize,
       maxCacheSize,
       maxRequests,
+      onSourceLoad,
+      onSourceError,
+      onSourceUnload,
     } = this.props;
 
     // The arrow function is defined here so its lexical `this` is the
@@ -130,6 +150,30 @@ export class MosaicLayer<
         const { source, signal, data: userData } = data;
         return renderSource(source, { data: userData, signal });
       },
+      ...(onSourceLoad && {
+        onTileLoad: (tile) => {
+          // `tile.index` is a `ResolvedSource<MosaicT>` from
+          // MosaicTileset2D.getTileIndices, which structurally extends
+          // MosaicT.
+          const source = tile.index as unknown as MosaicT;
+          onSourceLoad(source, { data: tile.content?.data });
+        },
+      }),
+      ...(onSourceError && {
+        onTileError: (error, tile) => {
+          if (!tile) {
+            return;
+          }
+          const source = tile.index as unknown as MosaicT;
+          onSourceError(source, { error });
+        },
+      }),
+      ...(onSourceUnload && {
+        onTileUnload: (tile) => {
+          const source = tile.index as unknown as MosaicT;
+          onSourceUnload(source, { data: tile.content?.data });
+        },
+      }),
     });
   }
 
