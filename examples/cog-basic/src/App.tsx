@@ -126,14 +126,13 @@ export default function App() {
       <MaplibreMap
         ref={mapRef}
         initialViewState={{
-          longitude: 8.331045775081293,
-          latitude: 46.672994231992305,
-          zoom: 7.654688966519274,
+          longitude: 0,
+          latitude: 0,
+          zoom: 3,
           pitch: 0,
           bearing: 0,
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-        onDrag={(e) => console.log(e)}
       >
         <DeckGlOverlay layers={[cogLayer]} interleaved />
       </MaplibreMap>
