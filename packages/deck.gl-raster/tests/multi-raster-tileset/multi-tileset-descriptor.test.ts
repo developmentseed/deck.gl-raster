@@ -41,9 +41,7 @@ function mockLevel(opts: {
 }
 
 /** Helper: create a mock RasterTilesetDescriptor */
-function mockDescriptor(
-  levels: RasterTilesetLevel[],
-): RasterTilesetDescriptor {
+function mockDescriptor(levels: RasterTilesetLevel[]): RasterTilesetDescriptor {
   const identity = (x: number, y: number): [number, number] => [x, y];
   return {
     levels,

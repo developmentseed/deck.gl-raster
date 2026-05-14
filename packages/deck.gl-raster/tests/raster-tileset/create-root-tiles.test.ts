@@ -53,9 +53,7 @@ function makeFakeLevel(opts: {
 /** Identity projection: source CRS already is EPSG:4326. */
 const identity = (x: number, y: number): [number, number] => [x, y];
 
-function makeDescriptor(
-  level: RasterTilesetLevel,
-): RasterTilesetDescriptor {
+function makeDescriptor(level: RasterTilesetLevel): RasterTilesetDescriptor {
   return {
     levels: [level],
     projectTo3857: identity,
