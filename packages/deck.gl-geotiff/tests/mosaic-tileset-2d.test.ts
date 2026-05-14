@@ -1,52 +1,100 @@
 import type { Viewport } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
+import Flatbush from "flatbush";
 import { describe, expect, it } from "vitest";
 import type { MosaicSource } from "../src/mosaic-layer/mosaic-tileset-2d.js";
 import { MosaicTileset2D } from "../src/mosaic-layer/mosaic-tileset-2d.js";
 
-function makeViewport(bounds: [number, number, number, number]): Viewport {
+function makeViewport(
+  bounds: [number, number, number, number],
+  zoom = 5,
+): Viewport {
   return {
     equals: () => false,
     resolution: undefined,
-    zoom: 5,
+    zoom,
     getBounds: () => bounds,
   } as unknown as Viewport;
 }
 
-function makeTileset(
-  sources: MosaicSource[],
-  maxRequests?: number,
-): MosaicTileset2D<MosaicSource> {
-  return new MosaicTileset2D<MosaicSource>(() => sources, {
-    getTileData: () => new Promise(() => {}),
-    ...(maxRequests !== undefined ? { maxRequests } : {}),
-  } as unknown as Tileset2DProps);
+function buildIndex(sources: MosaicSource[]): Flatbush | null {
+  if (sources.length === 0) {
+    return null;
+  }
+  const index = new Flatbush(sources.length);
+  for (const source of sources) {
+    index.add(...source.bbox);
+  }
+  index.finish();
+  return index;
 }
 
-describe("MosaicTileset2D center-out ordering", () => {
-  it("excludes sources outside viewport bounds (culling unaffected)", () => {
-    const sources: MosaicSource[] = [
+function makeTileset<T extends MosaicSource>(
+  sources: T[],
+  opts: { maxRequests?: number } = {},
+): MosaicTileset2D<T> {
+  const index = buildIndex(sources);
+  return new MosaicTileset2D<T>(
+    () => sources,
+    () => index,
+    {
+      getTileData: () => new Promise(() => {}),
+      ...(opts.maxRequests !== undefined
+        ? { maxRequests: opts.maxRequests }
+        : {}),
+    } as unknown as Tileset2DProps,
+  );
+}
+
+type Item = MosaicSource & { id: string };
+const A: Item = { id: "A", bbox: [0, 0, 10, 10] };
+const B: Item = { id: "B", bbox: [20, 0, 30, 10] };
+const C: Item = { id: "C", bbox: [40, 0, 50, 10] };
+
+describe("MosaicTileset2D viewport filtering", () => {
+  it("returns sources intersecting the viewport", () => {
+    const tileset = makeTileset([A, B, C]);
+    const result = tileset.getTileIndices({
+      viewport: makeViewport([-1, -1, 11, 11]),
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe("A");
+  });
+
+  it("excludes sources outside viewport bounds", () => {
+    const tileset = makeTileset<MosaicSource>([
       { bbox: [0, 0, 1, 1] },
       { bbox: [100, 100, 101, 101] },
-    ];
-    const tileset = makeTileset(sources);
-    const viewport = makeViewport([-5, -5, 5, 5]);
-    const result = tileset.getTileIndices({ viewport });
-    expect(result.length).toBe(1);
+    ]);
+    const result = tileset.getTileIndices({
+      viewport: makeViewport([-5, -5, 5, 5]),
+    });
+    expect(result).toHaveLength(1);
     expect(result[0]!.bbox).toEqual([0, 0, 1, 1]);
   });
 
+  it("returns no tiles when zoom is outside the [minZoom, maxZoom] range", () => {
+    const tileset = makeTileset([A]);
+    const viewport = makeViewport([-1, -1, 11, 11], 5);
+    expect(tileset.getTileIndices({ viewport, minZoom: 10 })).toEqual([]);
+    expect(tileset.getTileIndices({ viewport, maxZoom: 1 })).toEqual([]);
+    expect(
+      tileset.getTileIndices({ viewport, minZoom: 0, maxZoom: 10 }),
+    ).toHaveLength(1);
+  });
+});
+
+describe("MosaicTileset2D center-out ordering", () => {
   it("places the source nearest the viewport center first", () => {
     const sources: MosaicSource[] = [
       { bbox: [4, 4, 5, 5] },
       { bbox: [-4, -4, -3, -3] },
       { bbox: [0.4, 0.4, 0.6, 0.6] },
     ];
-    // maxRequests=1 to force the sort path regardless of deck.gl defaults.
-    const tileset = makeTileset(sources, 1);
+    const tileset = makeTileset(sources, { maxRequests: 1 });
     const viewport = makeViewport([-10, -10, 10, 10]);
     const result = tileset.getTileIndices({ viewport });
-    expect(result.length).toBe(3);
+    expect(result).toHaveLength(3);
     expect(result[0]!.bbox).toEqual([0.4, 0.4, 0.6, 0.6]);
   });
 
@@ -55,7 +103,7 @@ describe("MosaicTileset2D center-out ordering", () => {
       { bbox: [4, 4, 5, 5] },
       { bbox: [0.4, 0.4, 0.6, 0.6] },
     ];
-    const tileset = makeTileset(sources, 6);
+    const tileset = makeTileset(sources, { maxRequests: 6 });
     const viewport = makeViewport([-10, -10, 10, 10]);
     const result = tileset.getTileIndices({ viewport });
     expect(result.map((s) => s.bbox)).toEqual([
@@ -70,9 +118,36 @@ describe("MosaicTileset2D center-out ordering", () => {
       { bbox: [-4, -4, -3, -3] },
       { bbox: [0.4, 0.4, 0.6, 0.6] },
     ];
-    const tileset = makeTileset(sources, 2);
+    const tileset = makeTileset(sources, { maxRequests: 2 });
     const viewport = makeViewport([-10, -10, 10, 10]);
     const result = tileset.getTileIndices({ viewport });
     expect(result[0]!.bbox).toEqual([0.4, 0.4, 0.6, 0.6]);
+  });
+});
+
+describe("MosaicTileset2D tile keys", () => {
+  it("defaults each source's tile-cache key to its array position", () => {
+    const tileset = makeTileset([A, B, C]);
+    const result = tileset.getTileIndices({
+      viewport: makeViewport([-1, -1, 51, 11]),
+    });
+    const byId = new Map(result.map((s) => [s.id, s] as const));
+    expect(tileset.getTileId(byId.get("A")!)).toBe("0");
+    expect(tileset.getTileId(byId.get("B")!)).toBe("1");
+    expect(tileset.getTileId(byId.get("C")!)).toBe("2");
+  });
+
+  it("respects an explicit `key` on a source", () => {
+    const explicit: Item = {
+      id: "explicit",
+      bbox: [0, 0, 10, 10],
+      key: "stable-id",
+    };
+    const tileset = makeTileset([explicit]);
+    const result = tileset.getTileIndices({
+      viewport: makeViewport([-1, -1, 11, 11]),
+    });
+    expect(result[0]).toMatchObject({ id: "explicit", key: "stable-id" });
+    expect(tileset.getTileId(result[0]!)).toBe("stable-id");
   });
 });
