@@ -76,6 +76,18 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
       </>
     ),
   },
+  {
+    title: "USGS Topographic Map (Kanab Point, AZ, 1962, 1:62,500)",
+    url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/AZ/AZ_Kanab%20Point_314712_1962_62500_geo.tif",
+    attribution: (
+      <>
+        <a href="https://www.usgs.gov/programs/national-geospatial-program/historical-topographic-maps-preserving-past">
+          USGS Historical Topographic Map program
+        </a>
+        .
+      </>
+    ),
+  },
 ];
 
 export default function App() {
@@ -114,13 +126,14 @@ export default function App() {
       <MaplibreMap
         ref={mapRef}
         initialViewState={{
-          longitude: 0,
-          latitude: 0,
-          zoom: 3,
+          longitude: 8.331045775081293,
+          latitude: 46.672994231992305,
+          zoom: 7.654688966519274,
           pitch: 0,
           bearing: 0,
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+        onDrag={(e) => console.log(e)}
       >
         <DeckGlOverlay layers={[cogLayer]} interleaved />
       </MaplibreMap>
