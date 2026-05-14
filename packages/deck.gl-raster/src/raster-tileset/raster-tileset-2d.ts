@@ -16,7 +16,7 @@ import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import { getTileIndices } from "./raster-tile-traversal.js";
-import type { TilesetDescriptor } from "./tileset-interface.js";
+import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
   Corners,
@@ -27,7 +27,7 @@ import type {
 } from "./types.js";
 
 /** Type returned by {@link RasterTileset2D.getTileMetadata} */
-export type TileMetadata = {
+export type RasterTileMetadata = {
   /**
    * **Axis-aligned** bounding box of the tile in **WGS84 coordinates**.
    */
@@ -114,14 +114,14 @@ export interface RasterTileset2DOptions {
  * Handles tile lifecycle, caching, and viewport-based loading.
  */
 export class RasterTileset2D extends Tileset2D {
-  private descriptor: TilesetDescriptor;
+  private descriptor: RasterTilesetDescriptor;
   private wgs84Bounds: Bounds;
   private getPixelRatio: () => number;
   private boundingVolumeCache: BoundingVolumeCache;
 
   constructor(
     opts: Tileset2DProps,
-    descriptor: TilesetDescriptor,
+    descriptor: RasterTilesetDescriptor,
     { getPixelRatio, maxBoundingVolumeCacheSize }: RasterTileset2DOptions = {},
   ) {
     super(opts);
@@ -239,7 +239,7 @@ export class RasterTileset2D extends Tileset2D {
     return index.z;
   }
 
-  override getTileMetadata(index: TileIndex): TileMetadata {
+  override getTileMetadata(index: TileIndex): RasterTileMetadata {
     const { x, y, z } = index;
     const levelDescriptor = this.descriptor.levels[z]!;
     const { tileHeight, tileWidth } = levelDescriptor;

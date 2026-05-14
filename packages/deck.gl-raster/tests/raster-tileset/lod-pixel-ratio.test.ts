@@ -3,8 +3,8 @@ import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { describe, expect, it } from "vitest";
 import { RasterTileset2D } from "../../src/raster-tileset/raster-tileset-2d.js";
 import type {
-  TilesetDescriptor,
-  TilesetLevel,
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
 } from "../../src/raster-tileset/tileset-interface.js";
 import type { Corners } from "../../src/raster-tileset/types.js";
 
@@ -16,7 +16,7 @@ const identity = (x: number, y: number): [number, number] => [x, y];
  * Single-tile level covering [-1, -1, 1, 1] in source CRS, with caller-
  * specified `metersPerPixel`.
  */
-function makeLevel(metersPerPixel: number): TilesetLevel {
+function makeLevel(metersPerPixel: number): RasterTilesetLevel {
   const corners: Corners = {
     topLeft: [-1, 1],
     topRight: [1, 1],
@@ -42,7 +42,9 @@ function makeLevel(metersPerPixel: number): TilesetLevel {
   };
 }
 
-function makeDescriptor(metersPerPixelByLevel: number[]): TilesetDescriptor {
+function makeDescriptor(
+  metersPerPixelByLevel: number[],
+): RasterTilesetDescriptor {
   return {
     levels: metersPerPixelByLevel.map(makeLevel),
     projectTo3857: identity,

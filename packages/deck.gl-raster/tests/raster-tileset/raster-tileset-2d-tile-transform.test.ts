@@ -19,7 +19,7 @@ function tilesetProps(): Tileset2DProps {
 }
 
 describe("RasterTileset2D.getTileMetadata", () => {
-  it("attaches per-tile forwardTransform/inverseTransform to TileMetadata", () => {
+  it("attaches per-tile forwardTransform/inverseTransform to RasterTileMetadata", () => {
     const level = new AffineTilesetLevel({
       affine: compose(translation(100, 200), scale(10, -10)),
       arrayWidth: 8,

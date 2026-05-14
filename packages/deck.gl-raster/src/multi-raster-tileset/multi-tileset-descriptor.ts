@@ -1,27 +1,27 @@
 import type {
-  TilesetDescriptor,
-  TilesetLevel,
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
 } from "../raster-tileset/tileset-interface.js";
 import type { Bounds, ProjectionFunction } from "../raster-tileset/types.js";
 
 /**
- * Groups N {@link TilesetDescriptor}s representing the same geographic extent
+ * Groups N {@link RasterTilesetDescriptor}s representing the same geographic extent
  * at different native resolutions.
  *
  * The {@link primary} tileset (finest resolution) drives tile traversal;
  * {@link secondaries} are consulted at fetch time to resolve covering tiles
  * and compute UV transforms.
  *
- * @see {@link createMultiTilesetDescriptor} to construct from a named map of tilesets
+ * @see {@link createMultiRasterTilesetDescriptor} to construct from a named map of tilesets
  */
-export interface MultiTilesetDescriptor {
+export interface MultiRasterTilesetDescriptor {
   /** Highest-resolution tileset — drives tile traversal. */
-  primary: TilesetDescriptor;
-  /** The key under which the primary was provided to {@link createMultiTilesetDescriptor}. */
+  primary: RasterTilesetDescriptor;
+  /** The key under which the primary was provided to {@link createMultiRasterTilesetDescriptor}. */
   primaryKey: string;
   /** Lower-resolution tilesets, keyed by user-defined name. */
-  secondaries: Map<string, TilesetDescriptor>;
-  /** Shared CRS bounds (from primary's {@link TilesetDescriptor.projectedBounds}). */
+  secondaries: Map<string, RasterTilesetDescriptor>;
+  /** Shared CRS bounds (from primary's {@link RasterTilesetDescriptor.projectedBounds}). */
   bounds: Bounds;
   /** Shared projection: source CRS -> EPSG:3857. */
   projectTo3857: ProjectionFunction;
@@ -30,18 +30,18 @@ export interface MultiTilesetDescriptor {
 }
 
 /**
- * Create a {@link MultiTilesetDescriptor} from a map of named tilesets.
+ * Create a {@link MultiRasterTilesetDescriptor} from a map of named tilesets.
  *
  * Automatically selects the tileset with the finest
- * {@link TilesetLevel.metersPerPixel} at its highest-resolution level as the
+ * {@link RasterTilesetLevel.metersPerPixel} at its highest-resolution level as the
  * primary. All others become secondaries.
  *
  * @param tilesets - Named tilesets, e.g. `new Map([["B04", band10m], ["B11", band20m]])`
  * @throws If `tilesets` is empty
  */
-export function createMultiTilesetDescriptor(
-  tilesets: Map<string, TilesetDescriptor>,
-): MultiTilesetDescriptor {
+export function createMultiRasterTilesetDescriptor(
+  tilesets: Map<string, RasterTilesetDescriptor>,
+): MultiRasterTilesetDescriptor {
   if (tilesets.size === 0) {
     throw new Error("At least one tileset is required");
   }
@@ -55,7 +55,7 @@ export function createMultiTilesetDescriptor(
     }
   }
   const primary = tilesets.get(primaryKey!)!;
-  const secondaries = new Map<string, TilesetDescriptor>();
+  const secondaries = new Map<string, RasterTilesetDescriptor>();
   for (const [key, descriptor] of tilesets) {
     if (key !== primaryKey) {
       secondaries.set(key, descriptor);
@@ -85,28 +85,28 @@ export function createMultiTilesetDescriptor(
 export type SecondaryLevelStrategy = "closest" | "closest-finer";
 
 /**
- * Select the best {@link TilesetLevel} from a secondary tileset for a given
- * primary {@link TilesetLevel.metersPerPixel}.
+ * Select the best {@link RasterTilesetLevel} from a secondary tileset for a given
+ * primary {@link RasterTilesetLevel.metersPerPixel}.
  *
  * @param levels - Ordered coarsest-first (index 0 = coarsest), matching
- *   {@link TilesetDescriptor.levels} convention
+ *   {@link RasterTilesetDescriptor.levels} convention
  * @param primaryMetersPerPixel - The `metersPerPixel` of the current primary
  *   tile's zoom level
  * @param strategy - Selection strategy. Defaults to `"closest-finer"`.
- * @returns The selected {@link TilesetLevel}
+ * @returns The selected {@link RasterTilesetLevel}
  *
  * @see {@link SecondaryLevelStrategy} for available strategies
  */
 export function selectSecondaryLevel(
-  levels: TilesetLevel[],
+  levels: RasterTilesetLevel[],
   primaryMetersPerPixel: number,
   strategy: SecondaryLevelStrategy = "closest-finer",
-): TilesetLevel {
+): RasterTilesetLevel {
   if (strategy === "closest-finer") {
     // Among levels that are finer-or-equal to the primary, pick the closest
     // (coarsest of the finer-or-equal set). Walk from coarsest to finest,
     // tracking the last level that's <= primary.
-    let bestFiner: TilesetLevel | null = null;
+    let bestFiner: RasterTilesetLevel | null = null;
     for (let i = 0; i < levels.length; i++) {
       if (levels[i]!.metersPerPixel <= primaryMetersPerPixel) {
         bestFiner = levels[i]!;
@@ -131,16 +131,19 @@ export function selectSecondaryLevel(
 }
 
 /**
- * Check if two {@link TilesetLevel}s have the same grid parameters.
+ * Check if two {@link RasterTilesetLevel}s have the same grid parameters.
  *
  * Used to detect when sources share a tile grid and can skip UV transform
  * computation (e.g., all 10m Sentinel-2 bands share the same grid).
  *
- * Compares {@link TilesetLevel.matrixWidth}, {@link TilesetLevel.matrixHeight},
- * {@link TilesetLevel.tileWidth}, {@link TilesetLevel.tileHeight}, and
- * {@link TilesetLevel.metersPerPixel}.
+ * Compares {@link RasterTilesetLevel.matrixWidth}, {@link RasterTilesetLevel.matrixHeight},
+ * {@link RasterTilesetLevel.tileWidth}, {@link RasterTilesetLevel.tileHeight}, and
+ * {@link RasterTilesetLevel.metersPerPixel}.
  */
-export function tilesetLevelsEqual(a: TilesetLevel, b: TilesetLevel): boolean {
+export function tilesetLevelsEqual(
+  a: RasterTilesetLevel,
+  b: RasterTilesetLevel,
+): boolean {
   return (
     a.matrixWidth === b.matrixWidth &&
     a.matrixHeight === b.matrixHeight &&
