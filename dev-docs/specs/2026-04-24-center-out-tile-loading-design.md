@@ -72,7 +72,34 @@ Implementation constraints to hit this:
 
 ### Shared helper
 
-A pure function in `sort-by-distance.ts`:
+`sort-by-distance.ts` exposes two functions. The viewport-aware
+`sortItemsByDistanceFromViewportCenter` is what the two call sites use; it
+delegates to the lower-level `sortByDistanceFromPoint` for the actual
+sort.
+
+#### `sortItemsByDistanceFromViewportCenter` (call-site entry point)
+
+```ts
+export function sortItemsByDistanceFromViewportCenter<T>(
+  items: T[],
+  viewport: Viewport,
+  getCenter: (item: T) => readonly [number, number],
+): T[];
+```
+
+- Derives the reference point from `viewport.getBounds()` midpoint
+  (WGS84). Encapsulates the bounds-destructuring and midpoint math so
+  both call sites stay one-liner.
+- `getCenter` returns each item's center in WGS84 — callers working in a
+  projected CRS run their item centers through their descriptor's
+  `projectTo4326` first.
+- This is the only function exposed across packages, re-exported from
+  the package root as `_sortItemsByDistanceFromViewportCenter` (the
+  underscore marks it as an internal cross-package API, not a stable
+  public surface — see [#477](https://github.com/developmentseed/deck.gl-raster/pull/477)
+  review thread).
+
+#### `sortByDistanceFromPoint` (low-level sort)
 
 ```ts
 /**
@@ -104,27 +131,29 @@ export function sortByDistanceFromPoint<T>(
   index. This falls out of the stable `Array.prototype.sort` spec when
   the comparator returns 0 for equal keys — we rely on that rather than
   encoding a tiebreaker explicitly.
-- Space-agnostic: the caller picks the coordinate space. The two callsites
-  use different spaces (common/world for raster, WGS84 for mosaic); the
-  helper doesn't care.
+- Space-agnostic: the caller picks the coordinate space. Exported only
+  from the module file (not re-exported from the package) so unit tests
+  can target it directly; production call sites should go through
+  `sortItemsByDistanceFromViewportCenter`.
 
 ### `RasterTileset2D.getTileIndices`
 
 After computing `tileIndices`:
 
-1. If `tileIndices.length <= this.opts.maxRequests` (when available) or
-   `< 2` otherwise, return as-is. No sort needed.
-2. Compute the viewport reference point as the midpoint of
-   `viewport.getBounds()` (WGS84). Returns early if `getBounds()` is null.
-3. For each tile, compute its projected center from
-   `descriptor.levels[z].projectedTileCorners(x, y)` as the midpoint of
-   `topLeft` and `bottomRight` (two corner reads, one add+shift — no need
-   to touch all four corners), then project that center to WGS84 via
-   `descriptor.projectTo4326`.
-4. Pass through `sortByDistanceFromPoint`. Hot path: one
-   `projectedTileCorners` call plus one `projectTo4326` call per tile, one
-   subtract+multiply+add per tile into the distance array, `sort` on the
-   permutation, in-place shuffle.
+1. If `tileIndices.length <= this.opts.maxRequests`, return as-is. No
+   sort needed.
+2. Hand off to `sortItemsByDistanceFromViewportCenter(tileIndices,
+   viewport, getCenter)`. The helper derives the WGS84 reference from
+   `viewport.getBounds()` midpoint.
+3. `getCenter` for each tile reads
+   `descriptor.levels[z].projectedTileCorners(x, y)`, takes the midpoint
+   of `topLeft` and `bottomRight` (two corner reads, one add+shift — no
+   need to touch all four corners), and projects that center to WGS84
+   via `descriptor.projectTo4326`.
+
+Hot path: one `projectedTileCorners` call plus one `projectTo4326` call
+per tile, one subtract+multiply+add per tile into the distance array,
+`sort` on the permutation, in-place shuffle.
 
 **Why WGS84 instead of common/world space.** `viewport.center` exists but
 is in deck.gl common-world space (e.g. ~[270, 327] for a WebMercator
@@ -138,16 +167,16 @@ extra `projectTo4326` call per tile in the hot path.
 
 ### `MosaicTileset2D.getTileIndices`
 
-After `this.index.search(...bounds)` resolves source indices:
+After `built.index.search(...viewportBounds)` resolves source indices:
 
-1. If the result length `<= this.opts.maxRequests` (when available) or
-   `< 2` otherwise, return as-is. No sort needed.
-2. Compute the reference point as the midpoint of `viewport.getBounds()`
-   (WGS84) — matches the space `bbox` is stored in. Computed once.
-3. Each source's center is the midpoint of its `bbox`:
+1. If the result length `<= this.opts.maxRequests`, return as-is. No
+   sort needed.
+2. Hand off to `sortItemsByDistanceFromViewportCenter(sources, viewport,
+   getCenter)`. Mosaic sources already carry WGS84 bboxes, so no
+   projection is needed.
+3. `getCenter` for each source is the midpoint of its `bbox`:
    `[(minX+maxX) * 0.5, (minY+maxY) * 0.5]`. No function call, no object
    allocation per item beyond what the helper already owns.
-4. Pass through `sortByDistanceFromPoint`.
 
 ### Why no configuration prop
 
