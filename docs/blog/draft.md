@@ -20,19 +20,32 @@ This release includes big performance improvements
 
 ## Performance improvements
 
-### Big latency improvement for large COG
-
-We've
-
-https://github.com/developmentseed/deck.gl-raster/pull/529
-
-* perf(geotiff)!: block-aligned LRU header cache; lazy tile metadata by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/529
-
 ### Faster GPU updates for pixel filtering
 
 Applies to both the COGLayer and the ZarrLayer.
 
-See https://github.com/developmentseed/deck.gl-raster/pull/543 and https://github.com/developmentseed/deck.gl-raster/pull/540 for more details.
+**Before:**
+
+![](../static/img/pixel-filter-gpu-update-before.gif)
+
+**After:**
+
+![](../static/img/pixel-filter-gpu-update-after.gif)
+
+
+See [#543](https://github.com/developmentseed/deck.gl-raster/pull/543) and [#540](https://github.com/developmentseed/deck.gl-raster/pull/540) for more details.
+
+### Big latency improvement for large COGs
+
+We've updated [our GeoTIFF reader](https://developmentseed.org/deck.gl-raster/api/geotiff/) to reduce the number of header requests required to start rendering a COG.
+
+In our [Vermont Aerial Imagery example](https://developmentseed.org/deck.gl-raster/examples/vermont-cog-comparison/), for a **200 gigabyte COG**, we fetch only **256 kilobytes** of metadata before starting to load image tiles.
+
+This screencast from that example simulates loading a 200GB COG (on the right) and a 50GB COG (on the left) over a 20MB/s internet connection with caching disabled:
+
+![](../static/img/latency-improvement-large-cog.gif)
+
+See [#529](https://github.com/developmentseed/deck.gl-raster/pull/529) for more information.
 
 ### Faster tile traversal
 
@@ -42,26 +55,31 @@ See https://github.com/developmentseed/deck.gl-raster/pull/543 and https://githu
 
 We now load tiles starting from the center of the viewport.
 
-_(Tile loading in this GIF was artificially slowed down for effect.)_
+_(Tile loading in this screencast was artificially slowed down for effect.)_
 
 ![](../static/img/tile-loading-spiral.gif)
 
-See https://github.com/developmentseed/deck.gl-raster/pull/477 for more details.
+See [#477](https://github.com/developmentseed/deck.gl-raster/pull/477) for more details.
 
 ## Fixed tile selection on high-resolution displays
 
 We now ensure that COG overview and Zarr multiscale selection matches the pixel density of your display. We **now render 4x as many pixels** on modern displays like Mac Retina displays.
 
-Here are some before and after screenshots. Or go to our [NAIP example](https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/) and notice how crisp the images are now.
+Here's a comparison from our [NAIP example](https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/). Notice how much more crisp the image is now.
 
-| Before                                      | After                                      |
-| ------------------------------------------- | ------------------------------------------ |
-| ![](../static/img/high-dpi-fix-before2.jpg) | ![](../static/img/high-dpi-fix-after2.jpg) |
-| ![](../static/img/high-dpi-fix-before.jpg)  | ![](../static/img/high-dpi-fix-after.jpg)  |
+**Before:**
+
+![](../static/img/high-dpi-fix-before2.jpg)
+
+**After:**
+
+![](../static/img/high-dpi-fix-after2.jpg)
 
 Previously we had been using the number of CSS pixels, which is not the same as the size of the GPU drawing buffer.
 
 This means that for high-resolution screens like Mac Retina displays, **4x more image tiles** will now be loaded compared to before. We respect the [`Deck.useDevicePixels` parameter](https://deck.gl/docs/api-reference/core/deck#usedevicepixels), so you can turn that to `false` if you want to revert to the old behavior.
+
+See [#513](https://github.com/developmentseed/deck.gl-raster/pull/513) for more details.
 
 ## Updated Examples
 
