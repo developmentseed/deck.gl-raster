@@ -60,30 +60,49 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   }
 
   override updateState(params: UpdateParameters<this>): void {
-    // Temporary diagnostic for evaluating PR #540: SimpleMeshLayer rebuilds
-    // its Model only when `props.mesh !== oldProps.mesh` or
-    // `changeFlags.extensionsChanged`. Log whichever (if either) was the
-    // trigger so we can confirm the mesh fix is taking effect and identify
-    // unexpected rebuild causes.
-    const { props, oldProps, changeFlags } = params;
-    const meshChanged = props.mesh !== oldProps.mesh;
-    const extensionsChanged = changeFlags.extensionsChanged;
-    if (meshChanged || extensionsChanged) {
-      console.log("[MeshTextureLayer] model rebuild", this.props.id, {
-        meshChanged,
-        extensionsChanged,
-        hadOldMesh: Boolean(oldProps.mesh),
-        hasNewMesh: Boolean(props.mesh),
-      });
-    }
     super.updateState(params);
+
+    // SimpleMeshLayer rebuilds its Model on mesh/extension changes. Modules
+    // aren't on its radar, but our shader source depends on them — when the
+    // renderPipeline module list changes (e.g. render-mode switch), the
+    // existing Model's shader is stale and would silently keep running the
+    // old pipeline. Force a rebuild in that case.
+    const { props, oldProps, changeFlags } = params;
+    if (props.mesh !== oldProps.mesh || changeFlags.extensionsChanged) {
+      return;
+    }
+    if (!this._renderPipelineModulesChanged(oldProps, props)) {
+      return;
+    }
+    if (!props.mesh || !this.state.model) {
+      return;
+    }
+    this.state.model.destroy();
+    this.state.model = this.getModel(props.mesh as any);
+    this.getAttributeManager()?.invalidateAll();
+  }
+
+  private _renderPipelineModulesChanged(
+    oldProps: MeshTextureLayerProps,
+    newProps: MeshTextureLayerProps,
+  ): boolean {
+    if (Boolean(oldProps.image) !== Boolean(newProps.image)) {
+      return true;
+    }
+    const oldP = oldProps.renderPipeline ?? [];
+    const newP = newProps.renderPipeline ?? [];
+    if (oldP.length !== newP.length) {
+      return true;
+    }
+    for (let i = 0; i < oldP.length; i++) {
+      if (oldP[i]?.module !== newP[i]?.module) {
+        return true;
+      }
+    }
+    return false;
   }
 
   override getShaders() {
-    // Temporary diagnostic for evaluating PR #540: each call corresponds to a
-    // Model construction. After the mesh-reference fix, the count should NOT
-    // grow per frame for already-loaded tiles.
-    console.log("[MeshTextureLayer] getShaders()", this.props.id);
     const upstreamShaders = super.getShaders();
 
     const modules: ShaderModule[] = upstreamShaders.modules;
