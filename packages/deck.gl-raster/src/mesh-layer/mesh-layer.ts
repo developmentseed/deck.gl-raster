@@ -60,16 +60,14 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   }
 
   override updateState(params: UpdateParameters<this>): void {
-    // SimpleMeshLayer.updateState rebuilds the Model when
-    // `changeFlags.extensionsChanged` is set (alongside mesh-ref changes).
-    // It has no notion of our `renderPipeline`, but its rebuild path calls
-    // getShaders() — which our override composes from renderPipeline. So
-    // to make super rebuild on a module-list change (e.g. render-mode
-    // switch), flip the flag and let super own the destroy/recreate/
-    // invalidate dance.
+    // Ensure the SimpleMeshLayer rebuilds the model when the renderPipeline has
+    // changed.
     if (this.hasRenderPipelineChanged(params.oldProps, params.props)) {
+      // Setting extensionsChanged to true causes recompiling the shader
+      // https://github.com/visgl/deck.gl/blob/70adde2f1fcdf5e99195df81512e6d01ee7a5edc/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L284-L297
       params.changeFlags.extensionsChanged = true;
     }
+
     super.updateState(params);
   }
 
