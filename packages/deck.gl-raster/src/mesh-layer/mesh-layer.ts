@@ -71,7 +71,7 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     if (props.mesh !== oldProps.mesh || changeFlags.extensionsChanged) {
       return;
     }
-    if (!this._renderPipelineModulesChanged(oldProps, props)) {
+    if (!this.hasRenderPipelineChanged(oldProps, props)) {
       return;
     }
     if (!props.mesh || !this.state.model) {
@@ -82,23 +82,27 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     this.getAttributeManager()?.invalidateAll();
   }
 
-  private _renderPipelineModulesChanged(
+  /** Returns true if the render pipeline has changed between the old and new props. */
+  private hasRenderPipelineChanged(
     oldProps: MeshTextureLayerProps,
     newProps: MeshTextureLayerProps,
   ): boolean {
     if (Boolean(oldProps.image) !== Boolean(newProps.image)) {
       return true;
     }
-    const oldP = oldProps.renderPipeline ?? [];
-    const newP = newProps.renderPipeline ?? [];
-    if (oldP.length !== newP.length) {
+
+    const oldPipeline = oldProps.renderPipeline ?? [];
+    const newPipeline = newProps.renderPipeline ?? [];
+    if (oldPipeline.length !== newPipeline.length) {
       return true;
     }
-    for (let i = 0; i < oldP.length; i++) {
-      if (oldP[i]?.module !== newP[i]?.module) {
+
+    for (let i = 0; i < oldPipeline.length; i++) {
+      if (oldPipeline[i]?.module.name !== newPipeline[i]?.module.name) {
         return true;
       }
     }
+
     return false;
   }
 
