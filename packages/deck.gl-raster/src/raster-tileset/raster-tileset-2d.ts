@@ -211,7 +211,6 @@ export class RasterTileset2D extends Tileset2D {
     tileIndices: TileIndex[],
     viewport: Viewport,
   ): TileIndex[] {
-    console.log("unsorted", tileIndices);
     const maxRequests = this.opts.maxRequests;
     const threshold =
       typeof maxRequests === "number" && maxRequests > 0 ? maxRequests : 1;
