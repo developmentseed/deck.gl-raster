@@ -133,12 +133,11 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   declare state: {
     reprojector?: RasterReprojector;
     /**
-     * Mesh in the exact shape SimpleMeshLayer expects. Stored as a stable
-     * reference so MeshTextureLayer's `props.mesh` doesn't change identity
-     * across renders — SimpleMeshLayer rebuilds its Model whenever
-     * `props.mesh !== oldProps.mesh`, and rebuilding the Model triggers
-     * `assembleGLSLShaderPair` plus vertex-buffer setup. With many tile
-     * sublayers active that becomes a major per-frame cost.
+     * Mesh in the exact shape SimpleMeshLayer expects.
+     *
+     * It's important for this to be passed to MeshTextureLayer as a stable
+     * reference so `props.mesh` equality holds across renders. This avoids
+     * unnecessarily recreating the model.
      */
     mesh?: {
       indices: { value: Uint32Array; size: number };
