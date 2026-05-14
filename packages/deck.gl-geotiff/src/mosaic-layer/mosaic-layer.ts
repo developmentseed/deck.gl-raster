@@ -36,13 +36,13 @@ export type MosaicLayerProps<
      *
      * Tile cache reuse depends on stable tile IDs. By default, each source's
      * tile ID is derived from its position in this array (see
-     * `MosaicSource.key`), so:
+     * `MosaicSource.id`), so:
      *
      * - Appending items preserves all existing rendered tiles.
      * - Reordering or removing items from the middle of the array invalidates
      *   the cache slots of shifted items, causing them to re-fetch.
      *
-     * Supply an explicit `key` per source if you need cache stability across
+     * Supply an explicit `id` per source if you need cache stability across
      * arbitrary mutations of `sources`.
      */
     sources: MosaicT[];

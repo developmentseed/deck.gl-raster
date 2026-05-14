@@ -41,7 +41,7 @@ export type MosaicSource = {
  * closure returns a new array reference (compared by `===`); mutating the
  * array in place will not be detected.
  */
-/** A source augmented with the `TileIndex` fields and a resolved `key`
+/** A source augmented with the `TileIndex` fields and a resolved `id`
  * (defaulting to the array position) so deck.gl typing is satisfied and the
  * cache identifier is always defined. */
 type ResolvedSource<MosaicT> = TileIndex & MosaicT & { id: string };
