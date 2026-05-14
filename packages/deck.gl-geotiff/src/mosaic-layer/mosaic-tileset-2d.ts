@@ -1,7 +1,7 @@
 import type { Viewport } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
-import { _sortByDistanceFromPoint as sortByDistanceFromPoint } from "@developmentseed/deck.gl-raster";
+import { _sortItemsByDistanceFromViewportCenter as sortItemsByDistanceFromViewportCenter } from "@developmentseed/deck.gl-raster";
 import Flatbush from "flatbush";
 
 /** Tile index.
@@ -166,15 +166,13 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       return sources;
     }
 
-    const [minX, minY, maxX, maxY] = viewportBounds;
-    const viewportCenter = [(minX + maxX) * 0.5, (minY + maxY) * 0.5] as const;
-
-    return sortByDistanceFromPoint(sources, {
-      reference: viewportCenter,
-      getCenter: (src) => [
-        (src.bbox[0] + src.bbox[2]) * 0.5,
-        (src.bbox[1] + src.bbox[3]) * 0.5,
-      ],
-    });
+    return sortItemsByDistanceFromViewportCenter(
+      sources,
+      viewport,
+      (source) => {
+        const [minX, minY, maxX, maxY] = source.bbox;
+        return [(minX + maxX) * 0.5, (minY + maxY) * 0.5] as const;
+      },
+    );
   }
 }
