@@ -36,5 +36,7 @@ export {
   AffineTileset,
   AffineTilesetLevel,
   RasterTileset2D,
+  // Not a public export, but we want to share across modules
+  sortItemsByDistanceFromViewportCenter as _sortItemsByDistanceFromViewportCenter,
   TileMatrixSetAdaptor,
 } from "./raster-tileset/index.js";

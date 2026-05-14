@@ -16,6 +16,7 @@ import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import { getTileIndices } from "./raster-tile-traversal.js";
+import { sortItemsByDistanceFromViewportCenter } from "./sort-by-distance.js";
 import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -195,7 +196,43 @@ export class RasterTileset2D extends Tileset2D {
       boundingVolumeCache: this.boundingVolumeCache,
     });
 
-    return tileIndices;
+    return this.sortTileIndicesByDistance(tileIndices, viewport);
+  }
+
+  /**
+   * Sort tile indices by ascending distance from the viewport center in
+   * projected (common/world) space so loads initiate center-out.
+   *
+   * Short-circuits when `tileIndices.length <= maxRequests` — all fetches
+   * would start concurrently regardless of order in that case. Mutates and
+   * returns `tileIndices`.
+   */
+  private sortTileIndicesByDistance(
+    tileIndices: TileIndex[],
+    viewport: Viewport,
+  ): TileIndex[] {
+    const { maxRequests } = this.opts;
+    if (tileIndices.length <= maxRequests) {
+      return tileIndices;
+    }
+
+    const descriptor = this.descriptor;
+    return sortItemsByDistanceFromViewportCenter(
+      tileIndices,
+      viewport,
+      (tileIndex) => {
+        const { x, y, z } = tileIndex;
+
+        const { topLeft, bottomRight } = descriptor.levels[
+          z
+        ]!.projectedTileCorners(x, y);
+        const projectedCenter = [
+          (topLeft[0] + bottomRight[0]) / 2,
+          (topLeft[1] + bottomRight[1]) / 2,
+        ] as const;
+        return descriptor.projectTo4326(projectedCenter[0], projectedCenter[1]);
+      },
+    );
   }
 
   override getTileId(index: TileIndex): string {
