@@ -1,4 +1,8 @@
-import type { DefaultProps, TextureSource } from "@deck.gl/core";
+import type {
+  DefaultProps,
+  TextureSource,
+  UpdateParameters,
+} from "@deck.gl/core";
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import type { Texture } from "@luma.gl/core";
@@ -53,6 +57,26 @@ export class MeshTextureLayer extends SimpleMeshLayer<
       ? [{ module: CreateTexture, props: { textureName: image as Texture } }]
       : [];
     return [...imageModule, ...(renderPipeline ?? [])];
+  }
+
+  override updateState(params: UpdateParameters<this>): void {
+    // Temporary diagnostic for evaluating PR #540: SimpleMeshLayer rebuilds
+    // its Model only when `props.mesh !== oldProps.mesh` or
+    // `changeFlags.extensionsChanged`. Log whichever (if either) was the
+    // trigger so we can confirm the mesh fix is taking effect and identify
+    // unexpected rebuild causes.
+    const { props, oldProps, changeFlags } = params;
+    const meshChanged = props.mesh !== oldProps.mesh;
+    const extensionsChanged = changeFlags.extensionsChanged;
+    if (meshChanged || extensionsChanged) {
+      console.log("[MeshTextureLayer] model rebuild", this.props.id, {
+        meshChanged,
+        extensionsChanged,
+        hadOldMesh: Boolean(oldProps.mesh),
+        hasNewMesh: Boolean(props.mesh),
+      });
+    }
+    super.updateState(params);
   }
 
   override getShaders() {
