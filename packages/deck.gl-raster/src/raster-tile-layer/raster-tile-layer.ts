@@ -380,12 +380,8 @@ export class RasterTileLayer<
       return debugLayers;
     }
 
-    // `forwardTransform`/`inverseTransform` come from the tile metadata that
-    // `RasterTileset2D.getTileMetadata` attaches at tile-creation time. Reading
-    // them off the tile gives us reference-stable functions across renders,
-    // which `RasterLayer`'s `reprojectionFnsChanged` check needs to avoid
-    // unnecessary `_generateMesh` calls (and the downstream Model rebuild that
-    // follows).
+    // Access forwardTransform/inverseTransform from tile metadata so that
+    // reference equality holds across renders.
     const { forwardTransform, inverseTransform } = tile;
     const tileResult = renderTile(props.data);
     if (!tileResult) {

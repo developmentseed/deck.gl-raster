@@ -58,17 +58,20 @@ export type TileMetadata = {
   tileHeight: number;
 
   /**
-   * Forward (tile-local pixel → CRS) transform for this tile. Stable across
-   * the tile's lifetime; computed once at tile creation. Stored on the tile
-   * so downstream layers (e.g. `RasterTileLayer._renderSubLayers`) receive a
-   * reference-stable function across renders, which is what `RasterLayer`'s
-   * `reprojectionFnsChanged` check needs to avoid spurious mesh regeneration.
+   * Forward (tile-local pixel → CRS) transform for this tile.
+   *
+   * Stable across the tile's lifetime; computed once at tile creation. Stored
+   * on the tile so downstream layers (e.g. `RasterTileLayer._renderSubLayers`)
+   * receive a reference-stable function across renders, which is what
+   * `RasterLayer`'s `reprojectionFnsChanged` check needs to avoid spurious mesh
+   * regeneration.
    */
   forwardTransform: ProjectionFunction;
 
   /**
-   * Inverse (CRS → tile-local pixel) transform. Same stability guarantees as
-   * {@link TileMetadata.forwardTransform}.
+   * Inverse (CRS → tile-local pixel) transform.
+   *
+   * Same stability guarantees as {@link TileMetadata.forwardTransform}.
    */
   inverseTransform: ProjectionFunction;
 };
