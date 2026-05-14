@@ -60,30 +60,17 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   }
 
   override updateState(params: UpdateParameters<this>): void {
-    const previousModel = this.state.model;
-    super.updateState(params);
-    const superRebuiltModel = this.state.model !== previousModel;
-
-    // When SimpleMeshLayer rebuilds the Model (mesh/extension change), our
-    // overridden getShaders() runs and the new shader picks up the latest
-    // renderPipeline. We only need to step in when super did NOT rebuild
-    // but the module list still changed (e.g. render-mode switch);
-    // otherwise the cached Model would silently keep running the stale
-    // shader.
-    const { props, oldProps } = params;
-    const { model } = this.state;
-    if (
-      superRebuiltModel ||
-      !model ||
-      !props.mesh ||
-      !this.hasRenderPipelineChanged(oldProps, props)
-    ) {
-      return;
+    // SimpleMeshLayer.updateState rebuilds the Model when
+    // `changeFlags.extensionsChanged` is set (alongside mesh-ref changes).
+    // It has no notion of our `renderPipeline`, but its rebuild path calls
+    // getShaders() — which our override composes from renderPipeline. So
+    // to make super rebuild on a module-list change (e.g. render-mode
+    // switch), flip the flag and let super own the destroy/recreate/
+    // invalidate dance.
+    if (this.hasRenderPipelineChanged(params.oldProps, params.props)) {
+      params.changeFlags.extensionsChanged = true;
     }
-
-    model.destroy();
-    this.state.model = this.getModel(props.mesh as any);
-    this.getAttributeManager()?.invalidateAll();
+    super.updateState(params);
   }
 
   /** Returns true if the render pipeline has changed between the old and new props. */
