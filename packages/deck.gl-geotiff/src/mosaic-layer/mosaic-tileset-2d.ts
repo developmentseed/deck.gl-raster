@@ -1,7 +1,7 @@
 import type { Viewport } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
-import { sortByDistanceFromPoint } from "@developmentseed/deck.gl-raster";
+import { _sortByDistanceFromPoint as sortByDistanceFromPoint } from "@developmentseed/deck.gl-raster";
 import Flatbush from "flatbush";
 
 /** Tile index.
