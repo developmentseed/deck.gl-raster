@@ -46,10 +46,10 @@ function makeTileset<T extends MosaicSource>(
   );
 }
 
-type Item = MosaicSource & { id: string };
-const A: Item = { id: "A", bbox: [0, 0, 10, 10] };
-const B: Item = { id: "B", bbox: [20, 0, 30, 10] };
-const C: Item = { id: "C", bbox: [40, 0, 50, 10] };
+type Item = MosaicSource & { name: string };
+const A: Item = { name: "A", bbox: [0, 0, 10, 10] };
+const B: Item = { name: "B", bbox: [20, 0, 30, 10] };
+const C: Item = { name: "C", bbox: [40, 0, 50, 10] };
 
 describe("MosaicTileset2D viewport filtering", () => {
   it("returns sources intersecting the viewport", () => {
@@ -58,7 +58,7 @@ describe("MosaicTileset2D viewport filtering", () => {
       viewport: makeViewport([-1, -1, 11, 11]),
     });
     expect(result).toHaveLength(1);
-    expect(result[0]?.id).toBe("A");
+    expect(result[0]?.name).toBe("A");
   });
 
   it("excludes sources outside viewport bounds", () => {
@@ -125,29 +125,29 @@ describe("MosaicTileset2D center-out ordering", () => {
   });
 });
 
-describe("MosaicTileset2D tile keys", () => {
-  it("defaults each source's tile-cache key to its array position", () => {
+describe("MosaicTileset2D tile ids", () => {
+  it("defaults each source's tile-cache id to its array position", () => {
     const tileset = makeTileset([A, B, C]);
     const result = tileset.getTileIndices({
       viewport: makeViewport([-1, -1, 51, 11]),
     });
-    const byId = new Map(result.map((s) => [s.id, s] as const));
-    expect(tileset.getTileId(byId.get("A")!)).toBe("0");
-    expect(tileset.getTileId(byId.get("B")!)).toBe("1");
-    expect(tileset.getTileId(byId.get("C")!)).toBe("2");
+    const byName = new Map(result.map((s) => [s.name, s] as const));
+    expect(tileset.getTileId(byName.get("A")!)).toBe("0");
+    expect(tileset.getTileId(byName.get("B")!)).toBe("1");
+    expect(tileset.getTileId(byName.get("C")!)).toBe("2");
   });
 
-  it("respects an explicit `key` on a source", () => {
+  it("respects an explicit `id` on a source", () => {
     const explicit: Item = {
-      id: "explicit",
+      name: "explicit",
       bbox: [0, 0, 10, 10],
-      key: "stable-id",
+      id: "stable-id",
     };
     const tileset = makeTileset([explicit]);
     const result = tileset.getTileIndices({
       viewport: makeViewport([-1, -1, 11, 11]),
     });
-    expect(result[0]).toMatchObject({ id: "explicit", key: "stable-id" });
+    expect(result[0]).toMatchObject({ name: "explicit", id: "stable-id" });
     expect(tileset.getTileId(result[0]!)).toBe("stable-id");
   });
 });
