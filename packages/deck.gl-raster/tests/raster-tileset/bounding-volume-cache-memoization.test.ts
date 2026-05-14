@@ -3,15 +3,15 @@ import { describe, expect, it } from "vitest";
 import { BoundingVolumeCache } from "../../src/raster-tileset/bounding-volume-cache.js";
 import { getTileIndices } from "../../src/raster-tileset/raster-tile-traversal.js";
 import type {
-  TilesetDescriptor,
-  TilesetLevel,
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
 } from "../../src/raster-tileset/tileset-interface.js";
 import type { Bounds, Corners } from "../../src/raster-tileset/types.js";
 
 const identity = (x: number, y: number): [number, number] => [x, y];
 
 /** Single-tile level covering [-1, -1, 1, 1] with the given metersPerPixel. */
-function makeLevel(metersPerPixel: number): TilesetLevel {
+function makeLevel(metersPerPixel: number): RasterTilesetLevel {
   const corners: Corners = {
     topLeft: [-1, 1],
     topRight: [1, 1],
@@ -42,7 +42,7 @@ function makeLevel(metersPerPixel: number): TilesetLevel {
  * assert that a second traversal does not recompute bounding volumes.
  */
 function makeCountingDescriptor(metersPerPixelByLevel: number[]): {
-  descriptor: TilesetDescriptor;
+  descriptor: RasterTilesetDescriptor;
   projectCallCount: () => number;
 } {
   let count = 0;

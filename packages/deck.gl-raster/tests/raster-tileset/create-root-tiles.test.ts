@@ -1,20 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { createRootTiles } from "../../src/raster-tileset/raster-tile-traversal.js";
 import type {
-  TilesetDescriptor,
-  TilesetLevel,
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
 } from "../../src/raster-tileset/tileset-interface.js";
 import type { Bounds } from "../../src/raster-tileset/types.js";
 
 /**
- * Minimal fake `TilesetLevel`: top-left-origin EPSG:4326 grid. Only methods
+ * Minimal fake `RasterTilesetLevel`: top-left-origin EPSG:4326 grid. Only methods
  * `createRootTiles` touches are implemented.
  */
 function makeFakeLevel(opts: {
   matrixWidth: number;
   matrixHeight: number;
   tileDegrees: number;
-}): TilesetLevel {
+}): RasterTilesetLevel {
   const { matrixWidth, matrixHeight, tileDegrees } = opts;
   return {
     matrixWidth,
@@ -53,7 +53,9 @@ function makeFakeLevel(opts: {
 /** Identity projection: source CRS already is EPSG:4326. */
 const identity = (x: number, y: number): [number, number] => [x, y];
 
-function makeDescriptor(level: TilesetLevel): TilesetDescriptor {
+function makeDescriptor(
+  level: RasterTilesetLevel,
+): RasterTilesetDescriptor {
   return {
     levels: [level],
     projectTo3857: identity,
@@ -110,7 +112,7 @@ describe("createRootTiles", () => {
   it("enumerates every tile for small root matrices without projecting", () => {
     // Uncullable descriptor — projectFrom4326 throws. The small-matrix path
     // must not touch it.
-    const descriptor: TilesetDescriptor = {
+    const descriptor: RasterTilesetDescriptor = {
       levels: [
         makeFakeLevel({ matrixWidth: 3, matrixHeight: 4, tileDegrees: 90 }),
       ],
