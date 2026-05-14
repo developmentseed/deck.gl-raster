@@ -7,8 +7,9 @@ const shader = /* glsl */ `
 `;
 
 /**
- * A shader module that injects a unorm texture and uses a sampler2D to assign
- * to a color.
+ * A shader module that converts single-band grayscale data to RGB by
+ * broadcasting the inverted input value (0 = white, 1 = black) into all
+ * three channels. Matches TIFF `PhotometricInterpretation = 0` (WhiteIsZero).
  */
 export const WhiteIsZero = {
   name: "white-is-zero",

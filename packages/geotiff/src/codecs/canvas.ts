@@ -37,5 +37,16 @@ export async function decode(
     return { layout: "pixel-interleaved", data: rgb };
   }
 
+  if (samplesPerPixel === 1) {
+    // Browsers expand grayscale JPEGs into RGBA where R = G = B = gray. Take
+    // the red channel as the single-band sample.
+    const pixelCount = width * height;
+    const gray = new Uint8ClampedArray(pixelCount);
+    for (let i = 0, j = 0; i < pixelCount; i++, j += 4) {
+      gray[i] = rgba[j]!;
+    }
+    return { layout: "pixel-interleaved", data: gray };
+  }
+
   throw new Error(`Unsupported SamplesPerPixel for JPEG: ${samplesPerPixel}`);
 }

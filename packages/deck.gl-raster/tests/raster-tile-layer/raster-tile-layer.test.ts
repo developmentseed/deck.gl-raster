@@ -17,4 +17,18 @@ describe("RasterTileLayer", () => {
   it("can be constructed with no props without throwing", () => {
     expect(() => new RasterTileLayer({ id: "test" })).not.toThrow();
   });
+
+  it("exposes a _renderDebug hook returning [] when no descriptor is configured", () => {
+    class ProbeLayer extends RasterTileLayer {
+      callDebug(tile: unknown, data: unknown) {
+        return (
+          this as unknown as {
+            _renderDebug: (t: unknown, d: unknown) => unknown[];
+          }
+        )._renderDebug(tile, data);
+      }
+    }
+    const layer = new ProbeLayer({ id: "probe" });
+    expect(layer.callDebug({ id: "x" }, null)).toEqual([]);
+  });
 });

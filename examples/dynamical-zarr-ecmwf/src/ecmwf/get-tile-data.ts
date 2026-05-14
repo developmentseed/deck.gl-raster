@@ -1,7 +1,5 @@
-import type {
-  GetTileDataOptions,
-  MinimalZarrTileData,
-} from "@developmentseed/deck.gl-zarr";
+import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
+import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
 import type { Texture } from "@luma.gl/core";
 import * as zarr from "zarrita";
 import { ECMWF_LEAD_TIME_COUNT } from "./metadata.js";
@@ -10,7 +8,7 @@ import { ECMWF_LEAD_TIME_COUNT } from "./metadata.js";
  * Per-tile data for the ECMWF example: a Texture2DArray stacking all 85
  * lead_time frames for one spatial chunk.
  */
-export type EcmwfTileData = MinimalZarrTileData & {
+export type EcmwfTileData = MinimalTileData & {
   /** r32float Texture2DArray, depth = ECMWF_LEAD_TIME_COUNT. */
   texture: Texture;
 };

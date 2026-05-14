@@ -1,6 +1,12 @@
 import type { ShaderModule } from "@luma.gl/shadertools";
 
+/** Props for the {@link FilterNoDataVal} shader module. */
 export type FilterNoDataValProps = {
+  /**
+   * The sentinel nodata value, in the same units as `color.r` after any
+   * earlier pipeline modules. Pixels whose red channel exactly equals
+   * this value are discarded.
+   */
   value: number;
 };
 

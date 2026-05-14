@@ -1,7 +1,5 @@
-import type {
-  GetTileDataOptions,
-  MinimalZarrTileData,
-} from "@developmentseed/deck.gl-zarr";
+import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
+import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
 import type { Texture } from "@luma.gl/core";
 import * as zarr from "zarrita";
 import { NUM_BANDS } from "./constants.js";
@@ -10,7 +8,7 @@ import { NUM_BANDS } from "./constants.js";
  * Per-tile data for the AEF example: an r8sint Texture2DArray whose depth
  * equals the number of embedding bands ({@link NUM_BANDS}).
  */
-export type AefTileData = MinimalZarrTileData & {
+export type AefTileData = MinimalTileData & {
   /** r8sint Texture2DArray; depth = NUM_BANDS. Layer `i` = band `i`. */
   texture: Texture;
 };

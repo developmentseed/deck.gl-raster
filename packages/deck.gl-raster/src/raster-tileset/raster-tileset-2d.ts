@@ -14,19 +14,21 @@ import type {
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
+import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import { getTileIndices } from "./raster-tile-traversal.js";
 import { sortByDistanceFromPoint } from "./sort-by-distance.js";
-import type { TilesetDescriptor } from "./tileset-interface.js";
+import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
   Corners,
   ProjectedBoundingBox,
+  ProjectionFunction,
   TileIndex,
   ZRange,
 } from "./types.js";
 
-/** Type returned by `getTileMetadata` */
-export type TileMetadata = {
+/** Type returned by {@link RasterTileset2D.getTileMetadata} */
+export type RasterTileMetadata = {
   /**
    * **Axis-aligned** bounding box of the tile in **WGS84 coordinates**.
    */
@@ -55,7 +57,55 @@ export type TileMetadata = {
    * Tile height in pixels.
    */
   tileHeight: number;
+
+  /**
+   * Forward (tile-local pixel → CRS) transform for this tile.
+   *
+   * Stable across the tile's lifetime; computed once at tile creation. Stored
+   * on the tile so downstream layers (e.g. `RasterTileLayer._renderSubLayers`)
+   * receive a reference-stable function across renders, which is what
+   * `RasterLayer`'s `reprojectionFnsChanged` check needs to avoid spurious mesh
+   * regeneration.
+   */
+  forwardTransform: ProjectionFunction;
+
+  /**
+   * Inverse (CRS → tile-local pixel) transform.
+   *
+   * Same stability guarantees as {@link TileMetadata.forwardTransform}.
+   */
+  inverseTransform: ProjectionFunction;
 };
+
+/**
+ * Configuration for a {@link RasterTileset2D}.
+ */
+export interface RasterTileset2DOptions {
+  /**
+   * Returns the current drawing-buffer-pixel/CSS-pixel ratio.
+   *
+   * Read at every `getTileIndices` call so that runtime changes (e.g. dragging
+   * the window between displays of different DPR, or toggling
+   * `Deck.useDevicePixels`) take effect on the next tile evaluation.
+   *
+   * Defaults to a constant `1` if omitted, which makes LOD selection
+   * CSS-pixel-accurate but blurry on HiDPI displays. The `RasterTileLayer`
+   * wires this to `drawingBufferWidth / cssWidth` read from the layer's
+   * canvas context per call. See `dev-docs/lod-and-pixel-matching.md` § (A).
+   */
+  getPixelRatio?: () => number;
+
+  /**
+   * Soft cap on the number of tile bounding volumes cached across
+   * `getTileIndices` calls. Bounding volumes are expensive to compute (proj4
+   * reprojections + an oriented-bounding-box fit) and frame-invariant, so
+   * caching them keeps repeated traversals (animation frames) cheap. See
+   * `dev-docs/specs/2026-05-11-traversal-bounding-volume-cache-design.md`.
+   *
+   * @default 65536
+   */
+  maxBoundingVolumeCacheSize?: number;
+}
 
 /**
  * A generic tileset implementation organized according to the OGC
@@ -65,12 +115,22 @@ export type TileMetadata = {
  * Handles tile lifecycle, caching, and viewport-based loading.
  */
 export class RasterTileset2D extends Tileset2D {
-  private descriptor: TilesetDescriptor;
+  private descriptor: RasterTilesetDescriptor;
   private wgs84Bounds: Bounds;
+  private getPixelRatio: () => number;
+  private boundingVolumeCache: BoundingVolumeCache;
 
-  constructor(opts: Tileset2DProps, descriptor: TilesetDescriptor) {
+  constructor(
+    opts: Tileset2DProps,
+    descriptor: RasterTilesetDescriptor,
+    { getPixelRatio, maxBoundingVolumeCacheSize }: RasterTileset2DOptions = {},
+  ) {
     super(opts);
     this.descriptor = descriptor;
+    this.getPixelRatio = getPixelRatio ?? (() => 1);
+    this.boundingVolumeCache = new BoundingVolumeCache({
+      maxEntries: maxBoundingVolumeCacheSize,
+    });
 
     const rawBounds = transformBounds(
       this.descriptor.projectTo4326,
@@ -132,6 +192,8 @@ export class RasterTileset2D extends Tileset2D {
       maxZ,
       zRange: opts.zRange ?? null,
       wgs84Bounds: this.wgs84Bounds,
+      pixelRatio: this.getPixelRatio(),
+      boundingVolumeCache: this.boundingVolumeCache,
     });
 
     return this.sortTileIndicesByDistance(tileIndices, viewport);
@@ -228,7 +290,7 @@ export class RasterTileset2D extends Tileset2D {
     return index.z;
   }
 
-  override getTileMetadata(index: TileIndex): TileMetadata {
+  override getTileMetadata(index: TileIndex): RasterTileMetadata {
     const { x, y, z } = index;
     const levelDescriptor = this.descriptor.levels[z]!;
     const { tileHeight, tileWidth } = levelDescriptor;
@@ -261,6 +323,9 @@ export class RasterTileset2D extends Tileset2D {
       ...projectedBounds,
     );
 
+    const { forwardTransform, inverseTransform } =
+      levelDescriptor.tileTransform(x, y);
+
     return {
       bbox: {
         west,
@@ -277,6 +342,8 @@ export class RasterTileset2D extends Tileset2D {
       projectedCorners,
       tileWidth,
       tileHeight,
+      forwardTransform,
+      inverseTransform,
     };
   }
 }

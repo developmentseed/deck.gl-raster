@@ -1,9 +1,10 @@
 import type { UpdateParameters } from "@deck.gl/core";
 import type {
+  MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
   RasterTileLayerProps,
+  RasterTilesetDescriptor,
   RenderTileResult,
-  TilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
 import { RasterTileLayer } from "@developmentseed/deck.gl-raster";
 import type { GeoZarrMetadata } from "@developmentseed/geozarr";
@@ -28,22 +29,7 @@ import { geoZarrToDescriptor } from "./zarr-tileset.js";
  * A single dimension selector: a fixed integer index, a `zarr.Slice` range,
  * or `null` to use zarrita's default (full extent).
  */
-type SliceInput = number | zarr.Slice | null;
-
-/**
- * Minimum interface that a `DataT` returned from `getTileData` must satisfy.
- */
-export type MinimalZarrTileData = {
-  /** Pixel width of the fetched tile. */
-  width: number;
-  /** Pixel height of the fetched tile. */
-  height: number;
-  /**
-   * Optional byte count used by deck.gl's `maxCacheByteSize` eviction.
-   * Omitting it disables byte-based eviction for this tile.
-   */
-  byteLength?: number;
-};
+export type SliceInput = number | zarr.Slice | null;
 
 /**
  * Options bag passed to the user's {@link ZarrLayerProps.getTileData} callback.
@@ -81,7 +67,7 @@ export type GetTileDataOptions = RasterTileGetTileDataOptions & {
 export type ZarrLayerProps<
   Store extends zarr.Readable = zarr.Readable,
   Dtype extends zarr.DataType = zarr.DataType,
-  DataT extends MinimalZarrTileData = MinimalZarrTileData,
+  DataT extends MinimalTileData = MinimalTileData,
 > = Omit<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
@@ -96,11 +82,11 @@ export type ZarrLayerProps<
    * Group to let the layer resolve a `variable` path and use the GeoZarr
    * multiscale layout from its attrs.
    */
-  source: zarr.Array<Dtype, Store> | zarr.Group<Store>;
+  node: zarr.Array<Dtype, Store> | zarr.Group<Store>;
 
   /**
    * Optional path within the store to the variable group. Only applies
-   * when `source` is a {@link zarr.Group}; ignored when an Array is passed
+   * when `node` is a {@link zarr.Group}; ignored when an Array is passed
    * directly. If omitted, the group itself is used.
    */
   variable?: string;
@@ -118,8 +104,10 @@ export type ZarrLayerProps<
 
   /**
    * Optional raw group attrs to use in place of `group.attrs` when parsing
-   * GeoZarr metadata. Useful when you have already fetched the metadata
-   * out-of-band (e.g. from a STAC item).
+   * GeoZarr metadata.
+   *
+   * Use this to hard-code GeoZarr metadata when the Zarr data source does not
+   * include it.
    */
   metadata?: unknown;
 
@@ -151,8 +139,6 @@ export type ZarrLayerProps<
   epsgResolver?: EpsgResolver;
 };
 
-export type { SliceInput };
-
 /**
  * ZarrLayer renders a GeoZarr dataset using a tiled approach with reprojection.
  *
@@ -164,7 +150,7 @@ export type { SliceInput };
 export class ZarrLayer<
   Store extends zarr.Readable = zarr.Readable,
   Dtype extends zarr.DataType = zarr.DataType,
-  DataT extends MinimalZarrTileData = MinimalZarrTileData,
+  DataT extends MinimalTileData = MinimalTileData,
 > extends RasterTileLayer<DataT, ZarrLayerProps<Store, Dtype, DataT>> {
   static override layerName = "ZarrLayer";
   // ZarrLayer's getTileData signature differs from the base class's, so
@@ -182,7 +168,7 @@ export class ZarrLayer<
     spatialDims?: [string, string];
     /** One opened array per level, finest-first (matches meta.levels order). */
     arrays?: zarr.Array<zarr.DataType, zarr.Readable>[];
-    tilesetDescriptor?: TilesetDescriptor;
+    tilesetDescriptor?: RasterTilesetDescriptor;
   };
 
   override initializeState(): void {
@@ -196,7 +182,7 @@ export class ZarrLayer<
 
     const needsUpdate =
       Boolean(changeFlags.dataChanged) ||
-      props.source !== oldProps.source ||
+      props.node !== oldProps.node ||
       props.variable !== oldProps.variable;
 
     if (needsUpdate) {
@@ -218,7 +204,7 @@ export class ZarrLayer<
 
   /** Open the Zarr store, parse GeoZarr metadata, validate dims, build reprojection fns. */
   async _parseZarr(): Promise<void> {
-    const { source, variable, metadata: metadataOverride } = this.props;
+    const { node, variable, metadata: metadataOverride } = this.props;
 
     // Callers own the store. We accept a pre-opened Array (rendered as a
     // single-level source) or Group (used directly, with optional `variable`
@@ -227,13 +213,13 @@ export class ZarrLayer<
     let root:
       | zarr.Group<zarr.Readable>
       | zarr.Array<zarr.DataType, zarr.Readable>;
-    if ("shape" in source) {
+    if ("shape" in node) {
       // zarr.Array — reuse directly as the (single) level's array.
-      preopenedArray = source;
-      root = source;
+      preopenedArray = node;
+      root = node;
     } else {
       // zarr.Group
-      root = source;
+      root = node;
     }
     // @ts-expect-error - for debugging
     window.root = root;

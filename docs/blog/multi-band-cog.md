@@ -1,6 +1,7 @@
 ---
 slug: multi-band-cog
 title: Multi-band COG support
+date: 2026-04-16
 authors:
   - kylebarron
 tags: [release]
@@ -15,7 +16,7 @@ deck.gl-raster now supports rendering multi-band [Cloud-Optimized GeoTIFFs][coge
 
 [sentinel-2-example]: https://developmentseed.org/deck.gl-raster/examples/sentinel-2/
 
-<!-- truncate -->
+{/* truncate */}
 
 ## Multi-band COG support
 

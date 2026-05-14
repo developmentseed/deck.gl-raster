@@ -1,14 +1,17 @@
 import * as affine from "@developmentseed/affine";
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
 import { tileTransform, xy_bounds } from "@developmentseed/morecantile";
-import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
+import type {
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
+} from "./tileset-interface.js";
 import type { Bounds, Corners, ProjectionFunction } from "./types.js";
 
 // 0.28 mm per pixel — OGC TMS 2.0 standard screen pixel size
 // https://docs.ogc.org/is/17-083r4/17-083r4.html#toc15
 const SCREEN_PIXEL_SIZE = 0.00028;
 
-class TileMatrixAdaptor implements TilesetLevel {
+class TileMatrixAdaptor implements RasterTilesetLevel {
   inner: TileMatrix;
 
   constructor(tileMatrix: TileMatrix) {
@@ -132,8 +135,8 @@ class TileMatrixAdaptor implements TilesetLevel {
     col: number,
     row: number,
   ): {
-    forwardTransform: (x: number, y: number) => [number, number];
-    inverseTransform: (x: number, y: number) => [number, number];
+    forwardTransform: ProjectionFunction;
+    inverseTransform: ProjectionFunction;
   } {
     const fwd = tileTransform(this.inner, { col, row });
     const inv = affine.invert(fwd);
@@ -145,10 +148,10 @@ class TileMatrixAdaptor implements TilesetLevel {
 }
 
 /**
- * An adapter interface to use a TileMatrixSet as a TilesetDescriptor for raster
+ * An adapter interface to use a TileMatrixSet as a RasterTilesetDescriptor for raster
  * tile traversal.
  */
-export class TileMatrixSetAdaptor implements TilesetDescriptor {
+export class TileMatrixSetAdaptor implements RasterTilesetDescriptor {
   tms: TileMatrixSet;
   private _levels: TileMatrixAdaptor[];
   projectTo3857: ProjectionFunction;
@@ -178,7 +181,7 @@ export class TileMatrixSetAdaptor implements TilesetDescriptor {
     this.projectFrom4326 = projectFrom4326;
   }
 
-  get levels(): TilesetLevel[] {
+  get levels(): RasterTilesetLevel[] {
     return this._levels;
   }
 

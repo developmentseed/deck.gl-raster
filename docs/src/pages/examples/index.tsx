@@ -14,7 +14,7 @@ type Example = {
   source: string;
 };
 
-const examples: Example[] = [
+const cogExamples: Example[] = [
   {
     title: "RGB GeoTIFF",
     description: (
@@ -79,6 +79,49 @@ const examples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/sentinel-2",
   },
+  {
+    title: "Before/After Comparison",
+    description: <>Use a slider to compare Vermont state imagery over time.</>,
+    href: "https://developmentseed.org/deck.gl-raster/examples/vermont-cog-comparison/",
+    image: "/deck.gl-raster/img/vermont-opendata-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/vermont-cog-comparison",
+  },
+];
+
+const zarrExamples: Example[] = [
+  {
+    title: "ECMWF Temperature Forecast",
+    description: (
+      <>
+        Use the{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-zarr/classes/ZarrLayer/">
+          ZarrLayer
+        </Link>{" "}
+        to animate over 4-dimensional numerical data.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/dynamical-zarr-ecmwf/",
+    image: "/deck.gl-raster/img/dynamical-zarr-ecmwf.gif",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/dynamical-zarr-ecmwf",
+  },
+  {
+    title: "AEF Mosaic Embeddings",
+    description: (
+      <>
+        Use the{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-zarr/classes/ZarrLayer/">
+          ZarrLayer
+        </Link>{" "}
+        to visualize embeddings data.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/aef-mosaic/",
+    image: "/deck.gl-raster/img/aef-mosaic.gif",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/aef-mosaic",
+  },
 ];
 
 function ExampleCard({
@@ -138,8 +181,15 @@ export default function Examples(): ReactNode {
             Interactive demos built with deck.gl-raster. Each example opens as a
             standalone application.
           </p>
+          <Heading as="h2">COG Examples</Heading>
           <div className={styles.grid}>
-            {examples.map((ex) => (
+            {cogExamples.map((ex) => (
+              <ExampleCard key={ex.title} {...ex} />
+            ))}
+          </div>
+          <Heading as="h2">Zarr Examples</Heading>
+          <div className={styles.grid}>
+            {zarrExamples.map((ex) => (
               <ExampleCard key={ex.title} {...ex} />
             ))}
           </div>

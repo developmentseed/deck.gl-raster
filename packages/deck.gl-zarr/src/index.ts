@@ -1,6 +1,5 @@
 export type {
   GetTileDataOptions,
-  MinimalZarrTileData,
   SliceInput,
   ZarrLayerProps,
 } from "./zarr-layer.js";

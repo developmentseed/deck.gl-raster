@@ -1,3 +1,4 @@
+# https://docs.npmjs.com/trusted-publishers#step-2-configure-your-cicd-workflow
 name: Publish Package
 
 on:
@@ -36,16 +37,21 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
-          cache: "pnpm"
+          package-manager-cache: false # never use caching in release builds
       - run: pnpm install
       - run: pnpm build
       - run: pnpm test
       - name: Read version and publish
+        env:
+          # Clear the sentinel value setup-node writes; otherwise npm tries to
+          # use it as a bearer token and rejects OIDC.
+          # https://github.com/actions/setup-node/issues/1440#issuecomment-3571890875
+          NODE_AUTH_TOKEN: ""
         run: |
           # All packages are expected to have the same version
           VERSION=$(jq -r .version packages/deck.gl-raster/package.json)
           if [[ "$VERSION" == *alpha* || "$VERSION" == *beta* ]]; then
-            pnpm publish --recursive --no-git-checks --tag beta
+            pnpm publish --recursive --no-git-checks --tag beta --verbose
           else
-            pnpm publish --recursive --no-git-checks
+            pnpm publish --recursive --no-git-checks --verbose
           fi

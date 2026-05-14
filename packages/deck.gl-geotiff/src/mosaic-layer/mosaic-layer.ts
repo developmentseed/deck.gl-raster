@@ -11,14 +11,33 @@ export type MosaicLayerProps<
 > = CompositeLayerProps &
   Pick<
     TileLayerProps,
+    | "debounceTime"
     | "extent"
-    | "minZoom"
-    | "maxZoom"
     | "maxCacheByteSize"
     | "maxCacheSize"
     | "maxRequests"
+    | "maxZoom"
+    | "minZoom"
   > & {
-    /** List of mosaic sources to render */
+    /**
+     * List of mosaic sources to render.
+     *
+     * The mosaic updates reactively when this prop is replaced with a new
+     * array reference. Mutating the array in place will not trigger an
+     * update — pass a fresh array (e.g. `[...sources, newItem]`) to add or
+     * remove items.
+     *
+     * Tile cache reuse depends on stable tile IDs. By default, each source's
+     * tile ID is derived from its position in this array (see
+     * `MosaicSource.key`), so:
+     *
+     * - Appending items preserves all existing rendered tiles.
+     * - Reordering or removing items from the middle of the array invalidates
+     *   the cache slots of shifted items, causing them to re-fetch.
+     *
+     * Supply an explicit `key` per source if you need cache stability across
+     * arbitrary mutations of `sources`.
+     */
     sources: MosaicT[];
 
     /** Fetch data for this source. */
@@ -35,6 +54,31 @@ export type MosaicLayerProps<
         signal?: AbortSignal;
       },
     ) => Layer | LayersList | null;
+
+    /**
+     * Called after a source's data has loaded successfully. `data` is the
+     * value returned by `getSource`, or `undefined` when no `getSource` was
+     * supplied.
+     */
+    onSourceLoad?: (source: MosaicT, info: { data?: DataT }) => void;
+
+    /**
+     * Called when fetching a source's data fails.
+     */
+    onSourceError?: (source: MosaicT, info: { error: Error }) => void;
+
+    /**
+     * Called when a source is evicted from the tile cache.
+     */
+    onSourceUnload?: (source: MosaicT, info: { data?: DataT }) => void;
+
+    /**
+     * Called when all sources currently in the viewport have finished
+     * loading.
+     */
+    onViewportLoad?: (
+      entries: Array<{ source: MosaicT; data?: DataT }>,
+    ) => void;
   };
 
 const defaultProps: Partial<MosaicLayerProps> = {};
@@ -53,22 +97,30 @@ export class MosaicLayer<
   static override defaultProps = defaultProps;
 
   renderTileLayer(
-    mosaicSources: MosaicT[],
     renderSource: MosaicLayerProps<MosaicT, DataT>["renderSource"],
   ): TileLayer {
     const {
       id,
       minZoom,
       maxZoom,
+      debounceTime,
       extent,
       maxCacheByteSize,
       maxCacheSize,
       maxRequests,
+      onSourceLoad,
+      onSourceError,
+      onSourceUnload,
+      onViewportLoad,
     } = this.props;
 
+    // The arrow function is defined here so its lexical `this` is the
+    // MosaicLayer instance (which deck.gl reuses across prop updates),
+    // ensuring `this.props.sources` returns the latest array on every call.
+    const getSources = () => this.props.sources;
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
       constructor(opts: any) {
-        super(mosaicSources, opts);
+        super(getSources, opts);
       }
     }
 
@@ -81,15 +133,16 @@ export class MosaicLayer<
       TilesetClass: MosaicTileset2DFactory,
       minZoom,
       maxZoom,
+      debounceTime,
       extent,
       ...(maxCacheByteSize !== undefined && { maxCacheByteSize }),
       maxCacheSize,
       maxRequests,
       getTileData: async (data) => {
         // We hard-cast this because TilesetClass is not generic.
-        // TilesetClass returns MosaicT in `index`, but the known type is only
-        // `TileIndex`, which only defines x,y,z
-        const index = data.index as MosaicT;
+        // MosaicTileset2D returns MosaicT in `index`, but TileLayer's typing
+        // exposes only the plain `TileIndex` here.
+        const index = data.index as unknown as MosaicT;
         const { signal } = data;
         const userData =
           this.props.getSource &&
@@ -106,16 +159,53 @@ export class MosaicLayer<
         const { source, signal, data: userData } = data;
         return renderSource(source, { data: userData, signal });
       },
+      ...(onSourceLoad && {
+        onTileLoad: (tile) => {
+          // `tile.index` is a `ResolvedSource<MosaicT>` from
+          // MosaicTileset2D.getTileIndices, which structurally extends
+          // MosaicT.
+          const source = tile.index as unknown as MosaicT;
+          onSourceLoad(source, { data: tile.content?.data });
+        },
+      }),
+      ...(onSourceError && {
+        onTileError: (error, tile) => {
+          if (!tile) {
+            return;
+          }
+          const source = tile.index as unknown as MosaicT;
+          onSourceError(source, { error });
+        },
+      }),
+      ...(onSourceUnload && {
+        onTileUnload: (tile) => {
+          const source = tile.index as unknown as MosaicT;
+          onSourceUnload(source, { data: tile.content?.data });
+        },
+      }),
+      ...(onViewportLoad && {
+        onViewportLoad: (tiles) => {
+          onViewportLoad(
+            tiles.map((tile) => ({
+              source: tile.index as unknown as MosaicT,
+              data: tile.content?.data,
+            })),
+          );
+        },
+      }),
     });
   }
 
   override renderLayers(): Layer | null | LayersList {
     const { sources, renderSource } = this.props;
 
-    if (!sources || sources.length === 0) {
+    if (!sources) {
       return null;
     }
 
-    return this.renderTileLayer(sources, renderSource);
+    // Note: we deliberately render the inner TileLayer even when `sources` is
+    // empty so the same Tileset2D instance lives across empty -> non-empty
+    // transitions and picks up later updates without recreation.
+    return this.renderTileLayer(renderSource);
   }
 }

@@ -1,9 +1,9 @@
 /**
- * Direct S3 URL for the AlphaEarth Foundations GeoZarr Mosaic.
+ * URL for the AlphaEarth Foundations GeoZarr Mosaic.
+ *
  * See https://source.coop/tge-labs/aef-mosaic.
  */
-export const ZARR_URL =
-  "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/tge-labs/aef-mosaic";
+export const ZARR_URL = "https://data.source.coop/tge-labs/aef-mosaic";
 
 /** Path to the embeddings array within the root group. */
 export const VARIABLE = "embeddings";

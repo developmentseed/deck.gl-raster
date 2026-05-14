@@ -6,6 +6,7 @@ guides/changelog.md
 
 # Production
 /build
+/deck.gl-raster
 
 # Generated files
 .docusaurus

@@ -1,3 +1,5 @@
+import type { ProjectionFunction } from "./transform-bounds.js";
+
 const WGS84_ELLIPSOID_A = 6378137;
 
 // Maximum latitude representable in Web Mercator (EPSG:3857), in degrees.
@@ -35,9 +37,9 @@ function wgs84To3857(lon: number, lat: number): [number, number] {
  * hold shared projection utilities like this. *
  */
 export function makeClampedForwardTo3857(
-  forwardTo3857: (x: number, y: number) => [number, number],
-  forwardTo4326: (x: number, y: number) => [number, number],
-): (x: number, y: number) => [number, number] {
+  forwardTo3857: ProjectionFunction,
+  forwardTo4326: ProjectionFunction,
+): ProjectionFunction {
   return (x: number, y: number): [number, number] => {
     const [px, py] = forwardTo3857(x, y);
     if (Number.isFinite(px) && Number.isFinite(py)) {

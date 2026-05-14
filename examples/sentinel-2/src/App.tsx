@@ -1,20 +1,21 @@
-import type { MapboxOverlayProps } from "@deck.gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
+import { Code, NativeSelect, Text } from "@chakra-ui/react";
 import { MultiCOGLayer } from "@developmentseed/deck.gl-geotiff";
 import {
   FilterNoDataVal,
   LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { DebugState } from "deck.gl-raster-examples-shared";
+import {
+  ControlPanel,
+  DebugControls,
+  DeckGlOverlay,
+  ExternalLink,
+  Field,
+} from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
-import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-
-function DeckGLOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
-}
+import { Map as MaplibreMap } from "react-map-gl/maplibre";
 
 // Sentinel-2 L2A scenes. Each entry points at a scene folder; individual band
 // COGs are loaded as `${baseUrl}/${band}.tif`. Band resolutions:
@@ -133,10 +134,11 @@ export default function App() {
   const centeredSceneRef = useRef<number | null>(null);
   const [sceneIndex, setSceneIndex] = useState(0);
   const [presetIndex, setPresetIndex] = useState(0);
-  const [debug, setDebug] = useState(false);
-  const [debugOpacity, setDebugOpacity] = useState(0.25);
-  const [debugLevel, setDebugLevel] = useState<1 | 2 | 3>(1);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [debugState, setDebugState] = useState<DebugState>({
+    debug: false,
+    debugOpacity: 0.25,
+    debugLevel: 1,
+  });
 
   const scene = SCENES[sceneIndex];
   const preset = PRESETS[presetIndex];
@@ -156,9 +158,9 @@ export default function App() {
     id: `sentinel-2-multi-${sceneIndex}`,
     sources,
     composite: preset.composite,
-    debug,
-    debugOpacity,
-    debugLevel,
+    debug: debugState.debug,
+    debugOpacity: debugState.debugOpacity,
+    debugLevel: debugState.debugLevel,
     renderPipeline: [
       { module: FilterNoDataVal, props: { noDataValue: 0 } },
       { module: LinearRescale, props: { rescaleMin: 0, rescaleMax: 0.05 } },
@@ -188,207 +190,60 @@ export default function App() {
         initialViewState={{ longitude: 0, latitude: 0, zoom: 1 }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGLOverlay layers={[layer]} interleaved />
+        <DeckGlOverlay layers={[layer]} interleaved />
       </MaplibreMap>
 
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-          zIndex: 1000,
-        }}
+      <ControlPanel
+        title="Sentinel-2 Multi-Band"
+        sourcePath="examples/sentinel-2"
       >
-        <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "20px",
-            background: "white",
-            padding: "16px",
-            borderRadius: "8px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            width: "350px",
-            pointerEvents: "auto",
-          }}
-        >
-          <button
-            type="button"
-            style={{
-              all: "unset",
-              width: "100%",
-              margin: 0,
-              fontSize: "16px",
-              fontWeight: "bold",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              userSelect: "none",
-            }}
-            onClick={() => setPanelOpen((o) => !o)}
-          >
-            Sentinel-2 Multi-Band
-            <span
-              style={{
-                fontSize: "12px",
-                transition: "transform 0.2s",
-                transform: panelOpen ? "rotate(0deg)" : "rotate(-90deg)",
-              }}
+        <Text mb="3" color="gray.600">
+          These images are loaded directly from the{" "}
+          <ExternalLink href="https://registry.opendata.aws/sentinel-2-l2a-cogs/">
+            Sentinel-2 AWS Open Data bucket
+          </ExternalLink>{" "}
+          — no server involved. Separate{" "}
+          <ExternalLink href="https://gisgeography.com/sentinel-2-bands-combinations/">
+            bands
+          </ExternalLink>{" "}
+          are rendered as true-color or false-color composites, where the{" "}
+          <ExternalLink href="https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGLayer/">
+            <Code>MultiCOGLayer</Code>
+          </ExternalLink>{" "}
+          automatically handles GPU-based cross-resolution resampling.
+        </Text>
+        <Field label="Scene">
+          <NativeSelect.Root>
+            <NativeSelect.Field
+              value={sceneIndex}
+              onChange={(e) => setSceneIndex(Number(e.target.value))}
             >
-              ▼
-            </span>
-          </button>
-          {panelOpen && (
-            <>
-              <p
-                style={{
-                  margin: "8px 0 12px 0",
-                  fontSize: "13px",
-                  color: "#666",
-                }}
-              >
-                These images are loaded directly from the{" "}
-                <a
-                  href="https://registry.opendata.aws/sentinel-2-l2a-cogs/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Sentinel-2 AWS Open Data bucket
-                </a>{" "}
-                — no server involved. Separate{" "}
-                <a
-                  href="https://gisgeography.com/sentinel-2-bands-combinations/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  bands
-                </a>{" "}
-                are rendered as true-color or false-color composites, where the{" "}
-                <a
-                  href="https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGLayer/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <code>MultiCOGLayer</code>
-                </a>{" "}
-                automatically handles GPU-based cross-resolution resampling.
-              </p>
-              <p style={{ margin: "0 0 12px 0", fontSize: "14px" }}>
-                <a
-                  href="https://developmentseed.org/deck.gl-raster/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  deck.gl-raster Documentation ↗
-                </a>
-              </p>
-              <label
-                style={{ fontSize: "12px", color: "#666", display: "block" }}
-              >
-                Scene
-                <select
-                  value={sceneIndex}
-                  onChange={(e) => setSceneIndex(Number(e.target.value))}
-                  style={{
-                    width: "100%",
-                    padding: "4px",
-                    cursor: "pointer",
-                    marginTop: "2px",
-                  }}
-                >
-                  {SCENES.map((s, i) => (
-                    <option key={s.baseUrl} value={i}>
-                      {s.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#666",
-                  display: "block",
-                  marginTop: "8px",
-                }}
-              >
-                Composite
-                <select
-                  value={presetIndex}
-                  onChange={(e) => setPresetIndex(Number(e.target.value))}
-                  style={{
-                    width: "100%",
-                    padding: "4px",
-                    cursor: "pointer",
-                    marginTop: "2px",
-                  }}
-                >
-                  {PRESETS.map((p, i) => (
-                    <option key={p.title} value={i}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div style={{ marginTop: "8px" }}>
-                <label style={{ fontSize: "13px", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={debug}
-                    onChange={(e) => setDebug(e.target.checked)}
-                    style={{ marginRight: "6px" }}
-                  />
-                  Debug overlay
-                </label>
-              </div>
-              {debug && (
-                <>
-                  <div style={{ marginTop: "4px" }}>
-                    <label style={{ fontSize: "12px", color: "#666" }}>
-                      Detail level:{" "}
-                      <select
-                        value={debugLevel}
-                        onChange={(e) =>
-                          setDebugLevel(Number(e.target.value) as 1 | 2 | 3)
-                        }
-                        style={{ padding: "2px", cursor: "pointer" }}
-                      >
-                        <option value={1}>1 — Compact</option>
-                        <option value={2}>2 — Detailed</option>
-                        <option value={3}>3 — Verbose</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div style={{ marginTop: "4px" }}>
-                    <label
-                      style={{
-                        fontSize: "12px",
-                        color: "#666",
-                      }}
-                    >
-                      Debug Opacity: {debugOpacity.toFixed(2)}
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={debugOpacity}
-                        onChange={(e) =>
-                          setDebugOpacity(parseFloat(e.target.value))
-                        }
-                        style={{ width: "100%", cursor: "pointer" }}
-                      />
-                    </label>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+              {SCENES.map((s, i) => (
+                <option key={s.baseUrl} value={i}>
+                  {s.title}
+                </option>
+              ))}
+            </NativeSelect.Field>
+            <NativeSelect.Indicator />
+          </NativeSelect.Root>
+        </Field>
+        <Field label="Composite">
+          <NativeSelect.Root>
+            <NativeSelect.Field
+              value={presetIndex}
+              onChange={(e) => setPresetIndex(Number(e.target.value))}
+            >
+              {PRESETS.map((p, i) => (
+                <option key={p.title} value={i}>
+                  {p.title}
+                </option>
+              ))}
+            </NativeSelect.Field>
+            <NativeSelect.Indicator />
+          </NativeSelect.Root>
+        </Field>
+        <DebugControls value={debugState} onChange={setDebugState} />
+      </ControlPanel>
     </div>
   );
 }

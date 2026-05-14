@@ -17,15 +17,18 @@ import type { Device } from "@luma.gl/core";
 import { renderDebugTileOutline } from "../layer-utils.js";
 import type { RenderTileResult } from "../raster-layer.js";
 import { RasterLayer } from "../raster-layer.js";
-import type { TilesetDescriptor } from "../raster-tileset/index.js";
+import type { RasterTilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
-import type { TileMetadata } from "../raster-tileset/raster-tileset-2d.js";
+import type { RasterTileMetadata } from "../raster-tileset/raster-tileset-2d.js";
 import { TILE_SIZE, WEB_MERCATOR_TO_WORLD_SCALE } from "./constants.js";
 
 /**
  * Minimum interface returned by `getTileData`.
+ *
+ * `null` is permitted to describe failed tile loads that do not produce any
+ * data, which then do not render any layer.
  */
-export type MinimalTileData = {
+export type MinimalTileData = null | {
   /** Tile height in pixels. */
   height: number;
   /** Tile width in pixels. */
@@ -61,16 +64,20 @@ export type RasterTileLayerProps<
 > = CompositeLayerProps &
   Pick<
     TileLayerProps,
-    | "tileSize"
-    | "zoomOffset"
+    | "debounceTime"
+    | "extent"
+    | "maxCacheByteSize"
+    | "maxCacheSize"
+    | "maxRequests"
     | "maxZoom"
     | "minZoom"
-    | "extent"
-    | "debounceTime"
-    | "maxCacheSize"
-    | "maxCacheByteSize"
-    | "maxRequests"
+    | "onTileError"
+    | "onTileLoad"
+    | "onTileUnload"
+    | "onViewportLoad"
     | "refinementStrategy"
+    | "tileSize"
+    | "zoomOffset"
   > & {
     /**
      * Tile pyramid + CRS projection descriptor.
@@ -78,7 +85,7 @@ export type RasterTileLayerProps<
      * Subclasses may supply this via state by overriding the protected
      * `_tilesetDescriptor()` method.
      */
-    tilesetDescriptor?: TilesetDescriptor;
+    tilesetDescriptor?: RasterTilesetDescriptor;
 
     /**
      * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
@@ -102,7 +109,7 @@ export type RasterTileLayerProps<
      *
      * Subclasses may supply this via state by overriding `_renderTileCallback()`.
      */
-    renderTile?: (data: DataT) => RenderTileResult;
+    renderTile?: (data: DataT) => RenderTileResult | null;
 
     /**
      * Maximum reprojection error in pixels for mesh refinement.
@@ -162,7 +169,7 @@ type RasterTileLayerDefaultExtraProps<DataT extends MinimalTileData> = Pick<
 
 /**
  * Base layer that renders a tiled raster source driven by a generic
- * {@link TilesetDescriptor}.
+ * {@link RasterTilesetDescriptor}.
  *
  * Usable directly (provide `tilesetDescriptor`, `getTileData`, and `renderTile`
  * as props) or as a base class (override the protected `_tilesetDescriptor`,
@@ -181,7 +188,7 @@ export class RasterTileLayer<
   static override defaultProps = defaultProps;
 
   /**
-   * The currently effective {@link TilesetDescriptor}.
+   * The currently effective {@link RasterTilesetDescriptor}.
    *
    * Subclasses override this to return a descriptor built from their own
    * async-parsed state. Returns `undefined` while the source is still
@@ -193,7 +200,7 @@ export class RasterTileLayer<
    * brings it in; for subclass use this method is overridden and the cast
    * is never reached.
    */
-  protected _tilesetDescriptor(): TilesetDescriptor | undefined {
+  protected _tilesetDescriptor(): RasterTilesetDescriptor | undefined {
     return (this.props as unknown as RasterTileLayerProps<DataT>)
       .tilesetDescriptor;
   }
@@ -219,6 +226,39 @@ export class RasterTileLayer<
     return (this.props as unknown as RasterTileLayerProps<DataT>).renderTile;
   }
 
+  /**
+   * Hook for rendering per-tile debug overlay sub-layers.
+   *
+   * Called once per tile from `_renderSubLayers` only when `props.debug` is
+   * `true`. The hook fires both before data has arrived (`data` is `null`) and
+   * after (`data` is the fetched `DataT`), so the default outline can render
+   * during loading.
+   *
+   * Default behavior renders the primary tile boundary via
+   * {@link renderDebugTileOutline} using the active descriptor. Subclasses can
+   * override to replace, extend (via `super._renderDebug(...)`), or suppress
+   * the default — for example, a multi-source layer can replace the default
+   * with per-band tile outlines and tiered metadata labels once `data` is
+   * available.
+   */
+  protected _renderDebug(
+    tile: Tile2DHeader<DataT>,
+    _data: DataT | null,
+  ): Layer[] {
+    const descriptor = this._tilesetDescriptor();
+    if (!descriptor) {
+      return [];
+    }
+    // Tiles built by RasterTileset2D are augmented with RasterTileMetadata
+    // (projectedBbox/Corners, tileWidth/Height) at construction time. The cast
+    // makes that runtime augmentation visible to the typed helper.
+    return renderDebugTileOutline(
+      `${this.id}-${tile.id}-bounds`,
+      tile as Tile2DHeader<DataT> & RasterTileMetadata,
+      descriptor.projectTo4326,
+    );
+  }
+
   override renderLayers(): Layer | null {
     const descriptor = this._tilesetDescriptor();
     const getTileData = this._getTileDataCallback();
@@ -232,13 +272,32 @@ export class RasterTileLayer<
   }
 
   private _renderTileLayer(
-    descriptor: TilesetDescriptor,
+    descriptor: RasterTilesetDescriptor,
     getTileData: NonNullable<RasterTileLayerProps<DataT>["getTileData"]>,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): TileLayer {
+    // Capture the device once so the inner `TilesetFactory` can read
+    // its current effective device-pixel ratio per `getTileIndices`
+    // call. The ratio is sampled lazily so window-drag-between-displays
+    // (or runtime changes to `useDevicePixels`) take effect on the next
+    // traversal. See dev-docs/lod-and-pixel-matching.md § (A).
+    //
+    // We compute drawingBuffer/CSS rather than using
+    // `cssToDeviceRatio()` (deprecated) or the `devicePixelRatio`
+    // property (always reflects the system value, ignoring
+    // `Deck.useDevicePixels`). The drawing-buffer ratio is the
+    // *effective* DPR Deck is rendering at.
+    const device = this.context.device;
     class TilesetFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
-        super(opts, descriptor);
+        super(opts, descriptor, {
+          getPixelRatio: () => {
+            const ctx = device.getDefaultCanvasContext();
+            const [drawingBufferWidth] = ctx.getDrawingBufferSize();
+            const [cssWidth] = ctx.getCSSSize();
+            return cssWidth ? drawingBufferWidth / cssWidth : 1;
+          },
+        });
       }
     }
 
@@ -254,6 +313,10 @@ export class RasterTileLayer<
       maxRequests,
       refinementStrategy,
       updateTriggers,
+      onTileError,
+      onTileLoad,
+      onTileUnload,
+      onViewportLoad,
     } = this.props;
 
     return new TileLayer<DataT>({
@@ -284,6 +347,10 @@ export class RasterTileLayer<
       maxCacheByteSize,
       maxRequests,
       refinementStrategy,
+      onTileError,
+      onTileLoad,
+      onTileUnload,
+      onViewportLoad,
     });
   }
 
@@ -311,33 +378,28 @@ export class RasterTileLayer<
       _offset: number;
       tile: Tile2DHeader<DataT>;
     },
-    descriptor: TilesetDescriptor,
+    descriptor: RasterTilesetDescriptor,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): Layer[] {
     const { maxError, debug, debugOpacity } = this.props;
-    const tile = props.tile as Tile2DHeader<DataT> & TileMetadata;
+    const tile = props.tile as Tile2DHeader<DataT> & RasterTileMetadata;
 
-    const layers: Layer[] = [];
-    if (debug) {
-      layers.push(
-        ...renderDebugTileOutline(
-          `${this.id}-${tile.id}-bounds`,
-          tile,
-          descriptor.projectTo4326,
-        ),
-      );
-    }
+    const debugLayers = debug
+      ? this._renderDebug(tile, props.data ?? null)
+      : [];
+
     if (!props.data) {
-      return layers;
+      return debugLayers;
     }
 
-    const { x, y, z } = tile.index;
-    const level = descriptor.levels[z];
-    if (!level) {
-      return layers;
+    // Access forwardTransform/inverseTransform from tile metadata so that
+    // reference equality holds across renders.
+    const { forwardTransform, inverseTransform } = tile;
+    const tileResult = renderTile(props.data);
+    if (!tileResult) {
+      return debugLayers;
     }
-    const { forwardTransform, inverseTransform } = level.tileTransform(x, y);
-    const { image, renderPipeline } = renderTile(props.data);
+    const { image, renderPipeline } = tileResult;
     const { width, height } = props.data;
 
     const isGlobe = this.context.viewport.resolution !== undefined;
@@ -384,6 +446,6 @@ export class RasterTileLayer<
         ...deckProjectionProps,
       }),
     );
-    return [rasterLayer, ...layers];
+    return [rasterLayer, ...debugLayers];
   }
 }

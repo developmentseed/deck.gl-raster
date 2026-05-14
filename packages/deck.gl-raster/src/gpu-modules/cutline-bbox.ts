@@ -6,6 +6,7 @@ const EARTH_RADIUS = 6378137.0;
 /** Web Mercator latitude limit in degrees. */
 const MERCATOR_LAT_LIMIT = 85.051129;
 
+/** Props for the {@link CutlineBbox} shader module. */
 export type CutlineBboxProps = {
   /**
    * Axis-aligned bbox in **EPSG:3857 meters**, packed as
@@ -13,7 +14,7 @@ export type CutlineBboxProps = {
    * as the layer's mesh `positions` attribute — for `COGLayer` /
    * `RasterLayer`'s Web Mercator rendering path, that is raw 3857 meters.
    *
-   * Use {@link lngLatBboxToMercator} to project a WGS84 lng/lat bbox once
+   * Use {@link lngLatToMercator} to project a WGS84 lng/lat bbox once
    * at bbox definition time.
    */
   bbox: [number, number, number, number];

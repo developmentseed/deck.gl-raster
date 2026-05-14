@@ -29,12 +29,18 @@ const packages = [
     entry: "../packages/deck.gl-raster/src/index.ts",
     readme: "../packages/deck.gl-raster/README.md",
   },
-  // {
-  //   id: "deck-gl-zarr",
-  //   label: "deck.gl-zarr",
-  //   entry: "../packages/deck.gl-zarr/src/index.ts",
-  //   readme: "../packages/deck.gl-zarr/README.md",
-  // },
+  {
+    id: "deck-gl-raster-gpu-modules",
+    label: "deck.gl-raster/gpu-modules",
+    entry: "../packages/deck.gl-raster/src/gpu-modules/index.ts",
+    readme: "../packages/deck.gl-raster/GPU_MODULES.md",
+  },
+  {
+    id: "deck-gl-zarr",
+    label: "deck.gl-zarr",
+    entry: "../packages/deck.gl-zarr/src/index.ts",
+    readme: "../packages/deck.gl-zarr/README.md",
+  },
   {
     id: "epsg",
     label: "epsg",
@@ -46,6 +52,12 @@ const packages = [
     label: "geotiff",
     entry: "../packages/geotiff/src/index.ts",
     readme: "../packages/geotiff/README.md",
+  },
+  {
+    id: "geozarr",
+    label: "geozarr",
+    entry: "../packages/geozarr/src/index.ts",
+    readme: "../packages/geozarr/README.md",
   },
   {
     id: "morecantile",
@@ -72,7 +84,10 @@ const BASE_AFFINE = `${BASE}/api/affine`;
 const BASE_DECK_GL = "https://deck.gl/docs/api-reference";
 const BASE_DECK_GL_GEOTIFF = `${BASE}/api/deck-gl-geotiff`;
 const BASE_DECK_GL_RASTER = `${BASE}/api/deck-gl-raster`;
+const BASE_DECK_GL_RASTER_GPU_MODULES = `${BASE}/api/deck-gl-raster-gpu-modules`;
+const BASE_DECK_GL_ZARR = `${BASE}/api/deck-gl-zarr`;
 const BASE_GEOTIFF = `${BASE}/api/geotiff`;
+const BASE_GEOZARR = `${BASE}/api/geozarr`;
 const BASE_MORECANTILE = `${BASE}/api/morecantile`;
 const BASE_RASTER_REPROJECT = `${BASE}/api/raster-reproject`;
 const BASE_LUMA_GL = "https://luma.gl/docs/api-reference";
@@ -94,6 +109,42 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
   },
   "@developmentseed/deck.gl-raster": {
     RasterLayer: `${BASE_DECK_GL_RASTER}/classes/RasterLayer/`,
+    RasterTileLayer: `${BASE_DECK_GL_RASTER}/classes/RasterTileLayer/`,
+    RasterTileLayerProps: `${BASE_DECK_GL_RASTER}/type-aliases/RasterTileLayerProps/`,
+    RenderTileResult: `${BASE_DECK_GL_RASTER}/type-aliases/RenderTileResult/`,
+    RasterTilesetDescriptor: `${BASE_DECK_GL_RASTER}/interfaces/RasterTilesetDescriptor/`,
+    RasterTileMetadata: `${BASE_DECK_GL_RASTER}/type-aliases/RasterTileMetadata/`,
+    RasterTilesetLevel: `${BASE_DECK_GL_RASTER}/interfaces/RasterTilesetLevel/`,
+  },
+  "@developmentseed/deck.gl-raster/gpu-modules": {
+    BlackIsZero: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/BlackIsZero/`,
+    CMYKToRGB: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/CMYKToRGB/`,
+    cieLabToRGB: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/cieLabToRGB/`,
+    WhiteIsZero: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/WhiteIsZero/`,
+    YCbCrToRGB: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/YCbCrToRGB/`,
+    Colormap: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/Colormap/`,
+    ColormapProps: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/ColormapProps/`,
+    COLORMAP_INDEX: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/COLORMAP_INDEX/`,
+    ColormapName: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/ColormapName/`,
+    CompositeBands: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/CompositeBands/`,
+    CompositeBandsProps: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/CompositeBandsProps/`,
+    buildCompositeBandsProps: `${BASE_DECK_GL_RASTER_GPU_MODULES}/functions/buildCompositeBandsProps/`,
+    createColormapTexture: `${BASE_DECK_GL_RASTER_GPU_MODULES}/functions/createColormapTexture/`,
+    CreateTexture: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/CreateTexture/`,
+    CutlineBbox: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/CutlineBbox/`,
+    CutlineBboxProps: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/CutlineBboxProps/`,
+    lngLatToMercator: `${BASE_DECK_GL_RASTER_GPU_MODULES}/functions/lngLatToMercator/`,
+    ColormapSpriteSource: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/ColormapSpriteSource/`,
+    decodeColormapSprite: `${BASE_DECK_GL_RASTER_GPU_MODULES}/functions/decodeColormapSprite/`,
+    FilterNoDataVal: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/FilterNoDataVal/`,
+    LinearRescale: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/LinearRescale/`,
+    LinearRescaleProps: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/LinearRescaleProps/`,
+    MaskTexture: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/MaskTexture/`,
+    RasterModule: `${BASE_DECK_GL_RASTER_GPU_MODULES}/type-aliases/RasterModule/`,
+  },
+  "@developmentseed/deck.gl-zarr": {
+    ZarrLayer: `${BASE_DECK_GL_ZARR}/classes/ZarrLayer/`,
+    ZarrLayerProps: `${BASE_DECK_GL_ZARR}/type-aliases/ZarrLayerProps/`,
   },
   "@developmentseed/geotiff": {
     GeoTIFF: `${BASE_GEOTIFF}/classes/GeoTIFF/`,
@@ -106,6 +157,12 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     DecoderMetadata: `${BASE_GEOTIFF}/type-aliases/DecoderMetadata/`,
     DecoderPoolOptions: `${BASE_GEOTIFF}/type-aliases/DecoderPoolOptions/`,
     parseColormap: `${BASE_GEOTIFF}/functions/parseColormap/`,
+  },
+  "@developmentseed/geozarr": {
+    parseGeoZarrMetadata: `${BASE_GEOZARR}/functions/parseGeoZarrMetadata/`,
+    GeoZarrMetadata: `${BASE_GEOZARR}/interfaces/GeoZarrMetadata/`,
+    MultiscaleLevel: `${BASE_GEOZARR}/interfaces/MultiscaleLevel/`,
+    CRSInfo: `${BASE_GEOZARR}/interfaces/CRSInfo/`,
   },
   "@developmentseed/morecantile": {
     TileMatrixSet: `${BASE_MORECANTILE}/interfaces/TileMatrixSet/`,
@@ -149,10 +206,12 @@ const typedocPlugins = packages.map((pkg) => [
     out: `api/${pkg.id}`,
     docsPath: `api/${pkg.id}`,
     excludePrivate: true,
+    excludeProtected: true,
     excludeInternal: true,
     readme: pkg.readme,
     mergeReadme: true,
-    plugin: ["typedoc-plugin-mdn-links"],
+    plugin: ["typedoc-plugin-mdn-links", "typedoc-plugin-no-inherit"],
+    inheritNone: true,
     externalSymbolLinkMappings: crossPackageLinks,
   },
 ]);
@@ -173,7 +232,7 @@ const contentDocsPlugins = packages.map((pkg) => [
 const config: Config = {
   title: "deck.gl-raster",
   tagline:
-    "Client-side Cloud-Optimized GeoTIFF (and soon Zarr) visualization in deck.gl.",
+    "Client-side Cloud-Optimized GeoTIFF and Zarr visualization in deck.gl.",
   favicon: "img/ds_favicon.png",
 
   future: {
@@ -221,9 +280,18 @@ const config: Config = {
   plugins: [
     ...typedocPlugins,
     ...contentDocsPlugins,
-    "@cmfcmf/docusaurus-search-local",
+    [
+      "@easyops-cn/docusaurus-search-local",
+      {
+        hashed: true,
+        indexBlog: true,
+        docsRouteBasePath: ["docs", "api"],
+      },
+    ],
     "./plugins/changelog.js",
   ],
+
+  clientModules: ["./src/clientModules/searchHotkey.ts"],
 
   presets: [
     [
