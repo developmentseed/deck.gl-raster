@@ -56,6 +56,10 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   }
 
   override getShaders() {
+    // Temporary diagnostic for evaluating PR #540: each call corresponds to a
+    // Model construction. After the mesh-reference fix, the count should NOT
+    // grow per frame for already-loaded tiles.
+    console.log("[MeshTextureLayer] getShaders()", this.props.id);
     const upstreamShaders = super.getShaders();
 
     const modules: ShaderModule[] = upstreamShaders.modules;
