@@ -71,6 +71,14 @@ export type MosaicLayerProps<
      * Called when a source is evicted from the tile cache.
      */
     onSourceUnload?: (source: MosaicT, info: { data?: DataT }) => void;
+
+    /**
+     * Called when all sources currently in the viewport have finished
+     * loading.
+     */
+    onViewportLoad?: (
+      entries: Array<{ source: MosaicT; data?: DataT }>,
+    ) => void;
   };
 
 const defaultProps: Partial<MosaicLayerProps> = {};
@@ -103,6 +111,7 @@ export class MosaicLayer<
       onSourceLoad,
       onSourceError,
       onSourceUnload,
+      onViewportLoad,
     } = this.props;
 
     // The arrow function is defined here so its lexical `this` is the
@@ -172,6 +181,16 @@ export class MosaicLayer<
         onTileUnload: (tile) => {
           const source = tile.index as unknown as MosaicT;
           onSourceUnload(source, { data: tile.content?.data });
+        },
+      }),
+      ...(onViewportLoad && {
+        onViewportLoad: (tiles) => {
+          onViewportLoad(
+            tiles.map((tile) => ({
+              source: tile.index as unknown as MosaicT,
+              data: tile.content?.data,
+            })),
+          );
         },
       }),
     });
