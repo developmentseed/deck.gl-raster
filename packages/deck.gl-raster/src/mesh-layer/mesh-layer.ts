@@ -62,7 +62,7 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   override updateState(params: UpdateParameters<this>): void {
     // Ensure the SimpleMeshLayer rebuilds the model when the renderPipeline has
     // changed.
-    if (this.hasRenderPipelineChanged(params.oldProps, params.props)) {
+    if (this.hasRenderPipelineChanged(params)) {
       // Setting extensionsChanged to true causes recompiling the shader
       // https://github.com/visgl/deck.gl/blob/70adde2f1fcdf5e99195df81512e6d01ee7a5edc/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L284-L297
       params.changeFlags.extensionsChanged = true;
@@ -72,10 +72,8 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   }
 
   /** Returns true if the render pipeline has changed between the old and new props. */
-  private hasRenderPipelineChanged(
-    oldProps: MeshTextureLayerProps,
-    newProps: MeshTextureLayerProps,
-  ): boolean {
+  private hasRenderPipelineChanged(params: UpdateParameters<this>): boolean {
+    const { oldProps, props: newProps } = params;
     if (Boolean(oldProps.image) !== Boolean(newProps.image)) {
       return true;
     }
