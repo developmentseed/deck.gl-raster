@@ -88,11 +88,11 @@ See [#513](https://github.com/developmentseed/deck.gl-raster/pull/513) for more 
  Filterable categories
 
 
-## New Example: Swipe comparsion of 200GB COGs
+### Side-by-side image comparsion
 
-200GB COG
+As alluded to in our [performance section above](#big-latency-improvement-for-large-cogs), we have [a new example](https://developmentseed.org/deck.gl-raster/examples/vermont-cog-comparison/) that shows one method for "left/right image comparisons" with deck.gl-raster.
 
-Vermont open data example
+![](../static/img/vermont-swipe-example.gif)
 
 ## MosaicLayer improvements
 
