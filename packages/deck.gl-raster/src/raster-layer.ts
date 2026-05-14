@@ -132,10 +132,20 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
   declare state: {
     reprojector?: RasterReprojector;
+    /**
+     * Mesh in the exact shape SimpleMeshLayer expects. Stored as a stable
+     * reference so MeshTextureLayer's `props.mesh` doesn't change identity
+     * across renders — SimpleMeshLayer rebuilds its Model whenever
+     * `props.mesh !== oldProps.mesh`, and rebuilding the Model triggers
+     * `assembleGLSLShaderPair` plus vertex-buffer setup. With many tile
+     * sublayers active that becomes a major per-frame cost.
+     */
     mesh?: {
-      positions: Float32Array;
-      indices: Uint32Array;
-      texCoords: Float32Array;
+      indices: { value: Uint32Array; size: number };
+      attributes: {
+        POSITION: { value: Float32Array; size: number };
+        TEXCOORD_0: { value: Float32Array; size: number };
+      };
     };
   };
 
@@ -199,9 +209,11 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     this.setState({
       reprojector,
       mesh: {
-        positions,
-        indices,
-        texCoords,
+        indices: { value: indices, size: 1 },
+        attributes: {
+          POSITION: { value: positions, size: 3 },
+          TEXCOORD_0: { value: texCoords, size: 2 },
+        },
       },
     });
   }
@@ -275,8 +287,6 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       return null;
     }
 
-    const { indices, positions, texCoords } = mesh;
-
     const meshLayer = new MeshTextureLayer(
       this.getSubLayerProps({
         id: "raster",
@@ -285,19 +295,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         // Dummy data because we're only rendering _one_ instance of this mesh
         // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
         data: [1],
-        mesh: {
-          indices: { value: indices, size: 1 },
-          attributes: {
-            POSITION: {
-              value: positions,
-              size: 3,
-            },
-            TEXCOORD_0: {
-              value: texCoords,
-              size: 2,
-            },
-          },
-        },
+        mesh,
         // We're only rendering a single mesh, without instancing
         // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L244
         _instanced: false,
