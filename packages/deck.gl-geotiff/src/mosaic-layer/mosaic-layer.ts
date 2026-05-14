@@ -1,6 +1,7 @@
 import type {
   CompositeLayerProps,
   Layer,
+  LayerContext,
   LayersList,
   UpdateParameters,
 } from "@deck.gl/core";
@@ -107,13 +108,10 @@ export class MosaicLayer<
   declare state: {
     // The index can be null if sources are empty
     index: Flatbush | null;
-    /**
-     * Store sources on state as well so it's never out of sync for the tileset
-     */
-    sources: MosaicT[];
   };
 
-  override initializeState(): void {
+  override initializeState(context: LayerContext): void {
+    super.initializeState(context);
     this._buildSpatialIndex();
   }
 
@@ -140,7 +138,7 @@ export class MosaicLayer<
     }
     index.finish();
 
-    this.setState({ index, sources });
+    this.setState({ index });
   }
 
   renderTileLayer(
@@ -161,10 +159,10 @@ export class MosaicLayer<
       onViewportLoad,
     } = this.props;
 
-    // The arrow function is defined here so its lexical `this` is the
-    // MosaicLayer instance (which deck.gl reuses across prop updates),
-    // ensuring `this.state.sources` returns the latest array on every call.
-    const getSources = () => this.state.sources;
+    // Arrow functions bind to the MosaicLayer instance, which deck.gl reuses
+    // across prop updates — so `this.props` and `this.state` always reflect
+    // the latest values when the tileset reads them.
+    const getSources = () => this.props.sources;
     const getIndex = () => this.state.index;
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
       constructor(opts: any) {
