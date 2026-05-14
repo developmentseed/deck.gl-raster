@@ -1,3 +1,5 @@
+import type { Viewport } from "@deck.gl/core";
+
 /**
  * Sort `items` in place by ascending squared Euclidean distance of each
  * item's center from `reference`. Returns the same array reference.
@@ -14,7 +16,7 @@
  * Caller-side short-circuits (e.g. `n <= maxRequests`) should be applied
  * before invoking this helper when they would skip useful work entirely.
  */
-export function sortByDistanceFromPoint<T>(
+function sortByDistanceFromPoint<T>(
   items: T[],
   opts: {
     getCenter: (item: T) => readonly [number, number];
@@ -50,4 +52,25 @@ export function sortByDistanceFromPoint<T>(
   }
 
   return items;
+}
+
+/**
+ * Higher level function to sort
+ *
+ * @return  {<T>}     [return description]
+ */
+export function sortItemsByDistanceFromViewportCenter<T>(
+  items: T[],
+  viewport: Viewport,
+  getCenter: (item: T) => readonly [number, number],
+) {
+  const [minLon, minLat, maxLon, maxLat] = viewport.getBounds();
+  const viewportCenter = [
+    (minLon + maxLon) / 2,
+    (minLat + maxLat) / 2,
+  ] as const;
+  return sortByDistanceFromPoint(items, {
+    reference: viewportCenter,
+    getCenter,
+  });
 }

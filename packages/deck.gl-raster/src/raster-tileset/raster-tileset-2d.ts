@@ -16,7 +16,7 @@ import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import { getTileIndices } from "./raster-tile-traversal.js";
-import { sortByDistanceFromPoint } from "./sort-by-distance.js";
+import { sortItemsByDistanceFromViewportCenter } from "./sort-by-distance.js";
 import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -216,33 +216,23 @@ export class RasterTileset2D extends Tileset2D {
       return tileIndices;
     }
 
-    // Work in WGS84 throughout. `viewport.center` is in deck.gl common
-    // space (e.g. ~[270, 327] for a WebMercator viewport), which isn't
-    // directly comparable to projected tile corners in the tileset's CRS.
-    // `viewport.getBounds()` always returns [minLng, minLat, maxLng, maxLat]
-    // in WGS84, and we convert projected tile centers through the
-    // descriptor's `projectTo4326` to match.
-    const viewportBounds = viewport.getBounds();
-    const viewportCenter: readonly [number, number] = [
-      (viewportBounds[0] + viewportBounds[2]) * 0.5,
-      (viewportBounds[1] + viewportBounds[3]) * 0.5,
-    ];
-
     const descriptor = this.descriptor;
-    return sortByDistanceFromPoint(tileIndices, {
-      reference: viewportCenter,
-      getCenter: (idx) => {
-        const corners = descriptor.levels[idx.z]!.projectedTileCorners(
-          idx.x,
-          idx.y,
-        );
+    return sortItemsByDistanceFromViewportCenter(
+      tileIndices,
+      viewport,
+      (tileIndex) => {
+        const { x, y, z } = tileIndex;
+
+        const { topLeft, bottomRight } = descriptor.levels[
+          z
+        ]!.projectedTileCorners(x, y);
         const projectedCenter = [
-          (corners.topLeft[0] + corners.bottomRight[0]) * 0.5,
-          (corners.topLeft[1] + corners.bottomRight[1]) * 0.5,
+          (topLeft[0] + bottomRight[0]) / 2,
+          (topLeft[1] + bottomRight[1]) / 2,
         ] as const;
         return descriptor.projectTo4326(projectedCenter[0], projectedCenter[1]);
       },
-    });
+    );
   }
 
   override getTileId(index: TileIndex): string {
