@@ -26,7 +26,7 @@ import type {
   ZRange,
 } from "./types.js";
 
-/** Type returned by `getTileMetadata` */
+/** Type returned by {@link RasterTileset2D.getTileMetadata} */
 export type TileMetadata = {
   /**
    * **Axis-aligned** bounding box of the tile in **WGS84 coordinates**.

@@ -11,12 +11,13 @@ export type MosaicLayerProps<
 > = CompositeLayerProps &
   Pick<
     TileLayerProps,
+    | "debounceTime"
     | "extent"
-    | "minZoom"
-    | "maxZoom"
     | "maxCacheByteSize"
     | "maxCacheSize"
     | "maxRequests"
+    | "maxZoom"
+    | "minZoom"
   > & {
     /**
      * List of mosaic sources to render.
@@ -53,6 +54,31 @@ export type MosaicLayerProps<
         signal?: AbortSignal;
       },
     ) => Layer | LayersList | null;
+
+    /**
+     * Called after a source's data has loaded successfully. `data` is the
+     * value returned by `getSource`, or `undefined` when no `getSource` was
+     * supplied.
+     */
+    onSourceLoad?: (source: MosaicT, info: { data?: DataT }) => void;
+
+    /**
+     * Called when fetching a source's data fails.
+     */
+    onSourceError?: (source: MosaicT, info: { error: Error }) => void;
+
+    /**
+     * Called when a source is evicted from the tile cache.
+     */
+    onSourceUnload?: (source: MosaicT, info: { data?: DataT }) => void;
+
+    /**
+     * Called when all sources currently in the viewport have finished
+     * loading.
+     */
+    onViewportLoad?: (
+      entries: Array<{ source: MosaicT; data?: DataT }>,
+    ) => void;
   };
 
 const defaultProps: Partial<MosaicLayerProps> = {};
@@ -77,10 +103,15 @@ export class MosaicLayer<
       id,
       minZoom,
       maxZoom,
+      debounceTime,
       extent,
       maxCacheByteSize,
       maxCacheSize,
       maxRequests,
+      onSourceLoad,
+      onSourceError,
+      onSourceUnload,
+      onViewportLoad,
     } = this.props;
 
     // The arrow function is defined here so its lexical `this` is the
@@ -102,6 +133,7 @@ export class MosaicLayer<
       TilesetClass: MosaicTileset2DFactory,
       minZoom,
       maxZoom,
+      debounceTime,
       extent,
       ...(maxCacheByteSize !== undefined && { maxCacheByteSize }),
       maxCacheSize,
@@ -127,6 +159,40 @@ export class MosaicLayer<
         const { source, signal, data: userData } = data;
         return renderSource(source, { data: userData, signal });
       },
+      ...(onSourceLoad && {
+        onTileLoad: (tile) => {
+          // `tile.index` is a `ResolvedSource<MosaicT>` from
+          // MosaicTileset2D.getTileIndices, which structurally extends
+          // MosaicT.
+          const source = tile.index as unknown as MosaicT;
+          onSourceLoad(source, { data: tile.content?.data });
+        },
+      }),
+      ...(onSourceError && {
+        onTileError: (error, tile) => {
+          if (!tile) {
+            return;
+          }
+          const source = tile.index as unknown as MosaicT;
+          onSourceError(source, { error });
+        },
+      }),
+      ...(onSourceUnload && {
+        onTileUnload: (tile) => {
+          const source = tile.index as unknown as MosaicT;
+          onSourceUnload(source, { data: tile.content?.data });
+        },
+      }),
+      ...(onViewportLoad && {
+        onViewportLoad: (tiles) => {
+          onViewportLoad(
+            tiles.map((tile) => ({
+              source: tile.index as unknown as MosaicT,
+              data: tile.content?.data,
+            })),
+          );
+        },
+      }),
     });
   }
 

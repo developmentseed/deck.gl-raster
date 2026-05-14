@@ -64,16 +64,20 @@ export type RasterTileLayerProps<
 > = CompositeLayerProps &
   Pick<
     TileLayerProps,
-    | "tileSize"
-    | "zoomOffset"
+    | "debounceTime"
+    | "extent"
+    | "maxCacheByteSize"
+    | "maxCacheSize"
+    | "maxRequests"
     | "maxZoom"
     | "minZoom"
-    | "extent"
-    | "debounceTime"
-    | "maxCacheSize"
-    | "maxCacheByteSize"
-    | "maxRequests"
+    | "onTileError"
+    | "onTileLoad"
+    | "onTileUnload"
+    | "onViewportLoad"
     | "refinementStrategy"
+    | "tileSize"
+    | "zoomOffset"
   > & {
     /**
      * Tile pyramid + CRS projection descriptor.
@@ -309,6 +313,10 @@ export class RasterTileLayer<
       maxRequests,
       refinementStrategy,
       updateTriggers,
+      onTileError,
+      onTileLoad,
+      onTileUnload,
+      onViewportLoad,
     } = this.props;
 
     return new TileLayer<DataT>({
@@ -339,6 +347,10 @@ export class RasterTileLayer<
       maxCacheByteSize,
       maxRequests,
       refinementStrategy,
+      onTileError,
+      onTileLoad,
+      onTileUnload,
+      onViewportLoad,
     });
   }
 
