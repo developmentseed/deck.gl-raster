@@ -350,7 +350,6 @@ export default function App() {
   useEffect(() => {
     async function wrappedFetchSTACItems() {
       try {
-        // const data: STACFeatureCollection = await fetchSTACItems();
         const data = STAC_DATA as unknown as STACFeatureCollection;
         (window as any).data = data;
         setStacItems(data.features);

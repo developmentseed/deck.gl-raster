@@ -22,7 +22,7 @@ export type MosaicSource = {
    * spliced at runtime, so a given source keeps the same cache slot across
    * updates.
    */
-  key?: string;
+  id?: string;
   /**
    * Geographic bounds (WGS84) of the source in [minX, minY, maxX, maxY] format
    */
@@ -44,7 +44,7 @@ export type MosaicSource = {
 /** A source augmented with the `TileIndex` fields and a resolved `key`
  * (defaulting to the array position) so deck.gl typing is satisfied and the
  * cache identifier is always defined. */
-type ResolvedSource<MosaicT> = TileIndex & MosaicT & { key: string };
+type ResolvedSource<MosaicT> = TileIndex & MosaicT & { id: string };
 
 export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
   /** Closure returning the parent layer's current sources array. Re-evaluated
@@ -67,9 +67,9 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
 
   /** The Tileset2D cache key for a source. */
   override getTileId(tileIndex: TileIndex): string {
-    // `getTileIndices` always returns `ResolvedSource`s, so a `key` is
+    // `getTileIndices` always returns `ResolvedSource`s, so an `id` is
     // present on every value deck.gl will pass back here.
-    return (tileIndex as ResolvedSource<MosaicT>).key;
+    return (tileIndex as ResolvedSource<MosaicT>).id;
   }
 
   /** Must override to provide a zoom level for the tile. */
@@ -79,8 +79,8 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
 
   /** Must override because our tileIndex does not have x, y, z */
   override getTileMetadata(tileIndex: TileIndex): Record<string, any> {
-    const { key, bbox } = tileIndex as unknown as ResolvedSource<MosaicT>;
-    return { key, bbox };
+    const { id, bbox } = tileIndex as unknown as ResolvedSource<MosaicT>;
+    return { id, bbox };
   }
 
   override getParentIndex(tileIndex: TileIndex): TileIndex {
@@ -121,7 +121,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
         y: 0,
         z: 0,
         ...source,
-        key: source.key ?? String(sourceIndex),
+        id: source.id ?? String(sourceIndex),
       };
     });
 
