@@ -211,10 +211,8 @@ export class RasterTileset2D extends Tileset2D {
     tileIndices: TileIndex[],
     viewport: Viewport,
   ): TileIndex[] {
-    const maxRequests = this.opts.maxRequests;
-    const threshold =
-      typeof maxRequests === "number" && maxRequests > 0 ? maxRequests : 1;
-    if (tileIndices.length <= threshold) {
+    const { maxRequests } = this.opts;
+    if (tileIndices.length <= maxRequests) {
       return tileIndices;
     }
 
@@ -224,26 +222,25 @@ export class RasterTileset2D extends Tileset2D {
     // `viewport.getBounds()` always returns [minLng, minLat, maxLng, maxLat]
     // in WGS84, and we convert projected tile centers through the
     // descriptor's `projectTo4326` to match.
-    const bounds = viewport.getBounds();
-    if (!bounds) {
-      return tileIndices;
-    }
-    const reference: readonly [number, number] = [
-      (bounds[0] + bounds[2]) * 0.5,
-      (bounds[1] + bounds[3]) * 0.5,
+    const viewportBounds = viewport.getBounds();
+    const viewportCenter: readonly [number, number] = [
+      (viewportBounds[0] + viewportBounds[2]) * 0.5,
+      (viewportBounds[1] + viewportBounds[3]) * 0.5,
     ];
 
     const descriptor = this.descriptor;
     return sortByDistanceFromPoint(tileIndices, {
-      reference,
+      reference: viewportCenter,
       getCenter: (idx) => {
         const corners = descriptor.levels[idx.z]!.projectedTileCorners(
           idx.x,
           idx.y,
         );
-        const pcx = (corners.topLeft[0] + corners.bottomRight[0]) * 0.5;
-        const pcy = (corners.topLeft[1] + corners.bottomRight[1]) * 0.5;
-        return descriptor.projectTo4326(pcx, pcy);
+        const projectedCenter = [
+          (corners.topLeft[0] + corners.bottomRight[0]) * 0.5,
+          (corners.topLeft[1] + corners.bottomRight[1]) * 0.5,
+        ] as const;
+        return descriptor.projectTo4326(projectedCenter[0], projectedCenter[1]);
       },
     });
   }
