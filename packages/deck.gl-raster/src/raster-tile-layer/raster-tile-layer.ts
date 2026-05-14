@@ -380,12 +380,9 @@ export class RasterTileLayer<
       return debugLayers;
     }
 
-    const { x, y, z } = tile.index;
-    const level = descriptor.levels[z];
-    if (!level) {
-      return debugLayers;
-    }
-    const { forwardTransform, inverseTransform } = level.tileTransform(x, y);
+    // Access forwardTransform/inverseTransform from tile metadata so that
+    // reference equality holds across renders.
+    const { forwardTransform, inverseTransform } = tile;
     const tileResult = renderTile(props.data);
     if (!tileResult) {
       return debugLayers;
