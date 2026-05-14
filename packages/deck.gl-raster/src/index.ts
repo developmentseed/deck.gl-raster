@@ -2,13 +2,13 @@ export type { RasterModule } from "./gpu-modules/types.js";
 // Not a public API; exported for use in COGLayer and ZarrLayer
 export { renderDebugTileOutline as _renderDebugTileOutline } from "./layer-utils.js";
 export type {
-  MultiTilesetDescriptor,
+  MultiRasterTilesetDescriptor,
   SecondaryTileIndex,
   SecondaryTileResolution,
   UvTransform,
 } from "./multi-raster-tileset/index.js";
 export {
-  createMultiTilesetDescriptor,
+  createMultiRasterTilesetDescriptor,
   resolveSecondaryTiles,
   selectSecondaryLevel,
   tilesetLevelsEqual,
@@ -28,9 +28,9 @@ export type {
   CornerBounds,
   Corners,
   ProjectionFunction,
-  TileMetadata,
-  TilesetDescriptor,
-  TilesetLevel,
+  RasterTileMetadata,
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
 } from "./raster-tileset/index.js";
 export {
   AffineTileset,

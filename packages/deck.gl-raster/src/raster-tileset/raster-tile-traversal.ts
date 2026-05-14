@@ -13,7 +13,7 @@
  * The result is a set of tiles at varying zoom levels that efficiently
  * cover the visible area with appropriate detail.
  *
- * The traversal is driven by a {@link TilesetDescriptor}, which abstracts over
+ * The traversal is driven by a {@link RasterTilesetDescriptor}, which abstracts over
  * both OGC TileMatrixSet grids and Zarr multiscale pyramids.
  */
 
@@ -29,7 +29,10 @@ import {
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
-import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
+import type {
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
+} from "./tileset-interface.js";
 import type {
   Bounds,
   Corners,
@@ -109,8 +112,8 @@ const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
  *
  * This node class uses the following coordinate system:
  *
- * - x: tile column (0 to TilesetLevel.matrixWidth, left to right)
- * - y: tile row (0 to TilesetLevel.matrixHeight, top to bottom)
+ * - x: tile column (0 to RasterTilesetLevel.matrixWidth, left to right)
+ * - y: tile row (0 to RasterTilesetLevel.matrixHeight, top to bottom)
  * - z: overview level. This assumes ordering where: 0 = coarsest, higher = finer
  */
 export class RasterTileNode {
@@ -123,7 +126,7 @@ export class RasterTileNode {
   /** Zoom index assumed to be (higher = finer detail) */
   z: number;
 
-  private descriptor: TilesetDescriptor;
+  private descriptor: RasterTilesetDescriptor;
 
   /**
    * Flag indicating whether any descendant of this tile is visible.
@@ -147,7 +150,7 @@ export class RasterTileNode {
     x: number,
     y: number,
     z: number,
-    { descriptor }: { descriptor: TilesetDescriptor },
+    { descriptor }: { descriptor: RasterTilesetDescriptor },
   ) {
     this.x = x;
     this.y = y;
@@ -156,7 +159,7 @@ export class RasterTileNode {
   }
 
   /** Get the level info for this tile's z index. */
-  get level(): TilesetLevel {
+  get level(): RasterTilesetLevel {
     return this.descriptor.levels[this.z]!;
   }
 
@@ -166,7 +169,7 @@ export class RasterTileNode {
    *
    * A tileset pyramid is not guaranteed to be a quadtree — it is a stack of
    * independent grids. We find children by mapping the parent tile's CRS bounds
-   * into the child grid using {@link TilesetLevel.crsBoundsToTileRange}.
+   * into the child grid using {@link RasterTilesetLevel.crsBoundsToTileRange}.
    */
   get children(): RasterTileNode[] | null {
     if (!this._children) {
@@ -624,7 +627,7 @@ const MAX_ROOT_TILES_NO_CULL = 100;
  * Exported for unit testing.
  */
 export function createRootTiles(opts: {
-  descriptor: TilesetDescriptor;
+  descriptor: RasterTilesetDescriptor;
   viewport: Pick<Viewport, "getBounds">;
   datasetWgs84Bounds: Bounds;
 }): RasterTileNode[] {
@@ -676,13 +679,13 @@ export function createRootTiles(opts: {
 /**
  * Get tile indices visible in viewport.
  *
- * Uses frustum culling driven by a {@link TilesetDescriptor}, which abstracts
+ * Uses frustum culling driven by a {@link RasterTilesetDescriptor}, which abstracts
  * over OGC TileMatrixSet grids and Zarr multiscale pyramids.
  *
  * Overview levels follow the descriptor ordering: index 0 = coarsest, higher = finer.
  */
 export function getTileIndices(
-  descriptor: TilesetDescriptor,
+  descriptor: RasterTilesetDescriptor,
   opts: {
     viewport: Viewport;
     maxZ: number;
