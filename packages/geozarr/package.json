@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/geozarr",
-  "version": "0.6.1",
+  "version": "0.7.0-beta.1",
   "description": "GeoZarr metadata parsing.",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,8 +37,8 @@
   },
   "dependencies": {
     "@developmentseed/affine": "workspace:^",
-    "zarrita": "^0.7.1",
-    "zod": "^4.3.6"
+    "zarrita": "^0.7.3",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

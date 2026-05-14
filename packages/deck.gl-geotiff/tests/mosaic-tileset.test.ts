@@ -97,7 +97,7 @@ describe("MosaicTileset2D dynamic sources", () => {
     expect(result.map((s) => s.id).sort()).toEqual(["A", "B"]);
   });
 
-  it("derives default tile-id components from array position", () => {
+  it("defaults each source's tile-cache key to its array position", () => {
     const sourcesRef: { current: Item[] } = { current: [A, B, C] };
     const tileset = new MosaicTileset2D<Item>(
       () => sourcesRef.current,
@@ -109,18 +109,16 @@ describe("MosaicTileset2D dynamic sources", () => {
     });
 
     const byId = new Map(result.map((s) => [s.id, s] as const));
-    expect(byId.get("A")).toMatchObject({ x: 0, y: 0, z: 0 });
-    expect(byId.get("B")).toMatchObject({ x: 1, y: 0, z: 0 });
-    expect(byId.get("C")).toMatchObject({ x: 2, y: 0, z: 0 });
+    expect(tileset.getTileId(byId.get("A")!)).toBe("0");
+    expect(tileset.getTileId(byId.get("B")!)).toBe("1");
+    expect(tileset.getTileId(byId.get("C")!)).toBe("2");
   });
 
-  it("respects explicit x/y/z on a source", () => {
+  it("respects an explicit `key` on a source", () => {
     const explicit: MosaicSource & { id: string } = {
       id: "explicit",
       bbox: [0, 0, 10, 10],
-      x: 42,
-      y: 7,
-      z: 3,
+      key: "stable-id",
     };
     const tileset = new MosaicTileset2D<MosaicSource & { id: string }>(
       () => [explicit],
@@ -131,7 +129,8 @@ describe("MosaicTileset2D dynamic sources", () => {
       viewport: fakeViewport([-1, -1, 11, 11]),
     });
 
-    expect(result[0]).toMatchObject({ id: "explicit", x: 42, y: 7, z: 3 });
+    expect(result[0]).toMatchObject({ id: "explicit", key: "stable-id" });
+    expect(tileset.getTileId(result[0]!)).toBe("stable-id");
   });
 
   it("returns no tiles when zoom is outside the [minZoom, maxZoom] range", () => {

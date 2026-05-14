@@ -29,6 +29,7 @@ import {
 } from "@math.gl/culling";
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
+import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import type { TilesetDescriptor, TilesetLevel } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -150,17 +151,6 @@ export class RasterTileNode {
   /** A cache of the children of this node. */
   private _children?: RasterTileNode[] | null;
 
-  /**
-   * A cached bounding volume for this tile, used for frustum culling
-   *
-   * This stores the result of `getBoundingVolume`.
-   */
-  private _boundingVolume?: {
-    /** The zrange used to compute this bounding volume. */
-    zRange: ZRange;
-    result: { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds };
-  };
-
   constructor(
     x: number,
     y: number,
@@ -266,6 +256,13 @@ export class RasterTileNode {
      * `dev-docs/world-copies.md`.
      */
     worldOffset?: number;
+    /**
+     * Bounding-volume cache shared by every node in this traversal. Populated
+     * lazily as tiles are visited; reused across `getTileIndices` calls (so
+     * animation frames don't recompute proj4 reprojections + oriented-bounding-
+     * box fits). See {@link BoundingVolumeCache}.
+     */
+    boundingVolumeCache: BoundingVolumeCache;
   }): boolean {
     const {
       viewport,
@@ -277,6 +274,7 @@ export class RasterTileNode {
       bounds,
       pixelRatio,
       worldOffset = 0,
+      boundingVolumeCache,
     } = params;
 
     // Reset per-frame state on the primary pass only. Non-zero worldOffset
@@ -292,6 +290,7 @@ export class RasterTileNode {
     const { boundingVolume } = this.getBoundingVolume(
       elevationBounds,
       project,
+      boundingVolumeCache,
       worldOffset,
     );
 
@@ -304,6 +303,7 @@ export class RasterTileNode {
       const { commonSpaceBounds } = this.getBoundingVolume(
         elevationBounds,
         project,
+        boundingVolumeCache,
         0,
       );
       if (!this.insideBounds(bounds, commonSpaceBounds)) {
@@ -415,67 +415,81 @@ export class RasterTileNode {
   }
 
   /**
-   * Calculate the 3D bounding volume for this tile in deck.gl's common
-   * coordinate space for frustum culling.
+   * The 3D bounding volume for this tile in deck.gl's common coordinate space,
+   * used for frustum culling.
    *
-   * The cached result is computed once per `zRange` at world offset 0. Non-zero
-   * `worldOffset` values return a translated copy (center shifted by
-   * `worldOffset * TILE_SIZE` along common-space X) without polluting the cache.
+   * Memoized in `boundingVolumeCache` (keyed by `z/x/y`): a tile's bounding
+   * volume depends only on `(z, x, y, zRange)` for a given descriptor, so on a
+   * cache hit it is returned without rerunning {@link computeBoundingVolume}'s
+   * proj4 reprojections + oriented-bounding-box fit.
    *
-   * TODO: In the future, we can add a fast path in the case that the source
-   * tiling is already in EPSG:3857.
+   * For non-zero `worldOffset`, returns a translated copy (center shifted by
+   * `worldOffset * TILE_SIZE` along common-space X) without polluting the
+   * cache — the cache always stores the offset-0 volume. See
+   * `dev-docs/world-copies.md`.
    *
-   * @param zRange       Elevation `[min, max]` in common-space units.
-   * @param project      Projection function for Globe view, or `null` for Web
-   *                     Mercator common space.
-   * @param worldOffset  Number of world copies to translate the result by along
-   *                     common-space X. `0` returns the cached offset-0 volume.
-   *                     Non-zero values return a fresh translated copy. See
-   *                     `dev-docs/world-copies.md`.
+   * @param zRange               Elevation `[min, max]` in common-space units.
+   * @param project              Projection function for Globe view, or `null`
+   *                             for Web Mercator common space.
+   * @param boundingVolumeCache  Cache keyed by `z/x/y`. Stores the offset-0
+   *                             volume only.
+   * @param worldOffset          Number of world copies to translate the result
+   *                             by along common-space X. `0` returns the
+   *                             cached offset-0 volume directly. Non-zero
+   *                             values return a fresh translated copy.
    */
   getBoundingVolume(
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
+    boundingVolumeCache: BoundingVolumeCache,
     worldOffset = 0,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
-    const cached = this._boundingVolume;
+    const hit = boundingVolumeCache.get(this.z, this.x, this.y);
     let base: {
       boundingVolume: OrientedBoundingBox;
       commonSpaceBounds: Bounds;
     };
-    if (
-      cached &&
-      cached.zRange[0] === zRange[0] &&
-      cached.zRange[1] === zRange[1]
-    ) {
-      base = cached.result;
+    if (hit && hit.zRange[0] === zRange[0] && hit.zRange[1] === zRange[1]) {
+      base = hit;
     } else {
-      // Case 1: Globe view - need to construct an oriented bounding box from
-      // reprojected sample points, but also using the `project` param
-      if (project) {
-        assert(false, "TODO: implement getBoundingVolume in Globe view");
-        // Reproject positions to wgs84 instead, then pass them into `project`
-        // return makeOrientedBoundingBoxFromPoints(refPointPositions);
-      }
-
-      // (Future) Case 2: Web Mercator input image, can directly compute AABB in
-      // common space
-
-      // (Future) Case 3: Source projection is already mercator, like UTM. We
-      // don't need to sample from reference points, we can only use the 4
-      // corners.
-
-      // Case 4: Generic case - sample reference points and reproject to
-      // Web Mercator, then convert to deck.gl common space
-      base = this._getGenericBoundingVolume(zRange);
-      this._boundingVolume = { zRange, result: base };
+      base = this.computeBoundingVolume(zRange, project);
+      boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...base });
     }
-
     if (worldOffset === 0) {
       return base;
     }
-
     return translateBoundingVolume(base, worldOffset * TILE_SIZE);
+  }
+
+  /**
+   * Compute (without caching) the 3D bounding volume for this tile in deck.gl's
+   * common coordinate space.
+   *
+   * TODO: In the future, we can add a fast path in the case that the source
+   * tiling is already in EPSG:3857.
+   */
+  private computeBoundingVolume(
+    zRange: ZRange,
+    project: ((xyz: number[]) => number[]) | null,
+  ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
+    // Case 1: Globe view - need to construct an oriented bounding box from
+    // reprojected sample points, but also using the `project` param
+    if (project) {
+      assert(false, "TODO: implement getBoundingVolume in Globe view");
+      // Reproject positions to wgs84 instead, then pass them into `project`
+      // return makeOrientedBoundingBoxFromPoints(refPointPositions);
+    }
+
+    // (Future) Case 2: Web Mercator input image, can directly compute AABB in
+    // common space
+
+    // (Future) Case 3: Source projection is already mercator, like UTM. We
+    // don't need to sample from reference points, we can only use the 4
+    // corners.
+
+    // Case 4: Generic case - sample reference points and reproject to
+    // Web Mercator, then convert to deck.gl common space
+    return this._getGenericBoundingVolume(zRange);
   }
 
   /**
@@ -747,9 +761,27 @@ export function getTileIndices(
      * on HiDPI displays. See `dev-docs/lod-and-pixel-matching.md` § (A).
      */
     pixelRatio?: number;
+    /**
+     * Cache for tile bounding volumes, reused across `getTileIndices` calls so
+     * repeated traversals (animation frames) don't redo the proj4 reprojections
+     * + oriented-bounding-box fit. Pass the {@link BoundingVolumeCache} owned by
+     * the `RasterTileset2D`. If omitted, a throwaway cache is used — it still
+     * dedups within a single traversal but provides no cross-call benefit.
+     */
+    boundingVolumeCache?: BoundingVolumeCache;
   },
 ): TileIndex[] {
   const { viewport, maxZ, zRange, wgs84Bounds, pixelRatio = 1 } = opts;
+
+  // Shared by every node in this traversal (the recursion threads it through
+  // `update`'s params). A throwaway one is fine — it still dedups within the
+  // traversal; only a caller-provided cache survives to the next call.
+  const boundingVolumeCache =
+    opts.boundingVolumeCache ?? new BoundingVolumeCache();
+
+  // Trim the cache (no-op when under cap) before the traversal — never during,
+  // so this frame can never evict an entry it will need again this frame.
+  boundingVolumeCache.sweep();
 
   // Only define `project` function for Globe viewports, same as upstream
   const project: ((xyz: number[]) => number[]) | null =
@@ -821,6 +853,7 @@ export function getTileIndices(
     maxZ,
     bounds,
     pixelRatio,
+    boundingVolumeCache,
   };
 
   for (const root of roots) {

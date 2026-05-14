@@ -1,5 +1,11 @@
 import type { TiffImage, TiffTagGeoType, TiffTagType } from "@cogeotiff/core";
-import { Predictor, SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
+import {
+  PlanarConfiguration,
+  Predictor,
+  SampleFormat,
+  TiffTag,
+  TiffTagGeo,
+} from "@cogeotiff/core";
 
 /** Subset of TIFF tags that we pre-fetch for easier visualization. */
 export interface CachedTags {
@@ -18,8 +24,6 @@ export interface CachedTags {
   predictor: Predictor;
   sampleFormat: TiffTagType[TiffTag.SampleFormat];
   samplesPerPixel: TiffTagType[TiffTag.SamplesPerPixel];
-  tileByteCounts: TiffTagType[TiffTag.TileByteCounts] | null;
-  tileOffsets: TiffTagType[TiffTag.TileOffsets] | null;
 }
 
 /** Pre-fetch TIFF tags for easier visualization. */
@@ -48,8 +52,6 @@ export async function prefetchTags(
     predictor,
     sampleFormat,
     samplesPerPixel,
-    tileByteCounts,
-    tileOffsets,
   ] = await Promise.all([
     image.fetch(TiffTag.BitsPerSample, { signal }),
     image.fetch(TiffTag.ColorMap, { signal }),
@@ -64,11 +66,6 @@ export async function prefetchTags(
     image.fetch(TiffTag.Predictor, { signal }),
     image.fetch(TiffTag.SampleFormat, { signal }),
     image.fetch(TiffTag.SamplesPerPixel, { signal }),
-    // Pre-fetch tile offsets and byte counts. If we don't prefetch them,
-    // TiffImage.getTileSize will have to fetch them for each tile, which
-    // results in many redundant requests.
-    image.fetch(TiffTag.TileByteCounts, { signal }),
-    image.fetch(TiffTag.TileOffsets, { signal }),
   ]);
 
   const missingTag: (tagName: string) => never = (tagName: string) => {
@@ -81,10 +78,6 @@ export async function prefetchTags(
 
   if (samplesPerPixel === null) {
     missingTag("SamplesPerPixel");
-  }
-
-  if (planarConfiguration === null) {
-    missingTag("PlanarConfiguration");
   }
 
   if (photometric === null) {
@@ -102,14 +95,14 @@ export async function prefetchTags(
     modelTransformation,
     nodata: gdalNoData !== null ? Number(gdalNoData) : null,
     photometric,
-    planarConfiguration,
+    // PlanarConfiguration defaults to interleaved/chunky/contig
+    // https://web.archive.org/web/20240329145253/https://www.awaresystems.be/imaging/tiff/tifftags/planarconfiguration.html
+    planarConfiguration: planarConfiguration ?? PlanarConfiguration.Contig,
     predictor: (predictor as Predictor) ?? Predictor.None,
     // Uint is the default sample format according to the spec
     // https://web.archive.org/web/20240329145340/https://www.awaresystems.be/imaging/tiff/tifftags/sampleformat.html
     sampleFormat: sampleFormat ?? [SampleFormat.Uint],
     samplesPerPixel,
-    tileByteCounts,
-    tileOffsets,
   };
 }
 

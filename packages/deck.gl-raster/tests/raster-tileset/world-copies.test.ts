@@ -2,6 +2,7 @@ import { _GlobeViewport, WebMercatorViewport } from "@deck.gl/core";
 import { CullingVolume, Plane } from "@math.gl/culling";
 import { lngLatToWorld } from "@math.gl/web-mercator";
 import { describe, expect, it } from "vitest";
+import { BoundingVolumeCache } from "../../src/raster-tileset/bounding-volume-cache.js";
 import {
   getTileIndices,
   RasterTileNode,
@@ -68,9 +69,11 @@ describe("RasterTileNode.getBoundingVolume — worldOffset translation", () => {
 
   it("offset=0 returns the un-translated OBB and AABB", () => {
     const node = new RasterTileNode(0, 0, 0, { descriptor });
+    const cache = new BoundingVolumeCache();
     const { boundingVolume, commonSpaceBounds } = node.getBoundingVolume(
       [0, 0],
       null,
+      cache,
       0,
     );
     expect(commonSpaceBounds[0]).toBeGreaterThan(0);
@@ -81,10 +84,11 @@ describe("RasterTileNode.getBoundingVolume — worldOffset translation", () => {
 
   it("worldOffset=+1 shifts AABB and OBB center by +TILE_SIZE in X", () => {
     const node = new RasterTileNode(0, 0, 0, { descriptor });
+    const cache = new BoundingVolumeCache();
     const { boundingVolume: bv0, commonSpaceBounds: aabb0 } =
-      node.getBoundingVolume([0, 0], null, 0);
+      node.getBoundingVolume([0, 0], null, cache, 0);
     const { boundingVolume: bv1, commonSpaceBounds: aabb1 } =
-      node.getBoundingVolume([0, 0], null, 1);
+      node.getBoundingVolume([0, 0], null, cache, 1);
 
     expect(aabb1[0]).toBeCloseTo(aabb0[0] + TILE_SIZE, 6);
     expect(aabb1[2]).toBeCloseTo(aabb0[2] + TILE_SIZE, 6);
@@ -98,10 +102,11 @@ describe("RasterTileNode.getBoundingVolume — worldOffset translation", () => {
 
   it("worldOffset=-2 shifts AABB and OBB center by -2*TILE_SIZE in X", () => {
     const node = new RasterTileNode(0, 0, 0, { descriptor });
+    const cache = new BoundingVolumeCache();
     const { boundingVolume: bv0, commonSpaceBounds: aabb0 } =
-      node.getBoundingVolume([0, 0], null, 0);
+      node.getBoundingVolume([0, 0], null, cache, 0);
     const { boundingVolume: bv2, commonSpaceBounds: aabb2 } =
-      node.getBoundingVolume([0, 0], null, -2);
+      node.getBoundingVolume([0, 0], null, cache, -2);
 
     expect(aabb2[0]).toBeCloseTo(aabb0[0] - 2 * TILE_SIZE, 6);
     expect(aabb2[2]).toBeCloseTo(aabb0[2] - 2 * TILE_SIZE, 6);
@@ -110,13 +115,14 @@ describe("RasterTileNode.getBoundingVolume — worldOffset translation", () => {
 
   it("does not mutate the cached offset-0 result when called with non-zero offsets", () => {
     const node = new RasterTileNode(0, 0, 0, { descriptor });
-    const before = node.getBoundingVolume([0, 0], null, 0);
+    const cache = new BoundingVolumeCache();
+    const before = node.getBoundingVolume([0, 0], null, cache, 0);
     const beforeAabb: readonly number[] = [...before.commonSpaceBounds];
     const beforeCenterX = before.boundingVolume.center[0];
 
-    node.getBoundingVolume([0, 0], null, 3);
+    node.getBoundingVolume([0, 0], null, cache, 3);
 
-    const after = node.getBoundingVolume([0, 0], null, 0);
+    const after = node.getBoundingVolume([0, 0], null, cache, 0);
     expect(after.commonSpaceBounds).toEqual(beforeAabb);
     expect(after.boundingVolume.center[0]!).toBeCloseTo(beforeCenterX!, 12);
   });
@@ -175,6 +181,7 @@ describe("RasterTileNode.update — additive selection across worldOffset", () =
       maxZ: 0,
       bounds,
       pixelRatio: 1,
+      boundingVolumeCache: new BoundingVolumeCache(),
     };
 
     // Primary pass selects the tile.
