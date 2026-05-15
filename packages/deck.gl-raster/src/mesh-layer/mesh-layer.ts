@@ -10,6 +10,7 @@ import type { ShaderModule } from "@luma.gl/shadertools";
 import { CreateTexture } from "../gpu-modules/create-texture.js";
 import type { RasterModule } from "../gpu-modules/types.js";
 import fs from "./mesh-layer-fragment.glsl.js";
+import { getMemoizingShaderAssembler } from "./shader-assembler-memo.js";
 
 type _MeshTextureLayerProps =
   | { image: TextureSource; renderPipeline?: RasterModule[] }
@@ -107,6 +108,11 @@ export class MeshTextureLayer extends SimpleMeshLayer<
       // injection points
       fs,
       modules,
+      // Memoize shader assembly per (modules, vs, fs) across all sublayers of
+      // a tiled raster source. Within a `RasterTileLayer`, every tile passes
+      // identical inputs here — the per-Device cache collapses N regex-heavy
+      // assembly passes into one.
+      shaderAssembler: getMemoizingShaderAssembler(this.context.device),
     };
   }
 
