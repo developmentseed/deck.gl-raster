@@ -10,6 +10,10 @@ image: ../static/img/sentinel-2-examples-card.jpg
 
 deck.gl-raster enables GPU-accelerated [Cloud-Optimized GeoTIFF][cogeo] (COG) and [Zarr] visualization in [deck.gl].
 
+**TODO: update file name**
+
+**TODO: update summary**
+
 This release includes big performance improvements
 
 [cogeo]: https://cogeo.org/
@@ -21,6 +25,8 @@ This release includes big performance improvements
 ## Performance improvements
 
 ### Faster GPU updates for pixel filtering
+
+**TODO: update description**
 
 Applies to both the COGLayer and the ZarrLayer.
 
@@ -48,6 +54,8 @@ This screencast from that example simulates loading a 200GB COG (on the right) a
 See [#529](https://github.com/developmentseed/deck.gl-raster/pull/529) for more information.
 
 ### Faster tile traversal
+
+**TODO: update or remove**
 
 * fix(raster-tileset): memoize tile bounding volumes across traversals by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/525
 
@@ -85,8 +93,11 @@ See [#513](https://github.com/developmentseed/deck.gl-raster/pull/513) for more 
 
 ### Categorical land cover filtering
 
- Filterable categories
+We've updated the existing [NLCD Land Cover example](https://developmentseed.org/deck.gl-raster/examples/land-cover/) to filter pixels by their classification. All pixel filtering happens on the fly on the GPU.
 
+![](../static/img/land-cover-categories.gif)
+
+See [#506](https://github.com/developmentseed/deck.gl-raster/pull/506) for more details.
 
 ### Side-by-side image comparsion
 
@@ -94,9 +105,13 @@ As alluded to in our [performance section above](#big-latency-improvement-for-la
 
 ![](../static/img/vermont-swipe-example.gif)
 
+See [#502](https://github.com/developmentseed/deck.gl-raster/pull/502) for more details.
+
 ## MosaicLayer improvements
 
 ### Sources prop now reactive to changing input
+
+**TODO: update**
 
      * List of mosaic sources to render.
      *

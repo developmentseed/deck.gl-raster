@@ -43,7 +43,7 @@ const cogExamples: Example[] = [
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/land-cover/",
-    image: "/deck.gl-raster/img/land-cover-examples-card.jpg",
+    image: "/deck.gl-raster/img/land-cover-categories-hero.gif",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/land-cover",
   },
