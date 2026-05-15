@@ -432,7 +432,6 @@ export default function App() {
                       colormapReversed: colormapChoice.reversed,
                     }),
           signal,
-          maxCacheSize: 10,
         });
       },
       // Smaller cache for MosaicLayer cache, since it caches full COGLayer
