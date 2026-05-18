@@ -2,7 +2,8 @@ import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
-import { fetchTile, fetchTiles } from "./fetch.js";
+import type { SettledTile } from "./fetch.js";
+import { fetchTile, fetchTiles, fetchTilesSettled } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import type { DecoderPool } from "./pool/pool.js";
@@ -147,6 +148,23 @@ export class Overview {
     } = {},
   ): Promise<Tile[]> {
     return await fetchTiles(this, xy, options);
+  }
+
+  /**
+   * Like {@link fetchTiles}, but one missing tile or one tile's decode failure
+   * becomes a `{ error }` entry in its slot rather than throwing the whole
+   * batch. A network failure inside a coalesced range still rejects the call.
+   * See {@link SettledTile}.
+   */
+  async fetchTilesSettled(
+    xy: Array<[number, number]>,
+    options: {
+      boundless?: boolean;
+      pool?: DecoderPool;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<SettledTile[]> {
+    return await fetchTilesSettled(this, xy, options);
   }
 
   // TiledMixin
