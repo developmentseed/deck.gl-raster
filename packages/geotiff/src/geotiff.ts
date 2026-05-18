@@ -12,6 +12,8 @@ import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";
 import { parseGDALMetadata } from "./gdal-metadata.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
+import type { ConcurrencyLimiter } from "./limiter.js";
+import { defaultLimiterForOrigin, limitFetch } from "./limiter.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
@@ -112,14 +114,27 @@ export class GeoTIFF {
    * @param options.headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs. Callers who want to control the initial read size should compose a `SourceChunk` of the desired block size; cogeotiff's default `defaultReadSize` (16 KiB) gets padded up by the chunking layer anyway.
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console. Off by default.
+   * @param options.concurrencyLimiter When given, every tile-data and mask HTTP fetch is routed through this limiter, so callers can cap concurrent network requests. Header/metadata reads are not gated — they're a handful of small reads at open time and afterwards served from the header cache. Off by default.
    */
   static async open(options: {
     dataSource: Pick<Source, "fetch">;
     headerSource: Source;
+    concurrencyLimiter?: ConcurrencyLimiter;
     signal?: AbortSignal;
     debug?: boolean;
   }): Promise<GeoTIFF> {
-    const { dataSource, headerSource, signal, debug } = options;
+    const { headerSource, signal, debug, concurrencyLimiter } = options;
+    // When a limiter is supplied, gate tile-data reads through it. We only need
+    // `.fetch` from the data source, so a thin wrapper suffices — no need to
+    // reconstruct a full Source or pull in middleware machinery.
+    const dataSource: Pick<Source, "fetch"> = concurrencyLimiter
+      ? {
+          fetch: limitFetch(
+            options.dataSource.fetch.bind(options.dataSource),
+            concurrencyLimiter,
+          ),
+        }
+      : options.dataSource;
     // Construct + init in two steps so we don't have to pass cogeotiff's
     // `defaultReadSize` ourselves (the constructor defaults it to
     // `Tiff.DefaultReadSize` when no options are provided). In the typical
@@ -269,6 +284,7 @@ export class GeoTIFF {
    * @param options.cacheSize Total cache size in bytes. Defaults to 8 MiB (~128 blocks at the default chunk size).
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console with offset/length and a `data`/`mask` label. Off by default.
+   * @param options.concurrencyLimiter Caps concurrent tile-data and mask HTTP fetches (header/metadata reads are not gated). Defaults to {@link defaultLimiterForOrigin} for `url`'s origin, so multiple `fromUrl` calls (or other source-level callers) targeting the same host share one cap — important on browsers, where HTTP/1.1 limits concurrent connections per origin to ~6. Pass an explicit limiter to override; pass `null` to disable gating entirely.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
@@ -278,11 +294,13 @@ export class GeoTIFF {
       cacheSize = 8 * 1024 * 1024,
       signal,
       debug,
+      concurrencyLimiter,
     }: {
       chunkSize?: number;
       cacheSize?: number;
       signal?: AbortSignal;
       debug?: boolean;
+      concurrencyLimiter?: ConcurrencyLimiter | null;
     } = {},
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url, {});
@@ -308,12 +326,20 @@ export class GeoTIFF {
       new SourceCache({ size: cacheSize }),
     ]);
 
+    // Default to the per-origin shared limiter unless the caller opted out
+    // (`null`) or supplied their own. `undefined` → default; `null` → disabled.
+    const effectiveLimiter =
+      concurrencyLimiter === undefined
+        ? defaultLimiterForOrigin(url)
+        : (concurrencyLimiter ?? undefined);
+
     return await GeoTIFF.open({
       // Tile data reads bypass the header cache (raw source).
       dataSource: source,
       headerSource: view,
       signal,
       debug,
+      concurrencyLimiter: effectiveLimiter,
     });
   }
 
