@@ -6,215 +6,219 @@
 
 ## Background
 
-deck.gl's `TileLayer` has exactly one fetch hook, `getTileData(tile, { signal, … })`, called **once per tile**. For tile sources where each tile is a separate URL (MVT), that's unavoidable. For a COG, every tile in a viewport is a byte range of the *same* file, and adjacent tiles' ranges are contiguous (or near-contiguous) on disk — so N independent range requests could be a handful of coalesced ones. [#531](https://github.com/developmentseed/deck.gl-raster/pull/531) gave `@developmentseed/geotiff` a `fetchTiles(xy[])` that does exactly that coalescing for a *known* batch. What's missing is getting deck.gl's stream of per-tile `getTileData` calls *to* `fetchTiles`.
+Two distinct (but related) problems push us to change how `COGLayer` fetches tiles:
 
-The deck.gl-native fix — a `getTileDataBatched` prop wired into `Tileset2D` — is proposed upstream ([visgl/deck.gl#10098](https://github.com/visgl/deck.gl/issues/10098)) but has no PR and no maintainer commitment, so this lives in our packages. We follow the upstream-proposed shape closely so that, if/when it lands, our shim collapses to a thin adapter.
+**1. Request coalescing.** deck.gl's `TileLayer` has exactly one fetch hook, `getTileData(tile, { signal, … })`, called **once per tile**. For tile sources where each tile is a separate URL (MVT), that's unavoidable. For a COG, every tile in a viewport is a byte range of the *same* file, and adjacent tiles' ranges are contiguous (or near-contiguous) on disk — so N independent range requests could be a handful of coalesced ones. [#531](https://github.com/developmentseed/deck.gl-raster/pull/531) gave `@developmentseed/geotiff` a `fetchTiles(xy[])` that does exactly that coalescing for a *known* batch. What's missing is getting deck.gl's stream of per-tile `getTileData` calls *to* `fetchTiles`. The deck.gl-native fix — a `getTileDataBatched` prop wired into `Tileset2D` — is proposed upstream ([visgl/deck.gl#10098](https://github.com/visgl/deck.gl/issues/10098)) but has no PR and no maintainer commitment, so this lives in our packages.
+
+**2. Concurrency capping across layers, per origin.** Most COGs we target live on AWS S3 (or similar), which serves over HTTP/1.1 only. Browsers cap concurrent HTTP/1.1 connections per origin at ~6 (Chrome: 6). If we schedule more than that, the browser queues the excess — and queued requests stick around even when the viewport pans, blocking *new* requests for the new viewport behind dead ones for the old. So we want to cap concurrent in-flight HTTP requests at the browser's limit; over-scheduling is actively harmful.
+
+This cap can't live per-layer: two `COGLayer`s targeting the same S3 bucket would each get 6 slots → 12 in-flight → browser queues. It has to be **per origin, shared across layers and source formats** (COG today, Zarr later). deck.gl's `Tileset2D` ships an internal loaders.gl `RequestScheduler({ maxRequests: 6 })` but it's per-`TileLayer` instance, so it doesn't solve this; it also counts `getTileData` *calls* (≈ tiles), not HTTP requests — and one COG tile fetch can issue several requests (uncached metadata + tile data + mask).
+
+The two problems are independent: coalescing is layer-scoped (which deck.gl `getTileData` calls belong in one `fetchTiles`?), gating is source-scoped (how many HTTP requests are in flight to this host?). The design treats them separately.
 
 ### How deck.gl loads tiles today (relevant facts)
 
-- `Tileset2D` constructs a loaders.gl `RequestScheduler({ maxRequests: 6, debounceTime })` internally; `Tile2DHeader._loadData` does `await requestScheduler.scheduleRequest(this, …)` then `await getTileData(...)`. So `getTileData` is gated to `maxRequests` (default 6) concurrent calls, in a rolling window (a slot frees when `getTileData` resolves).
-- When `maxRequests <= 0` (and `debounceTime <= 0`), the scheduler's `throttleRequests` is `false` and `scheduleRequest` returns an already-resolved token — so `getTileData` is called for every needed tile with no throttling.
-- `Tileset2D._updateTileStates` loops over the needed tile indices **synchronously**, spawning one `loadData` (async) each. With throttling off, each `getTileData` call is one microtask later — so the whole burst of `getTileData` calls for a viewport update completes within the current macrotask (before its microtask queue drains).
-- `Tileset2D._pruneRequests` aborts *unselected* in-flight tiles when more than `maxRequests` are ongoing — a no-op when `maxRequests <= 0`.
-- The `maxRequests` cap counts **`getTileData` calls (≈ tiles)**, not HTTP requests. But a single COG tile fetch can issue several HTTP requests — an (uncached) tile-offset metadata read, the tile-data read, and a mask read — so "tiles in flight" is a poor proxy for "HTTP requests in flight", which is what the browser's ~6-per-origin HTTP/1.1 limit actually constrains.
+- `Tileset2D` constructs a loaders.gl `RequestScheduler({ maxRequests: 6, debounceTime })`; `Tile2DHeader._loadData` does `await scheduleRequest(...)` then `await getTileData(...)`. When `maxRequests <= 0` (and `debounceTime <= 0`), throttling is off and `scheduleRequest` returns an already-resolved token.
+- `Tileset2D._updateTileStates` loops over needed tile indices **synchronously**, spawning one `loadData` async per. With throttling off, each `getTileData` call is one microtask later — so the whole viewport-update burst lands within the current macrotask (before its microtask queue drains).
+- `Tileset2D._pruneRequests` aborts unselected in-flight tiles when more than `maxRequests` are ongoing — a no-op when `maxRequests <= 0`.
 
-### Current code shape in our packages
+### Current code shape
 
-- `@developmentseed/deck.gl-raster` — `RasterTileLayer` (subclass of `CompositeLayer`) builds the inner `@deck.gl/geo-layers` `TileLayer` in `_renderTileLayer`, passing `getTileData: tile => this._wrapGetTileData(tile, getTileData)` and a `TilesetClass` subclass of `RasterTileset2D`. `_wrapGetTileData` adapts deck.gl's `(tile, { signal, device }) => …` into the layer's `getTileData` and (for `COGLayer`) resolves `tile.index.z` to an overview vs. the primary image. Subclasses override `_getTileDataCallback()` / `_renderTileCallback()` / `_tilesetDescriptor()` to supply defaults.
-- `@developmentseed/deck.gl-geotiff` — `COGLayer` extends `RasterTileLayer`; in `updateState` it opens a `GeoTIFF` (`GeoTIFF.open` / `fromUrl`) and stores it in state; its default `getTileData` calls `geotiff.fetchTile(image, { x, y, … })`.
-- `@developmentseed/geotiff` — `GeoTIFF.open({ dataSource, headerSource })`; the header source is a chunkd `SourceView(http, [SourceChunk(64 KiB), SourceCache(…)])` (block cache) and the data source is a raw `SourceHttp` (uncached). `fetchTile` / `fetchTiles` / `coalesceRanges` / `assembleTile` issue `source.fetch(offset, length, { signal })` calls; `coalesceRanges` merges nearby ranges and dispatches up to `COALESCE_PARALLEL = 6` in parallel.
+- `@developmentseed/deck.gl-raster` — `RasterTileLayer` (subclass of `CompositeLayer`) builds the inner `@deck.gl/geo-layers` `TileLayer` in `_renderTileLayer`, passing `getTileData: tile => this._wrapGetTileData(tile, getTileData)`. `_wrapGetTileData` composes `props.signal` with `tile.signal` and calls the layer's `getTileData(tile, { device, signal })`. Subclasses override `_getTileDataCallback()` to supply defaults.
+- `@developmentseed/deck.gl-geotiff` — `COGLayer` extends `RasterTileLayer`; `_parseGeoTIFF()` opens a `GeoTIFF` via `fetchGeoTIFF(props.geotiff)` (which calls `GeoTIFF.fromUrl(url)` for URL inputs). `_getTileDataCallback` resolves `tile.index.z` to overview-vs-primary and calls the user/default `getTileData(image, …)` which today calls `geotiff.fetchTile`.
+- `@developmentseed/geotiff` — `GeoTIFF.open({ dataSource, headerSource, concurrencyLimiter? })` (the `concurrencyLimiter?` option ships in this design — see below). `fromUrl(url)` builds the chunkd source stack and calls `open`. `fetchTile` / `fetchTiles` / `coalesceRanges` issue `dataSource.fetch(...)` calls.
 
 ## Goals
 
-1. A `COGLayer` viewport of N tiles should produce **far fewer than N HTTP requests** — adjacent tiles' byte ranges coalesced, via `geotiff.fetchTiles`.
-2. **`maxRequests` should bound the number of actual HTTP requests in flight** (coalesced tile-data reads *and* uncached metadata reads *and* mask reads), since that's the browser-imposed limit that matters.
-3. **Zero behavior change when the feature isn't used**: a layer with no batched callback takes the exact code path it does today.
-4. Generic mechanism at the `RasterTileLayer` level (subclasses opt in by defining a batched callback); only `COGLayer` opts in for now.
-5. No new dependency added to `@developmentseed/geotiff` (in particular, no `loaders.gl`); `geotiff`'s public `fetchTile` / `fetchTiles` signatures unchanged.
+1. A `COGLayer` viewport of N tiles produces **far fewer than N HTTP requests** — adjacent tiles' byte ranges coalesced, via `geotiff.fetchTiles`.
+2. **Concurrent HTTP requests to a single origin are capped at the browser's HTTP/1.1 limit**, *shared across all layers (and future source formats) targeting that origin* — so panning doesn't leave stale queued requests blocking fresh ones.
+3. **Aborts on queued requests drop them** (no wasted fetch fires after the user has panned away).
+4. **Zero behavior change when the batched callback isn't used**: a layer with no `getMultiTileData` takes the exact code path it does today.
+5. Generic mechanism at the `RasterTileLayer` level (subclasses opt in by defining a batched callback); only `COGLayer` opts in for now.
+6. No new dependency on `loaders.gl` in `@developmentseed/geotiff`; `geotiff`'s public `fetchTile` / `fetchTiles` signatures unchanged.
 
 ## Non-goals
 
 - The deck.gl-native `getTileDataBatched` prop (upstream; out of scope here).
 - `MultiCOGLayer` / `MosaicLayer` batching (the batcher's grouping key is designed to allow it later, but it isn't wired up).
-- A `maxTilesPerBatch` cap (bounding how many tiles ride one all-or-nothing coalesced fetch — relevant given the composite-signal semantics below; a likely future knob, not built now).
-- Per-tile *streaming* (`Promise<DataT>[]` so a fast tile resolves before a slow one) — `fetchTiles` does one coalesced fetch then near-synchronous per-tile decode, so there's nothing to interleave; a single `Promise<Array<DataT | Error>>` suffices.
-- Exporting the scheduler middleware publicly (internal for now).
+- A `maxTilesPerBatch` cap (bounds how many tiles ride one all-or-nothing coalesced fetch).
+- Per-tile *streaming* (`Promise<DataT>[]` so a fast tile resolves before a slow one).
+- Cross-origin or per-path tuning of the default limiter (`max=6` everywhere is fine).
+- Gating header/metadata reads through the limiter (they're tiny, mostly at `open` time, served from the header cache — they never compete with tile-data fetches for connections).
 
 ## Architecture
 
-Two independent pieces:
+**Two independent pieces.** They can ship and be reasoned about separately.
 
-1. **`TileBatcher`** (in `@developmentseed/deck.gl-raster`) — *coalesces* deck.gl's per-tile `getTileData` calls into one batched call per zoom level. This is what turns N requests into a handful.
-2. **A concurrency-limiter chunkd middleware** (in `@developmentseed/geotiff`) — *gates* the number of concurrent HTTP `fetch`es. This is what makes `maxRequests` mean "HTTP requests in flight". Independent of batching — it sits on the byte source, so it sees every real request (coalesced data ranges, uncached metadata, masks) regardless of who issued it.
-
-They're combined only at the `COGLayer` level: when a batched callback is in play, `RasterTileLayer` creates one limiter from `props.maxRequests`, hands it to the `GeoTIFF` (so the middleware is installed on its sources), and runs the batcher; the inner `TileLayer` gets `maxRequests: 0` so deck.gl's per-tile throttle steps aside for our HTTP-level one.
+1. **Per-origin `ConcurrencyLimiter` at the source layer** (`@developmentseed/geotiff`). A small abstract interface + a concrete `Semaphore` + a `defaultLimiterForOrigin(url)` factory that caches one limiter per origin. `GeoTIFF.fromUrl(url)` defaults its `concurrencyLimiter` to that factory's result — so two `fromUrl` calls (or any other source-level callers, including a future Zarr `fromUrl`-equivalent) targeting the same host share one cap. The limiter wraps the data source's `.fetch` via `limitFetch`; the caller's per-request `signal` is forwarded into `acquire`, so an abort while queued *drops* the request before any network fires.
+2. **`TileBatcher` in the layer** (`@developmentseed/deck.gl-raster`). When `RasterTileLayer` is configured with a `getMultiTileData` callback, an internal `TileBatcher` buffers deck.gl's per-tile `getTileData` calls (caught on a `setTimeout(_, 0)` flush) and dispatches one `getMultiTileData(image, tiles[], …)` per `(source, z)` group. Results — `Array<DataT | Error>` — are distributed back. The inner `TileLayer` is given `maxRequests: 0` so the per-tile throttle steps aside and the batcher sees the whole viewport burst.
 
 ```
-                            RasterTileLayer (getMultiTileData defined)
-                               │  creates  RequestScheduler({maxRequests: props.maxRequests})  ← loaders.gl class
-        inner TileLayer        │           wrapped in a ~2-line adapter to geotiff's
-   maxRequests: 0 ────────────►│            ConcurrencyLimiter ({ acquire(): Promise<()=>void> })
-   getTileData: t => batcher.fetch(t)
-                               │
-   deck.gl  ──N×getTileData──► TileBatcher ──buffer, setTimeout(0)──► flush:
-                               │   group by (sourceId, z); z→image; composite signal/group
-                               │
-                               └──1× getMultiTileData(image, tiles[], {signal, device, pool})──►
-                                        COGLayer default ──► geotiff.fetchTilesSettled(xy)
-                                                                  │  source.fetch(...) × few
-                                                                  ▼
-                                  GeoTIFF sources, opened with { concurrencyLimiter }:
-                                     header: SourceView(http, [SourceChunk, SourceCache, limiterMW])
-                                     data:   SourceView(http, [limiterMW])
-                                            limiterMW: const release = await limiter.acquire(); try { next() } finally { release() }
+RasterTileLayer (getMultiTileData defined)
+   inner TileLayer.maxRequests = 0
+   inner TileLayer.getTileData = tile => batcher.fetch(tile)
+                                            │  setTimeout(0); group by (source, z); composite signal
+                                            ▼
+              1× getMultiTileData(image, tiles[], { signal, device, pool }) per group
+                                            │
+                                            ▼
+   COGLayer default ──► geotiff.fetchTilesSettled(xy)
+                              │
+                              ▼  dataSource.fetch(...) × few (after range coalescing)
+                              │
+   GeoTIFF.fromUrl(url, { concurrencyLimiter = defaultLimiterForOrigin(url) })
+   data source's .fetch wrapped via limitFetch(limiter):
+       const release = await limiter.acquire(signal);
+       try { return await rawFetch(offset, length, { signal }) }
+       finally { release() }
 ```
+
+The two pieces only meet at the `getMultiTileData` callback. The batcher knows nothing about HTTP gating; the limiter knows nothing about tiles or batches. Either can be used (or removed) independently — e.g. you'd still want the per-origin limiter even without the batcher, just to keep the browser from queueing.
 
 ## `@developmentseed/geotiff` changes
 
-### 1. A minimal `ConcurrencyLimiter` interface
+### 1. `ConcurrencyLimiter` interface
 
 ```ts
 /**
- * Minimal contract for capping the number of concurrent {@link Source.fetch}
- * calls, without coupling this package to any particular limiter / scheduler
- * implementation (e.g. loaders.gl's `RequestScheduler`).
+ * Minimal contract for capping the number of concurrent Source.fetch calls.
+ * An optional `signal` lets a caller drop out of the queue if they no longer
+ * need the request (e.g. the user panned away) — important on browsers, where
+ * HTTP/1.1 caps concurrent connections per origin to ~6 and an overlong queue
+ * from a previous viewport can starve a fresh one.
  */
 export interface ConcurrencyLimiter {
   /** Acquire a slot. Resolves once a slot is free; call the returned function
-   *  exactly once when the request finishes (success or failure) to release it. */
-  acquire(): Promise<() => void>;
+   *  exactly once when the request finishes (success or failure) to release it.
+   *  If `signal` aborts while queued, the promise rejects and no slot is consumed. */
+  acquire(signal?: AbortSignal): Promise<() => void>;
 }
 ```
 
-No `unknown`, no token object, no `null` — geotiff has no notion of request identity, priority, or cancellation, so the contract is just "wait for a slot, then release it". loaders.gl's `RequestScheduler.scheduleRequest(handle, getPriority?)` isn't structurally assignable to this, so `@developmentseed/deck.gl-raster` wraps it in a ~2-line adapter (see below) — geotiff stays loaders.gl-free.
+No `unknown`, no token object, no `null` — geotiff has no notion of request identity, priority, or cancellation other than the queued-abort case. loaders.gl's `RequestScheduler.scheduleRequest(handle, getPriority?)` doesn't structurally match (its `handle` is required, and our `acquire` is signal-aware while theirs isn't), but adapting in either direction is straightforward if someone wants to.
 
-### 2. An internal limiter middleware
+### 2. `limitFetch`, `Semaphore`, `defaultLimiterForOrigin`
 
 ```ts
-import type { SourceMiddleware } from "@chunkd/source";
-
-/** chunkd middleware: hold a {@link ConcurrencyLimiter} slot for the duration
- *  of each underlying `fetch`. */
-function limiterMiddleware(limiter: ConcurrencyLimiter): SourceMiddleware {
-  return {
-    name: "concurrency-limiter",
-    async fetch(req, next) {
-      const release = await limiter.acquire();
-      try {
-        return await next(req);
-      } finally {
-        release();
-      }
-    },
+/** Wraps a Source.fetch so each call holds a limiter slot for its duration,
+ *  forwarding the call's own signal so a queued abort drops the request. */
+export function limitFetch(fetch: Fetch, limiter: ConcurrencyLimiter): Fetch {
+  return async (offset, length, options) => {
+    const release = await limiter.acquire(options?.signal);
+    try {
+      return await fetch(offset, length, options);
+    } finally {
+      release();
+    }
   };
 }
+
+/** Concrete FIFO implementation; queued acquires that abort are removed from
+ *  the queue before any request is issued. */
+export class Semaphore implements ConcurrencyLimiter { /* … */ }
+
+/** Returns a shared Semaphore for `url`'s origin (cached across calls).
+ *  Default maxRequests = 6 — Chrome's HTTP/1.1 per-origin cap. Multiple
+ *  fromUrl calls (and any other source-level callers) targeting the same
+ *  host share one cap. */
+export function defaultLimiterForOrigin(url: string | URL): ConcurrencyLimiter;
 ```
 
-Internal (not exported from `index.ts`) for now.
+The interface type and the two helpers are exported from the package's public surface so app code (or a future Zarr package) can share the per-origin limiter directly. `limitFetch` is also exported so callers can apply gating to their own sources without going through `GeoTIFF.open`.
 
 ### 3. `concurrencyLimiter` option on `GeoTIFF.open` / `fromUrl`
 
-A new optional field, `concurrencyLimiter?: ConcurrencyLimiter`. When present, `GeoTIFF.open` / `fromUrl` append `limiterMiddleware(concurrencyLimiter)` to each source's middleware stack — **innermost** (last), after chunking and caching: header source `[SourceChunk(64 KiB), SourceCache(…), limiterMW]`, data source `[limiterMW]`. Innermost so a cache hit short-circuits before reaching the limiter (a cache hit is not an HTTP request and must not burn a slot), and a chunk-expanded read takes one slot for the single (block-sized) request it actually becomes. `fetchTile` / `fetchTiles` / `coalesceRanges` / `assembleTile` are **unchanged** — they call `source.fetch(...)` exactly as before; the middleware does the gating transparently.
+`open` accepts `concurrencyLimiter?: ConcurrencyLimiter`. When provided, the data source's `.fetch` is wrapped via `limitFetch` — a single-line conceptual change; no `SourceView` middleware machinery, no chunkd-vs-cogeotiff `Source` type juggling. Only `.fetch` is needed from the data source, so a thin `{ fetch: limitFetch(...) }` object suffices.
 
-(If the caller passes already-constructed sources to `GeoTIFF.open`, the same `concurrencyLimiter` option still applies — `open` wraps them. Exact wrapping point in `open` vs. `fromUrl` is an implementation detail.)
+`fromUrl` accepts `concurrencyLimiter?: ConcurrencyLimiter | null`. Its default behavior is the key piece: **when omitted, `fromUrl` calls `defaultLimiterForOrigin(url)`** so a per-origin cap is on by default. Pass an explicit limiter to override; pass `null` to disable gating entirely.
 
-### 4. A `Promise.allSettled`-style batch reader for per-tile errors
+Header/metadata reads are not gated — they're a small handful at `open` time, then served from the block cache; gating them buys nothing and would require either a chunkd `SourceMiddleware` (impedance with cogeotiff's `Source` typing) or a Proxy. Out of scope.
 
-`fetchTiles(xy)` today is all-or-nothing — it throws on the first sparse/missing tile. For the layer path we want a viewport to survive a bad tile: add a settled variant that returns one result *or error* per requested coordinate, in input order:
+`fetchTile` / `fetchTiles` / `coalesceRanges` / `assembleTile` are **unchanged** — they call `source.fetch(...)` as before; gating is invisible to them.
+
+### 4. `fetchTilesSettled` — a `Promise.allSettled`-style batch reader
+
+`fetchTiles(xy)` today is all-or-nothing: it throws on the first sparse/missing tile. The layer path wants a viewport to survive a bad tile. Add a settled variant returning one result *or error* per requested coordinate, in input order:
 
 ```ts
-fetchTilesSettled(self, xy[], options?) : Promise<Array<Tile | { error: unknown }>>
+type SettledTile = Tile | { error: unknown };
+fetchTilesSettled(self, xy[], options?) : Promise<SettledTile[]>;
 ```
 
-(Name/shape provisional — could equally be `fetchTiles(xy, { onError: "collect" })`. Decided in the plan.) Implementation composes the pieces [#531](https://github.com/developmentseed/deck.gl-raster/pull/531) already separated: one coalesced byte fetch (`getTiles` — still all-or-nothing at the *network* level: a `fetch` failure inside a merged range dooms every tile whose bytes were in that range, unavoidable with coalescing → those tiles all get that error), then `assembleTile` per tile wrapped in `try/catch` so per-tile decode errors / sparse tiles land in only that tile's slot. `getTiles` / `assembleTile` may need to be exported package-internally (they currently are) or lifted slightly — implementation detail.
+Implementation composes #531's already-split pieces: one coalesced byte fetch (still all-or-nothing *at the network level* — a `fetch` failure inside a merged range dooms every tile whose bytes were in it; inherent to coalescing), then `assembleTile` per tile wrapped in `try/catch` so per-tile decode errors / sparse tiles land in just that slot. A sparse tile (bytes `null`) maps to that slot's `{ error }`.
 
 ## `@developmentseed/deck.gl-raster` changes
 
-### 1. New `getMultiTileData` prop + accessor
+### 1. New `getMultiTileData` prop + `_getMultiTileDataCallback()` accessor
 
 ```ts
 // on RasterTileLayerProps:
 getMultiTileData?: (
-  image: ImageT,                 // overview or primary, resolved by z
-  tiles: Tile[],                 // all share z (same IFD); same source
-  opts: { signal: AbortSignal; device: Device; pool: DecoderPool },
+  tiles: TileLoadProps[],
+  options: { device: Device; signal?: AbortSignal },
 ) => Promise<Array<DataT | Error>>;   // aligned with `tiles`, in order
 ```
 
-Sourced via a new `protected _getMultiTileDataCallback()` accessor, mirroring `_getTileDataCallback()` / `_renderTileCallback()`. Returns `undefined` if neither the prop nor a subclass default is set. No limiter in `opts` — it's invisible to the callback, baked into the GeoTIFF's sources. (Forward-compat: if deck.gl upstreams `getTileDataBatched` and passes its `_requestScheduler` in opts, we can ignore it — our gating is at the source layer — or honor it; minor.)
+Sourced via a new `protected _getMultiTileDataCallback()` accessor, mirroring `_getTileDataCallback()` / `_renderTileCallback()`. Returns `undefined` if neither the prop nor a subclass default is set. The base-class signature receives `tiles: TileLoadProps[]` (deck.gl's tile shape); a subclass like `COGLayer` overrides `_getMultiTileDataCallback` to wrap a domain-specific signature (`(image, tiles, …)`) that resolves the group's shared `z` to an `image`. (All tiles in one dispatch share `z` — guaranteed by the batcher's `groupKey`.)
 
 ### 2. Branch in `_renderTileLayer`
 
 ```
 const multi = this._getMultiTileDataCallback();
 if (!multi) {
-  // unchanged from today
-  innerTileLayer.getTileData  = tile => this._wrapGetTileData(tile, getTileData);
-  innerTileLayer.maxRequests  = this.props.maxRequests;       // straight through
+  // byte-for-byte unchanged from today
+  innerTileLayer.getTileData = tile => this._wrapGetTileData(tile, getTileData);
+  innerTileLayer.maxRequests = this.props.maxRequests;
 } else {
-  const limiter = this.state.concurrencyLimiter;                  // created in updateState; see §4
-  const batcher = this.state.tileBatcher;                     // wraps `multi`
-  innerTileLayer.getTileData  = tile => batcher.fetch(tile);
-  innerTileLayer.maxRequests  = 0;                            // deck.gl's per-tile throttle off
+  innerTileLayer.getTileData = tile => batcher.fetch(tile, { signal: tile.signal });
+  innerTileLayer.maxRequests = 0;   // deck.gl's per-tile throttle steps aside
 }
 ```
 
-The no-batched-callback path is byte-for-byte today's. `maxRequests: 0` also disables `_pruneRequests` — fine: coalesced requests don't hit the connection limit, and per-tile aborts are still honored by the batcher.
+The no-batched-callback path is byte-for-byte today's. `maxRequests: 0` also disables `_pruneRequests`, which is fine: coalesced requests don't hit the connection limit (the per-origin limiter does), and per-tile aborts are still honored by the batcher's composite signal.
+
+The layer **does not own or create a limiter**. The per-origin shared limiter lives at the source layer (geotiff). Two consequences:
+
+- The user's `maxRequests` prop on `RasterTileLayer` keeps its today's meaning *only* in the no-`getMultiTileData` branch. In the batched branch it's overridden to `0` (the actual cap is at the source layer). Document this.
+- No `@loaders.gl/loader-utils` dependency is added.
 
 ### 3. `TileBatcher`
 
-A small class (not a layer), one instance per `RasterTileLayer` (lifecycle-tied to the inner `TileLayer` / created in `updateState` when `multi` first becomes available, finalized with the layer).
+A small generic class (not a layer), one instance per `RasterTileLayer`. Created lazily when `_getMultiTileDataCallback()` first returns non-undefined; finalized with the layer.
 
-- `fetch(tile, { signal }): Promise<DataT>` — push `{ tile, signal, resolve, reject }` onto a buffer; if the buffer was empty, arm `setTimeout(flush, 0)`. Return the promise. (`setTimeout(0)` deterministically fires after deck.gl's synchronous burst of `getTileData` calls + their microtask tail — see "Timing" below.) The `0` is an internal constant, not a public prop — the timing analysis shows it's sufficient, so there's nothing to tune; if a future deck.gl change makes a small delay useful it can be promoted to a prop then.
-- `flush()` — drain the buffer; drop any entry whose `signal` is already aborted (reject it with the abort reason); group the rest by `(sourceId, z)` — for `COGLayer`, `sourceId` is constant (one COG) and `z` selects overview vs. primary, resolved to `image` once per group using the same logic `_wrapGetTileData` uses; for each group: build a **composite `AbortSignal`** that aborts only when *every* member tile's signal has aborted, call `getMultiTileData(image, groupTiles, { signal: composite, device, pool })`; on resolve, for each `i`: if `results[i]` is an `Error` (or the tile's signal aborted post-dispatch) reject `groupTiles[i].reject(...)`, else `groupTiles[i].resolve(results[i])`; on reject, reject every tile in the group with the error. All groups dispatched concurrently — the source-level `ConcurrencyLimiter` does the limiting.
-- On layer finalize — reject every still-buffered entry with an abort reason; arm no further timers.
+- `fetch(item, { signal }) → Promise<TResult>` — push `{ item, signal, resolve, reject }` onto a buffer; if the buffer was empty, arm `setTimeout(flush, 0)`. Return the promise.
+- `flush()` — drain the buffer; drop entries whose `signal` is already aborted (reject them); group the rest by an opaque `(item) => string` `groupKey` (for `COGLayer`: `\`z${tile.index.z}\``); for each group: build a **composite `AbortSignal`** that fires only when *every* member's signal has aborted, call `dispatch(key, items, { signal: composite })` (the supplied "do one batched call" function); on resolve, distribute per-element results (`Error` instances → reject only that slot; values → resolve); on reject, reject every slot. Dispatch all groups concurrently — the source-level limiter is the cap.
+- `finalize()` — reject everything buffered and arm no further timers.
 
-Composite-signal helper: track a remaining count = group size; on each member signal's `abort`, decrement; at zero, abort a fresh `AbortController` and pass *its* signal to `getMultiTileData`. (This is the main reason a future `maxTilesPerBatch` cap is worth having — a huge group means many tiles share one all-or-nothing fetch and one composite signal.)
+The `dispatch` callback (supplied by `RasterTileLayer` when it constructs the batcher) is the bridge from "per-tile" to "per-source-format batched": it calls `_getMultiTileDataCallback()` (resolved to whatever the subclass returns) with the right shape, composing layer-level `props.signal` with the batcher's composite per-group signal.
 
-### 4. loaders.gl `RequestScheduler` → `ConcurrencyLimiter` adapter
-
-Promote `@loaders.gl/loader-utils` to an explicit dependency of `@developmentseed/deck.gl-raster` (currently transitive via deck.gl). In `updateState`, when `multi` becomes available, create a loaders.gl `RequestScheduler` and adapt it to geotiff's `ConcurrencyLimiter`:
-
-```ts
-const ls = new RequestScheduler({ maxRequests: this.props.maxRequests });
-const concurrencyLimiter: ConcurrencyLimiter = {
-  acquire: () =>
-    // fresh {} per call — loaders.gl dedupes by handle identity, so reusing one
-    // would collapse all requests into a single slot.
-    ls.scheduleRequest({}).then((tok) => () => tok?.done()),
-};
-```
-
-Store `ls` (so `setProps` can update `maxRequests`), `concurrencyLimiter` (the adapter), and the `tileBatcher` in layer state. The subclass that opens the GeoTIFF threads `concurrencyLimiter` into `GeoTIFF.open` (see deck.gl-geotiff changes). If `props.maxRequests` is `0`/falsy, `RequestScheduler` is un-throttled (no cap) — which is the right behavior (the user asked for unlimited). *(`scheduleRequest` can in principle resolve to `null` if a request is cancelled via a priority callback; we never pass one, so it never happens — the `tok?.done()` just makes the adapter total.)*
-
-## `@developmentseed/deck.gl-geotiff` changes
-
-- `COGLayer` provides a default `getMultiTileData` (via overriding `_getMultiTileDataCallback()` analogously to `_getTileDataCallback()`): resolve the batch's `xy` from `tiles`, call `geotiff.fetchTilesSettled(xy, { signal, pool })`, map each `Tile` → run the existing decode/render path → `DataT`, and each `{ error }` → that `Error`. Keeps its existing default `getTileData` → `geotiff.fetchTile` unchanged.
-- In `updateState`, pass `concurrencyLimiter: this.state.concurrencyLimiter` (created by the `RasterTileLayer` base in its `updateState`) into `GeoTIFF.open(...)`. Ordering: `RasterTileLayer.updateState` must create the limiter before `COGLayer.updateState` opens the GeoTIFF — e.g. `COGLayer.updateState` calls `super.updateState()` first, or the limiter is created in a base helper invoked early. Implementation detail for the plan.
+`setTimeout(flush, 0)`: hard-coded `0`, not exposed. The timing analysis (next section) shows it's sufficient.
 
 ## Timing — why `setTimeout(flush, 0)`
 
-The JS event loop runs one **macrotask** at a time (a `setTimeout` callback, an event handler, …); after *each* macrotask it fully drains the **microtask** queue (`Promise.then` / `await` continuations, `queueMicrotask`) before the next macrotask. deck.gl's `Tileset2D._updateTileStates` synchronously spawns one `Tile2DHeader.loadData` per needed tile; with the inner layer's `maxRequests: 0`, each `loadData`'s `await scheduleRequest(...)` resolves immediately, so the continuation calling our `getTileData` runs as a microtask — therefore **every `getTileData` call for one viewport update lands within the current macrotask** (before its microtask queue drains). A `setTimeout(flush, 0)` callback is the *next* macrotask, which runs only after the current one's microtasks are all done — so it deterministically observes the whole burst. (A `queueMicrotask`-based flush would be too eager — it could fire mid-burst.) `0` is hard-coded (browsers clamp `setTimeout(0)` to ~1 ms anyway — still low-latency, still after the burst); not exposed as a prop. If a future deck.gl spreads tile requests across animation frames or the main thread is starved, a small delay would merge across those chunks — correctness degrades gracefully (more, smaller batches), not breaks — and the constant could be promoted to a prop at that point.
+The JS event loop runs one **macrotask** at a time; after each macrotask it fully drains the **microtask** queue before the next macrotask. deck.gl's `Tileset2D._updateTileStates` synchronously spawns one `Tile2DHeader.loadData` per needed tile; with the inner layer's `maxRequests: 0`, each `loadData`'s `await scheduleRequest(...)` resolves immediately, so the continuation calling our `getTileData` runs as a microtask — therefore **every `getTileData` call for one viewport update lands within the current macrotask** (before its microtask queue drains). A `setTimeout(flush, 0)` callback is the *next* macrotask, which runs only after the current one's microtasks are all done — so it deterministically observes the whole burst. (A `queueMicrotask`-based flush would be too eager — it could fire mid-burst.) Browsers clamp `setTimeout(0)` to ~1 ms anyway — still low-latency, still after the burst.
+
+## `@developmentseed/deck.gl-geotiff` changes
+
+- `COGLayer` provides a default `getMultiTileData` (via overriding `_getMultiTileDataCallback()`): resolve the batch's `xy` from `tiles`, resolve the group's shared `z` to `image` (overview vs primary), call `geotiff.fetchTilesSettled(xy, { signal, pool })`, map each `Tile` → run the existing decode/render path → `DataT`, and each `{ error }` slot → that `Error`. Keeps its existing default `getTileData` → `geotiff.fetchTile` unchanged.
+- **No limiter wiring.** `fetchGeoTIFF(props.geotiff)` already calls `GeoTIFF.fromUrl(url)` which defaults the limiter to the shared per-origin one. Nothing for `COGLayer` to thread.
 
 ## Errors & edge cases
 
 - **Per-tile failure in a batch**: surfaced — `getMultiTileData` returns `Array<DataT | Error>`; the batcher rejects only the failing tile's `getTileData` promise (deck.gl marks just that tile errored/`null`). `COGLayer`'s implementation reports per-tile decode/sparse-tile errors individually; a network failure inside a coalesced merged range dooms every tile whose bytes were in it (those get the same error) — inherent to coalescing.
-- **Whole-batch failure**: `getMultiTileData` rejects ⇒ every tile in that group rejects ⇒ each marked errored/`null`, same as a per-tile `getTileData` throw today.
-- **Aborts**: a tile aborted *before* flush is dropped from the batch and rejected. A tile aborted *after* dispatch is rejected (its bytes were already fetched — wasted, acceptable). The underlying coalesced fetch is aborted only when *all* tiles in its group are aborted.
-- **`maxRequests: 0` on the inner layer**: also disables `_pruneRequests` (deck.gl's "abort unselected in-flight tiles past the limit") — desirable here.
+- **Whole-batch failure**: `getMultiTileData` rejects ⇒ every tile in that group rejects, same as a per-tile `getTileData` throw today.
+- **Aborts**: a tile aborted *before* flush is dropped from the batch and rejected. A tile aborted *after* dispatch is rejected (bytes already fetched — wasted, acceptable). The underlying coalesced fetch is aborted only when *all* tiles in its group are aborted. A queued limiter `acquire` whose signal aborts is dropped — no request fires.
+- **`maxRequests: 0` on the inner layer** also disables `_pruneRequests` (deck.gl's "abort unselected in-flight tiles past the limit") — desirable here.
 
 ## Testing
 
-- `TileBatcher` unit tests (mock tiles/signals/`getMultiTileData`): N `fetch()` calls ⇒ one `getMultiTileData` per `(source, z)` group with the right tiles; results distributed in order; an `Error` element rejects only that tile; whole-call rejection rejects the group; pre-flush abort drops & rejects; post-flush abort rejects but doesn't abort the group; the composite signal aborts the group only when all members abort; finalize rejects buffered.
-- `limiterMiddleware` unit test (mock limiter + source): `fetch` acquires a slot, calls `next`, and `release()`s in `finally` (on success and on throw); cache-hit path (no `next` call) never touches the limiter — exercised via a `[SourceCache, limiterMW]` stack with a pre-populated cache.
-- `GeoTIFF.open({ concurrencyLimiter })` integration test: open a fixture with a recording-and-counting limiter; `fetchTiles` over a grid ⇒ limiter saw exactly the number of (post-coalesce) `fetch` calls; with `maxRequests: 1` it serializes them.
-- `geotiff.fetchTilesSettled` test: a grid with one sparse tile ⇒ that slot is an error, the rest are `Tile`s; a network failure (mock source that throws on a particular range) ⇒ every tile whose bytes were in that merged range is an error.
-- `COGLayer._getMultiTileDataCallback` default: calls `geotiff.fetchTilesSettled` with the right `xy`/`image`; maps `Tile`→`DataT` and `{error}`→`Error`.
-- loaders.gl→`ConcurrencyLimiter` adapter: fresh handle per `acquire()` (two calls aren't deduped into one slot); the returned release function `done()`s the token.
-- (A full deck.gl-in-jsdom integration test — pan a `COGLayer`, count `dataSource.fetch` calls ≪ tiles — is heavy; the unit tests above cover the logic. Optional stretch if a harness exists.)
+- `limiter.test.ts` — `limitFetch` (slot held for fetch lifetime on success and on throw; forwards offset/length/options; forwards caller's signal so a queued abort drops the request); `Semaphore` (max concurrency, FIFO, queued abort drops without consuming a slot, pre-aborted signal rejects immediately, `RangeError` on bad construction); `defaultLimiterForOrigin` (same instance for same origin, distinct for distinct origins, accepts `URL` object).
+- `geotiff-concurrency-limiter.test.ts` — `GeoTIFF.open({ concurrencyLimiter })` integration: tile-data fetches go through the limiter, header reads don't, 1-slot smoke, no-limiter smoke.
+- `fetchTilesSettled` — good grid: same as `fetchTiles` (no `{ error }` slots); band-separate good grid: same; one sparse tile: that slot is `{ error }`, others are `Tile`s; empty input: `[]`.
+- `TileBatcher` unit tests — N `fetch()` calls ⇒ one `dispatch` per group key with the right items; per-item `Error` rejects only that slot; whole-dispatch rejection rejects the group; pre-flush abort drops & rejects; post-flush abort rejects but doesn't abort the group; composite signal aborts the group only when all members abort; `finalize()` rejects buffered.
+- `COGLayer._getMultiTileDataCallback` default: calls `geotiff.fetchTilesSettled` with the right `xy`/`image`; maps `Tile` → `DataT` and `{ error }` → `Error`.
 
 ## Open questions / deferred to the plan
 
-- Name for the settled batch reader (`fetchTilesSettled` vs. a `fetchTiles(xy, { onError: "collect" })` option).
-- Exact lifecycle wiring of the limiter/batcher in `RasterTileLayer.updateState` vs. `COGLayer.updateState` (who creates, who installs, ordering).
-- Whether `coalesceRanges`'s internal `COALESCE_PARALLEL` should become configurable now (the source-level limiter already caps things globally; a per-call ceiling is mostly redundant once the middleware is in place — likely leave as-is).
+- Exact lifecycle wiring of the batcher in `RasterTileLayer.updateState` / `finalizeState` vs. `COGLayer.updateState`.
+- Whether `coalesceRanges`'s internal `COALESCE_PARALLEL` should become configurable (the per-origin source-level limiter already caps globally; a per-call ceiling is likely redundant — lean toward leaving as-is).
