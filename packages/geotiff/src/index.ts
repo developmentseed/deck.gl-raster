@@ -18,6 +18,8 @@ export type {
 export { DECODER_REGISTRY } from "./decode.js";
 export { GeoTIFF } from "./geotiff.js";
 export type { CachedTags, GeoKeyDirectory } from "./ifd.js";
+export type { ConcurrencyLimiter } from "./limiter.js";
+export { PerOriginSemaphore } from "./limiter.js";
 export { Overview } from "./overview.js";
 export type { DecoderPoolOptions } from "./pool/pool.js";
 export { DecoderPool, defaultDecoderPool } from "./pool/pool.js";
