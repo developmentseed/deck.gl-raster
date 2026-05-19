@@ -9,19 +9,33 @@ import type { Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 import { CreateTexture } from "../gpu-modules/create-texture.js";
 import type { RasterModule } from "../gpu-modules/types.js";
+import { assertFp64Invariants } from "./assert-fp64-invariants.js";
 import fs from "./mesh-layer-fragment.glsl.js";
+import vs from "./mesh-layer-vertex.glsl.js";
 
 type _MeshTextureLayerProps =
   | { image: TextureSource; renderPipeline?: RasterModule[] }
   | { renderPipeline: RasterModule[]; image?: TextureSource };
 
 export type MeshTextureLayerProps = SimpleMeshLayerProps &
-  _MeshTextureLayerProps;
+  _MeshTextureLayerProps & {
+    /**
+     * Per-vertex low part of the fp64-split mesh position, paired with
+     * `mesh.attributes.POSITION.value` (which carries the high part as a
+     * Float32). Same length as `POSITION.value`. When `null`, no fp64
+     * correction is applied (vertex shader still references the attribute,
+     * which will be zero-filled by deck.gl).
+     *
+     * See `dev-docs/specs/2026-05-19-high-zoom-precision-design.md`.
+     */
+    positions64Low?: Float32Array | null;
+  };
 
 const defaultProps: DefaultProps<
   SimpleMeshLayerProps & {
     image: TextureSource | null;
     renderPipeline: RasterModule[];
+    positions64Low: Float32Array | null;
   }
 > = {
   ...SimpleMeshLayer.defaultProps,
@@ -29,6 +43,7 @@ const defaultProps: DefaultProps<
   // labels in interleaved mode 🤷‍♂️
   // image: { type: "image", value: null, async: true },
   renderPipeline: { type: "array", value: [], compare: true },
+  positions64Low: { type: "object", value: null, compare: true },
   // Disable lighting by default (avoids darkening raster)
   material: {
     ambient: 1.0,
@@ -39,10 +54,13 @@ const defaultProps: DefaultProps<
 };
 
 /**
- * A small subclass of the SimpleMeshLayer to allow dynamic shader injections.
+ * A small subclass of the SimpleMeshLayer to allow dynamic shader injections
+ * and to provide fp64 mesh-vertex precision via a `positions64Low`
+ * attribute paired with the geometry's `positions`.
  *
- * In the future this may expand to diverge more from the SimpleMeshLayer, such
- * as allowing the texture to be a 2D _array_.
+ * The fp64 correction is only valid for a single non-instanced mesh with
+ * identity per-instance transforms. `updateState` asserts this in
+ * development mode (see `assertFp64Invariants`).
  */
 export class MeshTextureLayer extends SimpleMeshLayer<
   null,
@@ -50,6 +68,26 @@ export class MeshTextureLayer extends SimpleMeshLayer<
 > {
   static override layerName = "mesh-texture-layer";
   static override defaultProps: typeof defaultProps = defaultProps;
+
+  override initializeState(): void {
+    super.initializeState();
+    const attributeManager = this.getAttributeManager();
+    if (attributeManager) {
+      attributeManager.add({
+        positions64Low: {
+          size: 3,
+          type: "float32",
+          noAlloc: true,
+          update: (attribute) => {
+            const value = this.props.positions64Low;
+            if (value) {
+              attribute.value = value;
+            }
+          },
+        },
+      });
+    }
+  }
 
   _resolveRenderPipeline(): RasterModule[] {
     const { image, renderPipeline } = this.props;
@@ -69,6 +107,24 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     }
 
     super.updateState(params);
+
+    // Dev-mode assertion: the fp64 mesh-vertex correction is only valid for a
+    // single non-instanced mesh with identity per-instance transforms. See
+    // dev-docs/specs/2026-05-19-high-zoom-precision-design.md § Invariant.
+    if (process.env.NODE_ENV !== "production") {
+      assertFp64Invariants(params.props);
+    }
+
+    // Invalidate the positions64Low attribute when its reference changes so
+    // the AttributeManager re-reads from `this.props`. Reference equality
+    // (not deep equality) is intentional: callers (RasterLayer) hand us a
+    // stable reference per-mesh, and any new reference means a new mesh.
+    if (params.oldProps.positions64Low !== params.props.positions64Low) {
+      const attributeManager = this.getAttributeManager();
+      if (attributeManager) {
+        attributeManager.invalidate("positions64Low");
+      }
+    }
   }
 
   /** Returns true if the render pipeline has changed between the old and new props. */
@@ -103,6 +159,11 @@ export class MeshTextureLayer extends SimpleMeshLayer<
 
     return {
       ...upstreamShaders,
+      // Override upstream's vertex shader with our copy that declares a
+      // `positions64Low` attribute and uses it in the project_position_to_clipspace
+      // call to restore fp64 mesh-vertex precision. See
+      // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
+      vs,
       // Override upstream's fragment shader with our copy with modified
       // injection points
       fs,

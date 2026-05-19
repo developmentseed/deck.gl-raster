@@ -291,7 +291,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 
   renderLayers() {
-    const { mesh } = this.state;
+    const { mesh, positions64Low } = this.state;
     const { debug, image, renderPipeline } = this.props;
 
     if (!mesh || (!image && (renderPipeline?.length ?? 0) === 0)) {
@@ -303,6 +303,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         id: "raster",
         image,
         renderPipeline,
+        positions64Low: positions64Low ?? null,
         // Dummy data because we're only rendering _one_ instance of this mesh
         // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
         data: [1],
