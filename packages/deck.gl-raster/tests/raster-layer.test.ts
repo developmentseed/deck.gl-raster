@@ -84,3 +84,79 @@ describe("RasterLayer.state.mesh", () => {
     expect(layers1[0]!.props.mesh).toBe(layers2[0]!.props.mesh);
   });
 });
+
+describe("RasterLayer.referencePointMeters", () => {
+  function makeBareLayerWithRef(referencePointMeters: [number, number] | null) {
+    const layer = new RasterLayer({
+      id: "test",
+      width: 4,
+      height: 4,
+      reprojectionFns: REPROJECTION_FNS,
+      image: {} as never,
+      referencePointMeters: referencePointMeters ?? undefined,
+    });
+    const internalState: Record<string, unknown> = {};
+    Object.assign(layer as object, { state: internalState });
+    Object.assign(layer as object, {
+      setState: (updates: Record<string, unknown>) =>
+        Object.assign(internalState, updates),
+      getSubLayerProps: <T>(props: T) => props,
+    });
+    return { layer, internalState };
+  }
+
+  it("writes positions unchanged when referencePointMeters is omitted", () => {
+    const { layer: layerA, internalState: stateA } = makeBareLayerWithRef(null);
+    const { layer: layerB, internalState: stateB } = makeBareLayerWithRef(null);
+
+    (layerA as unknown as { _generateMesh: () => void })._generateMesh();
+    (layerB as unknown as { _generateMesh: () => void })._generateMesh();
+
+    const posA = (stateA.mesh as WrappedMesh).attributes.POSITION.value;
+    const posB = (stateB.mesh as WrappedMesh).attributes.POSITION.value;
+    expect(Array.from(posA)).toEqual(Array.from(posB));
+  });
+
+  it("stores Float32 offsets when referencePointMeters is provided", () => {
+    // Simulate a high-zoom tile centered at ~13M meters in 3857 (somewhere in
+    // North America). Without reference subtraction, float32 quantization at
+    // this magnitude is ~1-2 m. With subtraction, offsets are small (< 10 m)
+    // and float32 precision is ample.
+    const REF_X = 13_000_000;
+    const REF_Y = 4_500_000;
+    const SUB = 0.3; // 30 cm/pixel — typical NAIP-class resolution.
+    const fns: ReprojectionFns = {
+      forwardTransform: identity,
+      inverseTransform: identity,
+      forwardReproject: (px, py) => [REF_X + px * SUB, REF_Y + py * SUB],
+      inverseReproject: (x, y) => [(x - REF_X) / SUB, (y - REF_Y) / SUB],
+    };
+
+    const layer = new RasterLayer({
+      id: "test",
+      width: 4,
+      height: 4,
+      reprojectionFns: fns,
+      image: {} as never,
+      referencePointMeters: [REF_X, REF_Y],
+    });
+    const internalState: Record<string, unknown> = {};
+    Object.assign(layer as object, { state: internalState });
+    Object.assign(layer as object, {
+      setState: (updates: Record<string, unknown>) =>
+        Object.assign(internalState, updates),
+      getSubLayerProps: <T>(props: T) => props,
+    });
+
+    (layer as unknown as { _generateMesh: () => void })._generateMesh();
+
+    const positions = (internalState.mesh as WrappedMesh).attributes.POSITION
+      .value;
+    // Every stored x/y should be a small offset (≤ a few meters), not the
+    // absolute 13M-meter magnitude.
+    for (let i = 0; i < positions.length; i += 3) {
+      expect(Math.abs(positions[i]!)).toBeLessThan(10);
+      expect(Math.abs(positions[i + 1]!)).toBeLessThan(10);
+    }
+  });
+});

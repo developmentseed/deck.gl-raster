@@ -106,6 +106,20 @@ export interface RasterLayerProps extends CompositeLayerProps {
 
   /** Opacity of the debug overlay. */
   debugOpacity?: number;
+
+  /**
+   * Reference point in projected (EPSG:3857) coordinates. When provided,
+   * mesh vertex positions are stored in the GPU buffer as float32 offsets
+   * from this point, rather than as absolute EPSG:3857 meters. Used by
+   * {@link RasterTileLayer} to preserve precision at high zoom levels.
+   *
+   * Callers passing this prop must fold the same reference point back into
+   * their `modelMatrix` translation (in float64 on the CPU) so the
+   * algebraic output is identical to the no-reference case.
+   *
+   * @default null
+   */
+  referencePointMeters?: [number, number] | null;
 }
 
 const defaultProps: DefaultProps<RasterLayerProps> = {
@@ -113,6 +127,7 @@ const defaultProps: DefaultProps<RasterLayerProps> = {
   // deck.gl (as long as async: true)
   image: { type: "image", value: null, async: true },
   renderPipeline: { type: "array", value: [], compare: true },
+  referencePointMeters: { type: "array", value: null, compare: true },
   debug: false,
   debugOpacity: 0.5,
 };
@@ -170,12 +185,19 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       props.reprojectionFns.inverseReproject !==
         oldProps.reprojectionFns?.inverseReproject;
 
+    const refChanged =
+      (props.referencePointMeters?.[0] ?? null) !==
+        (oldProps.referencePointMeters?.[0] ?? null) ||
+      (props.referencePointMeters?.[1] ?? null) !==
+        (oldProps.referencePointMeters?.[1] ?? null);
+
     const needsMeshUpdate =
       Boolean(changeFlags.dataChanged) ||
       props.width !== oldProps.width ||
       props.height !== oldProps.height ||
       reprojectionFnsChanged ||
-      props.maxError !== oldProps.maxError;
+      props.maxError !== oldProps.maxError ||
+      refChanged;
 
     if (needsMeshUpdate) {
       this._generateMesh();
@@ -203,7 +225,10 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       height + 1,
     );
     reprojector.run(maxError);
-    const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
+    const { indices, positions, texCoords } = reprojectorToMesh(
+      reprojector,
+      this.props.referencePointMeters ?? null,
+    );
 
     this.setState({
       reprojector,
@@ -318,7 +343,10 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 }
 
-function reprojectorToMesh(reprojector: RasterReprojector): {
+function reprojectorToMesh(
+  reprojector: RasterReprojector,
+  referencePointMeters: [number, number] | null,
+): {
   indices: Uint32Array;
   positions: Float32Array;
   texCoords: Float32Array;
@@ -327,9 +355,17 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   const positions = new Float32Array(numVertices * 3);
   const texCoords = new Float32Array(reprojector.uvs);
 
+  // Subtract the reference in JS float64 BEFORE writing to Float32Array so
+  // the stored values are small offsets, not full-magnitude 3857 meters. The
+  // caller must fold the same reference into modelMatrix translation to
+  // preserve algebraic output. See
+  // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
+  const refX = referencePointMeters?.[0] ?? 0;
+  const refY = referencePointMeters?.[1] ?? 0;
+
   for (let i = 0; i < numVertices; i++) {
-    positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
-    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
+    positions[i * 3] = reprojector.exactOutputPositions[i * 2]! - refX;
+    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]! - refY;
     // z (flat on the ground)
     positions[i * 3 + 2] = 0;
   }
