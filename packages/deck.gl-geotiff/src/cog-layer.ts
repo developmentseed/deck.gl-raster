@@ -7,7 +7,12 @@ import type {
   TilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
 import { RasterTileLayer } from "@developmentseed/deck.gl-raster";
-import type { DecoderPool, GeoTIFF, Overview } from "@developmentseed/geotiff";
+import type {
+  ConcurrencyLimiter,
+  DecoderPool,
+  GeoTIFF,
+  Overview,
+} from "@developmentseed/geotiff";
 import { defaultDecoderPool } from "@developmentseed/geotiff";
 import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
 import {
@@ -18,6 +23,7 @@ import {
 } from "@developmentseed/proj";
 import type { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
+import { defaultConcurrencyLimiter } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
@@ -133,6 +139,18 @@ export type COGLayerProps<DataT extends MinimalTileData = DefaultDataT> = Omit<
      * automatically aborted.
      */
     signal?: AbortSignal;
+
+    /**
+     * Caps concurrent HTTP requests for this layer's tile-data fetches.
+     * Defaults to a shared module-level `PerOriginSemaphore({ maxRequests:
+     * 6 })` so multiple `COGLayer`s targeting the same origin (e.g. the
+     * same S3 bucket) share one HTTP/1.1 connection pool. Pass your own
+     * `ConcurrencyLimiter` to override; pass `null` to disable gating.
+     *
+     * Ignored when `geotiff` is a pre-opened `GeoTIFF` instance — wire the
+     * limiter via {@link GeoTIFF.fromUrl} at construction time instead.
+     */
+    concurrencyLimiter?: ConcurrencyLimiter | null;
   };
 
 /**
@@ -150,6 +168,7 @@ export class COGLayer<
   static override defaultProps = {
     ...RasterTileLayer.defaultProps,
     epsgResolver,
+    concurrencyLimiter: defaultConcurrencyLimiter,
   } as typeof RasterTileLayer.defaultProps;
 
   declare state: {
@@ -189,7 +208,9 @@ export class COGLayer<
   }
 
   async _parseGeoTIFF(): Promise<void> {
-    const geotiff = await fetchGeoTIFF(this.props.geotiff);
+    const geotiff = await fetchGeoTIFF(this.props.geotiff, {
+      concurrencyLimiter: this.props.concurrencyLimiter,
+    });
     const crs = geotiff.crs;
     const sourceProjection =
       typeof crs === "number"
