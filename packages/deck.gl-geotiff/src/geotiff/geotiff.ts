@@ -1,6 +1,6 @@
 // Utilities for interacting with a GeoTIFF
 
-import type { RasterArray } from "@developmentseed/geotiff";
+import type { ConcurrencyLimiter, RasterArray } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Converter } from "proj4";
 
@@ -54,9 +54,18 @@ export function addAlphaChannel(rgbImage: RasterArray): RasterArray {
 
 export async function fetchGeoTIFF(
   input: GeoTIFF | string | URL | ArrayBuffer,
+  options: {
+    /** Forwarded to {@link GeoTIFF.fromUrl} when `input` is a URL or string.
+     *  Ignored when `input` is already a `GeoTIFF` instance or an
+     *  `ArrayBuffer` (there's no network to gate, and a pre-opened GeoTIFF
+     *  has already had its limiter wired at construction time). */
+    concurrencyLimiter?: ConcurrencyLimiter | null;
+  } = {},
 ): Promise<GeoTIFF> {
   if (typeof input === "string" || input instanceof URL) {
-    return await GeoTIFF.fromUrl(input);
+    return await GeoTIFF.fromUrl(input, {
+      concurrencyLimiter: options.concurrencyLimiter,
+    });
   }
 
   if (input instanceof ArrayBuffer) {
