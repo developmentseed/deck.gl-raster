@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConcurrencyLimiter } from "../src/limiter.js";
-import { PerOriginSemaphore, Semaphore } from "../src/limiter.js";
+import { limitFetch, PerOriginSemaphore, Semaphore } from "../src/limiter.js";
 
 describe("Semaphore", () => {
   it("allows up to maxRequests concurrent acquires; further acquires queue", async () => {
@@ -137,6 +137,113 @@ describe("PerOriginSemaphore", () => {
     const release = await limiter.acquire(C);
     expect(typeof release).toBe("function");
     release();
+    hold();
+  });
+});
+
+describe("limitFetch", () => {
+  const URL_A = new URL("https://a.example.com/cog.tif");
+
+  function makeRecorder() {
+    const calls: Array<{ offset: number; length: number | undefined }> = [];
+    const fetch = async (
+      offset: number,
+      length?: number,
+    ): Promise<ArrayBuffer> => {
+      calls.push({ offset, length });
+      return new ArrayBuffer(length ?? 0);
+    };
+    return { fetch, calls };
+  }
+
+  it("only invokes the inner fetch after acquiring a slot", async () => {
+    const order: string[] = [];
+    const limiter: ConcurrencyLimiter = {
+      acquire: async () => {
+        order.push("acquire");
+        return () => order.push("release");
+      },
+    };
+    const inner = async () => {
+      order.push("fetch");
+      return new ArrayBuffer(0);
+    };
+    const wrapped = limitFetch(inner, URL_A, limiter);
+    await wrapped(0, 4);
+    expect(order).toEqual(["acquire", "fetch", "release"]);
+  });
+
+  it("forwards offset, length, and options to the inner fetch unchanged", async () => {
+    const calls: unknown[][] = [];
+    const limiter: ConcurrencyLimiter = {
+      acquire: async () => () => {},
+    };
+    const inner = async (...args: unknown[]) => {
+      calls.push(args);
+      return new ArrayBuffer(0);
+    };
+    const wrapped = limitFetch(
+      inner as Parameters<typeof limitFetch>[0],
+      URL_A,
+      limiter,
+    );
+    const signal = new AbortController().signal;
+    await wrapped(100, 200, { signal });
+    expect(calls).toEqual([[100, 200, { signal }]]);
+  });
+
+  it("releases the slot when the inner fetch resolves", async () => {
+    const sem = new Semaphore({ maxRequests: 1 });
+    const limiter: ConcurrencyLimiter = {
+      acquire: (_url, signal) => sem.acquire(signal),
+    };
+    const { fetch } = makeRecorder();
+    const wrapped = limitFetch(fetch, URL_A, limiter);
+    await wrapped(0, 8);
+    // If the slot wasn't released, a second call would hang.
+    await wrapped(0, 8);
+  });
+
+  it("releases the slot when the inner fetch rejects (and propagates the error)", async () => {
+    const sem = new Semaphore({ maxRequests: 1 });
+    const limiter: ConcurrencyLimiter = {
+      acquire: (_url, signal) => sem.acquire(signal),
+    };
+    const wrapped = limitFetch(
+      async () => {
+        throw new Error("network down");
+      },
+      URL_A,
+      limiter,
+    );
+    await expect(wrapped(0, 8)).rejects.toThrow("network down");
+    // Slot was released — a second call must not hang.
+    const { fetch } = makeRecorder();
+    const ok = limitFetch(fetch, URL_A, limiter);
+    await ok(0, 8);
+  });
+
+  it("forwards options.signal to limiter.acquire so a queued abort drops the call", async () => {
+    const sem = new Semaphore({ maxRequests: 1 });
+    const limiter: ConcurrencyLimiter = {
+      acquire: (_url, signal) => sem.acquire(signal),
+    };
+    // Saturate the (per-test-shared) semaphore so the next acquire queues.
+    const hold = await sem.acquire();
+    let innerCalled = false;
+    const wrapped = limitFetch(
+      async () => {
+        innerCalled = true;
+        return new ArrayBuffer(0);
+      },
+      URL_A,
+      limiter,
+    );
+    const ac = new AbortController();
+    const pending = wrapped(0, 8, { signal: ac.signal });
+    ac.abort(new Error("pan-away"));
+    await expect(pending).rejects.toThrow("pan-away");
+    expect(innerCalled).toBe(false);
     hold();
   });
 });

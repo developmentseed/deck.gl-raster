@@ -1,3 +1,8 @@
+import type { Source } from "@cogeotiff/core";
+
+/** The shape of a {@link Source.fetch} call. */
+type Fetch = Pick<Source, "fetch">["fetch"];
+
 /** A pending acquire waiting for a slot. */
 interface Waiter {
   resolve(release: () => void): void;
@@ -117,4 +122,26 @@ export class PerOriginSemaphore implements ConcurrencyLimiter {
     }
     return sem.acquire(signal);
   }
+}
+
+/**
+ * Wrap a `Source.fetch` so each call holds a {@link ConcurrencyLimiter} slot
+ * for its duration — releasing on resolve, on reject, and never otherwise
+ * interfering. Forwards `options.signal` to `limiter.acquire`, so if the
+ * caller aborts while the call is queued the request is dropped before any
+ * network I/O fires.
+ */
+export function limitFetch(
+  fetch: Fetch,
+  url: URL,
+  limiter: ConcurrencyLimiter,
+): Fetch {
+  return async (offset, length, options) => {
+    const release = await limiter.acquire(url, options?.signal);
+    try {
+      return await fetch(offset, length, options);
+    } finally {
+      release();
+    }
+  };
 }
