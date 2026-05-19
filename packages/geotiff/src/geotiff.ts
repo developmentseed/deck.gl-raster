@@ -313,7 +313,7 @@ export class GeoTIFF {
     // SourceChunk + SourceCache so a cache hit short-circuits and never
     // consumes a slot — only network reads that escape the cache are gated.
     // On the data source (no caching), every fetch is gated.
-    const limiterMW = concurrencyLimiter
+    const limiter = concurrencyLimiter
       ? new LimiterMiddleware({
           url: new URL(url),
           limiter: concurrencyLimiter,
@@ -323,11 +323,11 @@ export class GeoTIFF {
     const view = new SourceView(source, [
       new SourceChunk({ size: chunkSize }),
       new SourceCache({ size: cacheSize }),
-      ...(limiterMW ? [limiterMW] : []),
+      ...(limiter ? [limiter] : []),
     ]);
 
-    const dataSource: Pick<Source, "fetch"> = limiterMW
-      ? new SourceView(source, [limiterMW])
+    const dataSource: Pick<Source, "fetch"> = limiter
+      ? new SourceView(source, [limiter])
       : source;
 
     return await GeoTIFF.open({
