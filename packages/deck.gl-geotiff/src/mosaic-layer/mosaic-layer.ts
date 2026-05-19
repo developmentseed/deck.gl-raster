@@ -2,7 +2,8 @@ import type { CompositeLayerProps, Layer, LayersList } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
-import type { Priority } from "@developmentseed/geotiff";
+import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
+import { defaultConcurrencyLimiter } from "../default-concurrency-limiter.js";
 import type { MosaicSource } from "./mosaic-tileset-2d.js";
 import { MosaicTileset2D } from "./mosaic-tileset-2d.js";
 
@@ -40,19 +41,38 @@ export type MosaicLayerProps<
      */
     sources: MosaicT[];
 
+    /**
+     * Caps concurrent HTTP requests for this layer's source fetches.
+     * Defaults to a shared module-level `PerOriginSemaphore({ maxRequests:
+     * 6 })` (the same instance `COGLayer` / `MultiCOGLayer` use), so all
+     * layers targeting one origin share one HTTP/1.1 connection pool. Pass
+     * your own `ConcurrencyLimiter` to override; pass `null` to disable
+     * gating. The layer threads this into `getSource`'s opts so consumers
+     * can forward it to {@link GeoTIFF.fromUrl} (or any source-opening
+     * call) alongside the matching `getPriority`.
+     */
+    concurrencyLimiter?: ConcurrencyLimiter | null;
+
     /** Fetch data for this source. */
     getSource?: (
       source: MosaicT,
       opts: {
         signal?: AbortSignal;
         /**
+         * The layer's current `concurrencyLimiter` prop (default
+         * {@link defaultConcurrencyLimiter}). Forward to
+         * {@link GeoTIFF.fromUrl}'s `concurrencyLimiter` option so this
+         * source's fetches join the shared per-origin queue.
+         */
+        concurrencyLimiter: ConcurrencyLimiter | null;
+        /**
          * Dynamic priority for fetches related to this source. Re-invoked by
          * the limiter on every slot-open, so the queue re-sorts on viewport
          * pan. Computed from the source's `bbox` center and the layer's
          * current viewport: closer to viewport center ⇒ lower number ⇒
-         * serviced sooner. Threaded into {@link fetchGeoTIFF} /
-         * `GeoTIFF.fromUrl` to bias center-of-screen rendering ahead of
-         * edges; passing it on is otherwise optional.
+         * serviced sooner. Forward to {@link GeoTIFF.fromUrl}'s
+         * `getPriority` option alongside `concurrencyLimiter` to bias
+         * center-of-screen rendering ahead of edges.
          */
         getPriority: () => Priority;
       },
@@ -68,7 +88,9 @@ export type MosaicLayerProps<
     ) => Layer | LayersList | null;
   };
 
-const defaultProps: Partial<MosaicLayerProps> = {};
+const defaultProps: Partial<MosaicLayerProps> = {
+  concurrencyLimiter: defaultConcurrencyLimiter,
+};
 
 /**
  * A deck.gl layer for rendering a mosaic of raster sources.
@@ -146,9 +168,22 @@ export class MosaicLayer<
           const dy = sourceCy - lat;
           return Math.hypot(dx, dy);
         };
+        // deck.gl fills `concurrencyLimiter` from `defaultProps` when the
+        // user doesn't supply it; an explicit `null` is the opt-out signal
+        // and gets forwarded as-is so `GeoTIFF.fromUrl` skips installing
+        // the middleware. Only `undefined` (e.g. types-only escape hatches)
+        // falls back to the default here.
+        const concurrencyLimiter =
+          this.props.concurrencyLimiter === undefined
+            ? defaultConcurrencyLimiter
+            : this.props.concurrencyLimiter;
         const userData =
           this.props.getSource &&
-          (await this.props.getSource(index, { signal, getPriority }));
+          (await this.props.getSource(index, {
+            signal,
+            concurrencyLimiter,
+            getPriority,
+          }));
 
         return {
           source: index,
