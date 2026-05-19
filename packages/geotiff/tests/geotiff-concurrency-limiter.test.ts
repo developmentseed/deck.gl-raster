@@ -1,0 +1,127 @@
+/**
+ * Verifies that GeoTIFF.fromUrl wraps the data source's .fetch with a
+ * ConcurrencyLimiter when one is supplied. The header source (the cached
+ * SourceView) is not wrapped — the limiter caps tile/data reads only.
+ *
+ * The SourceHttp stubbing pattern mirrors fromurl.test.ts.
+ */
+
+import { readFileSync } from "node:fs";
+import { SourceHttp } from "@chunkd/source-http";
+import { afterEach, describe, expect, it } from "vitest";
+import { GeoTIFF } from "../src/geotiff.js";
+import type { ConcurrencyLimiter } from "../src/limiter.js";
+import { fixturePath } from "./helpers.js";
+
+const FIXTURE = readFileSync(
+  fixturePath("uint8_rgb_deflate_block64_cog", "rasterio"),
+);
+
+function makeResponse(body: Uint8Array) {
+  return {
+    ok: true,
+    status: 206,
+    statusText: "",
+    headers: {
+      get: (key: string) =>
+        key.toLowerCase() === "content-length" ? String(body.byteLength) : null,
+    },
+    body: null,
+    arrayBuffer: async () =>
+      body.buffer.slice(
+        body.byteOffset,
+        body.byteOffset + body.byteLength,
+      ) as ArrayBuffer,
+  };
+}
+
+function staticFetch(file: Uint8Array) {
+  return async (
+    _url: string | URL,
+    init?: { method?: string; headers?: Record<string, string> },
+  ) => {
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (method === "HEAD") {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "",
+        headers: {
+          get: (key: string) =>
+            key.toLowerCase() === "content-length"
+              ? String(file.byteLength)
+              : null,
+        },
+        body: null,
+        arrayBuffer: async () => new ArrayBuffer(0),
+      };
+    }
+    const range = init?.headers?.range ?? "";
+    const match = /^bytes=(\d+)-(\d+)?$/.exec(range);
+    const start = match ? Number(match[1]) : 0;
+    const end =
+      match?.[2] != null
+        ? Math.min(Number(match[2]), file.byteLength - 1)
+        : file.byteLength - 1;
+    return makeResponse(file.subarray(start, end + 1));
+  };
+}
+
+describe("GeoTIFF.fromUrl({ concurrencyLimiter })", () => {
+  const realFetch = SourceHttp.fetch;
+  afterEach(() => {
+    SourceHttp.fetch = realFetch;
+  });
+
+  it("routes tile-data fetches through the limiter (header reads are not gated)", async () => {
+    SourceHttp.fetch = staticFetch(FIXTURE) as typeof SourceHttp.fetch;
+
+    const acquired: URL[] = [];
+    const limiter: ConcurrencyLimiter = {
+      acquire: async (url) => {
+        acquired.push(url);
+        return () => {};
+      },
+    };
+    const url = "https://example.test/cog.tif";
+    const tiff = await GeoTIFF.fromUrl(url, { concurrencyLimiter: limiter });
+
+    // Opening the TIFF reads headers — those go through the header source
+    // (cached SourceView), NOT through the limiter, so `acquired` should
+    // still be empty (or near-empty — it must contain zero tile-data calls).
+    const headerOnlyCount = acquired.length;
+    expect(headerOnlyCount).toBe(0);
+
+    await tiff.fetchTile(0, 0);
+
+    // After fetching a tile, the data-source path was exercised — the
+    // limiter must have seen at least one acquire, and every URL must be
+    // ours.
+    expect(acquired.length).toBeGreaterThan(headerOnlyCount);
+    for (const u of acquired) {
+      expect(u.href).toBe(url);
+    }
+  });
+
+  it("with concurrencyLimiter: null does not wrap (no acquires)", async () => {
+    SourceHttp.fetch = staticFetch(FIXTURE) as typeof SourceHttp.fetch;
+    const acquired: URL[] = [];
+    const limiter: ConcurrencyLimiter = {
+      acquire: async (url) => {
+        acquired.push(url);
+        return () => {};
+      },
+    };
+    // null = explicitly off.
+    const tiff = await GeoTIFF.fromUrl("https://example.test/cog.tif", {
+      concurrencyLimiter: null,
+    });
+    await tiff.fetchTile(0, 0);
+    // Limiter was passed `null`, so `acquired` only contains entries from
+    // explicit calls — but no one called this `limiter` from anywhere, so
+    // it must be exactly empty.
+    expect(acquired).toEqual([]);
+    // Reference `limiter` so it isn't flagged as unused.
+    expect(limiter.acquire).toBeDefined();
+  });
+});

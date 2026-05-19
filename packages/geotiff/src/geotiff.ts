@@ -12,6 +12,8 @@ import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";
 import { parseGDALMetadata } from "./gdal-metadata.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
+import type { ConcurrencyLimiter } from "./limiter.js";
+import { limitFetch } from "./limiter.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
@@ -269,6 +271,7 @@ export class GeoTIFF {
    * @param options.cacheSize Total cache size in bytes. Defaults to 8 MiB (~128 blocks at the default chunk size).
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console with offset/length and a `data`/`mask` label. Off by default.
+   * @param options.concurrencyLimiter Caps concurrent HTTP requests for the *tile data* path. Header / metadata reads (through the cached SourceView) are not gated. Pass `null` to explicitly disable; omit (or pass `undefined`) for the same effect — `GeoTIFF.fromUrl` does *not* default to a shared limiter on its own. The deck.gl-geotiff layers default to a shared {@link PerOriginSemaphore} via their `defaultProps`.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
@@ -278,11 +281,13 @@ export class GeoTIFF {
       cacheSize = 8 * 1024 * 1024,
       signal,
       debug,
+      concurrencyLimiter,
     }: {
       chunkSize?: number;
       cacheSize?: number;
       signal?: AbortSignal;
       debug?: boolean;
+      concurrencyLimiter?: ConcurrencyLimiter | null;
     } = {},
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url, {});
@@ -308,9 +313,21 @@ export class GeoTIFF {
       new SourceCache({ size: cacheSize }),
     ]);
 
+    // Wrap the *raw* data source's `.fetch` when a limiter is supplied so
+    // every tile-data fetch holds a slot for its duration. Header reads go
+    // through the cached SourceView and are not gated.
+    const dataSource: Pick<Source, "fetch"> = concurrencyLimiter
+      ? {
+          fetch: limitFetch(
+            source.fetch.bind(source),
+            new URL(url),
+            concurrencyLimiter,
+          ),
+        }
+      : source;
+
     return await GeoTIFF.open({
-      // Tile data reads bypass the header cache (raw source).
-      dataSource: source,
+      dataSource,
       headerSource: view,
       signal,
       debug,
