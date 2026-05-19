@@ -303,10 +303,17 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         id: "raster",
         image,
         renderPipeline,
-        positions64Low: positions64Low ?? null,
         // Dummy data because we're only rendering _one_ instance of this mesh
         // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
-        data: [1],
+        //
+        // Use the binary { length, attributes } form so we can pipe the
+        // per-vertex fp64 low-part attribute through `data.attributes`.
+        // deck.gl 9.x removed `props.<attributeName>` as a channel for
+        // attribute values, requiring `data.attributes.<attributeName>`
+        // (see @deck.gl/core/lib/attribute/attribute-manager.ts:196).
+        data: positions64Low
+          ? { length: 1, attributes: { positions64Low } }
+          : [1],
         mesh,
         // We're only rendering a single mesh, without instancing
         // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L244

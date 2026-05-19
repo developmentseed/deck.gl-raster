@@ -18,24 +18,12 @@ type _MeshTextureLayerProps =
   | { renderPipeline: RasterModule[]; image?: TextureSource };
 
 export type MeshTextureLayerProps = SimpleMeshLayerProps &
-  _MeshTextureLayerProps & {
-    /**
-     * Per-vertex low part of the fp64-split mesh position, paired with
-     * `mesh.attributes.POSITION.value` (which carries the high part as a
-     * Float32). Same length as `POSITION.value`. When `null`, no fp64
-     * correction is applied (vertex shader still references the attribute,
-     * which will be zero-filled by deck.gl).
-     *
-     * See `dev-docs/specs/2026-05-19-high-zoom-precision-design.md`.
-     */
-    positions64Low?: Float32Array | null;
-  };
+  _MeshTextureLayerProps;
 
 const defaultProps: DefaultProps<
   SimpleMeshLayerProps & {
     image: TextureSource | null;
     renderPipeline: RasterModule[];
-    positions64Low: Float32Array | null;
   }
 > = {
   ...SimpleMeshLayer.defaultProps,
@@ -43,7 +31,6 @@ const defaultProps: DefaultProps<
   // labels in interleaved mode 🤷‍♂️
   // image: { type: "image", value: null, async: true },
   renderPipeline: { type: "array", value: [], compare: true },
-  positions64Low: { type: "object", value: null, compare: true },
   // Disable lighting by default (avoids darkening raster)
   material: {
     ambient: 1.0,
@@ -73,17 +60,17 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     super.initializeState();
     const attributeManager = this.getAttributeManager();
     if (attributeManager) {
+      // Register the per-vertex low part of the fp64 position split. The
+      // buffer is supplied by the caller through `data.attributes.positions64Low`
+      // (deck.gl 9.x removed the `props.<attrName>` channel for attribute
+      // values — see attribute-manager.ts:196). We declare `noAlloc` so the
+      // AttributeManager doesn't try to materialize the buffer itself; it
+      // takes the external buffer directly via `setExternalBuffer`.
       attributeManager.add({
         positions64Low: {
           size: 3,
           type: "float32",
           noAlloc: true,
-          update: (attribute) => {
-            const value = this.props.positions64Low;
-            if (value) {
-              attribute.value = value;
-            }
-          },
         },
       });
     }
@@ -113,17 +100,6 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     // dev-docs/specs/2026-05-19-high-zoom-precision-design.md § Invariant.
     if (process.env.NODE_ENV !== "production") {
       assertFp64Invariants(params.props);
-    }
-
-    // Invalidate the positions64Low attribute when its reference changes so
-    // the AttributeManager re-reads from `this.props`. Reference equality
-    // (not deep equality) is intentional: callers (RasterLayer) hand us a
-    // stable reference per-mesh, and any new reference means a new mesh.
-    if (params.oldProps.positions64Low !== params.props.positions64Low) {
-      const attributeManager = this.getAttributeManager();
-      if (attributeManager) {
-        attributeManager.invalidate("positions64Low");
-      }
     }
   }
 
