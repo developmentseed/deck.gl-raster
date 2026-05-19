@@ -1,7 +1,8 @@
-import type { Source } from "@cogeotiff/core";
-
-/** The shape of a {@link Source.fetch} call. */
-type Fetch = Pick<Source, "fetch">["fetch"];
+import type {
+  SourceCallback,
+  SourceMiddleware,
+  SourceRequest,
+} from "@chunkd/source";
 
 /** A pending acquire parked in {@link Semaphore.queue}, waiting for a slot. */
 interface Waiter {
@@ -135,24 +136,55 @@ export class PerOriginSemaphore implements ConcurrencyLimiter {
   }
 }
 
+/** Options for {@link LimiterMiddleware}. */
+interface LimiterMiddlewareOptions {
+  /** The URL the wrapped source is reading from. Passed to
+   *  `limiter.acquire(url, signal?)` on every fetch — the limiter uses it for
+   *  per-origin routing. */
+  url: URL;
+  /** The {@link ConcurrencyLimiter} to gate through. */
+  limiter: ConcurrencyLimiter;
+}
+
 /**
- * Wrap a `Source.fetch` so each call holds a {@link ConcurrencyLimiter} slot
- * for its duration — releasing on resolve, on reject, and never otherwise
- * interfering. Forwards `options.signal` to `limiter.acquire`, so if the
- * caller aborts while the call is queued the request is dropped before any
- * network I/O fires.
+ * chunkd middleware that holds a {@link ConcurrencyLimiter} slot for the
+ * duration of each underlying `fetch` — releasing on resolve, on reject, and
+ * never otherwise interfering. Forwards the request's `signal` to
+ * `limiter.acquire`, so if the caller aborts while the call is queued the
+ * request is dropped before any network I/O fires.
+ *
+ * Composed into a {@link SourceView}'s middleware list alongside the chunkd
+ * middlewares (`SourceChunk`, `SourceCache`, …). Place it after caching so
+ * cache hits don't burn a slot.
+ *
+ * @example
+ * ```ts
+ * import { SourceView } from "@chunkd/source";
+ * import { SourceCache, SourceChunk } from "@chunkd/middleware";
+ *
+ * const view = new SourceView(source, [
+ *   new SourceChunk({ size: 64 * 1024 }),
+ *   new SourceCache({ size: 8 * 1024 * 1024 }),
+ *   new LimiterMiddleware({ url, limiter }),
+ * ]);
+ * ```
  */
-export function limitFetch(
-  fetch: Fetch,
-  url: URL,
-  limiter: ConcurrencyLimiter,
-): Fetch {
-  return async (offset, length, options) => {
-    const release = await limiter.acquire(url, options?.signal);
+export class LimiterMiddleware implements SourceMiddleware {
+  readonly name = "limiter";
+  private readonly url: URL;
+  private readonly limiter: ConcurrencyLimiter;
+
+  constructor(opts: LimiterMiddlewareOptions) {
+    this.url = opts.url;
+    this.limiter = opts.limiter;
+  }
+
+  async fetch(req: SourceRequest, next: SourceCallback): Promise<ArrayBuffer> {
+    const release = await this.limiter.acquire(this.url, req.signal);
     try {
-      return await fetch(offset, length, options);
+      return await next(req);
     } finally {
       release();
     }
-  };
+  }
 }

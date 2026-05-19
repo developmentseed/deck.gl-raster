@@ -73,7 +73,7 @@ describe("GeoTIFF.fromUrl({ concurrencyLimiter })", () => {
     SourceHttp.fetch = realFetch;
   });
 
-  it("routes tile-data fetches through the limiter (header reads are not gated)", async () => {
+  it("routes both header and tile-data fetches through the limiter (cache hits skip it)", async () => {
     SourceHttp.fetch = staticFetch(FIXTURE) as typeof SourceHttp.fetch;
 
     const acquired: URL[] = [];
@@ -86,18 +86,16 @@ describe("GeoTIFF.fromUrl({ concurrencyLimiter })", () => {
     const url = "https://example.test/cog.tif";
     const tiff = await GeoTIFF.fromUrl(url, { concurrencyLimiter: limiter });
 
-    // Opening the TIFF reads headers — those go through the header source
-    // (cached SourceView), NOT through the limiter, so `acquired` should
-    // still be empty (or near-empty — it must contain zero tile-data calls).
-    const headerOnlyCount = acquired.length;
-    expect(headerOnlyCount).toBe(0);
+    // Opening the TIFF reads headers — those network reads (cache misses
+    // through the SourceView) go through the limiter too.
+    expect(acquired.length).toBeGreaterThan(0);
+    const headerCount = acquired.length;
 
     await tiff.fetchTile(0, 0);
 
-    // After fetching a tile, the data-source path was exercised — the
-    // limiter must have seen at least one acquire, and every URL must be
-    // ours.
-    expect(acquired.length).toBeGreaterThan(headerOnlyCount);
+    // The tile fetch added at least one more acquire (the data-source
+    // path). Every URL must be ours.
+    expect(acquired.length).toBeGreaterThan(headerCount);
     for (const u of acquired) {
       expect(u.href).toBe(url);
     }

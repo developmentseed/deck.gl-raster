@@ -13,7 +13,7 @@ import { parseGDALMetadata } from "./gdal-metadata.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import type { ConcurrencyLimiter } from "./limiter.js";
-import { limitFetch } from "./limiter.js";
+import { LimiterMiddleware } from "./limiter.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
@@ -308,22 +308,26 @@ export class GeoTIFF {
     // unbounded length. Remove once the upstream fix lands.
     source.metadata = { size: Number.POSITIVE_INFINITY };
 
+    // When a limiter is supplied, slot a LimiterMiddleware into both
+    // sources' middleware stacks. On the header source, it sits *after*
+    // SourceChunk + SourceCache so a cache hit short-circuits and never
+    // consumes a slot — only network reads that escape the cache are gated.
+    // On the data source (no caching), every fetch is gated.
+    const limiterMW = concurrencyLimiter
+      ? new LimiterMiddleware({
+          url: new URL(url),
+          limiter: concurrencyLimiter,
+        })
+      : null;
+
     const view = new SourceView(source, [
       new SourceChunk({ size: chunkSize }),
       new SourceCache({ size: cacheSize }),
+      ...(limiterMW ? [limiterMW] : []),
     ]);
 
-    // Wrap the *raw* data source's `.fetch` when a limiter is supplied so
-    // every tile-data fetch holds a slot for its duration. Header reads go
-    // through the cached SourceView and are not gated.
-    const dataSource: Pick<Source, "fetch"> = concurrencyLimiter
-      ? {
-          fetch: limitFetch(
-            source.fetch.bind(source),
-            new URL(url),
-            concurrencyLimiter,
-          ),
-        }
+    const dataSource: Pick<Source, "fetch"> = limiterMW
+      ? new SourceView(source, [limiterMW])
       : source;
 
     return await GeoTIFF.open({
