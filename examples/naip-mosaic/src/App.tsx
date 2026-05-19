@@ -1,4 +1,8 @@
-import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
+import {
+  COGLayer,
+  defaultConcurrencyLimiter,
+  MosaicLayer,
+} from "@developmentseed/deck.gl-geotiff";
 import type {
   RasterModule,
   RenderTileResult,
@@ -92,7 +96,15 @@ function getCachedGeoTIFF(
 ): Promise<GeoTIFF> {
   let promise = geotiffCache.get(url);
   if (!promise) {
-    promise = GeoTIFF.fromUrl(url, { signal, getPriority }).catch((err) => {
+    // Pass the shared module-level limiter so every header + tile-data fetch
+    // through this GeoTIFF's sources is gated against the per-origin slot
+    // pool — and re-ordered dynamically by `getPriority` (distance from
+    // viewport center, computed by MosaicLayer).
+    promise = GeoTIFF.fromUrl(url, {
+      signal,
+      concurrencyLimiter: defaultConcurrencyLimiter,
+      getPriority,
+    }).catch((err) => {
       geotiffCache.delete(url);
       throw err;
     });
