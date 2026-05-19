@@ -3,11 +3,17 @@ import type { Source } from "@cogeotiff/core";
 /** The shape of a {@link Source.fetch} call. */
 type Fetch = Pick<Source, "fetch">["fetch"];
 
-/** A pending acquire waiting for a slot. */
+/** A pending acquire parked in {@link Semaphore.queue}, waiting for a slot. */
 interface Waiter {
+  /** Settles the caller's `acquire(...)` promise with a release function. */
   resolve(release: () => void): void;
+  /** Settles the caller's `acquire(...)` promise as rejected (e.g. on abort). */
   reject(reason: unknown): void;
+  /** Optional caller-supplied signal. If it aborts while we're queued, the
+   *  waiter is spliced out and {@link Waiter.reject reject}ed. */
   signal?: AbortSignal;
+  /** The listener installed on `signal` so we can later
+   *  `removeEventListener("abort", onAbort)` when the slot is granted. */
   onAbort?: () => void;
 }
 
@@ -54,6 +60,8 @@ export class Semaphore {
     });
   }
 
+  /** Build a single-use release function for a freshly-granted slot.
+   *  Calls beyond the first are no-ops, so double-releasing is safe. */
   private _makeRelease(): () => void {
     let released = false;
     return () => {
@@ -65,6 +73,9 @@ export class Semaphore {
     };
   }
 
+  /** Hand off one slot: dequeue the next waiter and grant it the slot, or —
+   *  if the queue is empty — decrement {@link Semaphore.active} so the next
+   *  `acquire` can take it directly. */
   private _releaseOne(): void {
     const next = this.queue.shift();
     if (!next) {
