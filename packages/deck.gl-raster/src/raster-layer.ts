@@ -146,6 +146,16 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         TEXCOORD_0: { value: Float32Array; size: number };
       };
     };
+    /**
+     * Low-part Float32Array of the fp64 split of mesh vertex positions
+     * (sibling to `mesh.attributes.POSITION`, which carries the high part).
+     * Stored separately from `mesh` because SimpleMeshLayer's
+     * `normalizeGeometryAttributes` whitelists only positions/colors/normals/
+     * texCoords on the mesh attributes object — anything else is silently
+     * dropped. Passed to MeshTextureLayer via a dedicated prop. See
+     * `dev-docs/specs/2026-05-19-high-zoom-precision-design.md`.
+     */
+    positions64Low?: Float32Array;
   };
 
   override initializeState(): void {
@@ -203,7 +213,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       height + 1,
     );
     reprojector.run(maxError);
-    const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
+    const { indices, positions, positions64Low, texCoords } =
+      reprojectorToMesh(reprojector);
 
     this.setState({
       reprojector,
@@ -214,6 +225,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
           TEXCOORD_0: { value: texCoords, size: 2 },
         },
       },
+      positions64Low,
     });
   }
 
@@ -321,17 +333,32 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 function reprojectorToMesh(reprojector: RasterReprojector): {
   indices: Uint32Array;
   positions: Float32Array;
+  positions64Low: Float32Array;
   texCoords: Float32Array;
 } {
   const numVertices = reprojector.uvs.length / 2;
   const positions = new Float32Array(numVertices * 3);
+  const positions64Low = new Float32Array(numVertices * 3);
   const texCoords = new Float32Array(reprojector.uvs);
 
   for (let i = 0; i < numVertices; i++) {
-    positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
-    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
+    const x = reprojector.exactOutputPositions[i * 2]!;
+    const y = reprojector.exactOutputPositions[i * 2 + 1]!;
+    // Split each float64 coord into (Math.fround(v), v - Math.fround(v)).
+    // The pair carries float64-equivalent precision when summed in fp64-aware
+    // shader math (see project.glsl.ts:234 — modelMatrix is applied to both
+    // halves and they're added in scaled common-units space). The residual is
+    // exactly representable as float32 since |residual| <= ulp_f32(v)/2. See
+    // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
+    const xHi = Math.fround(x);
+    const yHi = Math.fround(y);
+    positions[i * 3] = xHi;
+    positions[i * 3 + 1] = yHi;
     // z (flat on the ground)
     positions[i * 3 + 2] = 0;
+    positions64Low[i * 3] = x - xHi;
+    positions64Low[i * 3 + 1] = y - yHi;
+    positions64Low[i * 3 + 2] = 0;
   }
 
   // TODO: Consider using 16-bit indices if the mesh is small enough
@@ -340,6 +367,7 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   return {
     indices,
     positions,
+    positions64Low,
     texCoords,
   };
 }
