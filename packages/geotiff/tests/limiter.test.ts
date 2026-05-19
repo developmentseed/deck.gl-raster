@@ -1,6 +1,6 @@
 import type { SourceCallback, SourceRequest } from "@chunkd/source";
 import { describe, expect, it } from "vitest";
-import type { ConcurrencyLimiter } from "../src/limiter.js";
+import type { ConcurrencyLimiter, Priority } from "../src/limiter.js";
 import {
   LimiterMiddleware,
   PerOriginSemaphore,
@@ -76,6 +76,161 @@ describe("Semaphore", () => {
     await next;
     expect(nextResolved).toBe(true);
   });
+
+  it("orders queued waiters by priority (lower = sooner)", async () => {
+    const sem = new Semaphore({ maxRequests: 1 });
+    const hold = await sem.acquire();
+    const order: number[] = [];
+    // Queue in arrival order [c, a, b] but priorities say a < b < c.
+    const c = sem
+      .acquire(undefined, () => 3)
+      .then((r) => {
+        order.push(3);
+        r();
+      });
+    const a = sem
+      .acquire(undefined, () => 1)
+      .then((r) => {
+        order.push(1);
+        r();
+      });
+    const b = sem
+      .acquire(undefined, () => 2)
+      .then((r) => {
+        order.push(2);
+        r();
+      });
+    hold();
+    await Promise.all([a, b, c]);
+    expect(order).toEqual([1, 2, 3]);
+  });
+
+  it("FIFO tiebreak among waiters with the same priority", async () => {
+    const sem = new Semaphore({ maxRequests: 1 });
+    const hold = await sem.acquire();
+    const order: number[] = [];
+    const p1 = sem
+      .acquire(undefined, () => 5)
+      .then((r) => {
+        order.push(1);
+        r();
+      });
+    const p2 = sem
+      .acquire(undefined, () => 5)
+      .then((r) => {
+        order.push(2);
+        r();
+      });
+    const p3 = sem
+      .acquire(undefined, () => 5)
+      .then((r) => {
+        order.push(3);
+        r();
+      });
+    hold();
+    await Promise.all([p1, p2, p3]);
+    expect(order).toEqual([1, 2, 3]);
+  });
+
+  it("re-evaluates getPriority on every slot-open (dynamic priority)", async () => {
+    const sem = new Semaphore({ maxRequests: 1 });
+    const hold = await sem.acquire();
+    // Two waiters; each reads from a shared mutable state.
+    const prio = { a: 10, b: 1 };
+    const order: string[] = [];
+    const aPromise = sem
+      .acquire(undefined, () => prio.a)
+      .then((r) => {
+        order.push("a");
+        r();
+      });
+    const bPromise = sem
+      .acquire(undefined, () => prio.b)
+      .then((r) => {
+        order.push("b");
+        r();
+      });
+    // Right now b's priority (1) < a's (10), so on the first release b wins.
+    hold();
+    // Wait for b to finish.
+    await bPromise;
+    // Now flip priorities BEFORE a gets serviced. Only a is in the queue, so
+    // there's no contender, but this exercises that getPriority is read fresh
+    // on each call rather than memoised at acquire time.
+    prio.a = 0;
+    await aPromise;
+    expect(order).toEqual(["b", "a"]);
+  });
+
+  it("sorts tuple priorities lexicographically with missing trailing elements as 0", async () => {
+    const sem = new Semaphore({ maxRequests: 1 });
+    const hold = await sem.acquire();
+    const order: string[] = [];
+    // [5, 3] vs [5, 1] vs [5] — second-element decides; [5] = [5, 0] (smallest).
+    const p53 = sem
+      .acquire(undefined, () => [5, 3] as const)
+      .then((r) => {
+        order.push("[5,3]");
+        r();
+      });
+    const p51 = sem
+      .acquire(undefined, () => [5, 1] as const)
+      .then((r) => {
+        order.push("[5,1]");
+        r();
+      });
+    const p5 = sem
+      .acquire(undefined, () => [5] as const)
+      .then((r) => {
+        order.push("[5]");
+        r();
+      });
+    hold();
+    await Promise.all([p5, p51, p53]);
+    expect(order).toEqual(["[5]", "[5,1]", "[5,3]"]);
+  });
+
+  it("mixes number and tuple priorities — number is treated as 1-tuple", async () => {
+    const sem = new Semaphore({ maxRequests: 1 });
+    const hold = await sem.acquire();
+    const order: string[] = [];
+    // priority 3 (= [3]) and [3, 5] tie on first element; second decides — [3] (= [3,0]) wins.
+    const p3tuple = sem
+      .acquire(undefined, () => [3, 5] as const)
+      .then((r) => {
+        order.push("[3,5]");
+        r();
+      });
+    const p3num = sem
+      .acquire(undefined, () => 3)
+      .then((r) => {
+        order.push("3");
+        r();
+      });
+    hold();
+    await Promise.all([p3num, p3tuple]);
+    expect(order).toEqual(["3", "[3,5]"]);
+  });
+
+  it("treats omitted getPriority as priority 0 (so unprio'd waiters lead the queue)", async () => {
+    const sem = new Semaphore({ maxRequests: 1 });
+    const hold = await sem.acquire();
+    const order: string[] = [];
+    // priority 5 first arrival; no-priority second arrival. No-prio = 0 < 5 → wins.
+    const p5 = sem
+      .acquire(undefined, () => 5)
+      .then((r) => {
+        order.push("5");
+        r();
+      });
+    const pNone = sem.acquire().then((r) => {
+      order.push("none");
+      r();
+    });
+    hold();
+    await Promise.all([p5, pNone]);
+    expect(order).toEqual(["none", "5"]);
+  });
 });
 
 describe("PerOriginSemaphore", () => {
@@ -143,6 +298,27 @@ describe("PerOriginSemaphore", () => {
     expect(typeof release).toBe("function");
     release();
     hold();
+  });
+
+  it("forwards getPriority to the per-origin Semaphore", async () => {
+    const limiter = new PerOriginSemaphore({ maxRequests: 1 });
+    const hold = await limiter.acquire(A);
+    const order: string[] = [];
+    const low = limiter
+      .acquire(A, undefined, () => 99)
+      .then((r) => {
+        order.push("low");
+        r();
+      });
+    const high = limiter
+      .acquire(A2, undefined, () => 1)
+      .then((r) => {
+        order.push("high");
+        r();
+      });
+    hold();
+    await Promise.all([low, high]);
+    expect(order).toEqual(["high", "low"]);
   });
 });
 
@@ -240,5 +416,27 @@ describe("LimiterMiddleware", () => {
     });
     expect(mw.name).toBe("limiter");
     expect(typeof mw.fetch).toBe("function");
+  });
+
+  it("threads getPriority from constructor through to limiter.acquire", async () => {
+    const calls: Array<{
+      url: URL;
+      signal?: AbortSignal;
+      priority: Priority | undefined;
+    }> = [];
+    const limiter: ConcurrencyLimiter = {
+      acquire: async (url, signal, getPriority) => {
+        calls.push({ url, signal, priority: getPriority?.() });
+        return () => {};
+      },
+    };
+    const mw = new LimiterMiddleware({
+      url: URL_A,
+      limiter,
+      getPriority: () => [2, 7],
+    });
+    await mw.fetch(REQ, async () => new ArrayBuffer(0));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.priority).toEqual([2, 7]);
   });
 });
