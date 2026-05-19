@@ -82,11 +82,13 @@ bit-identical encoding of shared boundary vertices across adjacent tiles
 — but encode each vertex as an **fp64 split pair**:
 
 - `positions` (Float32Array high parts) — the closest float32 to each
-  true float64 vertex value
+  true float64 vertex value, computed on the CPU as
+  `Math.fround(v_f64)`
 - `positions64Low` (Float32Array low parts) — the residual
-  `(v_f64 − Math.fround(v_f64))`, also stored as float32
+  `v_f64 − Math.fround(v_f64)`, also stored as float32 (it's small enough
+  to be exactly representable)
 
-The pair `(hi, lo)` together carry ~14 decimal digits of precision
+The pair `(hi, lo)` together carries ~14 decimal digits of precision
 (float64-equivalent at our magnitudes). deck.gl's vertex projection
 shader already accepts both — [`project_position`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/shaderlib/project/project.glsl.ts#L188-L235)
 takes a `position64Low` parameter and adds
@@ -94,6 +96,62 @@ takes a `position64Low` parameter and adds
 result. The infrastructure is built-in and not deprecated; see
 [`coordinate-systems.md`](../coordinate-systems.md) § "fp64 attribute
 pairs".
+
+### Wiring: split on CPU, two separate plumbing paths
+
+BitmapLayer gets the fp64 split for free by declaring its `positions`
+attribute with `type: 'float64', fp64: true` on `AttributeManager`,
+which auto-splits Float64Array into `positions` (high) and
+`positions64Low` (low) at upload. That auto-split lives in
+AttributeManager — BitmapLayer is AttributeManager-driven for all
+attributes (its Model has no Geometry).
+
+SimpleMeshLayer is **Geometry-driven** for mesh primitive attributes:
+`positions`, `colors`, `normals`, `texCoords` come from
+[`getGeometry(mesh)`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L72-L89),
+not through AttributeManager. And
+[`normalizeGeometryAttributes`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L42-L66)
+whitelists those four names — any extra attribute keys are silently
+dropped. So we can't reach the auto-split mechanism via the mesh prop.
+
+The implementation splits manually on the CPU and plumbs each half via
+the path that fits its origin:
+
+- **High part** (Float32Array) → travels through the existing mesh prop
+  as `mesh.attributes.POSITION.value`. Geometry path. Becomes
+  `in vec3 positions` in the shader. Same shape as today, just narrower
+  values.
+- **Low part** (Float32Array) → exposed as a new `MeshTextureLayer`
+  prop (`positions64Low`). Registered via `attributeManager.add({
+  positions64Low: { type: 'float32', size: 3, noAlloc: true,
+  update: attr => attr.value = this.props.positions64Low }})`. AttributeManager
+  path, non-instanced. The Model's `bufferLayout` (from
+  `attributeManager.getBufferLayouts()`) gains the entry, the buffer is
+  bound to `in vec3 positions64Low` in the shader.
+
+Both buffers are per-vertex (same vertex count, same indexing), so
+they're consumed together in the same draw call.
+
+### Invariant required by the fp64 correction
+
+The SimpleMeshLayer vertex shader builds its working position as:
+
+```glsl
+vec3 pos = (instanceModelMatrix * positions) * simpleMesh.sizeScale + instanceTranslation;
+```
+
+Our `positions64Low` represents the low part of `positions`, not of
+`pos`. The fp64 correction is therefore correct only when:
+
+- `instanceModelMatrix` is identity (no per-instance rotation/scale)
+- `simpleMesh.sizeScale` is 1
+- `instanceTranslation` is `[0, 0, 0]`
+- `_instanced` is `false` and `instancePositions` is `[0, 0, 0]`
+
+That matches `RasterLayer`'s current usage exactly. To prevent silent
+breakage if `MeshTextureLayer` is ever wired into a different usage
+pattern, the plan should add a development-mode assertion in
+`MeshTextureLayer` that these invariants hold.
 
 ### Why this preserves bit-identity across tiles
 
@@ -121,35 +179,80 @@ positions on a float32 GPU.
 
 ## Scope of change
 
-Four files. Public API additions: none — fp64 is internal to mesh
-construction and the inner mesh-texture layer.
+Three source files plus tests. Public API additions: none — fp64
+splitting is internal to mesh construction and the inner mesh-texture
+layer.
 
 - [`packages/deck.gl-raster/src/raster-layer.ts`](../../packages/deck.gl-raster/src/raster-layer.ts)
-  — `_generateMesh` writes positions to a **Float64Array** instead of
-  Float32Array. The mesh data structure's `POSITION.value` becomes a
-  Float64Array; downstream (`MeshTextureLayer`) hands it to the layer's
-  attribute manager which auto-splits.
+  — `_generateMesh` (and its `reprojectorToMesh` helper) splits each
+  float64 vertex coordinate from the reprojector into a
+  `(Math.fround(v), v − Math.fround(v))` pair. Returns two
+  Float32Arrays (high and low). The mesh structure stored in
+  `state.mesh` gains a `positions64Low` field alongside the existing
+  `attributes.POSITION` (which holds the high part as a Float32Array,
+  same type as today). The state-mesh shape:
+  ```ts
+  state.mesh = {
+    indices: { value: Uint32Array, size: 1 },
+    attributes: {
+      POSITION:   { value: Float32Array /* high */, size: 3 },
+      TEXCOORD_0: { value: Float32Array,             size: 2 },
+    },
+    positions64Low: Float32Array /* low */,
+  }
+  ```
+  `renderLayers` passes both to the inner `MeshTextureLayer`: the
+  `mesh` prop as today, plus a new `positions64Low` prop.
+
 - [`packages/deck.gl-raster/src/mesh-layer/mesh-layer.ts`](../../packages/deck.gl-raster/src/mesh-layer/mesh-layer.ts)
-  — `MeshTextureLayer` overrides `initializeState()` to add a
-  `positions64Low` attribute via `attributeManager.add`/`addInstanced`
-  with `type: 'float64', fp64: this.use64bitPositions()`. Mirrors
-  [`BitmapLayer.initializeState`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/layers/src/bitmap-layer/bitmap-layer.ts#L135-L161).
-  Then `getShaders()` returns a `vs` override — a copy of
-  [`simple-mesh-layer-vertex.glsl.ts`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts)
-  with **one substitution**: in the `composeModelMatrix` branch,
-  replace the `instancePositions64Low` argument to
-  `project_position_to_clipspace` with
-  `positions64Low + instancePositions64Low`. Total addition: ~60 lines
-  of GLSL we explicitly own, plus the attribute plumbing.
+  — `MeshTextureLayer` adds:
+  1. A new `positions64Low: Float32Array | null` prop (default `null`).
+  2. `initializeState()` calls `super.initializeState()`, then
+     `attributeManager.add({ positions64Low: { type: 'float32',
+     size: 3, noAlloc: true, update: attr => attr.value = this.props.positions64Low }})`.
+     Non-instanced, so it's a per-vertex attribute alongside the
+     geometry's `positions`.
+  3. `updateState` invalidates the `positions64Low` attribute when
+     `props.positions64Low` reference changes.
+  4. `getShaders()` returns a `vs` override — a copy of upstream
+     [`simple-mesh-layer-vertex.glsl.ts`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts)
+     with one substitution in the `composeModelMatrix` branch: replace
+     the `instancePositions64Low` argument to
+     `project_position_to_clipspace` with
+     `positions64Low + instancePositions64Low`. Also add
+     `in vec3 positions64Low;` to the attribute declarations at the
+     top. ~60 lines of GLSL total that we explicitly own.
+  5. A development-mode assertion in `updateState` that the usage
+     invariants hold (`_instanced === false`, `getPosition` resolves
+     to `[0,0,0]`, identity model matrix, `sizeScale === 1`). The
+     check **throws** when violated — a misused `MeshTextureLayer`
+     produces precision-only-wrong output that looks plausibly
+     correct, so a loud failure is what catches it. Gated on
+     `process.env.NODE_ENV !== 'production'` so it's stripped from
+     prod builds. See "Invariant" section above.
+
 - No changes to [`packages/deck.gl-raster/src/raster-tileset/raster-tileset-2d.ts`](../../packages/deck.gl-raster/src/raster-tileset/raster-tileset-2d.ts).
   No per-tile reference point. No `referencePointMeters` prop on
   `RasterLayer`. No `modelMatrix.translation` per tile. We keep `main`'s
-  shape — single shared `coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0]`,
-  uniform `modelMatrix = diag(WEB_MERCATOR_TO_WORLD_SCALE)`.
-- Test: [`packages/deck.gl-raster/tests/raster-layer.test.ts`](../../packages/deck.gl-raster/tests/raster-layer.test.ts)
-  — extend to assert positions are written to a `Float64Array` with full
-  float64 precision, and that the value at a sample vertex matches the
-  reprojector's exact output to within float64 ULP (not float32 ULP).
+  outer shape — single shared `coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0]`,
+  uniform `modelMatrix = diag(WEB_MERCATOR_TO_WORLD_SCALE)`. The fp64
+  precision improvement is entirely internal to the mesh attribute
+  pipeline.
+
+- Tests in [`packages/deck.gl-raster/tests/raster-layer.test.ts`](../../packages/deck.gl-raster/tests/raster-layer.test.ts):
+  - `_generateMesh` produces two Float32Arrays (high + low) with the
+    same length; each is finite and non-NaN.
+  - **Precision claim:** for sample vertices spanning the full 3857
+    magnitude range (~±2 × 10⁷ m), `high[i] + low[i]` (computed in
+    JS float64 from the stored Float32Array entries) reconstructs
+    the reprojector's float64 output to within **float32 ULP at the
+    low part's magnitude** — concretely, `< 1e-6 m` absolute error.
+    Compare to the current float32-of-input floor of `~1 m` at the
+    same magnitude. This bound is the strict claim of the fp64
+    attribute-pair encoding and catches any silent regression in
+    the split.
+  - Regression: the existing mesh state-shape and reference-stability
+    tests still pass with the augmented mesh object.
 
 ## Non-goals
 
@@ -186,13 +289,14 @@ construction and the inner mesh-texture layer.
   vertex shader interface meaningfully, we adapt. The dependency is
   bounded — we already maintain the fragment shader for the same
   layer.
-- **`use64bitPositions()` returning `false`.** Defined on the base
-  `Layer` class ([`core/src/lib/layer.ts:357-364`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/lib/layer.ts#L357-L364)),
-  it returns `true` for `default`, `lnglat`, or `cartesian`. We
-  always set `cartesian` for non-globe tiles in
-  [`RasterTileLayer._renderSubLayers`](../../packages/deck.gl-raster/src/raster-tile-layer/raster-tile-layer.ts),
-  so the flag is `true`. Worth asserting in a test to catch any future
-  silent regression.
+- **Usage invariants on `MeshTextureLayer`.** The fp64 correction is
+  only valid when the SimpleMeshLayer per-instance transforms are
+  identity (see "Invariant" section above). `RasterLayer`'s current
+  usage satisfies all of them, but if a future caller wires
+  `MeshTextureLayer` differently the silent failure would be
+  precision-only — wrong but plausibly-correct-looking output. The
+  development-mode assertion is what prevents this from sneaking
+  through.
 - **Vertex stage cost.** fp64 adds ~3–5× cost per arithmetic operation
   in the vertex shader. Our meshes are tiny (dozens to a few hundred
   vertices per tile), so total vertex stage cost stays in the
@@ -200,11 +304,11 @@ construction and the inner mesh-texture layer.
   modules) dominates total frame time and is unaffected — fp64 is
   vertex-only.
 - **Upstream gap.** SimpleMeshLayer itself does not fp64 its primitive
-  `positions` attribute (only `instancePositions`). This is a
-  documented assumption mismatch with our usage (see
-  [`coordinate-systems.md`](../coordinate-systems.md) § "SimpleMeshLayer:
-  small-model-big-anchor"). Worth a follow-up issue at
-  vis.gl/deck.gl proposing optional fp64 for primitive positions;
+  `positions` attribute (only `instancePositions`). This is the
+  assumption mismatch documented in
+  [`coordinate-systems.md`](../coordinate-systems.md) §
+  "SimpleMeshLayer: small-model-big-anchor". Worth a follow-up issue
+  at vis.gl/deck.gl proposing optional fp64 for primitive positions;
   until then we patch locally.
 
 ## Follow-ups
