@@ -416,19 +416,32 @@ export class RasterTileLayer<
           forwardReproject: descriptor.projectTo3857,
           inverseReproject: descriptor.projectFrom3857,
         };
-    const deckProjectionProps: Partial<LayerProps> = isGlobe
-      ? {}
-      : {
-          coordinateSystem: "cartesian",
-          coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
-          // biome-ignore format: array
-          modelMatrix: [
-            WEB_MERCATOR_TO_WORLD_SCALE, 0, 0, 0,
-            0, WEB_MERCATOR_TO_WORLD_SCALE, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1,
-          ],
-        };
+
+    let referencePointMeters: [number, number] | null = null;
+    let deckProjectionProps: Partial<LayerProps> = {};
+    if (!isGlobe) {
+      referencePointMeters = tile.referencePointMeters;
+      // Translation columns of the column-major modelMatrix carry the
+      // float64-precision reference point, scaled to deck.gl world units.
+      // The mesh stores positions as float32 offsets from
+      // `referencePointMeters` (see RasterLayer.referencePointMeters), so the
+      // GPU multiplies a small float32 by the scale and adds a precise
+      // float64 origin. See
+      // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
+      const tx = referencePointMeters[0] * WEB_MERCATOR_TO_WORLD_SCALE;
+      const ty = referencePointMeters[1] * WEB_MERCATOR_TO_WORLD_SCALE;
+      deckProjectionProps = {
+        coordinateSystem: "cartesian",
+        coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
+        // biome-ignore format: array
+        modelMatrix: [
+          WEB_MERCATOR_TO_WORLD_SCALE, 0, 0, 0,
+          0, WEB_MERCATOR_TO_WORLD_SCALE, 0, 0,
+          0, 0, 1, 0,
+          tx, ty, 0, 1,
+        ],
+      };
+    }
 
     const rasterLayer = new RasterLayer(
       this.getSubLayerProps({
@@ -441,6 +454,7 @@ export class RasterTileLayer<
         renderPipeline,
         maxError,
         reprojectionFns,
+        referencePointMeters,
         debug,
         debugOpacity,
         ...deckProjectionProps,
