@@ -74,3 +74,47 @@ export class Semaphore {
     next.resolve(this._makeRelease());
   }
 }
+
+/**
+ * Minimal contract for capping concurrent {@link Source.fetch} calls. An
+ * implementation hands out slots scoped however it likes; the default
+ * {@link PerOriginSemaphore} scopes per `url.origin`.
+ */
+export interface ConcurrencyLimiter {
+  /**
+   * Acquire a slot to perform one fetch to `url`. Resolves to a release
+   * function — call it exactly once when the fetch settles. If `signal`
+   * aborts while waiting in the queue, the returned promise rejects with the
+   * signal's reason and no slot is consumed.
+   */
+  acquire(url: URL, signal?: AbortSignal): Promise<() => void>;
+}
+
+/**
+ * Default {@link ConcurrencyLimiter}. Maintains a separate {@link Semaphore}
+ * per `url.origin`, minted lazily on first encounter. Multiple consumers (e.g.
+ * two `COGLayer`s on the same S3 bucket) targeting one origin share that
+ * origin's slot pool; consumers targeting different origins don't compete.
+ *
+ * The browser's HTTP/1.1 per-origin connection cap (~6 on Chrome) is the
+ * reason the cap is *per origin*, shared across layers — exceeding it just
+ * makes the browser queue requests, blocking fresh ones behind stale ones.
+ */
+export class PerOriginSemaphore implements ConcurrencyLimiter {
+  private readonly maxRequests: number;
+  private readonly byOrigin = new Map<string, Semaphore>();
+
+  constructor(options: { maxRequests: number }) {
+    this.maxRequests = options.maxRequests;
+  }
+
+  acquire(url: URL, signal?: AbortSignal): Promise<() => void> {
+    const { origin } = url;
+    let sem = this.byOrigin.get(origin);
+    if (!sem) {
+      sem = new Semaphore({ maxRequests: this.maxRequests });
+      this.byOrigin.set(origin, sem);
+    }
+    return sem.acquire(signal);
+  }
+}
