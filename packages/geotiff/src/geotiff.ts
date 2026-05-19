@@ -327,7 +327,7 @@ export class GeoTIFF {
     const view = new SourceView(source, [
       new SourceChunk({ size: chunkSize }),
       new SourceCache({ size: cacheSize }),
-      // ...(limiter ? [limiter] : []),
+      ...(limiter ? [limiter] : []),
     ]);
 
     const dataSource: Pick<Source, "fetch"> = limiter
