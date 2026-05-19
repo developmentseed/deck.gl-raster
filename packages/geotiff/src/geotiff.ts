@@ -12,7 +12,7 @@ import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";
 import { parseGDALMetadata } from "./gdal-metadata.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
-import type { ConcurrencyLimiter } from "./limiter.js";
+import type { ConcurrencyLimiter, Priority } from "./limiter.js";
 import { LimiterMiddleware } from "./limiter.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
@@ -272,6 +272,7 @@ export class GeoTIFF {
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console with offset/length and a `data`/`mask` label. Off by default.
    * @param options.concurrencyLimiter Caps concurrent HTTP requests for the *tile data* path. Header / metadata reads (through the cached SourceView) are not gated. Pass `null` to explicitly disable; omit (or pass `undefined`) for the same effect — `GeoTIFF.fromUrl` does *not* default to a shared limiter on its own. The deck.gl-geotiff layers default to a shared {@link PerOriginSemaphore} via their `defaultProps`.
+   * @param options.getPriority Optional dynamic priority for every fetch through this GeoTIFF's sources. Re-invoked by the limiter on each slot-open, so closures over dynamic state (e.g. layer viewport center, tile bbox) re-sort the queue when that state changes. Lower = serviced sooner. Only meaningful when `concurrencyLimiter` is set.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
@@ -282,12 +283,14 @@ export class GeoTIFF {
       signal,
       debug,
       concurrencyLimiter,
+      getPriority,
     }: {
       chunkSize?: number;
       cacheSize?: number;
       signal?: AbortSignal;
       debug?: boolean;
       concurrencyLimiter?: ConcurrencyLimiter | null;
+      getPriority?: () => Priority;
     } = {},
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url, {});
@@ -317,13 +320,14 @@ export class GeoTIFF {
       ? new LimiterMiddleware({
           url: new URL(url),
           limiter: concurrencyLimiter,
+          getPriority,
         })
       : null;
 
     const view = new SourceView(source, [
       new SourceChunk({ size: chunkSize }),
       new SourceCache({ size: cacheSize }),
-      ...(limiter ? [limiter] : []),
+      // ...(limiter ? [limiter] : []),
     ]);
 
     const dataSource: Pick<Source, "fetch"> = limiter
