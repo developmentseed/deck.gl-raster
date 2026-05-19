@@ -32,6 +32,7 @@ import {
   CompositeBands,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type {
+  ConcurrencyLimiter,
   DecoderPool,
   GeoTIFF,
   Overview,
@@ -47,6 +48,7 @@ import {
 } from "@developmentseed/proj";
 import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import proj4 from "proj4";
+import { defaultConcurrencyLimiter } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 
@@ -257,12 +259,23 @@ export type MultiCOGLayerProps = CompositeLayerProps &
      * @default 1
      */
     debugLevel?: 1 | 2 | 3;
+
+    /**
+     * Caps concurrent HTTP requests for this layer's tile-data fetches.
+     * Defaults to a shared module-level `PerOriginSemaphore({ maxRequests:
+     * 6 })` (the *same* instance COGLayer uses by default), so a
+     * COGLayer and a MultiCOGLayer hitting the same origin share one
+     * HTTP/1.1 connection pool. Pass your own `ConcurrencyLimiter` to
+     * override; pass `null` to disable gating.
+     */
+    concurrencyLimiter?: ConcurrencyLimiter | null;
   };
 
 const defaultProps = {
   ...RasterTileLayer.defaultProps,
   epsgResolver: { type: "accessor" as const, value: defaultEpsgResolver },
   debugLevel: { type: "number" as const, value: 1 },
+  concurrencyLimiter: defaultConcurrencyLimiter,
 };
 
 /**
@@ -334,7 +347,9 @@ export class MultiCOGLayer extends RasterTileLayer<
     // Open all COGs in parallel
     const cogSources = await Promise.all(
       entries.map(async ([name, config]) => {
-        const geotiff = await fetchGeoTIFF(config.url);
+        const geotiff = await fetchGeoTIFF(config.url, {
+          concurrencyLimiter: this.props.concurrencyLimiter,
+        });
         const crs = geotiff.crs;
         const sourceProjection =
           typeof crs === "number"
