@@ -21,6 +21,7 @@ import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
   Corners,
+  Point,
   ProjectedBoundingBox,
   ProjectionFunction,
   TileIndex,
@@ -47,6 +48,17 @@ export type RasterTileMetadata = {
    * axis-aligned bbox.
    */
   projectedCorners: Corners;
+
+  /**
+   * Reference point in projected (EPSG:3857) coordinates, used by
+   * {@link RasterLayer} to split mesh vertex positions into a float32 offset
+   * and a float64 origin to preserve precision at high zoom. Computed once
+   * per tile as the centroid of {@link RasterTileMetadata.projectedCorners}.
+   *
+   * See `dev-docs/specs/2026-05-19-high-zoom-precision-design.md` for the
+   * reasoning.
+   */
+  referencePointMeters: Point;
 
   /**
    * Tile width in pixels.
@@ -292,6 +304,11 @@ export class RasterTileset2D extends Tileset2D {
       bottomRight,
     };
 
+    const referencePointMeters: Point = [
+      (topLeft[0] + topRight[0] + bottomLeft[0] + bottomRight[0]) / 4,
+      (topLeft[1] + topRight[1] + bottomLeft[1] + bottomRight[1]) / 4,
+    ];
+
     // Also compute axis-aligned bounding box for compatibility
     const projectedBounds: Bounds = [
       Math.min(topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]),
@@ -326,6 +343,7 @@ export class RasterTileset2D extends Tileset2D {
         top: projectedBounds[3],
       },
       projectedCorners,
+      referencePointMeters,
       tileWidth,
       tileHeight,
       forwardTransform,

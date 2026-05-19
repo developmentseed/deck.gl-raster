@@ -51,3 +51,32 @@ describe("RasterTileset2D.getTileMetadata", () => {
     expect(py).toBeCloseTo(0, 10);
   });
 });
+
+describe("RasterTileset2D.getTileMetadata referencePointMeters", () => {
+  it("computes the centroid of projectedCorners in projected (3857) coordinates", () => {
+    const level = new AffineTilesetLevel({
+      affine: compose(translation(100, 200), scale(10, -10)),
+      arrayWidth: 8,
+      arrayHeight: 8,
+      tileWidth: 4,
+      tileHeight: 4,
+      mpu: 1,
+    });
+    const descriptor = new AffineTileset({
+      levels: [level],
+      ...PROJECTIONS,
+    });
+    const tileset = new RasterTileset2D(tilesetProps(), descriptor);
+
+    const metadata = tileset.getTileMetadata({ x: 1, y: 1, z: 0 });
+    const { topLeft, topRight, bottomLeft, bottomRight } =
+      metadata.projectedCorners;
+    const expectedX =
+      (topLeft[0] + topRight[0] + bottomLeft[0] + bottomRight[0]) / 4;
+    const expectedY =
+      (topLeft[1] + topRight[1] + bottomLeft[1] + bottomRight[1]) / 4;
+
+    expect(metadata.referencePointMeters[0]).toBeCloseTo(expectedX, 10);
+    expect(metadata.referencePointMeters[1]).toBeCloseTo(expectedY, 10);
+  });
+});
