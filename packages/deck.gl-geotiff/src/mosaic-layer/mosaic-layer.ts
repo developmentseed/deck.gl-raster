@@ -2,6 +2,7 @@ import type { CompositeLayerProps, Layer, LayersList } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
+import type { Priority } from "@developmentseed/geotiff";
 import type { MosaicSource } from "./mosaic-tileset-2d.js";
 import { MosaicTileset2D } from "./mosaic-tileset-2d.js";
 
@@ -42,7 +43,19 @@ export type MosaicLayerProps<
     /** Fetch data for this source. */
     getSource?: (
       source: MosaicT,
-      opts: { signal?: AbortSignal },
+      opts: {
+        signal?: AbortSignal;
+        /**
+         * Dynamic priority for fetches related to this source. Re-invoked by
+         * the limiter on every slot-open, so the queue re-sorts on viewport
+         * pan. Computed from the source's `bbox` center and the layer's
+         * current viewport: closer to viewport center ⇒ lower number ⇒
+         * serviced sooner. Threaded into {@link fetchGeoTIFF} /
+         * `GeoTIFF.fromUrl` to bias center-of-screen rendering ahead of
+         * edges; passing it on is otherwise optional.
+         */
+        getPriority: () => Priority;
+      },
     ) => Promise<DataT>;
 
     /** Render a source */
@@ -112,9 +125,30 @@ export class MosaicLayer<
         // `TileIndex`, which only defines x,y,z
         const index = data.index as MosaicT;
         const { signal } = data;
+        // Dynamic priority for the limiter: euclidean distance from this
+        // source's bbox center to the layer's current viewport center, in
+        // degree-space (just used as an ordering key; great-circle isn't
+        // needed). Re-evaluated on every limiter slot-open, so panning the
+        // viewport re-sorts the queue and pulls newly-central sources to the
+        // front of the line ahead of older edge sources.
+        const [minX, minY, maxX, maxY] = index.bbox;
+        const sourceCx = (minX + maxX) / 2;
+        const sourceCy = (minY + maxY) / 2;
+        const getPriority = (): number => {
+          const { viewport } = this.context;
+          // Viewport exposes longitude/latitude for geographic viewports;
+          // fall back to (0, 0) defensively if not available.
+          const lon =
+            "longitude" in viewport ? (viewport.longitude as number) : 0;
+          const lat =
+            "latitude" in viewport ? (viewport.latitude as number) : 0;
+          const dx = sourceCx - lon;
+          const dy = sourceCy - lat;
+          return Math.hypot(dx, dy);
+        };
         const userData =
           this.props.getSource &&
-          (await this.props.getSource(index, { signal }));
+          (await this.props.getSource(index, { signal, getPriority }));
 
         return {
           source: index,
