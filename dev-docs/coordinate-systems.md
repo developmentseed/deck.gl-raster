@@ -254,6 +254,73 @@ All three create seams. The fix is structural — keep the mesh
 encoding identical across adjacent tiles (absolute coords) and add
 precision via fp64 attribute splits.
 
+## High-zoom precision: three error sources, and why fp64 alone isn't enough
+
+When we first applied fp64 attribute pairs (above), the jitter at z16+
+did *not* go away. The reason: there are **three** independent
+float32-at-large-magnitude error sources in the cartesian + auto-offset
+shader chain, and fp64 attribute pairs only fix the first.
+
+Tracing [`project.glsl.ts:188-235`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/shaderlib/project/project.glsl.ts#L188-L235):
+
+```glsl
+position_world = modelMatrix * position;     // (A) scale × ~1.3e7 m → ~114 wu
+position_world -= shaderCoordinateOrigin;     // (B) ~114 − ~114
+clip = viewProjectionMatrix * commonPosition + projectionCenter;  // (C)
+```
+
+1. **Attribute quantization** — the input position (3857 meters, ~10⁷)
+   rounds to float32 (~1 m) before the shader. Fixed by fp64 attribute
+   pairs.
+2. **Scale-multiply rounding (A)** — `scale × meters` is a float32
+   multiply with its own ~10⁻⁵ wu (~1 m) rounding at the ~114 result
+   magnitude. The fp64 low term adds `scale × low` but doesn't undo the
+   rounding of `scale × high`.
+3. **Origin re-quantization (B)** — `shaderCoordinateOrigin =
+   Math.fround(viewport.center) − coordinateOrigin`. With
+   `coordinateOrigin = [256,256,0]`, that's `fround(VC) − 256`, *re*-rounded
+   to float32 on upload (~10⁻⁵ wu ≈ 1 m).
+
+### The fix: project to common space, identity matrix, zero origin
+
+Eliminate (2) and (3) so fp64 (which fixes (1)) is the only correction
+needed:
+
+- **Project mesh vertices to full common space on the CPU**
+  (`common = meters × WEB_MERCATOR_TO_WORLD_SCALE + TILE_SIZE/2`, float64)
+  and pass `modelMatrix = identity`. The shader's `position_world` is
+  then the vertex itself — no multiply, no (2).
+- **Set `coordinateOrigin = [0,0,0]`.** Then
+  `shaderCoordinateOrigin = Math.fround(viewport.center)`, which is
+  *exactly* float32 (it's the output of `Math.fround`) — no upload
+  re-quantization, no (3). And `position_world − shaderCoordinateOrigin`
+  is `(~114) − (~114)` of two nearby float32 values, which is **exact**
+  by the **Sterbenz lemma** (`a − b` is exact when `a/2 ≤ b ≤ 2a`).
+
+The residual `fround(viewport.center)` rounding cancels: deck.gl computes
+`projectionCenter` from the *same* `fround(viewport.center)` in float64
+and adds it back in clip space (step C). The cancellation is exact *only*
+when `shaderCoordinateOrigin` is exactly `fround(viewport.center)` — which
+`[0,0,0]` guarantees and `[256,256,0]` breaks (the `−256` forces a
+re-rounding that no longer matches `projectionCenter`).
+
+This is the same precision discipline deck.gl's **LNGLAT** path already
+follows: identity model matrix (no multiply), `fround`-of-degrees origin
+(exact float32), fp64 pairs for the attribute. We reproduce it in
+cartesian/common space rather than converting to lng/lat.
+
+### Why delatin's triangulation is unaffected by the common-space move
+
+We apply the `× scale + offset` by wrapping the `forwardReproject` /
+`inverseReproject` functions, *not* inside the reprojector. Delatin
+measures refinement error in **pixel space** (it inverse-projects the
+interpolated output back to pixels and compares). Barycentric
+interpolation commutes with an affine transform
+(`interp(f(a),f(b),f(c)) = f(interp(a,b,c))` when weights sum to 1), and
+`inverseReproject` undoes the affine before going to pixels — so as long
+as *both* fns are wrapped consistently, the pixel-space error, and thus
+the triangulation, is identical to 3857-meter output.
+
 ## Performance: fp64 cost is vertex-only
 
 fp64-emulated arithmetic is ~3–5× slower per operation than float32,

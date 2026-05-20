@@ -1,6 +1,6 @@
-# Fix high-zoom jitter via fp64 mesh-vertex attributes
+# Fix high-zoom jitter via common-space mesh + fp64 attributes
 
-- **Date:** 2026-05-19
+- **Date:** 2026-05-19 (revised 2026-05-20)
 - **Issues:** [#512](https://github.com/developmentseed/deck.gl-raster/issues/512)
 - **Status:** Proposed
 - **Related:** [`dev-docs/coordinate-systems.md`](../coordinate-systems.md) — background and gotchas
@@ -27,7 +27,7 @@ quantize in steps of roughly 1–2 m. At z16 a pixel is ~2.4 m on the ground,
 so the quantization is visible as jitter; at z18 a pixel is ~0.6 m and the
 jitter dominates.
 
-## Why deck.gl's auto-offset doesn't fix this
+## Why deck.gl's auto-offset doesn't fix this on its own
 
 deck.gl's `WEB_MERCATOR_AUTO_OFFSET` (zoom ≥ 12, see
 [`Viewport.projectionMode`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/viewports/viewport.ts#L205-L212))
@@ -39,6 +39,37 @@ to float32 on the CPU when filling the `Float32Array`. Auto-offset works
 for ordinary geospatial layers because they store LNGLAT degrees
 (magnitudes ≲ 180), which float32 represents with sub-cm precision
 everywhere.
+
+## Three independent error sources
+
+Tracing the cartesian + auto-offset shader chain end to end
+([`project.glsl.ts`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/shaderlib/project/project.glsl.ts#L188-L235)),
+there are **three** places precision is lost — and fp64 attribute pairs
+alone only fix the first:
+
+```glsl
+position_world = modelMatrix * position;     // (A) scale × ~1.3e7 m → ~114 wu
+position_world -= shaderCoordinateOrigin;     // (B) ~114 − ~114
+clip = viewProjectionMatrix * commonPosition + projectionCenter;  // (C)
+```
+
+1. **Attribute quantization.** `position` (3857 meters, ~10⁷) rounds to
+   float32 (~1 m) *before the shader runs*. → fixed by fp64 attribute
+   pairs (high + low Float32Arrays).
+2. **Scale-multiply rounding (A).** `scale × meters` is a float32
+   multiply producing a ~114-magnitude result with its own ~10⁻⁵ wu
+   (~1 m) rounding. The fp64 low term adds `scale × low` back but does
+   *not* undo the rounding of `scale × high`. → **not fixed by fp64
+   alone.**
+3. **Auto-offset origin re-quantization (B).** `shaderCoordinateOrigin =
+   Math.fround(viewport.center) − coordinateOrigin`. With
+   `coordinateOrigin = [256,256,0]`, that is `fround(VC) − 256`, which is
+   **re-quantized to float32 on upload** (~10⁻⁵ wu ≈ 1 m). → **not fixed
+   by fp64 alone.**
+
+The first revision of this spec proposed fp64 attribute pairs alone and
+addressed only (1) — leaving (2) and (3) as a ~1 m floor, indistinguishable
+from `main`. The full fix below eliminates all three.
 
 ## What we tried first (and why it created seams)
 
@@ -75,11 +106,48 @@ The seam is structural to **per-tile mesh encoding** of a shared
 boundary, regardless of where the per-tile shift lives (mesh attribute,
 `modelMatrix.translation`, or `coordinateOrigin`).
 
-## Approach: fp64 attribute pairs on absolute 3857 coordinates
+## Approach: common-space mesh + identity matrix + zero origin + fp64 pairs
 
-Keep the mesh as **absolute** 3857 meters (same as `main`) — preserves
-bit-identical encoding of shared boundary vertices across adjacent tiles
-— but encode each vertex as an **fp64 split pair**:
+Address all three error sources together. Each addition is necessary; the
+combination makes every GPU step either Sterbenz-exact or fp64-correctable:
+
+| Error | Fix |
+|---|---|
+| (1) attribute quantization | **fp64 attribute pairs** (high + low Float32Arrays) |
+| (2) scale-multiply rounding | **project to common space on the CPU + `modelMatrix = identity`** — no scale multiply in the shader |
+| (3) origin re-quantization | **`coordinateOrigin = [0,0,0]`** — makes `shaderCoordinateOrigin = Math.fround(viewport.center)`, which is exactly float32 (no upload re-quantization) |
+
+### Why (2) + (3) work — the Sterbenz/fround cancellation
+
+Projecting mesh vertices to **full common space** on the CPU
+(`common = meters × WEB_MERCATOR_TO_WORLD_SCALE + TILE_SIZE/2`, in float64)
+and passing `modelMatrix = identity` means the shader's `position_world`
+is the vertex itself — no multiply, so error (2) vanishes.
+
+Setting `coordinateOrigin = [0,0,0]` makes
+`shaderCoordinateOrigin = Math.fround(viewport.center) − 0 =
+Math.fround(viewport.center)`, which is *exactly* representable in float32
+(it's the output of `Math.fround`), so uploading it as a uniform adds no
+quantization — error (3) vanishes. Then `position_world −
+shaderCoordinateOrigin` is `(~114) − (~114)` of two nearby float32 values:
+by the **Sterbenz lemma** that subtraction is *exact* in float32.
+
+The residual `fround(viewport.center)` rounding (≈ ULP at ~114) doesn't
+matter because deck.gl computes `projectionCenter` from the same
+`fround(viewport.center)` in float64 and adds it back in clip space (step
+C). The `fround` terms **cancel exactly** — but *only* when
+`shaderCoordinateOrigin` is exactly `fround(viewport.center)`, which the
+`[0,0,0]` origin guarantees and the `[256,256,0]` origin breaks.
+
+This is precisely why deck.gl's LNGLAT path is precise: identity model
+matrix (no multiply), `fround`-of-degrees origin (exact float32), fp64
+pairs for the attribute. We reproduce that discipline in common space.
+
+### fp64 attribute pairs for (1)
+
+Keep the mesh **bit-identical across adjacent tiles** (so shared boundary
+vertices match → no seams) by storing absolute common-space coordinates,
+and encode each vertex as an **fp64 split pair**:
 
 - `positions` (Float32Array high parts) — the closest float32 to each
   true float64 vertex value, computed on the CPU as
@@ -121,13 +189,18 @@ the path that fits its origin:
   as `mesh.attributes.POSITION.value`. Geometry path. Becomes
   `in vec3 positions` in the shader. Same shape as today, just narrower
   values.
-- **Low part** (Float32Array) → exposed as a new `MeshTextureLayer`
-  prop (`positions64Low`). Registered via `attributeManager.add({
-  positions64Low: { type: 'float32', size: 3, noAlloc: true,
-  update: attr => attr.value = this.props.positions64Low }})`. AttributeManager
-  path, non-instanced. The Model's `bufferLayout` (from
-  `attributeManager.getBufferLayouts()`) gains the entry, the buffer is
-  bound to `in vec3 positions64Low` in the shader.
+- **Low part** (Float32Array) → registered as a non-instanced attribute
+  via `attributeManager.add({ positions64Low: { type: 'float32',
+  size: 3, noAlloc: true }})`, and its buffer is supplied through the
+  inner sub-layer's `data.attributes.positions64Low`. deck.gl 9.x
+  **removed** the `props.<attributeName>` channel for attribute values
+  ([`attribute-manager.ts:196`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/lib/attribute/attribute-manager.ts#L196)) —
+  a top-level prop named `positions64Low` triggers a removal warning on
+  every render. Passing it via `data: { length: 1, attributes: {
+  positions64Low } }` lets the AttributeManager pick the buffer up via
+  `setExternalBuffer`. The Model's `bufferLayout` (from
+  `attributeManager.getBufferLayouts()`) gains the entry, bound to
+  `in vec3 positions64Low` in the shader.
 
 Both buffers are per-vertex (same vertex count, same indexing), so
 they're consumed together in the same draw call.
@@ -155,7 +228,10 @@ pattern, the plan should add a development-mode assertion in
 
 ### Why this preserves bit-identity across tiles
 
-For a shared boundary vertex at absolute 3857 coordinate `v`:
+For a shared boundary vertex at absolute common-space coordinate `v`
+(both tiles project the same physical point to the same common-space
+value, since the projection is deterministic and the per-tile reproject
+fns are identical):
 
 - Tile A: `(Math.fround(v), v − Math.fround(v))`
 - Tile B: `(Math.fround(v), v − Math.fround(v))`
@@ -166,31 +242,53 @@ bit-identical raster coverage → no seam.
 
 ### Why this fixes the jitter
 
-The shader does:
+With `modelMatrix = identity` and `coordinateOrigin = [0,0,0]`, the
+shader reduces to:
 
 ```
-projected = project_offset_(modelMatrix * pos)  // float32 chain
-          + project_offset_(modelMatrix * vec4(pos64Low, 0))  // recovers lost precision
+position_world = position;                       // identity — no multiply (kills error 2)
+position_world -= fround(viewport.center);       // Sterbenz-exact (kills error 3)
+commonPosition = project_offset_(position_world)
+               + project_offset_(positions64Low) // fp64 low recovers error 1
+clip = viewProjectionMatrix * commonPosition + projectionCenter  // fround cancels in float64
 ```
 
-The first line has the ~1 m quantization we currently have. The second
-line adds back the lost sub-meter detail. End result: float64-equivalent
-positions on a float32 GPU.
+Every step is exact or fp64-corrected: no multiply rounding (identity
+matrix), an exact subtraction (Sterbenz, both operands nearby float32),
+the attribute residual restored by the low part, and the `fround`
+offset cancelled by `projectionCenter` (computed CPU-side in float64).
+End result: float64-equivalent positions on float32 GPU hardware, with
+shared boundary vertices bit-identical across tiles.
 
 ## Scope of change
 
-Three source files plus tests. Public API additions: none — fp64
-splitting is internal to mesh construction and the inner mesh-texture
-layer.
+Four source files plus tests. Public API additions: none.
+
+- [`packages/deck.gl-raster/src/raster-tile-layer/raster-tile-layer.ts`](../../packages/deck.gl-raster/src/raster-tile-layer/raster-tile-layer.ts)
+  — in `_renderSubLayers`, the **non-globe** branch:
+  - Wraps `forwardReproject` / `inverseReproject` so output is **full
+    common space** instead of 3857 meters:
+    `forwardReproject(x, y) = projectTo3857(x, y) · S + TILE_SIZE/2`,
+    `inverseReproject(cx, cy) = projectFrom3857((c − TILE_SIZE/2) / S)`,
+    where `S = WEB_MERCATOR_TO_WORLD_SCALE`. Because delatin measures
+    refinement error in **pixel space** via `inverseReproject` (and
+    barycentric interpolation commutes with the affine `· S + t`),
+    wrapping both functions consistently leaves the triangulation
+    **identical** to today.
+  - Sets `modelMatrix = identity` and `coordinateOrigin = [0, 0, 0]`
+    (the scale and the `TILE_SIZE/2` offset moved into the reproject
+    fns above).
+  - **Reference stability:** the wrapped fns must be memoized
+    per-descriptor (the descriptor is stable per layer), not recreated
+    each render, or `RasterLayer.updateState`'s `reprojectionFnsChanged`
+    check fires and regenerates the mesh every frame. `forwardTransform`
+    / `inverseTransform` stay per-tile (from tile metadata) as today.
 
 - [`packages/deck.gl-raster/src/raster-layer.ts`](../../packages/deck.gl-raster/src/raster-layer.ts)
-  — `_generateMesh` (and its `reprojectorToMesh` helper) splits each
-  float64 vertex coordinate from the reprojector into a
-  `(Math.fround(v), v − Math.fround(v))` pair. Returns two
-  Float32Arrays (high and low). The mesh structure stored in
-  `state.mesh` gains a `positions64Low` field alongside the existing
-  `attributes.POSITION` (which holds the high part as a Float32Array,
-  same type as today). The state-mesh shape:
+  — `_generateMesh` / `reprojectorToMesh` splits each float64 vertex
+  coordinate from the reprojector (now in common space) into a
+  `(Math.fround(v), v − Math.fround(v))` pair, both Float32Arrays. The
+  state-mesh shape gains a `positions64Low` sibling field:
   ```ts
   state.mesh = {
     indices: { value: Uint32Array, size: 1 },
@@ -198,91 +296,108 @@ layer.
       POSITION:   { value: Float32Array /* high */, size: 3 },
       TEXCOORD_0: { value: Float32Array,             size: 2 },
     },
-    positions64Low: Float32Array /* low */,
-  }
+  };
+  state.positions64Low = Float32Array; /* low */
   ```
-  `renderLayers` passes both to the inner `MeshTextureLayer`: the
-  `mesh` prop as today, plus a new `positions64Low` prop.
+  `renderLayers` passes the low part to `MeshTextureLayer` via the
+  inner sub-layer's `data.attributes` (see below) — *not* a top-level
+  prop. `reprojectorToMesh` is coordinate-system-agnostic: it splits
+  whatever the reprojector emits, so the common-space change lives
+  entirely in the wrapped reproject fns, not here.
 
 - [`packages/deck.gl-raster/src/mesh-layer/mesh-layer.ts`](../../packages/deck.gl-raster/src/mesh-layer/mesh-layer.ts)
-  — `MeshTextureLayer` adds:
-  1. A new `positions64Low: Float32Array | null` prop (default `null`).
-  2. `initializeState()` calls `super.initializeState()`, then
+  — `MeshTextureLayer`:
+  1. `initializeState()` calls `super.initializeState()`, then
      `attributeManager.add({ positions64Low: { type: 'float32',
-     size: 3, noAlloc: true, update: attr => attr.value = this.props.positions64Low }})`.
-     Non-instanced, so it's a per-vertex attribute alongside the
-     geometry's `positions`.
-  3. `updateState` invalidates the `positions64Low` attribute when
-     `props.positions64Low` reference changes.
-  4. `getShaders()` returns a `vs` override — a copy of upstream
+     size: 3, noAlloc: true }})`. Non-instanced, per-vertex. No
+     `update` callback — the buffer is supplied externally via
+     `data.attributes.positions64Low`.
+  2. `getShaders()` returns a `vs` override — a copy of upstream
      [`simple-mesh-layer-vertex.glsl.ts`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts)
      with one substitution in the `composeModelMatrix` branch: replace
      the `instancePositions64Low` argument to
      `project_position_to_clipspace` with
-     `positions64Low + instancePositions64Low`. Also add
-     `in vec3 positions64Low;` to the attribute declarations at the
-     top. ~60 lines of GLSL total that we explicitly own.
-  5. A development-mode assertion in `updateState` that the usage
-     invariants hold (`_instanced === false`, `getPosition` resolves
-     to `[0,0,0]`, identity model matrix, `sizeScale === 1`). The
-     check **throws** when violated — a misused `MeshTextureLayer`
-     produces precision-only-wrong output that looks plausibly
-     correct, so a loud failure is what catches it. Gated on
-     `process.env.NODE_ENV !== 'production'` so it's stripped from
-     prod builds. See "Invariant" section above.
+     `positions64Low + instancePositions64Low`. Also adds
+     `in vec3 positions64Low;` to the attribute declarations. ~60 lines
+     of GLSL that we own.
+  3. A development-mode assertion in `updateState`
+     (`assertFp64Invariants`) that the usage invariants hold
+     (`_instanced === false`, `getPosition === [0,0,0]`, identity
+     instance transforms, `sizeScale === 1`). **Throws** when violated —
+     a misused `MeshTextureLayer` produces precision-only-wrong output
+     that looks plausibly correct. Gated on
+     `process.env.NODE_ENV !== 'production'`. See "Invariant" above.
+  - `RasterLayer.renderLayers` passes the buffer via the sub-layer's
+    `data`: `data: positions64Low ? { length: 1, attributes: {
+    positions64Low } } : [1]`. deck.gl 9.x removed the
+    `props.<attributeName>` channel; `data.attributes` is the supported
+    path.
 
 - No changes to [`packages/deck.gl-raster/src/raster-tileset/raster-tileset-2d.ts`](../../packages/deck.gl-raster/src/raster-tileset/raster-tileset-2d.ts).
-  No per-tile reference point. No `referencePointMeters` prop on
-  `RasterLayer`. No `modelMatrix.translation` per tile. We keep `main`'s
-  outer shape — single shared `coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0]`,
-  uniform `modelMatrix = diag(WEB_MERCATOR_TO_WORLD_SCALE)`. The fp64
-  precision improvement is entirely internal to the mesh attribute
-  pipeline.
+  No per-tile reference point, no new tile metadata.
 
-- Tests in [`packages/deck.gl-raster/tests/raster-layer.test.ts`](../../packages/deck.gl-raster/tests/raster-layer.test.ts):
-  - `_generateMesh` produces two Float32Arrays (high + low) with the
-    same length; each is finite and non-NaN.
-  - **Precision claim:** for sample vertices spanning the full 3857
-    magnitude range (~±2 × 10⁷ m), `high[i] + low[i]` (computed in
-    JS float64 from the stored Float32Array entries) reconstructs
-    the reprojector's float64 output to within **float32 ULP at the
-    low part's magnitude** — concretely, `< 1e-6 m` absolute error.
-    Compare to the current float32-of-input floor of `~1 m` at the
-    same magnitude. This bound is the strict claim of the fp64
-    attribute-pair encoding and catches any silent regression in
-    the split.
-  - Regression: the existing mesh state-shape and reference-stability
-    tests still pass with the augmented mesh object.
+- Tests:
+  - [`tests/raster-layer.test.ts`](../../packages/deck.gl-raster/tests/raster-layer.test.ts):
+    `_generateMesh` produces two same-length Float32Arrays (high +
+    low), each finite. **Precision claim:** for sample vertices across
+    a wide magnitude range, `high[i] + low[i]` reconstructs the
+    reprojector's float64 output to `< 1e-6 m` (vs the ~1 m
+    float32-of-input floor), catching any regression in the split.
+    Existing state-shape and reference-stability tests still pass.
+  - [`tests/mesh-layer/assert-fp64-invariants.test.ts`](../../packages/deck.gl-raster/tests/mesh-layer/assert-fp64-invariants.test.ts):
+    the invariant helper accepts deck.gl's identity defaults and
+    throws on every non-identity per-instance transform.
 
 ## Non-goals
 
-- LNGLAT coordinate system. Cartesian + fp64 mesh positions is the
-  closer match to our existing pipeline (we already speak EPSG:3857
-  internally).
+- Switching the inner mesh layer to the `lnglat` coordinate system.
+  We stay in cartesian/common space (we already speak EPSG:3857
+  internally); the precision discipline above reproduces what the
+  LNGLAT path does, without a per-vertex degrees reprojection.
 - Reviving the deprecated `Fp64Extension` (lnglat-only, throws for
   cartesian — see [`fp64-extension.ts`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/extensions/src/fp64/fp64-extension.ts#L10-L18)).
   We use the *attribute-pair* fp64 mechanism (BitmapLayer pattern),
   which is the supported approach.
 - The standalone `RasterLayer` (used without `RasterTileLayer`).
-  Should inherit the fix automatically since the mesh-attribute change
-  is at the `RasterLayer` level.
-- Globe mode. Out of scope; revisit alongside globe-projected raster
-  work.
+  The common-space wrapping lives in `RasterTileLayer`; a direct
+  `RasterLayer` caller would need to supply common-space reproject fns
+  itself to get the fix. Revisit if a use case surfaces.
+- Globe mode. Out of scope; the wrapping is in the non-globe branch
+  only. Revisit alongside globe-projected raster work.
 
 ## Verification
 
-- Unit test (above) — float64 ULP precision in the stored attribute.
+- Unit tests (above) — fp64 reconstruction precision + invariant helper.
 - Manual browser test on the NAIP mosaic example:
   - Pan and zoom around z16–z19 over the continental US. No visible
     jitter relative to the basemap (within ~1 px). No seams between
-    adjacent tiles. Both metrics matter — see the "why we tried first"
-    section.
+    adjacent tiles. Both metrics matter — earlier attempts fixed one
+    and broke the other.
   - Compare to `main` at z18+: previously the entire raster shifted
-    together by ~1 m; after the fix, raster stays anchored to basemap
-    at all zooms.
+    together by ~1 m as `fround(viewport.center)` snapped; after the
+    fix, the raster stays anchored to the basemap at all zooms.
+  - Confirm the debug mesh overlay (`debug: true`) still aligns; note
+    it does *not* get the fp64 treatment (reads raw
+    `exactOutputPositions`), so the overlay mesh itself may jitter at
+    extreme zoom even though the raster doesn't.
 
 ## Risks
 
+- **Reproject-fn reference stability.** The wrapped common-space
+  `forwardReproject` / `inverseReproject` must be memoized per
+  descriptor. If recreated each render, `RasterLayer.updateState`'s
+  `reprojectionFnsChanged` check fires and regenerates the mesh every
+  frame — a silent perf regression. Mitigation: memoize on the layer
+  keyed by descriptor; covered by the existing reference-stability test
+  in `tests/raster-layer.test.ts`.
+- **Sterbenz precondition.** The exact subtraction
+  `position_world − fround(viewport.center)` relies on the two operands
+  being within 2× of each other (Sterbenz). True for on-screen content
+  (positions cluster near the viewport center). Worst case is content
+  far off-screen or at very low zoom, where (a) Sterbenz may not hold
+  and (b) one float32 ULP doesn't matter anyway (low zoom → huge
+  pixels). No correctness impact in the regime we care about, but worth
+  a sanity check near the antimeridian.
 - **Custom vertex shader maintenance.** We own ~60 lines of GLSL that
   duplicate (with a one-line change) upstream's
   `simple-mesh-layer-vertex.glsl.ts`. If deck.gl 10 changes the
