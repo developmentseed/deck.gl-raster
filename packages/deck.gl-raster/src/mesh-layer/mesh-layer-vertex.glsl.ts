@@ -14,8 +14,8 @@
 //      by the float32 attribute pipeline.
 //
 // The fp64 correction is only valid when the per-instance transforms are
-// identity. MeshTextureLayer.updateState asserts this in development mode
-// via assertFp64Invariants. See
+// identity. MeshTextureLayer enforces that by fixing those props and omitting
+// them from its public prop type (see MeshTextureLayer's class doc). See
 // dev-docs/specs/2026-05-19-high-zoom-precision-design.md and
 // dev-docs/coordinate-systems.md.
 

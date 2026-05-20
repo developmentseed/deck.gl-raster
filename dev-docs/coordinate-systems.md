@@ -1,9 +1,9 @@
 # Coordinate systems and precision in deck.gl
 
-> Source references in this doc target
-> [`visgl/deck.gl@82a02831`](https://github.com/visgl/deck.gl/tree/82a028314b8b20275c8f58713e68702407f2eba4)
-> (deck.gl 9.3.x). Function/line numbers may drift; the prose explains the
-> mechanism so you can re-locate it if so.
+> Source references in this doc are commit-pinned GitHub permalinks (mostly
+> [`visgl/deck.gl@82a02831`](https://github.com/visgl/deck.gl/tree/82a028314b8b20275c8f58713e68702407f2eba4),
+> deck.gl 9.3.x), so the linked line numbers are stable. The prose also
+> explains each mechanism so you can re-locate it if upstream refactors.
 
 This is the running notebook of everything we've learned the hard way
 about how deck.gl handles position precision and projection — the kind of
@@ -26,12 +26,12 @@ hit a new gotcha.
   primitive layer in `@deck.gl/layers` uses this for cartesian and
   lnglat — `SimpleMeshLayer` is a notable exception, only fp64-ing its
   *instance* positions.
-- `Fp64Extension` is a *different* (older) thing — deprecated, lnglat-only,
+- [`Fp64Extension`](https://github.com/visgl/deck.gl/blob/48760d53efae9a94775a0f55e6869478ee223823/modules/extensions/src/fp64/fp64-extension.ts#L10-L29) is a *different* (older) thing — deprecated, lnglat-only,
   and incompatible with `SimpleMeshLayer`. Don't reach for it.
 
 ## Coordinate systems
 
-The `coordinateSystem` prop ([`core/src/lifecycle/constants.ts`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/lifecycle/constants.ts))
+The `coordinateSystem` prop ([`COORDINATE_SYSTEM` in `lib/constants.ts:24-55`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/lib/constants.ts#L24-L55))
 controls how deck.gl interprets the position attribute on a layer.
 
 | Value | Position attribute is | `coordinateOrigin` is | Notes |

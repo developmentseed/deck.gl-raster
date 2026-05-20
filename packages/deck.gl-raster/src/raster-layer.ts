@@ -9,6 +9,7 @@ import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
+import { splitFloat64 } from "./fp64.js";
 import type { RasterModule } from "./gpu-modules/types.js";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer.js";
 
@@ -294,7 +295,12 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     const { mesh, positions64Low } = this.state;
     const { debug, image, renderPipeline } = this.props;
 
-    if (!mesh || (!image && (renderPipeline?.length ?? 0) === 0)) {
+    // mesh and positions64Low are always set together by _generateMesh.
+    if (
+      !mesh ||
+      !positions64Low ||
+      (!image && (renderPipeline?.length ?? 0) === 0)
+    ) {
       return null;
     }
 
@@ -303,25 +309,16 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         id: "raster",
         image,
         renderPipeline,
-        // Dummy data because we're only rendering _one_ instance of this mesh
-        // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
-        //
-        // Use the binary { length, attributes } form so we can pipe the
-        // per-vertex fp64 low-part attribute through `data.attributes`.
-        // deck.gl 9.x removed `props.<attributeName>` as a channel for
-        // attribute values, requiring `data.attributes.<attributeName>`
-        // (see @deck.gl/core/lib/attribute/attribute-manager.ts:196).
-        data: positions64Low
-          ? { length: 1, attributes: { positions64Low } }
-          : [1],
+        // Single mesh rendered as one non-instanced draw. The binary
+        // { length, attributes } data form pipes the per-vertex fp64 low part
+        // through `data.attributes` — deck.gl 9.x removed `props.<attrName>`
+        // as a channel for attribute values (see
+        // @deck.gl/core/lib/attribute/attribute-manager.ts:196).
+        data: { length: 1, attributes: { positions64Low } },
         mesh,
-        // We're only rendering a single mesh, without instancing
-        // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L244
-        _instanced: false,
-        // Dummy accessors for the dummy data
-        // We place our mesh at the coordinate origin
-        getPosition: [0, 0, 0],
-        // We give a white color to turn off color mixing with the texture
+        // We give a white color to turn off color mixing with the texture.
+        // (_instanced: false and getPosition: [0,0,0] are fixed by
+        // MeshTextureLayer — see its class doc.)
         getColor: [255, 255, 255],
       }),
     );
@@ -345,29 +342,20 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   texCoords: Float32Array;
 } {
   const numVertices = reprojector.uvs.length / 2;
-  const positions = new Float32Array(numVertices * 3);
-  const positions64Low = new Float32Array(numVertices * 3);
   const texCoords = new Float32Array(reprojector.uvs);
 
+  // Assemble the exact (float64) vertex positions, then split into fp64 high +
+  // low Float32 component arrays for the GPU. The low part recovers the
+  // precision lost when downcasting large-magnitude coords to float32. See
+  // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
+  const positions64 = new Float64Array(numVertices * 3);
   for (let i = 0; i < numVertices; i++) {
-    const x = reprojector.exactOutputPositions[i * 2]!;
-    const y = reprojector.exactOutputPositions[i * 2 + 1]!;
-    // Split each float64 coord into (Math.fround(v), v - Math.fround(v)).
-    // The pair carries float64-equivalent precision when summed in fp64-aware
-    // shader math (see project.glsl.ts:234 — modelMatrix is applied to both
-    // halves and they're added in scaled common-units space). The residual is
-    // exactly representable as float32 since |residual| <= ulp_f32(v)/2. See
-    // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
-    const xHi = Math.fround(x);
-    const yHi = Math.fround(y);
-    positions[i * 3] = xHi;
-    positions[i * 3 + 1] = yHi;
+    positions64[i * 3] = reprojector.exactOutputPositions[i * 2]!;
+    positions64[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
     // z (flat on the ground)
-    positions[i * 3 + 2] = 0;
-    positions64Low[i * 3] = x - xHi;
-    positions64Low[i * 3 + 1] = y - yHi;
-    positions64Low[i * 3 + 2] = 0;
+    positions64[i * 3 + 2] = 0;
   }
+  const [positions64Low, positions] = splitFloat64(positions64);
 
   // TODO: Consider using 16-bit indices if the mesh is small enough
   const indices = new Uint32Array(reprojector.triangles);

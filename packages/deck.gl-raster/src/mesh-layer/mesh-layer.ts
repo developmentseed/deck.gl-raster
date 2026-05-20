@@ -9,15 +9,35 @@ import type { Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 import { CreateTexture } from "../gpu-modules/create-texture.js";
 import type { RasterModule } from "../gpu-modules/types.js";
-import { assertFp64Invariants } from "./assert-fp64-invariants.js";
 import fs from "./mesh-layer-fragment.glsl.js";
 import vs from "./mesh-layer-vertex.glsl.js";
+
+/**
+ * `SimpleMeshLayer` props that `MeshTextureLayer` deliberately does not
+ * support. They configure per-instance 3D-model placement, which is
+ * meaningless for our single-mesh-at-the-origin use case — and a non-identity
+ * value would silently break the fp64 mesh-vertex precision correction (the
+ * `positions64Low` low part is the residual of `positions`, not of a
+ * transformed `pos`). They are fixed internally (see `defaultProps`) and
+ * omitted from the public prop type so they can't be set.
+ */
+type ExcludedSimpleMeshProps =
+  | "_instanced"
+  | "getPosition"
+  | "getOrientation"
+  | "getScale"
+  | "getTranslation"
+  | "getTransformMatrix"
+  | "sizeScale";
 
 type _MeshTextureLayerProps =
   | { image: TextureSource; renderPipeline?: RasterModule[] }
   | { renderPipeline: RasterModule[]; image?: TextureSource };
 
-export type MeshTextureLayerProps = SimpleMeshLayerProps &
+export type MeshTextureLayerProps = Omit<
+  SimpleMeshLayerProps,
+  ExcludedSimpleMeshProps
+> &
   _MeshTextureLayerProps;
 
 const defaultProps: DefaultProps<
@@ -31,6 +51,13 @@ const defaultProps: DefaultProps<
   // labels in interleaved mode 🤷‍♂️
   // image: { type: "image", value: null, async: true },
   renderPipeline: { type: "array", value: [], compare: true },
+  // Fixed single-mesh configuration (these props are omitted from
+  // MeshTextureLayerProps; see ExcludedSimpleMeshProps): render exactly one
+  // non-instanced mesh anchored at the coordinate origin. getOrientation /
+  // getScale / getTranslation / getTransformMatrix / sizeScale keep
+  // SimpleMeshLayer's identity defaults via the spread above.
+  _instanced: false,
+  getPosition: { type: "accessor", value: [0, 0, 0] },
   // Disable lighting by default (avoids darkening raster)
   material: {
     ambient: 1.0,
@@ -41,13 +68,22 @@ const defaultProps: DefaultProps<
 };
 
 /**
- * A small subclass of the SimpleMeshLayer to allow dynamic shader injections
- * and to provide fp64 mesh-vertex precision via a `positions64Low`
- * attribute paired with the geometry's `positions`.
+ * A specialized raster-rendering layer, spiritually based on deck.gl's
+ * `SimpleMeshLayer` but with a narrower purpose: it draws **one** texture-mapped
+ * mesh anchored at the coordinate origin, not instanced 3D models.
  *
- * The fp64 correction is only valid for a single non-instanced mesh with
- * identity per-instance transforms. `updateState` asserts this in
- * development mode (see `assertFp64Invariants`).
+ * Differences from `SimpleMeshLayer`:
+ * - Allows dynamic shader injection (a render pipeline of `RasterModule`s) and
+ *   overrides the vertex/fragment shaders.
+ * - Provides fp64 mesh-vertex precision via a `positions64Low` attribute paired
+ *   with the geometry's `positions` (supplied by the caller through
+ *   `data.attributes.positions64Low`).
+ * - The per-instance placement props (`_instanced`, `getPosition`,
+ *   `getOrientation`, `getScale`, `getTranslation`, `getTransformMatrix`,
+ *   `sizeScale`) are intentionally unsupported and fixed at identity — see
+ *   {@link ExcludedSimpleMeshProps}. This is what keeps the fp64 correction
+ *   valid (the low part is the residual of `positions`, not of a transformed
+ *   vertex).
  */
 export class MeshTextureLayer extends SimpleMeshLayer<
   null,
@@ -94,13 +130,6 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     }
 
     super.updateState(params);
-
-    // Dev-mode assertion: the fp64 mesh-vertex correction is only valid for a
-    // single non-instanced mesh with identity per-instance transforms. See
-    // dev-docs/specs/2026-05-19-high-zoom-precision-design.md § Invariant.
-    if (process.env.NODE_ENV !== "production") {
-      assertFp64Invariants(params.props);
-    }
   }
 
   /** Returns true if the render pipeline has changed between the old and new props. */

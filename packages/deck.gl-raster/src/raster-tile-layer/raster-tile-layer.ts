@@ -214,6 +214,9 @@ export class RasterTileLayer<
   } {
     if (this._commonSpaceReproject?.descriptor !== descriptor) {
       const scale = WEB_MERCATOR_TO_WORLD_SCALE;
+      // deck.gl common space spans [0, TILE_SIZE] for the whole world, with the
+      // Web Mercator origin (lng 0, lat 0) at the center — so EPSG:3857 (0, 0)
+      // maps to (TILE_SIZE/2, TILE_SIZE/2).
       const offset = TILE_SIZE / 2;
       this._commonSpaceReproject = {
         descriptor,
@@ -459,13 +462,14 @@ export class RasterTileLayer<
       deckProjectionProps = {};
     } else {
       // Non-globe: render the mesh directly in deck.gl common space (world
-      // units). The reproject fns output `meters * scale + TILE_SIZE/2`, so
-      // `modelMatrix` is identity and `coordinateOrigin` is [0,0,0]. Combined
-      // with the fp64 mesh-vertex split (see RasterLayer), this keeps the
-      // auto-offset shader math exact at high zoom — `shaderCoordinateOrigin`
-      // becomes exactly `Math.fround(viewport.center)` and the camera-relative
-      // subtraction is Sterbenz-exact. See
-      // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
+      // units). The reproject fns output `meters * scale + TILE_SIZE/2`, so the
+      // mesh positions are already in common space — leaving `modelMatrix` at
+      // its identity default and `coordinateOrigin` at its [0,0,0] default
+      // (hence we only set `coordinateSystem`). Combined with the fp64
+      // mesh-vertex split (see RasterLayer), this keeps the auto-offset shader
+      // math exact at high zoom: `shaderCoordinateOrigin` becomes exactly
+      // `Math.fround(viewport.center)` and the camera-relative subtraction is
+      // Sterbenz-exact. See dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
       const { forwardReproject, inverseReproject } =
         this._getCommonSpaceReproject(descriptor);
       reprojectionFns = {
@@ -474,17 +478,7 @@ export class RasterTileLayer<
         forwardReproject,
         inverseReproject,
       };
-      deckProjectionProps = {
-        coordinateSystem: "cartesian",
-        coordinateOrigin: [0, 0, 0],
-        // biome-ignore format: array
-        modelMatrix: [
-          1, 0, 0, 0,
-          0, 1, 0, 0,
-          0, 0, 1, 0,
-          0, 0, 0, 1,
-        ],
-      };
+      deckProjectionProps = { coordinateSystem: "cartesian" };
     }
 
     const rasterLayer = new RasterLayer(

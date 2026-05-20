@@ -223,8 +223,14 @@ Our `positions64Low` represents the low part of `positions`, not of
 
 That matches `RasterLayer`'s current usage exactly. To prevent silent
 breakage if `MeshTextureLayer` is ever wired into a different usage
-pattern, the plan should add a development-mode assertion in
-`MeshTextureLayer` that these invariants hold.
+pattern, these per-instance props (`_instanced`, `getPosition`,
+`getOrientation`, `getScale`, `getTranslation`, `getTransformMatrix`,
+`sizeScale`) are **omitted from `MeshTextureLayerProps`** and fixed at
+identity in `defaultProps` — so they can't be set to a precision-breaking
+value. `MeshTextureLayer` is documented as a specialized single-mesh
+layer, not a general 3D-model layer. (An earlier revision used a runtime
+`assertFp64Invariants` check gated on `NODE_ENV`; excluding the props at
+the type level is cleaner and needs no runtime guard.)
 
 ### Why this preserves bit-identity across tiles
 
@@ -284,11 +290,16 @@ Four source files plus tests. Public API additions: none.
     check fires and regenerates the mesh every frame. `forwardTransform`
     / `inverseTransform` stay per-tile (from tile metadata) as today.
 
+- [`packages/deck.gl-raster/src/fp64.ts`](../../packages/deck.gl-raster/src/fp64.ts)
+  — a small `splitFloat64(values: Float64Array): [low, high]` helper that
+  vectorizes the `(Math.fround(v), v − Math.fround(v))` split into two
+  Float32Arrays. Kept standalone (with its own test) so the operation is
+  understandable in isolation and reusable.
+
 - [`packages/deck.gl-raster/src/raster-layer.ts`](../../packages/deck.gl-raster/src/raster-layer.ts)
-  — `_generateMesh` / `reprojectorToMesh` splits each float64 vertex
-  coordinate from the reprojector (now in common space) into a
-  `(Math.fround(v), v − Math.fround(v))` pair, both Float32Arrays. The
-  state-mesh shape gains a `positions64Low` sibling field:
+  — `reprojectorToMesh` assembles the exact float64 positions into a
+  `Float64Array` and calls `splitFloat64` to get the high/low Float32
+  pair. The state-mesh shape gains a `positions64Low` sibling field:
   ```ts
   state.mesh = {
     indices: { value: Uint32Array, size: 1 },
@@ -320,33 +331,34 @@ Four source files plus tests. Public API additions: none.
      `positions64Low + instancePositions64Low`. Also adds
      `in vec3 positions64Low;` to the attribute declarations. ~60 lines
      of GLSL that we own.
-  3. A development-mode assertion in `updateState`
-     (`assertFp64Invariants`) that the usage invariants hold
-     (`_instanced === false`, `getPosition === [0,0,0]`, identity
-     instance transforms, `sizeScale === 1`). **Throws** when violated —
-     a misused `MeshTextureLayer` produces precision-only-wrong output
-     that looks plausibly correct. Gated on
-     `process.env.NODE_ENV !== 'production'`. See "Invariant" above.
+  3. `MeshTextureLayerProps` **omits** the per-instance placement props
+     (`_instanced`, `getPosition`, `getOrientation`, `getScale`,
+     `getTranslation`, `getTransformMatrix`, `sizeScale`); `defaultProps`
+     fixes `_instanced: false` and `getPosition: [0,0,0]` (the rest keep
+     SimpleMeshLayer's identity defaults). This makes a precision-breaking
+     value unsettable at the type level — no runtime check needed. The
+     class doc explains the divergence from `SimpleMeshLayer`.
   - `RasterLayer.renderLayers` passes the buffer via the sub-layer's
-    `data`: `data: positions64Low ? { length: 1, attributes: {
-    positions64Low } } : [1]`. deck.gl 9.x removed the
-    `props.<attributeName>` channel; `data.attributes` is the supported
-    path.
+    `data: { length: 1, attributes: { positions64Low } }` (mesh and
+    `positions64Low` are always produced together by `_generateMesh`).
+    deck.gl 9.x removed the `props.<attributeName>` channel;
+    `data.attributes` is the supported path.
 
 - No changes to [`packages/deck.gl-raster/src/raster-tileset/raster-tileset-2d.ts`](../../packages/deck.gl-raster/src/raster-tileset/raster-tileset-2d.ts).
   No per-tile reference point, no new tile metadata.
 
 - Tests:
-  - [`tests/raster-layer.test.ts`](../../packages/deck.gl-raster/tests/raster-layer.test.ts):
-    `_generateMesh` produces two same-length Float32Arrays (high +
-    low), each finite. **Precision claim:** for sample vertices across
-    a wide magnitude range, `high[i] + low[i]` reconstructs the
-    reprojector's float64 output to `< 1e-6 m` (vs the ~1 m
+  - [`tests/fp64.test.ts`](../../packages/deck.gl-raster/tests/fp64.test.ts):
+    `splitFloat64` returns same-length `[low, high]` Float32Arrays;
+    `high` equals `Math.fround(v)`; **precision claim:** for sample
+    values across a wide magnitude range, `high[i] + low[i]`
+    reconstructs the float64 input to `< 1e-6 m` (vs the ~1 m
     float32-of-input floor), catching any regression in the split.
-    Existing state-shape and reference-stability tests still pass.
-  - [`tests/mesh-layer/assert-fp64-invariants.test.ts`](../../packages/deck.gl-raster/tests/mesh-layer/assert-fp64-invariants.test.ts):
-    the invariant helper accepts deck.gl's identity defaults and
-    throws on every non-identity per-instance transform.
+  - [`tests/raster-layer.test.ts`](../../packages/deck.gl-raster/tests/raster-layer.test.ts):
+    `_generateMesh` produces a `positions64Low` Float32Array the same
+    length as `POSITION`, and `high + low` reconstructs the
+    reprojector output. Existing state-shape and reference-stability
+    tests still pass.
 
 ## Non-goals
 
@@ -367,7 +379,7 @@ Four source files plus tests. Public API additions: none.
 
 ## Verification
 
-- Unit tests (above) — fp64 reconstruction precision + invariant helper.
+- Unit tests (above) — `splitFloat64` reconstruction precision + mesh wiring.
 - Manual browser test on the NAIP mosaic example:
   - Pan and zoom around z16–z19 over the continental US. No visible
     jitter relative to the basemap (within ~1 px). No seams between
@@ -406,12 +418,11 @@ Four source files plus tests. Public API additions: none.
   layer.
 - **Usage invariants on `MeshTextureLayer`.** The fp64 correction is
   only valid when the SimpleMeshLayer per-instance transforms are
-  identity (see "Invariant" section above). `RasterLayer`'s current
-  usage satisfies all of them, but if a future caller wires
-  `MeshTextureLayer` differently the silent failure would be
-  precision-only — wrong but plausibly-correct-looking output. The
-  development-mode assertion is what prevents this from sneaking
-  through.
+  identity (see "Invariant" section above). A non-identity value would
+  silently produce precision-only-wrong output. Mitigation: those props
+  are omitted from `MeshTextureLayerProps` and fixed in `defaultProps`,
+  so they can't be set — the failure mode is unreachable through the
+  public type rather than caught at runtime.
 - **Vertex stage cost.** fp64 adds ~3–5× cost per arithmetic operation
   in the vertex shader. Our meshes are tiny (dozens to a few hundred
   vertices per tile), so total vertex stage cost stays in the
