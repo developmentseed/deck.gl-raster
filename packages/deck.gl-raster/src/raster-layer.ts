@@ -214,7 +214,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       height + 1,
     );
     reprojector.run(maxError);
-    const { indices, positions, positions64Low, texCoords } =
+    const { indices, positions64High, positions64Low, texCoords } =
       reprojectorToMesh(reprojector);
 
     this.setState({
@@ -222,7 +222,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       mesh: {
         indices: { value: indices, size: 1 },
         attributes: {
-          POSITION: { value: positions, size: 3 },
+          POSITION: { value: positions64High, size: 3 },
           TEXCOORD_0: { value: texCoords, size: 2 },
         },
       },
@@ -309,11 +309,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         id: "raster",
         image,
         renderPipeline,
-        // Single mesh rendered as one non-instanced draw. The binary
-        // { length, attributes } data form pipes the per-vertex fp64 low part
-        // through `data.attributes` — deck.gl 9.x removed `props.<attrName>`
-        // as a channel for attribute values (see
-        // @deck.gl/core/lib/attribute/attribute-manager.ts:196).
+        // Single mesh rendered as one non-instanced draw.
         data: { length: 1, attributes: { positions64Low } },
         mesh,
         // We give a white color to turn off color mixing with the texture.
@@ -335,7 +331,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
 function reprojectorToMesh(reprojector: RasterReprojector): {
   indices: Uint32Array;
-  positions: Float32Array;
+  positions64High: Float32Array;
   positions64Low: Float32Array;
   texCoords: Float32Array;
 } {
@@ -359,7 +355,7 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
 
   return {
     indices,
-    positions: new Float32Array(positions64High),
+    positions64High: new Float32Array(positions64High),
     positions64Low,
     texCoords,
   };
