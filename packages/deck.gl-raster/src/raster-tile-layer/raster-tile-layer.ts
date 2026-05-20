@@ -405,6 +405,7 @@ export class RasterTileLayer<
     let reprojectionFns: ReprojectionFns;
     let coordinateSystem: CoordinateSystem;
     if (isGlobe) {
+      // Globe view
       reprojectionFns = {
         forwardTransform,
         inverseTransform,
@@ -413,26 +414,20 @@ export class RasterTileLayer<
       };
       coordinateSystem = "lnglat";
     } else {
-      // Non-globe: render the mesh directly in deck.gl common space (world
-      // units). The tile's `_projectPosition` maps source CRS → common space,
-      // so the mesh positions are already in common space — leaving
-      // `modelMatrix` at its identity default and `coordinateOrigin` at its
-      // [0,0,0] default (hence we only set `coordinateSystem`). Combined with
-      // the fp64 mesh-vertex split (see RasterLayer), this keeps the
-      // auto-offset shader math exact at high zoom: `shaderCoordinateOrigin`
-      // becomes exactly `Math.fround(viewport.center)` and the camera-relative
-      // subtraction is Sterbenz-exact. See
-      // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
+      // Web Mercator: render the mesh directly in deck.gl common space.
       //
-      // `_projectPosition`/`_unprojectPosition` come off the tile metadata
-      // (built once on the tileset) so they are reference-stable across
-      // renders, which RasterLayer's `reprojectionFnsChanged` check needs to
-      // avoid regenerating the mesh — and recompiling the shader — every frame.
+      // The tile's `_projectPosition` maps source CRS → common space, support
+      // high precision with fp64 emulation.
+      //
+      // `_projectPosition`/`_unprojectPosition` must be reference-stable across
+      // renders to avoid regenerating the mesh and recompiling the shader every
+      // frame.
+      const { _projectPosition, _unprojectPosition } = tile;
       reprojectionFns = {
         forwardTransform,
         inverseTransform,
-        forwardReproject: tile._projectPosition,
-        inverseReproject: tile._unprojectPosition,
+        forwardReproject: _projectPosition,
+        inverseReproject: _unprojectPosition,
       };
       coordinateSystem = "cartesian";
     }
