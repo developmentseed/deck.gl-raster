@@ -355,7 +355,7 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
 
   return {
     indices,
-    positions64High: new Float32Array(positions64High),
+    positions64High,
     positions64Low,
     texCoords,
   };
