@@ -148,13 +148,13 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       };
     };
     /**
-     * Low-part Float32Array of the fp64 split of mesh vertex positions
-     * (sibling to `mesh.attributes.POSITION`, which carries the high part).
-     * Stored separately from `mesh` because SimpleMeshLayer's
+     * Low-part of positions for fp64 emulation in the shaders.
+     * `mesh.attributes.POSITION` carries the high part.
+     *
+     * This needs to be passed separately from `mesh` because SimpleMeshLayer's
      * `normalizeGeometryAttributes` whitelists only positions/colors/normals/
      * texCoords on the mesh attributes object — anything else is silently
-     * dropped. Passed to MeshTextureLayer via a dedicated prop. See
-     * `dev-docs/specs/2026-05-19-high-zoom-precision-design.md`.
+     * dropped.
      */
     positions64Low?: Float32Array;
   };
