@@ -20,7 +20,6 @@ import { RasterLayer } from "../raster-layer.js";
 import type { RasterTilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
 import type { RasterTileMetadata } from "../raster-tileset/raster-tileset-2d.js";
-import { TILE_SIZE, WEB_MERCATOR_TO_WORLD_SCALE } from "./constants.js";
 
 /**
  * Minimum interface returned by `getTileData`.
@@ -186,53 +185,6 @@ export class RasterTileLayer<
 > extends CompositeLayer<RasterTileLayerBaseProps<DataT> & ExtraProps> {
   static override layerName = "RasterTileLayer";
   static override defaultProps = defaultProps;
-
-  /**
-   * Memoized common-space reprojection functions, keyed by descriptor.
-   *
-   * For the non-globe path we render the mesh in deck.gl common space
-   * (world units) with an identity `modelMatrix` and `coordinateOrigin =
-   * [0,0,0]`, which (combined with the fp64 mesh-vertex split) keeps the
-   * auto-offset shader math exact at high zoom. See
-   * `dev-docs/specs/2026-05-19-high-zoom-precision-design.md` and
-   * `dev-docs/coordinate-systems.md`.
-   *
-   * The wrapped functions must be reference-stable across renders, or
-   * `RasterLayer.updateState`'s `reprojectionFnsChanged` check regenerates
-   * the mesh every frame. The descriptor is stable per layer, so we
-   * recompute only when it changes.
-   */
-  private _commonSpaceReproject?: {
-    descriptor: RasterTilesetDescriptor;
-    forwardReproject: (x: number, y: number) => [number, number];
-    inverseReproject: (x: number, y: number) => [number, number];
-  };
-
-  private _getCommonSpaceReproject(descriptor: RasterTilesetDescriptor): {
-    forwardReproject: (x: number, y: number) => [number, number];
-    inverseReproject: (x: number, y: number) => [number, number];
-  } {
-    if (this._commonSpaceReproject?.descriptor !== descriptor) {
-      const scale = WEB_MERCATOR_TO_WORLD_SCALE;
-      // deck.gl common space spans [0, TILE_SIZE] for the whole world, with the
-      // Web Mercator origin (lng 0, lat 0) at the center — so EPSG:3857 (0, 0)
-      // maps to (TILE_SIZE/2, TILE_SIZE/2).
-      const offset = TILE_SIZE / 2;
-      this._commonSpaceReproject = {
-        descriptor,
-        forwardReproject: (x, y) => {
-          const [mx, my] = descriptor.projectTo3857(x, y);
-          return [mx * scale + offset, my * scale + offset];
-        },
-        inverseReproject: (cx, cy) => {
-          const mx = (cx - offset) / scale;
-          const my = (cy - offset) / scale;
-          return descriptor.projectFrom3857(mx, my);
-        },
-      };
-    }
-    return this._commonSpaceReproject;
-  }
 
   /**
    * The currently effective {@link RasterTilesetDescriptor}.
@@ -462,21 +414,25 @@ export class RasterTileLayer<
       coordinateSystem = "lnglat";
     } else {
       // Non-globe: render the mesh directly in deck.gl common space (world
-      // units). The reproject fns output `meters * scale + TILE_SIZE/2`, so the
-      // mesh positions are already in common space — leaving `modelMatrix` at
-      // its identity default and `coordinateOrigin` at its [0,0,0] default
-      // (hence we only set `coordinateSystem`). Combined with the fp64
-      // mesh-vertex split (see RasterLayer), this keeps the auto-offset shader
-      // math exact at high zoom: `shaderCoordinateOrigin` becomes exactly
-      // `Math.fround(viewport.center)` and the camera-relative subtraction is
-      // Sterbenz-exact. See dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
-      const { forwardReproject, inverseReproject } =
-        this._getCommonSpaceReproject(descriptor);
+      // units). The tile's `_projectPosition` maps source CRS → common space,
+      // so the mesh positions are already in common space — leaving
+      // `modelMatrix` at its identity default and `coordinateOrigin` at its
+      // [0,0,0] default (hence we only set `coordinateSystem`). Combined with
+      // the fp64 mesh-vertex split (see RasterLayer), this keeps the
+      // auto-offset shader math exact at high zoom: `shaderCoordinateOrigin`
+      // becomes exactly `Math.fround(viewport.center)` and the camera-relative
+      // subtraction is Sterbenz-exact. See
+      // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
+      //
+      // `_projectPosition`/`_unprojectPosition` come off the tile metadata
+      // (built once on the tileset) so they are reference-stable across
+      // renders, which RasterLayer's `reprojectionFnsChanged` check needs to
+      // avoid regenerating the mesh — and recompiling the shader — every frame.
       reprojectionFns = {
         forwardTransform,
         inverseTransform,
-        forwardReproject,
-        inverseReproject,
+        forwardReproject: tile._projectPosition,
+        inverseReproject: tile._unprojectPosition,
       };
       coordinateSystem = "cartesian";
     }

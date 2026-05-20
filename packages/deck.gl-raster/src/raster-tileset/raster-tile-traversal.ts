@@ -583,7 +583,7 @@ function sampleReferencePointsInEPSG3857(
  * Similar to the upstream code here:
  * https://github.com/visgl/deck.gl/blob/b0134f025148b52b91320d16768ab5d14a745328/modules/geo-layers/src/tileset-2d/tile-2d-traversal.ts#L172-L177
  */
-function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
+export function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
   number,
   number,
 ] {
@@ -596,6 +596,23 @@ function rescaleEPSG3857ToCommonSpace([x, y]: [number, number]): [
   return [
     (x / EPSG_3857_CIRCUMFERENCE + 0.5) * TILE_SIZE,
     (clampedY / EPSG_3857_CIRCUMFERENCE + 0.5) * TILE_SIZE,
+  ];
+}
+
+/**
+ * Inverse of {@link rescaleEPSG3857ToCommonSpace}: rescale a deck.gl
+ * common-space position back into EPSG:3857 meters.
+ *
+ * Common-space inputs are in-range by construction, so (unlike the forward
+ * direction) no latitude clamp is applied.
+ */
+export function rescaleCommonSpaceToEPSG3857([x, y]: [number, number]): [
+  number,
+  number,
+] {
+  return [
+    (x / TILE_SIZE - 0.5) * EPSG_3857_CIRCUMFERENCE,
+    (y / TILE_SIZE - 0.5) * EPSG_3857_CIRCUMFERENCE,
   ];
 }
 
