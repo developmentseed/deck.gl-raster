@@ -1,8 +1,8 @@
 import type {
   CompositeLayerProps,
+  CoordinateSystem,
   DefaultProps,
   Layer,
-  LayerProps,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type {
@@ -20,7 +20,6 @@ import { RasterLayer } from "../raster-layer.js";
 import type { RasterTilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
 import type { RasterTileMetadata } from "../raster-tileset/raster-tileset-2d.js";
-import { TILE_SIZE, WEB_MERCATOR_TO_WORLD_SCALE } from "./constants.js";
 
 /**
  * Minimum interface returned by `getTileData`.
@@ -403,32 +402,35 @@ export class RasterTileLayer<
     const { width, height } = props.data;
 
     const isGlobe = this.context.viewport.resolution !== undefined;
-    const reprojectionFns: ReprojectionFns = isGlobe
-      ? {
-          forwardTransform,
-          inverseTransform,
-          forwardReproject: descriptor.projectTo4326,
-          inverseReproject: descriptor.projectFrom4326,
-        }
-      : {
-          forwardTransform,
-          inverseTransform,
-          forwardReproject: descriptor.projectTo3857,
-          inverseReproject: descriptor.projectFrom3857,
-        };
-    const deckProjectionProps: Partial<LayerProps> = isGlobe
-      ? {}
-      : {
-          coordinateSystem: "cartesian",
-          coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
-          // biome-ignore format: array
-          modelMatrix: [
-            WEB_MERCATOR_TO_WORLD_SCALE, 0, 0, 0,
-            0, WEB_MERCATOR_TO_WORLD_SCALE, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1,
-          ],
-        };
+    let reprojectionFns: ReprojectionFns;
+    let coordinateSystem: CoordinateSystem;
+    if (isGlobe) {
+      // Globe view
+      reprojectionFns = {
+        forwardTransform,
+        inverseTransform,
+        forwardReproject: descriptor.projectTo4326,
+        inverseReproject: descriptor.projectFrom4326,
+      };
+      coordinateSystem = "lnglat";
+    } else {
+      // Web Mercator: render the mesh directly in deck.gl common space.
+      //
+      // The tile's `_projectPosition` maps source CRS → common space, support
+      // high precision with fp64 emulation.
+      //
+      // `_projectPosition`/`_unprojectPosition` must be reference-stable across
+      // renders to avoid regenerating the mesh and recompiling the shader every
+      // frame.
+      const { _projectPosition, _unprojectPosition } = tile;
+      reprojectionFns = {
+        forwardTransform,
+        inverseTransform,
+        forwardReproject: _projectPosition,
+        inverseReproject: _unprojectPosition,
+      };
+      coordinateSystem = "cartesian";
+    }
 
     const rasterLayer = new RasterLayer(
       this.getSubLayerProps({
@@ -443,7 +445,7 @@ export class RasterTileLayer<
         reprojectionFns,
         debug,
         debugOpacity,
-        ...deckProjectionProps,
+        coordinateSystem,
       }),
     );
     return [rasterLayer, ...debugLayers];

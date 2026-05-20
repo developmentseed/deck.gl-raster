@@ -8,7 +8,7 @@
  * textures.
  */
 export default /* glsl */ `#version 300 es
-#define SHADER_NAME simple-mesh-layer-fs
+#define SHADER_NAME mesh-texture-layer-fs
 
 precision highp float;
 

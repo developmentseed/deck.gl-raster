@@ -47,8 +47,12 @@ type RenderMode = "trueColor" | "falseColor" | "ndvi" | "grayscale";
 /** Fixed colormap for NDVI; spec says no per-side colormap selector. */
 const NDVI_COLORMAP_INDEX = COLORMAP_INDEX.cfastie;
 
-/** Half the equatorial circumference of Earth in EPSG:3857 mercator meters. */
-const MERCATOR_HALF_EQUATOR = 20037508.342789244;
+/**
+ * deck.gl common-space world extent: the whole Web Mercator world spans
+ * `[0, 512]` on each axis (the 512×512 zoom-0 tile). Used as the unclipped
+ * extent for `ClipExtension`'s `clipBounds`.
+ */
+const COMMON_SPACE_SIZE = 512;
 
 /** CARTO dark style; first label layer is `waterway_label` so we anchor the COG just below it. */
 const MAP_STYLE =
@@ -87,19 +91,19 @@ const RENDER_MODE_LABELS: Record<RenderMode, string> = {
 };
 
 /**
- * Convert the swipe handle's screen-space x position to a Web Mercator x
- * coordinate in **meters** (EPSG:3857), the coordinate space `COGLayer`'s
- * sub-tile geometry is rendered in. `ClipExtension`'s `clipBounds` are
- * interpreted in the layer's pre-modelMatrix coordinate space, which for
- * COGLayer is mercator meters.
+ * Convert the swipe handle's screen-space x position to a deck.gl common-space
+ * x coordinate — the space `COGLayer`'s sub-tile geometry is rendered in, and
+ * the space `ClipExtension`'s `clipBounds` are interpreted in. We unproject the
+ * split pixel to lng/lat and project that to common space with the viewport's
+ * own `projectPosition`, so there's no hand-rolled mercator math.
  */
-function splitMercatorMeterX(
+function splitCommonSpaceX(
   viewport: WebMercatorViewport,
   splitFraction: number,
 ): number {
   const splitPx = viewport.width * splitFraction;
-  const [splitLng] = viewport.unproject([splitPx, 0]);
-  return (splitLng * MERCATOR_HALF_EQUATOR) / 180;
+  const [lng, lat] = viewport.unproject([splitPx, 0]);
+  return viewport.projectPosition([lng, lat])[0];
 }
 
 type CogLayerArgs = {
@@ -371,8 +375,8 @@ export default function App() {
 
   const layers = useMemo(() => {
     // Reconstruct a deck.gl viewport from the current maplibre view state so
-    // we can convert the swipe handle's pixel-space x into a longitude
-    // (and from there into mercator meters for ClipExtension).
+    // we can convert the swipe handle's pixel-space x into a common-space x
+    // for ClipExtension.
     const vp = new WebMercatorViewport({
       longitude: viewState.longitude,
       latitude: viewState.latitude,
@@ -382,18 +386,18 @@ export default function App() {
       width: typeof window !== "undefined" ? window.innerWidth : 1024,
       height: typeof window !== "undefined" ? window.innerHeight : 768,
     });
-    const splitMx = splitMercatorMeterX(vp, splitFraction);
+    const splitX = splitCommonSpaceX(vp, splitFraction);
     const leftClip: [number, number, number, number] = [
-      -MERCATOR_HALF_EQUATOR,
-      -MERCATOR_HALF_EQUATOR,
-      splitMx,
-      MERCATOR_HALF_EQUATOR,
+      0,
+      0,
+      splitX,
+      COMMON_SPACE_SIZE,
     ];
     const rightClip: [number, number, number, number] = [
-      splitMx,
-      -MERCATOR_HALF_EQUATOR,
-      MERCATOR_HALF_EQUATOR,
-      MERCATOR_HALF_EQUATOR,
+      splitX,
+      0,
+      COMMON_SPACE_SIZE,
+      COMMON_SPACE_SIZE,
     ];
 
     const result: unknown[] = [];

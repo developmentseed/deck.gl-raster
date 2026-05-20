@@ -10,12 +10,34 @@ import type { ShaderModule } from "@luma.gl/shadertools";
 import { CreateTexture } from "../gpu-modules/create-texture.js";
 import type { RasterModule } from "../gpu-modules/types.js";
 import fs from "./mesh-layer-fragment.glsl.js";
+import vs from "./mesh-layer-vertex.glsl.js";
+
+/**
+ * `SimpleMeshLayer` props that `MeshTextureLayer` deliberately does not
+ * support. They configure per-instance 3D-model placement, which is
+ * meaningless for our single-mesh-at-the-origin use case — and a non-identity
+ * value would silently break the fp64 mesh-vertex precision correction (the
+ * `positions64Low` low part is the residual of `positions`, not of a
+ * transformed `pos`). They are fixed internally (see `defaultProps`) and
+ * omitted from the public prop type so they can't be set.
+ */
+type ExcludedSimpleMeshProps =
+  | "_instanced"
+  | "getPosition"
+  | "getOrientation"
+  | "getScale"
+  | "getTranslation"
+  | "getTransformMatrix"
+  | "sizeScale";
 
 type _MeshTextureLayerProps =
   | { image: TextureSource; renderPipeline?: RasterModule[] }
   | { renderPipeline: RasterModule[]; image?: TextureSource };
 
-export type MeshTextureLayerProps = SimpleMeshLayerProps &
+export type MeshTextureLayerProps = Omit<
+  SimpleMeshLayerProps,
+  ExcludedSimpleMeshProps
+> &
   _MeshTextureLayerProps;
 
 const defaultProps: DefaultProps<
@@ -29,6 +51,9 @@ const defaultProps: DefaultProps<
   // labels in interleaved mode 🤷‍♂️
   // image: { type: "image", value: null, async: true },
   renderPipeline: { type: "array", value: [], compare: true },
+  // Render exactly one non-instanced mesh anchored at the coordinate origin.
+  _instanced: false,
+  getPosition: { type: "accessor", value: [0, 0, 0] },
   // Disable lighting by default (avoids darkening raster)
   material: {
     ambient: 1.0,
@@ -39,10 +64,22 @@ const defaultProps: DefaultProps<
 };
 
 /**
- * A small subclass of the SimpleMeshLayer to allow dynamic shader injections.
+ * A specialized raster-rendering layer, spiritually based on deck.gl's
+ * `SimpleMeshLayer` but with a narrower purpose: it draws **one** texture-mapped
+ * mesh anchored at the coordinate origin, not instanced 3D models.
  *
- * In the future this may expand to diverge more from the SimpleMeshLayer, such
- * as allowing the texture to be a 2D _array_.
+ * Differences from `SimpleMeshLayer`:
+ * - Allows dynamic shader injection (a render pipeline of `RasterModule`s) and
+ *   overrides the vertex/fragment shaders.
+ * - Provides fp64 mesh-vertex precision via a `positions64Low` attribute paired
+ *   with the geometry's `positions` (supplied by the caller through
+ *   `data.attributes.positions64Low`).
+ * - The per-instance placement props (`_instanced`, `getPosition`,
+ *   `getOrientation`, `getScale`, `getTranslation`, `getTransformMatrix`,
+ *   `sizeScale`) are intentionally unsupported and fixed at identity — see
+ *   {@link ExcludedSimpleMeshProps}. This is what keeps the fp64 correction
+ *   valid (the low part is the residual of `positions`, not of a transformed
+ *   vertex).
  */
 export class MeshTextureLayer extends SimpleMeshLayer<
   null,
@@ -50,6 +87,24 @@ export class MeshTextureLayer extends SimpleMeshLayer<
 > {
   static override layerName = "mesh-texture-layer";
   static override defaultProps: typeof defaultProps = defaultProps;
+
+  override initializeState(): void {
+    super.initializeState();
+    const attributeManager = this.getAttributeManager();
+    if (attributeManager) {
+      // Register the per-vertex low part of the fp64 position split, supplied
+      // via `data.attributes.positions64Low`
+      attributeManager.add({
+        positions64Low: {
+          size: 3,
+          type: "float32",
+          // Tell the AttributeManager not to allocate a buffer for this
+          // attribute; we'll supply it externally
+          noAlloc: true,
+        },
+      });
+    }
+  }
 
   _resolveRenderPipeline(): RasterModule[] {
     const { image, renderPipeline } = this.props;
@@ -103,6 +158,9 @@ export class MeshTextureLayer extends SimpleMeshLayer<
 
     return {
       ...upstreamShaders,
+      // Override upstream's vertex shader with our copy that uses fp64
+      // emulation
+      vs,
       // Override upstream's fragment shader with our copy with modified
       // injection points
       fs,

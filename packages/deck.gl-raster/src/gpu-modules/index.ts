@@ -19,7 +19,7 @@ export {
 export { createColormapTexture } from "./create-colormap-texture.js";
 export { CreateTexture } from "./create-texture.js";
 export type { CutlineBboxProps } from "./cutline-bbox.js";
-export { CutlineBbox, lngLatToMercator } from "./cutline-bbox.js";
+export { CutlineBbox } from "./cutline-bbox.js";
 export type { ColormapSpriteSource } from "./decode-colormap-sprite.js";
 export { decodeColormapSprite } from "./decode-colormap-sprite.js";
 export { FilterNoDataVal } from "./filter-nodata.js";
