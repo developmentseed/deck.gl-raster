@@ -158,10 +158,8 @@ export class MeshTextureLayer extends SimpleMeshLayer<
 
     return {
       ...upstreamShaders,
-      // Override upstream's vertex shader with our copy that declares a
-      // `positions64Low` attribute and uses it in the project_position_to_clipspace
-      // call to restore fp64 mesh-vertex precision. See
-      // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
+      // Override upstream's vertex shader with our copy that uses fp64
+      // emulation
       vs,
       // Override upstream's fragment shader with our copy with modified
       // injection points

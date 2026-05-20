@@ -52,7 +52,7 @@ const NDVI_COLORMAP_INDEX = COLORMAP_INDEX.cfastie;
  * `[0, 512]` on each axis (the 512×512 zoom-0 tile). Used as the unclipped
  * extent for `ClipExtension`'s `clipBounds`.
  */
-const COMMON_WORLD_SIZE = 512;
+const COMMON_SPACE_SIZE = 512;
 
 /** CARTO dark style; first label layer is `waterway_label` so we anchor the COG just below it. */
 const MAP_STYLE =
@@ -391,13 +391,13 @@ export default function App() {
       0,
       0,
       splitX,
-      COMMON_WORLD_SIZE,
+      COMMON_SPACE_SIZE,
     ];
     const rightClip: [number, number, number, number] = [
       splitX,
       0,
-      COMMON_WORLD_SIZE,
-      COMMON_WORLD_SIZE,
+      COMMON_SPACE_SIZE,
+      COMMON_SPACE_SIZE,
     ];
 
     const result: unknown[] = [];
