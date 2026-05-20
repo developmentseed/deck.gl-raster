@@ -1,8 +1,8 @@
 import type {
   CompositeLayerProps,
+  CoordinateSystem,
   DefaultProps,
   Layer,
-  LayerProps,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type {
@@ -451,7 +451,7 @@ export class RasterTileLayer<
 
     const isGlobe = this.context.viewport.resolution !== undefined;
     let reprojectionFns: ReprojectionFns;
-    let deckProjectionProps: Partial<LayerProps>;
+    let coordinateSystem: CoordinateSystem;
     if (isGlobe) {
       reprojectionFns = {
         forwardTransform,
@@ -459,7 +459,7 @@ export class RasterTileLayer<
         forwardReproject: descriptor.projectTo4326,
         inverseReproject: descriptor.projectFrom4326,
       };
-      deckProjectionProps = {};
+      coordinateSystem = "lnglat";
     } else {
       // Non-globe: render the mesh directly in deck.gl common space (world
       // units). The reproject fns output `meters * scale + TILE_SIZE/2`, so the
@@ -478,7 +478,7 @@ export class RasterTileLayer<
         forwardReproject,
         inverseReproject,
       };
-      deckProjectionProps = { coordinateSystem: "cartesian" };
+      coordinateSystem = "cartesian";
     }
 
     const rasterLayer = new RasterLayer(
@@ -494,7 +494,7 @@ export class RasterTileLayer<
         reprojectionFns,
         debug,
         debugOpacity,
-        ...deckProjectionProps,
+        coordinateSystem,
       }),
     );
     return [rasterLayer, ...debugLayers];
