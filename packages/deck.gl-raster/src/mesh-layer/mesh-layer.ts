@@ -92,16 +92,14 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     super.initializeState();
     const attributeManager = this.getAttributeManager();
     if (attributeManager) {
-      // Register the per-vertex low part of the fp64 position split. The
-      // buffer is supplied by the caller through `data.attributes.positions64Low`
-      // (deck.gl 9.x removed the `props.<attrName>` channel for attribute
-      // values — see attribute-manager.ts:196). We declare `noAlloc` so the
-      // AttributeManager doesn't try to materialize the buffer itself; it
-      // takes the external buffer directly via `setExternalBuffer`.
+      // Register the per-vertex low part of the fp64 position split, supplied
+      // via `data.attributes.positions64Low`
       attributeManager.add({
         positions64Low: {
           size: 3,
           type: "float32",
+          // Tell the AttributeManager not to allocate a buffer for this
+          // attribute; we'll supply it externally
           noAlloc: true,
         },
       });
