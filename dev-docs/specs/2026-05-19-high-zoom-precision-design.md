@@ -291,14 +291,14 @@ Four source files plus tests. Public API additions: none.
     / `inverseTransform` stay per-tile (from tile metadata) as today.
 
 - [`packages/deck.gl-raster/src/fp64.ts`](../../packages/deck.gl-raster/src/fp64.ts)
-  — a small `splitFloat64(values: Float64Array): [low, high]` helper that
+  — a small `splitFloat64Array(values: Float64Array): [low, high]` helper that
   vectorizes the `(Math.fround(v), v − Math.fround(v))` split into two
   Float32Arrays. Kept standalone (with its own test) so the operation is
   understandable in isolation and reusable.
 
 - [`packages/deck.gl-raster/src/raster-layer.ts`](../../packages/deck.gl-raster/src/raster-layer.ts)
   — `reprojectorToMesh` assembles the exact float64 positions into a
-  `Float64Array` and calls `splitFloat64` to get the high/low Float32
+  `Float64Array` and calls `splitFloat64Array` to get the high/low Float32
   pair. The state-mesh shape gains a `positions64Low` sibling field:
   ```ts
   state.mesh = {
@@ -349,7 +349,7 @@ Four source files plus tests. Public API additions: none.
 
 - Tests:
   - [`tests/fp64.test.ts`](../../packages/deck.gl-raster/tests/fp64.test.ts):
-    `splitFloat64` returns same-length `[low, high]` Float32Arrays;
+    `splitFloat64Array` returns same-length `[low, high]` Float32Arrays;
     `high` equals `Math.fround(v)`; **precision claim:** for sample
     values across a wide magnitude range, `high[i] + low[i]`
     reconstructs the float64 input to `< 1e-6 m` (vs the ~1 m
@@ -379,7 +379,7 @@ Four source files plus tests. Public API additions: none.
 
 ## Verification
 
-- Unit tests (above) — `splitFloat64` reconstruction precision + mesh wiring.
+- Unit tests (above) — `splitFloat64Array` reconstruction precision + mesh wiring.
 - Manual browser test on the NAIP mosaic example:
   - Pan and zoom around z16–z19 over the continental US. No visible
     jitter relative to the basemap (within ~1 px). No seams between

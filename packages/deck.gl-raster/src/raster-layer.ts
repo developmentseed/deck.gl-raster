@@ -9,7 +9,7 @@ import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
-import { splitFloat64 } from "./fp64.js";
+import { splitFloat64Array } from "./fp64.js";
 import type { RasterModule } from "./gpu-modules/types.js";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer.js";
 
@@ -317,8 +317,6 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         data: { length: 1, attributes: { positions64Low } },
         mesh,
         // We give a white color to turn off color mixing with the texture.
-        // (_instanced: false and getPosition: [0,0,0] are fixed by
-        // MeshTextureLayer — see its class doc.)
         getColor: [255, 255, 255],
       }),
     );
@@ -355,7 +353,7 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
     // z (flat on the ground)
     positions64[i * 3 + 2] = 0;
   }
-  const [positions64Low, positions] = splitFloat64(positions64);
+  const [positions64Low, positions] = splitFloat64Array(positions64);
 
   // TODO: Consider using 16-bit indices if the mesh is small enough
   const indices = new Uint32Array(reprojector.triangles);

@@ -14,7 +14,7 @@
  * See `dev-docs/coordinate-systems.md` and
  * `dev-docs/specs/2026-05-19-high-zoom-precision-design.md`.
  */
-export function splitFloat64(
+export function splitFloat64Array(
   values: Float64Array,
 ): [low: Float32Array, high: Float32Array] {
   const low = new Float32Array(values.length);
