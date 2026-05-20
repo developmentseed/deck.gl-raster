@@ -1,5 +1,11 @@
 import type { TiffImage, TiffTagGeoType, TiffTagType } from "@cogeotiff/core";
-import { Predictor, SampleFormat, TiffTag, TiffTagGeo } from "@cogeotiff/core";
+import {
+  PlanarConfiguration,
+  Predictor,
+  SampleFormat,
+  TiffTag,
+  TiffTagGeo,
+} from "@cogeotiff/core";
 
 /** Subset of TIFF tags that we pre-fetch for easier visualization. */
 export interface CachedTags {
@@ -74,10 +80,6 @@ export async function prefetchTags(
     missingTag("SamplesPerPixel");
   }
 
-  if (planarConfiguration === null) {
-    missingTag("PlanarConfiguration");
-  }
-
   if (photometric === null) {
     missingTag("Photometric");
   }
@@ -93,7 +95,9 @@ export async function prefetchTags(
     modelTransformation,
     nodata: gdalNoData !== null ? Number(gdalNoData) : null,
     photometric,
-    planarConfiguration,
+    // PlanarConfiguration defaults to interleaved/chunky/contig
+    // https://web.archive.org/web/20240329145253/https://www.awaresystems.be/imaging/tiff/tifftags/planarconfiguration.html
+    planarConfiguration: planarConfiguration ?? PlanarConfiguration.Contig,
     predictor: (predictor as Predictor) ?? Predictor.None,
     // Uint is the default sample format according to the spec
     // https://web.archive.org/web/20240329145340/https://www.awaresystems.be/imaging/tiff/tifftags/sampleformat.html

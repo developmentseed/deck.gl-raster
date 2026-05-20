@@ -9,6 +9,7 @@ import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
+import { splitFloat64Array } from "./fp64.js";
 import type { RasterModule } from "./gpu-modules/types.js";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer.js";
 
@@ -132,11 +133,30 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
   declare state: {
     reprojector?: RasterReprojector;
+    /**
+     * Mesh in the exact shape SimpleMeshLayer expects.
+     *
+     * It's important for this to be passed to MeshTextureLayer as a stable
+     * reference so `props.mesh` equality holds across renders. This avoids
+     * unnecessarily recreating the model.
+     */
     mesh?: {
-      positions: Float32Array;
-      indices: Uint32Array;
-      texCoords: Float32Array;
+      indices: { value: Uint32Array; size: number };
+      attributes: {
+        POSITION: { value: Float32Array; size: number };
+        TEXCOORD_0: { value: Float32Array; size: number };
+      };
     };
+    /**
+     * Low-part of positions for fp64 emulation in the shaders.
+     * `mesh.attributes.POSITION` carries the high part.
+     *
+     * This needs to be passed separately from `mesh` because SimpleMeshLayer's
+     * `normalizeGeometryAttributes` whitelists only positions/colors/normals/
+     * texCoords on the mesh attributes object — anything else is silently
+     * dropped.
+     */
+    positions64Low?: Float32Array;
   };
 
   override initializeState(): void {
@@ -194,15 +214,19 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       height + 1,
     );
     reprojector.run(maxError);
-    const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
+    const { indices, positions64High, positions64Low, texCoords } =
+      reprojectorToMesh(reprojector);
 
     this.setState({
       reprojector,
       mesh: {
-        positions,
-        indices,
-        texCoords,
+        indices: { value: indices, size: 1 },
+        attributes: {
+          POSITION: { value: positions64High, size: 3 },
+          TEXCOORD_0: { value: texCoords, size: 2 },
+        },
       },
+      positions64Low,
     });
   }
 
@@ -268,43 +292,27 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 
   renderLayers() {
-    const { mesh } = this.state;
+    const { mesh, positions64Low } = this.state;
     const { debug, image, renderPipeline } = this.props;
 
-    if (!mesh || (!image && (renderPipeline?.length ?? 0) === 0)) {
+    // mesh and positions64Low are always set together by _generateMesh.
+    if (
+      !mesh ||
+      !positions64Low ||
+      (!image && (renderPipeline?.length ?? 0) === 0)
+    ) {
       return null;
     }
-
-    const { indices, positions, texCoords } = mesh;
 
     const meshLayer = new MeshTextureLayer(
       this.getSubLayerProps({
         id: "raster",
         image,
         renderPipeline,
-        // Dummy data because we're only rendering _one_ instance of this mesh
-        // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
-        data: [1],
-        mesh: {
-          indices: { value: indices, size: 1 },
-          attributes: {
-            POSITION: {
-              value: positions,
-              size: 3,
-            },
-            TEXCOORD_0: {
-              value: texCoords,
-              size: 2,
-            },
-          },
-        },
-        // We're only rendering a single mesh, without instancing
-        // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L244
-        _instanced: false,
-        // Dummy accessors for the dummy data
-        // We place our mesh at the coordinate origin
-        getPosition: [0, 0, 0],
-        // We give a white color to turn off color mixing with the texture
+        // Single mesh rendered as one non-instanced draw.
+        data: { length: 1, attributes: { positions64Low } },
+        mesh,
+        // We give a white color to turn off color mixing with the texture.
         getColor: [255, 255, 255],
       }),
     );
@@ -323,13 +331,14 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
 function reprojectorToMesh(reprojector: RasterReprojector): {
   indices: Uint32Array;
-  positions: Float32Array;
+  positions64High: Float32Array;
+  positions64Low: Float32Array;
   texCoords: Float32Array;
 } {
   const numVertices = reprojector.uvs.length / 2;
-  const positions = new Float32Array(numVertices * 3);
   const texCoords = new Float32Array(reprojector.uvs);
 
+  const positions = new Float64Array(numVertices * 3);
   for (let i = 0; i < numVertices; i++) {
     positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
     positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
@@ -337,12 +346,17 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
     positions[i * 3 + 2] = 0;
   }
 
+  // Split the float64 positions into high and low parts for fp64 emulation in
+  // the shader.
+  const [positions64Low, positions64High] = splitFloat64Array(positions);
+
   // TODO: Consider using 16-bit indices if the mesh is small enough
   const indices = new Uint32Array(reprojector.triangles);
 
   return {
     indices,
-    positions,
+    positions64High,
+    positions64Low,
     texCoords,
   };
 }

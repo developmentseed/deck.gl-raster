@@ -3,8 +3,8 @@ import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
   RasterTileLayerProps,
+  RasterTilesetDescriptor,
   RenderTileResult,
-  TilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
 import { RasterTileLayer } from "@developmentseed/deck.gl-raster";
 import type {
@@ -173,7 +173,7 @@ export class COGLayer<
 
   declare state: {
     geotiff?: GeoTIFF;
-    tilesetDescriptor?: TilesetDescriptor;
+    tilesetDescriptor?: RasterTilesetDescriptor;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
   };

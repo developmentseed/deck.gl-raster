@@ -1,4 +1,4 @@
-import type { TilesetLevel } from "../raster-tileset/tileset-interface.js";
+import type { RasterTilesetLevel } from "../raster-tileset/tileset-interface.js";
 
 /**
  * UV transform mapping primary tile UV space to the correct sub-region of a
@@ -124,10 +124,10 @@ export interface SecondaryTileResolution {
  * upward (north), so `offsetY` is computed as
  * `(stitchedMaxY - primaryMaxY) / stitchedCrsHeight` to account for the flip.
  *
- * @param primaryLevel - The {@link TilesetLevel} describing the primary tileset.
+ * @param primaryLevel - The {@link RasterTilesetLevel} describing the primary tileset.
  * @param primaryCol - Column index of the primary tile.
  * @param primaryRow - Row index of the primary tile.
- * @param secondaryLevel - The {@link TilesetLevel} describing the secondary tileset.
+ * @param secondaryLevel - The {@link RasterTilesetLevel} describing the secondary tileset.
  * @param secondaryZ - The zoom level index of `secondaryLevel` within its
  *   {@link TilesetDescriptor.levels} array. Stored in the returned
  *   {@link SecondaryTileResolution.z} so the consumer knows which COG overview
@@ -136,10 +136,10 @@ export interface SecondaryTileResolution {
  *   stitched dimensions, and the min col/row of the covered range.
  */
 export function resolveSecondaryTiles(
-  primaryLevel: TilesetLevel,
+  primaryLevel: RasterTilesetLevel,
   primaryCol: number,
   primaryRow: number,
-  secondaryLevel: TilesetLevel,
+  secondaryLevel: RasterTilesetLevel,
   secondaryZ: number,
 ): SecondaryTileResolution {
   // Step 1: Get the CRS extent of the primary tile

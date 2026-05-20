@@ -43,7 +43,7 @@ const cogExamples: Example[] = [
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/land-cover/",
-    image: "/deck.gl-raster/img/land-cover-examples-card.jpg",
+    image: "/deck.gl-raster/img/land-cover-categories-hero.gif",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/land-cover",
   },
@@ -83,7 +83,7 @@ const cogExamples: Example[] = [
     title: "Before/After Comparison",
     description: <>Use a slider to compare Vermont state imagery over time.</>,
     href: "https://developmentseed.org/deck.gl-raster/examples/vermont-cog-comparison/",
-    image: "/deck.gl-raster/img/vermont-opendata-example-card.jpg",
+    image: "/deck.gl-raster/img/vermont-swipe-example.gif",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/vermont-cog-comparison",
   },

@@ -1,5 +1,5 @@
 import type { AffineTilesetLevel } from "./affine-tileset-level.js";
-import type { TilesetDescriptor } from "./tileset-interface.js";
+import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type { Bounds, ProjectionFunction } from "./types.js";
 
 /**
@@ -19,12 +19,12 @@ export interface AffineTilesetOptions {
 }
 
 /**
- * A {@link TilesetDescriptor} backed by per-level affine transforms.
+ * A {@link RasterTilesetDescriptor} backed by per-level affine transforms.
  *
  * Derives `projectedBounds` from the coarsest level's array. Everything else
  * is passed through from the constructor options.
  */
-export class AffineTileset implements TilesetDescriptor {
+export class AffineTileset implements RasterTilesetDescriptor {
   readonly levels: AffineTilesetLevel[];
   readonly projectTo3857: ProjectionFunction;
   readonly projectFrom3857: ProjectionFunction;

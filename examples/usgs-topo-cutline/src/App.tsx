@@ -1,4 +1,5 @@
 import { Checkbox, Code, NativeSelect, Text } from "@chakra-ui/react";
+import { WebMercatorViewport } from "@deck.gl/core";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type {
   RasterModule,
@@ -7,7 +8,6 @@ import type {
 import {
   CreateTexture,
   CutlineBbox,
-  lngLatToMercator,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import type { Texture } from "@luma.gl/core";
@@ -23,33 +23,39 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import type { GetTileDataOptions } from "../../../packages/deck.gl-geotiff/dist/cog-layer.js";
 
+// A viewport is only needed for its (zoom-independent) lng/lat → common-space
+// projection; any instance works. CutlineBbox expects its bbox in common
+// space, and `getUniforms` runs every frame — so we project the static quad
+// bboxes once here at module load, not per render.
+const PROJECTION_VIEWPORT = new WebMercatorViewport({ width: 1, height: 1 });
+
 /**
- * Project a WGS84 lng/lat bbox `[west, south, east, north]` to an EPSG:3857
- * mercator bbox `[minX, minY, maxX, maxY]`. USGS quads always have
- * `east > west` and `north > south`, so we can pack the two corner points
- * directly without `Math.min` / `Math.max` guards.
+ * Project a WGS84 lng/lat bbox `[west, south, east, north]` to a deck.gl
+ * common-space bbox `[minX, minY, maxX, maxY]`. USGS quads always have
+ * `east > west` and `north > south`, and Mercator is monotonic in both axes,
+ * so we can pack the two corner points directly.
  */
-function mercatorBbox(
+function commonSpaceBbox(
   west: number,
   south: number,
   east: number,
   north: number,
 ): [number, number, number, number] {
-  const [minX, minY] = lngLatToMercator(west, south);
-  const [maxX, maxY] = lngLatToMercator(east, north);
+  const [minX, minY] = PROJECTION_VIEWPORT.projectPosition([west, south]);
+  const [maxX, maxY] = PROJECTION_VIEWPORT.projectPosition([east, north]);
   return [minX, minY, maxX, maxY];
 }
 
 /**
  * One USGS historical topo quad to render. The WGS84 data area comes from
- * the HTMC metadata CSV (`westbc`, `southbc`, `eastbc`, `northbc`); we
- * project it to EPSG:3857 meters once at module load so the per-frame
- * shader uniform update is a trivial pass-through.
+ * the HTMC metadata CSV (`westbc`, `southbc`, `eastbc`, `northbc`); we project
+ * it to common space once at module load so the per-frame shader uniform
+ * update is a trivial pass-through.
  */
 type TopoOption = {
   title: string;
   url: string;
-  /** EPSG:3857 meters, packed as `[minX, minY, maxX, maxY]`. */
+  /** deck.gl common-space bbox, packed as `[minX, minY, maxX, maxY]`. */
   bbox: [number, number, number, number];
 };
 
@@ -57,27 +63,27 @@ const TOPO_OPTIONS: TopoOption[] = [
   {
     title: "Emigrant Gap, CA (1955, 1:62,500)",
     url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/CA/CA_Emigrant%20Gap_297419_1955_62500_geo.tif",
-    bbox: mercatorBbox(-120.75, 39.25, -120.5, 39.5),
+    bbox: commonSpaceBbox(-120.75, 39.25, -120.5, 39.5),
   },
   {
     title: "Moab, UT (1885, 1:250,000)",
     url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/UT/UT_La%20Sal_250205_1885_250000_geo.tif",
-    bbox: mercatorBbox(-110.0, 38.0, -109.0, 39.0),
+    bbox: commonSpaceBbox(-110.0, 38.0, -109.0, 39.0),
   },
   {
     title: "Mount St Helens, WA (1919, 1:125,000)",
     url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/WA/WA_Mount%20St%20Helens_242547_1919_125000_geo.tif",
-    bbox: mercatorBbox(-122.5, 46.0, -122.0, 46.5),
+    bbox: commonSpaceBbox(-122.5, 46.0, -122.0, 46.5),
   },
   {
     title: "Estes Park, CO (1961, 1:24,000)",
     url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/CO/CO_Estes%20Park_466919_1961_24000_geo.tif",
-    bbox: mercatorBbox(-105.625, 40.375, -105.5, 40.5),
+    bbox: commonSpaceBbox(-105.625, 40.375, -105.5, 40.5),
   },
   {
     title: "Kanab Point, AZ (1962, 1:62,500)",
     url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/AZ/AZ_Kanab%20Point_314712_1962_62500_geo.tif",
-    bbox: mercatorBbox(-112.75, 36.25, -112.5, 36.5),
+    bbox: commonSpaceBbox(-112.75, 36.25, -112.5, 36.5),
   },
 ];
 

@@ -3,6 +3,49 @@
 ## Unreleased
 
 * feat: Web Mercator axis-aligned cutline support by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/424
+* feat(geotiff): New internal method to fetch multiple tiles concurrently, with range coalescing by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/530
+* feat(geotiff): route fetchTiles through batched, range-coalescing getTiles by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/531
+
+## v0.7.0 - 2026-05-13
+
+### Breaking Changes
+
+* chore!: Rename TilesetDescriptor to RasterTilesetDescriptor by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/547
+* refactor!: Make MosaicTileset2D private by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/550
+    * Ensure you're only using the top-level `MosaicLayer`, not the previously-exported `MosaicTileset2D`. Also ensure you import the `MinimalTileData` type from the `deck.gl-raster` package, not from `deck.gl-geotiff`.
+
+### New Features
+
+* feat: Vermont open data example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/502
+* feat: Update land-cover example to have filterable categories by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/506
+* feat: Use `devicePixelRatio` for level of detail computation in tile traversal by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/513
+* feat(geotiff): thread AbortSignal through GeoTIFF open/fromUrl by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/515
+* feat: Spiral out loading by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/477
+* feat(mosaic)!: add explicit `key?: string` to mosaic sources by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/533
+* feat: Expose onTile callbacks through raster tile layers by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/546
+
+### Bug Fixes
+
+* fix!: Default to linear sampling for non-paletted COGs by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/514
+* fix(examples): correct NDVI range filter in naip-mosaic by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/522
+* fix(mosaic-layer): make sources prop reactive to updates by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/511
+* fix(geotiff): Turn off HTTP request bounds checking by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/527
+* fix: `PlanarConfiguration` TIFF tag is not required by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/542
+
+### Performance Improvements
+
+* perf(geotiff)!: block-aligned LRU header cache; lazy tile metadata by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/529
+* fix(raster-tileset): memoize tile bounding volumes across traversals by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/525
+* perf(raster-tileset): Reduce re-renders of RasterLayer for same per-tile transforms by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/543
+* perf(raster-layer): avoid re-compiling shader Model as much as possible by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/540
+
+### Other
+
+* refactor: make `MultiCOGLayer` extend `RasterTileLayer` by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/499
+* feat(examples): shared component package + migrate cog-basic & sentinel-2 by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/520
+* feat(examples): migrate remaining examples to the shared component package by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/521
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.6.1...v0.7.0
 
 ## v0.6.1 - 2026-04-29
 

@@ -358,7 +358,6 @@ export default function App() {
   useEffect(() => {
     async function wrappedFetchSTACItems() {
       try {
-        // const data: STACFeatureCollection = await fetchSTACItems();
         const data = STAC_DATA as unknown as STACFeatureCollection;
         (window as any).data = data;
         setStacItems(data.features);
@@ -445,7 +444,7 @@ export default function App() {
       },
       // Smaller cache for MosaicLayer cache, since it caches full COGLayer
       // instances
-      maxCacheSize: 5,
+      maxCacheSize: 0,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.
       beforeId: "boundary_country_outline",

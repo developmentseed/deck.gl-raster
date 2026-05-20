@@ -12,16 +12,16 @@ import { PathLayer, TextLayer } from "@deck.gl/layers";
 import type {
   Corners,
   GetTileDataOptions,
-  MultiTilesetDescriptor,
+  MultiRasterTilesetDescriptor,
   ProjectionFunction,
   RasterModule,
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
   RenderTileResult,
-  TilesetDescriptor,
-  TilesetLevel,
   UvTransform,
 } from "@developmentseed/deck.gl-raster";
 import {
-  createMultiTilesetDescriptor,
+  createMultiRasterTilesetDescriptor,
   RasterTileLayer,
   resolveSecondaryTiles,
   selectSecondaryLevel,
@@ -213,7 +213,7 @@ export type MultiCOGLayerProps = CompositeLayerProps &
 
     /**
      * Called once all configured sources have been opened and the
-     * {@link MultiTilesetDescriptor} has been built.
+     * {@link MultiRasterTilesetDescriptor} has been built.
      *
      * `geographicBounds` is computed from the primary (finest-resolution)
      * source and reprojected to WGS84; it matches the shape returned by
@@ -280,15 +280,15 @@ const defaultProps = {
 
 /**
  * A deck.gl {@link CompositeLayer} that opens multiple Cloud-Optimized GeoTIFFs
- * (COGs) in parallel, builds a {@link TilesetDescriptor} for each, and groups
- * them into a single {@link MultiTilesetDescriptor}.
+ * (COGs) in parallel, builds a {@link RasterTilesetDescriptor} for each, and groups
+ * them into a single {@link MultiRasterTilesetDescriptor}.
  *
  * The finest-resolution source is automatically selected as the primary
  * tileset, which drives the tile grid. Secondary sources are sampled at the
  * closest matching resolution.
  *
  * @see {@link MultiCOGLayerProps} for accepted props.
- * @see {@link createMultiTilesetDescriptor} for the grouping logic.
+ * @see {@link createMultiRasterTilesetDescriptor} for the grouping logic.
  * @see {@link geoTiffToDescriptor} for the per-source tileset descriptor.
  */
 export class MultiCOGLayer extends RasterTileLayer<
@@ -304,7 +304,7 @@ export class MultiCOGLayer extends RasterTileLayer<
 
   declare state: {
     sources: Map<string, SourceState> | null;
-    multiDescriptor: MultiTilesetDescriptor | null;
+    multiDescriptor: MultiRasterTilesetDescriptor | null;
   };
 
   override initializeState(): void {
@@ -333,7 +333,7 @@ export class MultiCOGLayer extends RasterTileLayer<
 
   /**
    * Open all configured COG sources in parallel, compute shared projection
-   * functions, and build the {@link MultiTilesetDescriptor}.
+   * functions, and build the {@link MultiRasterTilesetDescriptor}.
    *
    * All sources are assumed to share the same CRS; the projection of the
    * first source is used for the shared coordinate converters.
@@ -394,7 +394,7 @@ export class MultiCOGLayer extends RasterTileLayer<
     });
 
     // Build TilesetDescriptors
-    const tilesetMap = new Map<string, TilesetDescriptor>();
+    const tilesetMap = new Map<string, RasterTilesetDescriptor>();
     const sourceMap = new Map<string, SourceState>();
 
     for (const cogSource of cogSources) {
@@ -409,7 +409,7 @@ export class MultiCOGLayer extends RasterTileLayer<
       sourceMap.set(cogSource.name, { geotiff: cogSource.geotiff });
     }
 
-    const multiDescriptor = createMultiTilesetDescriptor(tilesetMap);
+    const multiDescriptor = createMultiRasterTilesetDescriptor(tilesetMap);
 
     this.setState({
       sources: sourceMap,
@@ -538,7 +538,7 @@ export class MultiCOGLayer extends RasterTileLayer<
     };
   }
 
-  protected override _tilesetDescriptor(): TilesetDescriptor | undefined {
+  protected override _tilesetDescriptor(): RasterTilesetDescriptor | undefined {
     return this.state.multiDescriptor?.primary;
   }
 
@@ -675,8 +675,8 @@ export class MultiCOGLayer extends RasterTileLayer<
     name: string,
     sourceState: SourceState,
     opts: {
-      descriptor: TilesetDescriptor;
-      primaryLevel: TilesetLevel;
+      descriptor: RasterTilesetDescriptor;
+      primaryLevel: RasterTilesetLevel;
       primaryCol: number;
       primaryRow: number;
       primaryZ: number;
