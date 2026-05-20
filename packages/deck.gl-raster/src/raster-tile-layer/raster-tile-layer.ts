@@ -188,6 +188,50 @@ export class RasterTileLayer<
   static override defaultProps = defaultProps;
 
   /**
+   * Memoized common-space reprojection functions, keyed by descriptor.
+   *
+   * For the non-globe path we render the mesh in deck.gl common space
+   * (world units) with an identity `modelMatrix` and `coordinateOrigin =
+   * [0,0,0]`, which (combined with the fp64 mesh-vertex split) keeps the
+   * auto-offset shader math exact at high zoom. See
+   * `dev-docs/specs/2026-05-19-high-zoom-precision-design.md` and
+   * `dev-docs/coordinate-systems.md`.
+   *
+   * The wrapped functions must be reference-stable across renders, or
+   * `RasterLayer.updateState`'s `reprojectionFnsChanged` check regenerates
+   * the mesh every frame. The descriptor is stable per layer, so we
+   * recompute only when it changes.
+   */
+  private _commonSpaceReproject?: {
+    descriptor: RasterTilesetDescriptor;
+    forwardReproject: (x: number, y: number) => [number, number];
+    inverseReproject: (x: number, y: number) => [number, number];
+  };
+
+  private _getCommonSpaceReproject(descriptor: RasterTilesetDescriptor): {
+    forwardReproject: (x: number, y: number) => [number, number];
+    inverseReproject: (x: number, y: number) => [number, number];
+  } {
+    if (this._commonSpaceReproject?.descriptor !== descriptor) {
+      const scale = WEB_MERCATOR_TO_WORLD_SCALE;
+      const offset = TILE_SIZE / 2;
+      this._commonSpaceReproject = {
+        descriptor,
+        forwardReproject: (x, y) => {
+          const [mx, my] = descriptor.projectTo3857(x, y);
+          return [mx * scale + offset, my * scale + offset];
+        },
+        inverseReproject: (cx, cy) => {
+          const mx = (cx - offset) / scale;
+          const my = (cy - offset) / scale;
+          return descriptor.projectFrom3857(mx, my);
+        },
+      };
+    }
+    return this._commonSpaceReproject;
+  }
+
+  /**
    * The currently effective {@link RasterTilesetDescriptor}.
    *
    * Subclasses override this to return a descriptor built from their own
@@ -403,32 +447,45 @@ export class RasterTileLayer<
     const { width, height } = props.data;
 
     const isGlobe = this.context.viewport.resolution !== undefined;
-    const reprojectionFns: ReprojectionFns = isGlobe
-      ? {
-          forwardTransform,
-          inverseTransform,
-          forwardReproject: descriptor.projectTo4326,
-          inverseReproject: descriptor.projectFrom4326,
-        }
-      : {
-          forwardTransform,
-          inverseTransform,
-          forwardReproject: descriptor.projectTo3857,
-          inverseReproject: descriptor.projectFrom3857,
-        };
-    const deckProjectionProps: Partial<LayerProps> = isGlobe
-      ? {}
-      : {
-          coordinateSystem: "cartesian",
-          coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
-          // biome-ignore format: array
-          modelMatrix: [
-            WEB_MERCATOR_TO_WORLD_SCALE, 0, 0, 0,
-            0, WEB_MERCATOR_TO_WORLD_SCALE, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1,
-          ],
-        };
+    let reprojectionFns: ReprojectionFns;
+    let deckProjectionProps: Partial<LayerProps>;
+    if (isGlobe) {
+      reprojectionFns = {
+        forwardTransform,
+        inverseTransform,
+        forwardReproject: descriptor.projectTo4326,
+        inverseReproject: descriptor.projectFrom4326,
+      };
+      deckProjectionProps = {};
+    } else {
+      // Non-globe: render the mesh directly in deck.gl common space (world
+      // units). The reproject fns output `meters * scale + TILE_SIZE/2`, so
+      // `modelMatrix` is identity and `coordinateOrigin` is [0,0,0]. Combined
+      // with the fp64 mesh-vertex split (see RasterLayer), this keeps the
+      // auto-offset shader math exact at high zoom — `shaderCoordinateOrigin`
+      // becomes exactly `Math.fround(viewport.center)` and the camera-relative
+      // subtraction is Sterbenz-exact. See
+      // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
+      const { forwardReproject, inverseReproject } =
+        this._getCommonSpaceReproject(descriptor);
+      reprojectionFns = {
+        forwardTransform,
+        inverseTransform,
+        forwardReproject,
+        inverseReproject,
+      };
+      deckProjectionProps = {
+        coordinateSystem: "cartesian",
+        coordinateOrigin: [0, 0, 0],
+        // biome-ignore format: array
+        modelMatrix: [
+          1, 0, 0, 0,
+          0, 1, 0, 0,
+          0, 0, 1, 0,
+          0, 0, 0, 1,
+        ],
+      };
+    }
 
     const rasterLayer = new RasterLayer(
       this.getSubLayerProps({
