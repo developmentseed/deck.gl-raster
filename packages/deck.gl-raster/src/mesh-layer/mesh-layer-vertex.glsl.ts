@@ -1,7 +1,7 @@
 // Vertex shader for MeshTextureLayer. Override of upstream's
 // simple-mesh-layer-vertex.glsl.ts (deck.gl 9.3 @
-// 82a028314b8b20275c8f58713e68702407f2eba4):
-// https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts
+// 09af8de8d18a9cb9a31d064cae8f9e7239df7f53):
+// https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts
 //
 // Differences from upstream:
 //   1. Adds `in vec3 positions64Low;` — per-vertex low part of the
@@ -19,7 +19,7 @@
 // dev-docs/specs/2026-05-19-high-zoom-precision-design.md and
 // dev-docs/coordinate-systems.md.
 
-export default `#version 300 es
+export default /* glsl */ `#version 300 es
 #define SHADER_NAME mesh-texture-layer-vs
 
 // Primitive attributes
@@ -65,6 +65,8 @@ void main(void) {
     // call project_normal before setting position to avoid rotation
     normals_commonspace = project_normal(instanceModelMatrix * normals);
     geometry.worldPosition += pos;
+
+    // NOTE: this is the one line that changed to support fp64 emulation
     gl_Position = project_position_to_clipspace(pos + instancePositions, positions64Low + instancePositions64Low, vec3(0.0), position_commonspace);
     geometry.position = position_commonspace;
   }

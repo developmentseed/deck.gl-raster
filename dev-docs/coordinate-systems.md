@@ -1,8 +1,9 @@
 # Coordinate systems and precision in deck.gl
 
-> Source references in this doc are commit-pinned GitHub permalinks (mostly
-> [`visgl/deck.gl@82a02831`](https://github.com/visgl/deck.gl/tree/82a028314b8b20275c8f58713e68702407f2eba4),
-> deck.gl 9.3.x), so the linked line numbers are stable. The prose also
+> Source references in this doc are commit-pinned GitHub permalinks to the
+> [`v9.3.2`](https://github.com/visgl/deck.gl/tree/09af8de8d18a9cb9a31d064cae8f9e7239df7f53)
+> release (`09af8de8`) — the deck.gl version this package depends on — so the
+> linked line numbers are stable and match what we run against. The prose also
 > explains each mechanism so you can re-locate it if upstream refactors.
 
 This is the running notebook of everything we've learned the hard way
@@ -26,12 +27,12 @@ hit a new gotcha.
   primitive layer in `@deck.gl/layers` uses this for cartesian and
   lnglat — `SimpleMeshLayer` is a notable exception, only fp64-ing its
   *instance* positions.
-- [`Fp64Extension`](https://github.com/visgl/deck.gl/blob/48760d53efae9a94775a0f55e6869478ee223823/modules/extensions/src/fp64/fp64-extension.ts#L10-L29) is a *different* (older) thing — deprecated, lnglat-only,
+- [`Fp64Extension`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/extensions/src/fp64/fp64-extension.ts#L10-L18) is a *different* (older) thing — deprecated, lnglat-only,
   and incompatible with `SimpleMeshLayer`. Don't reach for it.
 
 ## Coordinate systems
 
-The `coordinateSystem` prop ([`COORDINATE_SYSTEM` in `lib/constants.ts:24-55`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/lib/constants.ts#L24-L55))
+The `coordinateSystem` prop ([`COORDINATE_SYSTEM` in `lib/constants.ts:24-55`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/lib/constants.ts#L24-L55))
 controls how deck.gl interprets the position attribute on a layer.
 
 | Value | Position attribute is | `coordinateOrigin` is | Notes |
@@ -60,12 +61,12 @@ why we set
 
 ## `WEB_MERCATOR_AUTO_OFFSET`
 
-[`Viewport.projectionMode`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/viewports/viewport.ts#L205-L212)
+[`Viewport.projectionMode`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/viewports/viewport.ts#L205-L212)
 returns `WEB_MERCATOR_AUTO_OFFSET` whenever `viewport.isGeospatial && zoom ≥ 12`.
 Below z12 it's plain `WEB_MERCATOR`.
 
 In auto-offset mode the CPU computes
-([`viewport-uniforms.ts:80-98`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/shaderlib/project/viewport-uniforms.ts#L80-L98)):
+([`viewport-uniforms.ts:80-98`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/shaderlib/project/viewport-uniforms.ts#L80-L98)):
 
 ```ts
 shaderCoordinateOrigin = [Math.fround(viewport.center[0]),
@@ -80,7 +81,7 @@ That subtraction happens in float64 JS — the CPU produces a small
 camera-relative remainder, only the small value is uploaded as a
 float32 uniform. The shader then subtracts that uniform from the
 projected vertex
-([`project.glsl.ts:225-231`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/shaderlib/project/project.glsl.ts#L225-L231)):
+([`project.glsl.ts:225-231`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/shaderlib/project/project.glsl.ts#L225-L231)):
 
 ```glsl
 if (projectionMode == AUTO_OFFSET && coordinateSystem == CARTESIAN) {
@@ -105,7 +106,7 @@ applied to lng/lat degrees (small magnitudes), where ULP is sub-cm.
 
 The supported, non-deprecated mechanism for sub-float32 precision in
 per-vertex attributes. The pattern, from
-[`BitmapLayer.initializeState`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/layers/src/bitmap-layer/bitmap-layer.ts#L141-L160):
+[`BitmapLayer.initializeState`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/layers/src/bitmap-layer/bitmap-layer.ts#L141-L160):
 
 ```ts
 attributeManager.add({
@@ -136,7 +137,7 @@ gl_Position = project_position_to_clipspace(
 ```
 
 `project_position_to_clipspace` already accepts the low part and feeds
-it through `project_position` ([`project.glsl.ts:188-234`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/shaderlib/project/project.glsl.ts#L188-L234)):
+it through `project_position` ([`project.glsl.ts:188-234`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/shaderlib/project/project.glsl.ts#L188-L234)):
 
 ```glsl
 return project_offset_(position_world)
@@ -147,7 +148,7 @@ The second term recovers the precision the first lost.
 
 ### `Layer.use64bitPositions()`
 
-[`core/src/lib/layer.ts:357-364`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/lib/layer.ts#L357-L364):
+[`core/src/lib/layer.ts:357-364`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/lib/layer.ts#L357-L364):
 
 ```ts
 use64bitPositions(): boolean {
@@ -168,7 +169,7 @@ standard primitive layer (`BitmapLayer`, `PathLayer`, `LineLayer`,
 
 ### Gotcha: `Fp64Extension` is a different, deprecated thing
 
-[`modules/extensions/src/fp64/fp64-extension.ts`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/extensions/src/fp64/fp64-extension.ts#L10-L18)
+[`modules/extensions/src/fp64/fp64-extension.ts`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/extensions/src/fp64/fp64-extension.ts#L10-L18)
 is marked `@deprecated`, and **throws** if `coordinateSystem !== 'lnglat'`.
 Different mechanism from the attribute-pair approach: it did *full
 projection math* in fp64-emulated GLSL via a `project64` shader
@@ -177,7 +178,7 @@ way) with `Fp64Extension` (the deprecated wrapper).
 
 ## SimpleMeshLayer: the "small model at big anchor" assumption
 
-[`SimpleMeshLayer`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L248-L267)'s
+[`SimpleMeshLayer`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L248-L267)'s
 `initializeState` wires fp64 *only* for `instancePositions` — the
 per-instance anchor. The mesh primitive `positions` attribute is
 plain float32. The implicit assumption: you have a small 3D model
@@ -196,9 +197,9 @@ and the spec at
 
 There's also a closely related gotcha: `SimpleMeshLayer`'s vertex
 shader has two paths gated by a `composeModelMatrix` uniform
-([`simple-mesh-layer-vertex.glsl.ts:42-59`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts#L42-L59)).
+([`simple-mesh-layer-vertex.glsl.ts:42-59`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts#L42-L59)).
 The flag is set by
-[`shouldComposeModelMatrix(viewport, coordinateSystem)`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/utils/matrix.ts#L161-L167),
+[`shouldComposeModelMatrix(viewport, coordinateSystem)`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/mesh-layers/src/utils/matrix.ts#L161-L167),
 which returns `true` for `cartesian` or `meter-offsets`. For our
 non-instanced cartesian usage, the `composeModelMatrix=true` branch
 runs, which calls `project_position_to_clipspace(pos + instancePositions, instancePositions64Low, vec3(0.0), ...)` —
@@ -261,7 +262,7 @@ did *not* go away. The reason: there are **three** independent
 float32-at-large-magnitude error sources in the cartesian + auto-offset
 shader chain, and fp64 attribute pairs only fix the first.
 
-Tracing [`project.glsl.ts:188-235`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/shaderlib/project/project.glsl.ts#L188-L235):
+Tracing [`project.glsl.ts:188-235`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/shaderlib/project/project.glsl.ts#L188-L235):
 
 ```glsl
 position_world = modelMatrix * position;     // (A) scale × ~1.3e7 m → ~114 wu

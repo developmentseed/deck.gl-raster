@@ -30,7 +30,7 @@ jitter dominates.
 ## Why deck.gl's auto-offset doesn't fix this on its own
 
 deck.gl's `WEB_MERCATOR_AUTO_OFFSET` (zoom ≥ 12, see
-[`Viewport.projectionMode`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/viewports/viewport.ts#L205-L212))
+[`Viewport.projectionMode`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/viewports/viewport.ts#L205-L212))
 re-anchors the projection to the viewport center on the CPU in float64,
 then runs camera-relative math in float32 in the shader. That fixes
 *camera-relative* precision, but the precision of our vertex attribute is
@@ -43,7 +43,7 @@ everywhere.
 ## Three independent error sources
 
 Tracing the cartesian + auto-offset shader chain end to end
-([`project.glsl.ts`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/shaderlib/project/project.glsl.ts#L188-L235)),
+([`project.glsl.ts`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/shaderlib/project/project.glsl.ts#L188-L235)),
 there are **three** places precision is lost — and fp64 attribute pairs
 alone only fix the first:
 
@@ -158,7 +158,7 @@ and encode each vertex as an **fp64 split pair**:
 
 The pair `(hi, lo)` together carries ~14 decimal digits of precision
 (float64-equivalent at our magnitudes). deck.gl's vertex projection
-shader already accepts both — [`project_position`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/shaderlib/project/project.glsl.ts#L188-L235)
+shader already accepts both — [`project_position`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/shaderlib/project/project.glsl.ts#L188-L235)
 takes a `position64Low` parameter and adds
 `project_offset_(modelMatrix * vec4(position64Low, 0.0))` to the
 result. The infrastructure is built-in and not deprecated; see
@@ -176,9 +176,9 @@ attributes (its Model has no Geometry).
 
 SimpleMeshLayer is **Geometry-driven** for mesh primitive attributes:
 `positions`, `colors`, `normals`, `texCoords` come from
-[`getGeometry(mesh)`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L72-L89),
+[`getGeometry(mesh)`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L72-L89),
 not through AttributeManager. And
-[`normalizeGeometryAttributes`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L42-L66)
+[`normalizeGeometryAttributes`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer.ts#L42-L66)
 whitelists those four names — any extra attribute keys are silently
 dropped. So we can't reach the auto-split mechanism via the mesh prop.
 
@@ -194,7 +194,7 @@ the path that fits its origin:
   size: 3, noAlloc: true }})`, and its buffer is supplied through the
   inner sub-layer's `data.attributes.positions64Low`. deck.gl 9.x
   **removed** the `props.<attributeName>` channel for attribute values
-  ([`attribute-manager.ts:196`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/core/src/lib/attribute/attribute-manager.ts#L196)) —
+  ([`attribute-manager.ts:196`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/core/src/lib/attribute/attribute-manager.ts#L196)) —
   a top-level prop named `positions64Low` triggers a removal warning on
   every render. Passing it via `data: { length: 1, attributes: {
   positions64Low } }` lets the AttributeManager pick the buffer up via
@@ -324,7 +324,7 @@ Four source files plus tests. Public API additions: none.
      `update` callback — the buffer is supplied externally via
      `data.attributes.positions64Low`.
   2. `getShaders()` returns a `vs` override — a copy of upstream
-     [`simple-mesh-layer-vertex.glsl.ts`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts)
+     [`simple-mesh-layer-vertex.glsl.ts`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts)
      with one substitution in the `composeModelMatrix` branch: replace
      the `instancePositions64Low` argument to
      `project_position_to_clipspace` with
@@ -367,7 +367,7 @@ Four source files plus tests. Public API additions: none.
   internally); the precision discipline above reproduces what the
   LNGLAT path does, without a per-vertex degrees reprojection.
 - Reviving the deprecated `Fp64Extension` (lnglat-only, throws for
-  cartesian — see [`fp64-extension.ts`](https://github.com/visgl/deck.gl/blob/82a028314b8b20275c8f58713e68702407f2eba4/modules/extensions/src/fp64/fp64-extension.ts#L10-L18)).
+  cartesian — see [`fp64-extension.ts`](https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/extensions/src/fp64/fp64-extension.ts#L10-L18)).
   We use the *attribute-pair* fp64 mechanism (BitmapLayer pattern),
   which is the supported approach.
 - The standalone `RasterLayer` (used without `RasterTileLayer`).
