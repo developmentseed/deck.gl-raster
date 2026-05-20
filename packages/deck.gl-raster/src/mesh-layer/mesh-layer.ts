@@ -51,11 +51,7 @@ const defaultProps: DefaultProps<
   // labels in interleaved mode 🤷‍♂️
   // image: { type: "image", value: null, async: true },
   renderPipeline: { type: "array", value: [], compare: true },
-  // Fixed single-mesh configuration (these props are omitted from
-  // MeshTextureLayerProps; see ExcludedSimpleMeshProps): render exactly one
-  // non-instanced mesh anchored at the coordinate origin. getOrientation /
-  // getScale / getTranslation / getTransformMatrix / sizeScale keep
-  // SimpleMeshLayer's identity defaults via the spread above.
+  // Render exactly one non-instanced mesh anchored at the coordinate origin.
   _instanced: false,
   getPosition: { type: "accessor", value: [0, 0, 0] },
   // Disable lighting by default (avoids darkening raster)
