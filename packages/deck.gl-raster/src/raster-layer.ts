@@ -342,25 +342,24 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   const numVertices = reprojector.uvs.length / 2;
   const texCoords = new Float32Array(reprojector.uvs);
 
-  // Assemble the exact (float64) vertex positions, then split into fp64 high +
-  // low Float32 component arrays for the GPU. The low part recovers the
-  // precision lost when downcasting large-magnitude coords to float32. See
-  // dev-docs/specs/2026-05-19-high-zoom-precision-design.md.
-  const positions64 = new Float64Array(numVertices * 3);
+  const positions = new Float64Array(numVertices * 3);
   for (let i = 0; i < numVertices; i++) {
-    positions64[i * 3] = reprojector.exactOutputPositions[i * 2]!;
-    positions64[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
+    positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
+    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
     // z (flat on the ground)
-    positions64[i * 3 + 2] = 0;
+    positions[i * 3 + 2] = 0;
   }
-  const [positions64Low, positions] = splitFloat64Array(positions64);
+
+  // Split the float64 positions into high and low parts for fp64 emulation in
+  // the shader.
+  const [positions64Low, positions64High] = splitFloat64Array(positions);
 
   // TODO: Consider using 16-bit indices if the mesh is small enough
   const indices = new Uint32Array(reprojector.triangles);
 
   return {
     indices,
-    positions,
+    positions: new Float32Array(positions64High),
     positions64Low,
     texCoords,
   };
