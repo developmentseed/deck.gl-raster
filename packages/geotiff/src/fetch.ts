@@ -326,6 +326,7 @@ async function findBandSeparateTileByteRanges(
   self: HasTiffReference,
   x: number,
   y: number,
+  signal?: AbortSignal,
 ): Promise<ByteRange[]> {
   // TODO: error here if user-provided band-indexes are out of bounds
   const { x: tilesPerRow, y: tilesPerColumn } = self.image.tileCount;
@@ -333,7 +334,7 @@ async function findBandSeparateTileByteRanges(
   const numBands = self.cachedTags.samplesPerPixel;
   const tileSizes = [...Array(numBands).keys()].map((band) => {
     const bandIdx = band * tilesPerBand + y * tilesPerRow + x;
-    return self.image.getTileSize(bandIdx);
+    return self.image.getTileSize(bandIdx, { signal });
   });
   return Promise.all(tileSizes);
 }
@@ -351,7 +352,7 @@ async function fetchBandSeparateTileBytes(
   const debug: DebugTag | undefined = self._debug
     ? { label: "data" }
     : undefined;
-  const byteRanges = await findBandSeparateTileByteRanges(self, x, y);
+  const byteRanges = await findBandSeparateTileByteRanges(self, x, y, signal);
   const buffers = byteRanges.map(async ({ offset, imageSize }) => {
     const tile = await getBytes(
       self.image,
@@ -429,7 +430,7 @@ async function fetchBandSeparateTileBytesMultiple(
     : undefined;
   const numBands = self.cachedTags.samplesPerPixel;
   const perTileRanges = await Promise.all(
-    xy.map(([x, y]) => findBandSeparateTileByteRanges(self, x, y)),
+    xy.map(([x, y]) => findBandSeparateTileByteRanges(self, x, y, signal)),
   );
   const flatRanges = perTileRanges.flatMap((ranges) =>
     ranges.map(({ offset, imageSize }) => ({
@@ -505,8 +506,11 @@ async function getTile(
   // image.getTileSize() reads TileOffsets[idx] and TileByteCounts[idx] from
   // the header source (cogeotiff's lazy per-entry path, served by the chunk
   // cache). It does NOT read tile data — only the 4–8 byte offset/count
-  // entries.
-  const { offset, imageSize } = await image.getTileSize(idx);
+  // entries. Thread the signal so a cache-miss read aborts (and releases its
+  // limiter slot) alongside the data fetch.
+  const { offset, imageSize } = await image.getTileSize(idx, {
+    signal: options?.signal,
+  });
 
   // The actual tile bytes go through dataSource (uncached HTTP).
   return getBytes(image, offset, imageSize, dataSource, options);
@@ -687,7 +691,9 @@ export async function getTiles(
     return idx;
   });
 
-  const sizes = await Promise.all(indices.map((i) => image.getTileSize(i)));
+  const sizes = await Promise.all(
+    indices.map((i) => image.getTileSize(i, { signal: options?.signal })),
+  );
   return getMultipleBytes(
     image,
     sizes.map((s) => ({ offset: s.offset, byteCount: s.imageSize })),
