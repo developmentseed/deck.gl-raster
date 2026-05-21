@@ -300,13 +300,13 @@ export class RasterTileNode {
     // at `(x, y, z)` represents the same data regardless of which world copy
     // it's drawn in — so always compare against the offset-0 AABB.
     if (bounds) {
-      const { commonSpaceBounds } = this.getBoundingVolume(
+      const primaryWorldVolume = this.getBoundingVolume(
         elevationBounds,
         project,
         boundingVolumeCache,
         0,
       );
-      if (!this.insideBounds(bounds, commonSpaceBounds)) {
+      if (!this.insideBounds(bounds, primaryWorldVolume.commonSpaceBounds)) {
         return false;
       }
     }
