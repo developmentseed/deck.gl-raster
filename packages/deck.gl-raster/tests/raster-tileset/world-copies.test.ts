@@ -290,11 +290,11 @@ describe("getTileIndices — multi-world copy traversal", () => {
     corners: centeredCorners,
   });
 
-  it("camera east of antimeridian sees dataset west of antimeridian via offset+1 (single-world traversal would miss it)", () => {
+  it("camera east of antimeridian sees dataset west of antimeridian via offset-1 (single-world traversal would miss it)", () => {
     // Camera at lng=-179, zoom=4. Bounds straddle the antimeridian
     // (~[-190, -168]) → subViewports.length === 2. The dataset's offset-0
     // position (common-space x ≈ [497, 512]) is far outside the frustum
-    // (which is near x=0 / x=512 wrap). Only the offset+1 traversal places
+    // (which is near x=0 / x=512 wrap). Only the offset-1 traversal places
     // the dataset's translated AABB (x ≈ [-15, 0]) in the frustum.
     const viewport = new WebMercatorViewport({
       longitude: -179,
@@ -315,8 +315,9 @@ describe("getTileIndices — multi-world copy traversal", () => {
     expect(indices.length).toBeGreaterThan(0);
   });
 
-  it("camera west of antimeridian sees dataset east of antimeridian via offset-1", () => {
-    // Mirror of the previous test.
+  it("camera west of antimeridian sees dataset east of antimeridian via offset+1", () => {
+    // Mirror of the previous test (camera at lng=179; the dataset's offset-0
+    // x ≈ [0, 15] enters the frustum only when translated by offset+1).
     const viewport = new WebMercatorViewport({
       longitude: 179,
       latitude: 0,

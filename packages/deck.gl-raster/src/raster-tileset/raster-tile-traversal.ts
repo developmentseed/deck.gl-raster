@@ -444,13 +444,20 @@ export class RasterTileNode {
     boundingVolumeCache: BoundingVolumeCache,
     worldOffset = 0,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
-    const hit = boundingVolumeCache.get(this.z, this.x, this.y);
+    const cacheHit = boundingVolumeCache.get(this.z, this.x, this.y);
+    // `base` is the tile's volume in the primary world (offset 0). The cache
+    // only ever stores the primary-world volume; it is returned as-is for
+    // worldOffset 0, or translated below for a non-zero offset.
     let base: {
       boundingVolume: OrientedBoundingBox;
       commonSpaceBounds: Bounds;
     };
-    if (hit && hit.zRange[0] === zRange[0] && hit.zRange[1] === zRange[1]) {
-      base = hit;
+    if (
+      cacheHit &&
+      cacheHit.zRange[0] === zRange[0] &&
+      cacheHit.zRange[1] === zRange[1]
+    ) {
+      base = cacheHit;
     } else {
       base = this.computeBoundingVolume(zRange, project);
       boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...base });
@@ -957,6 +964,9 @@ function translateBoundingVolume(
     translatedCenter,
     boundingVolume.halfAxes,
   );
+  // `update()`'s bounds check always re-reads the offset-0 `commonSpaceBounds`,
+  // so this translated AABB isn't consumed in production — it's kept for API
+  // symmetry with `boundingVolume` and is asserted directly by unit tests.
   const translatedBounds: Bounds = [
     commonSpaceBounds[0] + dx,
     commonSpaceBounds[1],
