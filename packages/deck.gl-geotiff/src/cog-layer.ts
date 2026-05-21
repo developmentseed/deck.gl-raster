@@ -182,7 +182,10 @@ export class COGLayer<
   };
 
   override initializeState(): void {
-    this.setState({});
+    // One controller for the layer's lifetime; aborted in finalizeState so a
+    // header read still in flight when the layer is removed is cancelled and
+    // its limiter slot freed.
+    this.setState({ abortController: new AbortController() });
   }
 
   override finalizeState(context: LayerContext): void {
@@ -216,12 +219,7 @@ export class COGLayer<
   }
 
   async _parseGeoTIFF(): Promise<void> {
-    // Abort any header read still in flight from a previous `geotiff` prop,
-    // then open a fresh controller for this one.
-    this.state.abortController?.abort();
-    const abortController = new AbortController();
-    const { signal } = abortController;
-    this.setState({ abortController });
+    const signal = this.state.abortController?.signal;
 
     let geotiff: GeoTIFF;
     try {
@@ -230,8 +228,8 @@ export class COGLayer<
         signal,
       });
     } catch (err) {
-      // A newer prop (or layer removal) aborted us; drop the stale open.
-      if (signal.aborted) {
+      // Layer removed mid-open (finalizeState aborted the signal); drop it.
+      if (signal?.aborted) {
         return;
       }
       throw err;
@@ -294,9 +292,9 @@ export class COGLayer<
         inferRenderPipeline(geotiff, this.context.device));
     }
 
-    // A newer prop (or layer removal) superseded this open while we were
-    // resolving the projection; don't clobber state with stale results.
-    if (signal.aborted) {
+    // Layer was removed while we resolved the projection; don't setState on a
+    // finalized layer.
+    if (signal?.aborted) {
       return;
     }
 

@@ -306,8 +306,8 @@ export class MultiCOGLayer extends RasterTileLayer<
   declare state: {
     sources: Map<string, SourceState> | null;
     multiDescriptor: MultiRasterTilesetDescriptor | null;
-    /** Aborts the in-flight header reads when the `sources` prop changes or the
-     *  layer is removed, freeing their limiter slots for fresh work. */
+    /** Aborts the in-flight header reads when the layer is removed, freeing
+     *  their limiter slots for fresh work. */
     abortController?: AbortController;
   };
 
@@ -315,6 +315,9 @@ export class MultiCOGLayer extends RasterTileLayer<
     this.setState({
       sources: null,
       multiDescriptor: null,
+      // One controller for the layer's lifetime; aborted in finalizeState so
+      // header reads still in flight when the layer is removed are cancelled.
+      abortController: new AbortController(),
     });
   }
 
@@ -353,12 +356,7 @@ export class MultiCOGLayer extends RasterTileLayer<
     const { sources } = this.props;
     const entries = Object.entries(sources);
 
-    // Abort any header reads still in flight from a previous `sources` prop,
-    // then open a fresh controller for this batch.
-    this.state.abortController?.abort();
-    const abortController = new AbortController();
-    const { signal } = abortController;
-    this.setState({ abortController });
+    const signal = this.state.abortController?.signal;
 
     // Open all COGs in parallel
     let cogSources: Array<{
@@ -382,8 +380,8 @@ export class MultiCOGLayer extends RasterTileLayer<
         }),
       );
     } catch (err) {
-      // A newer prop (or layer removal) aborted us; drop the stale opens.
-      if (signal.aborted) {
+      // Layer removed mid-open (finalizeState aborted the signal); drop it.
+      if (signal?.aborted) {
         return;
       }
       throw err;
@@ -441,9 +439,9 @@ export class MultiCOGLayer extends RasterTileLayer<
 
     const multiDescriptor = createMultiRasterTilesetDescriptor(tilesetMap);
 
-    // A newer prop (or layer removal) superseded this batch while we were
-    // resolving projections; don't clobber state with stale results.
-    if (signal.aborted) {
+    // Layer was removed while we resolved projections; don't setState on a
+    // finalized layer.
+    if (signal?.aborted) {
       return;
     }
 
