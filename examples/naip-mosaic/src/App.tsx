@@ -91,8 +91,6 @@ function getCachedGeoTIFF(
 ): Promise<GeoTIFF> {
   let promise = geotiffCache.get(url);
   if (!promise) {
-    // Forward MosaicLayer's opts (concurrencyLimiter, getPriority, signal)
-    // straight through to GeoTIFF.fromUrl.
     promise = GeoTIFF.fromUrl(url, opts).catch((err) => {
       geotiffCache.delete(url);
       throw err;
