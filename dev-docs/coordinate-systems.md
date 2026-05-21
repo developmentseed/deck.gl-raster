@@ -44,8 +44,9 @@ controls how deck.gl interprets the position attribute on a layer.
 | `identity` (non-geospatial default) | pixel-space coords | `[0, 0, 0]` | For non-geospatial views; no Mercator math. |
 
 We use `coordinateSystem: 'cartesian'` for non-globe raster tiles and
-set up a `modelMatrix` to convert EPSG:3857 meters → common space. We
-do not currently support globe mode.
+set up a `modelMatrix` to convert EPSG:3857 meters → common space. Globe
+mode renders in `coordinateSystem: 'lnglat'` instead — see
+[Globe view (prototype)](#globe-view-prototype) below.
 
 ## Common space and `WEB_MERCATOR_TO_WORLD_SCALE`
 
@@ -336,8 +337,90 @@ dozens of tiles in flight — microseconds total per frame. Fragment work
 dominates by orders of magnitude. fp64 vertex math is essentially free
 for us.
 
+## Globe view (prototype)
+
+Globe mode is supported as a prototype. It is reached via deck.gl's
+`_GlobeView`, or — what the `cog-globe` example uses — MapLibre's
+`projection: 'globe'` with deck.gl interleaved; both hand layers a
+`_GlobeViewport`. We detect it with `viewport.resolution !== undefined` (and
+`viewport instanceof _GlobeViewport` in the tile traversal). Full design and the
+deferred work are in
+[`dev-docs/specs/2026-05-21-globe-view-design.md`](specs/2026-05-21-globe-view-design.md).
+
+### Rendering: lnglat directly, no common-space mapping
+
+On a globe we render in `coordinateSystem: 'lnglat'` with mesh vertices in WGS84
+(via the tileset's `projectTo4326`). deck.gl's globe projection maps each
+lng/lat vertex onto the sphere, so there is no projection distortion and no need
+for the cartesian common-space `modelMatrix` mapping (that exists only as a
+high-zoom *precision* workaround for mercator; globe is used at low/mid zoom).
+The `MeshTextureLayer` vertex shader is collapsed to a single direct-projection
+path so this works for both cartesian and lnglat — see the shader header note
+and the `composeModelMatrix` discussion above.
+
+### Tile selection: two coordinate spaces
+
+`RasterTileNode` builds the per-tile bounding volume from reference points
+(`REF_POINTS_11`) reprojected to WGS84, then keeps two things:
+
+- **Frustum-culling OBB** — each lng/lat point is projected onto the globe
+  sphere via `viewport.projectPosition`, giving an oriented bounding box in
+  *globe common space*.
+- **`commonSpaceBounds`** — the same lng/lat points are converted with
+  `lngLatToWorld` to a *Web-Mercator-world* AABB. This stays comparable to the
+  dataset `bounds` pre-filter (also mercator-world) **and** is what the LOD reads
+  the latitude from (below).
+
+Globe and mercator volumes live in different common spaces, so the
+`BoundingVolumeCache` (keyed only by `z/x/y`) is discarded and rebuilt when the
+viewport's projection mode flips (in `RasterTileset2D.getTileIndices`).
+
+### LOD gotcha: read latitude from the mercator-world bounds, not the OBB
+
+Screen resolution is estimated as `getMetersPerPixel(lat, zoom) = C·cos(lat) /
+2^(zoom+8)`. The `lat` must come from `commonSpaceBounds` (mercator world), **not**
+the 3D OBB center: on a globe the OBB center is in globe common space (its `y` is
+far outside the `[0, 512]` mercator world range), so `worldToLngLat` returns
+~−89° near the Mercator singularity. `cos(−89°)` makes meters-per-pixel 10–270×
+too small, `devicePixelsPerSourcePixel` is then always ≫ 1, and the traversal
+recurses to the *finest* level everywhere — catastrophic when zoomed out.
+
+**Caveat (approximation):** using the tile's own center latitude in the mercator
+`metersPerPixel` formula is exact at the view center but ignores globe *limb
+foreshortening*, so tiles near the globe's edge fetch slightly more detail than
+strictly needed (over-fetch, never under). A camera-aware screen-space-error
+metric would be more accurate; deferred.
+
+### Z-fighting with the basemap: depthCompare + cull, not polygon offset
+
+In interleaved mode the raster mesh is coplanar with MapLibre's globe basemap
+sphere and z-fights in the shared depth buffer. A depth bias / polygon offset
+does **not** help with maplibre's globe depth encoding. The fix
+(`MeshTextureLayer` `parameters`, set by `RasterLayer` only for globe):
+
+- `depthCompare: 'always'` — skip the depth comparison so the raster never
+  z-fights the basemap.
+- `cullMode: 'back'` — without depth occlusion the far hemisphere would bleed
+  through, so back-face culling hides it. MapLibre globe uses a flipped
+  handedness; `'back'` is correct for *our* grid winding (`'front'` culls the
+  near, visible side). See
+  [visgl/deck.gl#9592](https://github.com/visgl/deck.gl/issues/9592). This is
+  tied to the maplibre-interleaved setup; a standalone `_GlobeView` may need the
+  opposite cull mode.
+
+### Anti-faceting mesh scaffold (throwaway)
+
+`RasterReprojector` subdivides on *reprojection* error (pixel-space), which is
+~0 for an EPSG:4326 source → 2 triangles → flat chords that facet the sphere at
+low zoom. As a stopgap, globe mode builds a uniform `N×N` grid per tile
+([`globe-grid-mesh.ts`](../packages/deck.gl-raster/src/globe-grid-mesh.ts))
+instead of the adaptive mesh. The real fix — a curvature-aware reprojection
+error metric — is deferred (see the spec).
+
 ## See also
 
+- [`dev-docs/specs/2026-05-21-globe-view-design.md`](specs/2026-05-21-globe-view-design.md)
+  — globe-view prototype design + deferred work
 - [`dev-docs/specs/2026-05-19-high-zoom-precision-design.md`](specs/2026-05-19-high-zoom-precision-design.md)
   — the high-zoom jitter fix using fp64 mesh attributes
 - [`dev-docs/texture-alignment.md`](texture-alignment.md) —
