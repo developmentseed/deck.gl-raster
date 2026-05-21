@@ -50,15 +50,30 @@ function makeDescriptor(
   };
 }
 
-function makeGlobeViewport(): GlobeViewport {
+function makeGlobeViewport(zoom = 1): GlobeViewport {
   return new GlobeViewport({
-    width: 200,
-    height: 200,
+    width: 800,
+    height: 600,
     longitude: 0,
     latitude: 0,
-    zoom: 1,
+    zoom,
     resolution: 10,
   });
+}
+
+function maxSelectedZ(
+  descriptor: RasterTilesetDescriptor,
+  zoom: number,
+  maxZ: number,
+): number {
+  const indices = getTileIndices(descriptor, {
+    viewport: makeGlobeViewport(zoom),
+    maxZ,
+    zRange: null,
+    wgs84Bounds: [-10, -10, 10, 10] as Bounds,
+    pixelRatio: 1,
+  });
+  return Math.max(...indices.map((i) => i.z));
 }
 
 describe("getTileIndices: GlobeView", () => {
@@ -73,5 +88,24 @@ describe("getTileIndices: GlobeView", () => {
       pixelRatio: 1,
     });
     expect(indices.length).toBeGreaterThan(0);
+  });
+
+  it("picks coarser levels when zoomed out (LOD tracks zoom, not the finest level)", () => {
+    // metersPerPixel per level, halving from coarse (z0) to fine (z5). At a low
+    // globe zoom the screen resolution is coarse, so a coarse level suffices;
+    // zooming in should select progressively finer levels. The bug drove the
+    // LOD latitude from the 3D OBB center (globe-common space → ~-89° garbage),
+    // making meters/px far too small so the traversal always recursed to maxZ.
+    const metersPerPixel = [78000, 39000, 19500, 9750, 4875, 2437];
+    const maxZ = metersPerPixel.length - 1; // 5
+    const descriptor = makeDescriptor(metersPerPixel);
+
+    const zoomedOut = maxSelectedZ(descriptor, 1, maxZ);
+    const zoomedIn = maxSelectedZ(descriptor, 6, maxZ);
+
+    // Zoomed out must NOT load the finest level across the globe.
+    expect(zoomedOut).toBeLessThan(maxZ);
+    // Zooming in selects strictly finer tiles.
+    expect(zoomedOut).toBeLessThan(zoomedIn);
   });
 });

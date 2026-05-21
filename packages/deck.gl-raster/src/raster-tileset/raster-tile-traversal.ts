@@ -307,8 +307,8 @@ export class RasterTileNode {
     // Only select this tile if no child is visible (prevents overlapping tiles)
     // "When pitch is low, force selection at maxZ."
     if (!this.childVisible && this.z >= minZ) {
-      const metersPerCSSPixel = getMetersPerPixelAtBoundingVolume(
-        boundingVolume,
+      const metersPerCSSPixel = getMetersPerPixelAtCommonSpaceBounds(
+        commonSpaceBounds,
         viewport.zoom,
       );
 
@@ -934,11 +934,19 @@ function getMetersPerPixel(latitude: number, zoom: number): number {
   );
 }
 
-function getMetersPerPixelAtBoundingVolume(
-  boundingVolume: OrientedBoundingBox,
+function getMetersPerPixelAtCommonSpaceBounds(
+  commonSpaceBounds: Bounds,
   zoom: number,
 ): number {
-  const [_lng, lat] = worldToLngLat(boundingVolume.center);
+  const [minX, minY, maxX, maxY] = commonSpaceBounds;
+  // `commonSpaceBounds` is in Web Mercator world space ([0, 512]) in BOTH the
+  // mercator and globe paths (the globe path builds it via `lngLatToWorld`), so
+  // its center maps back to a real latitude. The 3D oriented-bounding-box
+  // center, by contrast, is in globe common space on a globe and would
+  // `worldToLngLat` to a garbage latitude (~-89°, near the Mercator
+  // singularity), making meters-per-pixel far too small so the LOD always
+  // recursed to the finest level.
+  const [, lat] = worldToLngLat([(minX + maxX) / 2, (minY + maxY) / 2]);
   return getMetersPerPixel(lat, zoom);
 }
 
