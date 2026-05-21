@@ -202,14 +202,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       maxError = DEFAULT_MAX_ERROR,
     } = this.props;
 
-    // The mesh is lined up with the upper and left edges of the raster. So if
-    // we give the raster the same width and height as the number of pixels in
-    // the image, it'll be omitting the last row and column of pixels.
+    // TEMPORARY GLOBE VIEW HACK:
     //
-    // To account for this, we add 1 to both width and height when generating
-    // the mesh. This also solves obvious gaps in between neighboring tiles in
-    // the COGLayer.
-
     // GlobeView (lnglat) uses viewport.resolution, the same detection as
     // RasterTileLayer. THROWAWAY: globe renders a uniform grid instead of the
     // adaptive mesh, because Delatin's reprojection-error metric is blind to
@@ -233,6 +227,13 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       return;
     }
 
+    // The mesh is lined up with the upper and left edges of the raster. So if
+    // we give the raster the same width and height as the number of pixels in
+    // the image, it'll be omitting the last row and column of pixels.
+    //
+    // To account for this, we add 1 to both width and height when generating
+    // the mesh. This also solves obvious gaps in between neighboring tiles in
+    // the COGLayer.
     const reprojector = new RasterReprojector(
       reprojectionFns,
       width + 1,
