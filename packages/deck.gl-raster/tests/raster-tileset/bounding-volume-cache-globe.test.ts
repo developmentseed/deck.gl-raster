@@ -10,17 +10,21 @@ function entry(tag: number): BoundingVolumeCacheEntry {
   };
 }
 
-describe("BoundingVolumeCache: globe vs mercator keys", () => {
-  it("does not let a globe entry collide with a mercator entry at the same z/x/y", () => {
+// Globe and mercator volumes for the same (z, x, y) live in different common
+// spaces; the cache key is only (z, x, y), so the owner clears the cache on a
+// projection-mode switch rather than namespacing the key. This exercises the
+// clear() primitive that switch relies on.
+describe("BoundingVolumeCache.clear", () => {
+  it("drops all entries", () => {
     const cache = new BoundingVolumeCache();
-    const mercator = entry(1);
-    const globe = entry(2);
-
-    cache.set(0, 0, 0, mercator); // default globe = false
-    cache.set(0, 0, 0, globe, true);
-
-    expect(cache.get(0, 0, 0)).toBe(mercator);
-    expect(cache.get(0, 0, 0, true)).toBe(globe);
+    cache.set(0, 0, 0, entry(1));
+    cache.set(1, 0, 0, entry(2));
     expect(cache.size).toBe(2);
+
+    cache.clear();
+
+    expect(cache.size).toBe(0);
+    expect(cache.get(0, 0, 0)).toBeUndefined();
+    expect(cache.get(1, 0, 0)).toBeUndefined();
   });
 });

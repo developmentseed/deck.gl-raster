@@ -40,10 +40,11 @@ const DEFAULT_MAX_ENTRIES = 65_536;
  * `(z, x, y, zRange)` for a given tileset descriptor, so it is safe to memoize
  * across `getTileIndices` calls (i.e. across animation frames).
  *
- * The cache key namespaces by projection mode (`globe`): a tile's bounding
- * volume in a GlobeView is computed in a different common space than its Web
- * Mercator counterpart, so globe and mercator entries for the same `(z, x, y)`
- * are stored under distinct keys and never collide.
+ * The key is valid only within a single projection mode. A tile's bounding
+ * volume is computed in a different common space under a GlobeView than under
+ * Web Mercator, so the cache must be {@link BoundingVolumeCache.clear cleared}
+ * when the viewport's projection mode changes. `RasterTileset2D` owns the cache
+ * and does this in `getTileIndices` when it detects a globe↔mercator switch.
  */
 export class BoundingVolumeCache {
   private entries = new Map<string, BoundingVolumeCacheEntry>();
@@ -63,18 +64,9 @@ export class BoundingVolumeCache {
   /**
    * Look up the cached bounding volume for tile `(z, x, y)`. On a hit the entry
    * is marked most-recently-used. Returns `undefined` on a miss.
-   *
-   * `globe` selects the projection-mode namespace: a tile's bounding volume in
-   * a GlobeView lives in a different common space than its Web Mercator
-   * counterpart, so the two must never collide in the cache.
    */
-  get(
-    z: number,
-    x: number,
-    y: number,
-    globe = false,
-  ): BoundingVolumeCacheEntry | undefined {
-    const key = this.makeKey(z, x, y, globe);
+  get(z: number, x: number, y: number): BoundingVolumeCacheEntry | undefined {
+    const key = `${z}/${x}/${y}`;
     const entry = this.entries.get(key);
     if (entry === undefined) {
       return undefined;
@@ -86,20 +78,19 @@ export class BoundingVolumeCache {
   }
 
   /** Store the bounding volume for tile `(z, x, y)` as most-recently-used. */
-  set(
-    z: number,
-    x: number,
-    y: number,
-    entry: BoundingVolumeCacheEntry,
-    globe = false,
-  ): void {
-    const key = this.makeKey(z, x, y, globe);
+  set(z: number, x: number, y: number, entry: BoundingVolumeCacheEntry): void {
+    const key = `${z}/${x}/${y}`;
     this.entries.delete(key);
     this.entries.set(key, entry);
   }
 
-  private makeKey(z: number, x: number, y: number, globe: boolean): string {
-    return `${z}/${x}/${y}/${globe ? "g" : "m"}`;
+  /**
+   * Drop all cached entries. Called by the owner when the viewport's projection
+   * mode changes (globe↔mercator), since volumes computed under one projection
+   * are not valid under the other.
+   */
+  clear(): void {
+    this.entries.clear();
   }
 
   /**

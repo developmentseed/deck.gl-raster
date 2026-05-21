@@ -1,4 +1,4 @@
-import { WebMercatorViewport } from "@deck.gl/core";
+import { _GlobeViewport, WebMercatorViewport } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { describe, expect, it } from "vitest";
 import { RasterTileset2D } from "../../src/raster-tileset/raster-tileset-2d.js";
@@ -67,6 +67,17 @@ function makeViewport(): WebMercatorViewport {
   });
 }
 
+function makeGlobeViewport(): _GlobeViewport {
+  return new _GlobeViewport({
+    longitude: 0,
+    latitude: 0,
+    zoom: 1,
+    width: 100,
+    height: 100,
+    resolution: 10,
+  });
+}
+
 function tilesetProps(): Tileset2DProps {
   return { getTileData: () => new Promise(() => {}) } as Tileset2DProps;
 }
@@ -115,5 +126,32 @@ describe("RasterTileset2D bounding-volume cache", () => {
     expect(tileKeys(cached.getTileIndices({ viewport, zRange: null }))).toEqual(
       expected,
     );
+  });
+
+  it("clears the cache when the viewport projection mode switches", () => {
+    const { descriptor, projectCallCount } = makeCountingDescriptor([
+      1.0, 0.4, 0.1,
+    ]);
+    const tileset = new RasterTileset2D(tilesetProps(), descriptor);
+    const mercator = makeViewport();
+    const globe = makeGlobeViewport();
+
+    tileset.getTileIndices({ viewport: mercator, zRange: null });
+    const afterFirst = projectCallCount();
+    expect(afterFirst).toBeGreaterThan(0);
+
+    // Second mercator call hits the cache — no new projectTo3857 calls.
+    tileset.getTileIndices({ viewport: mercator, zRange: null });
+    expect(projectCallCount()).toBe(afterFirst);
+
+    // Switching to a globe viewport clears the cache. The globe path projects
+    // to WGS84 (projectTo4326, uncounted), so the counter is unchanged here…
+    tileset.getTileIndices({ viewport: globe, zRange: null });
+    expect(projectCallCount()).toBe(afterFirst);
+
+    // …but the next mercator call must recompute from scratch (cache empty),
+    // doubling the projectTo3857 count.
+    tileset.getTileIndices({ viewport: mercator, zRange: null });
+    expect(projectCallCount()).toBe(afterFirst * 2);
   });
 });

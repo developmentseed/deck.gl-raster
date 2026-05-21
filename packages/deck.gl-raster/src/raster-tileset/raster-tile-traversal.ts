@@ -89,6 +89,19 @@ const REF_POINTS_9 = REF_POINTS_5.concat([
   [0.5, 1], // bottom edge
 ]);
 
+// For the globe bounding volume: REF_POINTS_9 plus two more points on the
+// horizontal centerline (11 points total). The sphere surface bulges most
+// between samples along the widest span of a tile, so denser sampling there
+// keeps the oriented bounding box from under-enclosing the tile (which would
+// false-cull it). This matches upstream deck.gl's densest reference set, used
+// there only for the coarsest (whole-world) zoom. We use it for every globe
+// tile: a tile never spans more than the whole world, so 11 points always
+// suffice, and per-tile cost is paid once thanks to the bounding-volume cache.
+const REF_POINTS_11 = REF_POINTS_9.concat([
+  [0.25, 0.5],
+  [0.75, 0.5],
+]);
+
 /** semi-major axis of the WGS84 ellipsoid
  *
  * EPSG:3857 also uses the WGS84 datum, so this is used for conversions from
@@ -389,23 +402,12 @@ export class RasterTileNode {
     project: ((xyz: number[]) => number[]) | null,
     boundingVolumeCache: BoundingVolumeCache,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
-    const hit = boundingVolumeCache.get(
-      this.z,
-      this.x,
-      this.y,
-      project !== null,
-    );
+    const hit = boundingVolumeCache.get(this.z, this.x, this.y);
     if (hit && hit.zRange[0] === zRange[0] && hit.zRange[1] === zRange[1]) {
       return hit;
     }
     const result = this.computeBoundingVolume(zRange, project);
-    boundingVolumeCache.set(
-      this.z,
-      this.x,
-      this.y,
-      { zRange, ...result },
-      project !== null,
-    );
+    boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...result });
     return result;
   }
 
@@ -518,7 +520,7 @@ export class RasterTileNode {
   } {
     const tileCorners = this.level.projectedTileCorners(this.x, this.y);
     const refPointsWgs84 = sampleReferencePointsInWGS84(
-      REF_POINTS_9,
+      REF_POINTS_11,
       tileCorners,
       this.descriptor.projectTo4326,
     );
