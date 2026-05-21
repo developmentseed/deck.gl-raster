@@ -20,10 +20,11 @@
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport, assert } from "@deck.gl/core";
 import { transformBounds } from "@developmentseed/proj";
-import type { OrientedBoundingBox } from "@math.gl/culling";
+import { Vector3 } from "@math.gl/core";
 import {
   CullingVolume,
   makeOrientedBoundingBoxFromPoints,
+  OrientedBoundingBox,
   Plane,
 } from "@math.gl/culling";
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
@@ -54,6 +55,13 @@ import type {
  * bottom-right.
  */
 const TILE_SIZE = 512;
+
+/**
+ * Maximum number of world copies to test on each side of the primary world
+ * during multi-world tile traversal. Matches upstream
+ * `@deck.gl/geo-layers/tile-2d-traversal.ts`.
+ */
+const MAX_MAPS = 3;
 
 // Reference points used to sample tile boundaries for bounding volume
 // calculation.
@@ -244,6 +252,14 @@ export class RasterTileNode {
      */
     pixelRatio: number;
     /**
+     * Number of world copies to shift this tile's bounding volume by along
+     * common-space X for frustum testing. Default `0` (primary world).
+     * Non-zero passes are additive — they may set `selected = true` but
+     * never override a previous `true` to `false`. See
+     * `dev-docs/world-copies.md`.
+     */
+    worldOffset?: number;
+    /**
      * Bounding-volume cache shared by every node in this traversal. Populated
      * lazily as tiles are visited; reused across `getTileIndices` calls (so
      * animation frames don't recompute proj4 reprojections + oriented-bounding-
@@ -251,10 +267,6 @@ export class RasterTileNode {
      */
     boundingVolumeCache: BoundingVolumeCache;
   }): boolean {
-    // Reset state
-    this.childVisible = false;
-    this.selected = false;
-
     const {
       viewport,
       cullingVolume,
@@ -264,20 +276,42 @@ export class RasterTileNode {
       project,
       bounds,
       pixelRatio,
+      worldOffset = 0,
       boundingVolumeCache,
     } = params;
 
-    // Get bounding volume for this tile
-    const { boundingVolume, commonSpaceBounds } = this.getBoundingVolume(
+    // Reset per-frame state on the primary pass only. Non-zero worldOffset
+    // passes are additive — they can flip selected/childVisible from
+    // false → true but never the reverse. See dev-docs/world-copies.md.
+    if (worldOffset === 0) {
+      this.childVisible = false;
+      this.selected = false;
+    }
+
+    // Get bounding volume for this tile (translated for frustum culling at
+    // non-zero worldOffset).
+    const { boundingVolume } = this.getBoundingVolume(
       elevationBounds,
       project,
       boundingVolumeCache,
+      worldOffset,
     );
 
     // Step 1: Bounds checking
-    // If geographic bounds are specified, reject tiles outside those bounds
-    if (bounds && !this.insideBounds(bounds, commonSpaceBounds)) {
-      return false;
+    // If geographic bounds are specified, reject tiles outside those bounds.
+    // The dataset's `bounds` live in primary-world common space, and a tile
+    // at `(x, y, z)` represents the same data regardless of which world copy
+    // it's drawn in — so always compare against the offset-0 AABB.
+    if (bounds) {
+      const primaryWorldVolume = this.getBoundingVolume(
+        elevationBounds,
+        project,
+        boundingVolumeCache,
+        0,
+      );
+      if (!this.insideBounds(bounds, primaryWorldVolume.commonSpaceBounds)) {
+        return false;
+      }
     }
 
     // Frustum culling
@@ -322,7 +356,9 @@ export class RasterTileNode {
     // Note that if `this.children` is `null`, then there are no children
     // available because we're already at the finest tile resolution available
     if (children && children.length > 0) {
-      this.selected = false;
+      if (worldOffset === 0) {
+        this.selected = false;
+      }
 
       let anyChildVisible = false;
 
@@ -332,7 +368,13 @@ export class RasterTileNode {
         }
       }
 
-      this.childVisible = anyChildVisible;
+      // Only set childVisible to true; never override a previous true to
+      // false on a subsequent pass. Offset-0 already starts with
+      // childVisible=false (reset above), so this preserves the
+      // "any pass that finds a visible child wins" semantics.
+      if (anyChildVisible) {
+        this.childVisible = true;
+      }
       return anyChildVisible;
     }
 
@@ -383,19 +425,50 @@ export class RasterTileNode {
    * volume depends only on `(z, x, y, zRange)` for a given descriptor, so on a
    * cache hit it is returned without rerunning {@link computeBoundingVolume}'s
    * proj4 reprojections + oriented-bounding-box fit.
+   *
+   * For non-zero `worldOffset`, returns a translated copy (center shifted by
+   * `worldOffset * TILE_SIZE` along common-space X) without polluting the
+   * cache — the cache always stores the offset-0 volume. See
+   * `dev-docs/world-copies.md`.
+   *
+   * @param zRange               Elevation `[min, max]` in common-space units.
+   * @param project              Projection function for Globe view, or `null`
+   *                             for Web Mercator common space.
+   * @param boundingVolumeCache  Cache keyed by `z/x/y`. Stores the offset-0
+   *                             volume only.
+   * @param worldOffset          Number of world copies to translate the result
+   *                             by along common-space X. `0` returns the
+   *                             cached offset-0 volume directly. Non-zero
+   *                             values return a fresh translated copy.
    */
   getBoundingVolume(
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
     boundingVolumeCache: BoundingVolumeCache,
+    worldOffset = 0,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
-    const hit = boundingVolumeCache.get(this.z, this.x, this.y);
-    if (hit && hit.zRange[0] === zRange[0] && hit.zRange[1] === zRange[1]) {
-      return hit;
+    const cacheHit = boundingVolumeCache.get(this.z, this.x, this.y);
+    // `base` is the tile's volume in the primary world (offset 0). The cache
+    // only ever stores the primary-world volume; it is returned as-is for
+    // worldOffset 0, or translated below for a non-zero offset.
+    let base: {
+      boundingVolume: OrientedBoundingBox;
+      commonSpaceBounds: Bounds;
+    };
+    if (
+      cacheHit &&
+      cacheHit.zRange[0] === zRange[0] &&
+      cacheHit.zRange[1] === zRange[1]
+    ) {
+      base = cacheHit;
+    } else {
+      base = this.computeBoundingVolume(zRange, project);
+      boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...base });
     }
-    const result = this.computeBoundingVolume(zRange, project);
-    boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...result });
-    return result;
+    if (worldOffset === 0) {
+      return base;
+    }
+    return translateBoundingVolume(base, worldOffset * TILE_SIZE);
   }
 
   /**
@@ -814,6 +887,25 @@ export function getTileIndices(
     root.update(traversalParams);
   }
 
+  // World-copy passes: when the viewport spans multiple world copies (e.g.
+  // WebMercatorViewport with repeat: true panned across the antimeridian),
+  // re-run the traversal with the tile bounding volumes shifted by ±1, ±2…
+  // world copies along common-space X. A tile is selected if any pass selects
+  // it. See dev-docs/world-copies.md.
+  const subViewportCount = viewport.subViewports?.length ?? 0;
+  if (subViewportCount > 1) {
+    for (let offset = -1; offset >= -MAX_MAPS; offset--) {
+      if (!runOffsetPass(roots, traversalParams, offset)) {
+        break;
+      }
+    }
+    for (let offset = 1; offset <= MAX_MAPS; offset++) {
+      if (!runOffsetPass(roots, traversalParams, offset)) {
+        break;
+      }
+    }
+  }
+
   // Collect selected tiles
   const selectedNodes: RasterTileNode[] = [];
   for (const root of roots) {
@@ -821,6 +913,28 @@ export function getTileIndices(
   }
 
   return selectedNodes;
+}
+
+/**
+ * Run a non-zero world-offset traversal pass over each root.
+ *
+ * Returns `true` if any root tile was visible at this offset, signaling the
+ * caller to walk further from the primary world. Returns `false` when no
+ * tiles were visible — the offset has gone past the visible range and the
+ * caller stops walking that side.
+ */
+function runOffsetPass(
+  roots: RasterTileNode[],
+  baseParams: Parameters<RasterTileNode["update"]>[0],
+  worldOffset: number,
+): boolean {
+  let anyVisible = false;
+  for (const root of roots) {
+    if (root.update({ ...baseParams, worldOffset })) {
+      anyVisible = true;
+    }
+  }
+  return anyVisible;
 }
 
 /**
@@ -846,6 +960,43 @@ function getMetersPerPixelAtBoundingVolume(
 ): number {
   const [_lng, lat] = worldToLngLat(boundingVolume.center);
   return getMetersPerPixel(lat, zoom);
+}
+
+/**
+ * Translate a tile's bounding volume by `dx` units along common-space X.
+ *
+ * Returns a fresh OBB and AABB; does not mutate the input. Used by the
+ * world-copy traversal to test the same tile at multiple shifted positions
+ * without recomputing the underlying geometry.
+ */
+function translateBoundingVolume(
+  base: { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds },
+  dx: number,
+): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
+  const { boundingVolume, commonSpaceBounds } = base;
+  const center = boundingVolume.center;
+  const translatedCenter = new Vector3(
+    (center[0] ?? 0) + dx,
+    center[1] ?? 0,
+    center[2] ?? 0,
+  );
+  const translated = new OrientedBoundingBox(
+    translatedCenter,
+    boundingVolume.halfAxes,
+  );
+  // `update()`'s bounds check always re-reads the offset-0 `commonSpaceBounds`,
+  // so this translated AABB isn't consumed in production — it's kept for API
+  // symmetry with `boundingVolume` and is asserted directly by unit tests.
+  const translatedBounds: Bounds = [
+    commonSpaceBounds[0] + dx,
+    commonSpaceBounds[1],
+    commonSpaceBounds[2] + dx,
+    commonSpaceBounds[3],
+  ];
+  return {
+    boundingVolume: translated,
+    commonSpaceBounds: translatedBounds,
+  };
 }
 
 /**
