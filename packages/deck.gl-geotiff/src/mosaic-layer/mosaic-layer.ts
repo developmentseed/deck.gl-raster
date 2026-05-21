@@ -24,7 +24,12 @@ export type MosaicLayerProps<
 > = CompositeLayerProps &
   Pick<
     TileLayerProps,
-    | "debounceTime"
+    // NOTE: `debounceTime` is intentionally NOT exposed. deck.gl's
+    // RequestScheduler re-checks `isSelected` when the debounce timer fires
+    // and cancels anything not selected at that instant; MosaicLayer's flat,
+    // zoomless tile model churns selection under viewport changes, so a
+    // non-zero debounce leaves tiles perpetually cancelled and nothing loads.
+    // Tracked in https://github.com/developmentseed/deck.gl-raster/issues/562
     | "extent"
     | "maxCacheByteSize"
     | "maxCacheSize"
@@ -192,7 +197,6 @@ export class MosaicLayer<
       id,
       minZoom,
       maxZoom,
-      debounceTime,
       extent,
       maxCacheByteSize,
       maxCacheSize,
@@ -223,7 +227,6 @@ export class MosaicLayer<
       TilesetClass: MosaicTileset2DFactory,
       minZoom,
       maxZoom,
-      debounceTime,
       extent,
       ...(maxCacheByteSize !== undefined && { maxCacheByteSize }),
       maxCacheSize,
