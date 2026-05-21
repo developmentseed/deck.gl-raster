@@ -15,8 +15,13 @@ import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
 import type { Matrix4 } from "@math.gl/core";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
-import { getTileIndices } from "./raster-tile-traversal.js";
-import type { TilesetDescriptor } from "./tileset-interface.js";
+import {
+  getTileIndices,
+  rescaleCommonSpaceToEPSG3857,
+  rescaleEPSG3857ToCommonSpace,
+} from "./raster-tile-traversal.js";
+import { sortItemsByDistanceFromViewportCenter } from "./sort-by-distance.js";
+import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
   Corners,
@@ -26,8 +31,8 @@ import type {
   ZRange,
 } from "./types.js";
 
-/** Type returned by `getTileMetadata` */
-export type TileMetadata = {
+/** Type returned by {@link RasterTileset2D.getTileMetadata} */
+export type RasterTileMetadata = {
   /**
    * **Axis-aligned** bounding box of the tile in **WGS84 coordinates**.
    */
@@ -74,6 +79,25 @@ export type TileMetadata = {
    * Same stability guarantees as {@link TileMetadata.forwardTransform}.
    */
   inverseTransform: ProjectionFunction;
+
+  /**
+   * Forward (source CRS → deck.gl common space) projection.
+   *
+   * Mirrors deck.gl's `Viewport.projectPosition` but for this descriptor's
+   * source CRS rather than lng/lat. Descriptor-global (identical for every
+   * tile) and built once on the tileset, so the reference is stable for the
+   * tileset's lifetime — which is what `RasterLayer`'s `reprojectionFnsChanged`
+   * check relies on to avoid regenerating the mesh every render.
+   */
+  _projectPosition: ProjectionFunction;
+
+  /**
+   * Inverse (deck.gl common space → source CRS) projection.
+   *
+   * Mirrors deck.gl's `Viewport.unprojectPosition`. Same stability guarantees
+   * as {@link RasterTileMetadata._projectPosition}.
+   */
+  _unprojectPosition: ProjectionFunction;
 };
 
 /**
@@ -114,14 +138,16 @@ export interface RasterTileset2DOptions {
  * Handles tile lifecycle, caching, and viewport-based loading.
  */
 export class RasterTileset2D extends Tileset2D {
-  private descriptor: TilesetDescriptor;
+  private descriptor: RasterTilesetDescriptor;
   private wgs84Bounds: Bounds;
   private getPixelRatio: () => number;
   private boundingVolumeCache: BoundingVolumeCache;
+  private projectPosition: ProjectionFunction;
+  private unprojectPosition: ProjectionFunction;
 
   constructor(
     opts: Tileset2DProps,
-    descriptor: TilesetDescriptor,
+    descriptor: RasterTilesetDescriptor,
     { getPixelRatio, maxBoundingVolumeCacheSize }: RasterTileset2DOptions = {},
   ) {
     super(opts);
@@ -130,6 +156,19 @@ export class RasterTileset2D extends Tileset2D {
     this.boundingVolumeCache = new BoundingVolumeCache({
       maxEntries: maxBoundingVolumeCacheSize,
     });
+
+    // Source-CRS ↔ deck.gl common-space projection, built once here so the
+    // closures are reference-stable for the tileset's lifetime. Exposed on
+    // each tile's metadata; `RasterTileLayer._renderSubLayers` reads them off
+    // the tile to keep `RasterLayer`'s reprojection-equality check stable
+    // across renders (deck.gl recreates the layer instance every render, so
+    // per-render-derived closures would regenerate the mesh every frame).
+    this.projectPosition = (x, y) =>
+      rescaleEPSG3857ToCommonSpace(descriptor.projectTo3857(x, y));
+    this.unprojectPosition = (cx, cy) => {
+      const [mx, my] = rescaleCommonSpaceToEPSG3857([cx, cy]);
+      return descriptor.projectFrom3857(mx, my);
+    };
 
     const rawBounds = transformBounds(
       this.descriptor.projectTo4326,
@@ -195,7 +234,43 @@ export class RasterTileset2D extends Tileset2D {
       boundingVolumeCache: this.boundingVolumeCache,
     });
 
-    return tileIndices;
+    return this.sortTileIndicesByDistance(tileIndices, viewport);
+  }
+
+  /**
+   * Sort tile indices by ascending distance from the viewport center in
+   * projected (common/world) space so loads initiate center-out.
+   *
+   * Short-circuits when `tileIndices.length <= maxRequests` — all fetches
+   * would start concurrently regardless of order in that case. Mutates and
+   * returns `tileIndices`.
+   */
+  private sortTileIndicesByDistance(
+    tileIndices: TileIndex[],
+    viewport: Viewport,
+  ): TileIndex[] {
+    const { maxRequests } = this.opts;
+    if (tileIndices.length <= maxRequests) {
+      return tileIndices;
+    }
+
+    const descriptor = this.descriptor;
+    return sortItemsByDistanceFromViewportCenter(
+      tileIndices,
+      viewport,
+      (tileIndex) => {
+        const { x, y, z } = tileIndex;
+
+        const { topLeft, bottomRight } = descriptor.levels[
+          z
+        ]!.projectedTileCorners(x, y);
+        const projectedCenter = [
+          (topLeft[0] + bottomRight[0]) / 2,
+          (topLeft[1] + bottomRight[1]) / 2,
+        ] as const;
+        return descriptor.projectTo4326(projectedCenter[0], projectedCenter[1]);
+      },
+    );
   }
 
   override getTileId(index: TileIndex): string {
@@ -239,7 +314,7 @@ export class RasterTileset2D extends Tileset2D {
     return index.z;
   }
 
-  override getTileMetadata(index: TileIndex): TileMetadata {
+  override getTileMetadata(index: TileIndex): RasterTileMetadata {
     const { x, y, z } = index;
     const levelDescriptor = this.descriptor.levels[z]!;
     const { tileHeight, tileWidth } = levelDescriptor;
@@ -293,6 +368,8 @@ export class RasterTileset2D extends Tileset2D {
       tileHeight,
       forwardTransform,
       inverseTransform,
+      _projectPosition: this.projectPosition,
+      _unprojectPosition: this.unprojectPosition,
     };
   }
 }

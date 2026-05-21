@@ -43,6 +43,11 @@ jobs:
         run: |
           for dir in examples/*/; do
             example=$(basename "$dir")
+            has_build=$(node -p "Boolean((require('./$dir/package.json').scripts||{}).build)")
+            if [ "$has_build" != "true" ]; then
+              echo "Skipping $example (no build script)"
+              continue
+            fi
             pkg_name=$(node -p "require('./$dir/package.json').name")
             pnpm --filter "$pkg_name" build
             mkdir -p "docs/static/examples/$example"

@@ -1,9 +1,9 @@
 export type {
-  MultiTilesetDescriptor,
+  MultiRasterTilesetDescriptor,
   SecondaryLevelStrategy,
 } from "./multi-tileset-descriptor.js";
 export {
-  createMultiTilesetDescriptor,
+  createMultiRasterTilesetDescriptor,
   selectSecondaryLevel,
   tilesetLevelsEqual,
 } from "./multi-tileset-descriptor.js";

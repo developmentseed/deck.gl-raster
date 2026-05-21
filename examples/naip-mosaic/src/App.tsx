@@ -350,7 +350,6 @@ export default function App() {
   useEffect(() => {
     async function wrappedFetchSTACItems() {
       try {
-        // const data: STACFeatureCollection = await fetchSTACItems();
         const data = STAC_DATA as unknown as STACFeatureCollection;
         (window as any).data = data;
         setStacItems(data.features);
@@ -433,7 +432,6 @@ export default function App() {
                       colormapReversed: colormapChoice.reversed,
                     }),
           signal,
-          maxCacheSize: 10,
         });
       },
       // Smaller cache for MosaicLayer cache, since it caches full COGLayer

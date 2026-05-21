@@ -1,23 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
-  createMultiTilesetDescriptor,
+  createMultiRasterTilesetDescriptor,
   selectSecondaryLevel,
   tilesetLevelsEqual,
 } from "../../src/multi-raster-tileset/multi-tileset-descriptor.js";
 import type {
-  TilesetDescriptor,
-  TilesetLevel,
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
 } from "../../src/raster-tileset/tileset-interface.js";
 import type { Corners } from "../../src/raster-tileset/types.js";
 
-/** Helper: create a mock TilesetLevel */
+/** Helper: create a mock RasterTilesetLevel */
 function mockLevel(opts: {
   matrixWidth: number;
   matrixHeight: number;
   tileWidth: number;
   tileHeight: number;
   metersPerPixel: number;
-}): TilesetLevel {
+}): RasterTilesetLevel {
   const identityTransform = (x: number, y: number): [number, number] => [x, y];
   return {
     ...opts,
@@ -40,8 +40,8 @@ function mockLevel(opts: {
   };
 }
 
-/** Helper: create a mock TilesetDescriptor */
-function mockDescriptor(levels: TilesetLevel[]): TilesetDescriptor {
+/** Helper: create a mock RasterTilesetDescriptor */
+function mockDescriptor(levels: RasterTilesetLevel[]): RasterTilesetDescriptor {
   const identity = (x: number, y: number): [number, number] => [x, y];
   return {
     levels,
@@ -91,7 +91,7 @@ describe("tilesetLevelsEqual", () => {
   });
 });
 
-describe("createMultiTilesetDescriptor", () => {
+describe("createMultiRasterTilesetDescriptor", () => {
   it("selects the finest-resolution tileset as primary", () => {
     const fine = mockDescriptor([
       mockLevel({
@@ -125,7 +125,7 @@ describe("createMultiTilesetDescriptor", () => {
         metersPerPixel: 20,
       }),
     ]);
-    const multi = createMultiTilesetDescriptor(
+    const multi = createMultiRasterTilesetDescriptor(
       new Map([
         ["red", fine],
         ["swir", coarse],
@@ -155,7 +155,7 @@ describe("createMultiTilesetDescriptor", () => {
         metersPerPixel: 20,
       }),
     ]);
-    const multi = createMultiTilesetDescriptor(
+    const multi = createMultiRasterTilesetDescriptor(
       new Map([
         ["red", fine],
         ["swir", coarse],

@@ -1,6 +1,6 @@
 import type {
   ProjectionFunction,
-  TilesetDescriptor,
+  RasterTilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
 import {
   AffineTileset,
@@ -9,7 +9,7 @@ import {
 import type { GeoZarrMetadata } from "@developmentseed/geozarr";
 
 /**
- * Convert a `GeoZarrMetadata` object into a `TilesetDescriptor` for use with
+ * Convert a `GeoZarrMetadata` object into a `RasterTilesetDescriptor` for use with
  * `RasterTileset2D`.
  *
  * @param meta  Parsed GeoZarr metadata (from `parseGeoZarrMetadata`).
@@ -32,14 +32,14 @@ export function geoZarrToDescriptor(
     chunkSizes: Array<{ width: number; height: number }>;
     mpu: number;
   },
-): TilesetDescriptor {
+): RasterTilesetDescriptor {
   if (opts.chunkSizes.length !== meta.levels.length) {
     throw new Error(
       `chunkSizes length (${opts.chunkSizes.length}) must match meta.levels length (${meta.levels.length})`,
     );
   }
 
-  // meta.levels is finest-first; TilesetDescriptor requires coarsest-first.
+  // meta.levels is finest-first; RasterTilesetDescriptor requires coarsest-first.
   const reversedLevels = [...meta.levels].reverse();
   const reversedChunks = [...opts.chunkSizes].reverse();
 

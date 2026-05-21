@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { resolveSecondaryTiles } from "../../src/multi-raster-tileset/secondary-tile-resolver.js";
-import type { TilesetLevel } from "../../src/raster-tileset/tileset-interface.js";
+import type { RasterTilesetLevel } from "../../src/raster-tileset/tileset-interface.js";
 import type { Corners, Point } from "../../src/raster-tileset/types.js";
 
 /**
- * Create a mock TilesetLevel backed by a regular grid.
+ * Create a mock RasterTilesetLevel backed by a regular grid.
  * originX/originY is the top-left corner. cellSize is CRS units per pixel.
  */
 function gridLevel(opts: {
@@ -15,7 +15,7 @@ function gridLevel(opts: {
   tileHeight: number;
   matrixWidth: number;
   matrixHeight: number;
-}): TilesetLevel {
+}): RasterTilesetLevel {
   const {
     originX,
     originY,

@@ -112,7 +112,9 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     RasterTileLayer: `${BASE_DECK_GL_RASTER}/classes/RasterTileLayer/`,
     RasterTileLayerProps: `${BASE_DECK_GL_RASTER}/type-aliases/RasterTileLayerProps/`,
     RenderTileResult: `${BASE_DECK_GL_RASTER}/type-aliases/RenderTileResult/`,
-    TilesetDescriptor: `${BASE_DECK_GL_RASTER}/interfaces/TilesetDescriptor/`,
+    RasterTilesetDescriptor: `${BASE_DECK_GL_RASTER}/interfaces/RasterTilesetDescriptor/`,
+    RasterTileMetadata: `${BASE_DECK_GL_RASTER}/type-aliases/RasterTileMetadata/`,
+    RasterTilesetLevel: `${BASE_DECK_GL_RASTER}/interfaces/RasterTilesetLevel/`,
   },
   "@developmentseed/deck.gl-raster/gpu-modules": {
     BlackIsZero: `${BASE_DECK_GL_RASTER_GPU_MODULES}/variables/BlackIsZero/`,

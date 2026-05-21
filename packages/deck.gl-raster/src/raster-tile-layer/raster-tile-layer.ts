@@ -1,8 +1,8 @@
 import type {
   CompositeLayerProps,
+  CoordinateSystem,
   DefaultProps,
   Layer,
-  LayerProps,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type {
@@ -17,10 +17,9 @@ import type { Device } from "@luma.gl/core";
 import { renderDebugTileOutline } from "../layer-utils.js";
 import type { RenderTileResult } from "../raster-layer.js";
 import { RasterLayer } from "../raster-layer.js";
-import type { TilesetDescriptor } from "../raster-tileset/index.js";
+import type { RasterTilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
-import type { TileMetadata } from "../raster-tileset/raster-tileset-2d.js";
-import { TILE_SIZE, WEB_MERCATOR_TO_WORLD_SCALE } from "./constants.js";
+import type { RasterTileMetadata } from "../raster-tileset/raster-tileset-2d.js";
 
 /**
  * Minimum interface returned by `getTileData`.
@@ -64,16 +63,20 @@ export type RasterTileLayerProps<
 > = CompositeLayerProps &
   Pick<
     TileLayerProps,
-    | "tileSize"
-    | "zoomOffset"
+    | "debounceTime"
+    | "extent"
+    | "maxCacheByteSize"
+    | "maxCacheSize"
+    | "maxRequests"
     | "maxZoom"
     | "minZoom"
-    | "extent"
-    | "debounceTime"
-    | "maxCacheSize"
-    | "maxCacheByteSize"
-    | "maxRequests"
+    | "onTileError"
+    | "onTileLoad"
+    | "onTileUnload"
+    | "onViewportLoad"
     | "refinementStrategy"
+    | "tileSize"
+    | "zoomOffset"
   > & {
     /**
      * Tile pyramid + CRS projection descriptor.
@@ -81,7 +84,7 @@ export type RasterTileLayerProps<
      * Subclasses may supply this via state by overriding the protected
      * `_tilesetDescriptor()` method.
      */
-    tilesetDescriptor?: TilesetDescriptor;
+    tilesetDescriptor?: RasterTilesetDescriptor;
 
     /**
      * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
@@ -165,7 +168,7 @@ type RasterTileLayerDefaultExtraProps<DataT extends MinimalTileData> = Pick<
 
 /**
  * Base layer that renders a tiled raster source driven by a generic
- * {@link TilesetDescriptor}.
+ * {@link RasterTilesetDescriptor}.
  *
  * Usable directly (provide `tilesetDescriptor`, `getTileData`, and `renderTile`
  * as props) or as a base class (override the protected `_tilesetDescriptor`,
@@ -184,7 +187,7 @@ export class RasterTileLayer<
   static override defaultProps = defaultProps;
 
   /**
-   * The currently effective {@link TilesetDescriptor}.
+   * The currently effective {@link RasterTilesetDescriptor}.
    *
    * Subclasses override this to return a descriptor built from their own
    * async-parsed state. Returns `undefined` while the source is still
@@ -196,7 +199,7 @@ export class RasterTileLayer<
    * brings it in; for subclass use this method is overridden and the cast
    * is never reached.
    */
-  protected _tilesetDescriptor(): TilesetDescriptor | undefined {
+  protected _tilesetDescriptor(): RasterTilesetDescriptor | undefined {
     return (this.props as unknown as RasterTileLayerProps<DataT>)
       .tilesetDescriptor;
   }
@@ -245,12 +248,12 @@ export class RasterTileLayer<
     if (!descriptor) {
       return [];
     }
-    // Tiles built by RasterTileset2D are augmented with TileMetadata
+    // Tiles built by RasterTileset2D are augmented with RasterTileMetadata
     // (projectedBbox/Corners, tileWidth/Height) at construction time. The cast
     // makes that runtime augmentation visible to the typed helper.
     return renderDebugTileOutline(
       `${this.id}-${tile.id}-bounds`,
-      tile as Tile2DHeader<DataT> & TileMetadata,
+      tile as Tile2DHeader<DataT> & RasterTileMetadata,
       descriptor.projectTo4326,
     );
   }
@@ -268,7 +271,7 @@ export class RasterTileLayer<
   }
 
   private _renderTileLayer(
-    descriptor: TilesetDescriptor,
+    descriptor: RasterTilesetDescriptor,
     getTileData: NonNullable<RasterTileLayerProps<DataT>["getTileData"]>,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): TileLayer {
@@ -309,6 +312,10 @@ export class RasterTileLayer<
       maxRequests,
       refinementStrategy,
       updateTriggers,
+      onTileError,
+      onTileLoad,
+      onTileUnload,
+      onViewportLoad,
     } = this.props;
 
     return new TileLayer<DataT>({
@@ -339,6 +346,10 @@ export class RasterTileLayer<
       maxCacheByteSize,
       maxRequests,
       refinementStrategy,
+      onTileError,
+      onTileLoad,
+      onTileUnload,
+      onViewportLoad,
     });
   }
 
@@ -366,11 +377,11 @@ export class RasterTileLayer<
       _offset: number;
       tile: Tile2DHeader<DataT>;
     },
-    descriptor: TilesetDescriptor,
+    descriptor: RasterTilesetDescriptor,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): Layer[] {
     const { maxError, debug, debugOpacity } = this.props;
-    const tile = props.tile as Tile2DHeader<DataT> & TileMetadata;
+    const tile = props.tile as Tile2DHeader<DataT> & RasterTileMetadata;
 
     const debugLayers = debug
       ? this._renderDebug(tile, props.data ?? null)
@@ -391,32 +402,35 @@ export class RasterTileLayer<
     const { width, height } = props.data;
 
     const isGlobe = this.context.viewport.resolution !== undefined;
-    const reprojectionFns: ReprojectionFns = isGlobe
-      ? {
-          forwardTransform,
-          inverseTransform,
-          forwardReproject: descriptor.projectTo4326,
-          inverseReproject: descriptor.projectFrom4326,
-        }
-      : {
-          forwardTransform,
-          inverseTransform,
-          forwardReproject: descriptor.projectTo3857,
-          inverseReproject: descriptor.projectFrom3857,
-        };
-    const deckProjectionProps: Partial<LayerProps> = isGlobe
-      ? {}
-      : {
-          coordinateSystem: "cartesian",
-          coordinateOrigin: [TILE_SIZE / 2, TILE_SIZE / 2, 0],
-          // biome-ignore format: array
-          modelMatrix: [
-            WEB_MERCATOR_TO_WORLD_SCALE, 0, 0, 0,
-            0, WEB_MERCATOR_TO_WORLD_SCALE, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1,
-          ],
-        };
+    let reprojectionFns: ReprojectionFns;
+    let coordinateSystem: CoordinateSystem;
+    if (isGlobe) {
+      // Globe view
+      reprojectionFns = {
+        forwardTransform,
+        inverseTransform,
+        forwardReproject: descriptor.projectTo4326,
+        inverseReproject: descriptor.projectFrom4326,
+      };
+      coordinateSystem = "lnglat";
+    } else {
+      // Web Mercator: render the mesh directly in deck.gl common space.
+      //
+      // The tile's `_projectPosition` maps source CRS → common space, support
+      // high precision with fp64 emulation.
+      //
+      // `_projectPosition`/`_unprojectPosition` must be reference-stable across
+      // renders to avoid regenerating the mesh and recompiling the shader every
+      // frame.
+      const { _projectPosition, _unprojectPosition } = tile;
+      reprojectionFns = {
+        forwardTransform,
+        inverseTransform,
+        forwardReproject: _projectPosition,
+        inverseReproject: _unprojectPosition,
+      };
+      coordinateSystem = "cartesian";
+    }
 
     const rasterLayer = new RasterLayer(
       this.getSubLayerProps({
@@ -431,7 +445,7 @@ export class RasterTileLayer<
         reprojectionFns,
         debug,
         debugOpacity,
-        ...deckProjectionProps,
+        coordinateSystem,
       }),
     );
     return [rasterLayer, ...debugLayers];

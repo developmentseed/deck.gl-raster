@@ -1,6 +1,6 @@
 import type { Affine } from "@developmentseed/affine";
 import * as affine from "@developmentseed/affine";
-import type { TilesetLevel } from "./tileset-interface.js";
+import type { RasterTilesetLevel } from "./tileset-interface.js";
 import type { Bounds, Corners, ProjectionFunction } from "./types.js";
 
 /**
@@ -22,15 +22,15 @@ export interface AffineTilesetLevelOptions {
 }
 
 /**
- * A {@link TilesetLevel} described by a single affine transform plus tile and
+ * A {@link RasterTilesetLevel} described by a single affine transform plus tile and
  * array sizes.
  *
  * This handles axis-aligned, rotated, skewed, and non-square-pixel grids
  * uniformly. Sources that fit this shape (tiled GeoTIFF overviews, GeoZarr
  * multiscales) can construct one of these per resolution level instead of
- * implementing {@link TilesetLevel} manually.
+ * implementing {@link RasterTilesetLevel} manually.
  */
-export class AffineTilesetLevel implements TilesetLevel {
+export class AffineTilesetLevel implements RasterTilesetLevel {
   readonly tileWidth: number;
   readonly tileHeight: number;
   readonly matrixWidth: number;

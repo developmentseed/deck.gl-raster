@@ -1,7 +1,5 @@
-import type {
-  GetTileDataOptions,
-  MinimalTileData,
-} from "@developmentseed/deck.gl-geotiff";
+import type { GetTileDataOptions } from "@developmentseed/deck.gl-geotiff";
+import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import type { Texture } from "@luma.gl/core";
 
