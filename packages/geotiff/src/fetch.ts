@@ -326,7 +326,7 @@ async function findBandSeparateTileByteRanges(
   self: HasTiffReference,
   x: number,
   y: number,
-  signal?: AbortSignal,
+  options?: { signal?: AbortSignal },
 ): Promise<ByteRange[]> {
   // TODO: error here if user-provided band-indexes are out of bounds
   const { x: tilesPerRow, y: tilesPerColumn } = self.image.tileCount;
@@ -334,7 +334,7 @@ async function findBandSeparateTileByteRanges(
   const numBands = self.cachedTags.samplesPerPixel;
   const tileSizes = [...Array(numBands).keys()].map((band) => {
     const bandIdx = band * tilesPerBand + y * tilesPerRow + x;
-    return self.image.getTileSize(bandIdx, { signal });
+    return self.image.getTileSize(bandIdx, options);
   });
   return Promise.all(tileSizes);
 }
@@ -343,16 +343,15 @@ async function fetchBandSeparateTileBytes(
   self: HasTiffReference,
   x: number,
   y: number,
-  {
-    signal,
-  }: {
+  options: {
     signal?: AbortSignal;
   } = {},
 ): Promise<GetBytesResponse[]> {
+  const { signal } = options;
   const debug: DebugTag | undefined = self._debug
     ? { label: "data" }
     : undefined;
-  const byteRanges = await findBandSeparateTileByteRanges(self, x, y, signal);
+  const byteRanges = await findBandSeparateTileByteRanges(self, x, y, options);
   const buffers = byteRanges.map(async ({ offset, imageSize }) => {
     const tile = await getBytes(
       self.image,
@@ -419,18 +418,17 @@ async function fetchCogBytesMultiple(
 async function fetchBandSeparateTileBytesMultiple(
   self: HasTiffReference,
   xy: Array<[number, number]>,
-  {
-    signal,
-  }: {
+  options: {
     signal?: AbortSignal;
   } = {},
 ): Promise<GetBytesResponse[][]> {
+  const { signal } = options;
   const debug: DebugTag | undefined = self._debug
     ? { label: "data" }
     : undefined;
   const numBands = self.cachedTags.samplesPerPixel;
   const perTileRanges = await Promise.all(
-    xy.map(([x, y]) => findBandSeparateTileByteRanges(self, x, y, signal)),
+    xy.map(([x, y]) => findBandSeparateTileByteRanges(self, x, y, options)),
   );
   const flatRanges = perTileRanges.flatMap((ranges) =>
     ranges.map(({ offset, imageSize }) => ({
