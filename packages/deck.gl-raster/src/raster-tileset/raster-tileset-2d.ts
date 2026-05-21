@@ -7,7 +7,7 @@
  */
 
 import type { Viewport } from "@deck.gl/core";
-import { _GlobeViewport } from "@deck.gl/core";
+import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import type {
   GeoBoundingBox,
   _Tileset2DProps as Tileset2DProps,
@@ -228,7 +228,7 @@ export class RasterTileset2D extends Tileset2D {
     // mirrors the `project` gate in the tile traversal. (See
     // BoundingVolumeCache.)
     const isGlobe = Boolean(
-      viewport instanceof _GlobeViewport && viewport.resolution,
+      viewport instanceof GlobeViewport && viewport.resolution,
     );
     if (
       this.lastViewportIsGlobe !== undefined &&

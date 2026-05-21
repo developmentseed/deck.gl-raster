@@ -1,4 +1,4 @@
-import { _GlobeViewport } from "@deck.gl/core";
+import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import { describe, expect, it } from "vitest";
 import { getTileIndices } from "../../src/raster-tileset/raster-tile-traversal.js";
 import type {
@@ -50,8 +50,8 @@ function makeDescriptor(
   };
 }
 
-function makeGlobeViewport(): _GlobeViewport {
-  return new _GlobeViewport({
+function makeGlobeViewport(): GlobeViewport {
+  return new GlobeViewport({
     width: 200,
     height: 200,
     longitude: 0,

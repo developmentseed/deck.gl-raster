@@ -18,7 +18,7 @@
  */
 
 import type { Viewport } from "@deck.gl/core";
-import { _GlobeViewport } from "@deck.gl/core";
+import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import { transformBounds } from "@developmentseed/proj";
 import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
@@ -833,7 +833,7 @@ export function getTileIndices(
 
   // Only define `project` function for Globe viewports, same as upstream
   const project: ((xyz: number[]) => number[]) | null =
-    viewport instanceof _GlobeViewport && viewport.resolution
+    viewport instanceof GlobeViewport && viewport.resolution
       ? viewport.projectPosition
       : null;
 

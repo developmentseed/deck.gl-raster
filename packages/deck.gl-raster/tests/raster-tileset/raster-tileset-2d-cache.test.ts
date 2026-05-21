@@ -1,4 +1,7 @@
-import { _GlobeViewport, WebMercatorViewport } from "@deck.gl/core";
+import {
+  _GlobeViewport as GlobeViewport,
+  WebMercatorViewport,
+} from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { describe, expect, it } from "vitest";
 import { RasterTileset2D } from "../../src/raster-tileset/raster-tileset-2d.js";
@@ -67,8 +70,8 @@ function makeViewport(): WebMercatorViewport {
   });
 }
 
-function makeGlobeViewport(): _GlobeViewport {
-  return new _GlobeViewport({
+function makeGlobeViewport(): GlobeViewport {
+  return new GlobeViewport({
     longitude: 0,
     latitude: 0,
     zoom: 1,
