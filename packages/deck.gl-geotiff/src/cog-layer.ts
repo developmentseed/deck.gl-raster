@@ -1,4 +1,4 @@
-import type { UpdateParameters } from "@deck.gl/core";
+import type { LayerContext, UpdateParameters } from "@deck.gl/core";
 import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
@@ -23,7 +23,7 @@ import {
 } from "@developmentseed/proj";
 import type { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
-import { defaultConcurrencyLimiter } from "./default-concurrency-limiter.js";
+import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
@@ -168,7 +168,7 @@ export class COGLayer<
   static override defaultProps = {
     ...RasterTileLayer.defaultProps,
     epsgResolver,
-    concurrencyLimiter: defaultConcurrencyLimiter,
+    concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
   } as typeof RasterTileLayer.defaultProps;
 
   declare state: {
@@ -176,10 +176,18 @@ export class COGLayer<
     tilesetDescriptor?: RasterTilesetDescriptor;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
+    /** Aborts the in-flight header read when the `geotiff` prop changes or the
+     *  layer is removed, freeing its limiter slot for fresh work. */
+    abortController?: AbortController;
   };
 
   override initializeState(): void {
     this.setState({});
+  }
+
+  override finalizeState(context: LayerContext): void {
+    this.state.abortController?.abort();
+    super.finalizeState(context);
   }
 
   override updateState(params: UpdateParameters<this>) {
@@ -208,9 +216,26 @@ export class COGLayer<
   }
 
   async _parseGeoTIFF(): Promise<void> {
-    const geotiff = await fetchGeoTIFF(this.props.geotiff, {
-      concurrencyLimiter: this.props.concurrencyLimiter,
-    });
+    // Abort any header read still in flight from a previous `geotiff` prop,
+    // then open a fresh controller for this one.
+    this.state.abortController?.abort();
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    this.setState({ abortController });
+
+    let geotiff: GeoTIFF;
+    try {
+      geotiff = await fetchGeoTIFF(this.props.geotiff, {
+        concurrencyLimiter: this.props.concurrencyLimiter,
+        signal,
+      });
+    } catch (err) {
+      // A newer prop (or layer removal) aborted us; drop the stale open.
+      if (signal.aborted) {
+        return;
+      }
+      throw err;
+    }
     const crs = geotiff.crs;
     const sourceProjection =
       typeof crs === "number"
@@ -267,6 +292,12 @@ export class COGLayer<
     if (!this.props.getTileData || !this.props.renderTile) {
       ({ getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
         inferRenderPipeline(geotiff, this.context.device));
+    }
+
+    // A newer prop (or layer removal) superseded this open while we were
+    // resolving the projection; don't clobber state with stale results.
+    if (signal.aborted) {
+      return;
     }
 
     this.setState({

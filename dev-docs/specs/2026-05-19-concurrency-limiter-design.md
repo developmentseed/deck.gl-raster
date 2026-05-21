@@ -132,7 +132,7 @@ import { PerOriginSemaphore } from "@developmentseed/geotiff";
 /** Shared by every COGLayer / MultiCOGLayer that doesn't override its
  *  concurrencyLimiter prop, so multiple layers on the same origin share one
  *  HTTP/1.1 connection pool. */
-export const defaultConcurrencyLimiter = new PerOriginSemaphore({ maxRequests: 6 });
+export const DEFAULT_CONCURRENCY_LIMITER = new PerOriginSemaphore({ maxRequests: 6 });
 ```
 
 `COGLayer`:
@@ -141,7 +141,7 @@ export const defaultConcurrencyLimiter = new PerOriginSemaphore({ maxRequests: 6
 class COGLayer extends RasterTileLayer {
   static override defaultProps = {
     ...RasterTileLayer.defaultProps,
-    concurrencyLimiter: defaultConcurrencyLimiter,
+    concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
   };
 }
 

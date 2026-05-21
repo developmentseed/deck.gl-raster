@@ -68,12 +68,17 @@ export async function fetchGeoTIFF(
      *  fetch through this GeoTIFF's sources. Only meaningful when
      *  `concurrencyLimiter` is set. */
     getPriority?: () => Priority;
+    /** Forwarded to {@link GeoTIFF.fromUrl} to cancel the header reads when
+     *  the opening layer is removed or its source prop changes mid-flight.
+     *  Ignored when `input` is already a `GeoTIFF` or `ArrayBuffer`. */
+    signal?: AbortSignal;
   } = {},
 ): Promise<GeoTIFF> {
   if (typeof input === "string" || input instanceof URL) {
     return await GeoTIFF.fromUrl(input, {
       concurrencyLimiter: options.concurrencyLimiter,
       getPriority: options.getPriority,
+      signal: options.signal,
     });
   }
 

@@ -5,12 +5,16 @@ import type {
   LayersList,
   UpdateParameters,
 } from "@deck.gl/core";
-import { CompositeLayer } from "@deck.gl/core";
+import {
+  _GlobeViewport,
+  CompositeLayer,
+  WebMercatorViewport,
+} from "@deck.gl/core";
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
 import Flatbush from "flatbush";
-import { defaultConcurrencyLimiter } from "../default-concurrency-limiter.js";
+import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
 import type { MosaicSource } from "./mosaic-tileset-2d.js";
 import { MosaicTileset2D } from "./mosaic-tileset-2d.js";
 
@@ -68,11 +72,11 @@ export type MosaicLayerProps<
         signal?: AbortSignal;
         /**
          * The layer's current `concurrencyLimiter` prop (default
-         * {@link defaultConcurrencyLimiter}). Forward to
+         * {@link DEFAULT_CONCURRENCY_LIMITER}). Forward to
          * {@link GeoTIFF.fromUrl}'s `concurrencyLimiter` option so this
          * source's fetches join the shared per-origin queue.
          */
-        concurrencyLimiter: ConcurrencyLimiter | null;
+        concurrencyLimiter?: ConcurrencyLimiter | null;
         /**
          * Dynamic priority for fetches related to this source. Re-invoked by
          * the limiter on every slot-open, so the queue re-sorts on viewport
@@ -81,8 +85,14 @@ export type MosaicLayerProps<
          * serviced sooner. Forward to {@link GeoTIFF.fromUrl}'s
          * `getPriority` option alongside `concurrencyLimiter` to bias
          * center-of-screen rendering ahead of edges.
+         *
+         * Only provided for geographic viewports (`WebMercatorViewport` /
+         * `_GlobeViewport`), where the source bbox and viewport center share
+         * a lon/lat space. Omitted (`undefined`) otherwise, so the limiter
+         * falls back to FIFO instead of comparing mismatched coordinate
+         * units.
          */
-        getPriority: () => Priority;
+        getPriority?: () => Priority;
       },
     ) => Promise<DataT>;
 
@@ -122,7 +132,7 @@ export type MosaicLayerProps<
   };
 
 const defaultProps: Partial<MosaicLayerProps> = {
-  concurrencyLimiter: defaultConcurrencyLimiter,
+  concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
   sources: [],
 };
 
@@ -230,35 +240,35 @@ export class MosaicLayer<
         // needed). Re-evaluated on every limiter slot-open, so panning the
         // viewport re-sorts the queue and pulls newly-central sources to the
         // front of the line ahead of older edge sources.
+        //
+        // Only meaningful for geographic viewports, where the source bbox and
+        // the viewport center share a lon/lat space. For any other viewport we
+        // leave `getPriority` undefined so the limiter falls back to FIFO.
         const [minX, minY, maxX, maxY] = index.bbox;
         const sourceCx = (minX + maxX) / 2;
         const sourceCy = (minY + maxY) / 2;
-        const getPriority = (): number => {
-          const { viewport } = this.context;
-          // Viewport exposes longitude/latitude for geographic viewports;
-          // fall back to (0, 0) defensively if not available.
-          const lon =
-            "longitude" in viewport ? (viewport.longitude as number) : 0;
-          const lat =
-            "latitude" in viewport ? (viewport.latitude as number) : 0;
-          const dx = sourceCx - lon;
-          const dy = sourceCy - lat;
-          return Math.hypot(dx, dy);
-        };
-        // deck.gl fills `concurrencyLimiter` from `defaultProps` when the
-        // user doesn't supply it; an explicit `null` is the opt-out signal
-        // and gets forwarded as-is so `GeoTIFF.fromUrl` skips installing
-        // the middleware. Only `undefined` (e.g. types-only escape hatches)
-        // falls back to the default here.
-        const concurrencyLimiter =
-          this.props.concurrencyLimiter === undefined
-            ? defaultConcurrencyLimiter
-            : this.props.concurrencyLimiter;
+        const isGeographic =
+          this.context.viewport instanceof WebMercatorViewport ||
+          this.context.viewport instanceof _GlobeViewport;
+        const getPriority = isGeographic
+          ? (): number => {
+              // Re-read the viewport each call so panning re-sorts the queue.
+              const viewport = this.context.viewport as
+                | WebMercatorViewport
+                | _GlobeViewport;
+              const dx = sourceCx - viewport.longitude;
+              const dy = sourceCy - viewport.latitude;
+              return Math.hypot(dx, dy);
+            }
+          : undefined;
+        // `concurrencyLimiter` is filled from `defaultProps`, so the prop is
+        // already resolved (the shared default, a user override, or an
+        // explicit `null` to disable) — forward it straight through.
         const userData =
           this.props.getSource &&
           (await this.props.getSource(index, {
             signal,
-            concurrencyLimiter,
+            concurrencyLimiter: this.props.concurrencyLimiter,
             getPriority,
           }));
 

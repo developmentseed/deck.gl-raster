@@ -11,7 +11,7 @@ import {
   LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
-import type { Overview } from "@developmentseed/geotiff";
+import type { GeoTIFFFromUrlOptions, Overview } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
@@ -87,15 +87,12 @@ const geotiffCache = new Map<string, Promise<GeoTIFF>>();
 
 function getCachedGeoTIFF(
   url: string,
-  opts: Parameters<typeof GeoTIFF.fromUrl>[1],
+  opts: GeoTIFFFromUrlOptions,
 ): Promise<GeoTIFF> {
   let promise = geotiffCache.get(url);
   if (!promise) {
-    // MosaicLayer threads its `concurrencyLimiter` and `getPriority` through
-    // `opts`, so spreading here forwards both to `GeoTIFF.fromUrl` — every
-    // header + tile-data fetch through this GeoTIFF's sources is gated
-    // against the shared per-origin pool and re-ordered dynamically by
-    // distance from viewport center.
+    // Forward MosaicLayer's opts (concurrencyLimiter, getPriority, signal)
+    // straight through to GeoTIFF.fromUrl.
     promise = GeoTIFF.fromUrl(url, opts).catch((err) => {
       geotiffCache.delete(url);
       throw err;

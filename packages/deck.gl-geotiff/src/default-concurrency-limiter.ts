@@ -7,6 +7,6 @@ import { PerOriginSemaphore } from "@developmentseed/geotiff";
  * same origin (e.g. the same S3 bucket) share *one* HTTP/1.1 connection
  * pool. The cap matches Chrome's default per-origin HTTP/1.1 limit.
  */
-export const defaultConcurrencyLimiter = new PerOriginSemaphore({
+export const DEFAULT_CONCURRENCY_LIMITER = new PerOriginSemaphore({
   maxRequests: 6,
 });

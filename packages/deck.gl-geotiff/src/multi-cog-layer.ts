@@ -1,6 +1,7 @@
 import type {
   CompositeLayerProps,
   Layer,
+  LayerContext,
   UpdateParameters,
 } from "@deck.gl/core";
 import type {
@@ -39,7 +40,7 @@ import type {
   RasterArray,
 } from "@developmentseed/geotiff";
 import { assembleTiles, defaultDecoderPool } from "@developmentseed/geotiff";
-import type { EpsgResolver } from "@developmentseed/proj";
+import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
 import {
   epsgResolver as defaultEpsgResolver,
   makeClampedForwardTo3857,
@@ -48,7 +49,7 @@ import {
 } from "@developmentseed/proj";
 import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import proj4 from "proj4";
-import { defaultConcurrencyLimiter } from "./default-concurrency-limiter.js";
+import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 
@@ -275,7 +276,7 @@ const defaultProps = {
   ...RasterTileLayer.defaultProps,
   epsgResolver: { type: "accessor" as const, value: defaultEpsgResolver },
   debugLevel: { type: "number" as const, value: 1 },
-  concurrencyLimiter: defaultConcurrencyLimiter,
+  concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
 };
 
 /**
@@ -305,6 +306,9 @@ export class MultiCOGLayer extends RasterTileLayer<
   declare state: {
     sources: Map<string, SourceState> | null;
     multiDescriptor: MultiRasterTilesetDescriptor | null;
+    /** Aborts the in-flight header reads when the `sources` prop changes or the
+     *  layer is removed, freeing their limiter slots for fresh work. */
+    abortController?: AbortController;
   };
 
   override initializeState(): void {
@@ -312,6 +316,11 @@ export class MultiCOGLayer extends RasterTileLayer<
       sources: null,
       multiDescriptor: null,
     });
+  }
+
+  override finalizeState(context: LayerContext): void {
+    this.state.abortController?.abort();
+    super.finalizeState(context);
   }
 
   override updateState({
@@ -344,20 +353,41 @@ export class MultiCOGLayer extends RasterTileLayer<
     const { sources } = this.props;
     const entries = Object.entries(sources);
 
+    // Abort any header reads still in flight from a previous `sources` prop,
+    // then open a fresh controller for this batch.
+    this.state.abortController?.abort();
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    this.setState({ abortController });
+
     // Open all COGs in parallel
-    const cogSources = await Promise.all(
-      entries.map(async ([name, config]) => {
-        const geotiff = await fetchGeoTIFF(config.url, {
-          concurrencyLimiter: this.props.concurrencyLimiter,
-        });
-        const crs = geotiff.crs;
-        const sourceProjection =
-          typeof crs === "number"
-            ? await this.props.epsgResolver!(crs)
-            : parseWkt(crs);
-        return { name, geotiff, sourceProjection };
-      }),
-    );
+    let cogSources: Array<{
+      name: string;
+      geotiff: GeoTIFF;
+      sourceProjection: ProjectionDefinition;
+    }>;
+    try {
+      cogSources = await Promise.all(
+        entries.map(async ([name, config]) => {
+          const geotiff = await fetchGeoTIFF(config.url, {
+            concurrencyLimiter: this.props.concurrencyLimiter,
+            signal,
+          });
+          const crs = geotiff.crs;
+          const sourceProjection =
+            typeof crs === "number"
+              ? await this.props.epsgResolver!(crs)
+              : parseWkt(crs);
+          return { name, geotiff, sourceProjection };
+        }),
+      );
+    } catch (err) {
+      // A newer prop (or layer removal) aborted us; drop the stale opens.
+      if (signal.aborted) {
+        return;
+      }
+      throw err;
+    }
 
     // Use the first source's projection for shared projection functions
     // (all sources must share the same CRS)
@@ -410,6 +440,12 @@ export class MultiCOGLayer extends RasterTileLayer<
     }
 
     const multiDescriptor = createMultiRasterTilesetDescriptor(tilesetMap);
+
+    // A newer prop (or layer removal) superseded this batch while we were
+    // resolving projections; don't clobber state with stale results.
+    if (signal.aborted) {
+      return;
+    }
 
     this.setState({
       sources: sourceMap,
