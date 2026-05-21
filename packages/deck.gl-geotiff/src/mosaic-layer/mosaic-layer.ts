@@ -4,6 +4,7 @@ import type {
   LayerContext,
   LayersList,
   UpdateParameters,
+  Viewport,
 } from "@deck.gl/core";
 import {
   _GlobeViewport,
@@ -138,6 +139,44 @@ const defaultProps: Partial<MosaicLayerProps> = {
 };
 
 /**
+ * Build the limiter `getPriority` callback for one mosaic source: euclidean
+ * distance from the source's bbox center to the current viewport center, in
+ * lon/lat degree-space (just an ordering key — great-circle isn't needed).
+ *
+ * `getViewport` is read on every call, so the limiter re-sorts its queue as
+ * the viewport pans, pulling newly-central sources ahead of edge sources.
+ *
+ * Returns `undefined` for non-geographic viewports — where the source bbox and
+ * viewport center don't share a coordinate space — so the limiter falls back
+ * to FIFO instead of comparing mismatched units. The viewport type is checked
+ * once here; it isn't expected to change under the layer.
+ */
+function createGetPriorityCallback(
+  bbox: readonly [number, number, number, number],
+  getViewport: () => Viewport,
+): (() => number) | undefined {
+  const viewport = getViewport();
+  if (
+    !(viewport instanceof WebMercatorViewport) &&
+    !(viewport instanceof _GlobeViewport)
+  ) {
+    return undefined;
+  }
+
+  const [minX, minY, maxX, maxY] = bbox;
+  const sourceCx = (minX + maxX) / 2;
+  const sourceCy = (minY + maxY) / 2;
+
+  return (): number => {
+    // Geographic viewport (checked above); both types expose lon/lat.
+    const v = getViewport() as WebMercatorViewport | _GlobeViewport;
+    const dx = sourceCx - v.longitude;
+    const dy = sourceCy - v.latitude;
+    return Math.hypot(dx, dy);
+  };
+}
+
+/**
  * A deck.gl layer for rendering a mosaic of raster sources.
  *
  * The `renderSource` prop is called whenever a source is present in the current
@@ -233,33 +272,10 @@ export class MosaicLayer<
         // exposes only the plain `TileIndex` here.
         const index = data.index as unknown as MosaicT;
         const { signal } = data;
-        // Dynamic priority for the limiter: euclidean distance from this
-        // source's bbox center to the layer's current viewport center, in
-        // degree-space (just used as an ordering key; great-circle isn't
-        // needed). Re-evaluated on every limiter slot-open, so panning the
-        // viewport re-sorts the queue and pulls newly-central sources to the
-        // front of the line ahead of older edge sources.
-        //
-        // Only meaningful for geographic viewports, where the source bbox and
-        // the viewport center share a lon/lat space. For any other viewport we
-        // leave `getPriority` undefined so the limiter falls back to FIFO.
-        const [minX, minY, maxX, maxY] = index.bbox;
-        const sourceCx = (minX + maxX) / 2;
-        const sourceCy = (minY + maxY) / 2;
-        const isGeographic =
-          this.context.viewport instanceof WebMercatorViewport ||
-          this.context.viewport instanceof _GlobeViewport;
-        const getPriority = isGeographic
-          ? (): number => {
-              // Re-read the viewport each call so panning re-sorts the queue.
-              const viewport = this.context.viewport as
-                | WebMercatorViewport
-                | _GlobeViewport;
-              const dx = sourceCx - viewport.longitude;
-              const dy = sourceCy - viewport.latitude;
-              return Math.hypot(dx, dy);
-            }
-          : undefined;
+        const getPriority = createGetPriorityCallback(
+          index.bbox,
+          () => this.context.viewport,
+        );
         // `concurrencyLimiter` is filled from `defaultProps`, so the prop is
         // already resolved (the shared default, a user override, or an
         // explicit `null` to disable) — forward it straight through.
