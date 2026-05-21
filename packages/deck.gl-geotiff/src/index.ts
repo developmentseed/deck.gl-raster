@@ -1,3 +1,5 @@
+import "./proj4-init.js";
+
 export type {
   COGLayerProps,
   GetTileDataOptions,
