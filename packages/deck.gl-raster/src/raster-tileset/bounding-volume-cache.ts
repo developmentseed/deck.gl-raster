@@ -40,10 +40,10 @@ const DEFAULT_MAX_ENTRIES = 65_536;
  * `(z, x, y, zRange)` for a given tileset descriptor, so it is safe to memoize
  * across `getTileIndices` calls (i.e. across animation frames).
  *
- * NOTE: this assumes a non-Globe traversal (`project === null`) — the only kind
- * `RasterTileNode.getBoundingVolume` currently supports. If Globe-view bounding
- * volumes are ever implemented, the cache key will need a viewport/resolution
- * component.
+ * The cache key namespaces by projection mode (`globe`): a tile's bounding
+ * volume in a GlobeView is computed in a different common space than its Web
+ * Mercator counterpart, so globe and mercator entries for the same `(z, x, y)`
+ * are stored under distinct keys and never collide.
  */
 export class BoundingVolumeCache {
   private entries = new Map<string, BoundingVolumeCacheEntry>();
@@ -63,9 +63,18 @@ export class BoundingVolumeCache {
   /**
    * Look up the cached bounding volume for tile `(z, x, y)`. On a hit the entry
    * is marked most-recently-used. Returns `undefined` on a miss.
+   *
+   * `globe` selects the projection-mode namespace: a tile's bounding volume in
+   * a GlobeView lives in a different common space than its Web Mercator
+   * counterpart, so the two must never collide in the cache.
    */
-  get(z: number, x: number, y: number): BoundingVolumeCacheEntry | undefined {
-    const key = `${z}/${x}/${y}`;
+  get(
+    z: number,
+    x: number,
+    y: number,
+    globe = false,
+  ): BoundingVolumeCacheEntry | undefined {
+    const key = this.makeKey(z, x, y, globe);
     const entry = this.entries.get(key);
     if (entry === undefined) {
       return undefined;
@@ -77,10 +86,20 @@ export class BoundingVolumeCache {
   }
 
   /** Store the bounding volume for tile `(z, x, y)` as most-recently-used. */
-  set(z: number, x: number, y: number, entry: BoundingVolumeCacheEntry): void {
-    const key = `${z}/${x}/${y}`;
+  set(
+    z: number,
+    x: number,
+    y: number,
+    entry: BoundingVolumeCacheEntry,
+    globe = false,
+  ): void {
+    const key = this.makeKey(z, x, y, globe);
     this.entries.delete(key);
     this.entries.set(key, entry);
+  }
+
+  private makeKey(z: number, x: number, y: number, globe: boolean): string {
+    return `${z}/${x}/${y}/${globe ? "g" : "m"}`;
   }
 
   /**

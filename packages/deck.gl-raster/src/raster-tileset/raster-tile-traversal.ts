@@ -18,7 +18,7 @@
  */
 
 import type { Viewport } from "@deck.gl/core";
-import { _GlobeViewport, assert } from "@deck.gl/core";
+import { _GlobeViewport } from "@deck.gl/core";
 import { transformBounds } from "@developmentseed/proj";
 import type { OrientedBoundingBox } from "@math.gl/culling";
 import {
@@ -389,12 +389,23 @@ export class RasterTileNode {
     project: ((xyz: number[]) => number[]) | null,
     boundingVolumeCache: BoundingVolumeCache,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
-    const hit = boundingVolumeCache.get(this.z, this.x, this.y);
+    const hit = boundingVolumeCache.get(
+      this.z,
+      this.x,
+      this.y,
+      project !== null,
+    );
     if (hit && hit.zRange[0] === zRange[0] && hit.zRange[1] === zRange[1]) {
       return hit;
     }
     const result = this.computeBoundingVolume(zRange, project);
-    boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...result });
+    boundingVolumeCache.set(
+      this.z,
+      this.x,
+      this.y,
+      { zRange, ...result },
+      project !== null,
+    );
     return result;
   }
 
@@ -409,12 +420,10 @@ export class RasterTileNode {
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
-    // Case 1: Globe view - need to construct an oriented bounding box from
-    // reprojected sample points, but also using the `project` param
+    // Case 1: Globe view — reproject sample points to WGS84 and project them
+    // onto the globe sphere with the viewport's `project` function.
     if (project) {
-      assert(false, "TODO: implement getBoundingVolume in Globe view");
-      // Reproject positions to wgs84 instead, then pass them into `project`
-      // return makeOrientedBoundingBoxFromPoints(refPointPositions);
+      return this._getGlobeBoundingVolume(project);
     }
 
     // (Future) Case 2: Web Mercator input image, can directly compute AABB in
@@ -489,6 +498,59 @@ export class RasterTileNode {
     return {
       boundingVolume: makeOrientedBoundingBoxFromPoints(refPointPositions),
       commonSpaceBounds,
+    };
+  }
+
+  /**
+   * Globe-view bounding volume: reproject the tile's reference points to WGS84,
+   * project them onto the globe sphere (`project` = `viewport.projectPosition`)
+   * to build the oriented bounding box used for frustum culling, and separately
+   * compute a Web-Mercator-world AABB for the `bounds` pre-filter in
+   * {@link update} (which compares against `wgs84Bounds` in mercator world).
+   *
+   * NOTE: elevation is not modeled on globe yet — reference points are sampled
+   * at the surface (z = 0). Flat rasters only. See
+   * `dev-docs/specs/2026-05-21-globe-view-design.md`.
+   */
+  private _getGlobeBoundingVolume(project: (xyz: number[]) => number[]): {
+    boundingVolume: OrientedBoundingBox;
+    commonSpaceBounds: Bounds;
+  } {
+    const tileCorners = this.level.projectedTileCorners(this.x, this.y);
+    const refPointsWgs84 = sampleReferencePointsInWGS84(
+      REF_POINTS_9,
+      tileCorners,
+      this.descriptor.projectTo4326,
+    );
+
+    const refPointPositions: [number, number, number][] = [];
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    for (const [lng, lat] of refPointsWgs84) {
+      const projected = project([lng, lat, 0]);
+      refPointPositions.push([projected[0]!, projected[1]!, projected[2]!]);
+
+      const [worldX, worldY] = lngLatToWorld([lng, lat]);
+      if (worldX < minX) {
+        minX = worldX;
+      }
+      if (worldY < minY) {
+        minY = worldY;
+      }
+      if (worldX > maxX) {
+        maxX = worldX;
+      }
+      if (worldY > maxY) {
+        maxY = worldY;
+      }
+    }
+
+    return {
+      boundingVolume: makeOrientedBoundingBoxFromPoints(refPointPositions),
+      commonSpaceBounds: [minX, minY, maxX, maxY],
     };
   }
 }
@@ -574,6 +636,36 @@ function sampleReferencePointsInEPSG3857(
     refPointPositions.push(clampedProjectTo3857(geoX, geoY));
   }
 
+  return refPointPositions;
+}
+
+/**
+ * Sample the selected reference points in WGS84 lng/lat.
+ *
+ * Like {@link sampleReferencePointsInEPSG3857}, reference points are `[relX,
+ * relY]` fractions in `[0, 1]` bilinearly interpolated across the tile's four
+ * CRS corners, then reprojected to WGS84. Used by the GlobeView bounding-volume
+ * path, which projects lng/lat onto the sphere rather than rescaling 3857
+ * meters into common space.
+ */
+function sampleReferencePointsInWGS84(
+  refPoints: [number, number][],
+  tileCorners: Corners,
+  projectTo4326: ProjectionFunction,
+): [number, number][] {
+  const { topLeft, topRight, bottomLeft, bottomRight } = tileCorners;
+  const refPointPositions: [number, number][] = [];
+  for (const [relX, relY] of refPoints) {
+    const [geoX, geoY] = bilerpPoint(
+      topLeft,
+      topRight,
+      bottomLeft,
+      bottomRight,
+      relX,
+      relY,
+    );
+    refPointPositions.push(projectTo4326(geoX, geoY));
+  }
   return refPointPositions;
 }
 
