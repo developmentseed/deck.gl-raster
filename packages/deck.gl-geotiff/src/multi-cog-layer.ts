@@ -279,6 +279,49 @@ const defaultProps = {
   concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
 };
 
+/** A source's opened GeoTIFF paired with its resolved projection. */
+type OpenedCogSource = {
+  name: string;
+  geotiff: GeoTIFF;
+  sourceProjection: ProjectionDefinition;
+};
+
+/**
+ * Open every configured source's GeoTIFF in parallel and resolve each one's
+ * projection. Returns `null` when `signal` aborts mid-open (the layer was
+ * removed), so the caller can bail without applying stale state.
+ */
+async function openCogSources(
+  entries: [string, MultiCOGSourceConfig][],
+  options: {
+    concurrencyLimiter?: ConcurrencyLimiter | null;
+    epsgResolver: EpsgResolver;
+    signal?: AbortSignal;
+  },
+): Promise<OpenedCogSource[] | null> {
+  const { concurrencyLimiter, epsgResolver, signal } = options;
+  try {
+    return await Promise.all(
+      entries.map(async ([name, config]) => {
+        const geotiff = await fetchGeoTIFF(config.url, {
+          concurrencyLimiter,
+          signal,
+        });
+        const crs = geotiff.crs;
+        const sourceProjection =
+          typeof crs === "number" ? await epsgResolver(crs) : parseWkt(crs);
+        return { name, geotiff, sourceProjection };
+      }),
+    );
+  } catch (err) {
+    // Layer removed mid-open (finalizeState aborted the signal); bail.
+    if (signal?.aborted) {
+      return null;
+    }
+    throw err;
+  }
+}
+
 /**
  * A deck.gl {@link CompositeLayer} that opens multiple Cloud-Optimized GeoTIFFs
  * (COGs) in parallel, builds a {@link RasterTilesetDescriptor} for each, and groups
@@ -358,33 +401,14 @@ export class MultiCOGLayer extends RasterTileLayer<
 
     const signal = this.state.abortController?.signal;
 
-    // Open all COGs in parallel
-    let cogSources: Array<{
-      name: string;
-      geotiff: GeoTIFF;
-      sourceProjection: ProjectionDefinition;
-    }>;
-    try {
-      cogSources = await Promise.all(
-        entries.map(async ([name, config]) => {
-          const geotiff = await fetchGeoTIFF(config.url, {
-            concurrencyLimiter: this.props.concurrencyLimiter,
-            signal,
-          });
-          const crs = geotiff.crs;
-          const sourceProjection =
-            typeof crs === "number"
-              ? await this.props.epsgResolver!(crs)
-              : parseWkt(crs);
-          return { name, geotiff, sourceProjection };
-        }),
-      );
-    } catch (err) {
-      // Layer removed mid-open (finalizeState aborted the signal); drop it.
-      if (signal?.aborted) {
-        return;
-      }
-      throw err;
+    const cogSources = await openCogSources(entries, {
+      concurrencyLimiter: this.props.concurrencyLimiter,
+      epsgResolver: this.props.epsgResolver!,
+      signal,
+    });
+    // Layer removed mid-open; drop the result.
+    if (cogSources === null) {
+      return;
     }
 
     // Use the first source's projection for shared projection functions
