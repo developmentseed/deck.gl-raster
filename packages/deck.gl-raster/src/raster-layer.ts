@@ -330,6 +330,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       return null;
     }
 
+    const isGlobe = this.context?.viewport?.resolution !== undefined;
+
     const meshLayer = new MeshTextureLayer(
       this.getSubLayerProps({
         id: "raster",
@@ -340,6 +342,16 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         mesh,
         // We give a white color to turn off color mixing with the texture.
         getColor: [255, 255, 255],
+        // On a globe the mesh is coplanar with MapLibre's basemap sphere and
+        // they share the interleaved depth buffer, which z-fights. A depth bias
+        // (polygon offset) does not help with maplibre's globe depth encoding;
+        // the fix (see visgl/deck.gl#9592) is to skip depth comparison entirely
+        // and instead occlude the far side of the globe with back-face culling.
+        // For this grid's winding, `back` culls the far hemisphere; `front`
+        // culls the near (visible) side instead.
+        ...(isGlobe
+          ? { parameters: { depthCompare: "always", cullMode: "back" } }
+          : {}),
       }),
     );
 
