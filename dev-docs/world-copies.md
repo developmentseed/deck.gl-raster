@@ -30,13 +30,24 @@ traversal exactly mirrors the actual visibility.
 
 ## Why non-zero passes are additive
 
-The LOD test depends on `metersPerCSSPixel`, which derives from the OBB
-center via `worldToLngLat`. The OBB center moves with `worldOffset`, so a
-tile that satisfies the LOD criterion at offset 0 might fail at offset ±1.
-Without additive semantics, the offset ±1 pass would un-select tiles the
-primary pass selected. The traversal makes non-zero passes purely additive:
-they may flip `selected` / `childVisible` from `false` → `true` but never
-the reverse. Implemented by gating the per-frame resets on `worldOffset === 0`.
+Each pass tests the same tile against the frustum at a *different* world
+offset, so a tile's frustum visibility differs between passes — that's the
+whole point (a tile out of frustum at offset 0 may be in frustum at offset
+±1). The danger is the reverse direction: a tile *selected* at offset 0 must
+not be un-selected by a later pass that finds it out of frustum. Upstream's
+algorithm resets `selected` / `childVisible` to `false` at the top of
+`update` and on the recursion branch; if those resets ran on every pass, the
+offset ±1 pass would clear a tile the primary pass selected and then fail its
+own frustum test, dropping the tile. So non-zero passes skip the resets,
+making them purely additive: they may flip `selected` / `childVisible` from
+`false` → `true` but never the reverse. Implemented by gating the per-frame
+resets on `worldOffset === 0`.
+
+Note the LOD test itself is *offset-invariant*: `metersPerCSSPixel` derives
+from latitude only (`worldToLngLat` of the OBB center) and the world-offset
+translation is along common-space X only, so `devicePixelsPerSourcePixel` —
+and thus the LOD decision — is identical across passes. The additive gating
+is purely about preserving frustum-driven selection, not about LOD.
 
 ## Bounds check uses the offset-0 AABB
 

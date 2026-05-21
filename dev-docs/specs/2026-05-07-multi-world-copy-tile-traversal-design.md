@@ -70,15 +70,22 @@ Add `worldOffset: number` to `params` (default `0`).
   purely **additive** — they can flip `selected` from `false` → `true` but never
   the reverse.
 
-  Why: the LOD test
+  Why: a tile's *frustum* visibility differs per pass (each tests the volume at
+  a different offset). A tile selected at offset 0 must not be un-selected by a
+  later pass that finds it out of frustum. Upstream's algorithm resets `selected`
+  / `childVisible` at the top of `update` and on the recursion branch; running
+  those resets on a non-zero pass would clear the tile and then fail its own
+  frustum test, dropping it. Skipping the resets makes "selected at any offset"
+  the actual semantics.
+
+  Note the LOD test
   ```ts
   devicePixelsPerSourcePixel = (tileMetersPerPixel * pixelRatio) / metersPerCSSPixel
   ```
-  depends on `metersPerCSSPixel`, which derives from the OBB center via
-  `worldToLngLat`. The OBB center moves with `worldOffset`, so a tile that
-  satisfied the LOD criterion at offset 0 might fail at offset 1, and the
-  recursion branch in upstream's algorithm would then unselect it. Skipping the
-  resets makes "selected at any offset" the actual semantics.
+  is itself offset-invariant: `metersPerCSSPixel` derives from latitude only
+  (`worldToLngLat` of the OBB center) and the offset translation is along X only,
+  so the LOD decision is identical across passes. The gating is about frustum
+  selection, not LOD.
 
 Pass `worldOffset` through to `getBoundingVolume`.
 
