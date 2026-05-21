@@ -19,6 +19,35 @@ import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 
+/** Options for {@link GeoTIFF.fromUrl}. */
+export interface GeoTIFFFromUrlOptions {
+  /** Bytes per chunk for the header cache. Defaults to 64 KiB (matches
+   *  geotiff.js's BlockedSource). */
+  chunkSize?: number;
+  /** Total cache size in bytes. Defaults to 8 MiB (~128 blocks at the default
+   *  chunk size). */
+  cacheSize?: number;
+  /** An optional {@link AbortSignal} to cancel the header reads. */
+  signal?: AbortSignal;
+  /** When true, the returned GeoTIFF logs each tile/mask data fetch to the
+   *  console with offset/length and a `data`/`mask` label. Off by default. */
+  debug?: boolean;
+  /** Caps concurrent HTTP requests for both the header/metadata and tile-data
+   *  paths. Header reads go through the cached `SourceView`, so cache hits
+   *  short-circuit before the limiter and never consume a slot — only network
+   *  reads gate. Pass `null` to explicitly disable; omit (or pass `undefined`)
+   *  for the same effect — `GeoTIFF.fromUrl` does *not* default to a shared
+   *  limiter on its own. The deck.gl-geotiff layers default to a shared
+   *  {@link PerOriginSemaphore} via their `defaultProps`. */
+  concurrencyLimiter?: ConcurrencyLimiter | null;
+  /** Optional dynamic priority for every fetch through this GeoTIFF's sources.
+   *  Re-invoked by the limiter on each slot-open, so closures over dynamic
+   *  state (e.g. layer viewport center, tile bbox) re-sort the queue when that
+   *  state changes. Lower = serviced sooner. Only meaningful when
+   *  `concurrencyLimiter` is set. */
+  getPriority?: () => Priority;
+}
+
 /**
  * A high-level GeoTIFF abstraction built on
  * {@link https://github.com/blacha/cogeotiff | @cogeotiff/core}'s `Tiff` and
@@ -266,13 +295,7 @@ export class GeoTIFF {
    * bypass the cache and go straight to the raw HTTP source.
    *
    * @param url The URL of the GeoTIFF to open.
-   * @param options Optional parameters.
-   * @param options.chunkSize Bytes per chunk for the header cache. Defaults to 64 KiB (matches geotiff.js's BlockedSource).
-   * @param options.cacheSize Total cache size in bytes. Defaults to 8 MiB (~128 blocks at the default chunk size).
-   * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
-   * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console with offset/length and a `data`/`mask` label. Off by default.
-   * @param options.concurrencyLimiter Caps concurrent HTTP requests for the *tile data* path. Header / metadata reads (through the cached SourceView) are not gated. Pass `null` to explicitly disable; omit (or pass `undefined`) for the same effect — `GeoTIFF.fromUrl` does *not* default to a shared limiter on its own. The deck.gl-geotiff layers default to a shared {@link PerOriginSemaphore} via their `defaultProps`.
-   * @param options.getPriority Optional dynamic priority for every fetch through this GeoTIFF's sources. Re-invoked by the limiter on each slot-open, so closures over dynamic state (e.g. layer viewport center, tile bbox) re-sort the queue when that state changes. Lower = serviced sooner. Only meaningful when `concurrencyLimiter` is set.
+   * @param options Optional parameters; see {@link GeoTIFFFromUrlOptions}.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
@@ -284,14 +307,7 @@ export class GeoTIFF {
       debug,
       concurrencyLimiter,
       getPriority,
-    }: {
-      chunkSize?: number;
-      cacheSize?: number;
-      signal?: AbortSignal;
-      debug?: boolean;
-      concurrencyLimiter?: ConcurrencyLimiter | null;
-      getPriority?: () => Priority;
-    } = {},
+    }: GeoTIFFFromUrlOptions = {},
   ): Promise<GeoTIFF> {
     const source = new SourceHttp(url, {});
 

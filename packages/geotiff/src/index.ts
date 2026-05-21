@@ -16,6 +16,7 @@ export type {
   DecoderMetadata,
 } from "./decode.js";
 export { DECODER_REGISTRY } from "./decode.js";
+export type { GeoTIFFFromUrlOptions } from "./geotiff.js";
 export { GeoTIFF } from "./geotiff.js";
 export type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 export type { ConcurrencyLimiter, Priority } from "./limiter.js";
