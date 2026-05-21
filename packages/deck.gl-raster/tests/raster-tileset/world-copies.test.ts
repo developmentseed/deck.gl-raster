@@ -8,8 +8,8 @@ import {
   RasterTileNode,
 } from "../../src/raster-tileset/raster-tile-traversal.js";
 import type {
-  TilesetDescriptor,
-  TilesetLevel,
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
 } from "../../src/raster-tileset/tileset-interface.js";
 import type { Bounds, Corners } from "../../src/raster-tileset/types.js";
 
@@ -19,7 +19,7 @@ const TILE_SIZE = 512;
 // the small geometric range these tests exercise.
 const identity = (x: number, y: number): [number, number] => [x, y];
 
-function makeLevel(opts: { corners: Corners }): TilesetLevel {
+function makeLevel(opts: { corners: Corners }): RasterTilesetLevel {
   return {
     matrixWidth: 1,
     matrixHeight: 1,
@@ -39,7 +39,7 @@ function makeLevel(opts: { corners: Corners }): TilesetLevel {
   };
 }
 
-function makeDescriptor(corners: Corners): TilesetDescriptor {
+function makeDescriptor(corners: Corners): RasterTilesetDescriptor {
   return {
     levels: [makeLevel({ corners })],
     projectTo3857: identity,
@@ -218,7 +218,9 @@ function epsg3857ToWgs84(x: number, y: number): [number, number] {
   return [lng, lat];
 }
 
-function makeWgs84Descriptor(opts: { corners: Corners }): TilesetDescriptor {
+function makeWgs84Descriptor(opts: {
+  corners: Corners;
+}): RasterTilesetDescriptor {
   // Corners are stored in EPSG:3857 meters here (so projectedTileCorners
   // returns 3857). projectTo3857 is then identity, projectTo4326 converts.
   const corners = opts.corners;
