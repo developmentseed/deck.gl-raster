@@ -410,7 +410,6 @@ export class MultiCOGLayer extends RasterTileLayer<
       epsgResolver: this.props.epsgResolver!,
       signal,
     });
-    // Layer removed mid-open; drop the result.
     if (cogSources === null) {
       return;
     }
