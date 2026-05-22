@@ -69,8 +69,9 @@ export async function fetchGeoTIFF(
      *  `concurrencyLimiter` is set. */
     getPriority?: () => Priority;
     /** Forwarded to {@link GeoTIFF.fromUrl} to cancel the header reads when
-     *  the opening layer is removed or its source prop changes mid-flight.
-     *  Ignored when `input` is already a `GeoTIFF` or `ArrayBuffer`. */
+     *  the opening layer is removed (the COG layers abort this on
+     *  `finalizeState`). Ignored when `input` is already a `GeoTIFF` or
+     *  `ArrayBuffer`. */
     signal?: AbortSignal;
   } = {},
 ): Promise<GeoTIFF> {
