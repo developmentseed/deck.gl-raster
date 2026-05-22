@@ -40,10 +40,11 @@ const DEFAULT_MAX_ENTRIES = 65_536;
  * `(z, x, y, zRange)` for a given tileset descriptor, so it is safe to memoize
  * across `getTileIndices` calls (i.e. across animation frames).
  *
- * NOTE: this assumes a non-Globe traversal (`project === null`) — the only kind
- * `RasterTileNode.getBoundingVolume` currently supports. If Globe-view bounding
- * volumes are ever implemented, the cache key will need a viewport/resolution
- * component.
+ * The key is valid only within a single projection mode. A tile's bounding
+ * volume is computed in a different common space under a GlobeView than under
+ * Web Mercator, so the cache must be {@link BoundingVolumeCache.clear cleared}
+ * when the viewport's projection mode changes. `RasterTileset2D` owns the cache
+ * and does this in `getTileIndices` when it detects a globe↔mercator switch.
  */
 export class BoundingVolumeCache {
   private entries = new Map<string, BoundingVolumeCacheEntry>();
@@ -81,6 +82,15 @@ export class BoundingVolumeCache {
     const key = `${z}/${x}/${y}`;
     this.entries.delete(key);
     this.entries.set(key, entry);
+  }
+
+  /**
+   * Drop all cached entries. Called by the owner when the viewport's projection
+   * mode changes (globe↔mercator), since volumes computed under one projection
+   * are not valid under the other.
+   */
+  clear(): void {
+    this.entries.clear();
   }
 
   /**

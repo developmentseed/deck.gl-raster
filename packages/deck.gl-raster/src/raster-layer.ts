@@ -10,6 +10,7 @@ import { PolygonLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { splitFloat64Array } from "./fp64.js";
+import { buildUniformGridMesh } from "./globe-grid-mesh.js";
 import type { RasterModule } from "./gpu-modules/types.js";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer.js";
 
@@ -200,6 +201,31 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       reprojectionFns,
       maxError = DEFAULT_MAX_ERROR,
     } = this.props;
+
+    // TEMPORARY GLOBE VIEW HACK:
+    //
+    // GlobeView (lnglat) uses viewport.resolution, the same detection as
+    // RasterTileLayer. THROWAWAY: globe renders a uniform grid instead of the
+    // adaptive mesh, because Delatin's reprojection-error metric is blind to
+    // sphere curvature and facets at low zoom. See globe-grid-mesh.ts and
+    // dev-docs/specs/2026-05-21-globe-view-design.md.
+    const isGlobe = this.context?.viewport?.resolution !== undefined;
+    if (isGlobe) {
+      const { indices, positions64High, positions64Low, texCoords } =
+        buildUniformGridMesh(reprojectionFns, width + 1, height + 1);
+      this.setState({
+        reprojector: undefined,
+        mesh: {
+          indices: { value: indices, size: 1 },
+          attributes: {
+            POSITION: { value: positions64High, size: 3 },
+            TEXCOORD_0: { value: texCoords, size: 2 },
+          },
+        },
+        positions64Low,
+      });
+      return;
+    }
 
     // The mesh is lined up with the upper and left edges of the raster. So if
     // we give the raster the same width and height as the number of pixels in

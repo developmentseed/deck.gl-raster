@@ -18,7 +18,7 @@
  */
 
 import type { Viewport } from "@deck.gl/core";
-import { _GlobeViewport, assert } from "@deck.gl/core";
+import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import { transformBounds } from "@developmentseed/proj";
 import { Vector3 } from "@math.gl/core";
 import {
@@ -95,6 +95,19 @@ const REF_POINTS_9 = REF_POINTS_5.concat([
   [0.5, 0], // top edge
   [1, 0.5], // right edge
   [0.5, 1], // bottom edge
+]);
+
+// For the globe bounding volume: REF_POINTS_9 plus two more points on the
+// horizontal centerline (11 points total). The sphere surface bulges most
+// between samples along the widest span of a tile, so denser sampling there
+// keeps the oriented bounding box from under-enclosing the tile (which would
+// false-cull it). This matches upstream deck.gl's densest reference set, used
+// there only for the coarsest (whole-world) zoom. We use it for every globe
+// tile: a tile never spans more than the whole world, so 11 points always
+// suffice, and per-tile cost is paid once thanks to the bounding-volume cache.
+const REF_POINTS_11 = REF_POINTS_9.concat([
+  [0.25, 0.5],
+  [0.75, 0.5],
 ]);
 
 /** semi-major axis of the WGS84 ellipsoid
@@ -289,8 +302,10 @@ export class RasterTileNode {
     }
 
     // Get bounding volume for this tile (translated for frustum culling at
-    // non-zero worldOffset).
-    const { boundingVolume } = this.getBoundingVolume(
+    // non-zero worldOffset). `commonSpaceBounds` is the Web-Mercator-world AABB
+    // used for the LOD latitude (a worldOffset only shifts X, so latitude is
+    // unaffected).
+    const { boundingVolume, commonSpaceBounds } = this.getBoundingVolume(
       elevationBounds,
       project,
       boundingVolumeCache,
@@ -328,8 +343,8 @@ export class RasterTileNode {
     // Only select this tile if no child is visible (prevents overlapping tiles)
     // "When pitch is low, force selection at maxZ."
     if (!this.childVisible && this.z >= minZ) {
-      const metersPerCSSPixel = getMetersPerPixelAtBoundingVolume(
-        boundingVolume,
+      const metersPerCSSPixel = getMetersPerPixelAtCommonSpaceBounds(
+        commonSpaceBounds,
         viewport.zoom,
       );
 
@@ -482,12 +497,10 @@ export class RasterTileNode {
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
   ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
-    // Case 1: Globe view - need to construct an oriented bounding box from
-    // reprojected sample points, but also using the `project` param
+    // Case 1: Globe view — reproject sample points to WGS84 and project them
+    // onto the globe sphere with the viewport's `project` function.
     if (project) {
-      assert(false, "TODO: implement getBoundingVolume in Globe view");
-      // Reproject positions to wgs84 instead, then pass them into `project`
-      // return makeOrientedBoundingBoxFromPoints(refPointPositions);
+      return this._getGlobeBoundingVolume(project);
     }
 
     // (Future) Case 2: Web Mercator input image, can directly compute AABB in
@@ -562,6 +575,59 @@ export class RasterTileNode {
     return {
       boundingVolume: makeOrientedBoundingBoxFromPoints(refPointPositions),
       commonSpaceBounds,
+    };
+  }
+
+  /**
+   * Globe-view bounding volume: reproject the tile's reference points to WGS84,
+   * project them onto the globe sphere (`project` = `viewport.projectPosition`)
+   * to build the oriented bounding box used for frustum culling, and separately
+   * compute a Web-Mercator-world AABB for the `bounds` pre-filter in
+   * {@link update} (which compares against `wgs84Bounds` in mercator world).
+   *
+   * NOTE: elevation is not modeled on globe yet — reference points are sampled
+   * at the surface (z = 0). Flat rasters only. See
+   * `dev-docs/specs/2026-05-21-globe-view-design.md`.
+   */
+  private _getGlobeBoundingVolume(project: (xyz: number[]) => number[]): {
+    boundingVolume: OrientedBoundingBox;
+    commonSpaceBounds: Bounds;
+  } {
+    const tileCorners = this.level.projectedTileCorners(this.x, this.y);
+    const refPointsWgs84 = sampleReferencePointsInWGS84(
+      REF_POINTS_11,
+      tileCorners,
+      this.descriptor.projectTo4326,
+    );
+
+    const refPointPositions: [number, number, number][] = [];
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    for (const [lng, lat] of refPointsWgs84) {
+      const projected = project([lng, lat, 0]);
+      refPointPositions.push([projected[0]!, projected[1]!, projected[2]!]);
+
+      const [worldX, worldY] = lngLatToWorld([lng, lat]);
+      if (worldX < minX) {
+        minX = worldX;
+      }
+      if (worldY < minY) {
+        minY = worldY;
+      }
+      if (worldX > maxX) {
+        maxX = worldX;
+      }
+      if (worldY > maxY) {
+        maxY = worldY;
+      }
+    }
+
+    return {
+      boundingVolume: makeOrientedBoundingBoxFromPoints(refPointPositions),
+      commonSpaceBounds: [minX, minY, maxX, maxY],
     };
   }
 }
@@ -647,6 +713,36 @@ function sampleReferencePointsInEPSG3857(
     refPointPositions.push(clampedProjectTo3857(geoX, geoY));
   }
 
+  return refPointPositions;
+}
+
+/**
+ * Sample the selected reference points in WGS84 lng/lat.
+ *
+ * Like {@link sampleReferencePointsInEPSG3857}, reference points are `[relX,
+ * relY]` fractions in `[0, 1]` bilinearly interpolated across the tile's four
+ * CRS corners, then reprojected to WGS84. Used by the GlobeView bounding-volume
+ * path, which projects lng/lat onto the sphere rather than rescaling 3857
+ * meters into common space.
+ */
+function sampleReferencePointsInWGS84(
+  refPoints: [number, number][],
+  tileCorners: Corners,
+  projectTo4326: ProjectionFunction,
+): [number, number][] {
+  const { topLeft, topRight, bottomLeft, bottomRight } = tileCorners;
+  const refPointPositions: [number, number][] = [];
+  for (const [relX, relY] of refPoints) {
+    const [geoX, geoY] = bilerpPoint(
+      topLeft,
+      topRight,
+      bottomLeft,
+      bottomRight,
+      relX,
+      relY,
+    );
+    refPointPositions.push(projectTo4326(geoX, geoY));
+  }
   return refPointPositions;
 }
 
@@ -812,7 +908,7 @@ export function getTileIndices(
 
   // Only define `project` function for Globe viewports, same as upstream
   const project: ((xyz: number[]) => number[]) | null =
-    viewport instanceof _GlobeViewport && viewport.resolution
+    viewport instanceof GlobeViewport && viewport.resolution
       ? viewport.projectPosition
       : null;
 
@@ -954,11 +1050,19 @@ function getMetersPerPixel(latitude: number, zoom: number): number {
   );
 }
 
-function getMetersPerPixelAtBoundingVolume(
-  boundingVolume: OrientedBoundingBox,
+function getMetersPerPixelAtCommonSpaceBounds(
+  commonSpaceBounds: Bounds,
   zoom: number,
 ): number {
-  const [_lng, lat] = worldToLngLat(boundingVolume.center);
+  const [minX, minY, maxX, maxY] = commonSpaceBounds;
+  // `commonSpaceBounds` is in Web Mercator world space ([0, 512]) in BOTH the
+  // mercator and globe paths (the globe path builds it via `lngLatToWorld`), so
+  // its center maps back to a real latitude. The 3D oriented-bounding-box
+  // center, by contrast, is in globe common space on a globe and would
+  // `worldToLngLat` to a garbage latitude (~-89°, near the Mercator
+  // singularity), making meters-per-pixel far too small so the LOD always
+  // recursed to the finest level.
+  const [, lat] = worldToLngLat([(minX + maxX) / 2, (minY + maxY) / 2]);
   return getMetersPerPixel(lat, zoom);
 }
 

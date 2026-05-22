@@ -7,11 +7,20 @@
 //   1. Adds `in vec3 positions64Low;` — per-vertex low part of the
 //      fp64-split mesh position. Supplied by MeshTextureLayer via
 //      attributeManager.add (non-instanced).
-//   2. In the composeModelMatrix branch, passes
-//      `positions64Low + instancePositions64Low` (instead of just
-//      `instancePositions64Low`) to project_position_to_clipspace, so the
-//      shader's existing fp64 path recovers the mesh-vertex precision lost
-//      by the float32 attribute pipeline.
+//   2. Passes `positions64Low + instancePositions64Low` to
+//      project_position_to_clipspace, so the shader's fp64 path recovers the
+//      mesh-vertex precision lost by the float32 attribute pipeline.
+//   3. Collapses upstream's `composeModelMatrix` branch to a single
+//      direct-projection path. MeshTextureLayer always draws ONE
+//      non-instanced, identity-transform mesh anchored at the origin
+//      (instancePositions = [0,0,0], identity instanceModelMatrix, sizeScale =
+//      1), so the instanced / meters-offset (upstream's `else`) branch never
+//      applied. Projecting `pos` directly is correct for BOTH cartesian
+//      (common-space mesh, Web Mercator) and lnglat (degrees, GlobeView):
+//      project_position_to_clipspace handles each coordinate system. This is
+//      what makes GlobeView render correctly — upstream's `else` branch ran
+//      project_size(pos) on lng/lat degrees, which is meaningless. See
+//      dev-docs/specs/2026-05-21-globe-view-design.md.
 //
 // The fp64 correction is only valid when the per-instance transforms are
 // identity. MeshTextureLayer enforces that by fixing those props and omitting
@@ -58,25 +67,20 @@ void main(void) {
   mat3 instanceModelMatrix = mat3(instanceModelMatrixCol0, instanceModelMatrixCol1, instanceModelMatrixCol2);
   vec3 pos = (instanceModelMatrix * positions) * simpleMesh.sizeScale + instanceTranslation;
 
-  if (simpleMesh.composeModelMatrix) {
-    DECKGL_FILTER_SIZE(pos, geometry);
-    // using instancePositions as world coordinates
-    // when using globe mode, this branch does not re-orient the model to align with the surface of the earth
-    // call project_normal before setting position to avoid rotation
-    normals_commonspace = project_normal(instanceModelMatrix * normals);
-    geometry.worldPosition += pos;
+  DECKGL_FILTER_SIZE(pos, geometry);
+  // Call project_normal before project_position so the normal isn't affected by
+  // a position offset (unused for unlit raster, kept for parity with upstream).
+  normals_commonspace = project_normal(instanceModelMatrix * normals);
+  geometry.worldPosition += pos;
 
-    // NOTE: this is the one line that changed to support fp64 emulation
-    gl_Position = project_position_to_clipspace(pos + instancePositions, positions64Low + instancePositions64Low, vec3(0.0), position_commonspace);
-    geometry.position = position_commonspace;
-  }
-  else {
-    pos = project_size(pos);
-    DECKGL_FILTER_SIZE(pos, geometry);
-    gl_Position = project_position_to_clipspace(instancePositions, instancePositions64Low, pos, position_commonspace);
-    geometry.position = position_commonspace;
-    normals_commonspace = project_normal(instanceModelMatrix * normals);
-  }
+  // No composeModelMatrix branch: that flag only matters when placing an
+  // instanced model offset from an anchor. MeshTextureLayer always draws one
+  // mesh at instancePositions = [0,0,0] with identity transforms, so we project
+  // the mesh vertex directly (with its fp64 low part). This is correct for both
+  // cartesian (common-space, Web Mercator) and lnglat (degrees, GlobeView) —
+  // project_position_to_clipspace handles each coordinate system.
+  gl_Position = project_position_to_clipspace(pos + instancePositions, positions64Low + instancePositions64Low, vec3(0.0), position_commonspace);
+  geometry.position = position_commonspace;
 
   geometry.normal = normals_commonspace;
   DECKGL_FILTER_GL_POSITION(gl_Position, geometry);

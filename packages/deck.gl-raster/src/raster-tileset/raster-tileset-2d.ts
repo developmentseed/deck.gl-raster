@@ -7,6 +7,7 @@
  */
 
 import type { Viewport } from "@deck.gl/core";
+import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import type {
   GeoBoundingBox,
   _Tileset2DProps as Tileset2DProps,
@@ -144,6 +145,12 @@ export class RasterTileset2D extends Tileset2D {
   private boundingVolumeCache: BoundingVolumeCache;
   private projectPosition: ProjectionFunction;
   private unprojectPosition: ProjectionFunction;
+  /**
+   * Projection mode of the viewport on the previous `getTileIndices` call.
+   * `undefined` until the first call. Used to clear {@link boundingVolumeCache}
+   * on a globe↔mercator switch (volumes are not valid across projection modes).
+   */
+  private lastViewportIsGlobe?: boolean;
 
   constructor(
     opts: Tileset2DProps,
@@ -214,6 +221,22 @@ export class RasterTileset2D extends Tileset2D {
     modelMatrixInverse?: Matrix4;
   }): TileIndex[] {
     const { viewport, minZoom } = opts;
+
+    // A tile's bounding volume is computed in a different common space under a
+    // GlobeView than under Web Mercator, but the cache key is only (z, x, y).
+    // When the viewport's projection mode flips, drop the stale volumes. This
+    // mirrors the `project` gate in the tile traversal. (See
+    // BoundingVolumeCache.)
+    const isGlobe = Boolean(
+      viewport instanceof GlobeViewport && viewport.resolution,
+    );
+    if (
+      this.lastViewportIsGlobe !== undefined &&
+      this.lastViewportIsGlobe !== isGlobe
+    ) {
+      this.boundingVolumeCache.clear();
+    }
+    this.lastViewportIsGlobe = isGlobe;
 
     if (typeof minZoom === "number" && viewport.zoom < minZoom) {
       return [];
