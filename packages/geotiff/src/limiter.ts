@@ -10,6 +10,18 @@ import type { Source, SourceMetadata } from "@chunkd/source";
 export type Priority = number | readonly number[];
 
 /**
+ * Normalize priority value: `undefined` or `NaN` becomes 0, so it sorts as un-prioritized.
+ *
+ * Coercing `NaN` matters because `NaN < x` and `NaN > x` both resolve to false,
+ * so a `getPriority` that returns `NaN` (e.g. a distance from a degenerate
+ * viewport) would otherwise compare as a tie with everything and silently
+ * mis-sort, rather than falling back to FIFO.
+ */
+function normalizePriority(value: number | undefined): number {
+  return value === undefined || Number.isNaN(value) ? 0 : value;
+}
+
+/**
  * Compare two priorities. Returns negative if `a` should be serviced before
  * `b`, positive if `b` should go first, 0 on tie (queue then breaks the tie
  * by FIFO arrival order). Both shapes are normalised to arrays for compare.
@@ -19,8 +31,8 @@ function comparePriorities(a: Priority, b: Priority): number {
   const arrB = typeof b === "number" ? [b] : b;
   const len = Math.max(arrA.length, arrB.length);
   for (let i = 0; i < len; i++) {
-    const ai = arrA[i] ?? 0;
-    const bi = arrB[i] ?? 0;
+    const ai = normalizePriority(arrA[i]);
+    const bi = normalizePriority(arrB[i]);
     if (ai < bi) {
       return -1;
     }

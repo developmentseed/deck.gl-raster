@@ -354,7 +354,6 @@ export default function App() {
     async function wrappedFetchSTACItems() {
       try {
         const data = STAC_DATA as unknown as STACFeatureCollection;
-        (window as any).data = data;
         setStacItems(data.features);
       } catch (err) {
         console.error("Error fetching STAC items:", err);
@@ -437,8 +436,9 @@ export default function App() {
           signal,
         });
       },
-      // Smaller cache for MosaicLayer cache, since it caches full COGLayer
-      // instances
+      // Disable the MosaicLayer tile cache: each cached tile is a full
+      // COGLayer instance, and opened GeoTIFFs are already kept in the
+      // module-level `geotiffCache`, so there's nothing cheap to retain here.
       maxCacheSize: 0,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.

@@ -399,6 +399,10 @@ export class MultiCOGLayer extends RasterTileLayer<
     const { sources } = this.props;
     const entries = Object.entries(sources);
 
+    if (entries.length === 0) {
+      return;
+    }
+
     const signal = this.state.abortController?.signal;
 
     const cogSources = await openCogSources(entries, {
