@@ -178,14 +178,12 @@ export class COGLayer<
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
     /** Aborts the in-flight header read when the `geotiff` prop changes or the
-     *  layer is removed, freeing its limiter slot for fresh work. */
+     *  layer is removed
+     */
     abortController?: AbortController;
   };
 
   override initializeState(): void {
-    // One controller for the layer's lifetime; aborted in finalizeState so a
-    // header read still in flight when the layer is removed is cancelled and
-    // its limiter slot freed.
     this.setState({ abortController: new AbortController() });
   }
 
