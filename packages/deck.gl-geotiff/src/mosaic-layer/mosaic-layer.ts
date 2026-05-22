@@ -57,13 +57,11 @@ export type MosaicLayerProps<
 
     /**
      * Caps concurrent HTTP requests for this layer's source fetches.
-     * Defaults to a shared module-level `PerOriginSemaphore({ maxRequests:
-     * 6 })` (the same instance `COGLayer` / `MultiCOGLayer` use), so all
-     * layers targeting one origin share one HTTP/1.1 connection pool. Pass
-     * your own `ConcurrencyLimiter` to override; pass `null` to disable
-     * gating. The layer threads this into `getSource`'s opts so consumers
-     * can forward it to {@link GeoTIFF.fromUrl} (or any source-opening
-     * call) alongside the matching `getPriority`.
+     *
+     * Defaults to a maximum of 6 concurrent requests per origin, which aligns
+     * with browser limits of 6 HTTP/1.1 requests per origin. If your sources
+     * support HTTP/2 or HTTP/3, you may want to increase this limit or disable
+     * it entirely by passing `null`.
      */
     concurrencyLimiter?: ConcurrencyLimiter | null;
 
@@ -80,19 +78,11 @@ export type MosaicLayerProps<
          */
         concurrencyLimiter?: ConcurrencyLimiter | null;
         /**
-         * Dynamic priority for fetches related to this source. Re-invoked by
-         * the limiter on every slot-open, so the queue re-sorts on viewport
-         * pan. Computed from the source's `bbox` center and the layer's
-         * current viewport: closer to viewport center ⇒ lower number ⇒
-         * serviced sooner. Forward to {@link GeoTIFF.fromUrl}'s
-         * `getPriority` option alongside `concurrencyLimiter` to bias
-         * center-of-screen rendering ahead of edges.
+         * Callback that provides dynamic priority for fetches related to this
+         * source.
          *
-         * Only provided for geographic viewports (`WebMercatorViewport` /
-         * `_GlobeViewport`), where the source bbox and viewport center share
-         * a lon/lat space. Omitted (`undefined`) otherwise, so the limiter
-         * falls back to FIFO instead of comparing mismatched coordinate
-         * units.
+         * This is designed to re-sort the limiter's queue on viewport pan,
+         * preferring sources closer to the viewport center.
          */
         getPriority?: () => Priority;
       },
