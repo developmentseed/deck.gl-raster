@@ -59,28 +59,13 @@ export function addAlphaChannel(rgbImage: RasterArray): RasterArray {
 export async function fetchGeoTIFF(
   input: GeoTIFF | string | URL | ArrayBuffer,
   options: {
-    /** Forwarded to {@link GeoTIFF.fromUrl} when `input` is a URL or string.
-     *  Ignored when `input` is already a `GeoTIFF` instance or an
-     *  `ArrayBuffer` (there's no network to gate, and a pre-opened GeoTIFF
-     *  has already had its limiter wired at construction time). */
     concurrencyLimiter?: ConcurrencyLimiter | null;
-    /** Forwarded to {@link GeoTIFF.fromUrl} as the dynamic priority for every
-     *  fetch through this GeoTIFF's sources. Only meaningful when
-     *  `concurrencyLimiter` is set. */
     getPriority?: () => Priority;
-    /** Forwarded to {@link GeoTIFF.fromUrl} to cancel the header reads when
-     *  the opening layer is removed (the COG layers abort this on
-     *  `finalizeState`). Ignored when `input` is already a `GeoTIFF` or
-     *  `ArrayBuffer`. */
     signal?: AbortSignal;
   } = {},
 ): Promise<GeoTIFF> {
   if (typeof input === "string" || input instanceof URL) {
-    return await GeoTIFF.fromUrl(input, {
-      concurrencyLimiter: options.concurrencyLimiter,
-      getPriority: options.getPriority,
-      signal: options.signal,
-    });
+    return await GeoTIFF.fromUrl(input, options);
   }
 
   if (input instanceof ArrayBuffer) {
