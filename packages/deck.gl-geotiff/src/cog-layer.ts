@@ -239,6 +239,10 @@ export class COGLayer<
         ? await this.props.epsgResolver!(crs)
         : parseWkt(crs);
 
+    if (signal?.aborted) {
+      return;
+    }
+
     // @ts-expect-error - proj4 typings are incomplete and don't support
     // wkt-parser input
     const converter4326 = proj4(sourceProjection, "EPSG:4326");
@@ -289,12 +293,6 @@ export class COGLayer<
     if (!this.props.getTileData || !this.props.renderTile) {
       ({ getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
         inferRenderPipeline(geotiff, this.context.device));
-    }
-
-    // Layer was removed while we resolved the projection; don't setState on a
-    // finalized layer.
-    if (signal?.aborted) {
-      return;
     }
 
     this.setState({
