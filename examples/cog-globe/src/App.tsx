@@ -104,6 +104,14 @@ export default function App() {
         { padding: 40, duration: 1000 },
       );
     },
+    // On a globe the raster mesh is coplanar with MapLibre's basemap sphere and
+    // they share the interleaved depth buffer, which z-fights. A depth bias does
+    // not help with maplibre's globe depth encoding; instead skip the depth
+    // comparison and occlude the far hemisphere with back-face culling. The cull
+    // mode depends on the compositing setup — `back` for this MapLibre
+    // interleaved globe (a standalone deck.gl _GlobeView may need `front`),
+    // which is why the app sets it, not the library. See visgl/deck.gl#9592.
+    parameters: { depthCompare: "always", cullMode: "back" },
     // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
     // doesn't know about it.
     beforeId: "boundary_country_outline",

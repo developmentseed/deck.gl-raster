@@ -5,7 +5,7 @@ Renders a Cloud-Optimized GeoTIFF on a 3D globe using MapLibre's
 
 ```bash
 pnpm install
-pnpm --filter @developmentseed/deck.gl-raster build
-pnpm --filter @developmentseed/deck.gl-geotiff build
-pnpm --filter deck.gl-cog-globe-example dev
+pnpm build
+cd examples/cog-globe
+pnpm dev
 ```
