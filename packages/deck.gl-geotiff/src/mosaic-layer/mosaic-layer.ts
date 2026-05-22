@@ -177,6 +177,27 @@ function createGetPriorityCallback(
 }
 
 /**
+ * Drop keys whose value is `undefined`.
+ *
+ * MosaicLayer forwards a subset of `TileLayerProps` to its inner `TileLayer`.
+ * deck.gl's `createProps` copies an explicit `undefined` over the prototype, so
+ * forwarding an *unset* prop as `undefined` would shadow TileLayer's own
+ * default rather than fall back to it — e.g. `maxRequests: 6` becomes
+ * `undefined`, which silently disables request throttling and
+ * `_pruneRequests` (the only thing that aborts panned-out tiles). Forwarding
+ * only the defined props lets TileLayer's defaults apply.
+ */
+function omitUndefined<T extends object>(obj: T): Partial<T> {
+  const result: Partial<T> = {};
+  for (const key in obj) {
+    if (obj[key] !== undefined) {
+      result[key] = obj[key];
+    }
+  }
+  return result;
+}
+
+/**
  * A deck.gl layer for rendering a mosaic of raster sources.
  *
  * The `renderSource` prop is called whenever a source is present in the current
@@ -260,19 +281,17 @@ export class MosaicLayer<
     }>({
       id: `mosaic-layer-${id}`,
       TilesetClass: MosaicTileset2DFactory,
-      minZoom,
-      maxZoom,
-      extent,
-      ...(maxCacheByteSize !== undefined && { maxCacheByteSize }),
-      maxCacheSize,
-      // Only forward maxRequests when set: deck.gl's createProps copies
-      // `undefined` over the prototype, so passing `maxRequests: undefined`
-      // would shadow TileLayer's default of 6 with `undefined`, leaving
-      // Tileset2D with no request throttling AND no `_pruneRequests` (which
-      // gates on `maxRequests > 0` and is the only thing that aborts
-      // panned-out tiles — i.e. the limiter would never receive a
-      // cancellation). Omitting the key lets TileLayer's own default apply.
-      ...(maxRequests !== undefined && { maxRequests }),
+      // Forward only the TileLayerProps the caller actually set — an
+      // `undefined` here would clobber TileLayer's own default (see
+      // omitUndefined).
+      ...omitUndefined({
+        minZoom,
+        maxZoom,
+        extent,
+        maxCacheByteSize,
+        maxCacheSize,
+        maxRequests,
+      }),
       getTileData: async (data) => {
         // We hard-cast this because TilesetClass is not generic.
         // MosaicTileset2D returns MosaicT in `index`, but TileLayer's typing
