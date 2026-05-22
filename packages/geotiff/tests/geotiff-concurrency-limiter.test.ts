@@ -12,6 +12,7 @@ import { SourceHttp } from "@chunkd/source-http";
 import { afterEach, describe, expect, it } from "vitest";
 import { GeoTIFF } from "../src/geotiff.js";
 import type { ConcurrencyLimiter } from "../src/limiter.js";
+import { PerOriginSemaphore } from "../src/limiter.js";
 import { fixturePath } from "./helpers.js";
 
 const FIXTURE = readFileSync(
@@ -122,5 +123,63 @@ describe("GeoTIFF.fromUrl({ concurrencyLimiter })", () => {
     expect(acquired).toEqual([]);
     // Reference `limiter` so it isn't flagged as unused.
     expect(limiter.acquire).toBeDefined();
+  });
+
+  it("drops a queued header read when its signal aborts, without fetching it", async () => {
+    // One slot per origin, so the second open must queue behind the first.
+    const limiter = new PerOriginSemaphore({ maxRequests: 1 });
+
+    const fetched: string[] = [];
+    let firstHolds!: () => void;
+    const firstHolding = new Promise<void>((resolve) => {
+      firstHolds = resolve;
+    });
+    let releaseFirst!: () => void;
+    const firstReleased = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    SourceHttp.fetch = (async (
+      url: string | URL,
+      init?: { method?: string; headers?: Record<string, string> },
+    ) => {
+      const href = String(url);
+      fetched.push(href);
+      if (href.includes("first.tif")) {
+        // The first open holds the only slot until we release it, so the
+        // second open's first read must queue in the limiter.
+        firstHolds();
+        await firstReleased;
+      }
+      const range = init?.headers?.range ?? "";
+      const match = /^bytes=(\d+)-(\d+)?$/.exec(range);
+      const start = match ? Number(match[1]) : 0;
+      const end =
+        match?.[2] != null
+          ? Math.min(Number(match[2]), FIXTURE.byteLength - 1)
+          : FIXTURE.byteLength - 1;
+      return makeResponse(FIXTURE.subarray(start, end + 1));
+    }) as typeof SourceHttp.fetch;
+
+    // First open acquires the only slot and parks in its first read.
+    const first = GeoTIFF.fromUrl("https://ex.test/first.tif", {
+      concurrencyLimiter: limiter,
+    });
+    await firstHolding;
+
+    // Second open queues behind the first; abort it while it waits.
+    const ac = new AbortController();
+    const second = GeoTIFF.fromUrl("https://ex.test/second.tif", {
+      concurrencyLimiter: limiter,
+      signal: ac.signal,
+    });
+    ac.abort(new Error("pan-away"));
+
+    await expect(second).rejects.toThrow();
+    // The queued read was dropped before any network fetch for second.tif.
+    expect(fetched.some((u) => u.includes("second.tif"))).toBe(false);
+
+    releaseFirst();
+    await first;
   });
 });
