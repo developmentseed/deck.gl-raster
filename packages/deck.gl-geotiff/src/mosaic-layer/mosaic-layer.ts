@@ -220,12 +220,13 @@ export class MosaicLayer<
   ): TileLayer {
     const {
       id,
-      minZoom,
-      maxZoom,
+      concurrencyLimiter,
       extent,
       maxCacheByteSize,
       maxCacheSize,
       maxRequests,
+      maxZoom,
+      minZoom,
       onSourceLoad,
       onSourceError,
       onSourceUnload,
@@ -268,14 +269,11 @@ export class MosaicLayer<
           index.bbox,
           () => this.context.viewport,
         );
-        // `concurrencyLimiter` is filled from `defaultProps`, so the prop is
-        // already resolved (the shared default, a user override, or an
-        // explicit `null` to disable) — forward it straight through.
         const userData =
           this.props.getSource &&
           (await this.props.getSource(index, {
             signal,
-            concurrencyLimiter: this.props.concurrencyLimiter,
+            concurrencyLimiter,
             getPriority,
           }));
 
