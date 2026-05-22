@@ -1,4 +1,4 @@
-import type { UpdateParameters } from "@deck.gl/core";
+import type { LayerContext, UpdateParameters } from "@deck.gl/core";
 import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
@@ -7,7 +7,12 @@ import type {
   RenderTileResult,
 } from "@developmentseed/deck.gl-raster";
 import { RasterTileLayer } from "@developmentseed/deck.gl-raster";
-import type { DecoderPool, GeoTIFF, Overview } from "@developmentseed/geotiff";
+import type {
+  ConcurrencyLimiter,
+  DecoderPool,
+  GeoTIFF,
+  Overview,
+} from "@developmentseed/geotiff";
 import { defaultDecoderPool } from "@developmentseed/geotiff";
 import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
 import {
@@ -18,6 +23,7 @@ import {
 } from "@developmentseed/proj";
 import type { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
+import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
@@ -133,6 +139,19 @@ export type COGLayerProps<DataT extends MinimalTileData = DefaultDataT> = Omit<
      * automatically aborted.
      */
     signal?: AbortSignal;
+
+    /**
+     * Caps concurrent HTTP requests for this layer's source fetches.
+     *
+     * Defaults to a maximum of 6 concurrent requests per origin, which aligns
+     * with browser limits of 6 HTTP/1.1 requests per origin. If your sources
+     * support HTTP/2 or HTTP/3, you may want to increase this limit or disable
+     * it entirely by passing `null`.
+     *
+     * Ignored when `geotiff` is a pre-opened `GeoTIFF` instance — wire the
+     * limiter via {@link GeoTIFF.fromUrl} at construction time instead.
+     */
+    concurrencyLimiter?: ConcurrencyLimiter | null;
   };
 
 /**
@@ -150,6 +169,7 @@ export class COGLayer<
   static override defaultProps = {
     ...RasterTileLayer.defaultProps,
     epsgResolver,
+    concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
   } as typeof RasterTileLayer.defaultProps;
 
   declare state: {
@@ -157,10 +177,19 @@ export class COGLayer<
     tilesetDescriptor?: RasterTilesetDescriptor;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
+    /** Aborts the in-flight header read when the `geotiff` prop changes or the
+     *  layer is removed
+     */
+    abortController?: AbortController;
   };
 
   override initializeState(): void {
-    this.setState({});
+    this.setState({ abortController: new AbortController() });
+  }
+
+  override finalizeState(context: LayerContext): void {
+    this.state.abortController?.abort();
+    super.finalizeState(context);
   }
 
   override updateState(params: UpdateParameters<this>) {
@@ -189,12 +218,30 @@ export class COGLayer<
   }
 
   async _parseGeoTIFF(): Promise<void> {
-    const geotiff = await fetchGeoTIFF(this.props.geotiff);
+    const signal = this.state.abortController?.signal;
+
+    let geotiff: GeoTIFF;
+    try {
+      geotiff = await fetchGeoTIFF(this.props.geotiff, {
+        concurrencyLimiter: this.props.concurrencyLimiter,
+        signal,
+      });
+    } catch (err) {
+      // Layer removed mid-open (finalizeState aborted the signal); drop it.
+      if (signal?.aborted) {
+        return;
+      }
+      throw err;
+    }
     const crs = geotiff.crs;
     const sourceProjection =
       typeof crs === "number"
         ? await this.props.epsgResolver!(crs)
         : parseWkt(crs);
+
+    if (signal?.aborted) {
+      return;
+    }
 
     // @ts-expect-error - proj4 typings are incomplete and don't support
     // wkt-parser input

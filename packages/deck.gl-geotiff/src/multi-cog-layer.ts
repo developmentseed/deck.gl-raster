@@ -1,6 +1,7 @@
 import type {
   CompositeLayerProps,
   Layer,
+  LayerContext,
   UpdateParameters,
 } from "@deck.gl/core";
 import type {
@@ -32,13 +33,14 @@ import {
   CompositeBands,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type {
+  ConcurrencyLimiter,
   DecoderPool,
   GeoTIFF,
   Overview,
   RasterArray,
 } from "@developmentseed/geotiff";
 import { assembleTiles, defaultDecoderPool } from "@developmentseed/geotiff";
-import type { EpsgResolver } from "@developmentseed/proj";
+import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
 import {
   epsgResolver as defaultEpsgResolver,
   makeClampedForwardTo3857,
@@ -47,6 +49,7 @@ import {
 } from "@developmentseed/proj";
 import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import proj4 from "proj4";
+import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 
@@ -257,13 +260,67 @@ export type MultiCOGLayerProps = CompositeLayerProps &
      * @default 1
      */
     debugLevel?: 1 | 2 | 3;
+
+    /**
+     * Caps concurrent HTTP requests for this layer's source fetches.
+     *
+     * Defaults to a maximum of 6 concurrent requests per origin, which aligns
+     * with browser limits of 6 HTTP/1.1 requests per origin. If your sources
+     * support HTTP/2 or HTTP/3, you may want to increase this limit or disable
+     * it entirely by passing `null`.
+     */
+    concurrencyLimiter?: ConcurrencyLimiter | null;
   };
 
 const defaultProps = {
   ...RasterTileLayer.defaultProps,
   epsgResolver: { type: "accessor" as const, value: defaultEpsgResolver },
   debugLevel: { type: "number" as const, value: 1 },
+  concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
 };
+
+/** A source's opened GeoTIFF paired with its resolved projection. */
+type OpenedCogSource = {
+  name: string;
+  geotiff: GeoTIFF;
+  sourceProjection: ProjectionDefinition;
+};
+
+/**
+ * Open every configured source's GeoTIFF in parallel and resolve each one's
+ * projection. Returns `null` when `signal` aborts mid-open (the layer was
+ * removed), so the caller can bail without applying stale state.
+ */
+async function openCogSources(
+  entries: [string, MultiCOGSourceConfig][],
+  options: {
+    concurrencyLimiter?: ConcurrencyLimiter | null;
+    epsgResolver: EpsgResolver;
+    signal?: AbortSignal;
+  },
+): Promise<OpenedCogSource[] | null> {
+  const { concurrencyLimiter, epsgResolver, signal } = options;
+  try {
+    return await Promise.all(
+      entries.map(async ([name, config]) => {
+        const geotiff = await fetchGeoTIFF(config.url, {
+          concurrencyLimiter,
+          signal,
+        });
+        const crs = geotiff.crs;
+        const sourceProjection =
+          typeof crs === "number" ? await epsgResolver(crs) : parseWkt(crs);
+        return { name, geotiff, sourceProjection };
+      }),
+    );
+  } catch (err) {
+    // Layer removed mid-open (finalizeState aborted the signal); bail.
+    if (signal?.aborted) {
+      return null;
+    }
+    throw err;
+  }
+}
 
 /**
  * A deck.gl {@link CompositeLayer} that opens multiple Cloud-Optimized GeoTIFFs
@@ -292,13 +349,24 @@ export class MultiCOGLayer extends RasterTileLayer<
   declare state: {
     sources: Map<string, SourceState> | null;
     multiDescriptor: MultiRasterTilesetDescriptor | null;
+    /** Aborts the in-flight header reads when the layer is removed, freeing
+     *  their limiter slots for fresh work. */
+    abortController?: AbortController;
   };
 
   override initializeState(): void {
     this.setState({
       sources: null,
       multiDescriptor: null,
+      // One controller for the layer's lifetime; aborted in finalizeState so
+      // header reads still in flight when the layer is removed are cancelled.
+      abortController: new AbortController(),
     });
+  }
+
+  override finalizeState(context: LayerContext): void {
+    this.state.abortController?.abort();
+    super.finalizeState(context);
   }
 
   override updateState({
@@ -331,18 +399,20 @@ export class MultiCOGLayer extends RasterTileLayer<
     const { sources } = this.props;
     const entries = Object.entries(sources);
 
-    // Open all COGs in parallel
-    const cogSources = await Promise.all(
-      entries.map(async ([name, config]) => {
-        const geotiff = await fetchGeoTIFF(config.url);
-        const crs = geotiff.crs;
-        const sourceProjection =
-          typeof crs === "number"
-            ? await this.props.epsgResolver!(crs)
-            : parseWkt(crs);
-        return { name, geotiff, sourceProjection };
-      }),
-    );
+    if (entries.length === 0) {
+      return;
+    }
+
+    const signal = this.state.abortController?.signal;
+
+    const cogSources = await openCogSources(entries, {
+      concurrencyLimiter: this.props.concurrencyLimiter,
+      epsgResolver: this.props.epsgResolver!,
+      signal,
+    });
+    if (cogSources === null) {
+      return;
+    }
 
     // Use the first source's projection for shared projection functions
     // (all sources must share the same CRS)
@@ -395,6 +465,12 @@ export class MultiCOGLayer extends RasterTileLayer<
     }
 
     const multiDescriptor = createMultiRasterTilesetDescriptor(tilesetMap);
+
+    // Layer was removed while we resolved projections; don't setState on a
+    // finalized layer.
+    if (signal?.aborted) {
+      return;
+    }
 
     this.setState({
       sources: sourceMap,

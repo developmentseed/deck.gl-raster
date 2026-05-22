@@ -3,6 +3,7 @@ export type {
   GetTileDataOptions,
 } from "./cog-layer.js";
 export { COGLayer } from "./cog-layer.js";
+export { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 export { addAlphaChannel } from "./geotiff/geotiff.js";
 export * as texture from "./geotiff/texture.js";
 export type { MosaicLayerProps } from "./mosaic-layer/mosaic-layer.js";

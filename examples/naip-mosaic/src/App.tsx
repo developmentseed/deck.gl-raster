@@ -11,7 +11,7 @@ import {
   LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
-import type { Overview } from "@developmentseed/geotiff";
+import type { GeoTIFFFromUrlOptions, Overview } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
@@ -85,10 +85,13 @@ type TextureDataT = {
  */
 const geotiffCache = new Map<string, Promise<GeoTIFF>>();
 
-function getCachedGeoTIFF(url: string, signal?: AbortSignal): Promise<GeoTIFF> {
+function getCachedGeoTIFF(
+  url: string,
+  opts: GeoTIFFFromUrlOptions,
+): Promise<GeoTIFF> {
   let promise = geotiffCache.get(url);
   if (!promise) {
-    promise = GeoTIFF.fromUrl(url, { signal }).catch((err) => {
+    promise = GeoTIFF.fromUrl(url, opts).catch((err) => {
       geotiffCache.delete(url);
       throw err;
     });
@@ -351,7 +354,6 @@ export default function App() {
     async function wrappedFetchSTACItems() {
       try {
         const data = STAC_DATA as unknown as STACFeatureCollection;
-        (window as any).data = data;
         setStacItems(data.features);
       } catch (err) {
         console.error("Error fetching STAC items:", err);
@@ -410,8 +412,8 @@ export default function App() {
       // the MosaicLayer's TileLayer cache so we can keep cheap header metadata
       // around indefinitely without pinning every parent tile (and its inner
       // COGLayer's in-flight tile requests) in memory.
-      getSource: async (source, { signal }) =>
-        getCachedGeoTIFF(source.assets.image.href, signal),
+      getSource: async (source, opts) =>
+        getCachedGeoTIFF(source.assets.image.href, opts),
       renderSource: (source, { data, signal }) => {
         const url = source.assets.image.href;
         return new COGLayer<TextureDataT>({
@@ -434,8 +436,9 @@ export default function App() {
           signal,
         });
       },
-      // Smaller cache for MosaicLayer cache, since it caches full COGLayer
-      // instances
+      // Disable the MosaicLayer tile cache: each cached tile is a full
+      // COGLayer instance, and opened GeoTIFFs are already kept in the
+      // module-level `geotiffCache`, so there's nothing cheap to retain here.
       maxCacheSize: 0,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.
