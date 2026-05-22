@@ -265,7 +265,14 @@ export class MosaicLayer<
       extent,
       ...(maxCacheByteSize !== undefined && { maxCacheByteSize }),
       maxCacheSize,
-      maxRequests,
+      // Only forward maxRequests when set: deck.gl's createProps copies
+      // `undefined` over the prototype, so passing `maxRequests: undefined`
+      // would shadow TileLayer's default of 6 with `undefined`, leaving
+      // Tileset2D with no request throttling AND no `_pruneRequests` (which
+      // gates on `maxRequests > 0` and is the only thing that aborts
+      // panned-out tiles — i.e. the limiter would never receive a
+      // cancellation). Omitting the key lets TileLayer's own default apply.
+      ...(maxRequests !== undefined && { maxRequests }),
       getTileData: async (data) => {
         // We hard-cast this because TilesetClass is not generic.
         // MosaicTileset2D returns MosaicT in `index`, but TileLayer's typing
