@@ -1,8 +1,8 @@
-import type { SourceCallback, SourceRequest } from "@chunkd/source";
+import type { Source } from "@chunkd/source";
 import { describe, expect, it } from "vitest";
 import type { ConcurrencyLimiter, Priority } from "../src/limiter.js";
 import {
-  LimiterMiddleware,
+  LimitedSource,
   PerOriginSemaphore,
   Semaphore,
 } from "../src/limiter.js";
@@ -322,15 +322,23 @@ describe("PerOriginSemaphore", () => {
   });
 });
 
-describe("LimiterMiddleware", () => {
+describe("LimitedSource", () => {
   const URL_A = new URL("https://a.example.com/cog.tif");
-  const REQ: SourceRequest = {
-    source: {} as never,
-    offset: 0,
-    length: 4,
-  };
 
-  it("only invokes `next` after acquiring a slot, and releases after", async () => {
+  /** A minimal recording {@link Source} for wrapping. */
+  function fakeSource(
+    fetchImpl: Source["fetch"] = async () => new ArrayBuffer(0),
+  ): Source {
+    return {
+      type: "test",
+      url: URL_A,
+      metadata: { size: 1024 },
+      head: async () => ({ size: 1024 }),
+      fetch: fetchImpl,
+    };
+  }
+
+  it("acquires a slot before fetching and releases after", async () => {
     const order: string[] = [];
     const limiter: ConcurrencyLimiter = {
       acquire: async () => {
@@ -338,105 +346,104 @@ describe("LimiterMiddleware", () => {
         return () => order.push("release");
       },
     };
-    const mw = new LimiterMiddleware({ url: URL_A, limiter });
-    const next: SourceCallback = async () => {
-      order.push("next");
-      return new ArrayBuffer(0);
-    };
-    await mw.fetch(REQ, next);
-    expect(order).toEqual(["acquire", "next", "release"]);
+    const limited = new LimitedSource(
+      fakeSource(async () => {
+        order.push("fetch");
+        return new ArrayBuffer(0);
+      }),
+      { limiter },
+    );
+    await limited.fetch(0, 4);
+    expect(order).toEqual(["acquire", "fetch", "release"]);
   });
 
-  it("forwards req to `next` unchanged", async () => {
-    const calls: SourceRequest[] = [];
-    const limiter: ConcurrencyLimiter = {
-      acquire: async () => () => {},
-    };
-    const mw = new LimiterMiddleware({ url: URL_A, limiter });
+  it("forwards offset/length/options to the wrapped source's fetch", async () => {
+    const calls: Array<[number, number | undefined, unknown]> = [];
+    const limiter: ConcurrencyLimiter = { acquire: async () => () => {} };
     const signal = new AbortController().signal;
-    const req: SourceRequest = {
-      source: {} as never,
-      offset: 100,
-      length: 200,
-      signal,
-    };
-    const next: SourceCallback = async (r) => {
-      calls.push(r);
-      return new ArrayBuffer(0);
-    };
-    await mw.fetch(req, next);
-    expect(calls).toEqual([req]);
+    const limited = new LimitedSource(
+      fakeSource(async (offset, length, options) => {
+        calls.push([offset, length, options]);
+        return new ArrayBuffer(0);
+      }),
+      { limiter },
+    );
+    await limited.fetch(100, 200, { signal });
+    expect(calls).toEqual([[100, 200, { signal }]]);
   });
 
-  it("releases the slot when `next` rejects (and propagates the error)", async () => {
+  it("releases the slot when the wrapped fetch rejects (and propagates)", async () => {
     const sem = new Semaphore({ maxRequests: 1 });
     const limiter: ConcurrencyLimiter = {
       acquire: (_url, signal) => sem.acquire(signal),
     };
-    const mw = new LimiterMiddleware({ url: URL_A, limiter });
-    await expect(
-      mw.fetch(REQ, async () => {
+    const limited = new LimitedSource(
+      fakeSource(async () => {
         throw new Error("network down");
       }),
-    ).rejects.toThrow("network down");
-    // Slot was released — a second fetch must not hang.
-    await mw.fetch(REQ, async () => new ArrayBuffer(0));
+      { limiter },
+    );
+    await expect(limited.fetch(0, 4)).rejects.toThrow("network down");
+    // Slot was released — a second fetch (with a source that resolves) must
+    // not hang.
+    const ok = new LimitedSource(fakeSource(), { limiter });
+    await ok.fetch(0, 4);
   });
 
-  it("forwards req.signal to limiter.acquire so a queued abort drops the call", async () => {
+  it("forwards the signal to limiter.acquire so a queued abort drops the read before fetching", async () => {
     const sem = new Semaphore({ maxRequests: 1 });
     const limiter: ConcurrencyLimiter = {
       acquire: (_url, signal) => sem.acquire(signal),
     };
     // Saturate the semaphore so the next acquire queues.
     const hold = await sem.acquire();
-    let nextCalled = false;
-    const mw = new LimiterMiddleware({ url: URL_A, limiter });
+    let fetched = false;
+    const limited = new LimitedSource(
+      fakeSource(async () => {
+        fetched = true;
+        return new ArrayBuffer(0);
+      }),
+      { limiter },
+    );
     const ac = new AbortController();
-    const req: SourceRequest = {
-      source: {} as never,
-      offset: 0,
-      length: 8,
-      signal: ac.signal,
-    };
-    const pending = mw.fetch(req, async () => {
-      nextCalled = true;
-      return new ArrayBuffer(0);
-    });
+    const pending = limited.fetch(0, 8, { signal: ac.signal });
     ac.abort(new Error("pan-away"));
     await expect(pending).rejects.toThrow("pan-away");
-    expect(nextCalled).toBe(false);
+    expect(fetched).toBe(false);
     hold();
   });
 
-  it("has the expected SourceMiddleware shape (name + fetch)", () => {
-    const mw = new LimiterMiddleware({
-      url: URL_A,
-      limiter: { acquire: async () => () => {} },
-    });
-    expect(mw.name).toBe("limiter");
-    expect(typeof mw.fetch).toBe("function");
-  });
-
-  it("threads getPriority from constructor through to limiter.acquire", async () => {
-    const calls: Array<{
-      url: URL;
-      signal?: AbortSignal;
-      priority: Priority | undefined;
-    }> = [];
+  it("delegates type/url/metadata/head and routes acquire on the source's url", async () => {
+    const acquired: URL[] = [];
     const limiter: ConcurrencyLimiter = {
-      acquire: async (url, signal, getPriority) => {
-        calls.push({ url, signal, priority: getPriority?.() });
+      acquire: async (url) => {
+        acquired.push(url);
         return () => {};
       },
     };
-    const mw = new LimiterMiddleware({
-      url: URL_A,
+    const source = fakeSource();
+    const limited = new LimitedSource(source, { limiter });
+    expect(limited.type).toBe(source.type);
+    expect(limited.url).toBe(source.url);
+    expect(limited.metadata).toBe(source.metadata);
+    expect(await limited.head()).toEqual({ size: 1024 });
+    await limited.fetch(0, 4);
+    expect(acquired).toEqual([source.url]);
+  });
+
+  it("threads getPriority through to limiter.acquire", async () => {
+    const priorities: Array<Priority | undefined> = [];
+    const limiter: ConcurrencyLimiter = {
+      acquire: async (_url, _signal, getPriority) => {
+        priorities.push(getPriority?.());
+        return () => {};
+      },
+    };
+    const limited = new LimitedSource(fakeSource(), {
       limiter,
       getPriority: () => [2, 7],
     });
-    await mw.fetch(REQ, async () => new ArrayBuffer(0));
-    expect(calls).toHaveLength(1);
-    expect(calls[0]!.priority).toEqual([2, 7]);
+    await limited.fetch(0, 4);
+    expect(priorities).toEqual([[2, 7]]);
   });
 });

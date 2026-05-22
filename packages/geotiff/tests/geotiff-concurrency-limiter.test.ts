@@ -1,7 +1,8 @@
 /**
- * Verifies that GeoTIFF.fromUrl wraps the data source's .fetch with a
- * ConcurrencyLimiter when one is supplied. The header source (the cached
- * SourceView) is not wrapped — the limiter caps tile/data reads only.
+ * Verifies that GeoTIFF.fromUrl gates network reads through a
+ * ConcurrencyLimiter when one is supplied. Both the header reads (cache
+ * misses through the SourceView) and the tile-data reads are gated; cache
+ * hits short-circuit in SourceCache and never reach the limiter.
  *
  * The SourceHttp stubbing pattern mirrors fromurl.test.ts.
  */
