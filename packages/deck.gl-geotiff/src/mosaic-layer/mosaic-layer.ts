@@ -71,8 +71,7 @@ export type MosaicLayerProps<
       opts: {
         signal?: AbortSignal;
         /**
-         * The layer's current `concurrencyLimiter` prop (default
-         * {@link DEFAULT_CONCURRENCY_LIMITER}). Forward to
+         * The layer's current `concurrencyLimiter` prop. Forward to
          * {@link GeoTIFF.fromUrl}'s `concurrencyLimiter` option so this
          * source's fetches join the shared per-origin queue.
          */

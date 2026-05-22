@@ -262,12 +262,12 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     debugLevel?: 1 | 2 | 3;
 
     /**
-     * Caps concurrent HTTP requests for this layer's tile-data fetches.
-     * Defaults to a shared module-level `PerOriginSemaphore({ maxRequests:
-     * 6 })` (the *same* instance COGLayer uses by default), so a
-     * COGLayer and a MultiCOGLayer hitting the same origin share one
-     * HTTP/1.1 connection pool. Pass your own `ConcurrencyLimiter` to
-     * override; pass `null` to disable gating.
+     * Caps concurrent HTTP requests for this layer's source fetches.
+     *
+     * Defaults to a maximum of 6 concurrent requests per origin, which aligns
+     * with browser limits of 6 HTTP/1.1 requests per origin. If your sources
+     * support HTTP/2 or HTTP/3, you may want to increase this limit or disable
+     * it entirely by passing `null`.
      */
     concurrencyLimiter?: ConcurrencyLimiter | null;
   };
