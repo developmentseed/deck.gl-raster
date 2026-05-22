@@ -201,6 +201,127 @@ export async function fetchTiles(
   );
 }
 
+/** One settled batch result: a decoded {@link Tile}, or the error that
+ *  prevented producing it (a missing/sparse tile, or a decode failure). A
+ *  *network*-level failure inside a coalesced range still rejects the whole
+ *  call — only per-tile problems are reported this way. */
+export type SettledTile = Tile | { error: unknown };
+
+/**
+ * Like {@link fetchTiles}, but never throws on a single missing tile or a
+ * single tile's decode failure — those become `{ error }` entries in the
+ * returned array (one per input coordinate, in order). Used by the deck.gl
+ * batched-fetch path so one bad tile doesn't blank a whole viewport.
+ */
+export async function fetchTilesSettled(
+  self: HasTiffReference,
+  xy: Array<[number, number]>,
+  {
+    boundless = true,
+    pool,
+    signal,
+  }: {
+    boundless?: boolean;
+    pool?: DecoderPool;
+    signal?: AbortSignal;
+  } = {},
+): Promise<SettledTile[]> {
+  if (xy.length === 0) {
+    return [];
+  }
+
+  const dataFetch = fetchCogBytesMultipleSettled(self, xy, { signal });
+  const maskFetch: Promise<Array<GetBytesResponse | null>> =
+    self.maskImage != null
+      ? getTiles(self.maskImage, xy, self.dataSource, {
+          signal,
+          debug: self._debug ? { label: "mask" } : undefined,
+        })
+      : Promise.resolve(xy.map(() => null));
+
+  const [allTileBytes, allMaskBytes] = await Promise.all([
+    dataFetch,
+    maskFetch,
+  ]);
+
+  return Promise.all(
+    xy.map(async ([x, y], i): Promise<SettledTile> => {
+      const bytes = allTileBytes[i]!;
+      if (bytes !== null && typeof bytes === "object" && "error" in bytes) {
+        return bytes as { error: unknown };
+      }
+      try {
+        return await assembleTile(
+          self,
+          x,
+          y,
+          bytes as GetBytesResponse | GetBytesResponse[],
+          allMaskBytes[i] ?? null,
+          { boundless, pool },
+        );
+      } catch (error) {
+        return { error };
+      }
+    }),
+  );
+}
+
+/** Collect-not-throw variant of {@link fetchCogBytesMultiple}: a null/sparse
+ *  tile becomes `{ error }` in its slot instead of throwing. */
+async function fetchCogBytesMultipleSettled(
+  self: HasTiffReference,
+  xy: Array<[number, number]>,
+  { signal }: { signal?: AbortSignal } = {},
+): Promise<Array<GetBytesResponse | GetBytesResponse[] | { error: unknown }>> {
+  const debug: DebugTag | undefined = self._debug
+    ? { label: "data" }
+    : undefined;
+  switch (self.cachedTags.planarConfiguration) {
+    case PlanarConfiguration.Contig: {
+      const tiles = await getTiles(self.image, xy, self.dataSource, {
+        signal,
+        debug,
+      });
+      return tiles.map((tile, i) => {
+        if (tile === null) {
+          const [x, y] = xy[i]!;
+          return { error: new Error(`Tile at (${x}, ${y}) not found`) };
+        }
+        return tile;
+      });
+    }
+    case PlanarConfiguration.Separate: {
+      const numBands = self.cachedTags.samplesPerPixel;
+      const perTileRanges = await Promise.all(
+        xy.map(([x, y]) => findBandSeparateTileByteRanges(self, x, y)),
+      );
+      const flatRanges = perTileRanges.flatMap((ranges) =>
+        ranges.map(({ offset, imageSize }) => ({
+          offset,
+          byteCount: imageSize,
+        })),
+      );
+      const flatResults = await getMultipleBytes(
+        self.image,
+        flatRanges,
+        self.dataSource,
+        { signal, debug },
+      );
+      return xy.map(([x, y], t) => {
+        const bands = flatResults.slice(t * numBands, t * numBands + numBands);
+        if (bands.some((r) => r === null)) {
+          return { error: new Error(`Tile at (${x}, ${y}) not found`) };
+        }
+        return bands as GetBytesResponse[];
+      });
+    }
+    default:
+      throw new Error(
+        `Unsupported PlanarConfiguration: ${self.cachedTags.planarConfiguration}`,
+      );
+  }
+}
+
 type GetBytesResponse = { bytes: ArrayBuffer; compression: Compression };
 type ByteRange = Awaited<ReturnType<TiffImage["getTileSize"]>>;
 
