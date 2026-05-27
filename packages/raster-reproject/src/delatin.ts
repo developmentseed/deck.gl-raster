@@ -132,6 +132,20 @@ export interface ReprojectionFns {
 }
 
 /**
+ * Per-sample context handed to {@link RasterReprojector._sampleError}. Carries
+ * everything the base already computed for one barycentric sample of a
+ * triangle, so a scoring override never recomputes it.
+ */
+export interface SampleErrorContext {
+  /** Reprojection error at this sample, in input pixels — `hypot(dx, dy)`. */
+  pixelError: number;
+  /** Barycentric weights of the sample within the triangle (sum to 1). */
+  weights: readonly [number, number, number];
+  /** The triangle's three vertex indices (index into `uvs`/2, `renderPositions`/3). */
+  vertices: readonly [number, number, number];
+}
+
+/**
  * RasterReprojector performs a Delaunay triangulation-based reprojection of a
  * raster image.
  *
@@ -286,6 +300,18 @@ export class RasterReprojector {
   }
 
   /**
+   * Per-sample refinement error. The triangle's queue priority is the max of
+   * this over its sample points, and the split candidate is the argmax sample.
+   *
+   * Default: the reprojection error in input pixels (matches GDAL's approximate
+   * transformer). Subclasses may return a different scalar; the value's units
+   * define what `run`'s tolerance threshold means.
+   */
+  protected _sampleError(ctx: SampleErrorContext): number {
+    return ctx.pixelError;
+  }
+
+  /**
    * Conversion of upstream's `_findCandidate` for reprojection error handling.
    *
    * @param t The index (into `this.triangles`) of the pending triangle to process.
@@ -294,9 +320,13 @@ export class RasterReprojector {
    */
   private _findReprojectionCandidate(t: number): void {
     // Find the three vertices of this triangle
-    const a = 2 * this.triangles[t * 3 + 0]!;
-    const b = 2 * this.triangles[t * 3 + 1]!;
-    const c = 2 * this.triangles[t * 3 + 2]!;
+    const v0 = this.triangles[t * 3 + 0]!;
+    const v1 = this.triangles[t * 3 + 1]!;
+    const v2 = this.triangles[t * 3 + 2]!;
+    const a = 2 * v0;
+    const b = 2 * v1;
+    const c = 2 * v2;
+    const vertices: [number, number, number] = [v0, v1, v2];
 
     // Get the UV coordinates of each vertex
     const p0u = this.uvs[a]!;
@@ -384,10 +414,17 @@ export class RasterReprojector {
       // 4. error in pixel space
       const dx = pixelExactX - pixelSampled[0];
       const dy = pixelExactY - pixelSampled[1];
-      const err = Math.hypot(dx, dy);
+      const pixelError = Math.hypot(dx, dy);
 
-      if (err > maxError) {
-        maxError = err;
+      // Route through the scoring seam (default: the pixel error itself).
+      const score = this._sampleError({
+        pixelError,
+        weights: samplePoint,
+        vertices,
+      });
+
+      if (score > maxError) {
+        maxError = score;
         maxErrorU = uvSampleU;
         maxErrorV = uvSampleV;
       }
@@ -462,7 +499,7 @@ export class RasterReprojector {
   }
 
   // add coordinates for a new vertex
-  private _addPoint(u: number, v: number): number {
+  protected _addPoint(u: number, v: number): number {
     const i = this.uvs.length >> 1;
     this.uvs.push(u, v);
 
