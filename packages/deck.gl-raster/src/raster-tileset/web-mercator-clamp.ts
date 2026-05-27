@@ -34,7 +34,7 @@ export interface CornerLatitudes {
  * @param cornerLats WGS84 latitudes of the tile's four corners.
  * @param maxLat     Web Mercator latitude limit. Defaults to ±85.051°.
  */
-export function webMercatorInitialTriangulation(
+export function createInitialWebMercatorTriangulation(
   cornerLats: CornerLatitudes,
   maxLat: number = MAX_WEB_MERCATOR_LAT,
 ): InitialTriangulation | undefined {
