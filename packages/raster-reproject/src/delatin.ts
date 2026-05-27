@@ -69,19 +69,35 @@ export interface InitialTriangulation {
 }
 
 /**
- * The default seed: the full image in UV space, as 4 corner vertices and 2
- * triangles sharing the p0–p3 diagonal. Reproduces the previous hardcoded
- * constructor init exactly. Hardcoded (not delaunator-built) so the package has
- * no runtime triangulation dependency.
+ * Build an axis-aligned rectangle seed (4 corner vertices, 2 triangles sharing
+ * the p0–p3 diagonal) covering the UV sub-rectangle `[uMin, vMin]`–`[uMax, vMax]`.
+ *
+ * Seeding {@link RasterReprojector} with a sub-rectangle confines the mesh to
+ * that region — e.g. to clamp an image's mesh to the valid Web Mercator
+ * latitude band (see #182 / #351), pass that band's UV bounds.
  */
-const UNIT_SQUARE_SEED: InitialTriangulation = {
-  // p0=(0,0) p1=(1,0) p2=(0,1) p3=(1,1)
-  uvs: [0, 0, 1, 0, 0, 1, 1, 1],
-  // t0 = (p3, p0, p2), t1 = (p0, p3, p1)
-  triangles: [3, 0, 2, 0, 3, 1],
-  // shared diagonal p0–p3: halfedge 0 <-> 3; all other edges are boundary
-  halfedges: [3, -1, -1, 0, -1, -1],
-};
+export function rectangleSeed(
+  uMin: number,
+  vMin: number,
+  uMax: number,
+  vMax: number,
+): InitialTriangulation {
+  return {
+    // p0=(uMin,vMin) p1=(uMax,vMin) p2=(uMin,vMax) p3=(uMax,vMax)
+    uvs: [uMin, vMin, uMax, vMin, uMin, vMax, uMax, vMax],
+    // t0 = (p3, p0, p2), t1 = (p0, p3, p1)
+    triangles: [3, 0, 2, 0, 3, 1],
+    // shared diagonal p0–p3: halfedge 0 <-> 3; all other edges are boundary
+    halfedges: [3, -1, -1, 0, -1, -1],
+  };
+}
+
+/**
+ * The default seed: the full image in UV space. Reproduces the previous
+ * hardcoded constructor init exactly, and is hardcoded (not delaunator-built)
+ * so the package has no runtime triangulation dependency.
+ */
+const UNIT_SQUARE_SEED: InitialTriangulation = rectangleSeed(0, 0, 1, 1);
 
 export interface ReprojectionFns {
   /**
