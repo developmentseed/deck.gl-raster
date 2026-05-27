@@ -24,7 +24,9 @@ export async function openSurfaceTemp(): Promise<
   zarr.Array<"float32", zarr.Readable>
 > {
   const storage = new HttpStorage(REPO_URL);
-  const repo = await Repository.open({ storage });
+  // NLDAS-3 is a v1 icechunk repo; declaring the format skips icechunk-js's
+  // auto-detection probe for the v2 `/repo` file (an avoidable 404).
+  const repo = await Repository.open({ storage, formatVersion: "v1" });
 
   const branchSession = await repo.checkoutBranch(BRANCH);
   const snapshotId = branchSession.getSnapshotId();
