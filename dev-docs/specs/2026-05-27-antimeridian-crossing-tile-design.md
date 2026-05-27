@@ -54,7 +54,7 @@ The cut's **shape** determines feasibility:
 - **Straight cut** (axis-aligned EPSG:4326 → vertical; rotated geotransform → slanted): a straight line splits the unit square into two **convex** pieces.
 - **Curved cut** (curved-meridian CRS): at least one piece is **concave**.
 
-The MVP requires a straight cut (convex pieces) and **errors clearly** if the inverse-projected meridian is not straight within tolerance.
+The MVP handles **any straight cut** — vertical (axis-aligned EPSG:4326) *and* slanted (rotated geotransform) — since both yield convex pieces that delaunator triangulates exactly. It **errors clearly** only when the inverse-projected meridian is *curved* (concave pieces; curved-meridian CRS), which is deferred.
 
 ## Architecture
 
@@ -67,7 +67,7 @@ RasterTileLayer._renderSubLayers (per tile)        ← the only split point
 ```
 
 - **`RasterReprojector`** ([`delatin.ts`](../../packages/raster-reproject/src/delatin.ts)) — one mesh, always. Gains an optional **initial-triangulation seed** `{ uvs, triangles, halfedges }` (delaunator's shape), defaulting to today's unit-square 2-triangle seed. The refinement core (`_step`, `_legalize`, `_findReprojectionCandidate`, the error queue) is already seed-agnostic; only the constructor's hardcoded init changes. Refinement only ever *splits existing triangles*, so a seed covering `[0, u_cut]×[0,1]` keeps the whole mesh in that sub-region. `width`/`height` stay the full image, so sub-domain UVs index the full texture — no texture re-windowing.
-- **`createInitialConditions(points)`** — a **separate, tree-shakeable module** in `raster-reproject` that runs delaunator to produce a seed from arbitrary vertices. `delatin.ts` must **not** import it (so it tree-shakes when unused); mark the package `"sideEffects": false`. delaunator is ~8 KB, zero-dependency, same author/data-model as delatin (near-direct array transfer). The MVP can hand-roll the rectangle seed and skip delaunator entirely; delaunator earns its place for arbitrary/curved seeds.
+- **`createInitialConditions(points)`** — a **separate, tree-shakeable module** in `raster-reproject` that runs delaunator to produce a seed from arbitrary vertices. `delatin.ts` must **not** import it (so it tree-shakes when unused); mark the package `"sideEffects": false`. delaunator is ~8 KB, zero-dependency, same author/data-model as delatin (near-direct array transfer). The crossing-tile path uses it to seed each convex piece — a rectangle for a vertical cut, a convex quad/pentagon for a slanted cut (which can't be a hand-rolled rectangle) — so delaunator is part of the MVP crossing path. It still tree-shakes out for consumers that only render non-crossing tiles, since the default seed path doesn't import it.
 - **Cut builder** (deck.gl-raster) — computes the cut (inverse-project the antimeridian) → 1 or 2 sub-domain seeds. Lives in the tileset's `getTileMetadata` and is stored on tile metadata (per the "tile state on the tile" convention), so it is computed once and shared by both the render and the bounding volume.
 - **`RasterLayer`** ([`raster-layer.ts`](../../packages/deck.gl-raster/src/raster-layer.ts)) — one mesh, one `MeshTextureLayer`, unchanged except a new `initialTriangulation` prop (default: full square) passed to its reprojector.
 - **`RasterTileLayer._renderSubLayers`** — reads the tile's cut info and emits 1 or 2 `RasterLayer`s. Both crossing sub-layers share the **same** `reprojectionFns` (the tile's `_projectPosition`); they differ only in `initialTriangulation` and sublayer id (`…-raster-west` / `…-raster-east`).
@@ -95,8 +95,10 @@ The initial-triangulation seed subsumes several pending needs into one primitive
 
 **In scope:**
 - Web Mercator viewport.
-- Straight cut (convex pieces): axis-aligned EPSG:4326 *and* rotated geotransforms.
-- Test datasets: a global EPSG:4326 COG that triggers #366 — e.g. the WorldPop `ppp_2020_1km_Aggregated.tif` named in the issue, or the GEDTM30 global DEM from #353 — and (if sourced) a regional EPSG:4326 scene spanning ±180°.
+- Straight cut (convex pieces): axis-aligned EPSG:4326 (vertical) *and* rotated geotransforms (slanted).
+- Test datasets:
+  - **Primary, deterministic:** the [`antimeridian.tif`](https://github.com/developmentseed/geotiff-test-data/blob/3c7ceb9ec2ed23b0ba71c2222ac4d5e6f31db0ec/rasterio_generated/fixtures/antimeridian.tif) fixture, already vendored via the `fixtures/geotiff-test-data` submodule (`fixtures/geotiff-test-data/rasterio_generated/fixtures/antimeridian.tif`). 42×42, EPSG:4326, bbox (−204, −18, −162, 24) → crosses −180° with a clean vertical cut at pixel column 24 (lng −204 ≡ +156 wrapped).
+  - **Global / edge-overhang variant:** a global EPSG:4326 COG that triggers #366 — e.g. WorldPop `ppp_2020_1km_Aggregated.tif` (from the issue) or the GEDTM30 global DEM (from #353).
 
 **Out of scope (deferred):**
 - Globe view (separate prototype).
@@ -114,21 +116,21 @@ The initial-triangulation seed subsumes several pending needs into one primitive
 **Unit**
 - `createInitialConditions`: delaunator seed for the unit square and a sub-rectangle has expected `{ uvs, triangles, halfedges }`.
 - Reprojector with a sub-rectangle seed converges and adds no vertices outside the seed domain; with a delaunator unit-square seed produces output equivalent to the current default.
-- Cut location: inverse-projecting the antimeridian for an EPSG:4326 tile yields the expected vertical UV column; a non-straight cut is detected and errors.
+- Cut location: inverse-projecting the antimeridian yields the expected cut line — a vertical UV column for axis-aligned EPSG:4326 (the `antimeridian.tif` fixture cuts at column 24 / `u ≈ 0.571`), a slanted line for a rotated geotransform; a *curved* cut is detected and errors.
 - Two-box bounding volume for a crossing tile (west/east boxes; correct selection under the world-copy traversal).
 
 **Integration / visual (cog-basic)**
-- A global EPSG:4326 COG renders correctly across ±180° (no `error=43200` divergence; no mislocated rectangles); pan across the seam stays continuous.
-- (If sourced) a regional ±180°-spanning scene renders as a single contiguous image.
+- The `antimeridian.tif` fixture renders as a single contiguous image across ±180° (west piece near +180°, east piece near −180°), staying continuous when panning across the seam.
+- A global EPSG:4326 COG (WorldPop / GEDTM30) renders correctly at the dateline (no `error=43200` divergence; no mislocated rectangles).
 - Before/after comparison against current main.
 
 ## Implementation stages (high level)
 
 1. `RasterReprojector` accepts an initial-triangulation seed; default unchanged; tests including the delaunator-unit-square equivalence check.
 2. `createInitialConditions` utility (separate module, delaunator, tree-shakeable) + `sideEffects: false`.
-3. Cut location (inverse-project the antimeridian) + straight-cut detection/error, on tile metadata.
+3. Cut location (inverse-project the antimeridian) + convexity check (error on a curved/concave cut), on tile metadata.
 4. Two-box bounding volume in traversal for crossing tiles.
-5. `RasterLayer` `initialTriangulation` prop; `_renderSubLayers` emits 1 or 2 `RasterLayer`s.
+5. `RasterLayer` `initialTriangulation` prop; `_renderSubLayers` emits 1 or 2 `RasterLayer`s, each seeded from its cut sub-domain via `createInitialConditions`.
 6. Example wiring + visual validation in cog-basic.
 
 (Detailed task breakdown lives in the implementation plan, not here.)
