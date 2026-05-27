@@ -54,6 +54,13 @@ const DATA_BOUNDS: [[number, number], [number, number]] = [
 /** Total number of rows in the shipped colormap sprite. */
 const COLORMAP_ROW_COUNT = Object.keys(COLORMAP_INDEX).length;
 
+/**
+ * Convert a Kelvin value to an integer °C for display. The slider operates in
+ * Kelvin (the data's native unit, which the rescale shader expects); only the
+ * label is shown in the friendlier °C, with Kelvin in parentheses.
+ */
+const kelvinToCelsius = (k: number) => Math.round(k - 273.15);
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
@@ -197,7 +204,8 @@ export default function App() {
         <Field
           label={
             <Text as="span">
-              Rescale range: {rescaleMin} – {rescaleMax} K
+              Rescale range: {kelvinToCelsius(rescaleMin)}°C ({rescaleMin} K) –{" "}
+              {kelvinToCelsius(rescaleMax)}°C ({rescaleMax} K)
             </Text>
           }
         >
