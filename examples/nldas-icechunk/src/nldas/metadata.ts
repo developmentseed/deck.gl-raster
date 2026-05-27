@@ -38,11 +38,11 @@ export const TIME_INDEX = 3482;
  * Initial rescale range in Kelvin (near-surface air temperature `vmin`/`vmax`
  * ≈ 228–304 K). Adjustable at runtime via the rescale slider.
  */
-export const RESCALE_MIN = 228;
+export const RESCALE_MIN = 260;
 export const RESCALE_MAX = 305;
 
 /** Bounds + step for the rescale slider (Kelvin). */
-export const RESCALE_SLIDER_MIN = 220;
+export const RESCALE_SLIDER_MIN = 240;
 export const RESCALE_SLIDER_MAX = 320;
 export const RESCALE_SLIDER_STEP = 1;
 
