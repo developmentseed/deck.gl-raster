@@ -35,12 +35,10 @@ import { openNldasTair } from "./nldas/store.js";
 const BASEMAP_STYLE =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
-// Geographic extent of the NLDAS-3 grid (derived from NLDAS_GEOZARR_ATTRS:
-// lon [-169, -52], lat [7, 72]). Used as maxBounds so the map can't pan or
-// zoom out beyond where data exists.
+// Min longitude, min latitude, max longitude, max latitude
 const DATA_BOUNDS: [[number, number], [number, number]] = [
-  [-169, 7],
-  [-52, 72],
+  [-180, -20],
+  [-20, 80],
 ];
 
 export default function App() {
