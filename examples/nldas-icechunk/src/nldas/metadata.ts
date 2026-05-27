@@ -35,13 +35,6 @@ export const TIME_DIM = "time";
 export const TIME_INDEX = 3482;
 
 /**
- * Sentinel for fill pixels. The store's `missing_value` is -9999, which
- * `FilterNoDataVal` discards on the GPU. The source data uses this finite
- * sentinel (not NaN), so no per-pixel CPU pass is needed.
- */
-export const NODATA_VALUE = -9999;
-
-/**
  * Initial rescale range in Kelvin (near-surface air temperature `vmin`/`vmax`
  * ≈ 228–304 K). Adjustable at runtime via the rescale slider.
  */

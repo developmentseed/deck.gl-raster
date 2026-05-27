@@ -12,8 +12,8 @@ export type NldasTileData = MinimalTileData & {
 /**
  * Slice one spatial chunk of the near-surface air temperature array (time
  * pinned by the layer's selection) and upload it as a single-channel float
- * texture. Fill pixels keep their sentinel value (the store's `-9999`) and are
- * discarded on the GPU by `FilterNoDataVal`.
+ * texture. Fill pixels keep their sentinel value (the store's `missing_value`)
+ * and are discarded on the GPU by `FilterNoDataVal`.
  */
 export async function getTileData(
   arr: zarr.Array<"float32", zarr.Readable>,

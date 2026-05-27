@@ -29,7 +29,6 @@ import type { NldasTileData } from "./nldas/get-tile-data.js";
 import { getTileData } from "./nldas/get-tile-data.js";
 import {
   NLDAS_GEOZARR_ATTRS,
-  NODATA_VALUE,
   RESCALE_MAX,
   RESCALE_MIN,
   RESCALE_SLIDER_MAX,
@@ -39,6 +38,7 @@ import {
   TIME_INDEX,
 } from "./nldas/metadata.js";
 import { makeRenderTile } from "./nldas/render-tile.js";
+import type { SurfaceTempSource } from "./nldas/store.js";
 import { openSurfaceTemp } from "./nldas/store.js";
 
 // Keyless CARTO basemap; light background reads well under a data overlay.
@@ -63,9 +63,7 @@ const kelvinToCelsius = (k: number) => Math.round(k - 273.15);
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
-  const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
-    null,
-  );
+  const [source, setSource] = useState<SurfaceTempSource | null>(null);
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapImage, setColormapImage] = useState<ImageData | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
@@ -85,7 +83,7 @@ export default function App() {
     (async () => {
       const opened = await openSurfaceTemp();
       if (!cancelled) {
-        setArr(opened);
+        setSource(opened);
       }
     })();
     return () => {
@@ -118,11 +116,11 @@ export default function App() {
   }, [device, colormapImage]);
 
   const layers =
-    arr && colormapTexture
+    source && colormapTexture
       ? [
           new ZarrLayer<zarr.Readable, "float32", NldasTileData>({
             id: "nldas-surface-temp",
-            node: arr,
+            node: source.array,
             metadata: NLDAS_GEOZARR_ATTRS,
             selection: { [TIME_DIM]: TIME_INDEX },
             getTileData,
@@ -130,7 +128,7 @@ export default function App() {
               colormapTexture,
               colormapIndex: colormapChoice.colormapIndex,
               colormapReversed: colormapChoice.reversed,
-              noDataValue: NODATA_VALUE,
+              noDataValue: source.noDataValue,
               rescaleMin,
               rescaleMax,
             }),
