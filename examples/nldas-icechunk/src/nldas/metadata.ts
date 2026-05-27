@@ -1,5 +1,3 @@
-import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
-
 /** Public NLDAS-3 icechunk repo (anonymous, CORS-enabled). */
 export const REPO_URL =
   "https://nasa-waterinsight.s3.us-west-2.amazonaws.com/virtual-zarr-store/NLDAS-3-icechunk";
@@ -44,15 +42,16 @@ export const TIME_INDEX = 3482;
 export const NODATA_VALUE = -9999;
 
 /**
- * Fixed rescale range in Kelvin (near-surface air temperature `vmin`/`vmax`
- * ≈ 228–304 K).
+ * Initial rescale range in Kelvin (near-surface air temperature `vmin`/`vmax`
+ * ≈ 228–304 K). Adjustable at runtime via the rescale slider.
  */
 export const RESCALE_MIN = 228;
 export const RESCALE_MAX = 305;
 
-/** Colormap sprite layer + orientation (thermal sequential, like ECMWF). */
-export const SURFACE_TEMP_COLORMAP_INDEX = COLORMAP_INDEX.thermal;
-export const COLORMAP_REVERSED = false;
+/** Bounds + step for the rescale slider (Kelvin). */
+export const RESCALE_SLIDER_MIN = 220;
+export const RESCALE_SLIDER_MAX = 320;
+export const RESCALE_SLIDER_STEP = 1;
 
 /**
  * Synthetic GeoZarr-compliant attrs (the virtual store is not GeoZarr).

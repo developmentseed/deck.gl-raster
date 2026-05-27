@@ -1,5 +1,6 @@
-import { Text } from "@chakra-ui/react";
+import { NativeSelect, Text } from "@chakra-ui/react";
 import {
+  COLORMAP_INDEX,
   createColormapTexture,
   decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
@@ -7,24 +8,33 @@ import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colorma
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import type { Device, Texture } from "@luma.gl/core";
 import {
+  ColormapPreview,
   ControlPanel,
   DeckGlOverlay,
   ExternalLink,
+  Field,
+  RangeSlider,
 } from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import type * as zarr from "zarrita";
+import type { ColormapId } from "./nldas/colormap-choices.js";
+import {
+  COLORMAP_CHOICES,
+  DEFAULT_COLORMAP_ID,
+} from "./nldas/colormap-choices.js";
 import type { NldasTileData } from "./nldas/get-tile-data.js";
 import { getTileData } from "./nldas/get-tile-data.js";
 import {
-  COLORMAP_REVERSED,
   NLDAS_GEOZARR_ATTRS,
   NODATA_VALUE,
   RESCALE_MAX,
   RESCALE_MIN,
-  SURFACE_TEMP_COLORMAP_INDEX,
+  RESCALE_SLIDER_MAX,
+  RESCALE_SLIDER_MIN,
+  RESCALE_SLIDER_STEP,
   TIME_DIM,
   TIME_INDEX,
 } from "./nldas/metadata.js";
@@ -41,6 +51,9 @@ const DATA_BOUNDS: [[number, number], [number, number]] = [
   [-20, 80],
 ];
 
+/** Total number of rows in the shipped colormap sprite. */
+const COLORMAP_ROW_COUNT = Object.keys(COLORMAP_INDEX).length;
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
@@ -49,6 +62,15 @@ export default function App() {
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapImage, setColormapImage] = useState<ImageData | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
+  const [colormapId, setColormapId] = useState<ColormapId>(DEFAULT_COLORMAP_ID);
+  const [rescaleMin, setRescaleMin] = useState(RESCALE_MIN);
+  const [rescaleMax, setRescaleMax] = useState(RESCALE_MAX);
+
+  const colormapChoice = useMemo(
+    () =>
+      COLORMAP_CHOICES.find((c) => c.id === colormapId) ?? COLORMAP_CHOICES[0],
+    [colormapId],
+  );
 
   // Open the icechunk store + surface temperature array once.
   useEffect(() => {
@@ -99,12 +121,17 @@ export default function App() {
             getTileData,
             renderTile: makeRenderTile({
               colormapTexture,
-              colormapIndex: SURFACE_TEMP_COLORMAP_INDEX,
-              colormapReversed: COLORMAP_REVERSED,
+              colormapIndex: colormapChoice.colormapIndex,
+              colormapReversed: colormapChoice.reversed,
               noDataValue: NODATA_VALUE,
-              rescaleMin: RESCALE_MIN,
-              rescaleMax: RESCALE_MAX,
+              rescaleMin,
+              rescaleMax,
             }),
+            // Re-run renderTile on cached tiles when the colormap or rescale
+            // range changes.
+            updateTriggers: {
+              renderTile: [colormapId, rescaleMin, rescaleMax],
+            },
             // source bucket supports HTTP/2 multiplexing
             maxRequests: 20,
             maxCacheSize: 20,
@@ -140,12 +167,56 @@ export default function App() {
           <ExternalLink href="https://github.com/EarthyScience/icechunk-js">
             icechunk-js
           </ExternalLink>{" "}
-          + zarrita and rendered by a <code>ZarrLayer</code>.
+          + zarrita and rendered by a <code>ZarrLayer</code>. Showing a single
+          day (2010-07-16); ocean / no-data is left transparent.
         </Text>
-        <Text fontSize="xs" color="gray.600">
-          Showing a single day (2010-07-16), colorized on the GPU with the
-          thermal colormap. Ocean / no-data is left transparent.
-        </Text>
+
+        <Field label="Colormap">
+          <NativeSelect.Root size="sm" mb="2">
+            <NativeSelect.Field
+              value={colormapId}
+              onChange={(e) => setColormapId(e.target.value as ColormapId)}
+            >
+              {COLORMAP_CHOICES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </NativeSelect.Field>
+            <NativeSelect.Indicator />
+          </NativeSelect.Root>
+        </Field>
+        <ColormapPreview
+          spriteUrl={colormapsPngUrl}
+          rowCount={COLORMAP_ROW_COUNT}
+          rowIndex={colormapChoice.colormapIndex}
+          reversed={colormapChoice.reversed}
+          label={colormapChoice.label}
+        />
+
+        <Field
+          label={
+            <Text as="span">
+              Rescale range: {rescaleMin} – {rescaleMax} K
+            </Text>
+          }
+        >
+          <RangeSlider
+            min={RESCALE_SLIDER_MIN}
+            max={RESCALE_SLIDER_MAX}
+            step={RESCALE_SLIDER_STEP}
+            value={[rescaleMin, rescaleMax]}
+            onChange={([nextMin, nextMax]) => {
+              if (nextMin !== rescaleMin) {
+                setRescaleMin(nextMin);
+              }
+              if (nextMax !== rescaleMax) {
+                setRescaleMax(nextMax);
+              }
+            }}
+            thumbLabels={["Rescale min (K)", "Rescale max (K)"]}
+          />
+        </Field>
       </ControlPanel>
     </div>
   );
