@@ -68,6 +68,21 @@ export interface InitialTriangulation {
   halfedges: number[];
 }
 
+/**
+ * The default seed: the full image in UV space, as 4 corner vertices and 2
+ * triangles sharing the p0–p3 diagonal. Reproduces the previous hardcoded
+ * constructor init exactly. Hardcoded (not delaunator-built) so the package has
+ * no runtime triangulation dependency.
+ */
+const UNIT_SQUARE_SEED: InitialTriangulation = {
+  // p0=(0,0) p1=(1,0) p2=(0,1) p3=(1,1)
+  uvs: [0, 0, 1, 0, 0, 1, 1, 1],
+  // t0 = (p3, p0, p2), t1 = (p0, p3, p1)
+  triangles: [3, 0, 2, 0, 3, 1],
+  // shared diagonal p0–p3: halfedge 0 <-> 3; all other edges are boundary
+  halfedges: [3, -1, -1, 0, -1, -1],
+};
+
 export interface ReprojectionFns {
   /**
    * Convert from UV coordinates to input CRS coordinates.
@@ -151,6 +166,7 @@ export class RasterReprojector {
     reprojectors: ReprojectionFns,
     width: number,
     height: number = width,
+    options: { initialTriangulation?: InitialTriangulation } = {},
   ) {
     this.reprojectors = reprojectors;
     this.width = width;
@@ -170,19 +186,31 @@ export class RasterReprojector {
     this._pending = []; // triangles pending addition to queue
     this._pendingLen = 0;
 
-    // The two initial triangles cover the entire input texture in UV space, so
-    // they range from [0, 0] to [1, 1] in u and v.
-    const u1 = 1;
-    const v1 = 1;
-    const p0 = this._addPoint(0, 0);
-    const p1 = this._addPoint(u1, 0);
-    const p2 = this._addPoint(0, v1);
-    const p3 = this._addPoint(u1, v1);
-
-    // add initial two triangles
-    const t0 = this._addTriangle(p3, p0, p2, -1, -1, -1);
-    this._addTriangle(p0, p3, p1, t0, -1, -1);
+    this._seed(options.initialTriangulation ?? UNIT_SQUARE_SEED);
     this._flush();
+  }
+
+  /**
+   * Seed the mesh from an {@link InitialTriangulation}. Adds every vertex (which
+   * computes its exact output position), copies the triangle and halfedge arrays
+   * directly (the seed is already a valid triangulation), and queues every
+   * triangle for the first reprojection-error pass.
+   */
+  private _seed(seed: InitialTriangulation): void {
+    for (let i = 0; i < seed.uvs.length; i += 2) {
+      this._addPoint(seed.uvs[i]!, seed.uvs[i + 1]!);
+    }
+    for (let i = 0; i < seed.triangles.length; i++) {
+      this.triangles[i] = seed.triangles[i]!;
+      this._halfedges[i] = seed.halfedges[i]!;
+    }
+    const numTriangles = seed.triangles.length / 3;
+    for (let t = 0; t < numTriangles; t++) {
+      this._candidatesUV[2 * t] = 0;
+      this._candidatesUV[2 * t + 1] = 0;
+      this._queueIndices[t] = -1;
+      this._pending[this._pendingLen++] = t;
+    }
   }
 
   /**
