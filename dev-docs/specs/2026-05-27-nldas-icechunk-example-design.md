@@ -24,13 +24,42 @@ repo:
 - **Virtual chunks:** reference the original NLDAS-3 files under
   `s3://nasa-waterinsight/NLDAS3/forcing/daily/` — **the same bucket**.
 
-Two feasibility facts were verified during design:
+Feasibility facts verified during design:
 
 - The entire `nasa-waterinsight` bucket returns `Access-Control-Allow-Origin: *`
   for `GET`/`HEAD`, so both the icechunk repo metadata and the virtual source
   objects are reachable from a browser origin.
 - `icechunk-js@0.4.0` declares `zarrita ^0.5 || ^0.6 || ^0.7` as a peer
   dependency, matching this repo's `zarrita@0.7.3`.
+- The repo's `config.yaml` declares exactly one virtual chunk container:
+  ```yaml
+  virtual_chunk_containers:
+    s3://nasa-waterinsight/NLDAS3/forcing/daily/:
+      url_prefix: s3://nasa-waterinsight/NLDAS3/forcing/daily/
+      store: !s3 { region: us-west-2, anonymous: false, ... }
+  ```
+  The container's underlying objects are nonetheless publicly readable over
+  HTTPS (verified), so the browser can fetch them unsigned despite
+  `anonymous: false` in the stored config.
+
+The working Python recipe (provided by @kylebarron) confirms what the browser
+code must replicate:
+
+```python
+storage = icechunk.s3_storage(bucket='nasa-waterinsight',
+    prefix="virtual-zarr-store/NLDAS-3-icechunk", region="us-west-2", anonymous=True)
+virtual_credentials = icechunk.containers_credentials({
+    "s3://nasa-waterinsight/NLDAS3/forcing/daily/": icechunk.s3_anonymous_credentials()})
+repo = icechunk.Repository.open(storage=storage,
+    authorize_virtual_chunk_access=virtual_credentials)
+session = repo.readonly_session('main')
+ds = xr.open_zarr(session.store, consolidated=False, zarr_version=3, chunks={})
+```
+
+Two requirements fall out of this: **region** `us-west-2` (in the browser this is
+just encoded in the HTTPS host — `icechunk-js` has no region param), and
+**explicit authorization of the virtual chunk container** before chunk reads
+work.
 
 ## Goals
 
@@ -83,12 +112,27 @@ peer packages, `maplibre-gl`, `react-map-gl`, and the shared
 
 ### Data flow
 
-1. **Open (once, on mount).**
-   `IcechunkStore.open(REPO_URL, { withRangeCoalescing: true })` returns a
-   zarrita `AsyncReadable`. Then
-   `zarr.open(store.resolve("/Tair"), { kind: "array" })` (use `zarr.open.v3`
-   if auto-detection misfires — icechunk is always Zarr v3). Assert the dtype is
-   float; throw with a clear message otherwise (ECMWF precedent).
+1. **Open (once, on mount).** Build the store with the virtual chunk container
+   authorized. The `virtualChunkContainers` option lives on `ReadSession.open`
+   (not on `IcechunkStore.open(url, …)`), so we construct the session explicitly
+   and wrap it:
+   ```ts
+   const storage = new HttpStorage(REPO_URL); // region encoded in the HTTPS host
+   // VCC name (from config.yaml) -> public HTTPS prefix for the source objects
+   const virtualChunkContainers = new Map([[
+     "s3://nasa-waterinsight/NLDAS3/forcing/daily/",
+     "https://nasa-waterinsight.s3.us-west-2.amazonaws.com/NLDAS3/forcing/daily/",
+   ]]);
+   // exact entry point (Repository.checkoutBranch vs ReadSession.open with an
+   // explicit snapshot id) is pinned at the smoke-test step below
+   const session = await /* main-branch read session */;
+   const store = await IcechunkStore.open(session, { withRangeCoalescing: true });
+   const arr = await zarr.open(store.resolve("/Tair"), { kind: "array" });
+   ```
+   Use `zarr.open.v3` if auto-detection misfires — icechunk is always Zarr v3.
+   Assert the dtype is float; throw with a clear message otherwise (ECMWF
+   precedent). No custom `FetchClient` is needed: the source objects are public,
+   so the default client's unsigned `fetch` succeeds.
 2. **Colormap.** Fetch the shipped `colormaps.png`, `decodeColormapSprite` to
    `ImageData`, and `createColormapTexture` once the luma `Device` arrives via
    the overlay's `onDeviceInitialized` callback. Identical to ECMWF.
@@ -133,13 +177,15 @@ temperature colormap choice.
 
 ## Risks / smoke-test before building UI
 
-- **Virtual chunk resolution — the load-bearing risk.** Tair's chunks reference
-  `s3://nasa-waterinsight/NLDAS3/forcing/daily/...`; icechunk-js must translate
-  those `s3://` references to HTTPS and fetch them from the browser. It may need
-  explicit region/endpoint options on `open`. **First implementation step is a
-  throwaway script/console call** that opens the store and `zarr.get`s a single
-  chunk, confirming bytes return, *before* any layer/UI work. If it fails, revisit
-  the approach here rather than pressing on.
+- **Virtual chunk resolution — the load-bearing risk.** Mechanism is understood
+  (the `virtualChunkContainers` map above), but two unknowns remain until run: the
+  exact session entry point that accepts `virtualChunkContainers`
+  (`Repository.checkoutBranch` vs `ReadSession.open` with an explicit snapshot id),
+  and whether the manifest stores chunk locations such that the container's
+  `url_prefix` matches and rewrites cleanly to the HTTPS prefix. **First
+  implementation step is a throwaway script/console call** that opens the store
+  and `zarr.get`s a single Tair chunk, confirming bytes return, *before* any
+  layer/UI work. If it fails, revisit the approach here rather than pressing on.
 - **Zarr version.** icechunk is Zarr v3 with no consolidated metadata; the store
   serves metadata directly. Prefer `zarr.open.v3` if plain `open` mis-detects.
 
