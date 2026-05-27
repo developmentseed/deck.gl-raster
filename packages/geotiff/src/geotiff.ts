@@ -13,7 +13,7 @@ import { parseGDALMetadata } from "./gdal-metadata.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
 import type { ConcurrencyLimiter, Priority } from "./limiter.js";
-import { LimitedSource } from "./limiter.js";
+import { LimiterMiddleware } from "./limiter.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
@@ -327,30 +327,32 @@ export class GeoTIFF {
     // unbounded length. Remove once the upstream fix lands.
     source.metadata = { size: Number.POSITIVE_INFINITY };
 
-    // When a limiter is supplied, gate every network read through it by
-    // wrapping the raw source. The header `SourceView` composes SourceChunk +
-    // SourceCache *on top* of this wrapped source, so a cache hit
-    // short-circuits in SourceCache and never reaches — never burns a slot on
-    // — the limiter; only reads that escape the cache (and every data read,
-    // which bypasses the cache) are gated. The same wrapped source backs both
-    // the header view and the data source, so both share one per-origin pool.
-    //
-    // Gating here as a source wrapper rather than a chunkd SourceMiddleware is
-    // a workaround for chunkd not forwarding the abort signal to middleware;
-    // see LimitedSource. Once that's fixed upstream this can become a
-    // middleware again. Tracked in
-    // https://github.com/developmentseed/deck.gl-raster/issues/565
-    const limitedSource = concurrencyLimiter
-      ? new LimitedSource(source, { limiter: concurrencyLimiter, getPriority })
-      : source;
+    // When a limiter is supplied, slot a LimiterMiddleware into both
+    // sources' middleware stacks. On the header source, it sits *after*
+    // SourceChunk + SourceCache so a cache hit short-circuits and never
+    // consumes a slot — only network reads that escape the cache are gated.
+    // On the data source (no caching), every fetch is gated. Both stacks
+    // share one LimiterMiddleware instance, so they share one per-origin pool.
+    const limiter = concurrencyLimiter
+      ? new LimiterMiddleware({
+          url: new URL(url),
+          limiter: concurrencyLimiter,
+          getPriority,
+        })
+      : null;
 
-    const view = new SourceView(limitedSource, [
+    const view = new SourceView(source, [
       new SourceChunk({ size: chunkSize }),
       new SourceCache({ size: cacheSize }),
+      ...(limiter ? [limiter] : []),
     ]);
 
+    const dataSource: Pick<Source, "fetch"> = limiter
+      ? new SourceView(source, [limiter])
+      : source;
+
     return await GeoTIFF.open({
-      dataSource: limitedSource,
+      dataSource,
       headerSource: view,
       signal,
       debug,

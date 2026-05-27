@@ -1,4 +1,8 @@
-import type { Source, SourceMetadata } from "@chunkd/source";
+import type {
+  SourceCallback,
+  SourceMiddleware,
+  SourceRequest,
+} from "@chunkd/source";
 
 /**
  * Numeric priority used to order waiters in a {@link Semaphore}'s queue. Lower
@@ -63,7 +67,7 @@ interface Waiter {
 
 /**
  * Counting semaphore with abort-aware acquire and dynamic priority. Internal
- * primitive used by {@link PerOriginSemaphore} and {@link LimitedSource}.
+ * primitive used by {@link PerOriginSemaphore} and {@link LimiterMiddleware}.
  *
  * Hands out up to `maxRequests` concurrent slots. Further `acquire()`s queue.
  * On every slot-open, the queue is searched for the lowest-priority waiter
@@ -222,12 +226,15 @@ export class PerOriginSemaphore implements ConcurrencyLimiter {
   }
 }
 
-/** Options for {@link LimitedSource}. */
-interface LimitedSourceOptions {
-  /** The {@link ConcurrencyLimiter} to gate through. The wrapped source's
-   *  own `url` is passed to `limiter.acquire` for per-origin routing. */
+/** Options for {@link LimiterMiddleware}. */
+interface LimiterMiddlewareOptions {
+  /** The URL the wrapped source is reading from. Passed to
+   *  `limiter.acquire(url, signal?)` on every fetch — the limiter uses it for
+   *  per-origin routing. */
+  url: URL;
+  /** The {@link ConcurrencyLimiter} to gate through. */
   limiter: ConcurrencyLimiter;
-  /** Optional dynamic priority for every fetch through this source. The
+  /** Optional dynamic priority for every fetch through this middleware. The
    *  limiter re-invokes this callback on each slot-open, so closures over
    *  dynamic state (e.g. layer viewport center) re-sort the queue when that
    *  state changes. Lower = serviced sooner. */
@@ -235,78 +242,50 @@ interface LimitedSourceOptions {
 }
 
 /**
- * Wraps a {@link Source} so every `fetch` holds a {@link ConcurrencyLimiter}
- * slot for its duration — acquiring before the read, releasing when it settles
- * (resolve or reject). Forwards the read's `signal` to `limiter.acquire`, so a
- * request whose caller aborts while it is still queued for a slot is dropped
- * before any network I/O fires.
+ * chunkd middleware that holds a {@link ConcurrencyLimiter} slot for the
+ * duration of each underlying `fetch` — releasing on resolve, on reject, and
+ * never otherwise interfering. Forwards the request's `signal` to
+ * `limiter.acquire`, so if the caller aborts while the call is queued the
+ * request is dropped before any network I/O fires.
  *
- * Compose this *beneath* `SourceChunk` / `SourceCache` (i.e. as the
- * `SourceView`'s underlying source), so a cache hit short-circuits in
- * `SourceCache` and never reaches — never burns a slot on — the limiter:
+ * Composed into a {@link SourceView}'s middleware list alongside the chunkd
+ * middlewares (`SourceChunk`, `SourceCache`, …). Place it after caching so
+ * cache hits don't burn a slot.
  *
  * @example
  * ```ts
  * import { SourceView } from "@chunkd/source";
  * import { SourceCache, SourceChunk } from "@chunkd/middleware";
  *
- * const limited = new LimitedSource(source, { limiter });
- * const view = new SourceView(limited, [
+ * const view = new SourceView(source, [
  *   new SourceChunk({ size: 64 * 1024 }),
  *   new SourceCache({ size: 8 * 1024 * 1024 }),
+ *   new LimiterMiddleware({ url, limiter }),
  * ]);
  * ```
  *
- * **Why a source wrapper and not a chunkd `SourceMiddleware`** (which would
- * compose more naturally): chunkd's `SourceView` does not forward the request
- * `signal` to its middleware, so a middleware cannot observe an abort — only
- * the underlying source receives the read options (incl. `signal`) via
- * `SourceView`'s terminal handler. Wrapping the source is therefore the only
- * layer that can drop a queued request on abort. Revert to a `SourceMiddleware`
- * once chunkd forwards the signal (https://github.com/blacha/chunkd/pull/1697);
- * tracked in https://github.com/developmentseed/deck.gl-raster/issues/565.
- *
  * @internal
  */
-export class LimitedSource implements Source {
-  private readonly source: Source;
+export class LimiterMiddleware implements SourceMiddleware {
+  readonly name = "limiter";
+  private readonly url: URL;
   private readonly limiter: ConcurrencyLimiter;
   private readonly getPriority?: () => Priority;
 
-  constructor(source: Source, opts: LimitedSourceOptions) {
-    this.source = source;
+  constructor(opts: LimiterMiddlewareOptions) {
+    this.url = opts.url;
     this.limiter = opts.limiter;
     this.getPriority = opts.getPriority;
   }
 
-  get type(): string {
-    return this.source.type;
-  }
-
-  get url(): URL {
-    return this.source.url;
-  }
-
-  get metadata(): SourceMetadata | undefined {
-    return this.source.metadata;
-  }
-
-  head(options?: { signal: AbortSignal }): Promise<SourceMetadata> {
-    return this.source.head(options);
-  }
-
-  async fetch(
-    offset: number,
-    length?: number,
-    options?: { signal: AbortSignal },
-  ): Promise<ArrayBuffer> {
+  async fetch(req: SourceRequest, next: SourceCallback): Promise<ArrayBuffer> {
     const release = await this.limiter.acquire(
-      this.source.url,
-      options?.signal,
+      this.url,
+      req.signal,
       this.getPriority,
     );
     try {
-      return await this.source.fetch(offset, length, options);
+      return await next(req);
     } finally {
       release();
     }

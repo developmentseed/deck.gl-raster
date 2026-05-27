@@ -1016,14 +1016,14 @@ importers:
   packages/geotiff:
     dependencies:
       '@chunkd/middleware':
-        specifier: ^11.3.0
-        version: 11.3.0
+        specifier: ^11.3.1
+        version: 11.3.1
       '@chunkd/source':
-        specifier: ^11.4.0
-        version: 11.4.0
+        specifier: ^11.4.1
+        version: 11.4.1
       '@chunkd/source-http':
-        specifier: ^11.4.0
-        version: 11.4.0
+        specifier: ^11.4.1
+        version: 11.4.1
       '@chunkd/source-memory':
         specifier: ^11.2.0
         version: 11.2.0
@@ -1054,7 +1054,7 @@ importers:
     devDependencies:
       '@chunkd/source-file':
         specifier: ^11.2.0
-        version: 11.2.0
+        version: 11.2.1
       '@developmentseed/geotiff':
         specifier: workspace:^
         version: 'link:'
@@ -1148,6 +1148,9 @@ importers:
       '@types/node':
         specifier: ^25.6.0
         version: 25.6.0
+      delaunator:
+        specifier: ^5.1.0
+        version: 5.1.0
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -1911,16 +1914,20 @@ packages:
       react: '>=18'
       react-dom: '>=18'
 
-  '@chunkd/middleware@11.3.0':
-    resolution: {integrity: sha512-9AzKHP4zX3DUawwJY4wOCCNSPJTmGQc6y1rABsLmoUQ6F5lN73/1u2FkQB0ihNIzzLYz2j86nwvdJSA6GArrtQ==}
+  '@chunkd/middleware@11.3.1':
+    resolution: {integrity: sha512-BMvxd2Zfb0zhcZUjLera/9ozt1CKcpS71LjekNtJwOxeMN4AJ4DJK8gev9erHX5ZnwBsjbq1VnZSm2TxEFhv1Q==}
     engines: {node: '>=16.0.0'}
 
   '@chunkd/source-file@11.2.0':
     resolution: {integrity: sha512-QQpVYMELqzjLfn2T+S3s2sVLt5KfI0zHas50Ce8g/o5hYiVraukjTTUCxgbKYJITwIcwARuTxY8rIbKMGdj2RA==}
     engines: {node: '>=16.0.0'}
 
-  '@chunkd/source-http@11.4.0':
-    resolution: {integrity: sha512-ZkekctSU+7m8SNWxvZNBJA4Uw+eOqhaQq9Sy6gYLMeoZCTWDleID21zjWSbh/4tuSoTN/jiA/U1N9uljWjEY/g==}
+  '@chunkd/source-file@11.2.1':
+    resolution: {integrity: sha512-+WV6kCcd4ehe0/9nd7VCUBFOJPtP+X0OHohlZlr1RsM8LnMBd0+Jo/CUwrlStmGAUgU4T3qSdbUE/cwCODXZNQ==}
+    engines: {node: '>=16.0.0'}
+
+  '@chunkd/source-http@11.4.1':
+    resolution: {integrity: sha512-h/7tWxFh6EUh5k/pcYh66WSwiVbIWM6mCCLH0TZpBSWzgekjOXqXkEMRUBXrhekqrmtPQdTPro5e7tnknIdESg==}
     engines: {node: '>=18.0.0'}
 
   '@chunkd/source-memory@11.2.0':
@@ -1929,6 +1936,10 @@ packages:
 
   '@chunkd/source@11.4.0':
     resolution: {integrity: sha512-UVvihfAoGXYqH8sLJBHL7w3sKphIQpzoldfutZa7Y8UvaMqKxsIxOp8FbmxfCA2gd6EDLwBJaDA6HfkTIu1jmA==}
+    engines: {node: '>=16.0.0'}
+
+  '@chunkd/source@11.4.1':
+    resolution: {integrity: sha512-R4/gIKbx059Am4UOYplEjKkE6g9jhDQF4M7jKNkMZR8Toeudr9vQl0z9ppb9fkTQIuvW8oKjO0Hc5/s4RCCCzg==}
     engines: {node: '>=16.0.0'}
 
   '@cogeotiff/core@9.5.0':
@@ -5526,6 +5537,9 @@ packages:
     resolution: {integrity: sha512-8QmQKqEASLd5nx0U1B1okLElbUuuttJ/AnYmRXbbbGDWh6uS208EjD4Xqq/I9wK7u0v6O08XhTWnt5XtEbR6Dg==}
     engines: {node: '>= 0.4'}
 
+  delaunator@5.1.0:
+    resolution: {integrity: sha512-AGrQ4QSgssa1NGmWmLPqN5NY2KajF5MqxetNEO+o0n3ZwZZeTmt7bBnvzHWrmkZFxGgr4HdyFgelzgi06otLuQ==}
+
   delegate@3.2.0:
     resolution: {integrity: sha512-IofjkYBZaZivn0V8nnsMJGBr4jVLxHDheKSW88PyxS5QC4Vo9ZbZVvhzlSxY87fVq3STR6r+4cGepyHkcWOQSw==}
 
@@ -8161,6 +8175,9 @@ packages:
     resolution: {integrity: sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw==}
     engines: {iojs: '>=1.0.0', node: '>=0.10.0'}
 
+  robust-predicates@3.0.3:
+    resolution: {integrity: sha512-NS3levdsRIUOmiJ8FZWCP7LG3QpJyrs/TE0Zpf1yvZu8cAJJ6QMW92H1c7kWpdIHo8RvmLxN/o2JXTKHp74lUA==}
+
   rolldown@1.0.0-rc.17:
     resolution: {integrity: sha512-ZrT53oAKrtA4+YtBWPQbtPOxIbVDbxT0orcYERKd63VJTF13zPcgXTvD4843L8pcsI7M6MErt8QtON6lrB9tyA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -10276,23 +10293,29 @@ snapshots:
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
 
-  '@chunkd/middleware@11.3.0':
+  '@chunkd/middleware@11.3.1':
     dependencies:
-      '@chunkd/source': 11.4.0
+      '@chunkd/source': 11.4.1
 
   '@chunkd/source-file@11.2.0':
     dependencies:
       '@chunkd/source': 11.4.0
 
-  '@chunkd/source-http@11.4.0':
+  '@chunkd/source-file@11.2.1':
     dependencies:
-      '@chunkd/source': 11.4.0
+      '@chunkd/source': 11.4.1
+
+  '@chunkd/source-http@11.4.1':
+    dependencies:
+      '@chunkd/source': 11.4.1
 
   '@chunkd/source-memory@11.2.0':
     dependencies:
-      '@chunkd/source': 11.4.0
+      '@chunkd/source': 11.4.1
 
   '@chunkd/source@11.4.0': {}
+
+  '@chunkd/source@11.4.1': {}
 
   '@cogeotiff/core@9.5.0': {}
 
@@ -15293,6 +15316,10 @@ snapshots:
       has-property-descriptors: 1.0.2
       object-keys: 1.1.1
 
+  delaunator@5.1.0:
+    dependencies:
+      robust-predicates: 3.0.3
+
   delegate@3.2.0: {}
 
   depd@1.1.2: {}
@@ -18451,6 +18478,8 @@ snapshots:
   retry@0.13.1: {}
 
   reusify@1.1.0: {}
+
+  robust-predicates@3.0.3: {}
 
   rolldown@1.0.0-rc.17:
     dependencies:
