@@ -26,12 +26,5 @@ the same public `nasa-waterinsight` S3 bucket, authorized through a
    ```
 4. Open your browser to http://localhost:3000
 
-## Re-deriving the grid
-
-`src/nldas/metadata.ts` hard-codes the grid (the virtual store is not
-GeoZarr-compliant). To re-derive it, run the spike:
-
-```bash
-cd examples/nldas-icechunk
-pnpm exec tsx scripts/smoke.ts
-```
+`src/nldas/metadata.ts` hard-codes the grid (origin, pixel size, shape, units,
+fill) because the virtual store is not GeoZarr-compliant.

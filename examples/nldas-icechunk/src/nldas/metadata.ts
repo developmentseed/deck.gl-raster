@@ -50,8 +50,8 @@ export const COLORMAP_REVERSED = false;
 
 /**
  * Synthetic GeoZarr-compliant attrs (the virtual store is not GeoZarr).
- * Mirrors the ECMWF example's approach. Values derived from the store by
- * `scripts/smoke.ts`.
+ * Mirrors the ECMWF example's approach. Values read once from the store's
+ * shape + lat/lon coordinate arrays and frozen here.
  *
  * Affine [a,b,c,d,e,f] (see `@developmentseed/affine`):
  *   x = a*col + b*row + c ; y = d*col + e*row + f
