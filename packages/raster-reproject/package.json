@@ -49,5 +49,8 @@
   },
   "volta": {
     "extends": "../../package.json"
+  },
+  "dependencies": {
+    "delaunator": "^5.1.0"
   }
 }

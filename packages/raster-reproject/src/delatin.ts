@@ -29,6 +29,24 @@ const SAMPLE_POINTS: [number, number, number][] = [
 
 const DEFAULT_MAX_ERROR = 0.125;
 
+/**
+ * A seed triangulation for {@link RasterReprojector}, in delaunator's data
+ * shape. All UV coordinates must lie in `[0, 1]`. The triangulation must be a
+ * valid (ideally Delaunay) mesh — its triangles are NOT legalized on seeding.
+ */
+export interface InitialTriangulation {
+  /** Flat UV vertex coordinates `[u0, v0, u1, v1, ...]`, each in `[0, 1]`. */
+  uvs: number[];
+  /** Triangle vertex indices, 3 per triangle (indices into `uvs`). */
+  triangles: number[];
+  /**
+   * Halfedge twins: `halfedges[e]` is the opposite halfedge of `e`, or `-1`
+   * if `e` is on the boundary. Same convention as delaunator and the
+   * reprojector's internal `_halfedges`.
+   */
+  halfedges: number[];
+}
+
 export interface ReprojectionFns {
   /**
    * Convert from UV coordinates to input CRS coordinates.
