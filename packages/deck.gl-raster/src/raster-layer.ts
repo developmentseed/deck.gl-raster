@@ -7,7 +7,10 @@ import type {
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
-import type { ReprojectionFns } from "@developmentseed/raster-reproject";
+import type {
+  InitialTriangulation,
+  ReprojectionFns,
+} from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { splitFloat64Array } from "./fp64.js";
 import { buildUniformGridMesh } from "./globe-grid-mesh.js";
@@ -75,6 +78,14 @@ export interface RasterLayerProps extends CompositeLayerProps {
    * Reprojection functions for converting between pixel, input CRS, and output CRS coordinates
    */
   reprojectionFns: ReprojectionFns;
+
+  /**
+   * Optional seed triangulation for the reprojector — e.g. to clamp the mesh to
+   * a UV sub-region (such as the valid Web Mercator latitude band). Defaults to
+   * the full image. Must be reference-stable across renders to avoid
+   * regenerating the mesh every frame.
+   */
+  initialTriangulation?: InitialTriangulation;
 
   /**
    * The image to display. Accepts any luma.gl `TextureSource` (e.g. a URL,
@@ -187,7 +198,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       props.width !== oldProps.width ||
       props.height !== oldProps.height ||
       reprojectionFnsChanged ||
-      props.maxError !== oldProps.maxError;
+      props.maxError !== oldProps.maxError ||
+      props.initialTriangulation !== oldProps.initialTriangulation;
 
     if (needsMeshUpdate) {
       this._generateMesh();
@@ -199,6 +211,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       width,
       height,
       reprojectionFns,
+      initialTriangulation,
       maxError = DEFAULT_MAX_ERROR,
     } = this.props;
 
@@ -238,6 +251,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       reprojectionFns,
       width + 1,
       height + 1,
+      { initialTriangulation },
     );
     reprojector.run(maxError);
     const { indices, positions64High, positions64Low, texCoords } =

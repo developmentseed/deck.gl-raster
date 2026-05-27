@@ -443,6 +443,11 @@ export class RasterTileLayer<
         renderPipeline,
         maxError,
         reprojectionFns,
+        // Web Mercator: clamp the mesh to the valid latitude band for tiles
+        // past ±85.051°. Globe renders the full mesh (it shows the poles).
+        initialTriangulation: isGlobe
+          ? undefined
+          : tile._webMercatorInitialTriangulation,
         debug,
         debugOpacity,
         coordinateSystem,
