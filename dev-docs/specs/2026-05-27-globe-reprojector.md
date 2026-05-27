@@ -60,8 +60,11 @@ curvature actually matters. This spec replaces it.
 
 **Non-goals (explicitly deferred, but not foreclosed)**
 
-- **GCP-based seeding.** The `_seed()` hook (below) is the natural future home
-  for triangulating from Ground Control Points, but we do not build it now.
+- **GCP-based seeding.** The `InitialTriangulation` seed mechanism added in #574
+  (constructor `options.initialTriangulation` + the `triangulateRectangle`
+  helper) is the natural future home for triangulating from Ground Control
+  Points, but we do not build that here. The globe uses the default full-image
+  seed.
 - Antimeridian handling (tracked separately).
 - Pole singularity. Near the poles the reprojection never fully converges; the
   existing `maxIterations` safeguard still applies. Sag refinement does not make
@@ -87,13 +90,13 @@ future GCP case or any custom metric).
 
 ### 1a. Make `_addPoint` overridable
 
-`_addPoint` is `private` today ([delatin.ts:376](../../packages/raster-reproject/src/delatin.ts#L376)). Change to
+`_addPoint` is `private` today ([delatin.ts:465](../../packages/raster-reproject/src/delatin.ts#L465)). Change to
 `protected`. No logic change.
 
 ### 1b. Extract the scoring seam
 
 Today the per-sample pixel error is computed inline in the sampling loop of
-`_findReprojectionCandidate` ([delatin.ts:296-298](../../packages/raster-reproject/src/delatin.ts#L296-L298)). Extract the per-sample scalar
+`_findReprojectionCandidate` ([delatin.ts:387](../../packages/raster-reproject/src/delatin.ts#L387)). Extract the per-sample scalar
 into a `protected` method, default = today's pixel error:
 
 ```ts
@@ -117,35 +120,24 @@ triangle vertex indices, the interpolated output position, and the base's
 corresponding uv as the split candidate, and pushes the max to the queue —
 structurally identical to today, just routed through the seam.
 
-### 1c. Lazy seeding via `_seed()` + `_ensureSeeded()`
+### 1c. Keep eager seeding; the init-order hazard moves to the subclass
 
-Today the constructor seeds the initial 4 corners + 2 triangles and flushes
-([delatin.ts:138-146](../../packages/raster-reproject/src/delatin.ts#L138-L146)). Move that body into a `protected _seed()` and call it
-lazily:
+#574 already extracted seeding into `private _seed(seed: InitialTriangulation)`
+([delatin.ts:221](../../packages/raster-reproject/src/delatin.ts#L221)), still
+called **eagerly** from the constructor: `_seed(...)` → `_addPoint` ×N →
+`_flush` ([delatin.ts:211-212](../../packages/raster-reproject/src/delatin.ts#L211-L212)).
+We keep that as-is — **no constructor lifecycle change.** The globe uses the
+default full-image seed (the Web-Mercator latitude clamp from #574 is wired only
+into the Mercator branch; the globe shows the poles), so `_seed` stays `private`.
 
-```ts
-constructor(...) { /* allocate empty arrays only — no _addPoint, no _flush */ }
-
-protected _seed(): void { /* today's lines 138-146 */ }
-
-private _ensureSeeded(): void {
-  if (this.triangles.length === 0) this._seed();
-}
-
-run(...)  { this._ensureSeeded(); /* existing loop */ }
-refine()  { this._ensureSeeded(); /* existing body */ }
-```
-
-**Why:** in JS/TS a base constructor runs fully **before** subclass field
-initializers. If the constructor calls `_addPoint` (which a subclass overrides
-to touch `renderPositions`), `renderPositions` is still `undefined`. Moving
-seeding to first-`run()`/`refine()` means the object is fully constructed —
-subclass fields initialized — before any `_addPoint` fires. This also makes
-`_seed()` the clean override point for the future GCP case.
-
-**Observable change:** `triangles`/`uvs` are empty between construction and the
-first `run()`/`refine()`. Nothing reads them in that window
-([raster-layer.ts](../../packages/deck.gl-raster/src/raster-layer.ts) constructs then immediately runs).
+The catch: because seeding runs inside `super()`, a subclass's `_addPoint`
+override fires before the subclass's own fields exist, and the construction-time
+`_flush` runs `_sampleError` before any run-time tolerances are set. Rather than
+make seeding lazy, **`GlobeReprojector` absorbs both** (see 2a/2b/2d/2e):
+`renderPositions` is lazy-created inside the `_addPoint` override, and `run()`
+re-scores via `_reevaluate()` after setting tolerances, discarding the
+provisional construction-time scores. So the base needs only **1a/1b/1d** —
+three small `protected` edits, none touching the constructor.
 
 ### 1d. `_reevaluate()` for tolerance changes
 
@@ -177,16 +169,22 @@ package (not exported from `index.ts`) until there's an external use case.
 
 ```ts
 /** Sphere positions (deck.gl GlobeView common space), stride 3, indexed by
- *  vertex — parallel to the base's `exactOutputPositions` (stride 2). */
-renderPositions: number[] = [];
+ *  vertex — parallel to the base's `exactOutputPositions` (stride 2).
+ *  No initializer: the base constructor's eager `_seed` calls `_addPoint`
+ *  before this subclass's field initializers would run, so it is created
+ *  lazily in the override (2b). */
+renderPositions!: number[];
 ```
 
-A plain field initializer is safe now that seeding is lazy (1c).
+A definite-assignment declaration (no initializer to clobber); the array is
+lazy-created via `??=` in `_addPoint` (2b) on the first vertex — which always
+precedes any read of it.
 
 ### 2b. `_addPoint` override
 
 ```ts
 protected override _addPoint(u: number, v: number): number {
+  this.renderPositions ??= []; // created on the first (construction-time) vertex
   const i = super._addPoint(u, v); // pushes uv + exact lng/lat as today
   const lng = this.exactOutputPositions[2 * i]!;
   const lat = this.exactOutputPositions[2 * i + 1]!;
@@ -259,42 +257,44 @@ this normalized value (so the most-over-budget point is added first).
 The base planar metric is this with `sagTolerance = ∞` (sag term vanishes,
 score = `px/pxTol`). `GlobeReprojector` strictly generalizes the base.
 
+Because the base seeds eagerly, this seam also runs **once during construction**,
+before `run()` sets the tolerances. `_pixelTolerance`/`_sagTolerance` therefore
+read as defaults on that pass, and `run()`'s `_reevaluate()` recomputes those
+provisional scores with the real tolerances (2e). Those construction-time values
+are never consumed by refinement before the recompute.
+
 ### 2e. `run` — tolerances are per-run inputs
 
 Tolerance is a property of *a run*, not of the reprojector, and may change
-between runs. So both tolerances arrive at `run`. Concretely, convert the base
-`run` to an options object and extend it:
+between runs. #574 kept base `run(maxError, { maxIterations })`
+([delatin.ts:246](../../packages/raster-reproject/src/delatin.ts#L246)), so the
+globe overrides it **compatibly** — no base API change. `maxError` stays the
+pixel tolerance; `sagTolerance` joins the options bag:
 
 ```ts
-// base (raster-reproject)
-run(options?: { maxError?: number; maxIterations?: number }): void
+// base (raster-reproject), unchanged
+run(maxError = DEFAULT_MAX_ERROR, { maxIterations = 10_000 } = {}): void
 
-// GlobeReprojector
-run(options?: {
-  pixelTolerance?: number;   // input pixels (GDAL-like), default e.g. 0.125
-  sagTolerance?: number;     // relative dip, default tuned visually
-  maxIterations?: number;
-}): void {
-  this._pixelTolerance = options?.pixelTolerance ?? DEFAULT_PIXEL_TOLERANCE;
-  this._sagTolerance   = options?.sagTolerance   ?? DEFAULT_SAG_TOLERANCE;
-  if (tolerancesChangedSinceLastRun) this._reevaluate();
-  this._ensureSeeded();
-  while (this.getMaxError() > 1) this.refine(); // seam is normalized → threshold 1
+// GlobeReprojector — signature-compatible override (options bag extended)
+run(
+  maxError = DEFAULT_MAX_ERROR,
+  { sagTolerance = DEFAULT_SAG_TOLERANCE, maxIterations = 10_000 } = {},
+): void {
+  this._pixelTolerance = maxError;
+  this._sagTolerance = sagTolerance;
+  this._reevaluate();              // re-score the seed with the real tolerances
+  while (this.getMaxError() > 1) { // seam is normalized → fixed threshold 1
+    this.refine();
+    // ...same maxIterations safeguard as base
+  }
 }
 ```
 
 `_pixelTolerance`/`_sagTolerance` are **transient run state** (set at `run`
 entry, read by the seam during that run), not persistent configuration — the
-public contract is still "supply tolerances per `run` call." Re-running with
-different tolerances on the same instance triggers `_reevaluate()` first; in
-practice the layer builds a fresh reprojector per tolerance change, so this is a
-correctness safeguard, not a hot path.
-
-> Converting base `run(maxError)` → `run({ maxError })` is a small, principled
-> API change touching the one call site we own ([raster-layer.ts](../../packages/deck.gl-raster/src/raster-layer.ts)). It keeps the
-> override signature compatible. **Flagged for review** (alternative: keep
-> `run(maxError)` and reuse it with `maxError = 1` plus a separate tolerance
-> channel — uglier).
+public contract is still "supply tolerances per `run` call." `_reevaluate()`
+re-scores the existing triangles (just the seed on the first run) so the queue
+reflects the current tolerances rather than the construction-time defaults (2d).
 
 ## Component 3 — `RasterLayer` wiring
 
@@ -306,7 +306,12 @@ In `_generateMesh` ([raster-layer.ts:205-228](../../packages/deck.gl-raster/src/
 const reprojector = isGlobe
   ? new GlobeReprojector(reprojectionFns, width + 1, height + 1)
   : new RasterReprojector(reprojectionFns, width + 1, height + 1);
-reprojector.run(isGlobe ? { sagTolerance, pixelTolerance: maxError } : { maxError });
+// maxError is the pixel tolerance for both; the globe adds sagTolerance
+if (reprojector instanceof GlobeReprojector) {
+  reprojector.run(maxError, { sagTolerance });
+} else {
+  reprojector.run(maxError);
+}
 const mesh = reprojectorToMesh(reprojector);
 ```
 
@@ -322,8 +327,10 @@ const mesh = reprojectorToMesh(reprojector);
 ```
 tile load → RasterLayer._generateMesh
   → new GlobeReprojector(reprojectionFns, w+1, h+1)
-  → run({ pixelTolerance, sagTolerance })
-       _ensureSeeded → _seed → _addPoint ×4 (caches sphere xyz) → _flush
+       constructor → _seed(default) → _addPoint ×4 (lazy-creates + caches sphere xyz)
+                   → _flush → _sampleError (provisional: tolerances still default)
+  → run(maxError /* = pixelTolerance */, { sagTolerance })
+       set tolerances → _reevaluate (re-score the seed triangles)
        refine loop: _step → _addPoint (caches) ; _flush → _findReprojectionCandidate
          per sample → _sampleError = max(px/pxTol, sag/sagTol)   [sag from renderPositions]
        until getMaxError() ≤ 1
@@ -334,7 +341,7 @@ tile load → RasterLayer._generateMesh
 ## Error handling / edge cases
 
 - **Poles:** unchanged non-convergence risk; `maxIterations` warns and bails
-  ([delatin.ts:168-176](../../packages/raster-reproject/src/delatin.ts#L168-L176)). Sag pushes more refinement near curved regions but does
+  ([delatin.ts:257-264](../../packages/raster-reproject/src/delatin.ts#L257-L264)). Sag pushes more refinement near curved regions but does
   not introduce a new failure mode.
 - **Degenerate `R`:** all vertices share `R`; deriving it from the projection is
   safe. Guard against `sagTolerance ≤ 0` (throw, like `maxError ≤ 0` today).
@@ -344,9 +351,11 @@ tile load → RasterLayer._generateMesh
 ## Testing strategy
 
 - **Base unchanged:** existing `raster-reproject` tests pass after the seam
-  extraction + lazy seeding (behavior-preserving).
-- **Lazy seeding:** constructing a reprojector leaves `triangles`/`uvs` empty;
-  `run()`/`refine()` seeds.
+  extraction (behavior-preserving; the constructor and seeding are untouched).
+- **Init order:** constructing a `GlobeReprojector` (eager seed) populates
+  `renderPositions` via the `??=` guard, and the construction-time scoring pass
+  does not throw with tolerances unset; `run()`'s `_reevaluate()` then yields the
+  correct mesh.
 - **Sag formula:** given three known sphere corner positions, `sag` equals the
   analytic radial gap (e.g. a chord subtending angle θ → `R(1−cos(θ/2))` at the
   midpoint).
@@ -366,5 +375,3 @@ tile load → RasterLayer._generateMesh
    the small spherical formula. Design is unaffected.
 2. **Default `sagTolerance`.** Needs visual tuning on the globe example; ship a
    sensible default (relative dip) and expose the prop.
-3. **`run` options-object refactor** (Component 2e) — confirm preferred over the
-   alternative.
