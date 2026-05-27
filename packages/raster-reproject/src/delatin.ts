@@ -33,6 +33,27 @@ const DEFAULT_MAX_ERROR = 0.125;
  * A seed triangulation for {@link RasterReprojector}, in delaunator's data
  * shape. All UV coordinates must lie in `[0, 1]`. The triangulation must be a
  * valid (ideally Delaunay) mesh — its triangles are NOT legalized on seeding.
+ *
+ * The fields deliberately match [delaunator](https://github.com/mapbox/delaunator)'s
+ * output, so building a seed from a set of UV points is a one-liner — pass the
+ * points (which must form a convex domain; delaunator triangulates the convex
+ * hull of its input):
+ *
+ * ```ts
+ * import Delaunator from "delaunator";
+ *
+ * const points: [number, number][] = [[0, 0], [1, 0], [0, 1], [1, 1]];
+ * const d = Delaunator.from(points);
+ * const seed: InitialTriangulation = {
+ *   uvs: Array.from(d.coords),
+ *   triangles: Array.from(d.triangles),
+ *   halfedges: Array.from(d.halfedges),
+ * };
+ * ```
+ *
+ * delaunator is not a dependency of this package; consumers that want this
+ * convenience add it themselves. A hand-built triangulation works too, as long
+ * as it is a valid mesh with the halfedge convention below.
  */
 export interface InitialTriangulation {
   /** Flat UV vertex coordinates `[u0, v0, u1, v1, ...]`, each in `[0, 1]`. */
