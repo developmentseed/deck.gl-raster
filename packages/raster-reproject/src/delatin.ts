@@ -285,6 +285,24 @@ export class RasterReprojector {
     this._flush();
   }
 
+  /**
+   * Re-score every triangle through {@link _sampleError} and rebuild the
+   * priority queue. Use when a run-time scoring input changed since the last
+   * pass so the queue isn't a mix of stale and current scores. The queue is
+   * cleared first because `_queuePush` appends unconditionally.
+   */
+  protected _reevaluate(): void {
+    this._queue.length = 0;
+    this._errors.length = 0;
+    const numTriangles = this.triangles.length / 3;
+    for (let t = 0; t < numTriangles; t++) {
+      this._queueIndices[t] = -1;
+      this._pending[t] = t;
+    }
+    this._pendingLen = numTriangles;
+    this._flush();
+  }
+
   // max error of the current mesh
   getMaxError(): number {
     return this._errors[0]!;
