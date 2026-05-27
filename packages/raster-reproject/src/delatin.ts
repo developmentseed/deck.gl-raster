@@ -69,14 +69,15 @@ export interface InitialTriangulation {
 }
 
 /**
- * Build an axis-aligned rectangle seed (4 corner vertices, 2 triangles sharing
- * the p0–p3 diagonal) covering the UV sub-rectangle `[uMin, vMin]`–`[uMax, vMax]`.
+ * Triangulate an axis-aligned UV rectangle `[uMin, vMin]`–`[uMax, vMax]` into an
+ * {@link InitialTriangulation} (4 corner vertices, 2 triangles sharing the
+ * p0–p3 diagonal).
  *
  * Seeding {@link RasterReprojector} with a sub-rectangle confines the mesh to
  * that region — e.g. to clamp an image's mesh to the valid Web Mercator
  * latitude band (see #182 / #351), pass that band's UV bounds.
  */
-export function rectangleSeed(
+export function triangulateRectangle(
   uMin: number,
   vMin: number,
   uMax: number,
@@ -97,7 +98,12 @@ export function rectangleSeed(
  * hardcoded constructor init exactly, and is hardcoded (not delaunator-built)
  * so the package has no runtime triangulation dependency.
  */
-const UNIT_SQUARE_SEED: InitialTriangulation = rectangleSeed(0, 0, 1, 1);
+const UNIT_SQUARE_TRIANGULATION: InitialTriangulation = triangulateRectangle(
+  0,
+  0,
+  1,
+  1,
+);
 
 export interface ReprojectionFns {
   /**
@@ -202,7 +208,7 @@ export class RasterReprojector {
     this._pending = []; // triangles pending addition to queue
     this._pendingLen = 0;
 
-    this._seed(options.initialTriangulation ?? UNIT_SQUARE_SEED);
+    this._seed(options.initialTriangulation ?? UNIT_SQUARE_TRIANGULATION);
     this._flush();
   }
 

@@ -23,7 +23,7 @@ describe("createInitialWebMercatorTriangulation", () => {
       bottomRight: -90,
     });
     expect(seed).toBeDefined();
-    // rectangleSeed(0, vTop, 1, vBottom) → uvs = [0,vTop, 1,vTop, 0,vBottom, 1,vBottom]
+    // triangulateRectangle(0, vTop, 1, vBottom) → uvs = [0,vTop, 1,vTop, 0,vBottom, 1,vBottom]
     expect(seed?.uvs[1]).toBeCloseTo((90 - MAX_LAT) / 180, 9); // vTop
     expect(seed?.uvs[5]).toBeCloseTo((90 + MAX_LAT) / 180, 9); // vBottom
     expect(seed?.uvs[0]).toBe(0);

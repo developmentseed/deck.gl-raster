@@ -1,5 +1,5 @@
 import type { InitialTriangulation } from "@developmentseed/raster-reproject";
-import { rectangleSeed } from "@developmentseed/raster-reproject";
+import { triangulateRectangle } from "@developmentseed/raster-reproject";
 
 /** Maximum latitude representable in Web Mercator (EPSG:3857), in degrees. */
 const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
@@ -73,5 +73,5 @@ export function createInitialWebMercatorTriangulation(
     return undefined;
   }
 
-  return rectangleSeed(0, vTop, 1, vBottom);
+  return triangulateRectangle(0, vTop, 1, vBottom);
 }
