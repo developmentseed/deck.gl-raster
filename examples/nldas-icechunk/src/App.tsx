@@ -156,21 +156,37 @@ export default function App() {
         />
       </MaplibreMap>
       <ControlPanel
-        title="NLDAS-3 + icechunk"
+        title="NLDAS-3 Icechunk Example"
         sourcePath="examples/nldas-icechunk"
       >
         <Text mb="3" color="gray.600">
-          Reads NASA's NLDAS-3 daily near-surface air temperature directly from
-          a public{" "}
-          <ExternalLink href="https://icechunk.io">icechunk</ExternalLink>{" "}
-          repository in the browser — no server in between. The store is a{" "}
-          <em>virtual</em> Zarr: its chunks reference NLDAS-3 source files in
-          the same S3 bucket, read with{" "}
-          <ExternalLink href="https://github.com/EarthyScience/icechunk-js">
-            icechunk-js
+          Reads{" "}
+          <ExternalLink href="https://ldas.gsfc.nasa.gov/nldas/v3">
+            NLDAS-3
           </ExternalLink>{" "}
-          + zarrita and rendered by a <code>ZarrLayer</code>. Showing a single
-          day (2010-07-16); ocean / no-data is left transparent.
+          temperature data directly from a public{" "}
+          <ExternalLink href="https://icechunk.io">Icechunk</ExternalLink>{" "}
+          repository.
+        </Text>
+        <Text mb="3" color="gray.600">
+          Zarr data is rendered by a{" "}
+          <ExternalLink href="https://developmentseed.org/deck.gl-raster/api/deck-gl-zarr/classes/ZarrLayer/">
+            <code>ZarrLayer</code>
+          </ExternalLink>
+          , using
+          <ExternalLink href="https://github.com/EarthyScience/icechunk-js">
+            <code>icechunk-js</code>
+          </ExternalLink>{" "}
+          and{" "}
+          <ExternalLink href="https://zarrita.dev/">
+            <code>zarrita</code>
+          </ExternalLink>{" "}
+          to fetch data directly in the browser, without a server in between.
+          The store is{" "}
+          <ExternalLink href="https://virtualizarr.readthedocs.io/en/stable/index.html">
+            virtualized
+          </ExternalLink>
+          : the underlying raw data is technically read from NetCDF files.
         </Text>
 
         <Field label="Colormap">
