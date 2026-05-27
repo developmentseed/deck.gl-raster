@@ -35,6 +35,14 @@ import { openNldasTair } from "./nldas/store.js";
 const BASEMAP_STYLE =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
+// Geographic extent of the NLDAS-3 grid (derived from NLDAS_GEOZARR_ATTRS:
+// lon [-169, -52], lat [7, 72]). Used as maxBounds so the map can't pan or
+// zoom out beyond where data exists.
+const DATA_BOUNDS: [[number, number], [number, number]] = [
+  [-169, 7],
+  [-52, 72],
+];
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
@@ -112,6 +120,7 @@ export default function App() {
         ref={mapRef}
         initialViewState={{ longitude: -98, latitude: 39, zoom: 3.5 }}
         mapStyle={BASEMAP_STYLE}
+        maxBounds={DATA_BOUNDS}
       >
         <DeckGlOverlay
           layers={layers}
