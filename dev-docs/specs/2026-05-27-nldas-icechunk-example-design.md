@@ -126,7 +126,7 @@ peer packages, `maplibre-gl`, `react-map-gl`, and the shared
    // exact entry point (Repository.checkoutBranch vs ReadSession.open with an
    // explicit snapshot id) is pinned at the smoke-test step below
    const session = await /* main-branch read session */;
-   const store = await IcechunkStore.open(session, { withRangeCoalescing: true });
+   const store = await IcechunkStore.open(session); // withRangeCoalescing is fn-typed; omit
    const arr = await zarr.open(store.resolve("/Tair"), { kind: "array" });
    ```
    Use `zarr.open.v3` if auto-detection misfires — icechunk is always Zarr v3.
