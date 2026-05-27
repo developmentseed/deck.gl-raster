@@ -139,9 +139,6 @@ export default function App() {
             updateTriggers: {
               renderTile: [colormapId, rescaleMin, rescaleMax],
             },
-            // source bucket supports HTTP/2 multiplexing
-            maxRequests: 20,
-            maxCacheSize: 20,
           }),
         ]
       : [];
