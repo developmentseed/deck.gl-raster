@@ -28,7 +28,7 @@ export const TIME_DIM = "time";
 
 /**
  * Which timestep to render (single static frame). Time is "days since
- * 2001-01-01" with one-day increments, so index 3482 ≈ 2010-07-13 — a summer
+ * 2001-01-01" with one-day increments, so index 3482 = 2010-07-16 — a summer
  * day with good thermal contrast over North America.
  */
 export const TIME_INDEX = 3482;

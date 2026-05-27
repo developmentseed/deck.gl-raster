@@ -1,3 +1,4 @@
+import { Text } from "@chakra-ui/react";
 import {
   createColormapTexture,
   decodeColormapSprite,
@@ -5,7 +6,11 @@ import {
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import type { Device, Texture } from "@luma.gl/core";
-import { DeckGlOverlay } from "deck.gl-raster-examples-shared";
+import {
+  ControlPanel,
+  DeckGlOverlay,
+  ExternalLink,
+} from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -114,6 +119,27 @@ export default function App() {
           onDeviceInitialized={setDevice}
         />
       </MaplibreMap>
+      <ControlPanel
+        title="NLDAS-3 + icechunk"
+        sourcePath="examples/nldas-icechunk"
+      >
+        <Text mb="3" color="gray.600">
+          Reads NASA's NLDAS-3 daily 2-meter air temperature directly from a
+          public{" "}
+          <ExternalLink href="https://icechunk.io">icechunk</ExternalLink>{" "}
+          repository in the browser — no server in between. The store is a{" "}
+          <em>virtual</em> Zarr: its chunks reference NLDAS-3 source files in
+          the same S3 bucket, read with{" "}
+          <ExternalLink href="https://github.com/EarthyScience/icechunk-js">
+            icechunk-js
+          </ExternalLink>{" "}
+          + zarrita and rendered by a <code>ZarrLayer</code>.
+        </Text>
+        <Text fontSize="xs" color="gray.600">
+          Showing a single day (2010-07-16), colorized on the GPU with the
+          thermal colormap. Ocean / no-data is left transparent.
+        </Text>
+      </ControlPanel>
     </div>
   );
 }

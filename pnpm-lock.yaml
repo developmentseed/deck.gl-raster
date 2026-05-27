@@ -546,6 +546,9 @@ importers:
 
   examples/nldas-icechunk:
     dependencies:
+      '@chakra-ui/react':
+        specifier: ^3.34.0
+        version: 3.35.0(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@deck.gl/core':
         specifier: ^9.3.1
         version: 9.3.2
@@ -564,6 +567,9 @@ importers:
       '@developmentseed/deck.gl-zarr':
         specifier: workspace:^
         version: link:../../packages/deck.gl-zarr
+      '@emotion/react':
+        specifier: ^11.14.0
+        version: 11.14.0(@types/react@19.2.14)(react@19.2.5)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.3
