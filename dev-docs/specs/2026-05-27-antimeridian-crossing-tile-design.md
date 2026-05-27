@@ -67,7 +67,7 @@ RasterTileLayer._renderSubLayers (per tile)        ← the only split point
 ```
 
 - **`RasterReprojector`** ([`delatin.ts`](../../packages/raster-reproject/src/delatin.ts)) — one mesh, always. Gains an optional **initial-triangulation seed** `{ uvs, triangles, halfedges }` (delaunator's shape), defaulting to today's unit-square 2-triangle seed. The refinement core (`_step`, `_legalize`, `_findReprojectionCandidate`, the error queue) is already seed-agnostic; only the constructor's hardcoded init changes. Refinement only ever *splits existing triangles*, so a seed covering `[0, u_cut]×[0,1]` keeps the whole mesh in that sub-region. `width`/`height` stay the full image, so sub-domain UVs index the full texture — no texture re-windowing.
-- **`createInitialConditions(points)`** — a **separate, tree-shakeable module** in `raster-reproject` that runs delaunator to produce a seed from arbitrary vertices. `delatin.ts` must **not** import it (so it tree-shakes when unused); mark the package `"sideEffects": false`. delaunator is ~8 KB, zero-dependency, same author/data-model as delatin (near-direct array transfer). The crossing-tile path uses it to seed each convex piece — a rectangle for a vertical cut, a convex quad/pentagon for a slanted cut (which can't be a hand-rolled rectangle) — so delaunator is part of the MVP crossing path. It still tree-shakes out for consumers that only render non-crossing tiles, since the default seed path doesn't import it.
+- **Seed building (no shipped wrapper)** — `raster-reproject` exposes only the `InitialTriangulation` type, not a builder. Wrapping delaunator is a one-liner, so its docstring documents the pattern instead (`uvs`/`triangles`/`halfedges` = delaunator's `coords`/`triangles`/`halfedges`). delaunator is a **dev/test dependency** of `raster-reproject` — used by tests to validate winding compatibility — *not* a runtime dependency, so nothing is shipped to consumers. The deck.gl-raster cut builder (follow-up) constructs each convex-piece seed at runtime; whether that uses delaunator (a runtime dep there) or a hand-rolled convex-fan triangulation is decided in the integration plan.
 - **Cut builder** (deck.gl-raster) — computes the cut (inverse-project the antimeridian) → 1 or 2 sub-domain seeds. Lives in the tileset's `getTileMetadata` and is stored on tile metadata (per the "tile state on the tile" convention), so it is computed once and shared by both the render and the bounding volume.
 - **`RasterLayer`** ([`raster-layer.ts`](../../packages/deck.gl-raster/src/raster-layer.ts)) — one mesh, one `MeshTextureLayer`, unchanged except a new `initialTriangulation` prop (default: full square) passed to its reprojector.
 - **`RasterTileLayer._renderSubLayers`** — reads the tile's cut info and emits 1 or 2 `RasterLayer`s. Both crossing sub-layers share the **same** `reprojectionFns` (the tile's `_projectPosition`); they differ only in `initialTriangulation` and sublayer id (`…-raster-west` / `…-raster-east`).
@@ -114,8 +114,7 @@ The initial-triangulation seed subsumes several pending needs into one primitive
 ## Test plan
 
 **Unit**
-- `createInitialConditions`: delaunator seed for the unit square and a sub-rectangle has expected `{ uvs, triangles, halfedges }`.
-- Reprojector with a sub-rectangle seed converges and adds no vertices outside the seed domain; with a delaunator unit-square seed produces output equivalent to the current default.
+- Reprojector seeded with a delaunator-built sub-rectangle (the documented pattern) converges and adds no vertices outside the seed domain; a delaunator unit-square seed refines validly (winding compatibility), equivalent to the current default.
 - Cut location: inverse-projecting the antimeridian yields the expected cut line — a vertical UV column for axis-aligned EPSG:4326 (the `antimeridian.tif` fixture cuts at column 24 / `u ≈ 0.571`), a slanted line for a rotated geotransform; a *curved* cut is detected and errors.
 - Two-box bounding volume for a crossing tile (west/east boxes; correct selection under the world-copy traversal).
 
@@ -126,11 +125,10 @@ The initial-triangulation seed subsumes several pending needs into one primitive
 
 ## Implementation stages (high level)
 
-1. `RasterReprojector` accepts an initial-triangulation seed; default unchanged; tests including the delaunator-unit-square equivalence check.
-2. `createInitialConditions` utility (separate module, delaunator, tree-shakeable) + `sideEffects: false`.
-3. Cut location (inverse-project the antimeridian) + convexity check (error on a curved/concave cut), on tile metadata.
-4. Two-box bounding volume in traversal for crossing tiles.
-5. `RasterLayer` `initialTriangulation` prop; `_renderSubLayers` emits 1 or 2 `RasterLayer`s, each seeded from its cut sub-domain via `createInitialConditions`.
-6. Example wiring + visual validation in cog-basic.
+1. `RasterReprojector` accepts an `InitialTriangulation` seed (default unchanged); `InitialTriangulation` docstring documents the delaunator pattern; delaunator added as a dev dependency; tests use a delaunator-built seed to validate winding + sub-domain confinement. **(Done.)**
+2. Cut location (inverse-project the antimeridian) + convexity check (error on a curved/concave cut), on tile metadata.
+3. Two-box bounding volume in traversal for crossing tiles.
+4. `RasterLayer` `initialTriangulation` prop; `_renderSubLayers` emits 1 or 2 `RasterLayer`s, each seeded from its cut sub-domain.
+5. Example wiring + visual validation in cog-basic.
 
 (Detailed task breakdown lives in the implementation plan, not here.)
