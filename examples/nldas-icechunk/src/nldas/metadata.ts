@@ -55,21 +55,23 @@ export const RESCALE_SLIDER_STEP = 1;
 
 /**
  * Synthetic GeoZarr-compliant attrs (the virtual store is not GeoZarr).
- * Mirrors the ECMWF example's approach. Values read once from the store's
- * shape + lat/lon coordinate arrays and frozen here.
+ * Mirrors the ECMWF example's approach.
  *
  * Affine [a,b,c,d,e,f] (see `@developmentseed/affine`):
  *   x = a*col + b*row + c ; y = d*col + e*row + f
  *
- * NLDAS-3 latitude is ASCENDING (row 0 = south, lat 7.005°), so the row step
- * `e` is positive and the origin is the bottom-left cell corner = first cell
- * center − half a pixel. Grid: 0.01° over lon [-169, -52], lat [7, 72].
+ * NLDAS-3 latitude is ASCENDING (row 0 = south, first cell center lat 7.005°),
+ * so the row step `e` is positive and the origin is the bottom-left cell
+ * corner = first cell center − half a pixel.
+ *
+ * The grid is an exact 0.01° lon [-169, -52] × lat [7, 72]. Use these exact
+ * values rather than ones derived from the store's coordinate arrays: those are
+ * float32, so subtracting them yields precision-noised spacing (dLon ≈
+ * 0.00999451 → east edge ≈ -52.064, a ~7 km eastward drift by the far edge).
  */
 export const NLDAS_GEOZARR_ATTRS = {
   "spatial:dimensions": ["lat", "lon"],
-  "spatial:transform": [
-    0.0099945068359375, 0, -168.99999237060547, 0, 0.010000228881835938, 7,
-  ],
+  "spatial:transform": [0.01, 0, -169, 0, 0.01, 7],
   "spatial:shape": [6500, 11700],
   "proj:code": "EPSG:4326",
 } as const;
