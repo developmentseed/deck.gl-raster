@@ -19,23 +19,23 @@ import type * as zarr from "zarrita";
 import type { NldasTileData } from "./nldas/get-tile-data.js";
 import { getTileData } from "./nldas/get-tile-data.js";
 import {
-  COLORMAP_INDEX_TAIR,
   COLORMAP_REVERSED,
   NLDAS_GEOZARR_ATTRS,
   NODATA_VALUE,
   RESCALE_MAX,
   RESCALE_MIN,
+  SURFACE_TEMP_COLORMAP_INDEX,
   TIME_DIM,
   TIME_INDEX,
 } from "./nldas/metadata.js";
 import { makeRenderTile } from "./nldas/render-tile.js";
-import { openNldasTair } from "./nldas/store.js";
+import { openSurfaceTemp } from "./nldas/store.js";
 
 // Keyless CARTO basemap; light background reads well under a data overlay.
 const BASEMAP_STYLE =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
-// Min longitude, min latitude, max longitude, max latitude
+// [[Min longitude, min latitude], [max longitude, max latitude]]
 const DATA_BOUNDS: [[number, number], [number, number]] = [
   [-180, -20],
   [-20, 80],
@@ -50,11 +50,11 @@ export default function App() {
   const [colormapImage, setColormapImage] = useState<ImageData | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
 
-  // Open the icechunk store + Tair array once.
+  // Open the icechunk store + surface temperature array once.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const opened = await openNldasTair();
+      const opened = await openSurfaceTemp();
       if (!cancelled) {
         setArr(opened);
       }
@@ -92,14 +92,14 @@ export default function App() {
     arr && colormapTexture
       ? [
           new ZarrLayer<zarr.Readable, "float32", NldasTileData>({
-            id: "nldas-tair",
+            id: "nldas-surface-temp",
             node: arr,
             metadata: NLDAS_GEOZARR_ATTRS,
             selection: { [TIME_DIM]: TIME_INDEX },
             getTileData,
             renderTile: makeRenderTile({
               colormapTexture,
-              colormapIndex: COLORMAP_INDEX_TAIR,
+              colormapIndex: SURFACE_TEMP_COLORMAP_INDEX,
               colormapReversed: COLORMAP_REVERSED,
               noDataValue: NODATA_VALUE,
               rescaleMin: RESCALE_MIN,
@@ -131,8 +131,8 @@ export default function App() {
         sourcePath="examples/nldas-icechunk"
       >
         <Text mb="3" color="gray.600">
-          Reads NASA's NLDAS-3 daily 2-meter air temperature directly from a
-          public{" "}
+          Reads NASA's NLDAS-3 daily near-surface air temperature directly from
+          a public{" "}
           <ExternalLink href="https://icechunk.io">icechunk</ExternalLink>{" "}
           repository in the browser — no server in between. The store is a{" "}
           <em>virtual</em> Zarr: its chunks reference NLDAS-3 source files in

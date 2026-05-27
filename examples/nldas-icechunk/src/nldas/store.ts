@@ -8,18 +8,19 @@ import * as zarr from "zarrita";
 import {
   BRANCH,
   REPO_URL,
-  VARIABLE,
+  SURFACE_TEMP_PATH,
   VIRTUAL_CHUNK_CONTAINERS,
 } from "./metadata.js";
 
 /**
- * Open the NLDAS-3 Tair array from the public icechunk repo, with the virtual
- * chunk container authorized so chunk reads resolve to public HTTPS objects.
+ * Open the NLDAS-3 near-surface air temperature array from the public icechunk
+ * repo, with the virtual chunk container authorized so chunk reads resolve to
+ * public HTTPS objects.
  *
  * The container map is only accepted by `ReadSession.open`, so we resolve the
  * branch snapshot id first, then open a session that carries it.
  */
-export async function openNldasTair(): Promise<
+export async function openSurfaceTemp(): Promise<
   zarr.Array<"float32", zarr.Readable>
 > {
   const storage = new HttpStorage(REPO_URL);
@@ -37,9 +38,13 @@ export async function openNldasTair(): Promise<
   });
   const store = await IcechunkStore.open(session);
 
-  const node = await zarr.open(store.resolve(VARIABLE), { kind: "array" });
+  const node = await zarr.open(store.resolve(SURFACE_TEMP_PATH), {
+    kind: "array",
+  });
   if (!node.is("float32")) {
-    throw new Error(`Expected ${VARIABLE} to be float32, got ${node.dtype}`);
+    throw new Error(
+      `Expected ${SURFACE_TEMP_PATH} to be float32, got ${node.dtype}`,
+    );
   }
   return node;
 }

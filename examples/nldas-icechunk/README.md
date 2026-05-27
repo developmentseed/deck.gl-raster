@@ -1,6 +1,6 @@
 # NLDAS-3 icechunk Example
 
-Renders a single timestep of NLDAS-3 air temperature (`Tair`) from a public
+Renders a single timestep of NLDAS-3 near-surface air temperature from a public
 [icechunk](https://icechunk.io) repository, read in the browser via
 [`icechunk-js`](https://github.com/EarthyScience/icechunk-js) + zarrita and
 displayed with `@developmentseed/deck.gl-zarr`'s `ZarrLayer`.

@@ -7,14 +7,17 @@ export const REPO_URL =
 /** Branch to read. */
 export const BRANCH = "main";
 
-/** Path to the Tair array within the store. */
-export const VARIABLE = "/Tair";
+/**
+ * Path to the near-surface air temperature array within the store. `Tair` is
+ * the array's name in the NLDAS-3 store, so the literal path can't change.
+ */
+export const SURFACE_TEMP_PATH = "/Tair";
 
 /**
  * Virtual chunk container map: the container name declared in the repo's
- * `config.yaml` → the public HTTPS prefix the browser can fetch. Tair's chunks
- * are virtual references into the original NLDAS-3 source objects in the same
- * `nasa-waterinsight` bucket.
+ * `config.yaml` → the public HTTPS prefix the browser can fetch. The
+ * temperature chunks are virtual references into the original NLDAS-3 source
+ * objects in the same `nasa-waterinsight` bucket.
  */
 export const VIRTUAL_CHUNK_CONTAINERS = new Map([
   [
@@ -34,18 +37,21 @@ export const TIME_DIM = "time";
 export const TIME_INDEX = 3482;
 
 /**
- * Sentinel for fill pixels. The store's `missing_value` is -9999; getTileData
- * also maps any non-finite (NaN/Inf) value to this so the render pipeline can
- * discard them with a single comparison.
+ * Sentinel for fill pixels. The store's `missing_value` is -9999, which
+ * `FilterNoDataVal` discards on the GPU. The source data uses this finite
+ * sentinel (not NaN), so no per-pixel CPU pass is needed.
  */
 export const NODATA_VALUE = -9999;
 
-/** Fixed rescale range in Kelvin (Tair `vmin`/`vmax` ≈ 228–304 K). */
+/**
+ * Fixed rescale range in Kelvin (near-surface air temperature `vmin`/`vmax`
+ * ≈ 228–304 K).
+ */
 export const RESCALE_MIN = 228;
 export const RESCALE_MAX = 305;
 
 /** Colormap sprite layer + orientation (thermal sequential, like ECMWF). */
-export const COLORMAP_INDEX_TAIR = COLORMAP_INDEX.thermal;
+export const SURFACE_TEMP_COLORMAP_INDEX = COLORMAP_INDEX.thermal;
 export const COLORMAP_REVERSED = false;
 
 /**
