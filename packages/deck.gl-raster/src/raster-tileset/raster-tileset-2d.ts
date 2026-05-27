@@ -13,6 +13,7 @@ import type {
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
+import type { InitialTriangulation } from "@developmentseed/raster-reproject";
 import type { Matrix4 } from "@math.gl/core";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import {
@@ -30,6 +31,7 @@ import type {
   TileIndex,
   ZRange,
 } from "./types.js";
+import { webMercatorClampSeed } from "./web-mercator-clamp.js";
 
 /** Type returned by {@link RasterTileset2D.getTileMetadata} */
 export type RasterTileMetadata = {
@@ -98,6 +100,14 @@ export type RasterTileMetadata = {
    * as {@link RasterTileMetadata._projectPosition}.
    */
   _unprojectPosition: ProjectionFunction;
+
+  /**
+   * Seed triangulation that clamps this tile's reprojection mesh to the valid
+   * Web Mercator latitude band (±85.051°), or `undefined` if no clamp is needed.
+   * Consumed only by the Web Mercator render path; the globe path renders the
+   * full mesh. See {@link webMercatorClampSeed}.
+   */
+  _webMercatorReprojectorSeed?: InitialTriangulation;
 };
 
 /**
@@ -350,6 +360,18 @@ export class RasterTileset2D extends Tileset2D {
     const { forwardTransform, inverseTransform } =
       levelDescriptor.tileTransform(x, y);
 
+    // Clamp the reprojection mesh to the valid Web Mercator latitude band for
+    // tiles that extend past ±85.051° (e.g. a global EPSG:4326 image reaching
+    // ±90°). Computed once here so the reference is stable across renders.
+    const cornerLat = (corner: [number, number]) =>
+      this.descriptor.projectTo4326(corner[0], corner[1])[1];
+    const _webMercatorReprojectorSeed = webMercatorClampSeed({
+      topLeft: cornerLat(topLeft),
+      topRight: cornerLat(topRight),
+      bottomLeft: cornerLat(bottomLeft),
+      bottomRight: cornerLat(bottomRight),
+    });
+
     return {
       bbox: {
         west,
@@ -370,6 +392,7 @@ export class RasterTileset2D extends Tileset2D {
       inverseTransform,
       _projectPosition: this.projectPosition,
       _unprojectPosition: this.unprojectPosition,
+      _webMercatorReprojectorSeed,
     };
   }
 }
