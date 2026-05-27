@@ -447,7 +447,7 @@ export class RasterTileLayer<
         // past ±85.051°. Globe renders the full mesh (it shows the poles).
         initialTriangulation: isGlobe
           ? undefined
-          : tile._webMercatorReprojectorSeed,
+          : tile._webMercatorInitialTriangulation,
         debug,
         debugOpacity,
         coordinateSystem,

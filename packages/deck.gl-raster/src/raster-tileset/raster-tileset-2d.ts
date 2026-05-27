@@ -31,7 +31,7 @@ import type {
   TileIndex,
   ZRange,
 } from "./types.js";
-import { webMercatorClampSeed } from "./web-mercator-clamp.js";
+import { webMercatorInitialTriangulation } from "./web-mercator-clamp.js";
 
 /** Type returned by {@link RasterTileset2D.getTileMetadata} */
 export type RasterTileMetadata = {
@@ -105,9 +105,9 @@ export type RasterTileMetadata = {
    * Seed triangulation that clamps this tile's reprojection mesh to the valid
    * Web Mercator latitude band (±85.051°), or `undefined` if no clamp is needed.
    * Consumed only by the Web Mercator render path; the globe path renders the
-   * full mesh. See {@link webMercatorClampSeed}.
+   * full mesh. See {@link webMercatorInitialTriangulation}.
    */
-  _webMercatorReprojectorSeed?: InitialTriangulation;
+  _webMercatorInitialTriangulation?: InitialTriangulation;
 };
 
 /**
@@ -365,7 +365,7 @@ export class RasterTileset2D extends Tileset2D {
     // ±90°). Computed once here so the reference is stable across renders.
     const cornerLat = (corner: [number, number]) =>
       this.descriptor.projectTo4326(corner[0], corner[1])[1];
-    const _webMercatorReprojectorSeed = webMercatorClampSeed({
+    const _webMercatorInitialTriangulation = webMercatorInitialTriangulation({
       topLeft: cornerLat(topLeft),
       topRight: cornerLat(topRight),
       bottomLeft: cornerLat(bottomLeft),
@@ -392,7 +392,7 @@ export class RasterTileset2D extends Tileset2D {
       inverseTransform,
       _projectPosition: this.projectPosition,
       _unprojectPosition: this.unprojectPosition,
-      _webMercatorReprojectorSeed,
+      _webMercatorInitialTriangulation,
     };
   }
 }

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { webMercatorClampSeed } from "../../src/raster-tileset/web-mercator-clamp.js";
+import { webMercatorInitialTriangulation } from "../../src/raster-tileset/web-mercator-clamp.js";
 
 const MAX_LAT = 85.05112877980659;
 
-describe("webMercatorClampSeed", () => {
+describe("webMercatorInitialTriangulation", () => {
   it("returns undefined for a tile within Web Mercator bounds", () => {
     expect(
-      webMercatorClampSeed({
+      webMercatorInitialTriangulation({
         topLeft: 40,
         topRight: 40,
         bottomLeft: 30,
@@ -16,7 +16,7 @@ describe("webMercatorClampSeed", () => {
   });
 
   it("clamps a global north-up tile to the valid band on both edges", () => {
-    const seed = webMercatorClampSeed({
+    const seed = webMercatorInitialTriangulation({
       topLeft: 90,
       topRight: 90,
       bottomLeft: -90,
@@ -31,7 +31,7 @@ describe("webMercatorClampSeed", () => {
   });
 
   it("clamps only the north edge when only the north exceeds the bound", () => {
-    const seed = webMercatorClampSeed({
+    const seed = webMercatorInitialTriangulation({
       topLeft: 90,
       topRight: 90,
       bottomLeft: 80,
@@ -43,7 +43,7 @@ describe("webMercatorClampSeed", () => {
 
   it("returns undefined for a non-north-up (rotated) tile", () => {
     expect(
-      webMercatorClampSeed({
+      webMercatorInitialTriangulation({
         topLeft: 90,
         topRight: 88,
         bottomLeft: -90,
@@ -54,7 +54,7 @@ describe("webMercatorClampSeed", () => {
 
   it("returns undefined for a fully-polar tile (empty band)", () => {
     expect(
-      webMercatorClampSeed({
+      webMercatorInitialTriangulation({
         topLeft: 88,
         topRight: 88,
         bottomLeft: 86,
