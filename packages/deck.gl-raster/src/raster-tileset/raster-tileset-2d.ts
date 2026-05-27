@@ -21,6 +21,7 @@ import {
   getTileIndices,
   rescaleCommonSpaceToEPSG3857,
   rescaleEPSG3857ToCommonSpace,
+  TILE_SIZE,
 } from "./raster-tile-traversal.js";
 import { sortItemsByDistanceFromViewportCenter } from "./sort-by-distance.js";
 import type { RasterTilesetDescriptor } from "./tileset-interface.js";
@@ -103,6 +104,15 @@ export type RasterTileMetadata = {
   _unprojectPosition: ProjectionFunction;
 
   /**
+   * Source CRS → common space, but with the +180° seam flipped to the negative
+   * side (common-x ≈ 0). Used as the `forwardReproject` for the east/wrapped
+   * piece of an antimeridian-crossing tile so that piece does not span the
+   * whole world. Same stability guarantees as
+   * {@link RasterTileMetadata._projectPosition}.
+   */
+  _projectPositionWrapped: ProjectionFunction;
+
+  /**
    * Seed triangulation that clamps this tile's reprojection mesh to the valid
    * Web Mercator latitude band (±85.051°), or `undefined` if no clamp is needed.
    * Consumed only by the Web Mercator render path; the globe path renders the
@@ -154,6 +164,7 @@ export class RasterTileset2D extends Tileset2D {
   private getPixelRatio: () => number;
   private boundingVolumeCache: BoundingVolumeCache;
   private projectPosition: ProjectionFunction;
+  private projectPositionWrapped: ProjectionFunction;
   private unprojectPosition: ProjectionFunction;
   /**
    * Projection mode of the viewport on the previous `getTileIndices` call.
@@ -185,6 +196,19 @@ export class RasterTileset2D extends Tileset2D {
     this.unprojectPosition = (cx, cy) => {
       const [mx, my] = rescaleCommonSpaceToEPSG3857([cx, cy]);
       return descriptor.projectFrom3857(mx, my);
+    };
+
+    // Wrapped variant for the negative-side (east) piece of an
+    // antimeridian-crossing tile. proj4 normalizes the ±180° seam to +180°, so
+    // the seam vertex projects to common-x ≈ TILE_SIZE (the +max boundary)
+    // while the rest of that piece sits near 0 — making the piece span the
+    // whole world and diverge. Flip any vertex that comes back on the positive
+    // side (common-x > TILE_SIZE / 2) by one world-width so the seam lands at
+    // ≈ 0. Only the seam vertex is affected; output-sign-based and
+    // deterministic. See dev-docs/specs/2026-05-27-antimeridian-crossing-tile-design.md.
+    this.projectPositionWrapped = (x, y) => {
+      const [cx, cy] = this.projectPosition(x, y);
+      return cx > TILE_SIZE / 2 ? [cx - TILE_SIZE, cy] : [cx, cy];
     };
 
     const rawBounds = transformBounds(
@@ -416,6 +440,7 @@ export class RasterTileset2D extends Tileset2D {
       inverseTransform,
       _projectPosition: this.projectPosition,
       _unprojectPosition: this.unprojectPosition,
+      _projectPositionWrapped: this.projectPositionWrapped,
       _webMercatorInitialTriangulation,
     };
   }
