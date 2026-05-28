@@ -29,11 +29,17 @@ interface ProjectionDefinition {
 
 const SCREEN_PIXEL_SIZE = 0.28e-3;
 
-function buildCrs(crs: number | ProjJson): CRS {
+function buildCrs(crs: number | ProjJson | string): CRS {
   if (typeof crs === "number") {
     return {
       uri: `http://www.opengis.net/def/crs/EPSG/0/${crs}`,
     };
+  }
+
+  // Raw WKT string (e.g. from an ESRI PE String citation) — the OGC TMS CRS
+  // type allows a bare string form.
+  if (typeof crs === "string") {
+    return crs;
   }
 
   // @ts-expect-error - typing issues between different projjson definitions.

@@ -73,7 +73,7 @@ export class GeoTIFF {
   readonly overviews: Overview[];
 
   /** A cached CRS value. */
-  private _crs?: number | ProjJson;
+  private _crs?: number | ProjJson | string;
 
   /** Cached TIFF tags that are pre-fetched when opening the GeoTIFF. */
   readonly cachedTags: CachedTags;
@@ -361,15 +361,15 @@ export class GeoTIFF {
 
   // ── Properties from the primary image ─────────────────────────────────
 
-  /**
-   * The CRS parsed from the GeoKeyDirectory.
+  /** Coordinate reference system information.
    *
-   * Returns an EPSG code (number) for EPSG-coded CRSes, or a PROJJSON object
-   * for user-defined CRSes. The result is cached after the first access.
+   * - If `crs` is a number, it is an EPSG code.
+   * - If `crs` is an object, it is a PROJJSON object.
+   * - If `crs` is a string, it is an ESRI WKT (this is rare).
    *
-   * See also {@link GeoTIFF.epsg} for the EPSG code directly from the TIFF tags.
+   * The result is cached after the first access.
    */
-  get crs(): number | ProjJson {
+  get crs(): number | ProjJson | string {
     if (this._crs === undefined) {
       this._crs = crsFromGeoKeys(this.gkd);
     }

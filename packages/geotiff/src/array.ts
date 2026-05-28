@@ -43,8 +43,13 @@ export type RasterArrayBase = {
    */
   transform: Affine;
 
-  /** Coordinate reference system information. */
-  crs: number | ProjJson;
+  /** Coordinate reference system information.
+   *
+   * - If `crs` is a number, it is an EPSG code.
+   * - If `crs` is an object, it is a PROJJSON object.
+   * - If `crs` is a string, it is an ESRI WKT (this is rare).
+   */
+  crs: number | ProjJson | string;
 
   /** Nodata value from `GDAL_NODATA` TIFF tag. */
   nodata: number | null;

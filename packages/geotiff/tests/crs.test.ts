@@ -108,4 +108,26 @@ describe("test GeoKey CRS parsing", () => {
     expect(proj.units).toBe("meter");
     expect(proj.projName).toBe("Albers Equal Area");
   });
+
+  it("can parse an ESRI PE String citation under a user-defined model type", async () => {
+    // hfp_2017_100m_v1-2_cog: GTModelTypeGeoKey = 32767 (ModelTypeUserDefined),
+    // CRS only reconstructable from the `ESRI PE String = ...` citation.
+    const geotiff = await loadGeoTIFF(
+      "hfp_2017_100m_v1-2_cog",
+      "source-coop-vizzuality",
+    );
+    const crs = geotiff.crs;
+
+    if (typeof crs !== "string") {
+      throw new Error("expected raw WKT string for ESRI PE String CRS");
+    }
+    expect(crs.startsWith("PROJCS[")).toBe(true);
+    expect(crs).toContain("Mollweide");
+
+    // wkt-parser must be able to consume the WKT for downstream TMS use.
+    const proj = parseWkt(crs);
+    expect(proj.projName).toBe("Mollweide");
+    expect(proj.units).toBe("meter");
+    expect(proj.a ?? proj.datum?.a).toBe(6378137);
+  });
 });
