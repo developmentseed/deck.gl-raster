@@ -74,10 +74,13 @@ const LINEAR_UNIT: Record<number, string | ProjJsonUnit> = {
  * Parse a CRS from a GeoKeyDirectory.
  *
  * Returns the EPSG code as a number for EPSG-coded CRSes (letting the caller
- * decide how to resolve it), or a PROJJSON object built from the geo keys for
- * user-defined CRSes.
+ * decide how to resolve it), a PROJJSON object built from the geo keys for
+ * user-defined CRSes, or a raw WKT string when the GeoTIFF carries an
+ * `ESRI PE String = ...` citation under a fully user-defined model type.
  */
-export function crsFromGeoKeys(gkd: GeoKeyDirectory): number | ProjJson {
+export function crsFromGeoKeys(
+  gkd: GeoKeyDirectory,
+): number | ProjJson | string {
   const modelType = gkd.modelType;
 
   if (modelType === MODEL_TYPE_PROJECTED) {
@@ -88,7 +91,35 @@ export function crsFromGeoKeys(gkd: GeoKeyDirectory): number | ProjJson {
     return _geographicCrs(gkd);
   }
 
-  throw new Error(`Unsupported GeoTIFF model type: ${modelType}`);
+  if (modelType === USER_DEFINED) {
+    const wkt = _esriPeString(gkd);
+    if (wkt !== null) {
+      return wkt;
+    }
+  }
+
+  throw new Error(
+    `Unsupported GeoTIFF CRS definition with model type: ${modelType}`,
+  );
+}
+
+const ESRI_PE_STRING_PREFIX = "ESRI PE String =";
+
+/**
+ * Extract a WKT string from an `ESRI PE String = ...` ProjectedCitation.
+ *
+ * The GeoTIFF spec defines no text-based CRS encoding; `ESRI PE String =` is
+ * a de facto ArcGIS convention that GDAL/PROJ also read. It is used when the
+ * model type itself is user-defined (32767) and no projection method/parameter
+ * geo keys are present — the WKT in the citation is then the only CRS signal.
+ */
+function _esriPeString(gkd: GeoKeyDirectory): string | null {
+  const citation = gkd.projectedCitation;
+  if (citation === null || !citation.includes(ESRI_PE_STRING_PREFIX)) {
+    return null;
+  }
+  const wkt = citation.split(ESRI_PE_STRING_PREFIX, 2)[1]?.trim();
+  return wkt ? wkt : null;
 }
 
 function _geographicCrs(gkd: GeoKeyDirectory): number | GeographicCRS {

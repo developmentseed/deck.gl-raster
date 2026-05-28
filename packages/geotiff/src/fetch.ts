@@ -25,7 +25,7 @@ interface HasTiffReference extends HasTransform {
   readonly maskImage: TiffImage | null;
 
   /** The coordinate reference system. */
-  readonly crs: number | ProjJson;
+  readonly crs: number | ProjJson | string;
 
   /** The height of tiles in pixels. */
   readonly tileHeight: number;
