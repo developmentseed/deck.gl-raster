@@ -24,13 +24,13 @@
     "@luma.gl/shadertools": "^9.3.2",
     "deck.gl-raster-examples-shared": "workspace:*",
     "maplibre-gl": "^5.24.0",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "react-map-gl": "^8.1.1",
     "zarrita": "^0.7.3"
   },
   "devDependencies": {
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "gh-pages": "^6.3.0",
