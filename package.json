@@ -18,8 +18,8 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.13",
-    "publint": "^0.3.18",
+    "@biomejs/biome": "^2.4.16",
+    "publint": "^0.3.21",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   },
