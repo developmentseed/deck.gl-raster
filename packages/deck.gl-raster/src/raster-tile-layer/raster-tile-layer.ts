@@ -507,16 +507,12 @@ export class RasterTileLayer<
     tileResult: RenderTileResult;
     uCut: number;
   }): Layer[] {
-    const { baseId, tile, data, tileResult, uCut: uCutGeographic } = opts;
+    const { baseId, tile, data, tileResult, uCut } = opts;
     // `antimeridianCut` returns the seam location as a fraction of the tile's
-    // geographic span (0..1 over the full west→east lng range). The reprojector
-    // maps its UV [0, 1] to pixel-INDEX [0, W-1] (delatin.ts:470), so the same
-    // fraction has to be scaled by W/(W-1) to land on the seam pixel. W here
-    // is the actual image data width (`data.width`), not `tile.tileWidth` —
-    // for a COG, `tile.tileWidth` is the block size (e.g. 64 for
-    // antimeridian.tif), but the data passed to the reprojector is the
-    // (smaller) image size (42), and the reprojector keys off that.
-    const uCut = (uCutGeographic * data.width) / (data.width - 1);
+    // geographic span (0..1 over the full west→east lng range). `RasterLayer`
+    // constructs its reprojector with `width + 1` (raster-layer.ts:252), so
+    // the reprojector's UV*(W-1) = pixel-index maps UV `(seamCol / W)`
+    // exactly onto the seam pixel — no scaling needed here.
     const baseProps = {
       ...this._baseRasterProps(data, tileResult),
       coordinateSystem: "cartesian" as const,
