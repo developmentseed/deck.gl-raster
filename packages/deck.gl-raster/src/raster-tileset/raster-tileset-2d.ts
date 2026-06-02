@@ -16,6 +16,8 @@ import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
 import type { InitialTriangulation } from "@developmentseed/raster-reproject";
 import type { Matrix4 } from "@math.gl/core";
+import type { AntimeridianCut } from "./antimeridian-cut.js";
+import { antimeridianCut } from "./antimeridian-cut.js";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import {
   getTileIndices,
@@ -119,6 +121,15 @@ export type RasterTileMetadata = {
    * full mesh. See {@link createInitialWebMercatorTriangulation}.
    */
   _webMercatorInitialTriangulation?: InitialTriangulation;
+
+  /**
+   * Vertical cut at which this tile crosses ±180°, or `undefined` if the tile
+   * does not cross the antimeridian (or crosses with a slanted/curved cut that
+   * the MVP does not yet handle). Consumed by `RasterTileLayer._renderSubLayers`
+   * in the Web Mercator branch to split the tile into a west + east piece. See
+   * {@link antimeridianCut}.
+   */
+  _antimeridianCut?: AntimeridianCut;
 };
 
 /**
@@ -420,6 +431,18 @@ export class RasterTileset2D extends Tileset2D {
         bottomRight: cornerLat(bottomRight),
       });
 
+    // Detect whether this tile crosses ±180° and locate the vertical cut.
+    // Corner longitudes are native (as proj4 returns them — un-normalized for a
+    // 4326 source with an origin past ±180°). See {@link antimeridianCut}.
+    const cornerLng = (corner: [number, number]) =>
+      this.descriptor.projectTo4326(corner[0], corner[1])[0];
+    const _antimeridianCut = antimeridianCut({
+      topLeft: cornerLng(topLeft),
+      topRight: cornerLng(topRight),
+      bottomLeft: cornerLng(bottomLeft),
+      bottomRight: cornerLng(bottomRight),
+    });
+
     return {
       bbox: {
         west,
@@ -442,6 +465,7 @@ export class RasterTileset2D extends Tileset2D {
       _unprojectPosition: this.unprojectPosition,
       _projectPositionWrapped: this.projectPositionWrapped,
       _webMercatorInitialTriangulation,
+      _antimeridianCut,
     };
   }
 }
