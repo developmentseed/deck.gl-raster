@@ -490,14 +490,15 @@ export class RasterTileLayer<
 
   /**
    * Build the two `RasterLayer`s for a Web-Mercator tile that crosses ±180°:
-   * a west piece (UV `[0, uCut]`) and an east piece (UV `[uCut, 1]`). Both
-   * pieces share one `reprojectionFns` object built on
-   * `_projectPositionWrapped`, which folds any common-x past +max into the
-   * `(−256, 256]` world copy so the two pieces meet continuously at common-x
-   * 0 rather than either piece spanning the whole world. The split itself
-   * lives entirely in each piece's `triangulateRectangle` seed — the
-   * reprojector only refines existing triangles, so confining the seed to a
-   * sub-rectangle of UV space confines the mesh.
+   * a west piece (UV `[0, uCut]`) and an east piece (UV `[uCut, 1]`). Each
+   * piece uses its own `ReprojectionFns` bundle from the tile metadata —
+   * the bundle composes a `+k·360°` longitude shift into the geotransform
+   * so the piece's native lngs stay inside proj4's valid range, and pairs
+   * it with the stock `_projectPosition`/`_unprojectPosition` so the
+   * forward/inverse round-trip cleanly. The two pieces thus render in
+   * different world copies; deck.gl `repeat: true` + world-copy traversal
+   * (#518) bring them together visually. The split itself lives in each
+   * piece's `triangulateRectangle` seed.
    */
   private _renderAntimeridianTile(opts: {
     baseId: string;
@@ -507,15 +508,8 @@ export class RasterTileLayer<
     uCut: number;
   }): Layer[] {
     const { baseId, tile, data, tileResult, uCut } = opts;
-    const reprojectionFns: ReprojectionFns = {
-      forwardTransform: tile.forwardTransform,
-      inverseTransform: tile.inverseTransform,
-      forwardReproject: tile._projectPositionWrapped,
-      inverseReproject: tile._unprojectPosition,
-    };
     const baseProps = {
       ...this._baseRasterProps(data, tileResult),
-      reprojectionFns,
       coordinateSystem: "cartesian" as const,
     };
     return [
@@ -523,6 +517,7 @@ export class RasterTileLayer<
         this.getSubLayerProps({
           ...baseProps,
           id: `${baseId}-raster-west`,
+          reprojectionFns: tile._westReprojection!,
           initialTriangulation: triangulateRectangle(0, 0, uCut, 1),
         }),
       ),
@@ -530,6 +525,7 @@ export class RasterTileLayer<
         this.getSubLayerProps({
           ...baseProps,
           id: `${baseId}-raster-east`,
+          reprojectionFns: tile._eastReprojection!,
           initialTriangulation: triangulateRectangle(uCut, 0, 1, 1),
         }),
       ),
