@@ -1,9 +1,4 @@
-import type {
-  CompositeLayerProps,
-  CoordinateSystem,
-  DefaultProps,
-  Layer,
-} from "@deck.gl/core";
+import type { CompositeLayerProps, DefaultProps, Layer } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type {
   _Tile2DHeader as Tile2DHeader,
@@ -13,6 +8,7 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
+import { triangulateRectangle } from "@developmentseed/raster-reproject";
 import type { Device } from "@luma.gl/core";
 import { renderDebugTileOutline } from "../layer-utils.js";
 import type { RenderTileResult } from "../raster-layer.js";
@@ -402,55 +398,109 @@ export class RasterTileLayer<
     const { width, height } = props.data;
 
     const isGlobe = this.context.viewport.resolution !== undefined;
-    let reprojectionFns: ReprojectionFns;
-    let coordinateSystem: CoordinateSystem;
+
+    const baseRasterProps = {
+      width,
+      height,
+      // Passing `image: undefined` explicitly would trip isAsyncPropLoading
+      // and cause a transient black flash (see issue #376).
+      ...(image !== undefined && { image }),
+      renderPipeline,
+      maxError,
+      debug,
+      debugOpacity,
+    };
+
     if (isGlobe) {
-      // Globe view
-      reprojectionFns = {
+      // Globe view: full mesh in lng/lat, no antimeridian split (the globe
+      // shows the ±180° seam as a normal interior edge, not a discontinuity).
+      const reprojectionFns: ReprojectionFns = {
         forwardTransform,
         inverseTransform,
         forwardReproject: descriptor.projectTo4326,
         inverseReproject: descriptor.projectFrom4326,
       };
-      coordinateSystem = "lnglat";
-    } else {
-      // Web Mercator: render the mesh directly in deck.gl common space.
-      //
-      // The tile's `_projectPosition` maps source CRS → common space, support
-      // high precision with fp64 emulation.
-      //
-      // `_projectPosition`/`_unprojectPosition` must be reference-stable across
-      // renders to avoid regenerating the mesh and recompiling the shader every
-      // frame.
-      const { _projectPosition, _unprojectPosition } = tile;
-      reprojectionFns = {
-        forwardTransform,
-        inverseTransform,
-        forwardReproject: _projectPosition,
-        inverseReproject: _unprojectPosition,
-      };
-      coordinateSystem = "cartesian";
+      const rasterLayer = new RasterLayer(
+        this.getSubLayerProps({
+          ...baseRasterProps,
+          id: `${props.id}-raster`,
+          reprojectionFns,
+          coordinateSystem: "lnglat",
+        }),
+      );
+      return [rasterLayer, ...debugLayers];
     }
 
+    // Web Mercator: render the mesh directly in deck.gl common space.
+    //
+    // The tile's `_projectPosition` maps source CRS → common space and
+    // supports high precision with fp64 emulation.
+    //
+    // `_projectPosition`/`_unprojectPosition` must be reference-stable across
+    // renders to avoid regenerating the mesh and recompiling the shader every
+    // frame.
+    const {
+      _projectPosition,
+      _unprojectPosition,
+      _projectPositionWrapped,
+      _antimeridianCut,
+    } = tile;
+
+    if (_antimeridianCut) {
+      // Antimeridian-crossing tile: split into west + east pieces at the cut
+      // and render each as its own mesh. Both pieces use the *wrapped*
+      // projection (folds any common-x past +max into the (−256, 256] world
+      // copy) so they meet continuously at common-x 0 rather than either
+      // piece spanning the entire world. The split itself comes from each
+      // piece's `triangulateRectangle` seed — the reprojector only refines
+      // existing triangles, so confining the seed to a sub-rectangle of UV
+      // space confines the mesh.
+      const reprojectionFns: ReprojectionFns = {
+        forwardTransform,
+        inverseTransform,
+        forwardReproject: _projectPositionWrapped,
+        inverseReproject: _unprojectPosition,
+      };
+      const { uCut } = _antimeridianCut;
+      return [
+        new RasterLayer(
+          this.getSubLayerProps({
+            ...baseRasterProps,
+            id: `${props.id}-raster-west`,
+            reprojectionFns,
+            initialTriangulation: triangulateRectangle(0, 0, uCut, 1),
+            coordinateSystem: "cartesian",
+          }),
+        ),
+        new RasterLayer(
+          this.getSubLayerProps({
+            ...baseRasterProps,
+            id: `${props.id}-raster-east`,
+            reprojectionFns,
+            initialTriangulation: triangulateRectangle(uCut, 0, 1, 1),
+            coordinateSystem: "cartesian",
+          }),
+        ),
+        ...debugLayers,
+      ];
+    }
+
+    // Non-crossing tile: single mesh with the stock projection. The
+    // `_webMercatorInitialTriangulation` seed clamps the mesh to the valid
+    // latitude band for tiles past ±85.051°.
+    const reprojectionFns: ReprojectionFns = {
+      forwardTransform,
+      inverseTransform,
+      forwardReproject: _projectPosition,
+      inverseReproject: _unprojectPosition,
+    };
     const rasterLayer = new RasterLayer(
       this.getSubLayerProps({
+        ...baseRasterProps,
         id: `${props.id}-raster`,
-        width,
-        height,
-        // Passing `image: undefined` explicitly would trip isAsyncPropLoading
-        // and cause a transient black flash (see issue #376).
-        ...(image !== undefined && { image }),
-        renderPipeline,
-        maxError,
         reprojectionFns,
-        // Web Mercator: clamp the mesh to the valid latitude band for tiles
-        // past ±85.051°. Globe renders the full mesh (it shows the poles).
-        initialTriangulation: isGlobe
-          ? undefined
-          : tile._webMercatorInitialTriangulation,
-        debug,
-        debugOpacity,
-        coordinateSystem,
+        initialTriangulation: tile._webMercatorInitialTriangulation,
+        coordinateSystem: "cartesian",
       }),
     );
     return [rasterLayer, ...debugLayers];
