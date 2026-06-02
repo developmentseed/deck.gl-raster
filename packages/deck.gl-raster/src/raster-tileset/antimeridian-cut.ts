@@ -1,4 +1,11 @@
-/** WGS84 longitudes (normalized to (−180, 180]) of a tile's four corners. */
+/**
+ * WGS84 longitudes of a tile's four corners, as returned by
+ * `descriptor.projectTo4326(corner)[0]` — i.e. native and **not** normalized to
+ * (−180, 180]. For a north-up geotransform the west edge's lng is strictly
+ * less than the east edge's lng (proj4 4326→4326 is identity and does not
+ * wrap), so a tile crossing the antimeridian shows up as a span like
+ * (−204, −162) rather than (156, −162).
+ */
 export interface CornerLongitudes {
   topLeft: number;
   topRight: number;
@@ -23,23 +30,25 @@ const U_EPSILON = 1e-6;
  * Locate where a single horizontal edge crosses the antimeridian, as a fraction
  * of the edge's eastward span (0 at the west corner, 1 at the east corner).
  *
- * Returns `undefined` if the edge does not cross: with u increasing eastward, a
- * non-crossing edge has west lng < east lng, while a crossing edge wraps, so
- * `eastLng < westLng`.
+ * Returns `undefined` if the edge does not cross. Works on native un-normalized
+ * longitudes (e.g. `westLng = −204`, `eastLng = −162`) by searching for the
+ * smallest antimeridian line `−180 + 360k` strictly interior to `(westLng,
+ * eastLng)`. Strict inequalities give the correct non-crossing answer when a
+ * corner lies exactly on ±180.
  */
 function edgeUCut(westLng: number, eastLng: number): number | undefined {
-  // Not crossing if the eastward span doesn't wrap.
-  if (eastLng >= westLng) {
+  // Degenerate or non-monotonic edge — caller is expected to pass
+  // west-then-east in the source CRS's native ordering.
+  if (eastLng <= westLng) {
     return undefined;
   }
-  // Eastward distance west→(+180) then (−180)→east.
-  const toSeam = 180 - westLng;
-  const fromSeam = eastLng + 180;
-  const total = toSeam + fromSeam;
-  if (total <= 0) {
+  // Smallest antimeridian line (−180 + 360k) strictly greater than westLng.
+  const k = Math.ceil((westLng + 180) / 360);
+  const seam = -180 + 360 * k;
+  if (seam <= westLng || seam >= eastLng) {
     return undefined;
   }
-  return toSeam / total;
+  return (seam - westLng) / (eastLng - westLng);
 }
 
 /**
@@ -51,9 +60,10 @@ function edgeUCut(westLng: number, eastLng: number): number | undefined {
  * cuts (non-geographic CRSs) — but for now those return `undefined` and fall
  * back to a single full-mesh layer. See issue #575.
  *
- * Assumes u increases eastward (standard north-up geotransform). A non-crossing
- * tile has west-edge lng < east-edge lng; a crossing tile wraps, so
- * `eastLng < westLng`.
+ * Assumes u increases eastward (standard north-up geotransform) and that
+ * corner longitudes are passed in native, un-normalized form — that is what
+ * `descriptor.projectTo4326` returns for an EPSG:4326 source whose
+ * `ModelTiepoint` sits past ±180° (e.g. `−204°`).
  */
 export function antimeridianCut(
   cornerLngs: CornerLongitudes,
