@@ -510,12 +510,13 @@ export class RasterTileLayer<
     const { baseId, tile, data, tileResult, uCut: uCutGeographic } = opts;
     // `antimeridianCut` returns the seam location as a fraction of the tile's
     // geographic span (0..1 over the full west→east lng range). The reprojector
-    // maps its UV [0,1] to pixel-INDEX [0, W-1] (delatin.ts:470), so the same
-    // fraction has to be scaled by W/(W-1) to land on the seam pixel. Without
-    // this, the east piece's left edge sits ~0.5 pixel west of native −180°,
-    // where proj4 still treats lng as canonical positive — the piece then
-    // spans the whole world via the prime meridian and diverges.
-    const uCut = (uCutGeographic * tile.tileWidth) / (tile.tileWidth - 1);
+    // maps its UV [0, 1] to pixel-INDEX [0, W-1] (delatin.ts:470), so the same
+    // fraction has to be scaled by W/(W-1) to land on the seam pixel. W here
+    // is the actual image data width (`data.width`), not `tile.tileWidth` —
+    // for a COG, `tile.tileWidth` is the block size (e.g. 64 for
+    // antimeridian.tif), but the data passed to the reprojector is the
+    // (smaller) image size (42), and the reprojector keys off that.
+    const uCut = (uCutGeographic * data.width) / (data.width - 1);
     const baseProps = {
       ...this._baseRasterProps(data, tileResult),
       coordinateSystem: "cartesian" as const,
