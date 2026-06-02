@@ -1,52 +1,52 @@
 {
-  "name": "@developmentseed/geozarr",
-  "version": "0.7.0",
-  "description": "GeoZarr metadata parsing.",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+    "name": "@developmentseed/geozarr",
+    "version": "0.8.0-beta.1",
+    "description": "GeoZarr metadata parsing.",
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "sideEffects": false,
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc --build tsconfig.build.json",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "zarr",
+        "geozarr",
+        "zarr-conventions",
+        "raster",
+        "geospatial"
+    ],
+    "author": "Development Seed",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
+    },
+    "dependencies": {
+        "@developmentseed/affine": "workspace:^",
+        "zarrita": "^0.7.3",
+        "zod": "^4.4.3"
+    },
+    "devDependencies": {
+        "@types/node": "^25.9.1",
+        "jsdom": "^29.1.1",
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.7"
+    },
+    "volta": {
+        "extends": "../../package.json"
     }
-  },
-  "sideEffects": false,
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "tsc --build tsconfig.build.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
-  },
-  "keywords": [
-    "zarr",
-    "geozarr",
-    "zarr-conventions",
-    "raster",
-    "geospatial"
-  ],
-  "author": "Development Seed",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
-  },
-  "dependencies": {
-    "@developmentseed/affine": "workspace:^",
-    "zarrita": "^0.7.3",
-    "zod": "^4.4.3"
-  },
-  "devDependencies": {
-    "@types/node": "^25.9.1",
-    "jsdom": "^29.1.1",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
-  },
-  "volta": {
-    "extends": "../../package.json"
-  }
 }
