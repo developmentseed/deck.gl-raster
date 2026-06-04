@@ -4,7 +4,7 @@ import { triangulateRectangle } from "@developmentseed/raster-reproject";
 /** Maximum latitude representable in Web Mercator (EPSG:3857), in degrees. */
 const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
 
-/** Tolerance for the north-up check and degenerate-band guard, in degrees. */
+/** Tolerance for the constant-latitude check and degenerate-band guard, in degrees. */
 const LAT_EPSILON = 1e-6;
 
 /**
@@ -27,9 +27,11 @@ export interface CornerLatitudes {
  * that never converge (see #182 / #351). Seeding the reprojector with the
  * clamped band avoids meshing those rows entirely.
  *
- * Only **north-up geographic** tiles are handled — where latitude is constant
- * across each row, so the valid band is an axis-aligned rectangle. Rotated or
- * projected tiles return `undefined` (the caller falls back to the full mesh).
+ * Only tiles whose **rows are constant-latitude** are handled — where latitude
+ * is constant across each row, so the valid band is an axis-aligned rectangle.
+ *
+ * This covers both north-up grids and south-up grids. Rotated or projected
+ * tiles return `undefined` (the caller falls back to the full mesh).
  *
  * @param cornerLats WGS84 latitudes of the tile's four corners.
  * @param maxLat     Web Mercator latitude limit. Defaults to ±85.051°.
@@ -40,31 +42,47 @@ export function createInitialWebMercatorTriangulation(
 ): InitialTriangulation | undefined {
   const { topLeft, topRight, bottomLeft, bottomRight } = cornerLats;
 
-  // North-up means latitude is constant across each row, so the clamp band is
-  // an axis-aligned rectangle. Otherwise fall back to the full mesh.
-  const northUp =
+  // Each row must be constant-latitude for the clamp band to be an axis-aligned
+  // rectangle in UV space. Otherwise fall back to the full mesh.
+  const rowsIsoLatitude =
     Math.abs(topLeft - topRight) < LAT_EPSILON &&
     Math.abs(bottomLeft - bottomRight) < LAT_EPSILON;
-  if (!northUp) {
+  if (!rowsIsoLatitude) {
     return undefined;
   }
 
-  const north = topLeft;
-  const south = bottomLeft;
-  // Degenerate or south-up tile: leave it to the default full mesh.
-  if (north - south <= LAT_EPSILON) {
+  // v runs 0 (top row) → 1 (bottom row); latitude varies linearly along it:
+  //   lat(v) = top + v * (bottom - top)
+  // Do NOT assume top is the northern edge: a positive-`e` (south-up) affine
+  // puts the south pole at row 0, so `top` is the southern edge. Deriving the
+  // band from the actual top/bottom keeps this orientation-agnostic.
+  const top = topLeft;
+  const bottom = bottomLeft;
+
+  // Degenerate tile (zero latitude span): leave it to the default full mesh.
+  if (Math.abs(bottom - top) <= LAT_EPSILON) {
     return undefined;
   }
 
-  // Nothing to clamp if the whole tile is already within bounds.
-  if (north <= maxLat && south >= -maxLat) {
+  // Nothing to clamp if the whole tile is already within bounds (linear interp
+  // between two in-band corners stays in band).
+  if (
+    top <= maxLat &&
+    top >= -maxLat &&
+    bottom <= maxLat &&
+    bottom >= -maxLat
+  ) {
     return undefined;
   }
 
-  // v runs 0 (north) → 1 (south); lat(v) = north - v * (north - south).
+  // Intersect the tile's latitude segment with the band [-maxLat, maxLat]:
+  // solve lat(v) = ±maxLat for v, then take the overlapping v-interval. min/max
+  // makes this independent of whether latitude increases or decreases with v.
   const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
-  const vTop = clamp01((north - maxLat) / (north - south));
-  const vBottom = clamp01((north - -maxLat) / (north - south));
+  const vAtMaxLat = (maxLat - top) / (bottom - top);
+  const vAtMinLat = (-maxLat - top) / (bottom - top);
+  const vTop = clamp01(Math.min(vAtMaxLat, vAtMinLat));
+  const vBottom = clamp01(Math.max(vAtMaxLat, vAtMinLat));
 
   // Fully-polar tile (entirely outside ±maxLat): empty band, nothing to render.
   // Such tiles are normally excluded by the dataset-bounds clamp; guard anyway
