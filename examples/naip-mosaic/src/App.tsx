@@ -433,6 +433,8 @@ export default function App() {
                       colormapIndex: colormapChoice.colormapIndex,
                       colormapReversed: colormapChoice.reversed,
                     }),
+          onTileUnload: (tile) =>
+            (tile.data as TextureDataT | null)?.texture.destroy(),
           signal,
         });
       },

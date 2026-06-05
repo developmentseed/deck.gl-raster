@@ -182,6 +182,8 @@ export default function App() {
     geotiff: selected.url,
     getTileData,
     renderTile: (data) => renderTile(data, cutlineEnabled, selected.bbox),
+    onTileUnload: (tile) =>
+      (tile.data as TextureDataT | null)?.texture.destroy(),
     onGeoTIFFLoad: (_tiff, options) => {
       const { west, south, east, north } = options.geographicBounds;
       mapRef.current?.fitBounds(
