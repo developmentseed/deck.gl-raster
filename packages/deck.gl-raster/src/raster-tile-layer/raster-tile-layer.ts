@@ -233,7 +233,7 @@ export class RasterTileLayer<
    * no textures, so it returns the user's callback unchanged.
    */
   protected _onTileUnloadCallback(): RasterTileLayerProps<DataT>["onTileUnload"] {
-    return (this.props as unknown as RasterTileLayerProps<DataT>).onTileUnload;
+    return this.props.onTileUnload;
   }
 
   /**
