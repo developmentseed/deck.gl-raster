@@ -31,4 +31,19 @@ describe("RasterTileLayer", () => {
     const layer = new ProbeLayer({ id: "probe" });
     expect(layer.callDebug({ id: "x" }, null)).toEqual([]);
   });
+
+  it("base _onTileUnloadCallback returns the user onTileUnload unchanged", () => {
+    const onTileUnload = () => {};
+    class ProbeLayer extends RasterTileLayer {
+      callUnload() {
+        return (
+          this as unknown as {
+            _onTileUnloadCallback: () => unknown;
+          }
+        )._onTileUnloadCallback();
+      }
+    }
+    const layer = new ProbeLayer({ id: "probe", onTileUnload });
+    expect(layer.callUnload()).toBe(onTileUnload);
+  });
 });
