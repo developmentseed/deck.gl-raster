@@ -98,6 +98,7 @@ export default function App() {
     epsgResolver,
     getTileData,
     renderTile,
+    onTileUnload: (tile) => tile.content?.texture.destroy(),
     onGeoTIFFLoad: (tiff, options) => {
       setGeotiff(tiff);
       const { west, south, east, north } = options.geographicBounds;

@@ -16,6 +16,7 @@ import type {
   MultiRasterTilesetDescriptor,
   ProjectionFunction,
   RasterModule,
+  RasterTileLayerProps,
   RasterTilesetDescriptor,
   RasterTilesetLevel,
   RenderTileResult,
@@ -47,7 +48,8 @@ import {
   metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
-import type { Device, Texture, TextureFormat } from "@luma.gl/core";
+import type { Device, TextureFormat } from "@luma.gl/core";
+import { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
@@ -619,6 +621,24 @@ export class MultiCOGLayer extends RasterTileLayer<
     }
     return (data: MultiTileResult): RenderTileResult | null =>
       this._buildRenderResult(data);
+  }
+
+  protected override _onTileUnloadCallback(): RasterTileLayerProps<MultiTileResult>["onTileUnload"] {
+    const onTileUnload = this.props.onTileUnload;
+    // MultiCOGLayer always creates the band textures itself (there is no
+    // user-supplied `getTileData`), so it always frees them.
+    return (tile) => {
+      onTileUnload?.(tile);
+      const data = tile.content;
+      if (!data) {
+        return;
+      }
+      for (const band of data.bands.values()) {
+        if (band.texture instanceof Texture) {
+          band.texture.destroy();
+        }
+      }
+    };
   }
 
   protected override _renderDebug(

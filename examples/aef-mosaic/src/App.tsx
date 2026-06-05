@@ -96,6 +96,7 @@ export default function App() {
             selection,
             getTileData,
             renderTile,
+            onTileUnload: (tile) => tile.content?.texture.destroy(),
             minZoom: MIN_ZOOM,
             // source.coop supports HTTP/2 multiplexing, so increase concurrent
             // requests beyond browser limit of 6 per HTTP/1.1 domain

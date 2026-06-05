@@ -62,7 +62,7 @@ export type RasterTileLayerProps<
   DataT extends MinimalTileData = MinimalTileData,
 > = CompositeLayerProps &
   Pick<
-    TileLayerProps,
+    TileLayerProps<DataT>,
     | "debounceTime"
     | "extent"
     | "maxCacheByteSize"
@@ -226,6 +226,17 @@ export class RasterTileLayer<
   }
 
   /**
+   * The currently effective tile-unload callback.
+   *
+   * Subclasses override this to destroy GPU textures their default pipeline
+   * created before delegating to the user's `onTileUnload`. The base layer owns
+   * no textures, so it returns the user's callback unchanged.
+   */
+  protected _onTileUnloadCallback(): RasterTileLayerProps<DataT>["onTileUnload"] {
+    return this.props.onTileUnload;
+  }
+
+  /**
    * Hook for rendering per-tile debug overlay sub-layers.
    *
    * Called once per tile from `_renderSubLayers` only when `props.debug` is
@@ -314,7 +325,6 @@ export class RasterTileLayer<
       updateTriggers,
       onTileError,
       onTileLoad,
-      onTileUnload,
       onViewportLoad,
     } = this.props;
 
@@ -348,7 +358,7 @@ export class RasterTileLayer<
       refinementStrategy,
       onTileError,
       onTileLoad,
-      onTileUnload,
+      onTileUnload: this._onTileUnloadCallback(),
       onViewportLoad,
     });
   }

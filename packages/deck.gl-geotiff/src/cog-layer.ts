@@ -21,15 +21,13 @@ import {
   metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
-import type { Texture } from "@luma.gl/core";
+import { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
-
-export type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 
 type DefaultDataT = MinimalTileData & {
   texture: Texture;
@@ -355,5 +353,26 @@ export class COGLayer<
     }
 
     return userFn as NonNullable<RasterTileLayerProps<DataT>["renderTile"]>;
+  }
+
+  protected override _onTileUnloadCallback(): RasterTileLayerProps<DataT>["onTileUnload"] {
+    const onTileUnload = this.props.onTileUnload;
+    // A user-supplied `getTileData` owns its own textures and is responsible for
+    // freeing them. Only destroy textures the default pipeline created.
+    if (this.props.getTileData) {
+      return onTileUnload;
+    }
+    return (tile) => {
+      onTileUnload?.(tile);
+      // `DataT` is generic here (no `texture`/`mask` on `MinimalTileData`), but
+      // the default pipeline always returns a `TextureDataT`.
+      const data = tile.content as TextureDataT | null;
+      if (data?.texture instanceof Texture) {
+        data?.texture.destroy();
+      }
+      if (data?.mask instanceof Texture) {
+        data?.mask.destroy();
+      }
+    };
   }
 }

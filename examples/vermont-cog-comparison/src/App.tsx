@@ -148,6 +148,7 @@ function makeCOGLayer(args: CogLayerArgs): COGLayer<TileTextureData> | null {
     epsgResolver,
     getTileData: useGrayLoader ? getTileDataGray : getTileDataRGBA,
     renderTile,
+    onTileUnload: (tile) => tile.content?.texture.destroy(),
     extensions: [new ClipExtension()],
     // @ts-expect-error clipBounds + clipByInstance + beforeId are injected
     // by ClipExtension and @deck.gl/mapbox; LayerProps doesn't know about
