@@ -22,12 +22,6 @@ type SentinelTileData = MinimalTileData & {
   image: ImageData;
 };
 
-// Unlike the texture-uploading examples, this loader keeps tile data as CPU
-// `ImageData` (garbage-collected normally) and lets `renderTile` return it via
-// the RasterLayer `image` prop. deck.gl's `type: "image"` prop handling creates
-// and owns the GPU texture, freeing it on update/unmount — so no `onTileUnload`
-// texture cleanup is required here.
-
 /**
  * Fetch one spatial chunk as an RGBA ImageData ready to upload as a texture.
  */
