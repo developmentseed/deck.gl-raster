@@ -33,8 +33,13 @@ import { ControlPanel } from "./ui/control-panel.js";
  *  for `frameDurationMs`; 6-hour steps dwell for 2× that. */
 const BASE_STEP_HOURS = 3;
 
+// Fetched straight from the source.coop S3 bucket via the path-style S3
+// endpoint. The source.coop HTTP gateway (data.source.coop) no longer serves
+// this store's original layout, but the underlying bucket still holds it with
+// public CORS. Path-style is required because the bucket name contains dots,
+// which break the TLS wildcard cert used by virtual-hosted-style URLs.
 const ZARR_URL =
-  "https://data.source.coop/dynamical/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.zarr";
+  "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/dynamical/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.zarr";
 
 const VARIABLE = "temperature_2m";
 const ENSEMBLE_MEMBER_IDX = 0; // control run
@@ -216,9 +221,6 @@ export default function App() {
             getTileData,
             renderTile,
             onTileUnload: (tile) => tile.content?.texture.destroy(),
-            // source.coop supports HTTP/2 multiplexing, so increase concurrent
-            // requests beyond browser limit of 6 per HTTP/1.1 domain
-            maxRequests: 20,
             // Tiles are heavy, so limit GPU pressure with small cache size
             maxCacheSize: 10,
             updateTriggers: {
