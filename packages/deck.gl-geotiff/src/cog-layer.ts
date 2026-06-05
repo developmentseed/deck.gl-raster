@@ -28,6 +28,7 @@ import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
+import { destroyIfTexture } from "./texture-cleanup.js";
 
 export type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 
@@ -355,5 +356,20 @@ export class COGLayer<
     }
 
     return userFn as NonNullable<RasterTileLayerProps<DataT>["renderTile"]>;
+  }
+
+  protected override _onTileUnloadCallback(): RasterTileLayerProps<DataT>["onTileUnload"] {
+    const onTileUnload = this.props.onTileUnload;
+    // A user-supplied `getTileData` owns its own textures and is responsible for
+    // freeing them. Only destroy textures the default pipeline created.
+    if (this.props.getTileData) {
+      return onTileUnload;
+    }
+    return (tile) => {
+      onTileUnload?.(tile);
+      const data = tile.data as TextureDataT | null;
+      destroyIfTexture(data?.texture);
+      destroyIfTexture(data?.mask);
+    };
   }
 }

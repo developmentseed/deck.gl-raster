@@ -3,23 +3,25 @@ import { describe, expect, it, vi } from "vitest";
 import { destroyIfTexture } from "../src/texture-cleanup.js";
 
 /**
- * An object that passes `instanceof Texture` (shares Texture's prototype) with a
+ * A value that passes `instanceof Texture` (shares Texture's prototype) plus a
  * spy `destroy`. We can't `new Texture()` (it is abstract / needs a device), so
  * we synthesize the prototype link directly.
  */
-function fakeTexture(): Texture & { destroy: ReturnType<typeof vi.fn> } {
-  const tex = Object.create(Texture.prototype) as Texture & {
-    destroy: ReturnType<typeof vi.fn>;
-  };
-  tex.destroy = vi.fn();
-  return tex;
+function fakeTexture(): {
+  texture: Texture;
+  destroy: ReturnType<typeof vi.fn>;
+} {
+  const destroy = vi.fn();
+  const texture = Object.create(Texture.prototype) as Texture;
+  Object.defineProperty(texture, "destroy", { value: destroy });
+  return { texture, destroy };
 }
 
 describe("destroyIfTexture", () => {
   it("destroys a value that is a Texture", () => {
-    const tex = fakeTexture();
-    destroyIfTexture(tex);
-    expect(tex.destroy).toHaveBeenCalledOnce();
+    const { texture, destroy } = fakeTexture();
+    destroyIfTexture(texture);
+    expect(destroy).toHaveBeenCalledOnce();
   });
 
   it("ignores undefined", () => {
