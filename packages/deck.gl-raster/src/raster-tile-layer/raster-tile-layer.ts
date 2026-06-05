@@ -62,7 +62,7 @@ export type RasterTileLayerProps<
   DataT extends MinimalTileData = MinimalTileData,
 > = CompositeLayerProps &
   Pick<
-    TileLayerProps,
+    TileLayerProps<DataT>,
     | "debounceTime"
     | "extent"
     | "maxCacheByteSize"

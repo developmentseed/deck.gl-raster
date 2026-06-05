@@ -17,7 +17,7 @@ function unloadCallback(layer: COGLayer) {
   return (
     layer as unknown as {
       _onTileUnloadCallback: () =>
-        | ((tile: { data: unknown }) => void)
+        | ((tile: { content: unknown }) => void)
         | undefined;
     }
   )._onTileUnloadCallback();
@@ -37,7 +37,7 @@ describe("COGLayer._onTileUnloadCallback", () => {
 
     const texture = fakeTexture();
     const mask = fakeTexture();
-    const tile = { data: { texture: texture.texture, mask: mask.texture } };
+    const tile = { content: { texture: texture.texture, mask: mask.texture } };
     cb?.(tile);
 
     expect(texture.destroy).toHaveBeenCalledOnce();
@@ -52,10 +52,10 @@ describe("COGLayer._onTileUnloadCallback", () => {
     } as never);
     const cb = unloadCallback(layer);
 
-    expect(() => cb?.({ data: null })).not.toThrow();
+    expect(() => cb?.({ content: null })).not.toThrow();
 
     const texture = fakeTexture();
-    cb?.({ data: { texture: texture.texture } });
+    cb?.({ content: { texture: texture.texture } });
     expect(texture.destroy).toHaveBeenCalledOnce();
   });
 

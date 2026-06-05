@@ -16,7 +16,7 @@ function unloadCallback(layer: MultiCOGLayer) {
   return (
     layer as unknown as {
       _onTileUnloadCallback: () =>
-        | ((tile: { data: unknown }) => void)
+        | ((tile: { content: unknown }) => void)
         | undefined;
     }
   )._onTileUnloadCallback();
@@ -40,7 +40,7 @@ describe("MultiCOGLayer._onTileUnloadCallback", () => {
       ["a", { texture: texA.texture }],
       ["b", { texture: texB.texture }],
     ]);
-    const tile = { data: { bands } };
+    const tile = { content: { bands } };
     cb?.(tile);
 
     expect(texA.destroy).toHaveBeenCalledOnce();
@@ -51,6 +51,6 @@ describe("MultiCOGLayer._onTileUnloadCallback", () => {
   it("tolerates a tile with no data", () => {
     const layer = new MultiCOGLayer({ id: "multi", sources: {} } as never);
     const cb = unloadCallback(layer);
-    expect(() => cb?.({ data: null })).not.toThrow();
+    expect(() => cb?.({ content: null })).not.toThrow();
   });
 });

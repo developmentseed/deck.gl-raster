@@ -10,7 +10,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import { InfoPanel } from "./components/InfoPanel.js";
-import type { LandCoverTileData } from "./get-tile-data.js";
 import { getTileData } from "./get-tile-data.js";
 import { buildColormapTexture } from "./nlcd/build-colormap-texture.js";
 import {
@@ -99,8 +98,7 @@ export default function App() {
     epsgResolver,
     getTileData,
     renderTile,
-    onTileUnload: (tile) =>
-      (tile.data as LandCoverTileData | null)?.texture.destroy(),
+    onTileUnload: (tile) => tile.content?.texture.destroy(),
     onGeoTIFFLoad: (tiff, options) => {
       setGeotiff(tiff);
       const { west, south, east, north } = options.geographicBounds;

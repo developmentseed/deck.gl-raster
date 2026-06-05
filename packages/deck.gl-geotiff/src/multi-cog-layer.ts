@@ -629,7 +629,7 @@ export class MultiCOGLayer extends RasterTileLayer<
     // user-supplied `getTileData`), so it always frees them.
     return (tile) => {
       onTileUnload?.(tile);
-      const data = tile.data as MultiTileResult | null;
+      const data = tile.content;
       if (!data) {
         return;
       }

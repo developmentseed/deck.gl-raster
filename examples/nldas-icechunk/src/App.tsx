@@ -132,8 +132,7 @@ export default function App() {
               rescaleMin,
               rescaleMax,
             }),
-            onTileUnload: (tile) =>
-              (tile.data as NldasTileData | null)?.texture.destroy(),
+            onTileUnload: (tile) => tile.content?.texture.destroy(),
             // Re-run renderTile on cached tiles when the colormap or rescale
             // range changes.
             updateTriggers: {

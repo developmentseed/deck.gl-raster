@@ -367,7 +367,9 @@ export class COGLayer<
     }
     return (tile) => {
       onTileUnload?.(tile);
-      const data = tile.data as TextureDataT | null;
+      // `DataT` is generic here (no `texture`/`mask` on `MinimalTileData`), but
+      // the default pipeline always returns a `TextureDataT`.
+      const data = tile.content as TextureDataT | null;
       destroyIfTexture(data?.texture);
       destroyIfTexture(data?.mask);
     };
