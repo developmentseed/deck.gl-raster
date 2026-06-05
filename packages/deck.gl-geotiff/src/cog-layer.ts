@@ -21,16 +21,13 @@ import {
   metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
-import type { Texture } from "@luma.gl/core";
+import { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
-import { destroyIfTexture } from "./texture-cleanup.js";
-
-export type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 
 type DefaultDataT = MinimalTileData & {
   texture: Texture;
@@ -370,8 +367,12 @@ export class COGLayer<
       // `DataT` is generic here (no `texture`/`mask` on `MinimalTileData`), but
       // the default pipeline always returns a `TextureDataT`.
       const data = tile.content as TextureDataT | null;
-      destroyIfTexture(data?.texture);
-      destroyIfTexture(data?.mask);
+      if (data?.texture instanceof Texture) {
+        data?.texture.destroy();
+      }
+      if (data?.mask instanceof Texture) {
+        data?.mask.destroy();
+      }
     };
   }
 }

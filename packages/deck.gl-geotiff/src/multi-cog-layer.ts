@@ -48,12 +48,12 @@ import {
   metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
-import type { Device, Texture, TextureFormat } from "@luma.gl/core";
+import type { Device, TextureFormat } from "@luma.gl/core";
+import { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
-import { destroyIfTexture } from "./texture-cleanup.js";
 
 /**
  * Color palette for debug overlays.
@@ -634,7 +634,9 @@ export class MultiCOGLayer extends RasterTileLayer<
         return;
       }
       for (const band of data.bands.values()) {
-        destroyIfTexture(band.texture);
+        if (band.texture instanceof Texture) {
+          band.texture.destroy();
+        }
       }
     };
   }
