@@ -3,7 +3,10 @@
  *
  * See https://source.coop/tge-labs/aef-mosaic.
  */
-export const ZARR_URL = "https://data.source.coop/tge-labs/aef-mosaic";
+// We use the S3 URL directly to work around current source.coop bug of not sending Content-Length header
+// export const ZARR_URL = "https://data.source.coop/tge-labs/aef-mosaic";
+export const ZARR_URL =
+  "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/tge-labs/aef-mosaic";
 
 /** Path to the embeddings array within the root group. */
 export const VARIABLE = "embeddings";
