@@ -102,6 +102,43 @@ describe("AffineTilesetLevel", () => {
       expect(corners.topRight[0]).toBeCloseTo(100 + 4 * 10 * Math.cos(rad), 10);
       expect(corners.topRight[1]).toBeCloseTo(200 + 4 * 10 * Math.sin(rad), 10);
     });
+
+    it("clips an edge tile's corners to the array extent when tileSize does not divide arraySize evenly", () => {
+      // 5x3 array tiled in 4x4 chunks → 2x1 matrix; tile (1, 0) nominally
+      // covers pixels [4..8, 0..4] but the array only has data at [4..5, 0..3].
+      const level = new AffineTilesetLevel({
+        affine: SQUARE_AFFINE,
+        arrayWidth: 5,
+        arrayHeight: 3,
+        tileWidth: 4,
+        tileHeight: 4,
+        mpu: 1,
+      });
+      const corners = level.projectedTileCorners(1, 0);
+      // Without clipping, topRight would be at affine(8, 0) = (180, 200).
+      // With clipping it should sit at affine(5, 0) = (150, 200).
+      expect(corners.topLeft).toEqual([140, 200]);
+      expect(corners.topRight).toEqual([150, 200]);
+      expect(corners.bottomLeft).toEqual([140, 170]);
+      expect(corners.bottomRight).toEqual([150, 170]);
+    });
+
+    it("leaves interior tiles unaffected by clipping", () => {
+      // Interior tile (0, 0) is well within the array — clipping is a no-op.
+      const level = new AffineTilesetLevel({
+        affine: SQUARE_AFFINE,
+        arrayWidth: 12,
+        arrayHeight: 12,
+        tileWidth: 4,
+        tileHeight: 4,
+        mpu: 1,
+      });
+      const corners = level.projectedTileCorners(0, 0);
+      expect(corners.topLeft).toEqual([100, 200]);
+      expect(corners.topRight).toEqual([140, 200]);
+      expect(corners.bottomLeft).toEqual([100, 160]);
+      expect(corners.bottomRight).toEqual([140, 160]);
+    });
   });
 
   describe("tileTransform", () => {
