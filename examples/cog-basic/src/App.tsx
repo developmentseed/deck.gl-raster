@@ -16,6 +16,13 @@ import { Map as MaplibreMap } from "react-map-gl/maplibre";
 
 const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
   {
+    // Dev-only fixture served by examples/cog-basic/vite.config.ts from the
+    // geotiff-test-data submodule. EPSG:4326, bbox (−204, −18, −162, 24);
+    // crosses native −180° at u ≈ 24/42 — exercises antimeridian split.
+    title: "Antimeridian fixture (dev only)",
+    url: "/__fixtures/antimeridian.tif",
+  },
+  {
     title: "Sentinel-2 True Color Image (New York, 2026)",
     url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
   },
