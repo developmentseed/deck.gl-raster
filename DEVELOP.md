@@ -2,6 +2,14 @@
 
 This is a monorepo managed with pnpm workspaces.
 
+Some packages (e.g. `morecantile`, `geozarr`) reference files from git submodules.
+Initialize them before building, otherwise `pnpm build` fails with `TS6053: File '...' not found`:
+
+```bash
+# Initialize git submodules (required for the build)
+git submodule update --init --recursive
+```
+
 ```bash
 # Install dependencies
 pnpm install
