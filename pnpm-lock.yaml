@@ -675,6 +675,82 @@ importers:
         specifier: ^8.0.14
         version: 8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@1.21.7)(terser@5.48.0)(tsx@4.22.4)(yaml@2.8.3)
 
+  examples/sentinel-2-timelapse:
+    dependencies:
+      '@chakra-ui/react':
+        specifier: ^3.34.0
+        version: 3.35.0(@emotion/react@11.14.0(@types/react@19.2.16)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@deck.gl/core':
+        specifier: ^9.3.1
+        version: 9.3.2
+      '@deck.gl/geo-layers':
+        specifier: ^9.3.1
+        version: 9.3.2(@deck.gl/core@9.3.2)(@deck.gl/extensions@9.3.2(@deck.gl/core@9.3.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))))(@deck.gl/layers@9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))))(@deck.gl/mesh-layers@9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/gltf@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))
+      '@deck.gl/layers':
+        specifier: ^9.3.1
+        version: 9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))
+      '@deck.gl/mapbox':
+        specifier: ^9.3.1
+        version: 9.3.2(@deck.gl/core@9.3.2)(@luma.gl/core@9.3.3)(@math.gl/web-mercator@4.1.0)
+      '@deck.gl/mesh-layers':
+        specifier: ^9.3.1
+        version: 9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/gltf@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))
+      '@developmentseed/deck.gl-geotiff':
+        specifier: workspace:^
+        version: link:../../packages/deck.gl-geotiff
+      '@developmentseed/deck.gl-raster':
+        specifier: workspace:^
+        version: link:../../packages/deck.gl-raster
+      '@developmentseed/geotiff':
+        specifier: workspace:^
+        version: link:../../packages/geotiff
+      '@developmentseed/proj':
+        specifier: workspace:^
+        version: link:../../packages/proj
+      '@devseed-ui/collecticons-chakra':
+        specifier: ^4.0.0
+        version: 4.0.0(@chakra-ui/react@3.35.0(@emotion/react@11.14.0(@types/react@19.2.16)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@emotion/react@11.14.0(@types/react@19.2.16)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@emotion/react':
+        specifier: ^11.14.0
+        version: 11.14.0(@types/react@19.2.16)(react@19.2.7)
+      '@luma.gl/core':
+        specifier: ^9.3.3
+        version: 9.3.3
+      deck.gl-raster-examples-shared:
+        specifier: workspace:*
+        version: link:../_shared
+      maplibre-gl:
+        specifier: ^5.24.0
+        version: 5.24.0
+      proj4:
+        specifier: ^2.20.8
+        version: 2.20.8
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.7
+        version: 19.2.7(react@19.2.7)
+      react-map-gl:
+        specifier: ^8.1.1
+        version: 8.1.1(maplibre-gl@5.24.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.16
+        version: 19.2.16
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.16)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.2
+        version: 6.0.2(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@1.21.7)(terser@5.48.0)(tsx@4.22.4)(yaml@2.8.3))
+      gh-pages:
+        specifier: ^6.3.0
+        version: 6.3.0
+      vite:
+        specifier: ^8.0.14
+        version: 8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@1.21.7)(terser@5.48.0)(tsx@4.22.4)(yaml@2.8.3)
+
   examples/usgs-topo-cutline:
     dependencies:
       '@chakra-ui/react':

@@ -237,6 +237,15 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     ) => void;
 
     /**
+     * Called when opening the sources fails (e.g. a COG fetch is rejected by
+     * CORS or returns an error status, or a projection can't be resolved).
+     * Aborts from layer removal are not reported. Without a handler the failure
+     * surfaces only as an unhandled promise rejection in the console, so the map
+     * just stays blank; supply this to show the error in your own UI.
+     */
+    onGeoTIFFError?: (error: Error) => void;
+
+    /**
      * Enable debug overlay showing tile boundaries and metadata labels
      * for all tilesets.
      *
@@ -384,7 +393,20 @@ export class MultiCOGLayer extends RasterTileLayer<
         sources: null,
         multiDescriptor: null,
       });
-      this._parseAllSources();
+      // Fire-and-forget, but catch so a failed open surfaces through
+      // onGeoTIFFError instead of becoming an unhandled rejection.
+      this._parseAllSources().catch((err) => {
+        if (this.state.abortController?.signal.aborted) {
+          return;
+        }
+        const error = err instanceof Error ? err : new Error(String(err));
+        if (this.props.onGeoTIFFError) {
+          this.props.onGeoTIFFError(error);
+        } else {
+          // eslint-disable-next-line no-console
+          console.error("MultiCOGLayer: failed to open sources", error);
+        }
+      });
     }
   }
 
