@@ -19,20 +19,13 @@ The example displays 10m resolution RGB imagery of New Zealand from LINZ (Land I
 
 ## Setup
 
-1. Install dependencies from the repository root:
-   ```bash
-   pnpm install
-   ```
+1. Follow instructions for package setup in [DEVELOP.md](../../DEVELOP.md#package-setup).
 
-2. Build the packages:
-   ```bash
-   pnpm build
-   ```
+2. Run the development server:
 
-3. Run the development server:
    ```bash
    cd examples/cog-basic
    pnpm dev
    ```
 
-4. Open your browser to http://localhost:3000
+3. Open your browser to http://localhost:3000
