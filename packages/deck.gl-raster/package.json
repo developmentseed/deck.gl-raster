@@ -45,8 +45,8 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@luma.gl/core": "^9.3.2",
-    "@luma.gl/shadertools": "^9.3.2",
+    "@luma.gl/core": "^9.3.5",
+    "@luma.gl/shadertools": "^9.3.5",
     "@types/node": "^26.0.1",
     "jsdom": "^29.1.1",
     "typescript": "^6.0.3",
@@ -58,8 +58,8 @@
     "@deck.gl/geo-layers": "^9.3.0",
     "@deck.gl/layers": "^9.3.0",
     "@deck.gl/mesh-layers": "^9.3.0",
-    "@luma.gl/core": "^9.3.2",
-    "@luma.gl/shadertools": "^9.3.2"
+    "@luma.gl/core": "^9.3.5",
+    "@luma.gl/shadertools": "^9.3.5"
   },
   "dependencies": {
     "@developmentseed/affine": "workspace:^",
