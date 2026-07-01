@@ -43,7 +43,7 @@
     "json-schema-to-typescript": "^15.0.4",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.9"
   },
   "dependencies": {
     "@developmentseed/affine": "workspace:^"
