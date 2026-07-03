@@ -3,6 +3,7 @@ import type {
   CoordinateSystem,
   DefaultProps,
   Layer,
+  Material,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type {
@@ -128,6 +129,15 @@ export type RasterTileLayerProps<
      * @default 0.5
      */
     debugOpacity?: number;
+
+    /**
+     * Lighting material forwarded through {@link RasterLayer} to the
+     * underlying mesh layer. Pass `false` to render tiles unlit (pixel values
+     * verbatim, like `BitmapLayer`), e.g. when the scene uses a
+     * `LightingEffect` with ambient intensity < 1 for 3D layers.
+     * @default undefined
+     */
+    material?: Material;
 
     /**
      * AbortSignal applied to every tile fetch, composed with TileLayer's
@@ -390,7 +400,7 @@ export class RasterTileLayer<
     descriptor: RasterTilesetDescriptor,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): Layer[] {
-    const { maxError, debug, debugOpacity } = this.props;
+    const { maxError, debug, debugOpacity, material } = this.props;
     const tile = props.tile as Tile2DHeader<DataT> & RasterTileMetadata;
 
     const debugLayers = debug
@@ -452,6 +462,9 @@ export class RasterTileLayer<
         ...(image !== undefined && { image }),
         renderPipeline,
         maxError,
+        // Forward only when set so RasterLayer's sublayer default handling
+        // (and MeshTextureLayer's default material) is untouched when omitted.
+        ...(material !== undefined && { material }),
         reprojectionFns,
         // Web Mercator: clamp the mesh to the valid latitude band for tiles
         // past ±85.051°. Globe renders the full mesh (it shows the poles).

@@ -2,6 +2,7 @@ import type {
   CompositeLayerProps,
   DefaultProps,
   Layer,
+  Material,
   TextureSource,
   UpdateParameters,
 } from "@deck.gl/core";
@@ -119,6 +120,21 @@ export interface RasterLayerProps extends CompositeLayerProps {
 
   /** Opacity of the debug overlay. */
   debugOpacity?: number;
+
+  /**
+   * Lighting material forwarded to the underlying {@link MeshTextureLayer}
+   * (a `SimpleMeshLayer` subclass). Follows deck.gl's `material` convention:
+   * pass `false` to render the raster unlit, so pixel values display verbatim
+   * even when the scene has a `LightingEffect` with ambient intensity < 1
+   * (matching `BitmapLayer` behavior).
+   *
+   * When omitted, `MeshTextureLayer`'s default material applies
+   * (`{ambient: 1, diffuse: 0, shininess: 0, specularColor: [0, 0, 0]}`),
+   * which is lighting-neutral only when the scene's ambient intensity is 1.
+   *
+   * @default undefined
+   */
+  material?: Material;
 }
 
 const defaultProps: DefaultProps<RasterLayerProps> = {
@@ -333,7 +349,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
   renderLayers() {
     const { mesh, positions64Low } = this.state;
-    const { debug, image, renderPipeline } = this.props;
+    const { debug, image, renderPipeline, material } = this.props;
 
     // mesh and positions64Low are always set together by _generateMesh.
     if (
@@ -349,6 +365,10 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         id: "raster",
         image,
         renderPipeline,
+        // Forward only when set: an explicit `material: undefined` own-prop
+        // would shadow MeshTextureLayer's default material (deck.gl props are
+        // prototype-chained onto defaultProps).
+        ...(material !== undefined && { material }),
         // Single mesh rendered as one non-instanced draw.
         data: { length: 1, attributes: { positions64Low } },
         mesh,
