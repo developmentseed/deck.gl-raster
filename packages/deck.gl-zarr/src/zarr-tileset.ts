@@ -1,8 +1,8 @@
+import { pixelIsPointToArea } from "@developmentseed/affine";
 import type {
   ProjectionFunction,
   RasterTilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
-import { pixelIsPointToArea } from "@developmentseed/affine";
 import {
   AffineTileset,
   AffineTilesetLevel,
