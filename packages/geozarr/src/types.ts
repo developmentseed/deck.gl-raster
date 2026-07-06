@@ -38,6 +38,8 @@ export interface GeoZarrMetadata {
   levels: MultiscaleLevel[];
   /** CRS extracted from the geo-proj convention. */
   crs: CRSInfo;
+  /** Pixel interpretation from the spatial convention. */
+  registration: "pixel" | "node";
   /** Axis names from the spatial convention, e.g. ["y", "x"] or ["time", "y", "x"]. */
   axes: string[];
   /** Index of the y axis in `axes`. */

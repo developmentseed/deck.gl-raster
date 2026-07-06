@@ -5,6 +5,7 @@ import {
   compose,
   identity,
   invert,
+  pixelIsPointToArea,
   rotation,
   scale,
   translation,
@@ -72,6 +73,18 @@ describe("compose", () => {
     const t = translation(10, 20);
     const s = scale(2, 3);
     expect(compose(t, s)).not.toEqual(compose(s, t));
+  });
+});
+
+describe("pixelIsPointToArea", () => {
+  it("shifts point-registered pixels to area edges", () => {
+    const gt: Affine = [10, 0, 100, 0, -10, 200];
+    expect(pixelIsPointToArea(gt)).toEqual([10, 0, 95, 0, -10, 205]);
+  });
+
+  it("handles rotated or sheared transforms", () => {
+    const gt: Affine = [10, 2, 100, 3, -10, 200];
+    expect(pixelIsPointToArea(gt)).toEqual([10, 2, 94, 3, -10, 203.5]);
   });
 });
 
