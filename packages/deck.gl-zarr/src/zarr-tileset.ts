@@ -1,3 +1,4 @@
+import { pixelIsPointToArea } from "@developmentseed/affine";
 import type {
   ProjectionFunction,
   RasterTilesetDescriptor,
@@ -46,7 +47,10 @@ export function geoZarrToDescriptor(
   const levels = reversedLevels.map((level, i) => {
     const chunk = reversedChunks[i]!;
     return new AffineTilesetLevel({
-      affine: level.affine,
+      affine:
+        meta.registration === "node"
+          ? pixelIsPointToArea(level.affine)
+          : level.affine,
       arrayWidth: level.arrayWidth,
       arrayHeight: level.arrayHeight,
       tileWidth: chunk.width,
