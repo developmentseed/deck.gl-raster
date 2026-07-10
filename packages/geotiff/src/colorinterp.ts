@@ -31,8 +31,9 @@ export function inferColorInterpretation({
     case null:
       return Array<ColorInterp>(count).fill(ColorInterp.UNDEFINED);
 
+    case Photometric.MinIsWhite:
     case Photometric.MinIsBlack:
-      return Array<ColorInterp>(count).fill(ColorInterp.GRAY);
+      return [ColorInterp.GRAY, ...trailingBands(extraSamples, count - 1)];
 
     case Photometric.Rgb: {
       if (count < 3) {
@@ -40,16 +41,12 @@ export function inferColorInterpretation({
           "RGB photometric interpretation with fewer than 3 bands is not supported.",
         );
       }
-      if (count === 3) {
-        return [ColorInterp.RED, ColorInterp.GREEN, ColorInterp.BLUE];
-      }
-      // count >= 4: map extra samples
-      const extras = (extraSamples ?? []).map((sample) =>
-        sample === ExtraSample.UnassociatedAlpha
-          ? ColorInterp.ALPHA
-          : ColorInterp.UNDEFINED,
-      );
-      return [ColorInterp.RED, ColorInterp.GREEN, ColorInterp.BLUE, ...extras];
+      return [
+        ColorInterp.RED,
+        ColorInterp.GREEN,
+        ColorInterp.BLUE,
+        ...trailingBands(extraSamples, count - 3),
+      ];
     }
 
     case Photometric.Palette:
@@ -71,4 +68,25 @@ export function inferColorInterpretation({
         `Color interpretation not implemented for photometric: ${photometric}`,
       );
   }
+}
+
+/**
+ * Color interpretation for the `count` trailing (non-primary) bands.
+ *
+ * A band is ALPHA if its extra sample is unassociated alpha, otherwise
+ * UNDEFINED.
+ *
+ * Bands without a corresponding extra sample (e.g. a multi-band
+ * grayscale/multispectral stack) are UNDEFINED, keeping the result one entry
+ * per band.
+ */
+function trailingBands(
+  extraSamples: ExtraSample[] | null,
+  count: number,
+): ColorInterp[] {
+  return Array.from({ length: count }, (_, i) =>
+    extraSamples?.[i] === ExtraSample.UnassociatedAlpha
+      ? ColorInterp.ALPHA
+      : ColorInterp.UNDEFINED,
+  );
 }
