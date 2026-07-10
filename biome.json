@@ -12,6 +12,7 @@
     "includes": [
       "**",
       "!!**/*.log",
+      "!!**/*.svg",
       "!!**/coverage",
       "!!**/dist",
       "!!**/fixtures",
