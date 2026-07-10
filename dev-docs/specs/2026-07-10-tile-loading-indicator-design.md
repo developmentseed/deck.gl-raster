@@ -63,10 +63,12 @@ Resetting to "done" is authoritative via the layer's `onViewportLoad`.
 - When true: a rounded pill at top-center containing a Chakra `Spinner` and the
   `label` text (default `"Loading tiles…"`).
 - Contains **no logic** — purely `loading` in, pill out.
-- Positioned inside the existing pointer-events-none
-  [`UIOverlay`](../../examples/_shared/components/ui-overlay.tsx) so it floats
-  above the map without blocking interaction. Absolute box, `top`, centered
-  horizontally via `left="50%"` + `transform`.
+- **Self-positioning**, mirroring how
+  [`ControlPanel`](../../examples/_shared/components/control-panel.tsx#L78-L90)
+  places itself: `position="absolute"`, `zIndex={1000}`,
+  `pointerEvents="none"`, centered at top via `left="50%"` + `transform`. No
+  `UIOverlay` wrapper needed — examples drop it in as a sibling of
+  `ControlPanel`.
 - Exported from `examples/_shared/index.ts` alongside the other shared
   components.
 
@@ -108,9 +110,7 @@ return (
       <DeckGlOverlay layers={[cogLayer]} interleaved />
     </MaplibreMap>
 
-    <UIOverlay>
-      <LoadingIndicator loading={loading} />
-    </UIOverlay>
+    <LoadingIndicator loading={loading} />
     {/* existing ControlPanel … */}
   </div>
 );
