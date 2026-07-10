@@ -150,9 +150,6 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@deck.gl/mesh-layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/gltf@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6))
@@ -162,9 +159,6 @@ importers:
       '@developmentseed/deck.gl-zarr':
         specifier: workspace:^
         version: link:../../packages/deck.gl-zarr
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
@@ -220,18 +214,12 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@deck.gl/mesh-layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/gltf@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6))
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
@@ -281,18 +269,12 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@deck.gl/mesh-layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/gltf@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6))
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
@@ -342,9 +324,6 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@deck.gl/mesh-layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/gltf@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6))
@@ -357,9 +336,6 @@ importers:
       '@devseed-ui/collecticons-chakra':
         specifier: ^4.0.0
         version: 4.0.0(@chakra-ui/react@3.36.0(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
@@ -415,9 +391,6 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@deck.gl/mesh-layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/gltf@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6))
@@ -436,9 +409,6 @@ importers:
       '@developmentseed/proj':
         specifier: workspace:^
         version: link:../../packages/proj
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
@@ -488,9 +458,6 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
@@ -500,9 +467,6 @@ importers:
       '@developmentseed/geotiff':
         specifier: workspace:^
         version: link:../../packages/geotiff
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
@@ -558,18 +522,12 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../../packages/deck.gl-raster
       '@developmentseed/deck.gl-zarr':
         specifier: workspace:^
         version: link:../../packages/deck.gl-zarr
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
@@ -628,9 +586,6 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@deck.gl/mesh-layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/gltf@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6))
@@ -640,9 +595,6 @@ importers:
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../../packages/deck.gl-raster
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
@@ -689,9 +641,6 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@deck.gl/mesh-layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/gltf@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6))
@@ -704,9 +653,6 @@ importers:
       '@developmentseed/geotiff':
         specifier: workspace:^
         version: link:../../packages/geotiff
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
@@ -759,9 +705,6 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
@@ -771,9 +714,6 @@ importers:
       '@developmentseed/geotiff':
         specifier: workspace:^
         version: link:../../packages/geotiff
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
@@ -829,9 +769,6 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
-      '@deck.gl/mapbox':
-        specifier: ^9.3.1
-        version: 9.3.6(@deck.gl/core@9.3.6)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@deck.gl/mesh-layers':
         specifier: ^9.3.1
         version: 9.3.6(@deck.gl/core@9.3.6)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/gltf@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6))
@@ -841,9 +778,6 @@ importers:
       '@developmentseed/deck.gl-zarr':
         specifier: workspace:^
         version: link:../../packages/deck.gl-zarr
-      '@emotion/react':
-        specifier: ^11.14.0
-        version: 11.14.0(@types/react@19.2.17)(react@19.2.7)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.6
