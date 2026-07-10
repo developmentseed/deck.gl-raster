@@ -12,10 +12,7 @@ updates:
     schedule:
       interval: "monthly"
     groups:
-      # Keep the vis.gl ecosystem (deck.gl / luma.gl and the coupled
-      # math.gl / loaders.gl packages) in its own PR, since those versions
-      # must be upgraded in lockstep. Listed first so these packages match
-      # here instead of the dev/prod groups below.
+      # Separate group for visgl libraries, released jointly
       vis-gl:
         patterns:
           - "@deck.gl/*"
