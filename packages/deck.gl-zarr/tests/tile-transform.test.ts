@@ -19,6 +19,11 @@ const META: GeoZarrMetadata = {
   ],
 } as unknown as GeoZarrMetadata;
 
+const NODE_REGISTERED_META: GeoZarrMetadata = {
+  ...META,
+  registration: "node",
+};
+
 describe("ZarrTilesetLevel.tileTransform", () => {
   const descriptor = geoZarrToDescriptor(META, {
     projectTo4326: identityProjection,
@@ -45,5 +50,21 @@ describe("ZarrTilesetLevel.tileTransform", () => {
     const [px, py] = inverseTransform(cx, cy);
     expect(px).toBeCloseTo(2.5, 10);
     expect(py).toBeCloseTo(1.5, 10);
+  });
+
+  it("offsets node-registered rasters by half a pixel", () => {
+    const nodeDescriptor = geoZarrToDescriptor(NODE_REGISTERED_META, {
+      projectTo4326: identityProjection,
+      projectFrom4326: identityProjection,
+      projectTo3857: identityProjection,
+      projectFrom3857: identityProjection,
+      chunkSizes: [{ width: 4, height: 4 }],
+      mpu: 1,
+    });
+
+    const { forwardTransform } = nodeDescriptor.levels[0]!.tileTransform(0, 0);
+    const [x, y] = forwardTransform(0, 0);
+    expect(x).toBeCloseTo(95, 10);
+    expect(y).toBeCloseTo(205, 10);
   });
 });

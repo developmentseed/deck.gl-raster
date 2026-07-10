@@ -1,6 +1,6 @@
 import { RasterTypeKey } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
-import { apply, compose, invert, translation } from "@developmentseed/affine";
+import { apply, invert, pixelIsPointToArea } from "@developmentseed/affine";
 
 export function createTransform({
   modelTiepoint,
@@ -27,7 +27,7 @@ export function createTransform({
 
   // Offset transform by half pixel for point-interpreted rasters.
   if (rasterType === RasterTypeKey.PixelIsPoint) {
-    transform = compose(transform, translation(-0.5, -0.5));
+    transform = pixelIsPointToArea(transform);
   }
 
   return transform;

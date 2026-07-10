@@ -174,6 +174,19 @@ export function compose(
 }
 
 /**
+ * Convert a point/node-registered raster transform to an area/pixel-registered
+ * transform.
+ *
+ * Point-registered rasters locate integer pixel coordinates at sample points.
+ * The raster rendering path expects integer pixel coordinates to describe
+ * pixel edges, so the transform is shifted by half a pixel in source pixel
+ * space. Equivalent to `compose(affine, translation(-0.5, -0.5))`.
+ */
+export function pixelIsPointToArea(affine: Affine): Affine {
+  return compose(affine, translation(-0.5, -0.5));
+}
+
+/**
  * Compute the inverse of an Affine.
  *
  * @param affine  The affine transform to invert.

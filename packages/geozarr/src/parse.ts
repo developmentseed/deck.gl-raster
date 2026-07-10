@@ -112,5 +112,12 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
     ];
   }
 
-  return { levels, crs, axes, yAxisIndex, xAxisIndex };
+  return {
+    levels,
+    crs,
+    registration: spatial["spatial:registration"] ?? "pixel",
+    axes,
+    yAxisIndex,
+    xAxisIndex,
+  };
 }
