@@ -107,7 +107,7 @@ export async function prefetchTags(
     bitsPerSample: new Uint16Array(bitsPerSample),
     colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
     compression,
-    // Coerce extraSamples to an array
+    // Coerce extraSamples to an array. Can be updated once merged:
     // https://github.com/blacha/cogeotiff/pull/1478
     extraSamples:
       extraSamples == null
