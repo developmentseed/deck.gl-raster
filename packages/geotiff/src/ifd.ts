@@ -28,7 +28,7 @@ export interface CachedTags {
   bitsPerSample: Uint16Array;
   colorMap?: Uint16Array; // TiffTagType[TiffTag.ColorMap];
   compression: TiffTagType[TiffTag.Compression];
-  extraSamples: [ExtraSample] | null;
+  extraSamples: ExtraSample[] | null;
   gdalMetadata: TiffTagType[TiffTag.GdalMetadata] | null;
   lercParameters: TiffTagType[TiffTag.LercParameters] | null;
   modelTiepoint: TiffTagType[TiffTag.ModelTiePoint] | null;
@@ -107,7 +107,14 @@ export async function prefetchTags(
     bitsPerSample: new Uint16Array(bitsPerSample),
     colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
     compression,
-    extraSamples: (extraSamples as [ExtraSample] | null) ?? null,
+    // Coerce extraSamples to an array
+    // https://github.com/blacha/cogeotiff/pull/1478
+    extraSamples:
+      extraSamples == null
+        ? null
+        : ((Array.isArray(extraSamples)
+            ? extraSamples
+            : [extraSamples]) as ExtraSample[]),
     gdalMetadata,
     lercParameters,
     modelTiepoint,
