@@ -7,11 +7,28 @@ import {
   TiffTagGeo,
 } from "@cogeotiff/core";
 
+/**
+ * Description of extra components.
+ *
+ * Specifies that each pixel has N extra components whose interpretation is
+ * defined by one of the values listed below. When this field is used, the
+ * SamplesPerPixel field has a value greater than the PhotometricInterpretation
+ * field suggests.
+ *
+ * @see https://web.archive.org/web/20240329145321/https://www.awaresystems.be/imaging/tiff/tifftags/extrasamples.html
+ */
+export enum ExtraSample {
+  Unspecified = 0,
+  AssociatedAlpha = 1,
+  UnassociatedAlpha = 2,
+}
+
 /** Subset of TIFF tags that we pre-fetch for easier visualization. */
 export interface CachedTags {
   bitsPerSample: Uint16Array;
   colorMap?: Uint16Array; // TiffTagType[TiffTag.ColorMap];
   compression: TiffTagType[TiffTag.Compression];
+  extraSamples: ExtraSample[] | null;
   gdalMetadata: TiffTagType[TiffTag.GdalMetadata] | null;
   lercParameters: TiffTagType[TiffTag.LercParameters] | null;
   modelTiepoint: TiffTagType[TiffTag.ModelTiePoint] | null;
@@ -41,6 +58,7 @@ export async function prefetchTags(
   const [
     bitsPerSample,
     colorMap,
+    extraSamples,
     gdalNoData,
     gdalMetadata,
     lercParameters,
@@ -55,6 +73,7 @@ export async function prefetchTags(
   ] = await Promise.all([
     image.fetch(TiffTag.BitsPerSample, { signal }),
     image.fetch(TiffTag.ColorMap, { signal }),
+    image.fetch(TiffTag.ExtraSamples, { signal }),
     image.fetch(TiffTag.GdalNoData, { signal }),
     image.fetch(TiffTag.GdalMetadata, { signal }),
     image.fetch(TiffTag.LercParameters, { signal }),
@@ -88,6 +107,14 @@ export async function prefetchTags(
     bitsPerSample: new Uint16Array(bitsPerSample),
     colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
     compression,
+    // Coerce extraSamples to an array. Can be updated once merged:
+    // https://github.com/blacha/cogeotiff/pull/1478
+    extraSamples:
+      extraSamples == null
+        ? null
+        : ((Array.isArray(extraSamples)
+            ? extraSamples
+            : [extraSamples]) as ExtraSample[]),
     gdalMetadata,
     lercParameters,
     modelTiepoint,
