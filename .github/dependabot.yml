@@ -12,6 +12,16 @@ updates:
     schedule:
       interval: "monthly"
     groups:
+      # Separate group for visgl libraries, released jointly
+      vis-gl:
+        patterns:
+          - "@deck.gl/*"
+          - "@luma.gl/*"
+          - "@math.gl/*"
+          - "@loaders.gl/*"
+        update-types:
+          - "patch"
+          - "minor"
       dev-dependencies:
         dependency-type: "development"
         update-types:

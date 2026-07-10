@@ -45,7 +45,9 @@ export function inferColorInterpretation({
       }
       // count >= 4: map extra samples
       const extras = (extraSamples ?? []).map((sample) =>
-        sample === ExtraSample.UnassociatedAlpha ? ColorInterp.ALPHA : ColorInterp.UNDEFINED,
+        sample === ExtraSample.UnassociatedAlpha
+          ? ColorInterp.ALPHA
+          : ColorInterp.UNDEFINED,
       );
       return [ColorInterp.RED, ColorInterp.GREEN, ColorInterp.BLUE, ...extras];
     }
@@ -54,7 +56,12 @@ export function inferColorInterpretation({
       return [ColorInterp.PALETTE];
 
     case Photometric.Separated:
-      return [ColorInterp.CYAN, ColorInterp.MAGENTA, ColorInterp.YELLOW, ColorInterp.BLACK];
+      return [
+        ColorInterp.CYAN,
+        ColorInterp.MAGENTA,
+        ColorInterp.YELLOW,
+        ColorInterp.BLACK,
+      ];
 
     case Photometric.Ycbcr:
       return [ColorInterp.Y, ColorInterp.Cb, ColorInterp.Cr];

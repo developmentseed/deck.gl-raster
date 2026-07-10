@@ -29,6 +29,82 @@ const SAMPLE_POINTS: [number, number, number][] = [
 
 const DEFAULT_MAX_ERROR = 0.125;
 
+/**
+ * A seed triangulation for {@link RasterReprojector}, in delaunator's data
+ * shape. All UV coordinates must lie in `[0, 1]`. The triangulation must be a
+ * valid (ideally Delaunay) mesh — its triangles are NOT legalized on seeding.
+ *
+ * The fields deliberately match [delaunator](https://github.com/mapbox/delaunator)'s
+ * output, so building a seed from a set of UV points is a one-liner — pass the
+ * points (which must form a convex domain; delaunator triangulates the convex
+ * hull of its input):
+ *
+ * ```ts
+ * import Delaunator from "delaunator";
+ *
+ * const points: [number, number][] = [[0, 0], [1, 0], [0, 1], [1, 1]];
+ * const d = Delaunator.from(points);
+ * const seed: InitialTriangulation = {
+ *   uvs: Array.from(d.coords),
+ *   triangles: Array.from(d.triangles),
+ *   halfedges: Array.from(d.halfedges),
+ * };
+ * ```
+ *
+ * delaunator is not a dependency of this package; consumers that want this
+ * convenience add it themselves. A hand-built triangulation works too, as long
+ * as it is a valid mesh with the halfedge convention below.
+ */
+export interface InitialTriangulation {
+  /** Flat UV vertex coordinates `[u0, v0, u1, v1, ...]`, each in `[0, 1]`. */
+  uvs: number[];
+  /** Triangle vertex indices, 3 per triangle (indices into `uvs`). */
+  triangles: number[];
+  /**
+   * Halfedge twins: `halfedges[e]` is the opposite halfedge of `e`, or `-1`
+   * if `e` is on the boundary. Same convention as delaunator and the
+   * reprojector's internal `_halfedges`.
+   */
+  halfedges: number[];
+}
+
+/**
+ * Triangulate an axis-aligned UV rectangle `[uMin, vMin]`–`[uMax, vMax]` into an
+ * {@link InitialTriangulation} (4 corner vertices, 2 triangles sharing the
+ * p0–p3 diagonal).
+ *
+ * Seeding {@link RasterReprojector} with a sub-rectangle confines the mesh to
+ * that region — e.g. to clamp an image's mesh to the valid Web Mercator
+ * latitude band (see #182 / #351), pass that band's UV bounds.
+ */
+export function triangulateRectangle(
+  uMin: number,
+  vMin: number,
+  uMax: number,
+  vMax: number,
+): InitialTriangulation {
+  return {
+    // p0=(uMin,vMin) p1=(uMax,vMin) p2=(uMin,vMax) p3=(uMax,vMax)
+    uvs: [uMin, vMin, uMax, vMin, uMin, vMax, uMax, vMax],
+    // t0 = (p3, p0, p2), t1 = (p0, p3, p1)
+    triangles: [3, 0, 2, 0, 3, 1],
+    // shared diagonal p0–p3: halfedge 0 <-> 3; all other edges are boundary
+    halfedges: [3, -1, -1, 0, -1, -1],
+  };
+}
+
+/**
+ * The default seed: the full image in UV space. Reproduces the previous
+ * hardcoded constructor init exactly, and is hardcoded (not delaunator-built)
+ * so the package has no runtime triangulation dependency.
+ */
+const UNIT_SQUARE_TRIANGULATION: InitialTriangulation = triangulateRectangle(
+  0,
+  0,
+  1,
+  1,
+);
+
 export interface ReprojectionFns {
   /**
    * Convert from UV coordinates to input CRS coordinates.
@@ -55,9 +131,22 @@ export interface ReprojectionFns {
   inverseReproject(x: number, y: number): [number, number];
 }
 
+/**
+ * RasterReprojector performs a Delaunay triangulation-based reprojection of a
+ * raster image.
+ *
+ * It takes as input a set of functions to associate pixel positions with
+ * coordinates in the input and output CRS, as well as the dimensions of the
+ * output image, and it produces a triangulated mesh that can be used to
+ * reproject the input raster onto the output raster with bounded error.
+ */
 export class RasterReprojector {
   reprojectors: ReprojectionFns;
+
+  /** Width of the image in pixels */
   width: number;
+
+  /** Height of the image in pixels */
   height: number;
 
   /**
@@ -99,6 +188,7 @@ export class RasterReprojector {
     reprojectors: ReprojectionFns,
     width: number,
     height: number = width,
+    options: { initialTriangulation?: InitialTriangulation } = {},
   ) {
     this.reprojectors = reprojectors;
     this.width = width;
@@ -118,29 +208,60 @@ export class RasterReprojector {
     this._pending = []; // triangles pending addition to queue
     this._pendingLen = 0;
 
-    // The two initial triangles cover the entire input texture in UV space, so
-    // they range from [0, 0] to [1, 1] in u and v.
-    const u1 = 1;
-    const v1 = 1;
-    const p0 = this._addPoint(0, 0);
-    const p1 = this._addPoint(u1, 0);
-    const p2 = this._addPoint(0, v1);
-    const p3 = this._addPoint(u1, v1);
-
-    // add initial two triangles
-    const t0 = this._addTriangle(p3, p0, p2, -1, -1, -1);
-    this._addTriangle(p0, p3, p1, t0, -1, -1);
+    this._seed(options.initialTriangulation ?? UNIT_SQUARE_TRIANGULATION);
     this._flush();
   }
 
-  // refine the mesh until its maximum error gets below the given one
-  run(maxError: number = DEFAULT_MAX_ERROR): void {
+  /**
+   * Seed the mesh from an {@link InitialTriangulation}. Adds every vertex (which
+   * computes its exact output position), copies the triangle and halfedge arrays
+   * directly (the seed is already a valid triangulation), and queues every
+   * triangle for the first reprojection-error pass.
+   */
+  private _seed(seed: InitialTriangulation): void {
+    for (let i = 0; i < seed.uvs.length; i += 2) {
+      this._addPoint(seed.uvs[i]!, seed.uvs[i + 1]!);
+    }
+    for (let i = 0; i < seed.triangles.length; i++) {
+      this.triangles[i] = seed.triangles[i]!;
+      this._halfedges[i] = seed.halfedges[i]!;
+    }
+    const numTriangles = seed.triangles.length / 3;
+    for (let t = 0; t < numTriangles; t++) {
+      this._candidatesUV[2 * t] = 0;
+      this._candidatesUV[2 * t + 1] = 0;
+      this._queueIndices[t] = -1;
+      this._pending[this._pendingLen++] = t;
+    }
+  }
+
+  /**
+   * Refine the mesh until its maximum error gets below the given one
+   *
+   * @param maxError The maximum reprojection error in input pixels that the mesh should achieve.
+   * @param maxIterations Optional safeguard to prevent infinite loops in case of non-convergence. If the mesh fails to converge within this number of iterations, a warning will be logged and the function will return early.
+   *
+   * @return  {[type]}  [return description]
+   */
+  run(
+    maxError: number = DEFAULT_MAX_ERROR,
+    { maxIterations = 10000 } = {},
+  ): void {
     if (maxError <= 0) {
       throw new Error("maxError must be positive");
     }
 
+    // Note: this primarily happens near the poles, where we'll essentially
+    // never converge
+    let iterations = 0;
     while (this.getMaxError() > maxError) {
       this.refine();
+      if (++iterations > maxIterations) {
+        console.warn(
+          `RasterReprojector: mesh refinement did not converge after ${iterations} iterations (maxError=${maxError}, currentError=${this.getMaxError()})`,
+        );
+        break;
+      }
     }
   }
 
@@ -167,9 +288,9 @@ export class RasterReprojector {
   /**
    * Conversion of upstream's `_findCandidate` for reprojection error handling.
    *
-   * @param   {number}  t  The index (into `this.triangles`) of the pending triangle to process.
+   * @param t The index (into `this.triangles`) of the pending triangle to process.
    *
-   * @return  {void}    Doesn't return; instead modifies internal state.
+   * @return Doesn't return; instead modifies internal state.
    */
   private _findReprojectionCandidate(t: number): void {
     // Find the three vertices of this triangle
@@ -362,7 +483,7 @@ export class RasterReprojector {
   }
 
   // add or update a triangle in the mesh
-  _addTriangle(
+  private _addTriangle(
     a: number,
     b: number,
     c: number,

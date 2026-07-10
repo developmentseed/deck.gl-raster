@@ -1,0 +1,13 @@
+developmentseed:
+  name: Development Seed
+  url: https://developmentseed.org
+  image_url: https://github.com/developmentseed.png
+kylebarron:
+  image_url: https://github.com/kylebarron.png
+  name: Kyle Barron
+  title: Cloud Engineer
+  url: https://developmentseed.org/team/kyle-barron/
+  socials:
+    bluesky: kylebarron.dev
+    github: kylebarron
+    linkedin: kylebarrongeo

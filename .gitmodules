@@ -4,3 +4,12 @@
 [submodule "packages/morecantile/spec"]
 	path = packages/morecantile/spec
 	url = https://github.com/opengeospatial/2D-Tile-Matrix-Set
+[submodule "packages/geozarr/multiscales"]
+	path = packages/geozarr/multiscales
+	url = https://github.com/zarr-conventions/multiscales
+[submodule "packages/geozarr/spatial"]
+	path = packages/geozarr/spatial
+	url = https://github.com/zarr-conventions/spatial
+[submodule "packages/geozarr/geo-proj"]
+	path = packages/geozarr/geo-proj
+	url = https://github.com/zarr-conventions/geo-proj

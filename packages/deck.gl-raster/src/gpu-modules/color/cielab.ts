@@ -45,8 +45,9 @@ const shader = /* glsl */ `
 `;
 
 /**
- * A shader module that injects a unorm texture and uses a sampler2D to assign
- * to a color.
+ * A shader module that converts CIE L\*a\*b\* input (RGB channels read as L,
+ * a, b on a D65 white point) to sRGB. For TIFFs with
+ * `PhotometricInterpretation = 8` (CIELab).
  */
 export const cieLabToRGB = {
   name: "cielab-to-rgb",

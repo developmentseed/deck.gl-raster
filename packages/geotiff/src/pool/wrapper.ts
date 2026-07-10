@@ -61,7 +61,9 @@ export class WorkerWrapper {
     const { jobId, error, pixels } = e.data;
     const job = this.jobs.get(jobId);
     this.jobs.delete(jobId);
-    if (!job) return;
+    if (!job) {
+      return;
+    }
 
     if (error) {
       job.reject(new Error(error));

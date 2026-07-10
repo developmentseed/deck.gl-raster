@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/morecantile",
-  "version": "0.3.0-beta.3",
+  "version": "0.8.0-beta.2",
   "description": "TypeScript port of Python morecantile — TileMatrixSet utilities.",
   "type": "module",
   "main": "./dist/index.js",
@@ -38,12 +38,12 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^25.3.3",
-    "jsdom": "^28.1.0",
+    "@types/node": "^26.1.1",
+    "jsdom": "^29.1.1",
     "json-schema-to-typescript": "^15.0.4",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@developmentseed/affine": "workspace:^"

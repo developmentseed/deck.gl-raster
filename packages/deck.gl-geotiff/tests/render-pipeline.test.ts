@@ -1,9 +1,8 @@
-import assert from "node:assert";
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF } from "@developmentseed/geotiff";
 import { describe, expect, it } from "vitest";
-import { loadGeoTIFF } from "../../geotiff/tests/helpers.js";
-import { inferRenderPipeline } from "../src/geotiff/render-pipeline";
+import { inferRenderPipeline } from "../src/geotiff/render-pipeline.js";
+import { loadGeoTIFF } from "./helpers.js";
 
 const MOCK_DEVICE = {
   createTexture: (x: any) => x,
@@ -17,10 +16,7 @@ function _createRenderPipeline(geotiff: GeoTIFF): RasterModule[] {
     geotiff,
     MOCK_DEVICE as any,
   );
-  const renderPipeline = renderTile(MOCK_RENDER_TILE_DATA as any);
-
-  assert(!(renderPipeline instanceof ImageData));
-  return renderPipeline;
+  return renderTile(MOCK_RENDER_TILE_DATA as any).renderPipeline!;
 }
 
 describe("land cover, single-band uint8", async () => {
@@ -35,7 +31,12 @@ describe("land cover, single-band uint8", async () => {
     expect(renderPipeline[1]?.props?.value).toEqual(250 / 255.0);
 
     expect(renderPipeline[2]?.module.name).toEqual("colormap");
-    expect(renderPipeline[2]?.props?.colormapTexture).toBeDefined();
+    const cmapTexture = renderPipeline[2]?.props?.colormapTexture as any;
+    expect(cmapTexture).toBeDefined();
+    // Colormap shader module samples a sampler2DArray, so the texture must be
+    // created as a 2d-array (with depth=1 for a single Palette colormap).
+    expect(cmapTexture.dimension).toEqual("2d-array");
+    expect(cmapTexture.depth).toEqual(1);
   });
 });
 

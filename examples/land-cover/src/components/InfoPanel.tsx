@@ -1,176 +1,135 @@
-import { HelpIcon } from "./HelpIcon";
-import { Legend } from "./Legend";
+import { Checkbox, Code, Slider, Stack, Text } from "@chakra-ui/react";
+import {
+  ControlPanel,
+  ExternalLink,
+  Field,
+  HelpTooltip,
+} from "deck.gl-raster-examples-shared";
+import { CategoryFilter } from "./CategoryFilter.js";
 
 interface InfoPanelProps {
   debug: boolean;
   debugOpacity: number;
   meshMaxError: number;
+  selected: Set<number>;
+  onSelectedChange: (next: Set<number>) => void;
   onDebugChange: (checked: boolean) => void;
   onDebugOpacityChange: (opacity: number) => void;
   onMeshMaxErrorChange: (error: number) => void;
 }
 
-const helpIconTooltip = `
-Red squares depict the underlying COG tile structure.
+const debugOverlayTooltip = `Red squares depict the underlying COG tile structure.
 
-Triangles depict the GPU-based reprojection. Instead of per-pixel reprojection, we generate an adaptive triangular mesh. Each triangle locally approximates the non-linear reprojection function, ensuring minimal distortion.
-`;
+Triangles depict the GPU-based reprojection. Instead of per-pixel reprojection, we generate an adaptive triangular mesh. Each triangle locally approximates the non-linear reprojection function, ensuring minimal distortion.`;
 
-const meshMaxErrorTooltip = `
-Controls the maximum allowed reprojection error (in source pixels) for the adaptive triangular mesh.
+const meshMaxErrorTooltip = `Controls the maximum allowed reprojection error (in source pixels) for the adaptive triangular mesh.
 
-Lower values produce more triangles and higher accuracy at the cost of performance. Higher values use fewer triangles and render faster but with less precise reprojection.
-`;
+Lower values produce more triangles and higher accuracy at the cost of performance. Higher values use fewer triangles and render faster but with less precise reprojection.`;
 
 export function InfoPanel({
   debug,
   debugOpacity,
   meshMaxError,
+  selected,
+  onSelectedChange,
   onDebugChange,
   onDebugOpacityChange,
   onMeshMaxErrorChange,
 }: InfoPanelProps) {
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: "20px",
-        left: "20px",
-        background: "white",
-        padding: "16px",
-        borderRadius: "8px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        maxWidth: "300px",
-        pointerEvents: "auto",
-      }}
-    >
-      <h3
-        style={{
-          margin: "0 0 8px 0",
-          fontSize: "16px",
-          paddingBottom: "8px",
-          borderBottom: "1px solid #eee",
-        }}
-      >
-        NLCD Land Cover Classification
-      </h3>
+    <ControlPanel title="NLCD Land Cover" sourcePath="examples/land-cover">
+      <Stack gap="3">
+        <Text color="gray.600">
+          A <Text as="b">1.3 GB</Text>{" "}
+          <ExternalLink href="https://cogeo.org/">
+            Cloud-Optimized GeoTIFF
+          </ExternalLink>{" "}
+          of{" "}
+          <ExternalLink href="https://www.usgs.gov/annualnlcd">
+            USGS Annual NLCD
+          </ExternalLink>{" "}
+          data rendered in the browser with no server using{" "}
+          <ExternalLink href="https://developmentseed.org/deck.gl-raster/">
+            <Code>deck.gl-raster</Code>
+          </ExternalLink>
+          .
+        </Text>
 
-      <p style={{ margin: "8px 0", fontSize: "14px", color: "#666" }}>
-        A <b>1.3GB</b>{" "}
-        <a href="https://cogeo.org/" target="_blank" rel="noopener noreferrer">
-          Cloud-Optimized GeoTIFF
-        </a>{" "}
-        rendered in the browser with <b>no server</b> using{" "}
-        <a
-          href="https://github.com/developmentseed/deck.gl-raster"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            fontFamily: "monospace",
-          }}
-        >
-          @developmentseed/deck.gl-raster
-        </a>
-        .
-        <br />
-      </p>
+        <CategoryFilter selected={selected} onChange={onSelectedChange} />
 
-      <Legend />
-
-      <div
-        style={{
-          padding: "12px 0",
-          borderTop: "1px solid #eee",
-          marginTop: "12px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            marginBottom: "12px",
-          }}
-        >
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "12px",
-              cursor: "pointer",
-              color: "#666",
-            }}
-          >
-            <input
-              type="checkbox"
+        <Stack gap="3" pt="3" borderTopWidth="1px" borderColor="gray.200">
+          <Stack direction="row" align="center" gap="1.5">
+            <Checkbox.Root
               checked={debug}
-              onChange={(e) => onDebugChange(e.target.checked)}
-              style={{ cursor: "pointer" }}
-            />
-            <span>Show Debug Overlay</span>
-          </label>
-          <HelpIcon tooltip={helpIconTooltip} />
-        </div>
-
-        {debug && (
-          <div style={{ marginTop: "8px" }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: "12px",
-                color: "#666",
-                marginBottom: "4px",
-              }}
+              onCheckedChange={(d) => onDebugChange(d.checked === true)}
             >
-              Debug Opacity: {debugOpacity.toFixed(2)}
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={debugOpacity}
-                onChange={(e) =>
-                  onDebugOpacityChange(parseFloat(e.target.value))
-                }
-                style={{ width: "100%", cursor: "pointer" }}
-              />
-            </label>
-          </div>
-        )}
+              <Checkbox.HiddenInput />
+              <Checkbox.Control />
+              <Checkbox.Label>Debug overlay</Checkbox.Label>
+            </Checkbox.Root>
+            <HelpTooltip label="Debug overlay info">
+              {debugOverlayTooltip}
+            </HelpTooltip>
+          </Stack>
 
-        <div style={{ marginTop: "8px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              marginBottom: "4px",
-            }}
+          {debug ? (
+            <Field
+              label={
+                <Text as="span">Debug opacity: {debugOpacity.toFixed(2)}</Text>
+              }
+            >
+              <Slider.Root
+                size="sm"
+                width="full"
+                min={0}
+                max={1}
+                step={0.01}
+                value={[debugOpacity]}
+                onValueChange={(d) => onDebugOpacityChange(d.value[0])}
+              >
+                <Slider.Control>
+                  <Slider.Track>
+                    <Slider.Range />
+                  </Slider.Track>
+                  <Slider.Thumb index={0}>
+                    <Slider.HiddenInput />
+                  </Slider.Thumb>
+                </Slider.Control>
+              </Slider.Root>
+            </Field>
+          ) : null}
+
+          <Field
+            label={
+              <Text as="span" display="inline-flex" alignItems="center" gap="1">
+                Mesh max error: {meshMaxError.toFixed(3)}
+                <HelpTooltip label="Mesh max error info">
+                  {meshMaxErrorTooltip}
+                </HelpTooltip>
+              </Text>
+            }
           >
-            <label
-              htmlFor="mesh-max-error"
-              style={{
-                fontSize: "12px",
-                color: "#666",
-              }}
+            <Slider.Root
+              size="sm"
+              width="full"
+              min={0.01}
+              max={5}
+              step={0.01}
+              value={[meshMaxError]}
+              onValueChange={(d) => onMeshMaxErrorChange(d.value[0])}
             >
-              Mesh Max Error: {meshMaxError.toFixed(3)}
-            </label>
-            <HelpIcon tooltip={meshMaxErrorTooltip} />
-          </div>
-          <input
-            id="mesh-max-error"
-            type="range"
-            min="0.01"
-            max="5"
-            step="0.01"
-            value={meshMaxError}
-            onChange={(e) => onMeshMaxErrorChange(parseFloat(e.target.value))}
-            style={{ width: "100%", cursor: "pointer" }}
-          />
-        </div>
-      </div>
-    </div>
+              <Slider.Control>
+                <Slider.Track>
+                  <Slider.Range />
+                </Slider.Track>
+                <Slider.Thumb index={0}>
+                  <Slider.HiddenInput />
+                </Slider.Thumb>
+              </Slider.Control>
+            </Slider.Root>
+          </Field>
+        </Stack>
+      </Stack>
+    </ControlPanel>
   );
 }

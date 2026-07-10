@@ -7,8 +7,8 @@ import _GNOSIS from "../spec/schemas/tms/2.0/json/examples/tilematrixset/GNOSISG
 import _UTM31 from "../spec/schemas/tms/2.0/json/examples/tilematrixset/UTM31WGS84Quad.json";
 import _WebMercator from "../spec/schemas/tms/2.0/json/examples/tilematrixset/WebMercatorQuad.json";
 import _WorldCRS84 from "../spec/schemas/tms/2.0/json/examples/tilematrixset/WorldCRS84Quad.json";
-import { matrixTransform, tileTransform } from "../src/transform";
-import type { TileMatrix, TileMatrixSet } from "../src/types/index";
+import { matrixTransform, tileTransform } from "../src/transform.js";
+import type { TileMatrix, TileMatrixSet } from "../src/types/index.js";
 
 const CDB1 = _CDB1 as TileMatrixSet;
 const GNOSIS = _GNOSIS as TileMatrixSet;
@@ -18,7 +18,9 @@ const WorldCRS84 = _WorldCRS84 as TileMatrixSet;
 
 function findMatrix(tms: TileMatrixSet, id: string): TileMatrix {
   const m = tms.tileMatrices.find((m) => m.id === id);
-  if (!m) throw new Error(`no matrix with id "${id}"`);
+  if (!m) {
+    throw new Error(`no matrix with id "${id}"`);
+  }
   return m;
 }
 

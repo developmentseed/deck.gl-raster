@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/raster-reproject",
-  "version": "0.3.0-beta.3",
+  "version": "0.8.0-beta.2",
   "description": "Mesh generation for client-side raster reprojection.",
   "type": "module",
   "main": "./dist/index.js",
@@ -41,11 +41,12 @@
   },
   "devDependencies": {
     "@developmentseed/affine": "workspace:^",
-    "@types/node": "^25.3.3",
-    "jsdom": "^28.1.0",
-    "proj4": "^2.20.3",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "@types/node": "^26.1.1",
+    "delaunator": "^5.1.0",
+    "jsdom": "^29.1.1",
+    "proj4": "^2.20.9",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "volta": {
     "extends": "../../package.json"

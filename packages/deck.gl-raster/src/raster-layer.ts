@@ -1,15 +1,21 @@
 import type {
   CompositeLayerProps,
+  DefaultProps,
   Layer,
+  TextureSource,
   UpdateParameters,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
-import type { ReprojectionFns } from "@developmentseed/raster-reproject";
+import type {
+  InitialTriangulation,
+  ReprojectionFns,
+} from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
-import { CreateTexture } from "./gpu-modules/create-texture";
-import type { RasterModule } from "./gpu-modules/types";
-import { MeshTextureLayer } from "./mesh-layer/mesh-layer";
+import { splitFloat64Array } from "./fp64.js";
+import { buildUniformGridMesh } from "./globe-grid-mesh.js";
+import type { RasterModule } from "./gpu-modules/types.js";
+import { MeshTextureLayer } from "./mesh-layer/mesh-layer.js";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
@@ -43,6 +49,20 @@ type DebugData = {
   length: number;
 };
 
+/**
+ * The result returned by a `renderTile` function.
+ *
+ * Must contain at least one of `image` or `renderPipeline`. If both are
+ * provided, `image` is prepended as a `CreateTexture` module so the pipeline
+ * can operate on it.
+ */
+export type RenderTileResult =
+  | { image: TextureSource; renderPipeline?: RasterModule[] }
+  | { renderPipeline: RasterModule[]; image?: TextureSource };
+
+/**
+ * Props for {@link RasterLayer}.
+ */
 export interface RasterLayerProps extends CompositeLayerProps {
   /**
    * Width of the input raster image in pixels
@@ -60,14 +80,32 @@ export interface RasterLayerProps extends CompositeLayerProps {
   reprojectionFns: ReprojectionFns;
 
   /**
-   * Render pipeline for visualizing textures.
-   *
-   * Can be:
-   *
-   * - ImageData representing RGBA pixel data
-   * - Sequence of shader modules to be composed into a shader program
+   * Optional seed triangulation for the reprojector — e.g. to clamp the mesh to
+   * a UV sub-region (such as the valid Web Mercator latitude band). Defaults to
+   * the full image. Must be reference-stable across renders to avoid
+   * regenerating the mesh every frame.
    */
-  renderPipeline: ImageData | RasterModule[];
+  initialTriangulation?: InitialTriangulation;
+
+  /**
+   * The image to display. Accepts any luma.gl `TextureSource` (e.g. a URL,
+   * `HTMLImageElement`, `ImageData`, etc.). deck.gl manages the texture
+   * lifecycle automatically.
+   *
+   * If `renderPipeline` is also provided, `image` is prepended as a
+   * `CreateTexture` module so the pipeline can operate on it.
+   *
+   * @default null
+   */
+  image?: TextureSource | null;
+
+  /**
+   * Sequence of shader modules to be composed into a render pipeline.
+   *
+   * If `image` is also provided, it is automatically prepended as a
+   * `CreateTexture` module.
+   */
+  renderPipeline?: RasterModule[] | null;
 
   /**
    * Maximum reprojection error in pixels for mesh refinement.
@@ -76,21 +114,30 @@ export interface RasterLayerProps extends CompositeLayerProps {
    */
   maxError?: number;
 
+  /** If set, enables debug mode for visualizing the mesh and reprojection process. */
   debug?: boolean;
 
+  /** Opacity of the debug overlay. */
   debugOpacity?: number;
 }
 
-const defaultProps = {
+const defaultProps: DefaultProps<RasterLayerProps> = {
+  // A prop with `type: "image"` gets converted to a texture automatically by
+  // deck.gl (as long as async: true)
+  image: { type: "image", value: null, async: true },
+  renderPipeline: { type: "array", value: [], compare: true },
   debug: false,
   debugOpacity: 0.5,
 };
 
 /**
- * RasterLayer renders georeferenced raster data with client-side reprojection.
+ * Generic deck.gl layer for rendering geospatial raster data with client-side,
+ * GPU-based reprojection and custom processing pipelines.
  *
- * This is a composite layer that uses raster-reproject to generate an adaptive mesh
- * that accurately represents the reprojected raster, then renders it using SimpleMeshLayer.
+ * This is a composite layer that uses {@link RasterReprojector} to generate an adaptive mesh
+ * that accurately represents the reprojected raster, then renders it using
+ * {@link MeshTextureLayer} (a small wrapper around a deck.gl
+ * {@link SimpleMeshLayer}).
  */
 export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   static override layerName = "RasterLayer";
@@ -98,11 +145,30 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
   declare state: {
     reprojector?: RasterReprojector;
+    /**
+     * Mesh in the exact shape SimpleMeshLayer expects.
+     *
+     * It's important for this to be passed to MeshTextureLayer as a stable
+     * reference so `props.mesh` equality holds across renders. This avoids
+     * unnecessarily recreating the model.
+     */
     mesh?: {
-      positions: Float32Array;
-      indices: Uint32Array;
-      texCoords: Float32Array;
+      indices: { value: Uint32Array; size: number };
+      attributes: {
+        POSITION: { value: Float32Array; size: number };
+        TEXCOORD_0: { value: Float32Array; size: number };
+      };
     };
+    /**
+     * Low-part of positions for fp64 emulation in the shaders.
+     * `mesh.attributes.POSITION` carries the high part.
+     *
+     * This needs to be passed separately from `mesh` because SimpleMeshLayer's
+     * `normalizeGeometryAttributes` whitelists only positions/colors/normals/
+     * texCoords on the mesh attributes object — anything else is silently
+     * dropped.
+     */
+    positions64Low?: Float32Array;
   };
 
   override initializeState(): void {
@@ -114,26 +180,65 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
     const { props, oldProps, changeFlags } = params;
 
-    // Regenerate mesh if key properties change
+    // Regenerate mesh if key properties change.
+    // Compare reprojectionFns members individually since callers may create a
+    // new wrapper object on every render even when the functions are stable.
+    const reprojectionFnsChanged =
+      props.reprojectionFns.forwardTransform !==
+        oldProps.reprojectionFns?.forwardTransform ||
+      props.reprojectionFns.inverseTransform !==
+        oldProps.reprojectionFns?.inverseTransform ||
+      props.reprojectionFns.forwardReproject !==
+        oldProps.reprojectionFns?.forwardReproject ||
+      props.reprojectionFns.inverseReproject !==
+        oldProps.reprojectionFns?.inverseReproject;
+
     const needsMeshUpdate =
       Boolean(changeFlags.dataChanged) ||
       props.width !== oldProps.width ||
       props.height !== oldProps.height ||
-      props.reprojectionFns !== oldProps.reprojectionFns ||
-      props.maxError !== oldProps.maxError;
+      reprojectionFnsChanged ||
+      props.maxError !== oldProps.maxError ||
+      props.initialTriangulation !== oldProps.initialTriangulation;
 
     if (needsMeshUpdate) {
       this._generateMesh();
     }
   }
 
-  _generateMesh(): void {
+  protected _generateMesh(): void {
     const {
       width,
       height,
       reprojectionFns,
+      initialTriangulation,
       maxError = DEFAULT_MAX_ERROR,
     } = this.props;
+
+    // TEMPORARY GLOBE VIEW HACK:
+    //
+    // GlobeView (lnglat) uses viewport.resolution, the same detection as
+    // RasterTileLayer. THROWAWAY: globe renders a uniform grid instead of the
+    // adaptive mesh, because Delatin's reprojection-error metric is blind to
+    // sphere curvature and facets at low zoom. See globe-grid-mesh.ts and
+    // dev-docs/specs/2026-05-21-globe-view-design.md.
+    const isGlobe = this.context?.viewport?.resolution !== undefined;
+    if (isGlobe) {
+      const { indices, positions64High, positions64Low, texCoords } =
+        buildUniformGridMesh(reprojectionFns, width + 1, height + 1);
+      this.setState({
+        reprojector: undefined,
+        mesh: {
+          indices: { value: indices, size: 1 },
+          attributes: {
+            POSITION: { value: positions64High, size: 3 },
+            TEXCOORD_0: { value: texCoords, size: 2 },
+          },
+        },
+        positions64Low,
+      });
+      return;
+    }
 
     // The mesh is lined up with the upper and left edges of the raster. So if
     // we give the raster the same width and height as the number of pixels in
@@ -146,17 +251,22 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       reprojectionFns,
       width + 1,
       height + 1,
+      { initialTriangulation },
     );
     reprojector.run(maxError);
-    const { indices, positions, texCoords } = reprojectorToMesh(reprojector);
+    const { indices, positions64High, positions64Low, texCoords } =
+      reprojectorToMesh(reprojector);
 
     this.setState({
       reprojector,
       mesh: {
-        positions,
-        indices,
-        texCoords,
+        indices: { value: indices, size: 1 },
+        attributes: {
+          POSITION: { value: positions64High, size: 3 },
+          TEXCOORD_0: { value: texCoords, size: 2 },
+        },
       },
+      positions64Low,
     });
   }
 
@@ -221,65 +331,28 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     );
   }
 
-  /** Create assembled render pipeline from the renderPipeline prop input. */
-  _createRenderPipeline(): RasterModule[] {
-    if (this.props.renderPipeline instanceof ImageData) {
-      const imageData = this.props.renderPipeline;
-      const texture = this.context.device.createTexture({
-        format: "rgba8unorm",
-        width: imageData.width,
-        height: imageData.height,
-        data: imageData.data,
-      });
-      const wrapper: RasterModule = {
-        module: CreateTexture,
-        props: {
-          textureName: texture,
-        },
-      };
-      return [wrapper];
-    } else {
-      return this.props.renderPipeline;
-    }
-  }
-
   renderLayers() {
-    const { mesh } = this.state;
-    const { debug } = this.props;
+    const { mesh, positions64Low } = this.state;
+    const { debug, image, renderPipeline } = this.props;
 
-    if (!mesh) {
+    // mesh and positions64Low are always set together by _generateMesh.
+    if (
+      !mesh ||
+      !positions64Low ||
+      (!image && (renderPipeline?.length ?? 0) === 0)
+    ) {
       return null;
     }
-
-    const { indices, positions, texCoords } = mesh;
 
     const meshLayer = new MeshTextureLayer(
       this.getSubLayerProps({
         id: "raster",
-        renderPipeline: this._createRenderPipeline(),
-        // Dummy data because we're only rendering _one_ instance of this mesh
-        // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L241
-        data: [1],
-        mesh: {
-          indices: { value: indices, size: 1 },
-          attributes: {
-            POSITION: {
-              value: positions,
-              size: 3,
-            },
-            TEXCOORD_0: {
-              value: texCoords,
-              size: 2,
-            },
-          },
-        },
-        // We're only rendering a single mesh, without instancing
-        // https://github.com/visgl/deck.gl/blob/93111b667b919148da06ff1918410cf66381904f/modules/geo-layers/src/terrain-layer/terrain-layer.ts#L244
-        _instanced: false,
-        // Dummy accessors for the dummy data
-        // We place our mesh at the coordinate origin
-        getPosition: [0, 0, 0],
-        // We give a white color to turn off color mixing with the texture
+        image,
+        renderPipeline,
+        // Single mesh rendered as one non-instanced draw.
+        data: { length: 1, attributes: { positions64Low } },
+        mesh,
+        // We give a white color to turn off color mixing with the texture.
         getColor: [255, 255, 255],
       }),
     );
@@ -298,13 +371,14 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
 function reprojectorToMesh(reprojector: RasterReprojector): {
   indices: Uint32Array;
-  positions: Float32Array;
+  positions64High: Float32Array;
+  positions64Low: Float32Array;
   texCoords: Float32Array;
 } {
   const numVertices = reprojector.uvs.length / 2;
-  const positions = new Float32Array(numVertices * 3);
   const texCoords = new Float32Array(reprojector.uvs);
 
+  const positions = new Float64Array(numVertices * 3);
   for (let i = 0; i < numVertices; i++) {
     positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
     positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
@@ -312,12 +386,17 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
     positions[i * 3 + 2] = 0;
   }
 
+  // Split the float64 positions into high and low parts for fp64 emulation in
+  // the shader.
+  const [positions64Low, positions64High] = splitFloat64Array(positions);
+
   // TODO: Consider using 16-bit indices if the mesh is small enough
   const indices = new Uint32Array(reprojector.triangles);
 
   return {
     indices,
-    positions,
+    positions64High,
+    positions64Low,
     texCoords,
   };
 }

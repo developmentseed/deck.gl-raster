@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.13/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
   "assist": {
     "actions": {
       "source": {
@@ -11,13 +11,18 @@
     "ignoreUnknown": true,
     "includes": [
       "**",
-      "!!**/dist",
-      "!!**/node_modules",
-      "!!**/coverage",
       "!!**/*.log",
+      "!!**/*.svg",
+      "!!**/coverage",
+      "!!**/dist",
       "!!**/fixtures",
-      "!!packages/morecantile/spec",
-      "!!**/minimal_stac.json"
+      "!!**/minimal_stac.json",
+      "!!**/node_modules",
+      "!!docs/build",
+      "!!packages/geozarr/geo-proj",
+      "!!packages/geozarr/multiscales",
+      "!!packages/geozarr/spatial",
+      "!!packages/morecantile/spec"
     ]
   },
   "formatter": {
@@ -38,8 +43,22 @@
     "enabled": true,
     "rules": {
       "recommended": true,
+      "correctness": {
+        "useImportExtensions": {
+          "level": "error",
+          "options": {
+            "extensionMappings": {
+              "ts": "js",
+              "tsx": "js",
+              "mts": "mjs",
+              "cts": "cjs"
+            }
+          }
+        }
+      },
       "style": {
         "noNonNullAssertion": "off",
+        "useBlockStatements": "error",
         "useImportType": {
           "level": "error",
           "options": {

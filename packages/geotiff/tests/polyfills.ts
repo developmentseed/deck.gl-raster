@@ -1,5 +1,5 @@
 import { Compression } from "@cogeotiff/core";
-import { DECODER_REGISTRY } from "@developmentseed/geotiff";
+import { DECODER_REGISTRY } from "../src/decode.js";
 
 async function identity(bytes: ArrayBuffer): Promise<ArrayBuffer> {
   return bytes;

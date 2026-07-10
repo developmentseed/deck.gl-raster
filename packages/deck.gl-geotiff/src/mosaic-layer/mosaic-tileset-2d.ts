@@ -1,7 +1,8 @@
 import type { Viewport } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
-import Flatbush from "flatbush";
+import { _sortItemsByDistanceFromViewportCenter as sortItemsByDistanceFromViewportCenter } from "@developmentseed/deck.gl-raster";
+import type Flatbush from "flatbush";
 
 /** Tile index.
  *
@@ -14,9 +15,14 @@ export type TileIndex = { x: number; y: number; z: number };
  * Minimal required interface of a mosaic item.
  */
 export type MosaicSource = {
-  x?: number;
-  y?: number;
-  z?: number;
+  /**
+   * Optional stable identifier used as this source's tile-cache key in the
+   * inner Tileset2D. Defaults to the source's position in the `sources`
+   * array. Supply an explicit value when the sources list is reordered or
+   * spliced at runtime, so a given source keeps the same cache slot across
+   * updates.
+   */
+  id?: string;
   /**
    * Geographic bounds (WGS84) of the source in [minX, minY, maxX, maxY] format
    */
@@ -28,33 +34,57 @@ export type MosaicSource = {
  *
  * This is intended to be used for a collection of image mosaics, where we want
  * to render all images currently visible in the viewport.
+ *
+ * The constructor accepts a `getSources` closure rather than a sources array
+ * so that updates to the parent layer's `sources` prop are picked up across
+ * the tileset's lifetime. The spatial index is rebuilt on demand whenever the
+ * closure returns a new array reference (compared by `===`); mutating the
+ * array in place will not be detected.
  */
+/** A source augmented with the `TileIndex` fields and a resolved `id`
+ * (defaulting to the array position) so deck.gl typing is satisfied and the
+ * cache identifier is always defined. */
+type ResolvedSource<MosaicT> = TileIndex & MosaicT & { id: string };
+
 export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
-  private sources: (TileIndex & MosaicT)[];
-  private index: Flatbush;
+  /** Closure returning the parent layer's current sources array. Re-evaluated
+   * on each `getTileIndices` call so updates to the layer's `sources` prop
+   * propagate without recreating the tileset. */
+  private getSources: () => MosaicT[];
 
-  constructor(sources: MosaicT[], opts: Tileset2DProps) {
+  /** Access the spatial index on the MosaicLayer instance. */
+  private getIndex: () => Flatbush | null;
+
+  constructor(
+    getSources: () => MosaicT[],
+    getIndex: () => Flatbush | null,
+    opts: Tileset2DProps,
+  ) {
     super(opts);
+    this.getIndex = getIndex;
+    this.getSources = getSources;
+  }
 
-    // Add x,y,z to each source for TileIndex compatibility
-    // This is mostly just a hack to satisfy deck.gl typing requirements for
-    // getTileIndices
-    this.sources = sources.map((source, i) => ({
-      x: source.x === undefined ? i : source.x,
-      y: source.y === undefined ? 0 : source.y,
-      z: source.z === undefined ? 0 : source.z,
-      ...source,
-    }));
+  /** The Tileset2D cache key for a source. */
+  override getTileId(tileIndex: TileIndex): string {
+    // `getTileIndices` always returns `ResolvedSource`s, so an `id` is
+    // present on every value deck.gl will pass back here.
+    return (tileIndex as ResolvedSource<MosaicT>).id;
+  }
 
-    // Build spatial index of mosaic sources
-    const index = new Flatbush(sources.length);
-    for (const source of sources) {
-      const [minX, minY, maxX, maxY] = source.bbox;
-      index.add(minX, minY, maxX, maxY);
-    }
-    index.finish();
+  /** Must override to provide a zoom level for the tile. */
+  override getTileZoom(_tileIndex: TileIndex): number {
+    return 0;
+  }
 
-    this.index = index;
+  /** Must override because our tileIndex does not have x, y, z */
+  override getTileMetadata(tileIndex: TileIndex): Record<string, any> {
+    const { id, bbox } = tileIndex as unknown as ResolvedSource<MosaicT>;
+    return { id, bbox };
+  }
+
+  override getParentIndex(tileIndex: TileIndex): TileIndex {
+    return tileIndex;
   }
 
   override getTileIndices({
@@ -65,7 +95,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     viewport: Viewport;
     maxZoom?: number;
     minZoom?: number;
-  }): (TileIndex & MosaicT)[] {
+  }): ResolvedSource<MosaicT>[] {
     if (viewport.zoom < (minZoom ?? -Infinity)) {
       return [];
     }
@@ -73,8 +103,40 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       return [];
     }
 
-    const bounds = viewport.getBounds();
-    const indices = this.index.search(...bounds);
-    return indices.map((sourceIndex) => this.sources[sourceIndex]!);
+    const index = this.getIndex();
+    if (!index) {
+      return [];
+    }
+
+    const viewportBounds = viewport.getBounds();
+    const indices = index.search(...viewportBounds);
+
+    const sources = this.getSources();
+    const selectedSources = indices.map((sourceIndex) => {
+      const source = sources[sourceIndex]!;
+      return {
+        // Remove once https://github.com/visgl/deck.gl/pull/10299
+        // is merged and released
+        x: 0,
+        y: 0,
+        z: 0,
+        ...source,
+        id: source.id ?? String(sourceIndex),
+      };
+    });
+
+    const { maxRequests } = this.opts;
+    if (selectedSources.length <= maxRequests) {
+      return selectedSources;
+    }
+
+    return sortItemsByDistanceFromViewportCenter(
+      selectedSources,
+      viewport,
+      (source) => {
+        const [minX, minY, maxX, maxY] = source.bbox;
+        return [(minX + maxX) * 0.5, (minY + maxY) * 0.5] as const;
+      },
+    );
   }
 }

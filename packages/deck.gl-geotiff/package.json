@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/deck.gl-geotiff",
-  "version": "0.3.0-beta.3",
+  "version": "0.8.0-beta.2",
   "description": "GeoTIFF and Cloud-Optimized GeoTIFF visualization in deck.gl",
   "type": "module",
   "main": "./dist/index.js",
@@ -40,28 +40,29 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^25.3.3",
-    "jsdom": "^28.1.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "@chunkd/source-file": "^11.2.1",
+    "@types/node": "^26.1.1",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@cogeotiff/core": "^9.4.0",
+    "@cogeotiff/core": "^9.5.0",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/geotiff": "workspace:^",
     "@developmentseed/morecantile": "workspace:^",
+    "@developmentseed/proj": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
-    "flatbush": "^4.5.0",
-    "proj4": "^2.20.3",
-    "wkt-parser": "^1.5.3"
+    "flatbush": "^4.6.2",
+    "proj4": "^2.20.9"
   },
   "peerDependencies": {
-    "@deck.gl/core": "^9.2.7",
-    "@deck.gl/geo-layers": "^9.2.7",
-    "@deck.gl/layers": "^9.2.7",
-    "@deck.gl/mesh-layers": "^9.2.7",
-    "@luma.gl/core": "^9.2.6"
+    "@deck.gl/core": "^9.3.0",
+    "@deck.gl/geo-layers": "^9.3.0",
+    "@deck.gl/layers": "^9.3.0",
+    "@deck.gl/mesh-layers": "^9.3.0",
+    "@luma.gl/core": "^9.3.2"
   },
   "volta": {
     "extends": "../../package.json"

@@ -5,39 +5,77 @@ import { SourceMemory } from "@chunkd/source-memory";
 import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
-import type { ProjJson } from "./crs.js";
-import { crsFromGeoKeys } from "./crs.js";
-import { fetchTile } from "./fetch.js";
-import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";
-import { parseGDALMetadata } from "./gdal-metadata.js";
+import type { ProjJson } from "@developmentseed/proj";
 import type { ColorInterp } from "./colorinterp.js";
 import { inferColorInterpretation } from "./colorinterp.js";
+import { crsFromGeoKeys } from "./crs.js";
+import { fetchTile, fetchTiles } from "./fetch.js";
+import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";
+import { parseGDALMetadata } from "./gdal-metadata.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
+import type { ConcurrencyLimiter, Priority } from "./limiter.js";
+import { LimiterMiddleware } from "./limiter.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 
+/** Options for {@link GeoTIFF.fromUrl}. */
+export interface GeoTIFFFromUrlOptions {
+  /** Bytes per chunk for the header cache. Defaults to 64 KiB (matches
+   *  geotiff.js's BlockedSource). */
+  chunkSize?: number;
+  /** Total cache size in bytes. Defaults to 8 MiB (~128 blocks at the default
+   *  chunk size). */
+  cacheSize?: number;
+  /** An optional {@link AbortSignal} to cancel the header reads. */
+  signal?: AbortSignal;
+  /** When true, the returned GeoTIFF logs each tile/mask data fetch to the
+   *  console with offset/length and a `data`/`mask` label. Off by default. */
+  debug?: boolean;
+  /** Caps concurrent HTTP requests for both the header/metadata and tile-data
+   *  paths. Header reads go through the cached `SourceView`, so cache hits
+   *  short-circuit before the limiter and never consume a slot — only network
+   *  reads gate. Pass `null` to explicitly disable; omit (or pass `undefined`)
+   *  for the same effect — `GeoTIFF.fromUrl` does *not* default to a shared
+   *  limiter on its own. The deck.gl-geotiff layers default to a shared
+   *  {@link PerOriginSemaphore} via their `defaultProps`. */
+  concurrencyLimiter?: ConcurrencyLimiter | null;
+  /** Optional dynamic priority for every fetch through this GeoTIFF's sources.
+   *  Re-invoked by the limiter on each slot-open, so closures over dynamic
+   *  state (e.g. layer viewport center, tile bbox) re-sort the queue when that
+   *  state changes. Lower = serviced sooner. Only meaningful when
+   *  `concurrencyLimiter` is set. */
+  getPriority?: () => Priority;
+}
+
 /**
- * A high-level GeoTIFF abstraction built on @cogeotiff/core.
+ * A high-level GeoTIFF abstraction built on
+ * {@link https://github.com/blacha/cogeotiff | @cogeotiff/core}'s `Tiff` and
+ * `TiffImage` classes.
  *
- * Separates data IFDs from mask IFDs, pairs them by resolution level,
- * and exposes sorted overviews.  Mirrors the Python async-geotiff API.
+ * This class separates data IFDs from mask IFDs, pairs them by resolution
+ * level, and exposes sorted overviews. Intentionally mirrors the Python
+ * {@link https://github.com/developmentseed/async-geotiff | async-geotiff} API
+ * as closely as possible.
  *
- * Construct via `GeoTIFF.open(source)` or `GeoTIFF.fromTiff(tiff)`.
+ * Construct via {@link GeoTIFF.fromUrl}, {@link GeoTIFF.fromArrayBuffer},
+ * {@link GeoTIFF.open} or {@link GeoTIFF.fromTiff}.
+ *
+ * @see {@link Overview} for reduced-resolution overview images.
  */
 export class GeoTIFF {
   /**
    * Reduced-resolution overview levels, sorted finest-to-coarsest.
    *
-   * Does not include the full-resolution image — use `fetchTile` / methods
-   * on the GeoTIFF instance itself for that.
+   * Does not include the full-resolution image — use {@link fetchTile} on the
+   * GeoTIFF instance itself for that.
    */
   readonly overviews: Overview[];
 
   /** A cached CRS value. */
-  private _crs?: number | ProjJson;
+  private _crs?: number | ProjJson | string;
 
   /** Cached TIFF tags that are pre-fetched when opening the GeoTIFF. */
   readonly cachedTags: CachedTags;
@@ -65,6 +103,17 @@ export class GeoTIFF {
   /** Parsed GDALMetadata tag, if present. */
   readonly gdalMetadata: GDALMetadata | null;
 
+  /**
+   * Internal: when true, log each `dataSource` fetch (image tile data and
+   * mask tile data) to the console with offset/length and a `data`/`mask`
+   * label. Enable via the `debug` option on {@link GeoTIFF.open} or
+   * {@link GeoTIFF.fromUrl}. Read by the tile-fetch path; not part of the
+   * public API surface.
+   *
+   * @internal
+   */
+  readonly _debug: boolean;
+
   private constructor(
     tiff: Tiff,
     image: TiffImage,
@@ -74,6 +123,7 @@ export class GeoTIFF {
     cachedTags: CachedTags,
     dataSource: Pick<Source, "fetch">,
     gdalMetadata: GDALMetadata | null,
+    debug: boolean,
   ) {
     this.tiff = tiff;
     this.image = image;
@@ -83,6 +133,7 @@ export class GeoTIFF {
     this.cachedTags = cachedTags;
     this.dataSource = dataSource;
     this.gdalMetadata = gdalMetadata;
+    this._debug = debug;
   }
 
   /**
@@ -90,23 +141,36 @@ export class GeoTIFF {
    *
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    *
-   * @param dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
-   * @param headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs.
-   * @param prefetch Number of bytes to prefetch when reading TIFF tags and IFDs. Defaults to 32KB, which is enough for most tags and small IFDs. Increase if you have many tags or large IFDs.
+   * @param options.dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
+   * @param options.headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs. Callers who want to control the initial read size should compose a `SourceChunk` of the desired block size; cogeotiff's default `defaultReadSize` (16 KiB) gets padded up by the chunking layer anyway.
+   * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
+   * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console. Off by default.
    */
-  static async open({
-    dataSource,
-    headerSource,
-    prefetch = 32 * 1024,
-  }: {
+  static async open(options: {
     dataSource: Pick<Source, "fetch">;
     headerSource: Source;
-    prefetch?: number;
+    signal?: AbortSignal;
+    debug?: boolean;
   }): Promise<GeoTIFF> {
-    const tiff = await Tiff.create(headerSource, {
-      defaultReadSize: prefetch,
-    });
-    return GeoTIFF.fromTiff(tiff, dataSource);
+    const { dataSource, headerSource, signal, debug } = options;
+    // Construct + init in two steps so we don't have to pass cogeotiff's
+    // `defaultReadSize` ourselves (the constructor defaults it to
+    // `Tiff.DefaultReadSize` when no options are provided). In the typical
+    // fromUrl path, SourceChunk pads any small request up to the block size
+    // anyway, so tuning this independently of the chunk size is rarely useful.
+    const tiff = await new Tiff(headerSource).init({ signal });
+    // Disable cogeotiff's GDAL leader-bytes path so `TiffImage.getTileSize`
+    // always reads from TileOffsets/TileByteCounts through the header source.
+    // The leader-bytes optimization assumes a tile fits in one chunk, which
+    // breaks for typical 256x256x3 tiles (~200 KB) vs. our 64 KiB blocks.
+    // Without this, the leader read pulls image-data bytes into the header
+    // cache, evicting metadata. cogeotiff core only reads `tiff.options` in
+    // that one path, so nulling it here is safe.
+    //
+    // TODO: replace this with a cleaner opt-out once upstream supports one
+    // https://github.com/blacha/cogeotiff/issues/1467
+    tiff.options = undefined;
+    return GeoTIFF.fromTiff(tiff, dataSource, { signal, debug });
   }
 
   /**
@@ -116,11 +180,15 @@ export class GeoTIFF {
    * (width, height).  Overviews are sorted from finest to coarsest resolution.
    *
    * @param dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
+   * @param options.signal An optional {@link AbortSignal} to cancel header tag reads.
+   * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console.
    */
   static async fromTiff(
     tiff: Tiff,
     dataSource: Pick<Source, "fetch">,
+    options: { signal?: AbortSignal; debug?: boolean } = {},
   ): Promise<GeoTIFF> {
+    const { signal, debug = false } = options;
     const images = tiff.images;
     if (images.length === 0) {
       throw new Error("TIFF does not contain any IFDs");
@@ -128,7 +196,7 @@ export class GeoTIFF {
 
     // Force loading of important tags in sub-images
     // https://github.com/blacha/cogeotiff/blob/4781a6375adf419da9f0319d15c8a67284dfb0c4/packages/core/src/tiff.image.ts#L72-L88
-    await Promise.all(images.map((image) => image.init(true)));
+    await Promise.all(images.map((image) => image.init(true, { signal })));
 
     const primaryImage = images[0]!;
     const gkd = extractGeoKeyDirectory(primaryImage);
@@ -163,7 +231,7 @@ export class GeoTIFF {
       return sb.width * sb.height - sa.width * sa.height;
     });
 
-    const cachedTags = await prefetchTags(primaryImage);
+    const cachedTags = await prefetchTags(primaryImage, { signal });
     const gdalMetadata = parseGDALMetadata(cachedTags.gdalMetadata, {
       count: cachedTags.samplesPerPixel,
     });
@@ -179,6 +247,7 @@ export class GeoTIFF {
       cachedTags,
       dataSource,
       gdalMetadata,
+      debug,
     );
 
     const overviews: Overview[] = dataEntries.map(([key, dataImage]) => {
@@ -199,6 +268,17 @@ export class GeoTIFF {
     return geotiff;
   }
 
+  /**
+   * Create a GeoTIFF from an ArrayBuffer containing the entire file.
+   *
+   * This is a convenience method that wraps the ArrayBuffer in a memory source
+   * and calls {@link GeoTIFF.open}. For large files, consider using
+   * {@link GeoTIFF.fromUrl} or {@link GeoTIFF.open} with a chunked HTTP source
+   * to avoid loading the entire file into memory at once.
+   *
+   * @param input The ArrayBuffer containing the GeoTIFF file data.
+   * @returns A Promise that resolves to a GeoTIFF instance.
+   */
   static async fromArrayBuffer(input: ArrayBuffer): Promise<GeoTIFF> {
     const source = new SourceMemory("memory://input.tif", input);
     return await GeoTIFF.open({
@@ -210,52 +290,88 @@ export class GeoTIFF {
   /**
    * Create a new GeoTIFF from a URL.
    *
+   * Wraps the HTTP source with a fixed-size block-aligned LRU cache tuned for
+   * TIFF metadata. cogeotiff's lazy per-entry reads (for tile offsets, byte
+   * counts, and other tag values) are served by the block cache; adjacent
+   * entries within a single block hit one underlying request. Tile data reads
+   * bypass the cache and go straight to the raw HTTP source.
+   *
    * @param url The URL of the GeoTIFF to open.
-   * @param options Optional parameters for chunk size and cache size.
-   * @param options.chunkSize The minimum size for each request made to the source while reading header metadata. Defaults to 32KB.
-   * @param options.cacheSize The size of the cache for recently accessed header chunks. Currently no caching is applied to data fetches. Defaults to 1MB.
+   * @param options Optional parameters; see {@link GeoTIFFFromUrlOptions}.
    * @returns A Promise that resolves to a GeoTIFF instance.
    */
   static async fromUrl(
     url: string | URL,
     {
-      chunkSize = 32 * 1024,
-      cacheSize = 1024 * 1024,
-    }: { chunkSize?: number; cacheSize?: number } = {},
+      chunkSize = 64 * 1024,
+      cacheSize = 8 * 1024 * 1024,
+      signal,
+      debug,
+      concurrencyLimiter,
+      getPriority,
+    }: GeoTIFFFromUrlOptions = {},
   ): Promise<GeoTIFF> {
-    const source = new SourceHttp(url);
+    const source = new SourceHttp(url, {});
 
-    // Figure out optimal defaults in light of
-    // https://github.com/blacha/cogeotiff/issues/1431
-    // Defaulting to 32KB chunks is too small for tile data.
-    // https://github.com/developmentseed/deck.gl-raster/issues/294
+    // TEMPORARY workaround for
+    // https://github.com/developmentseed/deck.gl-raster/issues/524
+    //
+    // `@chunkd/source-http` records `source.metadata.size` from the first range
+    // response, preferring `Content-Range` and falling back to `Content-Length`.
+    // In a browser, `Content-Range` is only readable when the server lists it in
+    // `Access-Control-Expose-Headers` (S3 does not by default), so the
+    // `Content-Length` fallback — the length of a single *chunk*, not the file —
+    // gets recorded as the file size. Reads past that bogus size would then be
+    // rejected as out-of-bounds.
+    //
+    // Seed `metadata` ourselves so `SourceHttp` never records a size (it only
+    // fills in `metadata` while it is still null), treating the source as having
+    // unbounded length. Remove once the upstream fix lands.
+    source.metadata = { size: Number.POSITIVE_INFINITY };
 
-    // read files in chunks
-    const chunk = new SourceChunk({ size: chunkSize });
-    // 10MB cache for recently accessed chunks
-    const cache = new SourceCache({ size: cacheSize });
+    // When a limiter is supplied, slot a LimiterMiddleware into both
+    // sources' middleware stacks. On the header source, it sits *after*
+    // SourceChunk + SourceCache so a cache hit short-circuits and never
+    // consumes a slot — only network reads that escape the cache are gated.
+    // On the data source (no caching), every fetch is gated. Both stacks
+    // share one LimiterMiddleware instance, so they share one per-origin pool.
+    const limiter = concurrencyLimiter
+      ? new LimiterMiddleware({
+          url: new URL(url),
+          limiter: concurrencyLimiter,
+          getPriority,
+        })
+      : null;
 
-    const view = new SourceView(source, [chunk, cache]);
+    const view = new SourceView(source, [
+      new SourceChunk({ size: chunkSize }),
+      new SourceCache({ size: cacheSize }),
+      ...(limiter ? [limiter] : []),
+    ]);
+
+    const dataSource: Pick<Source, "fetch"> = limiter
+      ? new SourceView(source, [limiter])
+      : source;
 
     return await GeoTIFF.open({
-      // Use raw source for tile data to avoid unnecessary copying through the
-      // cache and chunk layers.
-      dataSource: source,
+      dataSource,
       headerSource: view,
+      signal,
+      debug,
     });
   }
 
   // ── Properties from the primary image ─────────────────────────────────
 
-  /**
-   * The CRS parsed from the GeoKeyDirectory.
+  /** Coordinate reference system information.
    *
-   * Returns an EPSG code (number) for EPSG-coded CRSes, or a PROJJSON object
-   * for user-defined CRSes. The result is cached after the first access.
+   * - If `crs` is a number, it is an EPSG code.
+   * - If `crs` is an object, it is a PROJJSON object.
+   * - If `crs` is a string, it is an ESRI WKT (this is rare).
    *
-   * See also {@link GeoTIFF.epsg} for the EPSG code directly from the TIFF tags.
+   * The result is cached after the first access.
    */
-  get crs(): number | ProjJson {
+  get crs(): number | ProjJson | string {
     if (this._crs === undefined) {
       this._crs = crsFromGeoKeys(this.gkd);
     }
@@ -287,7 +403,7 @@ export class GeoTIFF {
     return this.image.tileSize.height;
   }
 
-  /** The NoData value, or null if not set. */
+  /** The no data value, or null if not set. */
   get nodata(): number | null {
     return this.image.noData;
   }
@@ -302,7 +418,8 @@ export class GeoTIFF {
    *
    * Extracted from the GDALMetadata TIFF tag; never computed on demand.
    * Keys are **1-based** band indices to match GDAL's convention.
-   * Returns null if no statistics are stored in the file.
+   *
+   * Returns `null` if no statistics are stored in the file.
    */
   get storedStats(): ReadonlyMap<number, BandStatistics> | null {
     const stats = this.gdalMetadata?.bandStatistics;
@@ -362,7 +479,15 @@ export class GeoTIFF {
 
   // Mixins
 
-  /** Fetch a single tile from the full-resolution image. */
+  /** Fetch a single tile from the full-resolution image.
+   *
+   * @param x The tile column index (0-based).
+   * @param y The tile row index (0-based).
+   * @param options Optional parameters for fetching the tile.
+   * @param options.boundless Whether to clip tiles that are partially outside the image bounds. When `true`, no clipping is applied and edge tiles are returned at the full nominal tile size. Defaults to `true`.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tile data. If not provided, a new decoder will be created for each tile.
+   * @param options.signal An optional {@link AbortSignal} to cancel the fetch request.
+   */
   async fetchTile(
     x: number,
     y: number,
@@ -373,6 +498,29 @@ export class GeoTIFF {
     } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
+  }
+
+  /**
+   * Fetch multiple tiles in parallel.
+   *
+   * A future implementation may coalesce contiguous byte ranges to reduce
+   * the number of HTTP requests.
+   *
+   * @param xy - Array of `[x, y]` tile coordinates.
+   * @param options - Optional parameters (same as {@link fetchTile}).
+   * @returns Array of {@link Tile} objects in the same order as `xy`.
+   *
+   * @see {@link fetchTile} for single-tile fetching.
+   */
+  async fetchTiles(
+    xy: Array<[number, number]>,
+    options: {
+      boundless?: boolean;
+      pool?: DecoderPool;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<Tile[]> {
+    return await fetchTiles(this, xy, options);
   }
 
   // Transform mixin

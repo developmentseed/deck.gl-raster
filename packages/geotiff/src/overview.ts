@@ -1,8 +1,8 @@
 import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
-import type { ProjJson } from "./crs.js";
-import { fetchTile } from "./fetch.js";
+import type { ProjJson } from "@developmentseed/proj";
+import { fetchTile, fetchTiles } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
 import type { DecoderPool } from "./pool/pool.js";
@@ -48,16 +48,31 @@ export class Overview {
     this.dataSource = dataSource;
   }
 
-  get crs(): number | ProjJson {
+  /** Coordinate reference system information.
+   *
+   * - If `crs` is a number, it is an EPSG code.
+   * - If `crs` is an object, it is a PROJJSON object.
+   * - If `crs` is a string, it is an ESRI WKT (this is rare).
+   *
+   * The result is cached after the first access.
+   */
+  get crs(): number | ProjJson | string {
     return this.geotiff.crs;
   }
 
+  /** Image height in pixels. */
   get height(): number {
     return this.image.size.height;
   }
 
+  /** The no data value, or null if not set. */
   get nodata(): number | null {
     return this.geotiff.nodata;
+  }
+
+  /** Inherits the {@link GeoTIFF._debug} flag from the parent. */
+  get _debug(): boolean {
+    return this.geotiff._debug;
   }
 
   /** The number of tiles in the x and y directions */
@@ -65,14 +80,19 @@ export class Overview {
     return this.image.tileCount;
   }
 
+  /** Tile height in pixels. */
   get tileHeight(): number {
     return this.image.tileSize.height;
   }
 
+  /** Tile width in pixels. */
   get tileWidth(): number {
     return this.image.tileSize.width;
   }
 
+  /**
+   * Return the dataset's georeferencing transformation matrix.
+   */
   get transform(): Affine {
     const fullTransform = this.geotiff.transform;
     const scaleX = this.geotiff.width / this.width;
@@ -80,11 +100,20 @@ export class Overview {
     return compose(fullTransform, scale(scaleX, scaleY));
   }
 
+  /** Image width in pixels. */
   get width(): number {
     return this.image.size.width;
   }
 
-  /** Fetch a single tile from the full-resolution image. */
+  /** Fetch a single tile from the full-resolution image.
+   *
+   * @param x The tile column index (0-based).
+   * @param y The tile row index (0-based).
+   * @param options Optional parameters for fetching the tile.
+   * @param options.boundless Whether to clip tiles that are partially outside the image bounds. When `true`, no clipping is applied and edge tiles are returned at the full nominal tile size. Defaults to `true`.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tile data. If not provided, a new decoder will be created for each tile.
+   * @param options.signal An optional {@link AbortSignal} to cancel the fetch request.
+   */
   async fetchTile(
     x: number,
     y: number,
@@ -95,6 +124,29 @@ export class Overview {
     } = {},
   ): Promise<Tile> {
     return await fetchTile(this, x, y, options);
+  }
+
+  /**
+   * Fetch multiple tiles in parallel.
+   *
+   * A future implementation may coalesce contiguous byte ranges to reduce
+   * the number of HTTP requests.
+   *
+   * @param xy - Array of `[x, y]` tile coordinates.
+   * @param options - Optional parameters (same as {@link fetchTile}).
+   * @returns Array of {@link Tile} objects in the same order as `xy`.
+   *
+   * @see {@link fetchTile} for single-tile fetching.
+   */
+  async fetchTiles(
+    xy: Array<[number, number]>,
+    options: {
+      boundless?: boolean;
+      pool?: DecoderPool;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<Tile[]> {
+    return await fetchTiles(this, xy, options);
   }
 
   // TiledMixin

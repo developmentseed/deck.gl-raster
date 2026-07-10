@@ -1,23 +1,27 @@
 import { Photometric, SampleFormat } from "@cogeotiff/core";
+import type { RenderTileResult } from "@developmentseed/deck.gl-raster";
 import type { RasterModule } from "@developmentseed/deck.gl-raster/gpu-modules";
 import {
+  BlackIsZero,
   CMYKToRGB,
   Colormap,
   CreateTexture,
   cieLabToRGB,
   FilterNoDataVal,
   MaskTexture,
+  WhiteIsZero,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import { parseColormap } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
-import type { GetTileDataOptions } from "../cog-layer";
-import { addAlphaChannel } from "./geotiff";
-import { inferTextureFormat } from "./texture";
+import type { GetTileDataOptions } from "../cog-layer.js";
+import { addAlphaChannel } from "./geotiff.js";
+import { inferTextureFormat } from "./texture.js";
 
 export type TextureDataT = {
   height: number;
   width: number;
+  byteLength: number;
   texture: Texture;
   mask?: Texture;
 };
@@ -49,7 +53,7 @@ export function inferRenderPipeline(
     image: GeoTIFF | Overview,
     options: GetTileDataOptions,
   ) => Promise<TextureDataT>;
-  renderTile: (data: TextureDataT) => ImageData | RasterModule[];
+  renderTile: (data: TextureDataT) => RenderTileResult;
 } {
   const { sampleFormat } = geotiff.cachedTags;
   if (sampleFormat === null) {
@@ -63,7 +67,7 @@ export function inferRenderPipeline(
   }
 
   throw new Error(
-    `Inferring render pipeline for non-unsigned integers not yet supported. Found SampleFormat: ${SampleFormat}`,
+    `Inferring render pipeline for non-unsigned integers not yet supported. Found SampleFormat: ${sampleFormat}`,
   );
 }
 
@@ -78,7 +82,7 @@ function createUnormPipeline(
     image: GeoTIFF | Overview,
     options: GetTileDataOptions,
   ) => Promise<TextureDataT>;
-  renderTile: (data: TextureDataT) => ImageData | RasterModule[];
+  renderTile: (data: TextureDataT) => RenderTileResult;
 } {
   const {
     bitsPerSample,
@@ -99,8 +103,9 @@ function createUnormPipeline(
   ];
 
   if (nodata !== null) {
-    // Since values are 0-1 for unorm textures,
-    const noDataScaled = nodata / 255.0;
+    // Since values are 0-1 for unorm textures, scale nodata to [0, 1]
+    const maxVal = 2 ** bitsPerSample[0]! - 1;
+    const noDataScaled = nodata / maxVal;
 
     renderPipeline.push({
       module: FilterNoDataVal,
@@ -118,16 +123,18 @@ function createUnormPipeline(
     });
   }
 
-  const toRGBModule = photometricInterpretationToRGB(
+  const toRGBModule = photometricInterpretationToRGB({
+    count: samplesPerPixel,
     photometric,
     device,
     colorMap,
-  );
+  });
   if (toRGBModule) {
     renderPipeline.push(toRGBModule);
   }
 
-  // For palette images, use nearest-neighbor sampling
+  // For palette images, use nearest-neighbor sampling, because indices into a
+  // colormap can't be interpolated
   const samplerOptions: SamplerProps =
     photometric === Photometric.Palette
       ? {
@@ -170,71 +177,99 @@ function createUnormPipeline(
       bitsPerSample,
       sampleFormat,
     );
-    const bytesPerPixel = (bitsPerSample[0]! / 8) * numSamples;
+    let byteLength = array.data.byteLength;
     const texture = device.createTexture({
-      data: padToAlignment(array.data, width, height, bytesPerPixel),
+      data: array.data,
       format: textureFormat,
       width,
       height,
-      // Use nearest filtering for the mask to avoid interpolated edges/halos
-      sampler: {
-        minFilter: "nearest",
-        magFilter: "nearest",
-      },
+      sampler: samplerOptions,
     });
 
     let maskTexture: Texture | undefined;
     if (mask !== null) {
       maskTexture = device.createTexture({
-        // Mask is single-channel 8-bit, so bytesPerPixel must be 1
-        data: padToAlignment(mask, width, height, 1),
+        data: mask,
         // Single-channel 8-bit texture for the mask
         format: "r8unorm",
         width,
         height,
-        sampler: samplerOptions,
+        // Use nearest filtering for the mask to avoid interpolated edges/halos
+        sampler: {
+          minFilter: "nearest",
+          magFilter: "nearest",
+        },
       });
+      byteLength += mask.byteLength;
     }
 
     return {
       texture,
       mask: maskTexture,
+      byteLength,
       height: array.height,
       width: array.width,
     };
   };
-  const renderTile = (tileData: TextureDataT): RasterModule[] => {
-    return renderPipeline.map((m, _i) => resolveModule(m, tileData));
+  const renderTile = (tileData: TextureDataT): RenderTileResult => {
+    return {
+      renderPipeline: renderPipeline.map((m, _i) => resolveModule(m, tileData)),
+    };
   };
 
   return { getTileData, renderTile };
 }
 
-function photometricInterpretationToRGB(
-  photometric: Photometric,
-  device: Device,
-  ColorMap?: Uint16Array,
-): RasterModule | null {
+function photometricInterpretationToRGB({
+  count,
+  colorMap,
+  device,
+  photometric,
+}: {
+  count: number;
+  colorMap?: Uint16Array;
+  device: Device;
+  photometric: Photometric;
+}): RasterModule | null {
+  if (count === 3 || count === 4) {
+    // Always interpret 3-band or 4-band images as RGB/RGBA
+    return null;
+  }
+
   switch (photometric) {
+    case Photometric.MinIsWhite: {
+      return {
+        module: WhiteIsZero,
+      };
+    }
+    case Photometric.MinIsBlack: {
+      return {
+        module: BlackIsZero,
+      };
+    }
     case Photometric.Rgb:
       return null;
     case Photometric.Palette: {
-      if (!ColorMap) {
+      if (!colorMap) {
         throw new Error(
           "ColorMap is required for PhotometricInterpretation Palette",
         );
       }
-      const { data, width, height } = parseColormap(ColorMap);
+      const { data, width, height } = parseColormap(colorMap);
       const cmapTexture = device.createTexture({
+        dimension: "2d-array",
         data,
         format: "rgba8unorm",
         width,
         height,
+        depth: 1,
+        mipLevels: 1,
         sampler: {
           minFilter: "nearest",
           magFilter: "nearest",
           addressModeU: "clamp-to-edge",
           addressModeV: "clamp-to-edge",
+          addressModeW: "clamp-to-edge",
         },
       });
       return {
@@ -259,6 +294,7 @@ function photometricInterpretationToRGB(
       return {
         module: cieLabToRGB,
       };
+
     default:
       throw new Error(`Unsupported PhotometricInterpretation ${photometric}`);
   }
@@ -284,36 +320,4 @@ function resolveModule<T>(m: UnresolvedRasterModule<T>, data: T): RasterModule {
   }
 
   return { module, props: resolvedProps };
-}
-
-/**
- * WebGL's default `UNPACK_ALIGNMENT` is 4, meaning each row of pixel data must
- * start on a 4-byte boundary.
- *
- * For textures with widths not divisible by 4, we need to pad each row to the
- * next multiple of 4 bytes so WebGL doesn't reject the buffer as "too small".
- *
- * Returns the original array unchanged when no padding is needed.
- */
-function padToAlignment(
-  data: ArrayBufferView,
-  width: number,
-  height: number,
-  bytesPerPixel: number,
-): Uint8Array {
-  const src = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-  const rowBytes = width * bytesPerPixel;
-  const alignedRowBytes = Math.ceil(rowBytes / 4) * 4;
-  if (alignedRowBytes === rowBytes) {
-    return src;
-  }
-
-  const dst = new Uint8Array(alignedRowBytes * height);
-  for (let r = 0; r < height; r++) {
-    dst.set(
-      src.subarray(r * rowBytes, (r + 1) * rowBytes),
-      r * alignedRowBytes,
-    );
-  }
-  return dst;
 }

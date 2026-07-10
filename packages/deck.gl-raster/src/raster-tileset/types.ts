@@ -1,6 +1,15 @@
 export type ZRange = [minZ: number, maxZ: number];
 
+/** An axis-aligned bounding box */
 export type Bounds = [minX: number, minY: number, maxX: number, maxY: number];
+
+/** Corners which may or may not be axis-aligned. */
+export type Corners = {
+  topLeft: Point;
+  topRight: Point;
+  bottomLeft: Point;
+  bottomRight: Point;
+};
 
 export type GeoBoundingBox = {
   west: number;
@@ -8,30 +17,18 @@ export type GeoBoundingBox = {
   east: number;
   south: number;
 };
-export type NonGeoBoundingBox = {
+
+export type ProjectedBoundingBox = {
   left: number;
   top: number;
   right: number;
   bottom: number;
 };
 
-export type TileBoundingBox = NonGeoBoundingBox | GeoBoundingBox;
-
-export type TileLoadProps = {
-  index: TileIndex;
-  id: string;
-  bbox: TileBoundingBox;
-  url?: string | null;
-  signal?: AbortSignal;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  userData?: Record<string, any>;
-  zoom?: number;
-};
-
+/** A 2D point represented as [x, y] */
 export type Point = [number, number];
 
-type CRS = any;
-
+/** A function that projects coordinates from one CRS to another */
 export type ProjectionFunction = (x: number, y: number) => Point;
 
 /**
@@ -40,13 +37,6 @@ export type ProjectionFunction = (x: number, y: number) => Point;
 export type CornerBounds = {
   lowerLeft: Point;
   upperRight: Point;
-};
-
-/**
- * Minimum bounding rectangle surrounding a 2D resource in the CRS indicated elsewhere
- */
-export type TileMatrixSetBoundingBox = CornerBounds & {
-  crs?: CRS;
 };
 
 /**

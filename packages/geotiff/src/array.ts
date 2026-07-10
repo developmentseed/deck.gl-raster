@@ -1,5 +1,5 @@
 import type { Affine } from "@developmentseed/affine";
-import type { ProjJson } from "./crs.js";
+import type { ProjJson } from "@developmentseed/proj";
 import type {
   DecodedBandSeparate,
   DecodedPixelInterleaved,
@@ -19,7 +19,7 @@ export type RasterTypedArray =
   | Float64Array;
 
 /** Common metadata shared by all raster layouts. */
-type RasterArrayBase = {
+export type RasterArrayBase = {
   /** Number of bands (samples per pixel). */
   count: number;
 
@@ -43,8 +43,13 @@ type RasterArrayBase = {
    */
   transform: Affine;
 
-  /** Coordinate reference system information. */
-  crs: number | ProjJson;
+  /** Coordinate reference system information.
+   *
+   * - If `crs` is a number, it is an EPSG code.
+   * - If `crs` is an object, it is a PROJJSON object.
+   * - If `crs` is a string, it is an ESRI WKT (this is rare).
+   */
+  crs: number | ProjJson | string;
 
   /** Nodata value from `GDAL_NODATA` TIFF tag. */
   nodata: number | null;
@@ -258,7 +263,9 @@ function validateRasterShape(array: RasterArray): void {
 
 function isIdentityOrder(order: readonly number[]): boolean {
   for (let i = 0; i < order.length; i++) {
-    if (order[i] !== i) return false;
+    if (order[i] !== i) {
+      return false;
+    }
   }
   return true;
 }

@@ -17,7 +17,9 @@ export function parseGDALMetadata(
   gdalMetadata: string | null | undefined,
   { count }: { count: number },
 ): GDALMetadata | null {
-  if (gdalMetadata == null) return null;
+  if (gdalMetadata == null) {
+    return null;
+  }
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(gdalMetadata, "text/xml");

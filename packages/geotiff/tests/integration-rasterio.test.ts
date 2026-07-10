@@ -9,10 +9,10 @@
 import assert from "node:assert";
 import { readFile } from "node:fs/promises";
 import { TiffTag } from "@cogeotiff/core";
-import type { GeoTIFF } from "@developmentseed/geotiff";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { RasterArray, RasterTypedArray } from "../src/array.js";
 import { toBandSeparate } from "../src/array.js";
+import type { GeoTIFF } from "../src/geotiff.js";
 import { fixturePath, loadGeoTIFF } from "./helpers.js";
 import type { NPYTile } from "./utils/parse-npy.js";
 import { parseNPY } from "./utils/parse-npy.js";

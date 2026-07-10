@@ -1,4 +1,5 @@
 import type { Affine } from "@developmentseed/affine";
+import type { GeographicCRS } from "@developmentseed/proj";
 import { describe, expect, it } from "vitest";
 import type {
   RasterArrayBandSeparate,
@@ -10,7 +11,6 @@ import {
   toBandSeparate,
   toPixelInterleaved,
 } from "../src/array.js";
-import type { GeographicCRS } from "../src/crs.js";
 
 const EPSG_4326: GeographicCRS = {
   $schema: "https://proj.org/schemas/v0.7/projjson.schema.json",
