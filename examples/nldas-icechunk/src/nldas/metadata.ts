@@ -44,7 +44,7 @@ export const RESCALE_MAX = 305;
 /** Bounds + step for the rescale slider (Kelvin). */
 export const RESCALE_SLIDER_MIN = 240;
 export const RESCALE_SLIDER_MAX = 320;
-export const RESCALE_SLIDER_STEP = 1;
+export const RESCALE_SLIDER_STEP = 0.1;
 
 /**
  * Synthetic GeoZarr-compliant attrs (the virtual store is not GeoZarr).
