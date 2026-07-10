@@ -60,7 +60,7 @@
     "@developmentseed/lzw-tiff-decoder": "^0.2.2",
     "@developmentseed/morecantile": "workspace:^",
     "fzstd": "^0.1.1",
-    "lerc": "^4.1.1",
-    "uuid": "^14.0.0"
+    "lerc": "^4.1.2",
+    "uuid": "^14.0.1"
   }
 }

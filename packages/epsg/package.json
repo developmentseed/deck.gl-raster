@@ -41,7 +41,7 @@
   "devDependencies": {
     "@types/node": "^26.1.1",
     "jsdom": "^29.1.1",
-    "proj4": "^2.20.8",
+    "proj4": "^2.20.9",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
