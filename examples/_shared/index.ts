@@ -13,6 +13,8 @@ export { DocsLink, ExternalLink } from "./components/external-link.js";
 export { Field } from "./components/field.js";
 export type { HelpTooltipProps } from "./components/help-tooltip.js";
 export { HelpTooltip } from "./components/help-tooltip.js";
+export type { LoadingIndicatorProps } from "./components/loading-indicator.js";
+export { LoadingIndicator } from "./components/loading-indicator.js";
 export { ExampleProvider } from "./components/provider.js";
 export type { RangeSliderProps } from "./components/range-slider.js";
 export { RangeSlider } from "./components/range-slider.js";
