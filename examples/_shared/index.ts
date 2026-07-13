@@ -19,4 +19,6 @@ export { ExampleProvider } from "./components/provider.js";
 export type { RangeSliderProps } from "./components/range-slider.js";
 export { RangeSlider } from "./components/range-slider.js";
 export { UIOverlay } from "./components/ui-overlay.js";
+export type { UseTilesLoadingResult } from "./hooks/use-tiles-loading.js";
+export { useTilesLoading } from "./hooks/use-tiles-loading.js";
 export { system } from "./styles/theme.js";
