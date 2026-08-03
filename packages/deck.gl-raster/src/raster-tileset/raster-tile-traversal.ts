@@ -54,7 +54,7 @@ import type {
  * The origin (0,0) is at the top-left corner, and (512,512) is at the
  * bottom-right.
  */
-const TILE_SIZE = 512;
+export const TILE_SIZE = 512;
 
 /**
  * Maximum number of world copies to test on each side of the primary world

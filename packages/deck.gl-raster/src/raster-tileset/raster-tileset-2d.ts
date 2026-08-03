@@ -14,8 +14,13 @@ import type {
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
-import type { InitialTriangulation } from "@developmentseed/raster-reproject";
+import type {
+  InitialTriangulation,
+  ReprojectionFns,
+} from "@developmentseed/raster-reproject";
 import type { Matrix4 } from "@math.gl/core";
+import type { AntimeridianCut } from "./antimeridian-cut.js";
+import { antimeridianCut } from "./antimeridian-cut.js";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import {
   getTileIndices,
@@ -109,6 +114,32 @@ export type RasterTileMetadata = {
    * full mesh. See {@link createInitialWebMercatorTriangulation}.
    */
   _webMercatorInitialTriangulation?: InitialTriangulation;
+
+  /**
+   * Vertical cut at which this tile crosses ±180°, or `undefined` if the tile
+   * does not cross the antimeridian (or crosses with a slanted/curved cut that
+   * the MVP does not yet handle). Consumed by `RasterTileLayer._renderSubLayers`
+   * in the Web Mercator branch to split the tile into a west + east piece. See
+   * {@link antimeridianCut}.
+   */
+  _antimeridianCut?: AntimeridianCut;
+
+  /**
+   * Reprojection bundle for the west piece of an antimeridian-crossing tile,
+   * or `undefined` for non-crossing tiles. The piece's `forwardTransform`
+   * composes a `+k·360°` longitude shift onto the original geotransform so
+   * the piece's native longitudes land inside proj4's valid `(−180°, 180°]`
+   * range — letting the stock `_projectPosition` / `_unprojectPosition`
+   * round-trip cleanly (which the reprojector's error metric relies on).
+   * The visual side effect is that the west piece renders in the world-copy
+   * where its lngs end up after the shift; world-copy traversal places it
+   * adjacent to the east piece. Built once in `getTileMetadata` for
+   * reference stability across renders.
+   */
+  _westReprojection?: ReprojectionFns;
+
+  /** East piece counterpart of {@link RasterTileMetadata._westReprojection}. */
+  _eastReprojection?: ReprojectionFns;
 };
 
 /**
@@ -396,6 +427,41 @@ export class RasterTileset2D extends Tileset2D {
         bottomRight: cornerLat(bottomRight),
       });
 
+    // Detect whether this tile crosses ±180° and locate the vertical cut.
+    // Corner longitudes are native (as proj4 returns them — un-normalized for a
+    // 4326 source with an origin past ±180°). See {@link antimeridianCut}.
+    const cornerLng = (corner: [number, number]) =>
+      this.descriptor.projectTo4326(corner[0], corner[1])[0];
+    const tileWestLng = cornerLng(topLeft);
+    const tileEastLng = cornerLng(topRight);
+    const _antimeridianCut = antimeridianCut({
+      topLeft: tileWestLng,
+      topRight: tileEastLng,
+      bottomLeft: cornerLng(bottomLeft),
+      bottomRight: cornerLng(bottomRight),
+    });
+
+    // For each piece of a crossing tile, compose a `+k·360°` longitude shift
+    // into the geotransform so the piece's native lngs sit inside proj4's
+    // valid range. The reprojector's error metric uses `inverseReproject`
+    // round-trip, which only works when proj4 doesn't have to normalize.
+    let _westReprojection: ReprojectionFns | undefined;
+    let _eastReprojection: ReprojectionFns | undefined;
+    if (_antimeridianCut) {
+      const { uCut } = _antimeridianCut;
+      const lngAtCut = tileWestLng + uCut * (tileEastLng - tileWestLng);
+      _westReprojection = this.buildPieceReprojection(
+        forwardTransform,
+        inverseTransform,
+        (tileWestLng + lngAtCut) / 2,
+      );
+      _eastReprojection = this.buildPieceReprojection(
+        forwardTransform,
+        inverseTransform,
+        (lngAtCut + tileEastLng) / 2,
+      );
+    }
+
     return {
       bbox: {
         west,
@@ -417,6 +483,41 @@ export class RasterTileset2D extends Tileset2D {
       _projectPosition: this.projectPosition,
       _unprojectPosition: this.unprojectPosition,
       _webMercatorInitialTriangulation,
+      _antimeridianCut,
+      _westReprojection,
+      _eastReprojection,
+    };
+  }
+
+  /**
+   * Build a per-piece reprojection bundle for an antimeridian-crossing tile.
+   * Picks the `k·360°` longitude shift that brings the piece's native lngs
+   * (identified by `pieceMidLng`) into proj4's valid range, composes that
+   * shift into the geotransform, and pairs it with the stock projection
+   * pair. The composed closures are stable for the tile's lifetime.
+   */
+  private buildPieceReprojection(
+    forwardTransform: ProjectionFunction,
+    inverseTransform: ProjectionFunction,
+    pieceMidLng: number,
+  ): ReprojectionFns {
+    const lngShift = -Math.round(pieceMidLng / 360) * 360;
+    if (lngShift === 0) {
+      return {
+        forwardTransform,
+        inverseTransform,
+        forwardReproject: this.projectPosition,
+        inverseReproject: this.unprojectPosition,
+      };
+    }
+    return {
+      forwardTransform: (px, py) => {
+        const [x, y] = forwardTransform(px, py);
+        return [x + lngShift, y];
+      },
+      inverseTransform: (x, y) => inverseTransform(x - lngShift, y),
+      forwardReproject: this.projectPosition,
+      inverseReproject: this.unprojectPosition,
     };
   }
 }
