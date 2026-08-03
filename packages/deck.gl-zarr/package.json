@@ -51,8 +51,8 @@
     "@developmentseed/geozarr": "workspace:^",
     "@developmentseed/proj": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
-    "proj4": "^2.20.9",
-    "wkt-parser": "^1.5.5",
+    "proj4": "^2.21.0",
+    "wkt-parser": "^1.5.6",
     "zarrita": "^0.7.3"
   },
   "peerDependencies": {
