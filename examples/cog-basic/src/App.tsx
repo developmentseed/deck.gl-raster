@@ -7,6 +7,8 @@ import {
   DeckGlOverlay,
   ExternalLink,
   Field,
+  LoadingIndicator,
+  useTilesLoading,
 } from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { ReactNode } from "react";
@@ -97,6 +99,7 @@ export default function App() {
     debug: false,
     debugOpacity: 0.25,
   });
+  const { loading, onViewportLoad, onLoadingStart } = useTilesLoading();
 
   const selected = COG_OPTIONS[selectedIndex];
 
@@ -105,6 +108,7 @@ export default function App() {
     geotiff: selected.url,
     debug: debugState.debug,
     debugOpacity: debugState.debugOpacity,
+    onViewportLoad,
     onGeoTIFFLoad: (tiff, options) => {
       (window as unknown as { tiff: unknown }).tiff = tiff;
       const { west, south, east, north } = options.geographicBounds;
@@ -125,6 +129,7 @@ export default function App() {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
         ref={mapRef}
+        onMoveStart={onLoadingStart}
         initialViewState={{
           longitude: 0,
           latitude: 0,
@@ -136,6 +141,8 @@ export default function App() {
       >
         <DeckGlOverlay layers={[cogLayer]} interleaved />
       </MaplibreMap>
+
+      <LoadingIndicator loading={loading} />
 
       <ControlPanel title="COGLayer Example" sourcePath="examples/cog-basic">
         <Text mb="3" color="gray.600">
