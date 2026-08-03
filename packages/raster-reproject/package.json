@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@developmentseed/affine": "workspace:^",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
     "delaunator": "^5.1.0",
     "jsdom": "^29.1.1",
     "proj4": "^2.20.9",
