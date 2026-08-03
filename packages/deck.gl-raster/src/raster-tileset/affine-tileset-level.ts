@@ -44,10 +44,14 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
 
   private readonly _affine: Affine;
   private readonly _invAffine: Affine;
+  private readonly _arrayWidth: number;
+  private readonly _arrayHeight: number;
 
   constructor(options: AffineTilesetLevelOptions) {
     this._affine = options.affine;
     this._invAffine = affine.invert(options.affine);
+    this._arrayWidth = options.arrayWidth;
+    this._arrayHeight = options.arrayHeight;
     this.tileWidth = options.tileWidth;
     this.tileHeight = options.tileHeight;
     this.matrixWidth = Math.ceil(options.arrayWidth / options.tileWidth);
@@ -79,11 +83,28 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
     const th = this.tileHeight;
     const af = this._affine;
 
+    // Clip the tile's pixel-space rectangle to the array extent. Tiles at the
+    // right/bottom edge of the matrix may extend past the array when
+    // `matrixWidth*tileWidth > arrayWidth` (likewise for height); the affine
+    // still extrapolates past the data, but for projections whose valid
+    // domain isn't a rectangle aligned with the affine (e.g. Mollweide,
+    // Sinusoidal, Equal Earth) those extrapolated points fall outside the
+    // projection domain. The downstream bounding-volume sampler reprojects
+    // these corners and, for points outside the domain, sees them collapse to
+    // the pole — producing a degenerate volume that frustum culling rejects.
+    // Clipping to the actual data extent keeps every corner inside the
+    // projection's domain (modulo the projection's own corner-cases) and is
+    // also the semantically correct extent for the tile's data.
+    const x0 = Math.min(col * tw, this._arrayWidth);
+    const x1 = Math.min((col + 1) * tw, this._arrayWidth);
+    const y0 = Math.min(row * th, this._arrayHeight);
+    const y1 = Math.min((row + 1) * th, this._arrayHeight);
+
     return {
-      topLeft: affine.apply(af, col * tw, row * th),
-      topRight: affine.apply(af, (col + 1) * tw, row * th),
-      bottomLeft: affine.apply(af, col * tw, (row + 1) * th),
-      bottomRight: affine.apply(af, (col + 1) * tw, (row + 1) * th),
+      topLeft: affine.apply(af, x0, y0),
+      topRight: affine.apply(af, x1, y0),
+      bottomLeft: affine.apply(af, x0, y1),
+      bottomRight: affine.apply(af, x1, y1),
     };
   }
 
