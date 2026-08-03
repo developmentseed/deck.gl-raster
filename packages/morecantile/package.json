@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "json-schema-to-typescript": "^15.0.4",
     "tsx": "^4.23.1",
     "typescript": "^6.0.3",
