@@ -49,7 +49,7 @@
     "@luma.gl/shadertools": "^9.3.6",
     "@types/node": "^26.1.2",
     "jsdom": "^30.0.1",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "peerDependencies": {
