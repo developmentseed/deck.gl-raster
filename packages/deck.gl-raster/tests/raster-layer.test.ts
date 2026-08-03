@@ -26,13 +26,14 @@ const REPROJECTION_FNS: ReprojectionFns = {
  * object + assign, and short-circuits `getSubLayerProps` so MeshTextureLayer
  * receives the exact prop shape we hand it.
  */
-function makeBareLayer() {
+function makeBareLayer(extraProps: Record<string, unknown> = {}) {
   const layer = new RasterLayer({
     id: "test",
     width: 4,
     height: 4,
     reprojectionFns: REPROJECTION_FNS,
     image: {} as never,
+    ...extraProps,
   });
   const internalState: Record<string, unknown> = {};
   Object.assign(layer as object, { state: internalState });
@@ -82,6 +83,42 @@ describe("RasterLayer.state.mesh", () => {
     expect(layers1[0]!.props.mesh).toBe(meshRef);
     expect(layers2[0]!.props.mesh).toBe(meshRef);
     expect(layers1[0]!.props.mesh).toBe(layers2[0]!.props.mesh);
+  });
+});
+
+describe("RasterLayer material forwarding", () => {
+  function renderMeshLayer(extraProps: Record<string, unknown> = {}) {
+    const { layer } = makeBareLayer(extraProps);
+    (layer as unknown as { _generateMesh: () => void })._generateMesh();
+    const [meshLayer] = (
+      layer as unknown as {
+        renderLayers: () => { props: Record<string, unknown> }[];
+      }
+    ).renderLayers();
+    return meshLayer!;
+  }
+
+  it("forwards material: false to MeshTextureLayer", () => {
+    const meshLayer = renderMeshLayer({ material: false });
+    expect(meshLayer.props.material).toBe(false);
+  });
+
+  it("forwards a material object to MeshTextureLayer by reference", () => {
+    const material = {
+      ambient: 0.8,
+      diffuse: 0.2,
+      shininess: 1,
+      specularColor: [0, 0, 0] as [number, number, number],
+    };
+    const meshLayer = renderMeshLayer({ material });
+    expect(meshLayer.props.material).toBe(material);
+  });
+
+  it("omits the material key when unset, preserving MeshTextureLayer's default", () => {
+    const meshLayer = renderMeshLayer();
+    // The key must be absent (not `undefined`): an explicit own-property would
+    // shadow MeshTextureLayer's prototype-chained default material.
+    expect("material" in meshLayer.props).toBe(false);
   });
 });
 

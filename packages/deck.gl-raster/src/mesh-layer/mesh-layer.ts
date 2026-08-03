@@ -175,6 +175,19 @@ export class MeshTextureLayer extends SimpleMeshLayer<
       shaderProps[m.module.name] = m.props || {};
     }
 
+    // deck.gl documents `material: false` as the way to render a mesh unlit,
+    // but in deck.gl v9 the LightingEffect forwards the raw `false` to
+    // luma.gl's ShaderInputs, which coerces falsy module props to `{}` and so
+    // silently re-applies the *default* phong material (ambient 0.35,
+    // diffuse 0.6). Translate a disabled material into the phongMaterial
+    // module's `unlit` flag ourselves so raster values render verbatim (like
+    // `BitmapLayer`). This runs after the LightingEffect's module props are
+    // applied for the frame (`Layer._drawLayer` sets effect shaderModuleProps
+    // before calling `draw`), so it reliably wins.
+    if (!this.props.material) {
+      shaderProps.phongMaterial = { unlit: true };
+    }
+
     for (const m of super.getModels()) {
       m.shaderInputs.setProps(shaderProps);
     }
