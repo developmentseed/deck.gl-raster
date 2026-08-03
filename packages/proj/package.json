@@ -40,12 +40,12 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "proj4": "^2.20.9",
+    "proj4": "^2.21.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "wkt-parser": "1.5.5"
+    "wkt-parser": "1.5.6"
   },
   "volta": {
     "extends": "../../package.json"

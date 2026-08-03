@@ -44,7 +44,7 @@
     "@types/node": "^26.1.2",
     "delaunator": "^5.1.0",
     "jsdom": "^30.0.1",
-    "proj4": "^2.20.9",
+    "proj4": "^2.21.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
