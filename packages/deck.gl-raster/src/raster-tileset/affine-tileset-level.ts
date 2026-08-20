@@ -44,12 +44,16 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
 
   private readonly _affine: Affine;
   private readonly _invAffine: Affine;
+  private readonly _arrayWidth: number;
+  private readonly _arrayHeight: number;
 
   constructor(options: AffineTilesetLevelOptions) {
     this._affine = options.affine;
     this._invAffine = affine.invert(options.affine);
     this.tileWidth = options.tileWidth;
     this.tileHeight = options.tileHeight;
+    this._arrayWidth = options.arrayWidth;
+    this._arrayHeight = options.arrayHeight;
     this.matrixWidth = Math.ceil(options.arrayWidth / options.tileWidth);
     this.matrixHeight = Math.ceil(options.arrayHeight / options.tileHeight);
 
@@ -78,12 +82,19 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
     const tw = this.tileWidth;
     const th = this.tileHeight;
     const af = this._affine;
-
+    // Clip to actual array extent so corners of the last tile row/column don't
+    // extrapolate past the data boundary. For projections whose valid domain
+    // isn't axis-aligned with the affine (Mollweide, Sinusoidal, Equal Earth),
+    // extrapolated corners fall outside the CRS domain — proj4 maps them to the
+    // pole, collapsing every such corner onto a single ±85.05° Mercator line and
+    // producing a zero-height bounding volume that causes every tile to be culled.
+    const right = Math.min((col + 1) * tw, this._arrayWidth);
+    const bottom = Math.min((row + 1) * th, this._arrayHeight);
     return {
       topLeft: affine.apply(af, col * tw, row * th),
-      topRight: affine.apply(af, (col + 1) * tw, row * th),
-      bottomLeft: affine.apply(af, col * tw, (row + 1) * th),
-      bottomRight: affine.apply(af, (col + 1) * tw, (row + 1) * th),
+      topRight: affine.apply(af, right, row * th),
+      bottomLeft: affine.apply(af, col * tw, bottom),
+      bottomRight: affine.apply(af, right, bottom),
     };
   }
 

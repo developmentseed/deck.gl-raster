@@ -86,6 +86,37 @@ describe("AffineTilesetLevel", () => {
       expect(corners.bottomRight).toEqual([140, 160]);
     });
 
+    it("clips the right edge of the last-column tile to arrayWidth", () => {
+      // arrayWidth=6 means tile 1 (pixels 4..7) is clipped to pixel 6.
+      const level = new AffineTilesetLevel({
+        affine: SQUARE_AFFINE,
+        arrayWidth: 6,
+        arrayHeight: 8,
+        tileWidth: 4,
+        tileHeight: 4,
+        mpu: 1,
+      });
+      // Interior tile (col=0): right edge is at pixel 4, unclipped.
+      expect(level.projectedTileCorners(0, 0).topRight).toEqual([140, 200]);
+      // Last-column tile (col=1): right edge clipped from pixel 8 to pixel 6.
+      expect(level.projectedTileCorners(1, 0).topRight).toEqual([160, 200]);
+    });
+
+    it("clips the bottom edge of the last-row tile to arrayHeight", () => {
+      const level = new AffineTilesetLevel({
+        affine: SQUARE_AFFINE,
+        arrayWidth: 8,
+        arrayHeight: 6,
+        tileWidth: 4,
+        tileHeight: 4,
+        mpu: 1,
+      });
+      // Interior tile (row=0): bottom at pixel 4, unclipped.
+      expect(level.projectedTileCorners(0, 0).bottomLeft).toEqual([100, 160]);
+      // Last-row tile (row=1): bottom clipped from pixel 8 to pixel 6.
+      expect(level.projectedTileCorners(0, 1).bottomLeft).toEqual([100, 140]);
+    });
+
     it("returns rotated quadrilateral corners for a rotated affine", () => {
       const level = new AffineTilesetLevel({
         affine: ROTATED_AFFINE,
