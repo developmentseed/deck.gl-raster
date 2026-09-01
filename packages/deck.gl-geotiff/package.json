@@ -41,10 +41,10 @@
   },
   "devDependencies": {
     "@chunkd/source-file": "^11.2.1",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.4.0",
     "jsdom": "^30.0.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@cogeotiff/core": "^9.5.0",
