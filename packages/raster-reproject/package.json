@@ -45,7 +45,7 @@
     "delaunator": "^5.1.0",
     "jsdom": "^30.0.1",
     "proj4": "^2.20.9",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "volta": {
