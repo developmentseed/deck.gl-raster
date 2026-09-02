@@ -37,8 +37,8 @@
   },
   "dependencies": {
     "@developmentseed/affine": "workspace:^",
-    "zarrita": "^0.7.3",
-    "zod": "^4.4.3"
+    "zarrita": "^0.7.4",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
