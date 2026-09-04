@@ -16,6 +16,10 @@ import { Map as MaplibreMap } from "react-map-gl/maplibre";
 
 const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
   {
+    title: "HFP 100",
+    url: "https://data.source.coop/vizzuality/hfp-100/hfp_2017_100m_v1-2_cog.tif",
+  },
+  {
     title: "Sentinel-2 True Color Image (New York, 2026)",
     url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
   },
