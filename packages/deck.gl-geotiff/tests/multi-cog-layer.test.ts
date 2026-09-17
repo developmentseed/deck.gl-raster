@@ -1,6 +1,11 @@
+import type {
+  DecodedPixelInterleaved,
+  RasterArray,
+} from "@developmentseed/geotiff";
+import type { Device } from "@luma.gl/core";
 import { Texture } from "@luma.gl/core";
 import { describe, expect, it, vi } from "vitest";
-import { MultiCOGLayer } from "../src/multi-cog-layer.js";
+import { createBandTexture, MultiCOGLayer } from "../src/multi-cog-layer.js";
 
 function fakeTexture(): {
   texture: Texture;
@@ -76,5 +81,52 @@ describe("MultiCOGLayer.updateState", () => {
     const error = onError.mock.calls[0]?.[0];
     expect(error?.message).toBe("loading COG sources: boom");
     expect(error?.cause).toBeInstanceOf(Error);
+  });
+});
+
+describe("createBandTexture", () => {
+  // Hands back the texture props so the test can see the format and samples.
+  const device = {
+    createTexture: (props: unknown) => props,
+  } as unknown as Device;
+  const upload = (data: DecodedPixelInterleaved["data"]) =>
+    createBandTexture(device, {
+      layout: "pixel-interleaved",
+      data,
+      width: 2,
+      height: 2,
+      count: 1,
+      nodata: null,
+      mask: null,
+      transform: [1, 0, 0, 0, -1, 0],
+      crs: 4326,
+    } satisfies RasterArray) as unknown as { data: unknown; format: string };
+
+  it("uploads unsigned 8- and 16-bit samples as normalised formats", () => {
+    const u8 = new Uint8Array(4);
+    expect(upload(u8)).toMatchObject({ data: u8, format: "r8unorm" });
+    const u16 = new Uint16Array(4);
+    expect(upload(u16)).toMatchObject({ data: u16, format: "r16unorm" });
+  });
+
+  it("uploads signed integers as exact float32 samples", () => {
+    const { data, format } = upload(new Int16Array([-999, -32768, 0, 32767]));
+    expect(format).toBe("r32float");
+    expect(data).toBeInstanceOf(Float32Array);
+    expect(Array.from(data as Float32Array)).toEqual([-999, -32768, 0, 32767]);
+  });
+
+  it("uploads float32 as is and narrows float64", () => {
+    const f32 = new Float32Array([0.5, -1, 2, 3]);
+    expect(upload(f32)).toMatchObject({ data: f32, format: "r32float" });
+    const { data } = upload(new Float64Array([0.5, -1, 2, 3]));
+    expect(data).toBeInstanceOf(Float32Array);
+    expect(Array.from(data as Float32Array)).toEqual([0.5, -1, 2, 3]);
+  });
+
+  it("rejects sample types it cannot upload", () => {
+    expect(() => upload(new BigInt64Array(4) as never)).toThrow(
+      "Unsupported typed array type: BigInt64Array.",
+    );
   });
 });

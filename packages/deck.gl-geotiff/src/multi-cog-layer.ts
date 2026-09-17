@@ -1021,32 +1021,44 @@ function selectImage(geotiff: GeoTIFF, z: number): GeoTIFF | Overview {
 /**
  * Create a GPU texture from a {@link RasterArray}.
  *
- * Infers the texture format from the typed array type. Currently supports
- * single-band `Uint8Array` (`r8unorm`) and `Uint16Array` (`r16unorm`).
+ * Infers the texture format from the typed array type. Single-band
+ * `Uint8Array` uploads as `r8unorm`, `Uint16Array` as `r16unorm`, and every
+ * other typed array as `r32float`.
  *
  * TODO: use `inferTextureFormat` from `texture.ts` for full format support.
  */
-function createBandTexture(device: Device, array: RasterArray): Texture {
+export function createBandTexture(device: Device, array: RasterArray): Texture {
   if (array.layout !== "pixel-interleaved") {
     throw new Error("Band-separate layout not yet supported in MultiCOGLayer");
   }
 
   const { data, width, height } = array;
   let format: TextureFormat;
+  let samples = data;
 
   if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
     format = "r8unorm";
   } else if (data instanceof Uint16Array) {
     format = "r16unorm";
+  } else if (
+    data instanceof Int8Array ||
+    data instanceof Int16Array ||
+    data instanceof Int32Array ||
+    data instanceof Uint32Array ||
+    data instanceof Float32Array ||
+    data instanceof Float64Array
+  ) {
+    format = "r32float";
+    samples = data instanceof Float32Array ? data : new Float32Array(data);
   } else {
+    // Unreachable by type, kept as a runtime guard.
     throw new Error(
-      `Unsupported typed array type: ${data.constructor.name}. ` +
-        "Currently only Uint8Array and Uint16Array are supported.",
+      `Unsupported typed array type: ${(data as object).constructor.name}.`,
     );
   }
 
   return device.createTexture({
-    data,
+    data: samples,
     format,
     width,
     height,
