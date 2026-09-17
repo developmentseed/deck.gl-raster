@@ -202,7 +202,9 @@ export class COGLayer<
       // Clear stale state so renderLayers returns null until the new GeoTIFF is
       // ready
       this.clearState();
-      this._parseGeoTIFF();
+      this._parseGeoTIFF().catch((error: Error) =>
+        this.raiseError(error, "loading GeoTIFF"),
+      );
     }
   }
 

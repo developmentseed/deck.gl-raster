@@ -384,7 +384,11 @@ export class MultiCOGLayer extends RasterTileLayer<
         sources: null,
         multiDescriptor: null,
       });
-      this._parseAllSources();
+      // The open runs outside any tile request, so its rejection has no tile
+      // error path. raiseError reaches props.onError, then Deck's handler.
+      this._parseAllSources().catch((error: Error) =>
+        this.raiseError(error, "loading COG sources"),
+      );
     }
   }
 
