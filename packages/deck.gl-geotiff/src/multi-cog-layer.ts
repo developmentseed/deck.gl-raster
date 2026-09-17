@@ -727,8 +727,8 @@ export class MultiCOGLayer extends RasterTileLayer<
       signal,
     });
 
-    const texture = createBandTexture(device, tile.array);
-    const arr = tile.array;
+    const arr = fillPaddingWithNodata(image, x, y, tile.array);
+    const texture = createBandTexture(device, arr);
     const byteLength =
       arr.layout === "pixel-interleaved"
         ? arr.data.byteLength
@@ -823,6 +823,9 @@ export class MultiCOGLayer extends RasterTileLayer<
       pool,
       signal,
     });
+    for (const tile of tiles) {
+      fillPaddingWithNodata(image, tile.x, tile.y, tile.array);
+    }
 
     // Assemble into a single RasterArray (handles stitching + typed array preservation)
     const assembled = assembleTiles(tiles, {
@@ -1016,6 +1019,42 @@ export class MultiCOGLayer extends RasterTileLayer<
 function selectImage(geotiff: GeoTIFF, z: number): GeoTIFF | Overview {
   const images: Array<GeoTIFF | Overview> = [geotiff, ...geotiff.overviews];
   return images[images.length - 1 - z]!;
+}
+
+/**
+ * Overwrite an edge tile's padding with the nodata value, in place.
+ *
+ * Boundless reads return edge tiles at full size, zero-padded past the image
+ * bounds, and those zeros render like real pixels. As nodata the pipeline can
+ * discard them. No-op for interior tiles or when there's no nodata value.
+ */
+export function fillPaddingWithNodata(
+  image: GeoTIFF | Overview,
+  x: number,
+  y: number,
+  array: RasterArray,
+): RasterArray {
+  const { nodata, width, height } = array;
+  if (nodata == null || array.layout !== "pixel-interleaved") {
+    return array;
+  }
+  const validWidth = Math.max(
+    0,
+    Math.min(width, image.width - x * image.tileWidth),
+  );
+  const validHeight = Math.max(
+    0,
+    Math.min(height, image.height - y * image.tileHeight),
+  );
+  if (validWidth === width && validHeight === height) {
+    return array;
+  }
+  const { count, data } = array;
+  for (let row = 0; row < height; row++) {
+    const from = row < validHeight ? validWidth : 0;
+    data.fill(nodata, (row * width + from) * count, (row + 1) * width * count);
+  }
+  return array;
 }
 
 /**
