@@ -1,4 +1,4 @@
-import type { UpdateParameters } from "@deck.gl/core";
+import type { LayerContext, UpdateParameters } from "@deck.gl/core";
 import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
@@ -169,10 +169,20 @@ export class ZarrLayer<
     /** One opened array per level, finest-first (matches meta.levels order). */
     arrays?: zarr.Array<zarr.DataType, zarr.Readable>[];
     tilesetDescriptor?: RasterTilesetDescriptor;
+    /**
+     * Aborted when the layer is removed, and replaced on every re-parse so a
+     * superseded parse can neither raise an error nor write stale state.
+     */
+    abortController?: AbortController;
   };
 
   override initializeState(): void {
     this.setState({});
+  }
+
+  override finalizeState(context: LayerContext): void {
+    this.state.abortController?.abort();
+    super.finalizeState(context);
   }
 
   override updateState(params: UpdateParameters<this>) {
@@ -186,9 +196,28 @@ export class ZarrLayer<
       props.variable !== oldProps.variable;
 
     if (needsUpdate) {
+      // Supersede any parse still in flight: its results are stale, and
+      // without this a slower earlier parse could resolve last and write its
+      // arrays and descriptor over the newer ones.
+      this.state.abortController?.abort();
+      const abortController = new AbortController();
+
       // Clear stale state so renderLayers returns null until the new Zarr is ready
       this._clearState();
-      void this._parseZarr();
+      this.setState({ abortController });
+
+      const { signal } = abortController;
+      this._parseZarr(signal).catch((error: unknown) => {
+        // Layer removed or superseded mid-open; the error is no longer
+        // actionable by the app.
+        if (signal.aborted) {
+          return;
+        }
+        this.raiseError(
+          error instanceof Error ? error : new Error(String(error)),
+          "loading Zarr",
+        );
+      });
     }
   }
 
@@ -202,8 +231,15 @@ export class ZarrLayer<
     });
   }
 
-  /** Open the Zarr store, parse GeoZarr metadata, validate dims, build reprojection fns. */
-  async _parseZarr(): Promise<void> {
+  /**
+   * Open the Zarr store, parse GeoZarr metadata, validate dims, build
+   * reprojection fns.
+   *
+   * @param signal - Aborted when this parse is superseded or the layer is
+   *   removed. Nothing here threads it into zarrita, so it does not cancel
+   *   in-flight reads; it only stops a stale parse from writing state.
+   */
+  async _parseZarr(signal: AbortSignal): Promise<void> {
     const { node, variable, metadata: metadataOverride } = this.props;
 
     // Callers own the store. We accept a pre-opened Array (rendered as a
@@ -221,19 +257,13 @@ export class ZarrLayer<
       // zarr.Group
       root = node;
     }
-    // @ts-expect-error - for debugging
-    window.root = root;
 
     const group = variable
       ? await zarr.open(root.resolve(variable), { kind: "group" })
       : root;
-    // @ts-expect-error - for debugging
-    window.group = group;
 
     const rawAttrs = metadataOverride ?? group.attrs;
     const meta = parseGeoZarrMetadata(rawAttrs);
-    // @ts-expect-error - for debugging
-    window.meta = meta;
 
     // Open each level's array once and keep the references in state. If the
     // caller passed a pre-opened array and the metadata describes a single
@@ -328,6 +358,10 @@ export class ZarrLayer<
       chunkSizes,
       mpu,
     });
+
+    if (signal.aborted) {
+      return;
+    }
 
     this.setState({
       meta,
