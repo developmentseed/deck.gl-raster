@@ -221,11 +221,17 @@ export class COGLayer<
     const signal = this.state.abortController?.signal;
 
     let geotiff: GeoTIFF;
+    let sourceProjection: ProjectionDefinition;
     try {
       geotiff = await fetchGeoTIFF(this.props.geotiff, {
         concurrencyLimiter: this.props.concurrencyLimiter,
         signal,
       });
+      const crs = geotiff.crs;
+      sourceProjection =
+        typeof crs === "number"
+          ? await this.props.epsgResolver!(crs)
+          : parseWkt(crs);
     } catch (err) {
       // Layer removed mid-open (finalizeState aborted the signal); drop it.
       if (signal?.aborted) {
@@ -233,11 +239,6 @@ export class COGLayer<
       }
       throw err;
     }
-    const crs = geotiff.crs;
-    const sourceProjection =
-      typeof crs === "number"
-        ? await this.props.epsgResolver!(crs)
-        : parseWkt(crs);
 
     if (signal?.aborted) {
       return;
