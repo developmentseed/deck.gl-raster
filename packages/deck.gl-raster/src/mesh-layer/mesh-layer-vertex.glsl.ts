@@ -1,7 +1,7 @@
 // Vertex shader for MeshTextureLayer. Override of upstream's
-// simple-mesh-layer-vertex.glsl.ts (deck.gl 9.3 @
-// 09af8de8d18a9cb9a31d064cae8f9e7239df7f53):
-// https://github.com/visgl/deck.gl/blob/09af8de8d18a9cb9a31d064cae8f9e7239df7f53/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts
+// simple-mesh-layer-vertex.glsl.ts (deck.gl 9.4.0 @
+// 5eded84b438eef83387dc6579c51670389053602):
+// https://github.com/visgl/deck.gl/blob/5eded84b438eef83387dc6579c51670389053602/modules/mesh-layers/src/simple-mesh-layer/simple-mesh-layer-vertex.glsl.ts
 //
 // Differences from upstream:
 //   1. Adds `in vec3 positions64Low;` — per-vertex low part of the
@@ -42,7 +42,6 @@ in vec2 texCoords;
 in vec3 instancePositions;
 in vec3 instancePositions64Low;
 in vec4 instanceColors;
-in vec3 instancePickingColors;
 in vec3 instanceModelMatrixCol0;
 in vec3 instanceModelMatrixCol1;
 in vec3 instanceModelMatrixCol2;
@@ -58,7 +57,7 @@ out vec4 vColor;
 void main(void) {
   geometry.worldPosition = instancePositions;
   geometry.uv = texCoords;
-  geometry.pickingColor = instancePickingColors;
+  geometry.pickingColor = picking_getPickingColorFromInstanceID();
 
   vTexCoord = texCoords;
   cameraPosition = project.cameraPosition;
