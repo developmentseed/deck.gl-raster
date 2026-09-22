@@ -80,6 +80,8 @@ const defaultProps: DefaultProps<
  *   {@link ExcludedSimpleMeshProps}. This is what keeps the fp64 correction
  *   valid (the low part is the residual of `positions`, not of a transformed
  *   vertex).
+ * - WebGL only: the shaders and `RasterModule`s are GLSL, so upstream's WGSL
+ *   shader is dropped.
  */
 export class MeshTextureLayer extends SimpleMeshLayer<
   null,
@@ -149,7 +151,9 @@ export class MeshTextureLayer extends SimpleMeshLayer<
   }
 
   override getShaders() {
-    const upstreamShaders = super.getShaders();
+    // Drop upstream's WGSL `source`: we currently only support WebGL/GLSL
+    // shaders.
+    const { source: _wgslSource, ...upstreamShaders } = super.getShaders();
 
     const modules: ShaderModule[] = upstreamShaders.modules;
     for (const m of this._resolveRenderPipeline()) {
