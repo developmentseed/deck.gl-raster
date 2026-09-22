@@ -180,7 +180,7 @@ export default function App() {
           </ExternalLink>{" "}
           and{" "}
           <ExternalLink href="https://zarrita.dev/">
-            <code>zarrita</code>
+            <code>zarrita.js</code>
           </ExternalLink>{" "}
           to fetch data directly in the browser, without a server in between.
           The store is{" "}
