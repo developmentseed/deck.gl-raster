@@ -1039,9 +1039,10 @@ function selectImage(geotiff: GeoTIFF, z: number): GeoTIFF | Overview {
 /**
  * Create a GPU texture from a {@link RasterArray}.
  *
- * Infers the texture format from the typed array type. Single-band
- * `Uint8Array` uploads as `r8unorm`, `Uint16Array` as `r16unorm`, and every
- * other typed array as `r32float`.
+ * Infers the texture format from the typed array type: `Uint8Array` as
+ * `r8unorm`, `Uint16Array` as `r16unorm`, and any other as `r32float`.
+ *
+ * Uses nearest sampling when the device can't linearly filter the format.
  *
  * TODO: use `inferTextureFormat` from `texture.ts` for full format support.
  */
@@ -1080,7 +1081,9 @@ export function createBandTexture(device: Device, array: RasterArray): Texture {
     format,
     width,
     height,
-    sampler: { minFilter: "linear", magFilter: "linear" },
+    sampler: device.isTextureFormatFilterable(format)
+      ? { minFilter: "linear", magFilter: "linear" }
+      : { minFilter: "nearest", magFilter: "nearest" },
   });
 }
 
