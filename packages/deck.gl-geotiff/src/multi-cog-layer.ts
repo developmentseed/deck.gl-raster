@@ -384,7 +384,9 @@ export class MultiCOGLayer extends RasterTileLayer<
         sources: null,
         multiDescriptor: null,
       });
-      this._parseAllSources();
+      this._parseAllSources().catch((error: Error) =>
+        this.raiseError(error, "loading COG sources"),
+      );
     }
   }
 

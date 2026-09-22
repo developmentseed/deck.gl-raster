@@ -41,10 +41,10 @@
   },
   "devDependencies": {
     "@chunkd/source-file": "^11.2.1",
-    "@types/node": "^26.0.1",
-    "jsdom": "^29.1.1",
+    "@types/node": "^26.4.0",
+    "jsdom": "^30.0.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@cogeotiff/core": "^9.5.0",
@@ -54,8 +54,8 @@
     "@developmentseed/morecantile": "workspace:^",
     "@developmentseed/proj": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
-    "flatbush": "^4.5.1",
-    "proj4": "^2.20.8"
+    "flatbush": "^4.6.2",
+    "proj4": "^2.20.9"
   },
   "peerDependencies": {
     "@deck.gl/core": "^9.3.0",

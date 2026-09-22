@@ -12,17 +12,22 @@ export const BRANCH = "main";
 export const SURFACE_TEMP_PATH = "/Tair";
 
 /**
- * Virtual chunk container map: the container name declared in the repo's
- * `config.yaml` → the public HTTPS prefix the browser can fetch. The
- * temperature chunks are virtual references into the original NLDAS-3 source
- * objects in the same `nasa-waterinsight` bucket.
+ * Virtual chunk containers authorizing the browser to resolve the store's
+ * virtual chunk references. The temperature chunks are virtual references into
+ * the original NLDAS-3 source objects (`s3://nasa-waterinsight/...`) in the
+ * same `nasa-waterinsight` bucket; `urlPrefix` matches those absolute chunk
+ * locations, and the `s3` config directs icechunk to the bucket's regional
+ * endpoint — `https://nasa-waterinsight.s3.us-west-2.amazonaws.com/...` — which
+ * is required for browser CORS (the global endpoint's region redirect carries
+ * no CORS headers).
  */
-export const VIRTUAL_CHUNK_CONTAINERS = new Map([
-  [
-    "s3://nasa-waterinsight/NLDAS3/forcing/daily/",
-    "https://nasa-waterinsight.s3.us-west-2.amazonaws.com/NLDAS3/forcing/daily/",
-  ],
-]);
+export const VIRTUAL_CHUNK_CONTAINERS = [
+  {
+    name: null,
+    urlPrefix: "s3://nasa-waterinsight/NLDAS3/forcing/daily/",
+    s3: { region: "us-west-2" },
+  },
+];
 
 /** Name of the non-spatial dimension (array dims are ["time", "lat", "lon"]). */
 export const TIME_DIM = "time";

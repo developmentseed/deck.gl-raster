@@ -40,10 +40,10 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
-    "jsdom": "^29.1.1",
+    "@types/node": "^26.4.0",
+    "jsdom": "^30.0.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@developmentseed/affine": "workspace:^",
@@ -51,7 +51,7 @@
     "@developmentseed/geozarr": "workspace:^",
     "@developmentseed/proj": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
-    "proj4": "^2.20.8",
+    "proj4": "^2.20.9",
     "wkt-parser": "^1.5.5",
     "zarrita": "^0.7.3"
   },

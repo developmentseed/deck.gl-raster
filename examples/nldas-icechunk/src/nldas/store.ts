@@ -25,8 +25,8 @@ export interface SurfaceTempSource {
  * repo, with the virtual chunk container authorized so chunk reads resolve to
  * public HTTPS objects.
  *
- * The container map is only accepted by `ReadSession.open`, so we resolve the
- * branch snapshot id first, then open a session that carries it.
+ * The containers are only accepted by `ReadSession.open`, so we resolve the
+ * branch snapshot id first, then open a session that carries them.
  */
 export async function openSurfaceTemp(): Promise<SurfaceTempSource> {
   const storage = new HttpStorage(REPO_URL);

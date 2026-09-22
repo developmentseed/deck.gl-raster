@@ -77,3 +77,25 @@ describe("COGLayer._onTileUnloadCallback", () => {
     expect(unloadCallback(layer)).toBe(onTileUnload);
   });
 });
+
+describe("COGLayer.updateState", () => {
+  it("raises a GeoTIFF open failure through onError", async () => {
+    const onError = vi.fn((_error: Error) => true);
+    const layer = new COGLayer({
+      id: "cog",
+      geotiff: "https://example.com/x.tif",
+      onError,
+    } as never);
+    vi.spyOn(layer, "clearState").mockImplementation(() => {});
+    vi.spyOn(layer, "_parseGeoTIFF").mockRejectedValue(new Error("boom"));
+
+    layer.updateState({
+      props: layer.props,
+      oldProps: layer.props,
+      changeFlags: { dataChanged: true },
+    } as never);
+
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
+    expect(onError.mock.calls[0]?.[0]?.message).toBe("loading GeoTIFF: boom");
+  });
+});
