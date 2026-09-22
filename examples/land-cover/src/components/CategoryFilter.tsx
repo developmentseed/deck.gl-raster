@@ -57,7 +57,7 @@ function Chevron({
  * - The whole "Categories" bar expands/collapses the filter.
  */
 export function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const [expandedHeadings, setExpandedHeadings] = useState<Set<string>>(
     () => new Set(),
   );
