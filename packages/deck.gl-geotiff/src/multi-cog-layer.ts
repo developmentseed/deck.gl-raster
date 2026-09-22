@@ -1023,7 +1023,9 @@ function selectImage(geotiff: GeoTIFF, z: number): GeoTIFF | Overview {
  *
  * Infers the texture format from the typed array type. Single-band
  * `Uint8Array` uploads as `r8unorm`, `Uint16Array` as `r16unorm`, and every
- * other typed array as `r32float`.
+ * other typed array as `r32float`. A float texture the device cannot filter
+ * (WebGL without `OES_texture_float_linear`, common on iOS) is incomplete
+ * under linear sampling and reads as zeros, so it gets a nearest sampler.
  *
  * TODO: use `inferTextureFormat` from `texture.ts` for full format support.
  */
@@ -1062,7 +1064,9 @@ export function createBandTexture(device: Device, array: RasterArray): Texture {
     format,
     width,
     height,
-    sampler: { minFilter: "linear", magFilter: "linear" },
+    sampler: device.isTextureFormatFilterable(format)
+      ? { minFilter: "linear", magFilter: "linear" }
+      : { minFilter: "nearest", magFilter: "nearest" },
   });
 }
 

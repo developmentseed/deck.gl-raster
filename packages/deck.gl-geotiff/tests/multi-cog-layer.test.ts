@@ -86,11 +86,16 @@ describe("MultiCOGLayer.updateState", () => {
 
 describe("createBandTexture", () => {
   // Hands back the texture props so the test can see the format and samples.
-  const device = {
-    createTexture: (props: unknown) => props,
-  } as unknown as Device;
-  const upload = (data: DecodedPixelInterleaved["data"]) =>
-    createBandTexture(device, {
+  const device = (filterable = true) =>
+    ({
+      createTexture: (props: unknown) => props,
+      isTextureFormatFilterable: () => filterable,
+    }) as unknown as Device;
+  const upload = (
+    data: DecodedPixelInterleaved["data"],
+    filterable?: boolean,
+  ) =>
+    createBandTexture(device(filterable), {
       layout: "pixel-interleaved",
       data,
       width: 2,
@@ -100,7 +105,11 @@ describe("createBandTexture", () => {
       mask: null,
       transform: [1, 0, 0, 0, -1, 0],
       crs: 4326,
-    } satisfies RasterArray) as unknown as { data: unknown; format: string };
+    } satisfies RasterArray) as unknown as {
+      data: unknown;
+      format: string;
+      sampler: { minFilter: string };
+    };
 
   it("uploads unsigned 8- and 16-bit samples as normalised formats", () => {
     const u8 = new Uint8Array(4);
@@ -122,6 +131,12 @@ describe("createBandTexture", () => {
     const { data } = upload(new Float64Array([0.5, -1, 2, 3]));
     expect(data).toBeInstanceOf(Float32Array);
     expect(Array.from(data as Float32Array)).toEqual([0.5, -1, 2, 3]);
+  });
+
+  it("samples nearest when the device cannot filter float textures", () => {
+    const f32 = new Float32Array(4);
+    expect(upload(f32).sampler.minFilter).toBe("linear");
+    expect(upload(f32, false).sampler.minFilter).toBe("nearest");
   });
 
   it("rejects sample types it cannot upload", () => {
