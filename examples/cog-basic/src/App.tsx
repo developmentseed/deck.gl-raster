@@ -32,14 +32,19 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
     url: "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif",
   },
   {
-    title: "EOxCloudless 2020 RGB",
-    url: "https://s2downloads.eox.at/demo/EOxCloudless/2020/rgb_corrected_geodetic/3/0/0.tif",
+    title: "EOxCloudless 2024 RGB",
+    url: "https://s3.us-east-1.amazonaws.com/ds-deck.gl-raster-public/cog/viewing-basic_s2cloudless-2024_geodetic-zoom-3_3bands_8bit.tif",
     attribution: (
       <>
         <a href="https://cloudless.eox.at">
-          EOxCloudless - https://cloudless.eox.at
+          EOxCloudless https://cloudless.eox.at
         </a>
-        {" (Contains modified Copernicus Sentinel data 2020)"}
+        {
+          " by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2024), licensed under "
+        }
+        <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">
+          CC BY-NC-SA 4.0
+        </a>
       </>
     ),
   },
