@@ -122,7 +122,15 @@ export default function App() {
   });
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        // Space around the globe; MapLibre leaves it transparent.
+        background: "#000",
+      }}
+    >
       <MaplibreMap
         ref={mapRef}
         initialViewState={{
