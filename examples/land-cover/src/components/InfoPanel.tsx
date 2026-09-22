@@ -113,7 +113,7 @@ export function InfoPanel({
               size="sm"
               width="full"
               min={0.01}
-              max={5}
+              max={21}
               step={0.01}
               value={[meshMaxError]}
               onValueChange={(d) => onMeshMaxErrorChange(d.value[0])}

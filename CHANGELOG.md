@@ -6,6 +6,39 @@
 * feat(geotiff): New internal method to fetch multiple tiles concurrently, with range coalescing by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/530
 * feat(geotiff): route fetchTiles through batched, range-coalescing getTiles by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/531
 
+## v0.8.0 - 2026-09-22
+
+### What's Changed
+
+* fix: Remove NAIP Mosaic caching override by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/554
+* fix: Use fp64 emulation to fix lack of precision (jitter) at high zooms by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/559
+* fix: traverse tiles across world copies (#517) by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/518
+* feat: Initial Globe view support by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/563
+* feat: per-origin HTTP concurrency limiter for COG layers by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/557
+* fix: Use https links for umbra COG by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/571
+* fix(geotiff): revert ConcurrencyLimiter to a chunkd SourceMiddleware by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/572
+* feat: reprojector initial-triangulation seed + clamp Web Mercator meshes to ±85.051° by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/574
+* feat: NLDAS-3 icechunk example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/577
+* fix: Support parsing ESRI WKT String for ESRI-created custom CRS by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/579
+* fix: clamp Web Mercator mesh for south-up affines by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/590
+* fix: destroy tile textures on eviction (#591) by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/594
+* fix: Restore raw s3 URL instead of data.source.coop URL for ECMWF example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/595
+* fix: use direct s3 url for aef-mosaic example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/596
+* fix: Reduce max requests in aef mosaic example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/597
+* refactor!: Flatten `texture` exports from `geotiff/texture.js` by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/600
+* docs: Add git submodule install instructions by @abarciauskas-bgse in https://github.com/developmentseed/deck.gl-raster/pull/602
+* fix: handle `spatial:registration = node` in geozarr properties by @abhi-airspace-intelligence in https://github.com/developmentseed/deck.gl-raster/pull/615
+* feat(geotiff): Add `colorinterp` property by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/317
+* fix(deck.gl-geotiff): raise COG open failures through onError by @earlybard in https://github.com/developmentseed/deck.gl-raster/pull/652
+
+### New Contributors
+
+* @abarciauskas-bgse made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/602
+* @abhi-airspace-intelligence made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/615
+* @earlybard made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/652
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.7.0...v0.8.0
+
 ## v0.7.0 - 2026-05-13
 
 ### Breaking Changes
