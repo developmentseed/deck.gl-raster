@@ -113,7 +113,7 @@ export default function App() {
         },
       );
     },
-    // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+    // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
     // doesn't know about it.
     beforeId: "aeroway-runway",
   });
