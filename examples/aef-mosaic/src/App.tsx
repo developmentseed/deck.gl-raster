@@ -109,7 +109,7 @@ export default function App() {
                 rescaleMax,
               ],
             },
-            // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+            // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
             // doesn't know about it.
             beforeId: "boundary_country_outline",
           }),

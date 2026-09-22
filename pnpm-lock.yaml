@@ -10,7 +10,7 @@ overrides:
   '@deck.gl/extensions': ^9.4.0
   '@deck.gl/geo-layers': ^9.4.0
   '@deck.gl/layers': ^9.4.0
-  '@deck.gl/mapbox': ^9.4.0
+  '@deck.gl/maplibre': ^9.4.0
   '@deck.gl/mesh-layers': ^9.4.0
   '@deck.gl/widgets': ^9.4.0
   '@loaders.gl/core': ^4.3.4
@@ -113,9 +113,9 @@ importers:
       '@chakra-ui/react':
         specifier: ^3.36.0
         version: 3.36.0(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@deck.gl/mapbox':
+      '@deck.gl/maplibre':
         specifier: ^9.4.0
-        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)(@math.gl/web-mercator@4.1.0)
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)(maplibre-gl@5.24.0)
       '@devseed-ui/collecticons-chakra':
         specifier: ^4.0.0
         version: 4.0.0(@chakra-ui/react@3.36.0(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -2345,12 +2345,12 @@ packages:
       '@luma.gl/core': ^9.4.2
       '@luma.gl/engine': ^9.4.2
 
-  '@deck.gl/mapbox@9.4.0':
-    resolution: {integrity: sha512-otpLp3HgJKWl5KgeQ8J+8oraKAa/nOThtSB5w93KsZSN6Oq467o8vXaWjkas9aPOVoqHIM33GG/wCEYbPDuATQ==}
+  '@deck.gl/maplibre@9.4.0':
+    resolution: {integrity: sha512-ck7Hxzt0t9M7iVgbVwelZiuUEx+e2HtmhGyPmZulURV0Ct5QtIjDYc6SWWUYZqASQnyDiBgFVaSaA9DisU8ziw==}
     peerDependencies:
       '@deck.gl/core': ^9.4.0
       '@luma.gl/core': ^9.4.2
-      '@math.gl/web-mercator': ^4.1.0
+      maplibre-gl: ^4.5.1 || ^5.0.0 || ^6.0.0
 
   '@deck.gl/mesh-layers@9.4.0':
     resolution: {integrity: sha512-NlLraZYYEoPACHEao+VfQCzyO4s/IaElM79Af6ngqWtM/wpHI1pTs1ISe5NNU9sbW717M/wNHiGqkYwQDbt1aA==}
@@ -11028,11 +11028,11 @@ snapshots:
     transitivePeerDependencies:
       - '@75lb/nature'
 
-  '@deck.gl/mapbox@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)(@math.gl/web-mercator@4.1.0)':
+  '@deck.gl/maplibre@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)(maplibre-gl@5.24.0)':
     dependencies:
       '@deck.gl/core': 9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
       '@luma.gl/core': 9.4.2
-      '@math.gl/web-mercator': 4.1.0
+      maplibre-gl: 5.24.0
 
   '@deck.gl/mesh-layers@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))':
     dependencies:

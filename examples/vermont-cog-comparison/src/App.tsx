@@ -151,7 +151,7 @@ function makeCOGLayer(args: CogLayerArgs): COGLayer<TileTextureData> | null {
     onTileUnload: (tile) => tile.content?.texture.destroy(),
     extensions: [new ClipExtension()],
     // @ts-expect-error clipBounds + clipByInstance + beforeId are injected
-    // by ClipExtension and @deck.gl/mapbox; LayerProps doesn't know about
+    // by ClipExtension and @deck.gl/maplibre; LayerProps doesn't know about
     // extension- or interleaved-injected props.
     clipBounds,
     // Force per-pixel clipping. ClipExtension's auto-detect sees
