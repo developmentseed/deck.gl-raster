@@ -16,14 +16,19 @@ import { Map as MaplibreMap } from "react-map-gl/maplibre";
 
 const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
   {
-    title: "EOxCloudless 2020 RGB",
-    url: "https://s2downloads.eox.at/demo/EOxCloudless/2020/rgb_corrected_geodetic/3/0/0.tif",
+    title: "EOxCloudless 2024 RGB",
+    url: "https://s3.us-east-1.amazonaws.com/ds-deck.gl-raster-public/cog/viewing-basic_s2cloudless-2024_geodetic-zoom-3_3bands_8bit.tif",
     attribution: (
       <>
         <a href="https://cloudless.eox.at">
-          EOxCloudless - https://cloudless.eox.at
+          EOxCloudless https://cloudless.eox.at
         </a>
-        {" (Contains modified Copernicus Sentinel data 2020)"}
+        {
+          " by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2024), licensed under "
+        }
+        <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">
+          CC BY-NC-SA 4.0
+        </a>
       </>
     ),
   },
@@ -107,11 +112,10 @@ export default function App() {
     // On a globe the raster mesh is coplanar with MapLibre's basemap sphere and
     // they share the interleaved depth buffer, which z-fights. A depth bias does
     // not help with maplibre's globe depth encoding; instead skip the depth
-    // comparison and occlude the far hemisphere with back-face culling. The cull
-    // mode depends on the compositing setup — `back` for this MapLibre
-    // interleaved globe (a standalone deck.gl _GlobeView may need `front`),
-    // which is why the app sets it, not the library. See visgl/deck.gl#9592.
-    parameters: { depthCompare: "always", cullMode: "back" },
+    // comparison. The far hemisphere is still hidden because the GlobeView
+    // created by the overlay culls back faces by default (deck.gl >= 9.4).
+    // See visgl/deck.gl#9592.
+    parameters: { depthCompare: "always" },
     // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
     // doesn't know about it.
     beforeId: "boundary_country_outline",

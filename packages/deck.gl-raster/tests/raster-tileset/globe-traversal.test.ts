@@ -108,4 +108,32 @@ describe("getTileIndices: GlobeView", () => {
     // Zooming in selects strictly finer tiles.
     expect(zoomedOut).toBeLessThan(zoomedIn);
   });
+
+  it("selects a tile whose grid footprint extends past a pole", () => {
+    // A global EPSG:4326 COG overview smaller than one tile (512x256 pixels in
+    // a 512x512 tile) has a tile footprint whose bottom edge sits at -270°.
+    const corners: Corners = {
+      topLeft: [-180, 90],
+      topRight: [180, 90],
+      bottomLeft: [-180, -270],
+      bottomRight: [180, -270],
+    };
+    const descriptor: RasterTilesetDescriptor = {
+      levels: [{ ...makeLevel(78000), projectedTileCorners: () => corners }],
+      projectTo3857: identity,
+      projectTo4326: identity,
+      projectFrom3857: identity,
+      projectFrom4326: identity,
+      projectedBounds: [-180, -90, 180, 90],
+    };
+
+    const indices = getTileIndices(descriptor, {
+      viewport: makeGlobeViewport(),
+      maxZ: 0,
+      zRange: null,
+      wgs84Bounds: [-180, -85.0511287798066, 180, 85.0511287798066],
+      pixelRatio: 1,
+    });
+    expect(indices).toHaveLength(1);
+  });
 });
