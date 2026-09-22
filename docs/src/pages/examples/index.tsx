@@ -22,7 +22,7 @@ const cogExamples: Example[] = [
         Load and display RGB Cloud-Optimized GeoTIFF imagery with the{" "}
         <Link to="/deck.gl-raster/api/deck-gl-geotiff/classes/COGLayer/">
           COGLayer
-        </Link>{" "}
+        </Link>
         .
       </>
     ),
@@ -62,6 +62,22 @@ const cogExamples: Example[] = [
     image: "/deck.gl-raster/img/naip-mosaic-examples-card.jpg",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/naip-mosaic",
+  },
+  {
+    title: "Globe View",
+    description: (
+      <>
+        Render Cloud-Optimized GeoTIFFs on a 3D globe using{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-geotiff/classes/COGLayer/">
+          COGLayer
+        </Link>{" "}
+        with MapLibre's globe projection.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/cog-globe/",
+    image: "/deck.gl-raster/img/cog-globe.gif",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/cog-globe",
   },
   {
     title: "Sentinel-2 Multi-Band",
