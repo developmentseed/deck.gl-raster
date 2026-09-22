@@ -395,18 +395,27 @@ metric would be more accurate; deferred.
 
 In interleaved mode the raster mesh is coplanar with MapLibre's globe basemap
 sphere and z-fights in the shared depth buffer. A depth bias / polygon offset
-does **not** help with maplibre's globe depth encoding. The fix
-(`MeshTextureLayer` `parameters`, set by `RasterLayer` only for globe):
+does **not** help with maplibre's globe depth encoding. The fix is two GPU
+draw parameters, neither of which the library sets itself:
 
 - `depthCompare: 'always'` — skip the depth comparison so the raster never
-  z-fights the basemap.
+  z-fights the basemap. The app passes it in the layer's `parameters` prop (see
+  `examples/cog-globe`); `CompositeLayer` forwards `parameters` down to the
+  `MeshTextureLayer` sublayers.
 - `cullMode: 'back'` — without depth occlusion the far hemisphere would bleed
-  through, so back-face culling hides it. MapLibre globe uses a flipped
-  handedness; `'back'` is correct for *our* grid winding (`'front'` culls the
-  near, visible side). See
-  [visgl/deck.gl#9592](https://github.com/visgl/deck.gl/issues/9592). This is
-  tied to the maplibre-interleaved setup; a standalone `_GlobeView` may need the
-  opposite cull mode.
+  through, so back-face culling hides it. Since deck.gl 9.4, `GlobeView` sets
+  this by default through its view-level `parameters`, and both
+  `@deck.gl/mapbox` and `@deck.gl/maplibre` create a `GlobeView` when MapLibre
+  is in globe projection, so apps no longer set it. MapLibre globe uses a
+  flipped handedness; `'back'` is correct for *our* grid winding there
+  (`'front'` culls the near, visible side). See
+  [visgl/deck.gl#9592](https://github.com/visgl/deck.gl/issues/9592).
+
+A standalone deck.gl `GlobeView` (no MapLibre) is untested. If our winding is
+flipped there, the default `'back'` would cull the visible side and the raster
+would disappear. deck.gl merges draw parameters as deck, then view, then layer,
+so a layer's `parameters: {cullMode: 'front'}` would override the view
+default.
 
 ### Anti-faceting mesh scaffold (throwaway)
 

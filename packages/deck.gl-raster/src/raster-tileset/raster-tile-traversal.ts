@@ -741,7 +741,9 @@ function sampleReferencePointsInWGS84(
       relX,
       relY,
     );
-    refPointPositions.push(projectTo4326(geoX, geoY));
+    const [lng, lat] = projectTo4326(geoX, geoY);
+    // Clamp latitudes to [-90, 90]
+    refPointPositions.push([lng, Math.max(-90, Math.min(90, lat))]);
   }
   return refPointPositions;
 }
