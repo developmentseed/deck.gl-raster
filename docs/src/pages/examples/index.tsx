@@ -122,6 +122,29 @@ const zarrExamples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/aef-mosaic",
   },
+  {
+    title: "NLDAS Icechunk",
+    description: (
+      <>
+        Use the{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-zarr/classes/ZarrLayer/">
+          ZarrLayer
+        </Link>{" "}
+        to read from an <Link to="https://icechunk.io/">Icechunk</Link>{" "}
+        repository.
+        <br />
+        The store is{" "}
+        <Link to="https://icechunk.io/en/stable/guides/virtual/">
+          <em>virtualized</em>
+        </Link>
+        , so tile requests read directly from source NetCDF files.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/nldas-icechunk/",
+    image: "/deck.gl-raster/img/nldas-3-icechunk.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/nldas-icechunk",
+  },
 ];
 
 function ExampleCard({
