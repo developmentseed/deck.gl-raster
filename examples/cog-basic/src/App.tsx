@@ -121,7 +121,7 @@ export default function App() {
         { padding: 40, duration: 1000 },
       );
     },
-    // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+    // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
     // doesn't know about it.
     beforeId: "boundary_country_outline",
   });

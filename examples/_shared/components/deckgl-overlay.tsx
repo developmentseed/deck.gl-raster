@@ -1,5 +1,5 @@
-import type { MapboxOverlayProps } from "@deck.gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
+import type { MapLibreOverlayProps } from "@deck.gl/maplibre";
+import { MapLibreOverlay } from "@deck.gl/maplibre";
 import { useControl } from "react-map-gl/maplibre";
 
 /**
@@ -7,8 +7,8 @@ import { useControl } from "react-map-gl/maplibre";
  *
  * Drop inside a `<Map>` element: `<DeckGlOverlay layers={[layer]} interleaved />`.
  */
-export function DeckGlOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
+export function DeckGlOverlay(props: MapLibreOverlayProps) {
+  const overlay = useControl<MapLibreOverlay>(() => new MapLibreOverlay(props));
   overlay.setProps(props);
   return null;
 }
