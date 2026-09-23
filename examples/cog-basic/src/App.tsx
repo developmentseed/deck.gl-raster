@@ -1,4 +1,5 @@
 import { NativeSelect, Text } from "@chakra-ui/react";
+import { LoadingWidget } from "@deck.gl/widgets";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type { DebugState } from "deck.gl-raster-examples-shared";
 import {
@@ -7,7 +8,9 @@ import {
   DeckGlOverlay,
   ExternalLink,
   Field,
+  loadingWidgetProps,
 } from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
@@ -139,7 +142,11 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGlOverlay layers={[cogLayer]} interleaved />
+        <DeckGlOverlay
+          layers={[cogLayer]}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
+          interleaved
+        />
       </MaplibreMap>
 
       <ControlPanel title="COGLayer Example" sourcePath="examples/cog-basic">

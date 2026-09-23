@@ -15,6 +15,7 @@
     "@deck.gl/geo-layers": "^9.4.0",
     "@deck.gl/layers": "^9.4.0",
     "@deck.gl/mesh-layers": "^9.4.0",
+    "@deck.gl/widgets": "^9.4.0",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/deck.gl-zarr": "workspace:^",
     "@devseed-ui/collecticons-chakra": "^4.0.0",

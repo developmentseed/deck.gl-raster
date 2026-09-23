@@ -6,6 +6,20 @@
 * feat(geotiff): New internal method to fetch multiple tiles concurrently, with range coalescing by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/530
 * feat(geotiff): route fetchTiles through batched, range-coalescing getTiles by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/531
 
+## v0.8.1 - 2026-09-23
+
+### What's Changed
+
+* docs: Add icechunk zarr example to docs index page by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/655
+* chore: bump to deck.gl 9.4 by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/656
+* fix: Update mesh picking color uniform for deck.gl 9.4 by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/658
+* fix: update eox cloudless url in cog-basic app by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/659
+* fix: clamp tile traversal latitudes to [-90, 90] by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/660
+* chore(examples): land-cover control panel tweaks by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/662
+* docs: Add cog-globe example to examples list by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/663
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.8.0...v0.8.1
+
 ## v0.8.0 - 2026-09-22
 
 ### What's Changed
