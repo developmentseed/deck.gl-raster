@@ -39,7 +39,9 @@ export default function App() {
   const [bBandIdx, setBBandIdx] = useState(DEFAULT_B_BAND);
   const [rescaleMin, setRescaleMin] = useState(DEFAULT_RESCALE_MIN);
   const [rescaleMax, setRescaleMax] = useState(DEFAULT_RESCALE_MAX);
-  const [zoom, setZoom] = useState(DEFAULT_LOCATION.zoom);
+  const [belowMinZoom, setBelowMinZoom] = useState(
+    DEFAULT_LOCATION.zoom < MIN_ZOOM,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -128,11 +130,11 @@ export default function App() {
           zoom: DEFAULT_LOCATION.zoom,
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-        onZoom={(e) => setZoom(e.viewState.zoom)}
+        onZoom={(e) => setBelowMinZoom(e.viewState.zoom < MIN_ZOOM)}
       >
         <DeckGlOverlay layers={layers} interleaved />
       </MaplibreMap>
-      <ZoomNotice zoom={zoom} minZoom={MIN_ZOOM} />
+      {belowMinZoom && <ZoomNotice />}
       <ControlPanel
         locationId={locationId}
         yearIdx={yearIdx}
