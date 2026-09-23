@@ -1,5 +1,10 @@
+import { LoadingWidget } from "@deck.gl/widgets";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
-import { DeckGlOverlay } from "deck.gl-raster-examples-shared";
+import {
+  DeckGlOverlay,
+  loadingWidgetProps,
+} from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -127,7 +132,11 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGlOverlay layers={layers} interleaved />
+        <DeckGlOverlay
+          layers={layers}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
+          interleaved
+        />
       </MaplibreMap>
       <ControlPanel
         locationId={locationId}
