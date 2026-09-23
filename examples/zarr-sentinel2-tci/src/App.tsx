@@ -1,4 +1,5 @@
 import { Text } from "@chakra-ui/react";
+import { LoadingWidget } from "@deck.gl/widgets";
 import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
@@ -7,9 +8,9 @@ import {
   ControlPanel,
   DebugControls,
   DeckGlOverlay,
-  LoadingIndicator,
-  useTilesLoading,
+  loadingWidgetProps,
 } from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -97,7 +98,6 @@ export default function App() {
     debugOpacity: 0.25,
   });
   const [node, setNode] = useState<zarr.Group<zarr.Readable> | null>(null);
-  const { loading, onViewportLoad, onLoadingStart } = useTilesLoading();
 
   // Open the store ourselves so we own version/consolidation decisions,
   // then hand the Group to the layer.
@@ -127,7 +127,6 @@ export default function App() {
         renderTile,
         debug: debugState.debug,
         debugOpacity: debugState.debugOpacity,
-        onViewportLoad,
       })
     : null;
 
@@ -135,7 +134,6 @@ export default function App() {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
         ref={mapRef}
-        onMoveStart={onLoadingStart}
         initialViewState={{
           longitude: -74,
           latitude: 41,
@@ -143,10 +141,12 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGlOverlay layers={zarrLayer ? [zarrLayer] : []} interleaved />
+        <DeckGlOverlay
+          layers={zarrLayer ? [zarrLayer] : []}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
+          interleaved
+        />
       </MaplibreMap>
-
-      <LoadingIndicator loading={loading} />
 
       <ControlPanel
         title="ZarrLayer — Sentinel-2 TCI"
