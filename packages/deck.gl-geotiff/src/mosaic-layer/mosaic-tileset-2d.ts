@@ -82,9 +82,8 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
   /**
    * Must override because our tileIndex does not have x, y, z.
    *
-   * The bbox is returned as a {@link GeoBoundingBox} object because deck.gl
-   * only reads that shape: its tile request priority (center-first loading)
-   * and its cull-rect visibility check (used when picking) ignore arrays.
+   * The bbox is returned as a {@link GeoBoundingBox} object to satisfy deck.gl
+   * requirements for center-first tile loading.
    */
   override getTileMetadata(tileIndex: TileIndex): {
     id: string;
