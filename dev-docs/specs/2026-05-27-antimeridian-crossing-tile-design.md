@@ -33,13 +33,19 @@ projectPosition = (x, y) => rescaleEPSG3857ToCommonSpace(descriptor.projectTo385
 
 Rather than keep the crossing tile as one mesh and fight proj4 to make its coordinates continuous (the **render-as-one** family: #374 output-space shift, #269 reprojector unwrap, #353 global `+over`), **split the tile at the antimeridian into a west piece and an east piece.** Each piece lies wholly on one side of the dateline, so:
 
-- The west piece is monotonic in 3857 (all +x → common-x up to 512); the east piece all −x → common-x from 0. **The discontinuity never exists within a piece.**
-- `projectTo3857` stays stock — no unwrap, no proj4 reconfiguration, no `+over`.
+- The west piece is monotonic in 3857 (all +x → common-x up to 512); the east piece all −x → common-x from 0. **The discontinuity exists only *at* the shared seam edge, not within a piece's interior** (see "Seam handling" below).
+- Almost no projection change: the west piece uses stock `projectTo3857`; the east piece needs only a trivial one-line seam fix — no proj4 reconfiguration, no `+over`, no phase-unwrap.
 - The `RasterReprojector` needs zero antimeridian awareness — Delatin converges normally on each piece.
 - Mesh vertices stay within `[0, 512]`, so the fp64 high-zoom precision scheme ([`coordinate-systems.md`](../coordinate-systems.md)) is untouched.
 - Each piece is a normal tile that the merged world-copy traversal (#518) selects and draws across copies.
 
 The antimeridian becomes *a tile boundary*, which the pipeline already handles, instead of a coordinate-space discontinuity.
+
+### Seam handling
+
+Splitting at the antimeridian is *almost* enough — but not quite. proj4 normalizes ±180° to the **positive** boundary (+max_X / common-x 512). That's correct for the west piece (its right edge *is* +180°), but the east piece's left edge is also the antimeridian and must sit at common-x 0 (−max_X). With stock proj4 the east piece's seam corner lands at 512 while its interior is near 0, so its seed triangle still spans the world and the reprojector diverges — the original #366 failure.
+
+The fix is local to the **wrapped (negative-side) piece** only: in its `forwardReproject`, **if the projected X comes back positive, subtract one world-width** (the +max boundary → −max). Within that piece the *only* vertex proj4 places on the positive side is the ±180° seam, so this single sign test flips exactly the seam corner and leaves the interior untouched. It is **output-sign-based, not an input-value test** — the seam may be lng +180° or −180° depending on the source's longitude convention, and both pieces share the same seam *input*, so only *which piece* you're rendering decides the handling (known at cut time: the wrapped piece is the one whose interior projects to negative X). `inverseReproject` is unchanged: the piece is now a clean negative range the stock inverse maps back correctly. This is **not** the general phase-unwrap that sank #374 — the piece is known a priori to be wholly on the negative side, so the rule is trivial and deterministic.
 
 ### Why not render-as-one
 
