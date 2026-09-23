@@ -79,9 +79,31 @@ Differences:
 - We cache the offset-0 OBB per `(zRange)` and translate from the cache
   rather than recomputing per offset.
 
+## A second, independent layer: MosaicTileset2D source selection
+
+This file focusses primarily on how *pixel tiles* are selected within an already-open COG, inside
+`RasterTileLayer`. A separate concern sits one level up: `MosaicLayer`'s
+[`MosaicTileset2D`](../packages/deck.gl-geotiff/src/mosaic-layer/mosaic-tileset-2d.ts)
+decides which `sources` (each `{ id?, bbox }`, see
+`MosaicSource`) are visible at all via a Flatbush spatial query over source
+bboxes *before* any `RasterTileLayer` for that source exists. `viewport.getBounds()`
+returns unwrapped longitudes once the camera pans past ±180°, so a single,
+un-repeated query misses sources whose bbox sits on the far side of the seam.
+A source that's never selected here never gets a `RasterTileLayer`, so the
+fix above can't help it.
+
+The fix mirrors this doc's model: `subViewports.length > 1` gate and same
+`MAX_MAPS` walk-until-empty pattern but shifts the *query bounds* by
+`worldOffset * 360°` of longitude instead of translating a bounding volume by
+`worldOffset * 512` in common space, since Flatbush operates on WGS84
+degrees, not deck.gl common space. Matches are deduplicated across offsets
+(a `Set`) since the same source can satisfy more than one offset's query at
+once (e.g. a source near the prime meridian at extreme zoom-out).
+
 ## Out of scope
 
 - The large-zarr-root cull path in `createRootTiles` does not yet consider
   world-copy intersections. For typical OGC pyramids this doesn't matter
   (root tiles are enumerated unconditionally). If a zarr dataset hits the
   same symptom, generalize that path.
+- Antimeridian issues such as COGs whose bbox crosses ±180° in WGS84 longitude will be handled separately.

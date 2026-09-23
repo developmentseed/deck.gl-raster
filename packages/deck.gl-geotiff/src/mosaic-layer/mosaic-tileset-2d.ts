@@ -4,6 +4,14 @@ import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { _sortItemsByDistanceFromViewportCenter as sortItemsByDistanceFromViewportCenter } from "@developmentseed/deck.gl-raster";
 import type Flatbush from "flatbush";
 
+/**
+ * Maximum number of world copies to test on each side of the primary world
+ * so max 7 (primary + 3 either side if visible). Mirrors
+ * `raster-tile-traversal.ts`'s `MAX_MAPS`, which in turn matches upstream
+ * `@deck.gl/geo-layers/tile-2d-traversal.ts`.
+ */
+const MAX_MAPS = 3;
+
 /** Tile index.
  *
  * Note this is essentially just to type-check deck.gl, since getTileIndices
@@ -109,10 +117,25 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     }
 
     const viewportBounds = viewport.getBounds();
-    const indices = index.search(...viewportBounds);
+    const matched = new Set<number>(index.search(...viewportBounds));
+
+    // World-copy passes: see "MosaicTileset2D source selection" in
+    // dev-docs/world-copies.md.
+    if ((viewport.subViewports?.length ?? 0) > 1) {
+      for (let worldOffset = -1; worldOffset >= -MAX_MAPS; worldOffset--) {
+        if (!searchAtOffset(index, viewportBounds, worldOffset, matched)) {
+          break;
+        }
+      }
+      for (let worldOffset = 1; worldOffset <= MAX_MAPS; worldOffset++) {
+        if (!searchAtOffset(index, viewportBounds, worldOffset, matched)) {
+          break;
+        }
+      }
+    }
 
     const sources = this.getSources();
-    const selectedSources = indices.map((sourceIndex) => {
+    const selectedSources = [...matched].map((sourceIndex) => {
       const source = sources[sourceIndex]!;
       return {
         // Remove once https://github.com/visgl/deck.gl/pull/10299
@@ -139,4 +162,30 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       },
     );
   }
+}
+
+/**
+ * Query `index` with `bounds` shifted by `worldOffset * 360°` of longitude,
+ * adding any matched source indices into `matched`. Returns `true` if this
+ * offset matched anything, signaling the caller to keep walking further from
+ * the primary world; `false` stops that direction's walk (the offset has
+ * moved past the visible range).
+ */
+function searchAtOffset(
+  index: Flatbush,
+  bounds: [number, number, number, number],
+  worldOffset: number,
+  matched: Set<number>,
+): boolean {
+  const shift = worldOffset * 360;
+  const found = index.search(
+    bounds[0] - shift,
+    bounds[1],
+    bounds[2] - shift,
+    bounds[3],
+  );
+  for (const i of found) {
+    matched.add(i);
+  }
+  return found.length > 0;
 }

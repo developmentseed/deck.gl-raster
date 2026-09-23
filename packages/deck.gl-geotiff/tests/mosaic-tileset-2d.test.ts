@@ -8,12 +8,14 @@ import { MosaicTileset2D } from "../src/mosaic-layer/mosaic-tileset-2d.js";
 function makeViewport(
   bounds: [number, number, number, number],
   zoom = 5,
+  subViewports: unknown[] | null = null,
 ): Viewport {
   return {
     equals: () => false,
     resolution: undefined,
     zoom,
     getBounds: () => bounds,
+    subViewports,
   } as unknown as Viewport;
 }
 
@@ -149,5 +151,50 @@ describe("MosaicTileset2D tile ids", () => {
     });
     expect(result[0]).toMatchObject({ name: "explicit", id: "stable-id" });
     expect(tileset.getTileId(result[0]!)).toBe("stable-id");
+  });
+});
+
+describe("MosaicTileset2D world-copy passes", () => {
+  // A source just west of the dateline and one just east of it, as a real
+  // antimeridian-straddling STAC collection would produce.
+  const west: Item = { name: "west", bbox: [176, -5, 179, 5] };
+  const east: Item = { name: "east", bbox: [-179, -5, -176, 5] };
+
+  it("selects sources on both sides of the antimeridian when the viewport straddles it", () => {
+    const tileset = makeTileset([west, east]);
+    // Camera panned just past +180°; bounds extend past 180 while `east`'s
+    // bbox is still expressed in its true, unwrapped [-180, 180] range.
+    const viewport = makeViewport([175, -10, 183, 10], 5, [{}, {}]);
+    const result = tileset.getTileIndices({ viewport });
+    expect(result.map((s) => s.name).sort()).toEqual(["east", "west"]);
+  });
+
+  it("finds a source via a shifted world copy after panning fully past +180°", () => {
+    const tileset = makeTileset([east]);
+    // Camera centered around longitude ~187°; raw bounds no longer overlap
+    // `east`'s true bbox at all without the -360°-shifted offset pass.
+    const viewport = makeViewport([183, -10, 191, 10], 5, [{}, {}]);
+    const result = tileset.getTileIndices({ viewport });
+    expect(result.map((s) => s.name)).toEqual(["east"]);
+  });
+
+  it.each([
+    ["only one world copy is visible", [{}]],
+    ["subViewports is absent (e.g. Globe view)", null],
+  ])("does not run world-copy passes when %s", (_label, subViewports) => {
+    const tileset = makeTileset([east]);
+    const viewport = makeViewport([183, -10, 191, 10], 5, subViewports);
+    expect(tileset.getTileIndices({ viewport })).toEqual([]);
+  });
+
+  it("selects a source matched by multiple offsets only once", () => {
+    const center: Item = { name: "center", bbox: [-1, -5, 1, 5] };
+    const tileset = makeTileset([center]);
+    // Extremely wide bounds so both the offset 0 and offset -1 passes
+    // independently overlap the same source.
+    const viewport = makeViewport([-370, -10, 10, 10], 5, [{}, {}, {}]);
+    const result = tileset.getTileIndices({ viewport });
+    expect(result).toHaveLength(1);
+    expect(result[0]!.name).toBe("center");
   });
 });
