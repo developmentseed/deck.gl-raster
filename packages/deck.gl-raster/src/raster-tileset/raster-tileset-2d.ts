@@ -180,8 +180,18 @@ export class RasterTileset2D extends Tileset2D {
     // the tile to keep `RasterLayer`'s reprojection-equality check stable
     // across renders (deck.gl recreates the layer instance every render, so
     // per-render-derived closures would regenerate the mesh every frame).
-    this.projectPosition = (x, y) =>
-      rescaleEPSG3857ToCommonSpace(descriptor.projectTo3857(x, y));
+    this.projectPosition = (x, y) => {
+      const result = rescaleEPSG3857ToCommonSpace(
+        descriptor.projectTo3857(x, y),
+      );
+      if (Number.isFinite(result[0]) && Number.isFinite(result[1])) {
+        return result;
+      }
+      // Point is outside the CRS domain (e.g. beyond the Mollweide ellipse).
+      // Return NaN so the GPU rasterizer discards any triangle that touches
+      // this vertex, producing a clean domain-boundary cutoff with no artifacts.
+      return [NaN, NaN];
+    };
     this.unprojectPosition = (cx, cy) => {
       const [mx, my] = rescaleCommonSpaceToEPSG3857([cx, cy]);
       return descriptor.projectFrom3857(mx, my);
