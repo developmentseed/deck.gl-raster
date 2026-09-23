@@ -1,4 +1,5 @@
 import { Code, NativeSelect, Text } from "@chakra-ui/react";
+import { LoadingWidget } from "@deck.gl/widgets";
 import { MultiCOGLayer } from "@developmentseed/deck.gl-geotiff";
 import {
   FilterNoDataVal,
@@ -11,7 +12,9 @@ import {
   DeckGlOverlay,
   ExternalLink,
   Field,
+  loadingWidgetProps,
 } from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -190,7 +193,11 @@ export default function App() {
         initialViewState={{ longitude: 0, latitude: 0, zoom: 1 }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGlOverlay layers={[layer]} interleaved />
+        <DeckGlOverlay
+          layers={[layer]}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
+          interleaved
+        />
       </MaplibreMap>
 
       <ControlPanel

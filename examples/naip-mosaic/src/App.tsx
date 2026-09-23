@@ -1,3 +1,4 @@
+import { LoadingWidget } from "@deck.gl/widgets";
 import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
 import type {
   RasterModule,
@@ -15,7 +16,11 @@ import type { GeoTIFFFromUrlOptions, Overview } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
-import { DeckGlOverlay } from "deck.gl-raster-examples-shared";
+import {
+  DeckGlOverlay,
+  loadingWidgetProps,
+} from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -468,6 +473,9 @@ export default function App() {
       >
         <DeckGlOverlay
           layers={layers}
+          // With no layers, deck never redraws, so the widget would keep its
+          // initial loading state forever. Drop it once the STAC query fails.
+          widgets={error ? [] : [new LoadingWidget(loadingWidgetProps)]}
           interleaved
           onDeviceInitialized={setDevice}
         />

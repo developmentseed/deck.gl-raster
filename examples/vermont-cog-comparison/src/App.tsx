@@ -1,6 +1,7 @@
 import { NativeSelect, Stack, Text } from "@chakra-ui/react";
 import { WebMercatorViewport } from "@deck.gl/core";
 import { ClipExtension } from "@deck.gl/extensions";
+import { LoadingWidget } from "@deck.gl/widgets";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type { RenderTileResult } from "@developmentseed/deck.gl-raster";
 import {
@@ -16,7 +17,9 @@ import {
   DeckGlOverlay,
   ExternalLink,
   Field,
+  loadingWidgetProps,
 } from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef, ViewState } from "react-map-gl/maplibre";
@@ -459,6 +462,7 @@ export default function App() {
       >
         <DeckGlOverlay
           layers={layers as []}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
           interleaved
           onDeviceInitialized={setDevice}
         />

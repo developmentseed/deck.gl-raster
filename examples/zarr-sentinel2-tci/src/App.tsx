@@ -1,4 +1,5 @@
 import { Text } from "@chakra-ui/react";
+import { LoadingWidget } from "@deck.gl/widgets";
 import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
@@ -7,7 +8,9 @@ import {
   ControlPanel,
   DebugControls,
   DeckGlOverlay,
+  loadingWidgetProps,
 } from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -138,7 +141,11 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGlOverlay layers={zarrLayer ? [zarrLayer] : []} interleaved />
+        <DeckGlOverlay
+          layers={zarrLayer ? [zarrLayer] : []}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
+          interleaved
+        />
       </MaplibreMap>
 
       <ControlPanel

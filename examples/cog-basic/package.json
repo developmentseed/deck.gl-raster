@@ -15,6 +15,7 @@
     "@deck.gl/geo-layers": "^9.4.0",
     "@deck.gl/layers": "^9.4.0",
     "@deck.gl/mesh-layers": "^9.4.0",
+    "@deck.gl/widgets": "^9.4.0",
     "@developmentseed/deck.gl-geotiff": "workspace:^",
     "@luma.gl/core": "^9.4.2",
     "deck.gl-raster-examples-shared": "workspace:*",

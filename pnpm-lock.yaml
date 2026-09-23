@@ -116,6 +116,9 @@ importers:
       '@deck.gl/mapbox':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)(@math.gl/web-mercator@4.1.0)
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@devseed-ui/collecticons-chakra':
         specifier: ^4.0.0
         version: 4.0.0(@chakra-ui/react@3.36.0(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -153,6 +156,9 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../../packages/deck.gl-raster
@@ -217,6 +223,9 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
@@ -272,6 +281,9 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
@@ -327,6 +339,9 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../../packages/deck.gl-raster
@@ -394,6 +409,9 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
@@ -458,6 +476,9 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
@@ -522,6 +543,9 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../../packages/deck.gl-raster
@@ -589,6 +613,9 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
@@ -644,6 +671,9 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
@@ -705,6 +735,9 @@ importers:
       '@deck.gl/layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
@@ -772,6 +805,9 @@ importers:
       '@deck.gl/mesh-layers':
         specifier: ^9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
       '@developmentseed/deck.gl-raster':
         specifier: workspace:^
         version: link:../../packages/deck.gl-raster
@@ -2360,6 +2396,12 @@ packages:
       '@luma.gl/engine': ^9.4.2
       '@luma.gl/gltf': ^9.4.2
       '@luma.gl/shadertools': ^9.4.2
+
+  '@deck.gl/widgets@9.4.0':
+    resolution: {integrity: sha512-Ou8d9XiymjWT9zkPKtI+YezAfh48N3uxayhjSlNnp24rCrf40QtEnlZyC5daE0bk5Ehrj6SrmE8fOtpbhIPnYQ==}
+    peerDependencies:
+      '@deck.gl/core': ^9.4.0
+      '@luma.gl/core': ^9.4.2
 
   '@developmentseed/lzw-tiff-decoder@0.2.2':
     resolution: {integrity: sha512-bsBIdV1LyqcrtnYtIYu3C/297X2wxeYkmmhHzR02OOX823sGxT8GLGdenTmwoXvNWkozk3b+ptXtJeSUmNPaTA==}
@@ -8053,6 +8095,14 @@ packages:
   potpack@2.1.0:
     resolution: {integrity: sha512-pcaShQc1Shq0y+E7GqJqvZj8DTthWV1KeHGdi0Z6IAin2Oi3JnLCOfwnCo84qc+HAp52wT9nK9H7FAJp5a44GQ==}
 
+  preact@10.29.8:
+    resolution: {integrity: sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==}
+    peerDependencies:
+      preact-render-to-string: '>=5'
+    peerDependenciesMeta:
+      preact-render-to-string:
+        optional: true
+
   prettier@3.9.6:
     resolution: {integrity: sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g==}
     engines: {node: '>=14'}
@@ -11046,6 +11096,15 @@ snapshots:
     transitivePeerDependencies:
       - '@75lb/nature'
       - '@loaders.gl/core'
+
+  '@deck.gl/widgets@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)':
+    dependencies:
+      '@deck.gl/core': 9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
+      '@floating-ui/dom': 1.7.6
+      '@luma.gl/core': 9.4.2
+      preact: 10.29.8
+    transitivePeerDependencies:
+      - preact-render-to-string
 
   '@developmentseed/lzw-tiff-decoder@0.2.2': {}
 
@@ -18779,6 +18838,8 @@ snapshots:
       source-map-js: 1.2.1
 
   potpack@2.1.0: {}
+
+  preact@10.29.8: {}
 
   prettier@3.9.6: {}
 
