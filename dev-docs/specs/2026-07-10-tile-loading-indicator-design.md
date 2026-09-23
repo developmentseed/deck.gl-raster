@@ -1,165 +1,215 @@
 # Tile Loading Indicator for Examples
 
-- **Date:** 2026-07-10
+- **Date:** 2026-07-10 (revised 2026-09-23)
 - **Issues:** [#599](https://github.com/developmentseed/deck.gl-raster/issues/599)
-- **Status:** Approved
+- **Status:** Draft — revised design, pending review
 
 ## Problem
 
 The example apps give no visual feedback while tiles are fetching. A user
 panning or zooming, or switching data sources, sees stale or blank tiles with no
-indication that work is in progress. Issue #599 asks for a spinner UI element
-that shows when tiles are loading.
+indication that work is in progress. Issue #599 asks for a spinner that shows
+when tiles are loading. A later PR comment points at `aef-mosaic`, whose first
+view takes a long time to render with no feedback.
+
+## Why the first design was replaced
+
+The first version of this PR added a `useTilesLoading` hook. The map's
+`onMoveStart` turned loading on and the layer's `onViewportLoad` turned it off.
+That fails in three ways:
+
+1. **The spinner can get stuck on.** `TileLayer` only fires `onViewportLoad`
+   when the tileset's frame number changes, and `Tileset2D.update()` only bumps
+   the frame number when some tile's visibility changes. A small pan or zoom
+   that keeps the same tiles on screen turns loading on via `onMoveStart`, and
+   `onViewportLoad` never fires to turn it off.
+2. **`naip-mosaic` clears too early.** `MosaicLayer`'s `onViewportLoad` comes
+   from its inner `TileLayer`, whose "tiles" are the GeoTIFF sources. It fires
+   once the headers are open, not once each source's `COGLayer` has loaded its
+   image tiles.
+3. **Loads that don't come from moving the map are missed.** In `aef-mosaic`,
+   changing the year changes the layer `id`, which reloads every tile without
+   firing `movestart`.
+
+All three come from rebuilding a loading state out of two separate events,
+one of which (the start) deck.gl doesn't provide.
+
+## Background: deck.gl's loading signal
+
+- **`layer.isLoaded` covers every level of nesting.** `CompositeLayer.isLoaded`
+  is true only when all of its sublayers are loaded. `TileLayer.isLoaded` is
+  true only when every selected tile has loaded *and* every sublayer drawn for
+  those tiles is loaded. So `MosaicLayer.isLoaded` already covers both levels:
+  the GeoTIFF sources in view, and each source's image tiles.
+- **deck.gl 9.4 ships a `LoadingWidget`** in `@deck.gl/widgets`. On every
+  redraw its `onRedraw({ layers })` receives every layer deck has applied,
+  sublayers included, and sets `loading = layers.some((l) => !l.isLoaded)`. It
+  draws a spinner button while loading, and it starts out in the loading state.
+- **Why a widget and not React state.** Every React render creates new layer
+  instances. deck applies them on its next animation frame
+  (`LayerManager._nextLayers`), and until then a new instance's `isLoaded` is
+  `false`. Code that reads `isLoaded` from the layers React holds, for example
+  in `onAfterRender`, can see those unapplied instances and flip back and forth.
+  A widget only ever receives layers deck has already applied.
+- **Works with our map setup.** In interleaved mode, `MapboxOverlay` passes its
+  props through to `Deck`, so `widgets` works like any other `Deck` prop.
 
 ## Goals
 
-- A reusable loading indicator, centralized in `examples/_shared`, so the visual
-  is defined once.
-- Wiring that stays **visible in each example** — a reader learning from the
-  examples should be able to see exactly how loading state is derived from
-  deck.gl callbacks, not have it hidden by magic in a shared wrapper.
-- Demonstrate the pattern across the main layer types without editing all ~13
-  example apps.
+- Use deck.gl's built-in `LoadingWidget` instead of our own loading logic.
+- Theme it to match the examples' Chakra `ControlPanel`.
+- The spinner never stays on after loading finishes.
+- It covers the nested mosaic and loads not caused by moving the map (source
+  or year switches).
+- Adopting it in an example takes three imports (the widget, its stylesheet
+  and the shared props) and one `widgets` prop.
 
 ## Non-Goals
 
-- No changes to library packages (`deck.gl-raster`, `deck.gl-geotiff`,
-  `deck.gl-zarr`). Every layer already forwards the deck.gl `TileLayer`
-  callbacks this design relies on.
-- Not wiring every example — three representative apps only (see Scope).
-- No per-tile progress bar or percentage; a binary loading/idle indicator only.
+- **No library changes in this PR.** The `RasterTileLayer.isLoaded` fix (see
+  Dependency) lands as its own PR.
+- **No upstream deck.gl changes.**
+- **No text label or top-centre placement.** `LoadingWidget` is an icon-only
+  button, and widgets can only go in the corners.
+- **Not wiring every example.** Four apps only (see Scope).
 
-## Background: the available signal
+## Dependency: `RasterTileLayer.isLoaded` fix ([#667](https://github.com/developmentseed/deck.gl-raster/pull/667), merged)
 
-Every example layer (`COGLayer`, `MosaicLayer`, `ZarrLayer`) extends
-`RasterTileLayer`, which forwards the standard deck.gl `TileLayer` callbacks,
-including `onViewportLoad` — fired when every tile selected for the current
-viewport has resolved ("done").
+`COGLayer`, `ZarrLayer` and `MultiCOGLayer` fetch metadata asynchronously in
+`updateState` and render no sublayers until it arrives. A composite layer with
+no sublayers counts as loaded, so they report `isLoaded === true` while the
+COG header or Zarr metadata is still being fetched, and the spinner hides
+during that fetch.
 
-deck.gl provides **no matching "load started" event**. `Deck`'s `onAfterRender`
-hook exposes only `{ device, gl }`, not the layers, so polling `layer.isLoaded`
-per frame is not available through the public `MapboxOverlay` API.
-
-The "started" edge must therefore be derived from what the example already knows:
-
-- The **map moving** (`onMoveStart` on the MapLibre map) — panning/zooming
-  selects new tiles.
-- A **new load being kicked off** by the app — e.g. the user switching data
-  source.
-
-Resetting to "done" is authoritative via the layer's `onViewportLoad`.
+#667 makes these layers report "not loaded" while their metadata is loading,
+and "loaded" if it failed, so an error can't leave the spinner showing. It adds
+a protected `_isLoadingMetadata()` hook to `RasterTileLayer`, which `COGLayer`,
+`MultiCOGLayer` and `ZarrLayer` override. This branch picks it up by merging
+`main`.
 
 ## Design
 
-### Component 1 — `LoadingIndicator` (presentational)
+### Shared widget props — `examples/_shared/styles/loading-widget.ts`
 
-`examples/_shared/components/loading-indicator.tsx`
-
-```tsx
-<LoadingIndicator loading={boolean} label?="Loading tiles…" />
-```
-
-- Renders nothing when `loading` is false.
-- When true: a rounded pill at top-center containing a Chakra `Spinner` and the
-  `label` text (default `"Loading tiles…"`).
-- Contains **no logic** — purely `loading` in, pill out.
-- **Self-positioning**, mirroring how
-  [`ControlPanel`](../../examples/_shared/components/control-panel.tsx#L78-L90)
-  places itself: `position="absolute"`, `zIndex={1000}`,
-  `pointerEvents="none"`, centered at top via `left="50%"` + `transform`. No
-  `UIOverlay` wrapper needed — examples drop it in as a sibling of
-  `ControlPanel`.
-- Exported from `examples/_shared/index.ts` alongside the other shared
-  components.
-
-### Component 2 — `useTilesLoading` (state hook)
-
-`examples/_shared/hooks/use-tiles-loading.ts`
+One exported constant holds the placement, label and theme, so every example
+gets the same widget:
 
 ```ts
-const { loading, onViewportLoad, onLoadingStart } = useTilesLoading();
+import type { DeckWidgetTheme, LoadingWidgetProps } from "@deck.gl/widgets";
+
+/** Theme values matching the shared Chakra `ControlPanel`. */
+const theme: DeckWidgetTheme = {
+  "--widget-margin": "20px", // ControlPanel's corner offset
+  "--button-size": "36px",
+  "--button-background": "#fff",
+  "--button-corner-radius": "8px", // Chakra `lg`
+  "--button-shadow": "0 2px 8px rgba(0, 0, 0, 0.1)", // ControlPanel's shadow
+  "--button-icon-idle": "#52525b", // Chakra `gray.600`
+};
+
+/** Props for deck.gl's `LoadingWidget`, themed to match the examples. */
+export const loadingWidgetProps: LoadingWidgetProps = {
+  placement: "top-right", // ControlPanel takes top-left
+  label: "Loading tiles…",
+  style: theme as Partial<CSSStyleDeclaration>,
+};
 ```
 
-Returns:
-
-- `loading: boolean` — pass to `<LoadingIndicator>`.
-- `onViewportLoad: () => void` — attach to the tile layer's `onViewportLoad`
-  prop. Sets `loading` false. This is the "done" edge.
-- `onLoadingStart: () => void` — call when a new load begins (map `onMoveStart`,
-  or a source-switch handler). Sets `loading` true. This is the "started" edge.
-
-Internals (~15 lines): `useState(true)` — initialized true so the very first
-tile fetch shows the indicator before any move happens. `onLoadingStart` → set
-true; `onViewportLoad` → set false. Both callbacks are stabilized with
-`useCallback` so they are safe to pass as layer/map props.
-
-The hook's docstring documents the non-obvious point: deck.gl has no native
-"load started" event, so callers supply that edge via `onLoadingStart`
-(typically the map's `onMoveStart`).
+- **Theme through `style`.** deck's `applyStyles` passes `--*` keys to
+  `style.setProperty`, and the widget stylesheet reads its colours and sizes
+  from those variables. `WidgetProps.style` is typed as
+  `Partial<CSSStyleDeclaration>`, so the theme needs one cast.
+- **`top-right`** isn't used by any example. `ControlPanel` defaults to
+  `top-left`, and no example adds MapLibre controls.
+- Exported from `examples/_shared/index.ts`.
 
 ### How an example wires it
 
 ```tsx
-const { loading, onViewportLoad, onLoadingStart } = useTilesLoading();
+import { LoadingWidget } from "@deck.gl/widgets";
+import "@deck.gl/widgets/stylesheet.css";
+import { DeckGlOverlay, loadingWidgetProps } from "deck.gl-raster-examples-shared";
 
-const cogLayer = new COGLayer({ /* … */, onViewportLoad });
-
-return (
-  <div style={{ position: "relative", width: "100%", height: "100%" }}>
-    <MaplibreMap onMoveStart={onLoadingStart} …>
-      <DeckGlOverlay layers={[cogLayer]} interleaved />
-    </MaplibreMap>
-
-    <LoadingIndicator loading={loading} />
-    {/* existing ControlPanel … */}
-  </div>
-);
+<DeckGlOverlay
+  layers={layers}
+  widgets={[new LoadingWidget(loadingWidgetProps)]}
+  interleaved
+/>
 ```
 
-The two deck.gl/map touch-points — `onViewportLoad` on the layer, `onMoveStart`
-on the map — are visible in the example itself. The shared hook only removes the
-copy-pasted `useState` boilerplate; the mechanism a reader needs to understand
-stays in the example file.
+- **The stylesheet is imported in each example**, the same way each example
+  already imports `maplibre-gl/dist/maplibre-gl.css`.
+- **Creating the widget on every render is safe.** `WidgetManager` matches
+  widgets by `id`, keeps the existing instance (and its loading state), and
+  updates its props.
+- `DeckGlOverlay` needs no changes, because it already passes all
+  `MapboxOverlayProps` through.
+
+### Behaviour
+
+- **First load:** the widget starts in the loading state, so the spinner shows
+  immediately.
+- **No layers yet:** in interleaved mode deck doesn't redraw when there are no
+  layers, so the widget keeps its initial loading state. That's correct while
+  the app fetches its own metadata before creating a layer (`aef-mosaic`,
+  `zarr-sentinel2-tci`, and `naip-mosaic`'s STAC query).
+- **Pan or zoom:** the layer update selects new tiles and deck redraws, so the
+  spinner shows until they load. If no new tiles are needed, the redraw sees
+  everything loaded and the spinner stays hidden.
+- **Source or year switch:** handled the same way; nothing specific to
+  switching is needed.
+- **Mosaic:** covered by the nested `isLoaded` checks described above.
+
+### What gets removed
+
+- `examples/_shared/components/loading-indicator.tsx` and its exports.
+- `examples/_shared/hooks/use-tiles-loading.ts` and its exports (the `hooks/`
+  directory goes away).
+- The `onMoveStart` and `onViewportLoad` wiring and the `<LoadingIndicator>`
+  elements in the three examples that have them.
 
 ## Scope: examples to wire
 
-Three representative apps, one per primary layer type:
+1. **`cog-basic`** — `COGLayer`, with a dropdown to switch COGs.
+2. **`naip-mosaic`** — `MosaicLayer` wrapping one `COGLayer` per source. This
+   app has an `error` state for its STAC query. When it's set there are no
+   layers, so the widget would keep spinning; pass `widgets={[]}` in that case.
+3. **`zarr-sentinel2-tci`** — `ZarrLayer`.
+4. **`aef-mosaic`** — `ZarrLayer`; the example the PR comment asked about.
+   Covers the year switch (new layer `id`).
 
-1. **`cog-basic`** — `COGLayer` (single COG). Source-switch via the existing
-   dropdown already triggers `fitBounds` → a map move, so `onMoveStart` covers
-   it; no extra source-change wiring needed.
-2. **`naip-mosaic`** — `MosaicLayer`. Note this app already has a separate
-   `loading` state for the STAC index fetch, shown in its `ControlPanel`. The
-   new tile-loading indicator is distinct (named `tilesLoading` locally) and
-   nicely illustrates metadata-loading vs. tile-loading as two concerns.
-3. **`zarr-sentinel2-tci`** — `ZarrLayer`. The layer is created conditionally
-   (`zarrLayer ? [zarrLayer] : []`); `onViewportLoad` attaches to the layer when
-   present.
+Other examples can adopt it with the same imports and prop.
 
-Other examples can adopt the pattern later by copying these ~3 visible lines.
+## Dependencies
 
-## Error handling
-
-- `onViewportLoad` fires once the viewport's tiles have settled; a transient
-  tile fetch error does not leave the spinner hung indefinitely because
-  subsequent moves re-trigger `onLoadingStart`/`onViewportLoad`. Per-tile error
-  handling (`onTileError`) is out of scope for this indicator.
+Add `"@deck.gl/widgets": "^9.4.0"` to `examples/_shared` (for the types) and to
+the four examples (for `LoadingWidget` and the stylesheet). It pulls in
+`preact` and `@floating-ui/dom`.
 
 ## Testing / verification
 
-Examples in this repo are not unit-tested; verification is manual per the repo's
-example workflow:
-
-- `pnpm typecheck` passes for the shared package and the three wired examples.
-- `pnpm biome check` clean.
-- Manual: run each wired example, confirm the pill appears on initial load and
-  on pan/zoom into new tiles, and disappears when tiles finish.
+- **No new unit tests.** The loading logic is deck.gl's, and the example apps
+  aren't unit-tested.
+- `pnpm typecheck` and `pnpm biome check` pass.
+- **Manual check** (dev server, you look at it). In each of the four examples:
+  - The spinner shows on first load and clears once imagery appears.
+  - After a small pan that needs no new tiles, the spinner doesn't show, or
+    clears.
+  - After a pan or zoom into new tiles, it shows and then clears.
+- **Also check:**
+  - `cog-basic`: switching COG shows the spinner until the new COG renders.
+  - `naip-mosaic`: the spinner stays until the NAIP imagery is visible, not
+    just until the headers load.
+  - `aef-mosaic`: changing the year shows the spinner.
 
 ## Files
 
-- **New:** `examples/_shared/components/loading-indicator.tsx`
-- **New:** `examples/_shared/hooks/use-tiles-loading.ts`
-- **Edit:** `examples/_shared/index.ts` (export both)
-- **Edit:** `examples/cog-basic/src/App.tsx`
-- **Edit:** `examples/naip-mosaic/src/App.tsx`
-- **Edit:** `examples/zarr-sentinel2-tci/src/App.tsx`
+- **New:** `examples/_shared/styles/loading-widget.ts`
+- **Delete:** `examples/_shared/components/loading-indicator.tsx`
+- **Delete:** `examples/_shared/hooks/use-tiles-loading.ts`
+- **Edit:** `examples/_shared/index.ts` (drop the old exports, add
+  `loadingWidgetProps`)
+- **Edit:** `examples/_shared/package.json`
+- **Edit:** `examples/{cog-basic,naip-mosaic,zarr-sentinel2-tci,aef-mosaic}/package.json`
+- **Edit:** `examples/{cog-basic,naip-mosaic,zarr-sentinel2-tci,aef-mosaic}/src/App.tsx`
+- **Edit:** `pnpm-lock.yaml`
