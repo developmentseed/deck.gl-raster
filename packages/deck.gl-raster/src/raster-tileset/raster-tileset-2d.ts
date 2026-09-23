@@ -257,8 +257,6 @@ export class RasterTileset2D extends Tileset2D {
         ? Math.min(opts.maxZoom, maxAvailableZ)
         : maxAvailableZ;
 
-    // No need to sort by distance from the viewport center: since 9.4,
-    // deck.gl's request scheduler loads tiles nearest the center first.
     return getTileIndices(this.descriptor, {
       viewport,
       maxZ,
