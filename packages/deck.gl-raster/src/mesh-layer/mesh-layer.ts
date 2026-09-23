@@ -20,6 +20,9 @@ import vs from "./mesh-layer-vertex.glsl.js";
  * `positions64Low` low part is the residual of `positions`, not of a
  * transformed `pos`). They are fixed internally (see `defaultProps`) and
  * omitted from the public prop type so they can't be set.
+ *
+ * `material` is also excluded: the fragment shader doesn't apply lighting, so
+ * a material would have no effect.
  */
 type ExcludedSimpleMeshProps =
   | "_instanced"
@@ -28,7 +31,8 @@ type ExcludedSimpleMeshProps =
   | "getScale"
   | "getTranslation"
   | "getTransformMatrix"
-  | "sizeScale";
+  | "sizeScale"
+  | "material";
 
 type _MeshTextureLayerProps =
   | { image: TextureSource; renderPipeline?: RasterModule[] }
@@ -54,13 +58,6 @@ const defaultProps: DefaultProps<
   // Render exactly one non-instanced mesh anchored at the coordinate origin.
   _instanced: false,
   getPosition: { type: "accessor", value: [0, 0, 0] },
-  // Disable lighting by default (avoids darkening raster)
-  material: {
-    ambient: 1.0,
-    diffuse: 0.0,
-    shininess: 0,
-    specularColor: [0, 0, 0],
-  },
 };
 
 /**
@@ -80,6 +77,8 @@ const defaultProps: DefaultProps<
  *   {@link ExcludedSimpleMeshProps}. This is what keeps the fp64 correction
  *   valid (the low part is the residual of `positions`, not of a transformed
  *   vertex).
+ * - Unlit: raster pixels are rendered verbatim, unaffected by any scene
+ *   `LightingEffect` (like `BitmapLayer`), so `material` is unsupported.
  * - WebGL only: the shaders and `RasterModule`s are GLSL, so upstream's WGSL
  *   shader is dropped.
  */
