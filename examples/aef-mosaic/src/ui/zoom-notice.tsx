@@ -14,7 +14,7 @@ export function ZoomNotice({ zoom, minZoom }: ZoomNoticeProps) {
     <Box
       position="absolute"
       top="20px"
-      right="20px"
+      right="76px" // To not overlap with the loader widget
       bg="white"
       textAlign="center"
       px="4"
