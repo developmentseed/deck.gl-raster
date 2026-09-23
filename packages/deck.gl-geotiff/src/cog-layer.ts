@@ -179,6 +179,8 @@ export class COGLayer<
      *  layer is removed
      */
     abortController?: AbortController;
+    /** True while `_parseGeoTIFF` is in flight. */
+    loadingMetadata?: boolean;
   };
 
   override initializeState(): void {
@@ -202,9 +204,10 @@ export class COGLayer<
       // Clear stale state so renderLayers returns null until the new GeoTIFF is
       // ready
       this.clearState();
-      this._parseGeoTIFF().catch((error: Error) =>
-        this.raiseError(error, "loading GeoTIFF"),
-      );
+      this.setState({ loadingMetadata: true });
+      this._parseGeoTIFF()
+        .catch((error: Error) => this.raiseError(error, "loading GeoTIFF"))
+        .finally(() => this.setState({ loadingMetadata: false }));
     }
   }
 
@@ -306,6 +309,10 @@ export class COGLayer<
 
   protected override _tilesetDescriptor() {
     return this.state.tilesetDescriptor;
+  }
+
+  protected override _isLoadingMetadata(): boolean {
+    return this.state.loadingMetadata === true;
   }
 
   /**

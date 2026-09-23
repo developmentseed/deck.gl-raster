@@ -1,6 +1,36 @@
+import { CompositeLayer } from "@deck.gl/core";
 import { Texture } from "@luma.gl/core";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { COGLayer } from "../src/cog-layer.js";
+
+/**
+ * Build a {@link COGLayer} ready for direct lifecycle calls: bypasses deck.gl's
+ * `LayerManager` by replacing `state` and `setState` with a plain object +
+ * assign, mirroring `makeBareLayer` in the deck.gl-raster tests.
+ */
+function makeBareLayer(props: Record<string, unknown> = {}): COGLayer {
+  const layer = new COGLayer({
+    id: "cog",
+    geotiff: "https://example.com/x.tif",
+    ...props,
+  } as never);
+  const state: Record<string, unknown> = {};
+  Object.assign(layer as object, {
+    state,
+    setState: (updates: Record<string, unknown>) =>
+      Object.assign(state, updates),
+  });
+  return layer;
+}
+
+/** Run `updateState` as deck.gl does when the layer is first added. */
+function runInitialUpdate(layer: COGLayer): void {
+  layer.updateState({
+    props: layer.props,
+    oldProps: layer.props,
+    changeFlags: { dataChanged: true },
+  } as never);
+}
 
 function fakeTexture(): {
   texture: Texture;
@@ -81,21 +111,50 @@ describe("COGLayer._onTileUnloadCallback", () => {
 describe("COGLayer.updateState", () => {
   it("raises a GeoTIFF open failure through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
-    const layer = new COGLayer({
-      id: "cog",
-      geotiff: "https://example.com/x.tif",
-      onError,
-    } as never);
-    vi.spyOn(layer, "clearState").mockImplementation(() => {});
+    const layer = makeBareLayer({ onError });
     vi.spyOn(layer, "_parseGeoTIFF").mockRejectedValue(new Error("boom"));
 
-    layer.updateState({
-      props: layer.props,
-      oldProps: layer.props,
-      changeFlags: { dataChanged: true },
-    } as never);
+    runInitialUpdate(layer);
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
     expect(onError.mock.calls[0]?.[0]?.message).toBe("loading GeoTIFF: boom");
+  });
+});
+
+describe("COGLayer.isLoaded", () => {
+  beforeEach(() => {
+    // Report every sublayer as loaded, so only metadata loading decides.
+    vi.spyOn(CompositeLayer.prototype, "isLoaded", "get").mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("is not loaded while the GeoTIFF is opening", () => {
+    const layer = makeBareLayer();
+    vi.spyOn(layer, "_parseGeoTIFF").mockReturnValue(new Promise(() => {}));
+
+    runInitialUpdate(layer);
+
+    expect(layer.isLoaded).toBe(false);
+  });
+
+  it("is loaded once the GeoTIFF has opened", async () => {
+    const layer = makeBareLayer();
+    vi.spyOn(layer, "_parseGeoTIFF").mockResolvedValue(undefined);
+
+    runInitialUpdate(layer);
+
+    await vi.waitFor(() => expect(layer.isLoaded).toBe(true));
+  });
+
+  it("is loaded after the GeoTIFF fails to open", async () => {
+    const layer = makeBareLayer({ onError: () => true });
+    vi.spyOn(layer, "_parseGeoTIFF").mockRejectedValue(new Error("boom"));
+
+    runInitialUpdate(layer);
+
+    await vi.waitFor(() => expect(layer.isLoaded).toBe(true));
   });
 });

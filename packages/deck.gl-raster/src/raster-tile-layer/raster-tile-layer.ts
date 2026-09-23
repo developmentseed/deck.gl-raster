@@ -205,6 +205,28 @@ export class RasterTileLayer<
   }
 
   /**
+   * Whether the layer is still fetching the metadata.
+   *
+   * Subclasses that load metadata asynchronously (e.g. opening a GeoTIFF or a
+   * Zarr store) should override this to return `true` until that load settles.
+   *
+   * The base layer takes its descriptor from props, so it never waits on
+   * metadata.
+   */
+  protected _isLoadingMetadata(): boolean {
+    return false;
+  }
+
+  /**
+   * Whether the layer has finished loading its data.
+   *
+   * We override this to return `false` while metadata is still loading.
+   */
+  override get isLoaded(): boolean {
+    return !this._isLoadingMetadata() && super.isLoaded;
+  }
+
+  /**
    * The currently effective tile-fetch callback.
    *
    * Subclasses override this to adapt their user-facing `getTileData`
