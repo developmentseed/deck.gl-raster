@@ -84,44 +84,18 @@ describe("MosaicTileset2D viewport filtering", () => {
   });
 });
 
-describe("MosaicTileset2D center-out ordering", () => {
-  it("places the source nearest the viewport center first", () => {
-    const sources: MosaicSource[] = [
-      { bbox: [4, 4, 5, 5] },
-      { bbox: [-4, -4, -3, -3] },
-      { bbox: [0.4, 0.4, 0.6, 0.6] },
-    ];
-    const tileset = makeTileset(sources, { maxRequests: 1 });
-    const viewport = makeViewport([-10, -10, 10, 10]);
-    const result = tileset.getTileIndices({ viewport });
-    expect(result).toHaveLength(3);
-    expect(result[0]!.bbox).toEqual([0.4, 0.4, 0.6, 0.6]);
-  });
-
-  it("short-circuits when source count <= maxRequests", () => {
-    const sources: MosaicSource[] = [
-      { bbox: [4, 4, 5, 5] },
-      { bbox: [0.4, 0.4, 0.6, 0.6] },
-    ];
-    const tileset = makeTileset(sources, { maxRequests: 6 });
-    const viewport = makeViewport([-10, -10, 10, 10]);
-    const result = tileset.getTileIndices({ viewport });
-    expect(result.map((s) => s.bbox)).toEqual([
-      [4, 4, 5, 5],
-      [0.4, 0.4, 0.6, 0.6],
-    ]);
-  });
-
-  it("still sorts when count > maxRequests", () => {
-    const sources: MosaicSource[] = [
-      { bbox: [4, 4, 5, 5] },
-      { bbox: [-4, -4, -3, -3] },
-      { bbox: [0.4, 0.4, 0.6, 0.6] },
-    ];
-    const tileset = makeTileset(sources, { maxRequests: 2 });
-    const viewport = makeViewport([-10, -10, 10, 10]);
-    const result = tileset.getTileIndices({ viewport });
-    expect(result[0]!.bbox).toEqual([0.4, 0.4, 0.6, 0.6]);
+describe("MosaicTileset2D tile metadata", () => {
+  it("gives each tile a geographic bbox object that deck.gl can read", () => {
+    // deck.gl's request priority and cull-rect visibility check only
+    // understand `{west, south, east, north}` bboxes, not arrays.
+    const tileset = makeTileset([A]);
+    const [tileIndex] = tileset.getTileIndices({
+      viewport: makeViewport([-1, -1, 11, 11]),
+    });
+    expect(tileset.getTileMetadata(tileIndex!)).toEqual({
+      id: "0",
+      bbox: { west: 0, south: 0, east: 10, north: 10 },
+    });
   });
 });
 
