@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { CompositeLayer } from "@deck.gl/core";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RasterTileLayerProps } from "../../src/raster-tile-layer/index.js";
 import { RasterTileLayer } from "../../src/raster-tile-layer/index.js";
 
@@ -45,5 +46,42 @@ describe("RasterTileLayer", () => {
     }
     const layer = new ProbeLayer({ id: "probe", onTileUnload });
     expect(layer.callUnload()).toBe(onTileUnload);
+  });
+});
+
+describe("RasterTileLayer.isLoaded", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Stub deck.gl's sublayer check (`CompositeLayer.isLoaded`). */
+  function stubSublayersLoaded(loaded: boolean) {
+    vi.spyOn(CompositeLayer.prototype, "isLoaded", "get").mockReturnValue(
+      loaded,
+    );
+  }
+
+  class LoadingMetadataLayer extends RasterTileLayer {
+    protected override _isLoadingMetadata(): boolean {
+      return true;
+    }
+  }
+
+  it("is not loaded while metadata is loading, even with no sublayers pending", () => {
+    stubSublayersLoaded(true);
+    const layer = new LoadingMetadataLayer({ id: "test" });
+    expect(layer.isLoaded).toBe(false);
+  });
+
+  it("is not loaded while sublayers are loading", () => {
+    stubSublayersLoaded(false);
+    const layer = new RasterTileLayer({ id: "test" });
+    expect(layer.isLoaded).toBe(false);
+  });
+
+  it("is loaded when no metadata is pending and sublayers are loaded", () => {
+    stubSublayersLoaded(true);
+    const layer = new RasterTileLayer({ id: "test" });
+    expect(layer.isLoaded).toBe(true);
   });
 });
