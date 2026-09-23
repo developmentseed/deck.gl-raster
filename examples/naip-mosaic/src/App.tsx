@@ -1,3 +1,4 @@
+import { LoadingWidget } from "@deck.gl/widgets";
 import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
 import type {
   RasterModule,
@@ -17,9 +18,9 @@ import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 import {
   DeckGlOverlay,
-  LoadingIndicator,
-  useTilesLoading,
+  loadingWidgetProps,
 } from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -340,11 +341,6 @@ export default function App() {
   const [stacItems, setStacItems] = useState<PartialSTACItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const {
-    loading: tilesLoading,
-    onViewportLoad,
-    onLoadingStart,
-  } = useTilesLoading();
   const [renderMode, setRenderMode] = useState<RenderMode>("trueColor");
   const [ndviRange, setNdviRange] = useState<[number, number]>([-1, 1]);
   const [device, setDevice] = useState<Device | null>(null);
@@ -450,7 +446,6 @@ export default function App() {
       // COGLayer instance, and opened GeoTIFFs are already kept in the
       // module-level `geotiffCache`, so there's nothing cheap to retain here.
       maxCacheSize: 0,
-      onViewportLoad,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.
       beforeId: "boundary_country_outline",
@@ -462,7 +457,6 @@ export default function App() {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
         ref={mapRef}
-        onMoveStart={onLoadingStart}
         initialViewState={{
           longitude: -104.9903,
           latitude: 39.7392,
@@ -479,12 +473,13 @@ export default function App() {
       >
         <DeckGlOverlay
           layers={layers}
+          // With no layers, deck never redraws, so the widget would keep its
+          // initial loading state forever. Drop it once the STAC query fails.
+          widgets={error ? [] : [new LoadingWidget(loadingWidgetProps)]}
           interleaved
           onDeviceInitialized={setDevice}
         />
       </MaplibreMap>
-
-      <LoadingIndicator loading={tilesLoading} />
 
       <ControlPanel
         loading={loading}
