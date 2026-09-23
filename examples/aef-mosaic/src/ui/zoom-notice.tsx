@@ -22,7 +22,6 @@ export function ZoomNotice() {
       py="3"
       borderRadius="md"
       boxShadow="md"
-      pointerEvents="none"
     >
       <Text fontWeight="semibold" color="gray.800">
         Zoom in to see the data
