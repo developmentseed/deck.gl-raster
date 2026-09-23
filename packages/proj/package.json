@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/proj",
-  "version": "0.8.0-beta.2",
+  "version": "0.8.1",
   "description": "Utilities for geographic reprojections.",
   "type": "module",
   "main": "./dist/index.js",
@@ -39,10 +39,10 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.4.0",
     "proj4": "^2.20.9",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "wkt-parser": "1.5.5"

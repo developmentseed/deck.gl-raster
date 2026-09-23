@@ -1,7 +1,7 @@
 {
   "name": "monorepo",
   "private": true,
-  "version": "0.8.0-beta.2",
+  "version": "0.8.1",
   "description": "GPU-accelerated COG and Zarr visualization in deck.gl",
   "scripts": {
     "build": "pnpm --recursive --filter=!docs build",
@@ -18,33 +18,33 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.3",
-    "publint": "^0.3.21",
+    "@biomejs/biome": "^2.5.11",
+    "publint": "^0.3.24",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   },
   "pnpm": {
     "overrides": {
-      "@deck.gl/aggregation-layers": "^9.3.1",
-      "@deck.gl/core": "^9.3.1",
-      "@deck.gl/extensions": "^9.3.1",
-      "@deck.gl/geo-layers": "^9.3.1",
-      "@deck.gl/layers": "^9.3.1",
-      "@deck.gl/mapbox": "^9.3.1",
-      "@deck.gl/mesh-layers": "^9.3.1",
-      "@deck.gl/widgets": "^9.3.1",
+      "@deck.gl/aggregation-layers": "^9.4.0",
+      "@deck.gl/core": "^9.4.0",
+      "@deck.gl/extensions": "^9.4.0",
+      "@deck.gl/geo-layers": "^9.4.0",
+      "@deck.gl/layers": "^9.4.0",
+      "@deck.gl/mapbox": "^9.4.0",
+      "@deck.gl/mesh-layers": "^9.4.0",
+      "@deck.gl/widgets": "^9.4.0",
       "@loaders.gl/core": "^4.3.4",
-      "@luma.gl/constants": "^9.3.3",
-      "@luma.gl/core": "^9.3.3",
-      "@luma.gl/engine": "^9.3.3",
-      "@luma.gl/gltf": "^9.3.3",
-      "@luma.gl/shadertools": "^9.3.3",
-      "@luma.gl/webgl": "^9.3.3"
+      "@luma.gl/constants": "^9.4.2",
+      "@luma.gl/core": "^9.4.2",
+      "@luma.gl/engine": "^9.4.2",
+      "@luma.gl/gltf": "^9.4.2",
+      "@luma.gl/shadertools": "^9.4.2",
+      "@luma.gl/webgl": "^9.4.2"
     }
   },
   "packageManager": "pnpm@10.25.0",
   "volta": {
-    "node": "24.11.1",
+    "node": "24.21.0",
     "pnpm": "10.25.0"
   }
 }

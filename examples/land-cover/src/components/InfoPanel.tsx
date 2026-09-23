@@ -73,61 +73,70 @@ export function InfoPanel({
           </Stack>
 
           {debug ? (
-            <Field
-              label={
-                <Text as="span">Debug opacity: {debugOpacity.toFixed(2)}</Text>
-              }
-            >
-              <Slider.Root
-                size="sm"
-                width="full"
-                min={0}
-                max={1}
-                step={0.01}
-                value={[debugOpacity]}
-                onValueChange={(d) => onDebugOpacityChange(d.value[0])}
+            <>
+              <Field
+                label={
+                  <Text as="span">
+                    Debug opacity: {debugOpacity.toFixed(2)}
+                  </Text>
+                }
               >
-                <Slider.Control>
-                  <Slider.Track>
-                    <Slider.Range />
-                  </Slider.Track>
-                  <Slider.Thumb index={0}>
-                    <Slider.HiddenInput />
-                  </Slider.Thumb>
-                </Slider.Control>
-              </Slider.Root>
-            </Field>
-          ) : null}
+                <Slider.Root
+                  size="sm"
+                  width="full"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={[debugOpacity]}
+                  onValueChange={(d) => onDebugOpacityChange(d.value[0])}
+                >
+                  <Slider.Control>
+                    <Slider.Track>
+                      <Slider.Range />
+                    </Slider.Track>
+                    <Slider.Thumb index={0}>
+                      <Slider.HiddenInput />
+                    </Slider.Thumb>
+                  </Slider.Control>
+                </Slider.Root>
+              </Field>
 
-          <Field
-            label={
-              <Text as="span" display="inline-flex" alignItems="center" gap="1">
-                Mesh max error: {meshMaxError.toFixed(3)}
-                <HelpTooltip label="Mesh max error info">
-                  {meshMaxErrorTooltip}
-                </HelpTooltip>
-              </Text>
-            }
-          >
-            <Slider.Root
-              size="sm"
-              width="full"
-              min={0.01}
-              max={5}
-              step={0.01}
-              value={[meshMaxError]}
-              onValueChange={(d) => onMeshMaxErrorChange(d.value[0])}
-            >
-              <Slider.Control>
-                <Slider.Track>
-                  <Slider.Range />
-                </Slider.Track>
-                <Slider.Thumb index={0}>
-                  <Slider.HiddenInput />
-                </Slider.Thumb>
-              </Slider.Control>
-            </Slider.Root>
-          </Field>
+              <Field
+                label={
+                  <Text
+                    as="span"
+                    display="inline-flex"
+                    alignItems="center"
+                    gap="1"
+                  >
+                    Mesh max error: {meshMaxError.toFixed(3)}
+                    <HelpTooltip label="Mesh max error info">
+                      {meshMaxErrorTooltip}
+                    </HelpTooltip>
+                  </Text>
+                }
+              >
+                <Slider.Root
+                  size="sm"
+                  width="full"
+                  min={0.01}
+                  max={21}
+                  step={0.01}
+                  value={[meshMaxError]}
+                  onValueChange={(d) => onMeshMaxErrorChange(d.value[0])}
+                >
+                  <Slider.Control>
+                    <Slider.Track>
+                      <Slider.Range />
+                    </Slider.Track>
+                    <Slider.Thumb index={0}>
+                      <Slider.HiddenInput />
+                    </Slider.Thumb>
+                  </Slider.Control>
+                </Slider.Root>
+              </Field>
+            </>
+          ) : null}
         </Stack>
       </Stack>
     </ControlPanel>

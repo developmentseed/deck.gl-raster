@@ -54,3 +54,27 @@ describe("MultiCOGLayer._onTileUnloadCallback", () => {
     expect(() => cb?.({ content: null })).not.toThrow();
   });
 });
+
+describe("MultiCOGLayer.updateState", () => {
+  it("raises a COG open failure through onError", async () => {
+    const onError = vi.fn((_error: Error) => true);
+    const layer = new MultiCOGLayer({
+      id: "multi",
+      sources: { a: { url: "https://example.com/a.tif" } },
+      onError,
+    } as never);
+    vi.spyOn(layer, "setState").mockImplementation(() => {});
+    vi.spyOn(layer, "_parseAllSources").mockRejectedValue(new Error("boom"));
+
+    layer.updateState({
+      props: layer.props,
+      oldProps: layer.props,
+      changeFlags: { dataChanged: true },
+    } as never);
+
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
+    const error = onError.mock.calls[0]?.[0];
+    expect(error?.message).toBe("loading COG sources: boom");
+    expect(error?.cause).toBeInstanceOf(Error);
+  });
+});

@@ -59,7 +59,7 @@ const COLORMAP_ROW_COUNT = Object.keys(COLORMAP_INDEX).length;
  * Kelvin (the data's native unit, which the rescale shader expects); only the
  * label is shown in the friendlier °C, with Kelvin in parentheses.
  */
-const kelvinToCelsius = (k: number) => Math.round(k - 273.15);
+const kelvinToCelsius = (k: number) => (k - 273.15).toFixed(1);
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -180,7 +180,7 @@ export default function App() {
           </ExternalLink>{" "}
           and{" "}
           <ExternalLink href="https://zarrita.dev/">
-            <code>zarrita</code>
+            <code>zarrita.js</code>
           </ExternalLink>{" "}
           to fetch data directly in the browser, without a server in between.
           The store is{" "}
@@ -216,7 +216,7 @@ export default function App() {
         <Field
           label={
             <Text as="span">
-              Rescale range: {kelvinToCelsius(rescaleMin)}°C ({rescaleMin} K) –{" "}
+              Rescale range: {kelvinToCelsius(rescaleMin)}°C ({rescaleMin} K) -{" "}
               {kelvinToCelsius(rescaleMax)}°C ({rescaleMax} K)
             </Text>
           }
