@@ -1,4 +1,5 @@
 import { NativeSelect, Text } from "@chakra-ui/react";
+import { LoadingWidget } from "@deck.gl/widgets";
 import {
   COLORMAP_INDEX,
   createColormapTexture,
@@ -13,8 +14,10 @@ import {
   DeckGlOverlay,
   ExternalLink,
   Field,
+  loadingWidgetProps,
   RangeSlider,
 } from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -152,6 +155,7 @@ export default function App() {
       >
         <DeckGlOverlay
           layers={layers}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
           interleaved
           onDeviceInitialized={setDevice}
         />

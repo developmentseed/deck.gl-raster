@@ -1,5 +1,6 @@
 import { Checkbox, Code, NativeSelect, Text } from "@chakra-ui/react";
 import { WebMercatorViewport } from "@deck.gl/core";
+import { LoadingWidget } from "@deck.gl/widgets";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type {
   RasterModule,
@@ -16,7 +17,9 @@ import {
   DeckGlOverlay,
   ExternalLink,
   Field,
+  loadingWidgetProps,
 } from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -208,7 +211,11 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGlOverlay layers={[layer]} interleaved />
+        <DeckGlOverlay
+          layers={[layer]}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
+          interleaved
+        />
       </MaplibreMap>
 
       <ControlPanel

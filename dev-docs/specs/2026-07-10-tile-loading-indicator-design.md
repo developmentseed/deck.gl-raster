@@ -71,7 +71,8 @@ one of which (the start) deck.gl doesn't provide.
 - **No upstream deck.gl changes.**
 - **No text label or top-centre placement.** `LoadingWidget` is an icon-only
   button, and widgets can only go in the corners.
-- **Not wiring every example.** Four apps only (see Scope).
+- **Examples without `DeckGlOverlay`.** `globe-view` and `titiler-cog` don't
+  render deck layers through the shared overlay, so they're out of scope.
 
 ## Dependency: `RasterTileLayer.isLoaded` fix ([#667](https://github.com/developmentseed/deck.gl-raster/pull/667), merged)
 
@@ -170,6 +171,9 @@ import { DeckGlOverlay, loadingWidgetProps } from "deck.gl-raster-examples-share
 
 ## Scope: examples to wire
 
+Every example that renders through `DeckGlOverlay`, so they all behave the same.
+Four of them exercise a specific case:
+
 1. **`cog-basic`** — `COGLayer`, with a dropdown to switch COGs.
 2. **`naip-mosaic`** — `MosaicLayer` wrapping one `COGLayer` per source. This
    app has an `error` state for its STAC query. When it's set there are no
@@ -178,12 +182,16 @@ import { DeckGlOverlay, loadingWidgetProps } from "deck.gl-raster-examples-share
 4. **`aef-mosaic`** — `ZarrLayer`; the example the PR comment asked about.
    Covers the year switch (new layer `id`).
 
-Other examples can adopt it with the same imports and prop.
+The rest take the plain `widgets` prop:
+- `COGLayer`: `cog-globe` (globe view), `land-cover`, `usgs-topo-cutline` and
+  `vermont-cog-comparison`.
+- `MultiCOGLayer`: `sentinel-2`.
+- `ZarrLayer`: `dynamical-zarr-ecmwf` and `nldas-icechunk`.
 
 ## Dependencies
 
 Add `"@deck.gl/widgets": "^9.4.0"` to `examples/_shared` (for the types) and to
-the four examples (for `LoadingWidget` and the stylesheet). It pulls in
+every wired example (for `LoadingWidget` and the stylesheet). It pulls in
 `preact` and `@floating-ui/dom`.
 
 ## Testing / verification
@@ -191,7 +199,7 @@ the four examples (for `LoadingWidget` and the stylesheet). It pulls in
 - **No new unit tests.** The loading logic is deck.gl's, and the example apps
   aren't unit-tested.
 - `pnpm typecheck` and `pnpm biome check` pass.
-- **Manual check** (dev server, you look at it). In each of the four examples:
+- **Manual check** (dev server, you look at it). In each wired example:
   - The spinner shows on first load and clears once imagery appears.
   - After a small pan that needs no new tiles, the spinner doesn't show, or
     clears.
@@ -210,6 +218,6 @@ the four examples (for `LoadingWidget` and the stylesheet). It pulls in
 - **Edit:** `examples/_shared/index.ts` (drop the old exports, add
   `loadingWidgetProps`)
 - **Edit:** `examples/_shared/package.json`
-- **Edit:** `examples/{cog-basic,naip-mosaic,zarr-sentinel2-tci,aef-mosaic}/package.json`
-- **Edit:** `examples/{cog-basic,naip-mosaic,zarr-sentinel2-tci,aef-mosaic}/src/App.tsx`
+- **Edit:** `package.json` and `src/App.tsx` in each wired example (all eleven
+  listed under Scope)
 - **Edit:** `pnpm-lock.yaml`

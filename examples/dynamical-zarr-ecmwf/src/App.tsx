@@ -1,3 +1,4 @@
+import { LoadingWidget } from "@deck.gl/widgets";
 import {
   createColormapTexture,
   decodeColormapSprite,
@@ -5,7 +6,11 @@ import {
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
 import type { Device, Texture } from "@luma.gl/core";
-import { DeckGlOverlay } from "deck.gl-raster-examples-shared";
+import {
+  DeckGlOverlay,
+  loadingWidgetProps,
+} from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { StyleSpecification } from "react-map-gl/mapbox";
@@ -250,6 +255,7 @@ export default function App() {
       >
         <DeckGlOverlay
           layers={layers}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
           interleaved
           onDeviceInitialized={setDevice}
         />
