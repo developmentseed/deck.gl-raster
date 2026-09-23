@@ -354,6 +354,8 @@ export class MultiCOGLayer extends RasterTileLayer<
     /** Aborts the in-flight header reads when the layer is removed, freeing
      *  their limiter slots for fresh work. */
     abortController?: AbortController;
+    /** True while `_parseAllSources` is in flight. */
+    loadingMetadata?: boolean;
   };
 
   override initializeState(): void {
@@ -383,10 +385,11 @@ export class MultiCOGLayer extends RasterTileLayer<
       this.setState({
         sources: null,
         multiDescriptor: null,
+        loadingMetadata: true,
       });
-      this._parseAllSources().catch((error: Error) =>
-        this.raiseError(error, "loading COG sources"),
-      );
+      this._parseAllSources()
+        .catch((error: Error) => this.raiseError(error, "loading COG sources"))
+        .finally(() => this.setState({ loadingMetadata: false }));
     }
   }
 
@@ -605,6 +608,10 @@ export class MultiCOGLayer extends RasterTileLayer<
 
   protected override _tilesetDescriptor(): RasterTilesetDescriptor | undefined {
     return this.state.multiDescriptor?.primary;
+  }
+
+  protected override _isLoadingMetadata(): boolean {
+    return this.state.loadingMetadata === true;
   }
 
   protected override _getTileDataCallback() {
