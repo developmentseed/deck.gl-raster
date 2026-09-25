@@ -1,5 +1,6 @@
 import { parseWkt } from "@developmentseed/proj";
 import { describe, expect, it } from "vitest";
+import { crsFromGeoKeys } from "../src/crs.js";
 import { loadGeoTIFF } from "./helpers.js";
 
 describe("test CRS", () => {
@@ -129,5 +130,58 @@ describe("test GeoKey CRS parsing", () => {
     expect(proj.projName).toBe("Mollweide");
     expect(proj.units).toBe("meter");
     expect(proj.a ?? proj.datum?.a).toBe(6378137);
+  });
+});
+
+/**
+ * Parameters of New Brunswick Stereographic (equivalent to EPSG:2953), in the
+ * order the Oblique Stereographic and Stereographic conversions emit them.
+ */
+const NEW_BRUNSWICK_STEREOGRAPHIC_PARAMETERS = [
+  { name: "Latitude of natural origin", value: 46.5, unit: "degree" },
+  { name: "Longitude of natural origin", value: -66.5, unit: "degree" },
+  { name: "Scale factor at natural origin", value: 0.999912, unit: "unity" },
+  { name: "False easting", value: 2500000, unit: "metre" },
+  { name: "False northing", value: 7500000, unit: "metre" },
+];
+
+describe("user-defined projection parameters", () => {
+  it("reads the Oblique Stereographic origin from ProjNatOrigin* keys", async () => {
+    // https://github.com/source-cooperative/cog-viewer/issues/40
+    const geotiff = await loadGeoTIFF(
+      "O2308000_7586000_cog",
+      "source-coop-dataforcanada",
+    );
+
+    expect(geotiff.crs).toMatchObject({
+      conversion: {
+        method: { name: "Oblique Stereographic" },
+        parameters: NEW_BRUNSWICK_STEREOGRAPHIC_PARAMETERS,
+      },
+    });
+  });
+
+  it("reads the Stereographic scale factor from ProjScaleAtNatOriginGeoKey", async () => {
+    // GDAL writes CT_Stereographic with the origin in ProjCenter{Lat,Long} but
+    // the scale factor in ProjScaleAtNatOrigin.
+    const { gkd } = await loadGeoTIFF(
+      "O2308000_7586000_cog",
+      "source-coop-dataforcanada",
+    );
+    const crs = crsFromGeoKeys({
+      ...gkd,
+      projMethod: 14,
+      projCenterLat: gkd.projNatOriginLat,
+      projCenterLong: gkd.projNatOriginLong,
+      projNatOriginLat: null,
+      projNatOriginLong: null,
+    });
+
+    expect(crs).toMatchObject({
+      conversion: {
+        method: { name: "Stereographic" },
+        parameters: NEW_BRUNSWICK_STEREOGRAPHIC_PARAMETERS,
+      },
+    });
   });
 });
