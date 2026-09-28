@@ -1,10 +1,16 @@
 /**
  * WGS84 longitudes of a tile's four corners, as returned by
- * `descriptor.projectTo4326(corner)[0]` — i.e. native and **not** normalized to
- * (−180, 180]. For a north-up geotransform the west edge's lng is strictly
- * less than the east edge's lng (proj4 4326→4326 is identity and does not
- * wrap), so a tile crossing the antimeridian shows up as a span like
- * (−204, −162) rather than (156, −162).
+ * `descriptor.projectTo4326(corner)[0]`. A crossing edge is accepted in
+ * either of two encodings:
+ *  - **Native un-normalized**: for an identity 4326→4326 source whose
+ *    `ModelTiepoint` sits past ±180°, proj4 does not renormalize, so west <
+ *    east always and a crossing edge shows up as e.g. `(−204, −162)`.
+ *  - **GeoJSON-flipped** (RFC 7946 §5.2): for any *projected* source, proj4's
+ *    inverse projection normalizes its output to (−180°, 180°], so a
+ *    crossing edge instead shows up with west > east, e.g.
+ *    `(179.97, −179.17)` — the same convention the GeoJSON spec uses for an
+ *    antimeridian-crossing bbox.
+ * A non-crossing edge always has west < east.
  */
 export interface CornerLongitudes {
   topLeft: number;
@@ -27,28 +33,41 @@ export interface AntimeridianCut {
 const U_EPSILON = 1e-6;
 
 /**
+ * Unwrap a GeoJSON-flipped edge (RFC 7946 §5.2: west > east marks a
+ * crossing) onto the continuous native scale `edgeUCut`'s seam search
+ * expects, by adding 360° to `eastLng`. A no-op for an edge already in
+ * native un-normalized form (west < east) or for a degenerate zero-width
+ * edge (west === east).
+ */
+export function unwrapEastLng(westLng: number, eastLng: number): number {
+  return eastLng < westLng ? eastLng + 360 : eastLng;
+}
+
+/**
  * Locate where a single horizontal edge crosses the antimeridian, as a fraction
  * of the edge's eastward span (0 at the west corner, 1 at the east corner).
  *
- * Returns `undefined` if the edge does not cross. Works on native un-normalized
- * longitudes (e.g. `westLng = −204`, `eastLng = −162`) by searching for the
- * smallest antimeridian line `−180 + 360k` strictly interior to `(westLng,
- * eastLng)`. Strict inequalities give the correct non-crossing answer when a
- * corner lies exactly on ±180.
+ * Returns `undefined` if the edge does not cross. Accepts either corner
+ * longitude encoding described on {@link CornerLongitudes} — a GeoJSON-flipped
+ * edge is unwrapped via {@link unwrapEastLng} before the seam search, which
+ * finds the smallest antimeridian line `−180 + 360k` strictly interior to
+ * `(westLng, eastLng)`. Strict inequalities give the correct non-crossing
+ * answer when a corner lies exactly on ±180.
  */
 function edgeUCut(westLng: number, eastLng: number): number | undefined {
+  const unwrappedEastLng = unwrapEastLng(westLng, eastLng);
   // Degenerate or non-monotonic edge — caller is expected to pass
   // west-then-east in the source CRS's native ordering.
-  if (eastLng <= westLng) {
+  if (unwrappedEastLng <= westLng) {
     return undefined;
   }
   // Smallest antimeridian line (−180 + 360k) strictly greater than westLng.
   const k = Math.ceil((westLng + 180) / 360);
   const seam = -180 + 360 * k;
-  if (seam <= westLng || seam >= eastLng) {
+  if (seam <= westLng || seam >= unwrappedEastLng) {
     return undefined;
   }
-  return (seam - westLng) / (eastLng - westLng);
+  return (seam - westLng) / (unwrappedEastLng - westLng);
 }
 
 /**
@@ -60,18 +79,19 @@ function edgeUCut(westLng: number, eastLng: number): number | undefined {
  * cuts (non-geographic CRSs) — but for now those return `undefined` and fall
  * back to a single full-mesh layer. See issue #575.
  *
- * Assumes u increases eastward (standard north-up geotransform) and that
- * corner longitudes are passed in native, un-normalized form — that is what
- * `descriptor.projectTo4326` returns for an EPSG:4326 source whose
- * `ModelTiepoint` sits past ±180° (e.g. `−204°`).
+ * Assumes u increases eastward (standard north-up geotransform). Corner
+ * longitudes may be in either encoding described on {@link CornerLongitudes}.
  */
 export function antimeridianCut(
   cornerLngs: CornerLongitudes,
 ): AntimeridianCut | undefined {
   const { topLeft, topRight, bottomLeft, bottomRight } = cornerLngs;
 
+  console.log("[antimeridianCut] corners:", cornerLngs);
+
   const topUCut = edgeUCut(topLeft, topRight);
   const bottomUCut = edgeUCut(bottomLeft, bottomRight);
+  console.log("[antimeridianCut] topUCut:", topUCut, "bottomUCut:", bottomUCut);
   if (topUCut === undefined || bottomUCut === undefined) {
     return undefined;
   }
@@ -81,5 +101,6 @@ export function antimeridianCut(
   if (Math.abs(topUCut - bottomUCut) > U_EPSILON) {
     return undefined;
   }
+  console.log("[antimeridianCut] uCut:", (topUCut + bottomUCut) / 2);
   return { uCut: (topUCut + bottomUCut) / 2 };
 }

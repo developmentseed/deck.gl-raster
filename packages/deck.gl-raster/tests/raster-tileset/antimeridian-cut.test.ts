@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { antimeridianCut } from "../../src/raster-tileset/antimeridian-cut.js";
+import {
+  antimeridianCut,
+  unwrapEastLng,
+} from "../../src/raster-tileset/antimeridian-cut.js";
 
 // cornerLngs are WGS84 longitudes as returned by
-// descriptor.projectTo4326(corner)[0] — native and NOT normalized to
-// (−180, 180]. For a north-up geotransform, west < east always (proj4
-// 4326→4326 is identity), so a crossing tile shows up as e.g. (−204, −162),
-// not (156, −162).
+// descriptor.projectTo4326(corner)[0]. Two encodings are accepted for a
+// crossing edge — see CornerLongitudes' doc:
+//  - native un-normalized (identity 4326→4326 source): west < east always,
+//    e.g. (−204, −162).
+//  - GeoJSON-flipped (RFC 7946 §5.2 — what a projected source emits, since
+//    proj4's inverse projection normalizes to (−180°, 180°]): west > east,
+//    e.g. (179.97, −179.17).
 describe("antimeridianCut", () => {
   it("returns undefined for a non-crossing tile (west < east, no seam inside)", () => {
     expect(
@@ -74,5 +80,49 @@ describe("antimeridianCut", () => {
         bottomRight: -160,
       }),
     ).toBeUndefined();
+  });
+
+  it("locates a vertical cut for a GeoJSON-flipped crossing tile (projected-CRS lngs)", () => {
+    // dep_ls_geomad_066_022_2025 (EPSG:3832, PDC Mercator): projectTo4326
+    // normalizes to (−180°, 180°], so the crossing edge is flipped —
+    // topLeft/bottomLeft = 179.967798°, topRight/bottomRight = −179.169819°.
+    const cut = antimeridianCut({
+      topLeft: 179.967798,
+      topRight: -179.169819,
+      bottomLeft: 179.967798,
+      bottomRight: -179.169819,
+    });
+    expect(cut).toBeDefined();
+    // Unwrapped span is (179.967798, 180.830181); the 180° seam sits at
+    // (180 − 179.967798) / (180.830181 − 179.967798) ≈ 0.0373 of the way in.
+    expect(cut?.uCut).toBeCloseTo(0.037344, 5);
+  });
+
+  it("returns undefined for a degenerate zero-width edge (west === east)", () => {
+    expect(
+      antimeridianCut({
+        topLeft: 170,
+        topRight: 170,
+        bottomLeft: 170,
+        bottomRight: 170,
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("unwrapEastLng", () => {
+  it("adds 360° to a GeoJSON-flipped eastLng (west > east)", () => {
+    expect(unwrapEastLng(179.967798, -179.169819)).toBeCloseTo(
+      180.830181,
+      9,
+    );
+  });
+
+  it("passes through a native un-normalized eastLng unchanged (west < east)", () => {
+    expect(unwrapEastLng(-204, -162)).toBe(-162);
+  });
+
+  it("passes through a degenerate zero-width edge unchanged (west === east)", () => {
+    expect(unwrapEastLng(170, 170)).toBe(170);
   });
 });

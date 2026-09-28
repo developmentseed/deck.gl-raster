@@ -2,12 +2,108 @@ import type { _Tile2DHeader as Tile2DHeader } from "@deck.gl/geo-layers";
 import { PathLayer, TextLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { RasterTileMetadata } from "./raster-tileset/index.js";
+import type { ProjectionFunction } from "./raster-tileset/types.js";
+
+/**
+ * Closed 5-point box path for a pixel-space rectangle `[x0, 0] .. [x1,
+ * height]`, mapped through `forwardTransform` (pixel → source CRS) then
+ * `forwardReproject` (source CRS → common space).
+ */
+function pieceBoxPath(
+  forwardTransform: ProjectionFunction,
+  forwardReproject: ReprojectionFns["forwardReproject"],
+  x0: number,
+  x1: number,
+  height: number,
+): [number, number][] {
+  const corners: [number, number][] = [
+    [x0, 0],
+    [x1, 0],
+    [x1, height],
+    [x0, height],
+    [x0, 0],
+  ];
+  return corners.map(([px, py]) => {
+    const [sx, sy] = forwardTransform(px!, py!);
+    return forwardReproject(sx, sy);
+  });
+}
+
+function boxCenter(path: [number, number][]): [number, number] {
+  const xs = path.map((p) => p[0]);
+  const ys = path.map((p) => p[1]);
+  return [
+    (Math.min(...xs) + Math.max(...xs)) / 2,
+    (Math.min(...ys) + Math.max(...ys)) / 2,
+  ];
+}
 
 export function renderDebugTileOutline(
   id: string,
   tile: Tile2DHeader & RasterTileMetadata,
   forwardTo4326: ReprojectionFns["forwardReproject"],
 ) {
+  const { _antimeridianCut, _westReprojection, _eastReprojection } = tile;
+
+  // A crossing tile renders as two `RasterLayer`s in different world
+  // copies (see `RasterTileLayer._renderAntimeridianTile`) — the debug
+  // outline needs to match, in the same common-space coordinate system,
+  // rather than drawing one WGS84 box whose corners (e.g. lng 179.97° and
+  // −179.17°) `PathLayer` would connect the long way around the globe.
+  if (_antimeridianCut && _westReprojection && _eastReprojection) {
+    const { uCut } = _antimeridianCut;
+    const { tileWidth, tileHeight, forwardTransform } = tile;
+    const cutPx = uCut * tileWidth;
+    const westPath = pieceBoxPath(
+      forwardTransform,
+      _westReprojection.forwardReproject,
+      0,
+      cutPx,
+      tileHeight,
+    );
+    const eastPath = pieceBoxPath(
+      forwardTransform,
+      _eastReprojection.forwardReproject,
+      cutPx,
+      tileWidth,
+      tileHeight,
+    );
+
+    const labelLayer = new TextLayer({
+      id: `${id}-label`,
+      data: [
+        {
+          position: boxCenter(westPath),
+          text: `x=${tile.index.x} y=${tile.index.y} z=${tile.index.z} (west)`,
+        },
+        {
+          position: boxCenter(eastPath),
+          text: `x=${tile.index.x} y=${tile.index.y} z=${tile.index.z} (east)`,
+        },
+      ],
+      getColor: [255, 255, 255, 255],
+      getSize: 24,
+      sizeUnits: "pixels",
+      outlineWidth: 3,
+      outlineColor: [0, 0, 0, 255],
+      fontSettings: { sdf: true },
+      coordinateSystem: "cartesian",
+    });
+
+    const outlineLayer = new PathLayer({
+      id,
+      data: [westPath, eastPath],
+      getPath: (d) => d,
+      getColor: [255, 0, 0, 255], // Red
+      getWidth: 2,
+      widthUnits: "pixels",
+      pickable: false,
+      coordinateSystem: "cartesian",
+    });
+
+    return [outlineLayer, labelLayer];
+  }
+
   const { projectedCorners } = tile;
 
   // Create a closed path in WGS84 projection around the tile bounds

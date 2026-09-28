@@ -26,6 +26,7 @@ import {
   getTileIndices,
   rescaleCommonSpaceToEPSG3857,
   rescaleEPSG3857ToCommonSpace,
+  TILE_SIZE,
 } from "./raster-tile-traversal.js";
 import { sortItemsByDistanceFromViewportCenter } from "./sort-by-distance.js";
 import type { RasterTilesetDescriptor } from "./tileset-interface.js";
@@ -126,15 +127,15 @@ export type RasterTileMetadata = {
 
   /**
    * Reprojection bundle for the west piece of an antimeridian-crossing tile,
-   * or `undefined` for non-crossing tiles. The piece's `forwardTransform`
-   * composes a `+k·360°` longitude shift onto the original geotransform so
-   * the piece's native longitudes land inside proj4's valid `(−180°, 180°]`
-   * range — letting the stock `_projectPosition` / `_unprojectPosition`
-   * round-trip cleanly (which the reprojector's error metric relies on).
-   * The visual side effect is that the west piece renders in the world-copy
-   * where its lngs end up after the shift; world-copy traversal places it
-   * adjacent to the east piece. Built once in `getTileMetadata` for
-   * reference stability across renders.
+   * or `undefined` for non-crossing tiles. `forwardTransform`/`inverseTransform`
+   * are the stock, unmodified pixel↔source-CRS transform — the antimeridian
+   * discontinuity doesn't live there (it's a property of the projection, not
+   * the geotransform). Instead `forwardReproject`/`inverseReproject` correct
+   * for it post-projection, in common-space units: any raw common-space x
+   * below `TILE_SIZE / 2` is on the wrapped side and gets `+TILE_SIZE`,
+   * placing it in the world-copy adjacent to the other piece — see
+   * `buildPieceReprojection`. Built once in `getTileMetadata` for reference
+   * stability across renders.
    */
   _westReprojection?: ReprojectionFns;
 
@@ -440,25 +441,19 @@ export class RasterTileset2D extends Tileset2D {
       bottomLeft: cornerLng(bottomLeft),
       bottomRight: cornerLng(bottomRight),
     });
-
-    // For each piece of a crossing tile, compose a `+k·360°` longitude shift
-    // into the geotransform so the piece's native lngs sit inside proj4's
-    // valid range. The reprojector's error metric uses `inverseReproject`
-    // round-trip, which only works when proj4 doesn't have to normalize.
+    // Each piece of a crossing tile needs its `forwardReproject` output
+    // (common space) corrected per-point, not by one constant shift — see
+    // `buildPieceReprojection` for why.
     let _westReprojection: ReprojectionFns | undefined;
     let _eastReprojection: ReprojectionFns | undefined;
     if (_antimeridianCut) {
-      const { uCut } = _antimeridianCut;
-      const lngAtCut = tileWestLng + uCut * (tileEastLng - tileWestLng);
       _westReprojection = this.buildPieceReprojection(
         forwardTransform,
         inverseTransform,
-        (tileWestLng + lngAtCut) / 2,
       );
       _eastReprojection = this.buildPieceReprojection(
         forwardTransform,
         inverseTransform,
-        (lngAtCut + tileEastLng) / 2,
       );
     }
 
@@ -491,33 +486,42 @@ export class RasterTileset2D extends Tileset2D {
 
   /**
    * Build a per-piece reprojection bundle for an antimeridian-crossing tile.
-   * Picks the `k·360°` longitude shift that brings the piece's native lngs
-   * (identified by `pieceMidLng`) into proj4's valid range, composes that
-   * shift into the geotransform, and pairs it with the stock projection
-   * pair. The composed closures are stable for the tile's lifetime.
+   *
+   * A crossing tile's west piece always has native lngs just *below* +180°
+   * (e.g. 179.97°), which `projectPosition` maps to common-space x just
+   * *below* `TILE_SIZE` (e.g. 511.95) — no correction needed. The east
+   * piece's *interior* has native lngs just past −180° after proj4's
+   * wraparound (e.g. −179.17°), mapping to common-space x just *above* 0
+   * (e.g. 1.18) — this needs `+TILE_SIZE` to sit continuously past the west
+   * piece. But the east piece's own west edge *is* the seam itself (native
+   * lng exactly 180°), which `projectPosition` maps to common-space x
+   * exactly `TILE_SIZE` — the *same* boundary value as the west piece's
+   * east edge, needing *no* correction, even though it belongs to the east
+   * piece.
+   *
+   * So the correction can't be "shift this whole piece by one world" (a
+   * single piece can contain both a boundary point at exactly the seam and
+   * interior points on the wrapped side of it) — it has to be a per-point
+   * test: any raw common-space x in the lower half `[0, TILE_SIZE/2)` is on
+   * the wrapped side and gets `+TILE_SIZE`; everything else (including the
+   * exact-seam boundary, at `TILE_SIZE`) is left alone. This is symmetric
+   * for both pieces — the west piece's raw x values never fall below
+   * `TILE_SIZE/2`, so the test is a no-op there, matching its already-correct
+   * behavior.
    */
   private buildPieceReprojection(
     forwardTransform: ProjectionFunction,
     inverseTransform: ProjectionFunction,
-    pieceMidLng: number,
   ): ReprojectionFns {
-    const lngShift = -Math.round(pieceMidLng / 360) * 360;
-    if (lngShift === 0) {
-      return {
-        forwardTransform,
-        inverseTransform,
-        forwardReproject: this.projectPosition,
-        inverseReproject: this.unprojectPosition,
-      };
-    }
     return {
-      forwardTransform: (px, py) => {
-        const [x, y] = forwardTransform(px, py);
-        return [x + lngShift, y];
+      forwardTransform,
+      inverseTransform,
+      forwardReproject: (x, y) => {
+        const [cx, cy] = this.projectPosition(x, y);
+        return cx < TILE_SIZE / 2 ? [cx + TILE_SIZE, cy] : [cx, cy];
       },
-      inverseTransform: (x, y) => inverseTransform(x - lngShift, y),
-      forwardReproject: this.projectPosition,
-      inverseReproject: this.unprojectPosition,
+      inverseReproject: (cx, cy) =>
+        this.unprojectPosition(cx >= TILE_SIZE ? cx - TILE_SIZE : cx, cy),
     };
   }
 }

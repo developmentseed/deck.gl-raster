@@ -399,6 +399,7 @@ export class RasterTileLayer<
             data: props.data,
             tileResult,
             uCut: tile._antimeridianCut.uCut,
+            descriptor,
           })
         : this._renderNormalTile({
             baseId: props.id,
@@ -491,14 +492,12 @@ export class RasterTileLayer<
   /**
    * Build the two `RasterLayer`s for a Web-Mercator tile that crosses ±180°:
    * a west piece (UV `[0, uCut]`) and an east piece (UV `[uCut, 1]`). Each
-   * piece uses its own `ReprojectionFns` bundle from the tile metadata —
-   * the bundle composes a `+k·360°` longitude shift into the geotransform
-   * so the piece's native lngs stay inside proj4's valid range, and pairs
-   * it with the stock `_projectPosition`/`_unprojectPosition` so the
-   * forward/inverse round-trip cleanly. The two pieces thus render in
-   * different world copies; deck.gl `repeat: true` + world-copy traversal
-   * (#518) bring them together visually. The split itself lives in each
-   * piece's `triangulateRectangle` seed.
+   * piece uses its own `ReprojectionFns` bundle from the tile metadata,
+   * which corrects for the antimeridian discontinuity post-projection, in
+   * common-space units — see `RasterTileset2D.buildPieceReprojection`. The
+   * two pieces thus render in adjacent world copies; deck.gl `repeat: true`
+   * + world-copy traversal (#518) bring them together visually. The split
+   * itself lives in each piece's `triangulateRectangle` seed.
    */
   private _renderAntimeridianTile(opts: {
     baseId: string;
@@ -506,13 +505,9 @@ export class RasterTileLayer<
     data: NonNullable<DataT>;
     tileResult: RenderTileResult;
     uCut: number;
+    descriptor: RasterTilesetDescriptor;
   }): Layer[] {
     const { baseId, tile, data, tileResult, uCut } = opts;
-    // `antimeridianCut` returns the seam location as a fraction of the tile's
-    // geographic span (0..1 over the full west→east lng range). `RasterLayer`
-    // constructs its reprojector with `width + 1` (raster-layer.ts:252), so
-    // the reprojector's UV*(W-1) = pixel-index maps UV `(seamCol / W)`
-    // exactly onto the seam pixel — no scaling needed here.
     const baseProps = {
       ...this._baseRasterProps(data, tileResult),
       coordinateSystem: "cartesian" as const,
