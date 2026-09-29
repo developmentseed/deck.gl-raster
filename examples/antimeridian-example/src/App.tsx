@@ -7,28 +7,34 @@ import {
   DebugControls,
   DeckGlOverlay,
   ExternalLink,
+  fetchStacGeoparquetItems,
 } from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import { getTileDataGray, renderGrayWhiteToBlack } from "./render-gray.js";
 
-// Two items from the same DEP Landsat GeoMAD catalog (EPSG:3832 / PDC
+// Every item in the DEP Landsat GeoMAD test catalog (EPSG:3832 / PDC
 // Mercator), shown together as they are — no reprojection-hiding fitBounds.
-// `066_022` crosses the antimeridian (GeoJSON-flipped corner lngs: xmin
-// 179.97 → xmax −179.17); `064_020` doesn't, for comparison.
-const CROSSING_URL =
-  "https://s3.us-west-2.amazonaws.com/dep-public-staging/dep_ls_geomad/0-3-1-test/066/022/2025/dep_ls_geomad_066_022_2025_red.tif";
-const NON_CROSSING_URL =
-  "https://s3.us-west-2.amazonaws.com/dep-public-staging/dep_ls_geomad/0-3-1-test/064/020/2025/dep_ls_geomad_064_020_2025_red.tif";
+// The 3 items at column `066` cross the antimeridian (GeoJSON-flipped corner
+// lngs: xmin 179.97 → xmax −179.17); the other 9 don't, for comparison.
+const PARQUET_URL =
+  "https://s3.us-west-2.amazonaws.com/dep-public-staging/dep_ls_geomad/0-3-1-test/dep_ls_geomad.parquet";
 
 export default function App() {
+  const [redBandUrls, setRedBandUrls] = useState<string[]>([]);
   const [debugState, setDebugState] = useState<DebugState>({
     debug: true,
     debugOpacity: 0.25,
   });
 
-  const layers = [CROSSING_URL, NON_CROSSING_URL].map(
+  useEffect(() => {
+    fetchStacGeoparquetItems(PARQUET_URL).then((items) =>
+      setRedBandUrls(items.map((item) => item.assets.red!.href)),
+    );
+  }, []);
+
+  const layers = redBandUrls.map(
     (url) =>
       new COGLayer({
         id: `cog-layer-${url}`,
@@ -79,8 +85,9 @@ export default function App() {
         sourcePath="examples/antimeridian-example"
       >
         <Text mb="2" color="gray.600">
-          Two <ExternalLink href="https://cogeo.org">COGs</ExternalLink> from
-          the same catalog: one crosses the ±180° antimeridian, one doesn't —
+          All {redBandUrls.length || 12}{" "}
+          <ExternalLink href="https://cogeo.org">COGs</ExternalLink> in the
+          test catalog: 3 cross the ±180° antimeridian, the other 9 don't —
           see{" "}
           <ExternalLink href="https://github.com/developmentseed/deck.gl-raster/issues/575">
             #575

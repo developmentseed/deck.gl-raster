@@ -137,10 +137,21 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       }
     }
 
+    // `index` and `sources` are read from two separate closures backed by
+    // the same MosaicLayer instance; a matched index can transiently point
+    // past the end of `sources` for one frame if `getTileIndices` runs
+    // between the layer's own `sources` prop updating and its Flatbush index
+    // finishing its rebuild for the new array (e.g. right after an async
+    // `sources` load populates the layer for the first time). Skip rather
+    // than crash — the next tick's rebuilt index resolves it.
     const sources = this.getSources();
-    const selectedSources = Array.from(matchedIndices).map((sourceIndex) => {
-      const source = sources[sourceIndex]!;
-      return {
+    const selectedSources: ResolvedSource<MosaicT>[] = [];
+    for (const sourceIndex of matchedIndices) {
+      const source = sources[sourceIndex];
+      if (source === undefined) {
+        continue;
+      }
+      selectedSources.push({
         // Remove once https://github.com/visgl/deck.gl/pull/10299
         // is merged and released
         x: 0,
@@ -148,8 +159,8 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
         z: 0,
         ...source,
         id: source.id ?? String(sourceIndex),
-      };
-    });
+      });
+    }
 
     const { maxRequests } = this.opts;
     if (selectedSources.length <= maxRequests) {

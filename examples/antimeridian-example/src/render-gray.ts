@@ -9,40 +9,27 @@ import { texture } from "@developmentseed/deck.gl-geotiff";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import type { Texture } from "@luma.gl/core";
 
-/** Texture payload for a 1-band grayscale tile, plus its own contrast-stretch range. */
+/** Texture payload for a 1-band grayscale tile. */
 export type GrayTileData = {
   texture: Texture;
   width: number;
   height: number;
-  /** Normalized [0, 1] — inner-90% value range, per-tile. */
-  rescaleMin: number;
-  rescaleMax: number;
 };
 
-/** r16unorm normalizes the raw uint16 sample by this before the shader sees it. */
-const UINT16_MAX = 65535;
-
-/**
- * Inner-90% value range (5th/95th percentile), ignoring `nodata` (0 for this
- * dataset). A simple per-tile auto-contrast-stretch — good enough for a demo,
- * not a substitute for a real histogram-based stretch across the whole COG.
- */
-function inner90Range(data: ArrayLike<number>): [number, number] {
-  const values = Array.from(data).filter((v) => v !== 0);
-  if (values.length === 0) {
-    return [0, UINT16_MAX];
-  }
-  values.sort((a, b) => a - b);
-  const lo = values[Math.floor(values.length * 0.05)]!;
-  const hi = values[Math.ceil(values.length * 0.95) - 1]!;
-  return [lo, hi];
-}
+// DEP GeoMAD reflectance stretch — uint16 sampled as r16unorm (shader sees
+// rawDN / 65535), so the display range needs the same division. Same fixed
+// range as antimeridian-mosaic-multi-example's own tuned stretch for the
+// same product line; its red-band raster:bands stats across all 12 test
+// items cluster around a mean of ~7300–7900, so one fixed range works fine
+// everywhere — no need for a per-tile percentile stretch.
+const RESCALE_MIN = 7200 / 65535;
+const RESCALE_MAX = 12000 / 65535;
 
 /**
  * Tile loader for the 1-band (16-bit unsigned) DEP GeoMAD bands used in this
- * example. Both COGs here have no overviews, so `image` is always the base
- * `GeoTIFF`; `texture.createTextureProps` infers the right WebGL format from
- * its tags (`r16unorm` for this data) rather than assuming 8-bit.
+ * example. `texture.createTextureProps` infers the right WebGL format from
+ * the GeoTIFF's own tags (`r16unorm` for this data) rather than assuming
+ * 8-bit.
  */
 export async function getTileDataGray(
   image: GeoTIFF | Overview,
@@ -59,22 +46,13 @@ export async function getTileDataGray(
     width,
     height,
   });
-  const [lo, hi] = inner90Range(data);
-  return {
-    texture: device.createTexture(props),
-    width,
-    height,
-    rescaleMin: lo / UINT16_MAX,
-    rescaleMax: hi / UINT16_MAX,
-  };
+  return { texture: device.createTexture(props), width, height };
 }
 
 /**
  * Render pipeline showing raw value as white (low) → black (high) —
  * `WhiteIsZero`, matching TIFF `PhotometricInterpretation = 0` regardless of
- * this data's own tag (`= 1`, BlackIsZero). `LinearRescale` runs first, using
- * this tile's own inner-90% range, so `WhiteIsZero` sees an already-stretched
- * [0, 1] value.
+ * this data's own tag (`= 1`, BlackIsZero).
  */
 export function renderGrayWhiteToBlack(data: GrayTileData): RenderTileResult {
   return {
@@ -82,7 +60,7 @@ export function renderGrayWhiteToBlack(data: GrayTileData): RenderTileResult {
       { module: CreateTexture, props: { textureName: data.texture } },
       {
         module: LinearRescale,
-        props: { rescaleMin: data.rescaleMin, rescaleMax: data.rescaleMax },
+        props: { rescaleMin: RESCALE_MIN, rescaleMax: RESCALE_MAX },
       },
       { module: WhiteIsZero },
     ],

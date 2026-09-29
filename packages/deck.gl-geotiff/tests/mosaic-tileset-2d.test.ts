@@ -159,6 +159,24 @@ describe("MosaicTileset2D world-copy passes", () => {
   });
 });
 
+describe("MosaicTileset2D stale index resilience", () => {
+  it("skips a matched index that points past the end of a since-shrunk sources array, instead of throwing", () => {
+    // Simulates the index being built for a larger `sources` array than
+    // `getSources()` currently returns — e.g. one frame after an async
+    // `sources` load where the layer's index rebuild hasn't caught up yet.
+    const index = buildIndex([A, B, C])!;
+    const tileset = new MosaicTileset2D<Item>(
+      () => [A], // getSources() now returns fewer items than the index knows about
+      () => index,
+      { getTileData: () => new Promise(() => {}) } as unknown as Tileset2DProps,
+    );
+    const result = tileset.getTileIndices({
+      viewport: makeViewport([-1, -1, 51, 11]),
+    });
+    expect(result.map((s) => s.name)).toEqual(["A"]);
+  });
+});
+
 describe("MosaicTileset2D tile ids", () => {
   it("defaults each source's tile-cache id to its array position", () => {
     const tileset = makeTileset([A, B, C]);

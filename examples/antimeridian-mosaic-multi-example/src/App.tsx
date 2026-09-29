@@ -94,7 +94,7 @@ export default function App() {
         sourcePath="examples/antimeridian-mosaic-multi-example"
       >
         <Text mb="2" color="gray.600">
-          Same two DEP GeoMAD items as{" "}
+          Same {geomadItems.length || 12} DEP GeoMAD items as{" "}
           <ExternalLink href="https://github.com/developmentseed/deck.gl-raster/tree/main/examples/antimeridian-example">
             antimeridian-example
           </ExternalLink>
