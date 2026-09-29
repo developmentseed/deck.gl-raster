@@ -16,10 +16,8 @@ import type { GeomadItem } from "./data.js";
 import { fetchGeomadItems } from "./data.js";
 
 // DEP GeoMAD reflectance stretch — uint16 sampled as r16unorm (shader sees
-// rawDN / 65535), so the display range needs the same division. This
-// item's own STAC raster:bands stats put the red band in [7014, 16807]
-// (mean 7682); 7200–12000 matches the reference app's own tuned stretch for
-// the same product line.
+// rawDN / 65535), so the display range needs the same division. One
+// item's STAC raster:bands stats state the red band range as [7014, 16807]
 const RESCALE_MIN = 7200 / 65535;
 const RESCALE_MAX = 12000 / 65535;
 
@@ -99,7 +97,7 @@ export default function App() {
             antimeridian-example
           </ExternalLink>
           , but composed as R/G/B through <code>MosaicLayer</code> +{" "}
-          <code>MultiCOGLayer</code> — the shape real usage actually needs,
+          <code>MultiCOGLayer</code> (the needed use pattern),
           not just a single-band <code>COGLayer</code>. See{" "}
           <ExternalLink href="https://github.com/developmentseed/deck.gl-raster/issues/575">
             #575
