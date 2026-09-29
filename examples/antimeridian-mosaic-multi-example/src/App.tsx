@@ -2,14 +2,18 @@ import { Text } from "@chakra-ui/react";
 import { PathLayer } from "@deck.gl/layers";
 import { MosaicLayer, MultiCOGLayer } from "@developmentseed/deck.gl-geotiff";
 import { LinearRescale } from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { DebugState } from "deck.gl-raster-examples-shared";
 import {
   ControlPanel,
+  DebugControls,
   DeckGlOverlay,
   ExternalLink,
 } from "deck.gl-raster-examples-shared";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { useEffect, useState } from "react";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
-import { GEOMAD_ITEMS } from "./data.js";
+import type { GeomadItem } from "./data.js";
+import { fetchGeomadItems } from "./data.js";
 
 // DEP GeoMAD reflectance stretch — uint16 sampled as r16unorm (shader sees
 // rawDN / 65535), so the display range needs the same division. This
@@ -20,9 +24,20 @@ const RESCALE_MIN = 7200 / 65535;
 const RESCALE_MAX = 12000 / 65535;
 
 export default function App() {
+  const [geomadItems, setGeomadItems] = useState<GeomadItem[]>([]);
+  const [debugState, setDebugState] = useState<DebugState>({
+    debug: false,
+    debugOpacity: 0.5,
+    debugLevel: 1,
+  });
+
+  useEffect(() => {
+    fetchGeomadItems().then(setGeomadItems);
+  }, []);
+
   const mosaicLayer = new MosaicLayer({
     id: "geomad-mosaic",
-    sources: GEOMAD_ITEMS,
+    sources: geomadItems,
     renderSource: (source) =>
       new MultiCOGLayer({
         id: `geomad-${source.id}`,
@@ -38,6 +53,9 @@ export default function App() {
             props: { rescaleMin: RESCALE_MIN, rescaleMax: RESCALE_MAX },
           },
         ],
+        debug: debugState.debug,
+        debugOpacity: debugState.debugOpacity,
+        debugLevel: debugState.debugLevel,
       }),
   });
 
@@ -94,6 +112,7 @@ export default function App() {
           </ExternalLink>{" "}
           Landsat GeoMAD mosaic.
         </Text>
+        <DebugControls value={debugState} onChange={setDebugState} />
       </ControlPanel>
     </div>
   );

@@ -16,6 +16,7 @@ import type {
   MultiRasterTilesetDescriptor,
   ProjectionFunction,
   RasterModule,
+  RasterTileMetadata,
   RasterTilesetDescriptor,
   RasterTilesetLevel,
   RenderTileResult,
@@ -861,18 +862,60 @@ export class MultiCOGLayer extends RasterTileLayer<
     }
 
     // --- Primary tile outline and label ---
-    const primaryCrsCorners = primaryLevel.projectedTileCorners(x, y);
-    const { path: primaryPath, center: primaryCenter } = cornersToWgs84Path(
-      primaryCrsCorners,
-      forwardTo4326,
-    );
+    //
+    // An antimeridian-crossing tile renders as two RasterLayer pieces (see
+    // RasterTileLayer._renderAntimeridianTile); the debug outline needs to
+    // match, or PathLayer connects a corner like 179.97° to −179.17° the
+    // "short" way in lng/lat space — the long way around the globe. Each
+    // piece's own corners stay entirely on one side of ±180°, so no unwrap
+    // correction is needed within a piece — just split at the same `uCut`
+    // pixel used to build the actual render pieces.
+    const { _antimeridianCut, forwardTransform, tileWidth, tileHeight } =
+      tile as unknown as RasterTileMetadata;
+
+    const primaryBoxes: Array<{
+      path: [number, number][];
+      center: [number, number];
+      labelSuffix: string;
+    }> = _antimeridianCut
+      ? [
+          {
+            ...pieceBoxWgs84(
+              forwardTransform,
+              forwardTo4326,
+              0,
+              _antimeridianCut.uCut * tileWidth,
+              tileHeight,
+            ),
+            labelSuffix: " (west)",
+          },
+          {
+            ...pieceBoxWgs84(
+              forwardTransform,
+              forwardTo4326,
+              _antimeridianCut.uCut * tileWidth,
+              tileWidth,
+              tileHeight,
+            ),
+            labelSuffix: " (east)",
+          },
+        ]
+      : [
+          {
+            ...cornersToWgs84Path(
+              primaryLevel.projectedTileCorners(x, y),
+              forwardTo4326,
+            ),
+            labelSuffix: "",
+          },
+        ];
 
     const primaryColor = DEBUG_COLORS[0]!;
 
     layers.push(
       new PathLayer({
         id: `${tileId}-debug-primary-outline`,
-        data: [primaryPath],
+        data: primaryBoxes.map((box) => box.path),
         getPath: (d) => d,
         getColor: primaryColor.outline,
         getWidth: 2,
@@ -882,15 +925,20 @@ export class MultiCOGLayer extends RasterTileLayer<
     );
 
     // Build primary label text
-    let primaryText = `x=${x} y=${y} z=${z}`;
+    let primaryDetail = "";
     if (debugLevel >= 2) {
-      primaryText += `  ${data.width}x${data.height}`;
+      primaryDetail += `  ${data.width}x${data.height}`;
     }
     if (debugLevel >= 3) {
-      primaryText += `  ${primaryLevel.metersPerPixel.toFixed(1)}m/px`;
+      primaryDetail += `  ${primaryLevel.metersPerPixel.toFixed(1)}m/px`;
     }
 
-    // Count total label lines for vertical stacking
+    // Secondary labels are anchored to the first primary piece's center and
+    // stacked below it. A second piece (the "east" half of a crossing tile)
+    // sits at its own separate position, so it needs no stack offset.
+    const primaryCenter = primaryBoxes[0]!.center;
+
+    // Count total label lines stacked at `primaryCenter` for vertical spacing.
     const secondaryNames = data.debugInfo
       ? [...data.debugInfo.bands.keys()]
       : [];
@@ -901,15 +949,15 @@ export class MultiCOGLayer extends RasterTileLayer<
     layers.push(
       new TextLayer({
         id: `${tileId}-debug-primary-label`,
-        data: [
-          {
-            position: primaryCenter,
-            text: primaryText,
-          },
-        ],
+        data: primaryBoxes.map((box, i) => ({
+          position: box.center,
+          text: `x=${x} y=${y} z=${z}${box.labelSuffix}${primaryDetail}`,
+          pixelOffset: i === 0 ? [0, -topOffset] : [0, 0],
+        })),
         getColor: primaryColor.text,
         getSize: 14,
-        getPixelOffset: [0, -topOffset],
+        getPixelOffset: (d: { pixelOffset: [number, number] }) =>
+          d.pixelOffset,
         sizeUnits: "pixels",
         outlineWidth: 3,
         outlineColor: [0, 0, 0, 255],
@@ -1030,6 +1078,60 @@ function createBandTexture(device: Device, array: RasterArray): Texture {
     height,
     sampler: { minFilter: "linear", magFilter: "linear" },
   });
+}
+
+/**
+ * Closed 5-point box path (in WGS84) for a pixel-space rectangle `[x0, 0] ..
+ * [x1, height]` within a tile, mapped through `forwardTransform` (pixel →
+ * source CRS) then `projectTo4326` (source CRS → WGS84).
+ *
+ * Used to draw one piece of an antimeridian-crossing tile's debug outline —
+ * mirrors `pieceBoxPath` in `@developmentseed/deck.gl-raster`'s
+ * `layer-utils.ts`, but stops at WGS84 rather than continuing on to
+ * common-space, since `_renderDebugLayers` draws in plain lng/lat.
+ *
+ * `projectTo4326` normalizes lng to `(−180°, 180°]` — the seam corner shared
+ * with the *other* piece projects to the same `+180°` regardless of which
+ * piece is asking. For the west piece that's already continuous with its
+ * other corners (~179.97°..180°), but for the east piece it isn't
+ * (180°..−179.17° would draw as a ~359° span, not the real ~0.83° gap), so
+ * every corner is unwrapped by ±360° relative to the box's first corner
+ * before PathLayer sees it.
+ */
+export function pieceBoxWgs84(
+  forwardTransform: ProjectionFunction,
+  projectTo4326: ProjectionFunction,
+  x0: number,
+  x1: number,
+  height: number,
+): { path: [number, number][]; center: [number, number] } {
+  const corners: [number, number][] = [
+    [x0, 0],
+    [x1, 0],
+    [x1, height],
+    [x0, height],
+    [x0, 0],
+  ];
+  const rawCorners = corners.map(([px, py]) => {
+    const [sx, sy] = forwardTransform(px!, py!);
+    return projectTo4326(sx, sy) as [number, number];
+  });
+  const refLng = rawCorners[0]![0];
+  const path: [number, number][] = rawCorners.map(([lng, lat]) => {
+    let unwrapped = lng;
+    while (unwrapped - refLng > 180) unwrapped -= 360;
+    while (unwrapped - refLng < -180) unwrapped += 360;
+    return [unwrapped, lat];
+  });
+  const xs = path.map((p) => p[0]);
+  const ys = path.map((p) => p[1]);
+  return {
+    path,
+    center: [
+      (Math.min(...xs) + Math.max(...xs)) / 2,
+      (Math.min(...ys) + Math.max(...ys)) / 2,
+    ],
+  };
 }
 
 /**
