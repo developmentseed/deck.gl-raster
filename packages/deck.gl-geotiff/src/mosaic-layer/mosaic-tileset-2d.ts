@@ -122,16 +122,17 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     // raster-tile-traversal.ts's per-offset frustum passes, just in lng/lat
     // instead of common-space pixels. See dev-docs/world-copies.md.
     if ((viewport.subViewports?.length ?? 0) > 1) {
-      for (let offset = -1; offset >= -MAX_MAP_COPIES; offset--) {
-        const shift = offset * 360;
-        for (const i of index.search(minX + shift, minY, maxX + shift, maxY)) {
-          matchedIndices.add(i);
-        }
-      }
-      for (let offset = 1; offset <= MAX_MAP_COPIES; offset++) {
-        const shift = offset * 360;
-        for (const i of index.search(minX + shift, minY, maxX + shift, maxY)) {
-          matchedIndices.add(i);
+      for (let n = 1; n <= MAX_MAP_COPIES; n++) {
+        for (const offset of [-n, n]) {
+          const shift = offset * 360;
+          for (const i of index.search(
+            minX + shift,
+            minY,
+            maxX + shift,
+            maxY,
+          )) {
+            matchedIndices.add(i);
+          }
         }
       }
     }

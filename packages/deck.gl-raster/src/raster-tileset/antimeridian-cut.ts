@@ -87,11 +87,8 @@ export function antimeridianCut(
 ): AntimeridianCut | undefined {
   const { topLeft, topRight, bottomLeft, bottomRight } = cornerLngs;
 
-  console.log("[antimeridianCut] corners:", cornerLngs);
-
   const topUCut = edgeUCut(topLeft, topRight);
   const bottomUCut = edgeUCut(bottomLeft, bottomRight);
-  console.log("[antimeridianCut] topUCut:", topUCut, "bottomUCut:", bottomUCut);
   if (topUCut === undefined || bottomUCut === undefined) {
     return undefined;
   }
@@ -101,6 +98,5 @@ export function antimeridianCut(
   if (Math.abs(topUCut - bottomUCut) > U_EPSILON) {
     return undefined;
   }
-  console.log("[antimeridianCut] uCut:", (topUCut + bottomUCut) / 2);
   return { uCut: (topUCut + bottomUCut) / 2 };
 }

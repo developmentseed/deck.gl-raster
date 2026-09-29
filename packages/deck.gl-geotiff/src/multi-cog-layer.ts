@@ -949,15 +949,14 @@ export class MultiCOGLayer extends RasterTileLayer<
     layers.push(
       new TextLayer({
         id: `${tileId}-debug-primary-label`,
-        data: primaryBoxes.map((box, i) => ({
+        data: primaryBoxes.map((box) => ({
           position: box.center,
           text: `x=${x} y=${y} z=${z}${box.labelSuffix}${primaryDetail}`,
-          pixelOffset: i === 0 ? [0, -topOffset] : [0, 0],
         })),
         getColor: primaryColor.text,
         getSize: 14,
-        getPixelOffset: (d: { pixelOffset: [number, number] }) =>
-          d.pixelOffset,
+        getPixelOffset: (_d: unknown, { index }: { index: number }) =>
+          index === 0 ? [0, -topOffset] : [0, 0],
         sizeUnits: "pixels",
         outlineWidth: 3,
         outlineColor: [0, 0, 0, 255],

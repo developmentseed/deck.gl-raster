@@ -443,15 +443,12 @@ export class RasterTileset2D extends Tileset2D {
     });
     // Each piece of a crossing tile needs its `forwardReproject` output
     // (common space) corrected per-point, not by one constant shift — see
-    // `buildPieceReprojection` for why.
+    // `buildPieceReprojection` for why. The correction is piece-agnostic, so
+    // both pieces share the same built bundle.
     let _westReprojection: ReprojectionFns | undefined;
     let _eastReprojection: ReprojectionFns | undefined;
     if (_antimeridianCut) {
-      _westReprojection = this.buildPieceReprojection(
-        forwardTransform,
-        inverseTransform,
-      );
-      _eastReprojection = this.buildPieceReprojection(
+      _westReprojection = _eastReprojection = this.buildPieceReprojection(
         forwardTransform,
         inverseTransform,
       );
