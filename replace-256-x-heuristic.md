@@ -1,9 +1,13 @@
-# Can the GeoJSON west>east convention replace the `x < 256` heuristic?
+# Replacing the `x < 256` antimeridian heuristic
 
-## Background
+## Problem
 
-`unwrapCommonSpaceX` (`packages/deck.gl-raster/src/raster-tileset/antimeridian-cut.ts`) corrects
-one reprojected reference point's common-space `x` for an antimeridian-crossing tile:
+An antimeridian-crossing tile gets cut into two pieces (west/east), each meshed independently. Every
+mesh vertex is reprojected through proj4, which always normalizes longitude to `(−180°, 180°]` — so
+a vertex whose true position is just past the seam comes back wrapped to the *opposite* edge of the
+map. Each piece needs its wrapped vertices corrected back onto a single contiguous mesh.
+
+The current correction, `unwrapCommonSpaceX` (`packages/deck.gl-raster/src/raster-tileset/antimeridian-cut.ts`):
 
 ```ts
 export function unwrapCommonSpaceX(x: number, tileSize: number): number {
@@ -11,50 +15,125 @@ export function unwrapCommonSpaceX(x: number, tileSize: number): number {
 }
 ```
 
-This is used both by the traversal's bounding-volume fit (`raster-tile-traversal.ts`) and, mirrored
-per piece, by `buildPieceReprojection` (`raster-tileset-2d.ts`) to place each piece's mesh vertices.
-It's a **midpoint test**: `tileSize/2` (256, in common-space units) is the threshold. It works for a
-normal, narrow tile — but it's a heuristic, not a proof, and it has a real failure mode: a piece
-wide enough that its own legitimate points cross the 256 line without ever having wrapped around the
-antimeridian at all.
+is a **magnitude test against a fixed midpoint** (256, half the world). It works for a normal,
+narrow tile. It breaks for a piece wide enough that one of its own, legitimately-placed points
+crosses that same 256 line without ever having wrapped at all — the test can't tell "this point
+wrapped around the seam" apart from "this point is just far from the seam," because both look
+identical once reduced to a single magnitude comparison. The result is a torn mesh, silently.
 
-Elsewhere in this codebase, antimeridian-crossing detection avoids exactly this kind of magnitude
-guess by using the GeoJSON bbox convention (RFC 7946 §5.2: `minX > maxX` marks a crossing bbox) —
-`unwrapEastLng` and `normalizeSourceBbox`, described below. Given that convention already solves a
-structurally similar problem cleanly, this doc asks: can it replace `unwrapCommonSpaceX` too?
+## Solution
 
-**Short answer: no — not because the convention is wrong, but because the two problems aren't the
-same shape.** Detection and per-point placement hit fundamentally different constraints. This doc
-works through why, then documents the width guard that was added instead.
+Correct each point against a **reference computed from that point's own position**, instead of a
+single fixed constant for the whole piece.
 
-## Where the GeoJSON convention is already used (and why it works there)
+`antimeridianCut` (`antimeridian-cut.ts`) already computes, for every tile, the true continuous
+longitude range of each piece — via `unwrapEastLng`, the same "west > east marks a crossing, add
+360°" comparison GeoJSON (RFC 7946 §5.2) uses for bboxes. That range is exact and doesn't degrade
+with width; it's how `antimeridianCut` locates the seam (`uCut`) in the first place, for a piece of
+*any* size.
 
-- **`unwrapEastLng(westLng, eastLng)`** (`antimeridian-cut.ts`): the literal GeoJSON idiom — if
-  `eastLng < westLng`, add 360°. Used by `edgeUCut`/`antimeridianCut` to detect whether a tile's
-  corners cross the seam and to locate the cut (`uCut`).
-- **`normalizeSourceBbox`** (`packages/deck.gl-geotiff/src/mosaic-layer/mosaic-layer.ts`): the same
-  idiom applied to a `MosaicLayer` source's bbox before it's indexed into Flatbush.
+Reuse it. For a sample point at parameter `t ∈ [0,1]` along a piece, linearly interpolate between the
+piece's two already-known corner longitudes to get an **expected** longitude for that point — pure
+arithmetic on two numbers already in hand, no extra proj4 call. Then snap the point's real (wrapped)
+projected longitude to the representative nearest that expected value:
 
-Both are **corner/bbox-level, one-shot, detection-time** uses: given exactly two known longitudes
-(west corner, east corner), decide "does this cross, and if so, where." That's a single yes/no
-comparison between two known values — it doesn't care how wide the span between them is. A dataset
-whose bbox is 300° wide is detected exactly as reliably as one that's 3° wide, because there's
-nothing here to disambiguate — the two corners are given directly, not derived by guessing which
-"copy" of a periodic function they came from.
+```
+corrected = actual + round((expected − actual) / 360) * 360
+```
 
-`unwrapCommonSpaceX`'s job is different: given a single **already-wrapped** output value (a mesh
-vertex's `x`, after it's been through a proj4 forward projection that only ever returns something in
-`(−180°, 180°]`), decide how many multiples of 360° it's actually offset by. That's not a two-value
-comparison — it's recovering information that's already been thrown away by the projection.
+**In plain terms:** the old test asks one global question — "is this point in the left half of the
+whole map?" — and treats "yes" as proof it wrapped. But a wide piece can have points that are
+genuinely, correctly in the left half without anything having wrapped at all; the test can't tell
+the two apart because it only ever looks at one number in isolation. The new test asks a different,
+local question instead — "is this point roughly where I'd expect it, given where it sits *within this
+piece*?" — and only nudges it by a full world-width if the answer is no. Because the expectation
+moves with the point instead of sitting fixed at one spot, it stays a useful check no matter how wide
+the piece is.
 
-## Trying the "obvious" fix: make the reference explicit and piece-relative
+**Worked example.** Take a tile whose corners are native lng −100° and +190° (un-normalized, so
+west < east as usual) — crossing the seam at 180°, `uCut = (180−(−100))/(190−(−100)) = 280/290`. The
+west piece spans native lng −100° to 180°: 280° wide, entirely inside proj4's normal `(−180°,180°]`
+range, so *nothing in this piece ever wraps at all*. Take a point near its far edge, native lng −90°
+(`t = 10/280 ≈ 0.036`). proj4 returns it unchanged, −90° (no wrap — there's nothing to correct) →
+common-space `x ≈ 128`. The old test only looks at that `x`: `128 < 256`, so it "corrects" a point
+that was already correct, shifting it a full world-width to `x ≈ 640` and tearing the mesh — the
+heuristic doesn't require an actual wrap to misfire, just a piece wide enough to have legitimate
+points below the midpoint.
 
-The first instinct is: instead of a hardcoded `tileSize/2`, compare each point against its own
-piece's *known* reference corner — the same "compare against a trusted value" idiom `unwrapEastLng`
-uses, instead of a magic constant.
+The new test instead interpolates an expected value for this point: `expected = −100 + 0.036×280 =
+−90°` — matching the actual value exactly. `round((−90 − (−90))/360) = 0`, so `corrected = −90°`,
+unchanged. It correctly recognizes nothing needs fixing, because its reference was computed from
+*this point's own position in the piece*, not a fixed line drawn through the middle of the world.
 
-Concretely: west piece's own seam-adjacent corner is always expected at common-space `x = tileSize`
-(512); east piece's at `x = 0`. Write the correction as reference-relative:
+## Why this is the most general and robust solution
+
+**It has no artificial width limit.** The old test's ±180°-from-256 limit comes entirely from using
+one fixed reference for an entire piece — any single, fixed reference (256, a corner, anything) can
+only disambiguate up to half a period away from itself, and that's true regardless of how the
+reference is chosen or where the test is performed (common-space, longitude-space, doesn't matter —
+same wall, different name). A *per-point* reference doesn't have this problem: it's derived from
+where that specific point actually sits, so it stays close to the true value everywhere across the
+piece, no matter how wide the piece is.
+
+**The only remaining constraint isn't a new one.** The interpolation is only meaningful if the
+piece's two corner longitudes describe a real, non-self-overlapping span — i.e. the tile's total
+width is under 360°. That's not a limitation this fix introduces or fails to solve: data ≥360° wide
+already has two pixels claiming the same real-world longitude, which is invalid regardless of how
+it's rendered. No correction, however general, can produce a "correct" placement for data that
+doesn't have one. This fix's domain of validity is exactly the domain of valid input.
+
+**It reuses machinery that's already trusted and already width-independent.** `unwrapEastLng` and
+the corner data it produces are the *detection* step, used today for cut location and (via
+`normalizeSourceBbox`) Mosaic source indexing — both already work at any width, because comparing
+two known longitudes against each other never degrades the way a magnitude test against a fixed
+constant does. This fix doesn't add a new mechanism; it extends the reach of the one already proven
+correct at the corners down to every interior point.
+
+**It doesn't reintroduce the fragility of a rejected prior approach.** A generic phase-unwrap that
+walks samples in spatial order and accumulates an offset from neighbor to neighbor (tried and
+rejected as PR #374) is order-dependent, and one bad sample corrupts everything downstream of it.
+This fix computes each point's reference independently, straight from validated corner geometry —
+no walk order, no accumulated error, no dependency between points.
+
+**It keeps the existing architecture.** No change to the cut-into-two-pieces design, no change to
+where `RasterReprojector` runs or what it needs — only the per-point correction step inside a piece
+that's already known to be isolated on one side of the seam.
+
+## Prior art already using this idiom (detection only, not placement — until now)
+
+- **`unwrapEastLng(westLng, eastLng)`** — the GeoJSON west>east idiom itself, used by
+  `edgeUCut`/`antimeridianCut` to detect a crossing and locate the seam.
+- **`normalizeSourceBbox`** (`packages/deck.gl-geotiff/src/mosaic-layer/mosaic-layer.ts`) — the same
+  idiom applied to a `MosaicLayer` source's bbox before Flatbush indexing.
+
+Both are one-shot, corner-level comparisons — this fix is the same idea, applied per interior point
+instead of once at the corners.
+
+## Before implementing
+
+- **`antimeridianCut`'s return type needs extending** — currently just `{ uCut }`; the render and
+  traversal code need each piece's corner longitudes too, to interpolate against. Natural to add
+  `westLng`/`unwrappedEastLng` (already computed internally) to `AntimeridianCut`.
+- **Mesh vertices for a very wide piece will legitimately land outside `[0, 512]`** (into
+  neighboring world copies) — expected, and already how deck.gl's repeat rendering works via
+  `worldOffset` translation. `MAX_MAPS = 3` in `raster-tile-traversal.ts` (and the equivalent in
+  `mosaic-tileset-2d.ts`) may need to scale with piece width for a genuinely extreme piece rather
+  than staying a fixed constant.
+- **Validate the interpolation assumption against a pathological CRS.** The interpolated reference
+  only needs to land within 180° of the true value to disambiguate correctly — a low bar for any
+  reasonably-behaved projection over one tile's extent — but this hasn't been stress-tested outside
+  the straight/vertical-or-slanted-cut MVP scope this project already targets.
+- **`MAX_PIECE_SPAN_DEG` (already implemented, `antimeridian-cut.ts`)** — its role changes from
+  "reject any piece ≥170° wide" to a check against genuine self-overlap (total tile width ≥360°);
+  the threshold should move accordingly rather than being dropped outright.
+
+## Appendix: two fixed-reference variants considered and rejected
+
+Both were tried first, before landing on the per-point version above — kept here because they're the
+reasoning that rules out the "just use the GeoJSON idiom directly" instinct.
+
+**Piece-relative fixed reference.** Compare each point against its own piece's known corner instead
+of a bare constant:
 
 ```ts
 function unwrap(x, reference, worldWidth) {
@@ -65,121 +144,22 @@ function unwrap(x, reference, worldWidth) {
 }
 ```
 
-For the west piece, `reference = 512`: `x - 512 < -256` ⟺ `x < 256` → add 512. **Identical to the
-current test.** For the east piece, `reference = 0`: `x - 0 > 256` ⟺ `x >= 256` → subtract 512.
-**Also identical.**
+For the west piece (`reference = 512`): `x - 512 < -256 ⟺ x < 256` — identical to the current test.
+Same for east (`reference = 0`). Not a coincidence: for this geometry, the only legitimate *fixed*
+reference for each piece is 0 or 512, both literally the antimeridian viewed from that piece's own
+frame — so an explicit reference-relative version collapses to the exact arithmetic already shipped.
 
-This isn't a coincidence to be engineered around — it's forced. For this exact geometry (a tile cut
-into precisely two pieces, both anchored at the seam), the *only* legitimate reference for each
-piece is 0 or 512 — both of which are literally the antimeridian, just viewed from each piece's own
-frame. Their arithmetic midpoint is unavoidably 256. Reframing the test as "reference-relative"
-doesn't change what reference to use, because there was never a real choice of reference to make.
-**No improvement available here.**
+**Unwrap in longitude space before the linear rescale.** EPSG:3857's `x` is exactly linear in
+longitude, so try correcting the longitude (via the `unwrapEastLng` comparison) before that linear
+step instead of after. This looked promising enough on a first pass to conclude it might extend the
+safe range to just under 360° — worth keeping the mistake visible, since it's the natural way to
+talk yourself into thinking this direction works. The error: treating "±180° around the reference"
+as the piece's *whole* width budget (360° total), when the reference is one *edge* of the piece, not
+its center — the piece only extends away from that edge in one direction, so the usable budget in
+that direction is still capped at just under 180°. Moving the correction earlier doesn't change how
+much information the projection already threw away — same limit, different domain.
 
-## Trying to move the correction earlier: unwrap in longitude space, not common space
-
-Second instinct: EPSG:3857's `x` is *exactly linear* in longitude (`x = R · radians(lng)`, no
-trigonometry, unlike the `y` axis) — so what if the wrap correction happened on the longitude
-*before* that linear step, using the same `unwrapEastLng`-style "compare against the piece's known
-reference longitude" logic, instead of correcting the already-rescaled common-space output?
-
-This felt promising enough in the first pass of reasoning through it to conclude it might extend the
-safe range all the way to just under 360° per piece. That conclusion was **wrong**, and the mistake
-is worth keeping visible rather than editing out, because it's the natural way to talk yourself into
-believing this direction works:
-
-- The error was measuring the safe window as "±180° around the reference" and calling that the
-  piece's *width budget* — i.e. up to 360° total, 180° in each direction.
-- But the reference longitude is the piece's own **seam corner** — one *edge* of the piece, not its
-  center. The piece only extends *away* from that edge in one direction. So the usable budget is the
-  distance from the reference to the piece's *far* corner in that single direction — which is capped
-  at just under 180°, not 360°, before you reach the reference's own antipode and the same ambiguity
-  reappears.
-
-Redone correctly: doing the correction in longitude-space before the linear rescale hits the
-**exact same ±180°-per-piece limit** as doing it in common-space after. Moving where the correction
-happens doesn't change how much information was lost — the projection is periodic with period 360°
-regardless of which side of the linear rescale you sit on, and no single-reference comparison can
-resolve an ambiguity wider than half that period. **No improvement here either.**
-
-## The actual limit, stated plainly
-
-Any point-independent correction anchored to a single reference — whether phrased as "is `x`
-past the midpoint," "is `x` more than half a world from this piece's known corner," or "is this
-point's longitude more than 180° from the seam" — is the same test under different names, and none
-of them can disambiguate a 360°-periodic signal beyond **±180° from the reference**. This is a
-property of the math (Nyquist-style: you cannot recover a signal's true phase from a wrapped sample
-that's more than half a period from your only reference point), not a gap in how cleverly the
-formula is written. `unwrapCommonSpaceX`'s width limit was never really "assumes points don't
-wander past Greenwich" (256 only numerically coincides with the prime meridian) — it's "assumes each
-piece is under ~180° wide," which is the actual, unavoidable constraint on this entire class of
-correction.
-
-**What would genuinely raise the limit**: true neighbor-relative phase unwrapping — walk a piece's
-sample points in spatial order and accumulate a running ±360° offset whenever adjacent samples jump
-by more than half a period. This is the only way to legitimately handle a piece approaching 360°
-wide. It's also exactly the family of fix the antimeridian design doc already tried and explicitly
-rejected (PR #374, "sank" — see `dev-docs/specs/2026-05-27-antimeridian-crossing-tile-design.md`,
-"Why not render-as-one"), and it doesn't fit this codebase's current sampling architecture (each of
-the 9 reference points / mesh vertices is computed independently, with no defined spatial adjacency
-or traversal order to accumulate along). Reintroducing it here would be resurrecting a
-previously-rejected approach for a risk that has a much cheaper fix available — see below.
-
-## The width guard (implemented)
-
-Since no formula closes the gap, the fix is to detect when a piece would exceed the safe range and
-refuse to cut it — the same way an unsupported slanted or curved cut is already refused, rather than
-silently producing a torn mesh.
-
-**`antimeridianCut`** (`antimeridian-cut.ts`) now computes each piece's angular span from the same
-unwrapped corner longitudes already used for cut detection — no new data needed:
-
-```ts
-const MAX_PIECE_SPAN_DEG = 170;
-
-// ...after computing uCut from the top/bottom edge crossings:
-const totalSpanDeg = unwrapEastLng(topLeft, topRight) - topLeft;
-const westPieceSpanDeg = uCut * totalSpanDeg;
-const eastPieceSpanDeg = totalSpanDeg - westPieceSpanDeg;
-if (
-  westPieceSpanDeg >= MAX_PIECE_SPAN_DEG ||
-  eastPieceSpanDeg >= MAX_PIECE_SPAN_DEG
-) {
-  return undefined;
-}
-```
-
-`170` rather than the mathematical limit of `180` leaves margin against floating-point noise right
-at the boundary. Returning `undefined` reuses the exact fallback path a curved or slanted cut
-already takes: the caller renders the tile as a single full mesh instead of splitting it — not a
-new failure mode, the same one #366 already documented for wide/global tiles, just reached
-deliberately instead of by silent corruption.
-
-Covered by tests in `antimeridian-cut.test.ts`: a piece just under the threshold still cuts
-normally, and a piece at or over it returns `undefined` instead of a cut.
-
-## Limitations (explicit)
-
-- **The guard doesn't fix wide tiles — it stops them from being silently wrong.** A rejected
-  crossing tile falls back to a single full mesh, which can still hit the original #366 divergence
-  (`RasterReprojector` failing to converge) for a genuinely wide/global tile. That's a pre-existing,
-  documented limitation of the render-as-one fallback, not something this guard solves.
-- **No per-point or per-piece formula can raise the 170°/180° limit.** Every variant considered
-  above — common-space, reference-relative, longitude-space — is the same test in different clothes.
-  Only neighbor-relative phase unwrapping could, and that's already-rejected territory (#374).
-- **Practical exposure is low for normally-tiled data.** A single OGC/zarr tile — including the
-  PDC/EPSG:3832 data this PR targets — is almost always a small fraction of the globe. The real risk
-  is concentrated in coarse `z=0` root tiles of lightly-tiled global datasets (the codebase already
-  has special-casing elsewhere for datasets with very few root tiles, e.g. `MAX_ROOT_TILES_NO_CULL`
-  in `raster-tile-traversal.ts`) — worth checking if any real dataset's coarsest level can actually
-  produce a piece this wide, but not an urgent risk for typically-tiled sources.
-
-## Conclusion
-
-The GeoJSON west>east convention is already doing the right job everywhere it's used —
-`unwrapEastLng`/`antimeridianCut` for cut detection, `normalizeSourceBbox` for Mosaic source
-indexing — and neither needs replacing. It does not generalize into a fix for
-`unwrapCommonSpaceX`'s per-point placement correction: reframed as reference-relative, it's
-arithmetically identical to what's already shipped; moved into longitude-space, it hits the same
-±180°-per-piece wall under a different name. The width guard added to `antimeridianCut` — reject and
-fall back, not a smarter formula — is the right-sized fix for the actual risk.
+Both share the same root cause: a single, fixed reference for the whole piece can only disambiguate
+±180° around itself, regardless of how cleverly the reference is chosen or which domain the
+comparison happens in. That part of the reasoning holds. What doesn't hold is that a fixed reference
+was the only option — see "Solution" above.
