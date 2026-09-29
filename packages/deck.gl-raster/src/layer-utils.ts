@@ -43,30 +43,30 @@ export function renderDebugTileOutline(
   tile: Tile2DHeader & RasterTileMetadata,
   forwardTo4326: ReprojectionFns["forwardReproject"],
 ) {
-  const { _antimeridianCut, _westReprojection } = tile;
+  const { _antimeridianCut, _westReprojection, _eastReprojection } = tile;
 
-  // A crossing tile renders as two `RasterLayer`s in different world
-  // copies (see `RasterTileLayer._renderAntimeridianTile`) — the debug
-  // outline needs to match, in the same common-space coordinate system,
-  // rather than drawing one WGS84 box whose corners (e.g. lng 179.97° and
-  // −179.17°) `PathLayer` would connect the long way around the globe.
-  if (_antimeridianCut && _westReprojection) {
-    // Both pieces share the same (piece-agnostic) reprojection bundle — see
-    // `RasterTileset2D.buildPieceReprojection`.
-    const { forwardReproject } = _westReprojection;
+  // A crossing tile renders as two `RasterLayer`s, each at its own natural
+  // common-space position (see `RasterTileLayer._renderAntimeridianTile` and
+  // `RasterTileset2D.buildPieceReprojection`) — the debug outline needs to
+  // match, using EACH piece's own reprojection, rather than drawing one WGS84
+  // box whose corners (e.g. lng 179.97° and −179.17°) `PathLayer` would
+  // connect the long way around the globe, or using one piece's reprojection
+  // for both (which would place the east box a full world away from where
+  // it actually renders).
+  if (_antimeridianCut && _westReprojection && _eastReprojection) {
     const { uCut } = _antimeridianCut;
     const { tileWidth, tileHeight, forwardTransform } = tile;
     const cutPx = uCut * tileWidth;
     const westPath = pieceBoxPath(
       forwardTransform,
-      forwardReproject,
+      _westReprojection.forwardReproject,
       0,
       cutPx,
       tileHeight,
     );
     const eastPath = pieceBoxPath(
       forwardTransform,
-      forwardReproject,
+      _eastReprojection.forwardReproject,
       cutPx,
       tileWidth,
       tileHeight,

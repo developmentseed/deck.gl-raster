@@ -29,6 +29,7 @@ import {
 } from "@math.gl/culling";
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
+import { antimeridianCut, unwrapCommonSpaceX } from "./antimeridian-cut.js";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import type {
   RasterTilesetDescriptor,
@@ -62,6 +63,12 @@ export const TILE_SIZE = 512;
  * `@deck.gl/geo-layers/tile-2d-traversal.ts`.
  */
 const MAX_MAPS = 3;
+
+/** TEMP DEBUG: true if `x` (mod TILE_SIZE) is within 20 units of a seam (0 or TILE_SIZE), to gate noisy per-tile logging to only antimeridian-relevant tiles. */
+function isNearSeam(x: number): boolean {
+  const mod = ((x % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
+  return mod < 20 || mod > TILE_SIZE - 20;
+}
 
 // Reference points used to sample tile boundaries for bounding volume
 // calculation.
@@ -325,6 +332,12 @@ export class RasterTileNode {
         0,
       );
       if (!this.insideBounds(bounds, primaryWorldVolume.commonSpaceBounds)) {
+        if (isNearSeam(primaryWorldVolume.commonSpaceBounds[0])) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[AM-DEBUG] BOUNDS-REJECT z=${this.z} x=${this.x} y=${this.y} worldOffset=${worldOffset} tileBounds=${primaryWorldVolume.commonSpaceBounds.map((n) => n.toFixed(1))} datasetBounds=${bounds.map((n) => n.toFixed(1))}`,
+          );
+        }
         return false;
       }
     }
@@ -334,6 +347,12 @@ export class RasterTileNode {
     // Returns: <0 if outside, 0 if intersecting, >0 if fully inside
     const isInside = cullingVolume.computeVisibility(boundingVolume);
     if (isInside < 0) {
+      if (isNearSeam(boundingVolume.center[0] ?? 0)) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[AM-DEBUG] FRUSTUM-REJECT z=${this.z} x=${this.x} y=${this.y} worldOffset=${worldOffset} center=${boundingVolume.center[0]?.toFixed(1)},${boundingVolume.center[1]?.toFixed(1)}`,
+        );
+      }
       return false;
     }
 
@@ -362,6 +381,12 @@ export class RasterTileNode {
         (children === null && this.z >= minZ)
       ) {
         this.selected = true;
+        if (isNearSeam(boundingVolume.center[0] ?? 0)) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[AM-DEBUG] SELECTED z=${this.z} x=${this.x} y=${this.y} worldOffset=${worldOffset} devicePixelsPerSourcePixel=${devicePixelsPerSourcePixel.toFixed(3)}`,
+          );
+        }
         return true;
       }
     }
@@ -528,6 +553,19 @@ export class RasterTileNode {
 
     const tileCorners = this.level.projectedTileCorners(this.x, this.y);
 
+    // Detect whether this tile crosses ±180°. proj4's forward-to-3857
+    // (below) wraps longitudes outside (-180°, 180°] back into range, so a
+    // crossing tile's reference points past the seam land on the opposite
+    // edge of common space unless corrected — see `unwrapCommonSpaceX`.
+    const cornerLng = (corner: Point): number =>
+      this.descriptor.projectTo4326(corner[0], corner[1])[0];
+    const cut = antimeridianCut({
+      topLeft: cornerLng(tileCorners.topLeft),
+      topRight: cornerLng(tileCorners.topRight),
+      bottomLeft: cornerLng(tileCorners.bottomLeft),
+      bottomRight: cornerLng(tileCorners.bottomRight),
+    });
+
     const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
       REF_POINTS_9,
       tileCorners,
@@ -535,9 +573,16 @@ export class RasterTileNode {
       this.descriptor.projectTo4326,
     );
 
-    const commonSpacePositions = refPointsEPSG3857.map((xy) =>
-      rescaleEPSG3857ToCommonSpace(xy),
-    );
+    const commonSpacePositions: [number, number][] = refPointsEPSG3857
+      .map((xy) => rescaleEPSG3857ToCommonSpace(xy))
+      .map(([x, y]) => (cut ? [unwrapCommonSpaceX(x, TILE_SIZE), y] : [x, y]));
+
+    // eslint-disable-next-line no-console
+    if (cut) {
+      console.warn(
+        `[AM-DEBUG] bbox z=${this.z} x=${this.x} y=${this.y} cut.uCut=${cut.uCut.toFixed(4)} rawX=${refPointsEPSG3857.map((xy) => rescaleEPSG3857ToCommonSpace(xy)[0].toFixed(2)).join(",")} correctedX=${commonSpacePositions.map((p) => p[0].toFixed(2)).join(",")}`,
+      );
+    }
 
     const refPointPositions: [number, number, number][] = [];
     for (const p of commonSpacePositions) {
@@ -953,6 +998,50 @@ export function getTileIndices(
   const [minLng, minLat, maxLng, maxLat] = wgs84Bounds;
   const bottomLeft = lngLatToWorld([minLng, minLat]);
   const topRight = lngLatToWorld([maxLng, maxLat]);
+
+  // `wgs84Bounds` is derived from `descriptor.projectedBounds` via a plain
+  // min/max over densified samples (see `RasterTileset2D`'s constructor),
+  // which — like a single tile's naive reference-point reprojection — loses
+  // antimeridian awareness for a crossing dataset. Detect crossing directly
+  // from the dataset's own corner longitudes (mirroring the per-tile
+  // `cornerLng`/`antimeridianCut` check in `_getGenericBoundingVolume`) and
+  // apply the same `unwrapCommonSpaceX` correction, so this bounds pre-filter
+  // agrees with the now-corrected per-tile bounding volumes it's compared
+  // against in `RasterTileNode.update`'s `insideBounds` check — otherwise a
+  // crossing tile's corrected box (starting at x=TILE_SIZE) and this
+  // uncorrected dataset box (ending at x=TILE_SIZE) merely touch instead of
+  // overlapping, and the tile is wrongly rejected at every zoom.
+  const [projMinX, , projMaxX, projMaxY] = descriptor.projectedBounds;
+  const datasetWestLng = descriptor.projectTo4326(projMinX, projMaxY)[0];
+  const datasetEastLng = descriptor.projectTo4326(projMaxX, projMaxY)[0];
+  const datasetCut = antimeridianCut({
+    topLeft: datasetWestLng,
+    topRight: datasetEastLng,
+    bottomLeft: datasetWestLng,
+    bottomRight: datasetEastLng,
+  });
+  if (datasetCut) {
+    // `bottomLeft`/`topRight` above came from `wgs84Bounds`'s already-lossy
+    // min/max (mixed together from densified samples on both sides of the
+    // seam) — patching those two numbers independently would collapse the
+    // box, since they no longer correspond to "the west corner" and "the
+    // east corner" individually. Recompute each corner's common-space x
+    // directly from its own real longitude instead, then apply the same
+    // per-point unwrap rule used for a single tile's reference points.
+    bottomLeft[0] = unwrapCommonSpaceX(
+      lngLatToWorld([datasetWestLng, minLat])[0],
+      TILE_SIZE,
+    );
+    topRight[0] = unwrapCommonSpaceX(
+      lngLatToWorld([datasetEastLng, maxLat])[0],
+      TILE_SIZE,
+    );
+  }
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[AM-DEBUG] datasetCut=${datasetCut ? datasetCut.uCut.toFixed(4) : "undefined"} datasetLngs=${datasetWestLng.toFixed(3)},${datasetEastLng.toFixed(3)} bottomLeft=${bottomLeft[0].toFixed(2)} topRight=${topRight[0].toFixed(2)}`,
+  );
+
   const bounds: Bounds = [
     bottomLeft[0],
     bottomLeft[1],
@@ -983,13 +1072,19 @@ export function getTileIndices(
     root.update(traversalParams);
   }
 
-  // World-copy passes: when the viewport spans multiple world copies (e.g.
-  // WebMercatorViewport with repeat: true panned across the antimeridian),
+  // World-copy passes: whenever repeat mode is active (`subViewports` is
+  // non-null — not just when the viewport's own bounds currently straddle a
+  // ±180° multiple, which says nothing about whether some tile's position
+  // is on a different world-copy frame than the viewport's canonical one),
   // re-run the traversal with the tile bounding volumes shifted by ±1, ±2…
   // world copies along common-space X. A tile is selected if any pass selects
-  // it. See dev-docs/world-copies.md.
-  const subViewportCount = viewport.subViewports?.length ?? 0;
-  if (subViewportCount > 1) {
+  // it. The early-break below keeps this cheap when nothing is near a seam.
+  // See dev-docs/world-copies.md.
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[AM-DEBUG] subViewports.length=${viewport.subViewports?.length ?? "null"}`,
+  );
+  if (viewport.subViewports != null) {
     for (let offset = -1; offset >= -MAX_MAPS; offset--) {
       if (!runOffsetPass(roots, traversalParams, offset)) {
         break;

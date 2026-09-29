@@ -139,27 +139,30 @@ describe("RasterTileset2D.getTileMetadata — _antimeridianCut", () => {
       expect(cx).toBeCloseTo(477.87, 1);
     });
 
-    it("shifts a point that wraps to common-space x < TILE_SIZE/2 by +TILE_SIZE (east piece's interior)", () => {
+    it("leaves the east piece's interior unshifted (already its own natural, near-0 position)", () => {
       const metadata = crossingMetadata();
       // Native lng −162° wraps to −162° (already in range) → common-space
-      // x ≈ 25.6 (< 256) → shifted to ≈ 537.6, continuing past the west
-      // piece's edge instead of wrapping back to the start of the world.
+      // x ≈ 25.6 (< 256) — left as-is, since this IS the east piece's own
+      // natural position. Forcing it to join the west piece's frame (the old
+      // +TILE_SIZE behavior) put it a full world away from wherever the
+      // camera was actually looking whenever only the east piece was in
+      // view — see `buildPieceReprojection`'s doc comment.
       const [cx] = metadata._eastReprojection!.forwardReproject(-162, 24);
-      expect(cx).toBeCloseTo(25.6 + TILE_SIZE, 1);
+      expect(cx).toBeCloseTo(25.6, 1);
     });
 
-    it("does NOT shift the exact seam corner, even though it's the east piece's own west edge — the bug this fix corrects", () => {
+    it("shifts the seam corner by -TILE_SIZE for the east piece, joining its own interior instead of the west piece's frame", () => {
       // The seam itself: native lng −180° wraps to exactly +180° →
-      // common-space x = TILE_SIZE exactly (512, not < TILE_SIZE/2). This is
-      // the same corner as the west piece's east edge — both pieces must
-      // agree on it, or the boundary corner gets double-shifted (regression
-      // test for the real-world bug: a single per-piece constant shift
-      // pushed this corner to 1024 instead of leaving it at 512).
+      // common-space x = TILE_SIZE exactly (512). For the WEST piece this is
+      // its own natural east edge — no shift. For the EAST piece this same
+      // raw value is its own west edge, but belongs to the east piece's
+      // natural (near-0) frame, so it shifts by -TILE_SIZE to join up with
+      // that piece's interior (≈25.6) rather than sitting a full world away.
       const metadata = crossingMetadata();
       const [westCx] = metadata._westReprojection!.forwardReproject(-180, 24);
       const [eastCx] = metadata._eastReprojection!.forwardReproject(-180, 24);
       expect(westCx).toBeCloseTo(TILE_SIZE, 9);
-      expect(eastCx).toBeCloseTo(TILE_SIZE, 9);
+      expect(eastCx).toBeCloseTo(0, 9);
     });
 
     it("round-trips forwardReproject/inverseReproject for a shifted point", () => {

@@ -20,7 +20,7 @@ import type {
 } from "@developmentseed/raster-reproject";
 import type { Matrix4 } from "@math.gl/core";
 import type { AntimeridianCut } from "./antimeridian-cut.js";
-import { antimeridianCut } from "./antimeridian-cut.js";
+import { antimeridianCut, unwrapCommonSpaceX } from "./antimeridian-cut.js";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import {
   getTileIndices,
@@ -443,14 +443,23 @@ export class RasterTileset2D extends Tileset2D {
     });
     // Each piece of a crossing tile needs its `forwardReproject` output
     // (common space) corrected per-point, not by one constant shift — see
-    // `buildPieceReprojection` for why. The correction is piece-agnostic, so
-    // both pieces share the same built bundle.
+    // `buildPieceReprojection` for why. West and east each get their OWN
+    // bundle (mirror-image corrections), so each piece renders at its own
+    // natural, internally-consistent position rather than both being forced
+    // into the west piece's frame — see that method's doc comment for why a
+    // single shared bundle breaks visibility when only one piece is in view.
     let _westReprojection: ReprojectionFns | undefined;
     let _eastReprojection: ReprojectionFns | undefined;
     if (_antimeridianCut) {
-      _westReprojection = _eastReprojection = this.buildPieceReprojection(
+      _westReprojection = this.buildPieceReprojection(
         forwardTransform,
         inverseTransform,
+        "west",
+      );
+      _eastReprojection = this.buildPieceReprojection(
+        forwardTransform,
+        inverseTransform,
+        "east",
       );
     }
 
@@ -489,36 +498,70 @@ export class RasterTileset2D extends Tileset2D {
    * *below* `TILE_SIZE` (e.g. 511.95) — no correction needed. The east
    * piece's *interior* has native lngs just past −180° after proj4's
    * wraparound (e.g. −179.17°), mapping to common-space x just *above* 0
-   * (e.g. 1.18) — this needs `+TILE_SIZE` to sit continuously past the west
-   * piece. But the east piece's own west edge *is* the seam itself (native
-   * lng exactly 180°), which `projectPosition` maps to common-space x
-   * exactly `TILE_SIZE` — the *same* boundary value as the west piece's
-   * east edge, needing *no* correction, even though it belongs to the east
-   * piece.
+   * (e.g. 1.18) — already its own natural, internally-consistent position.
+   * The east piece's own west edge *is* the seam itself (native lng exactly
+   * 180°), which `projectPosition` maps to common-space x exactly
+   * `TILE_SIZE` — the *same* boundary value as the west piece's east edge,
+   * but *belonging* to the east piece's natural (near-0) frame, so it needs
+   * `-TILE_SIZE` to join up with that piece's interior rather than sitting a
+   * full world away from it.
    *
    * So the correction can't be "shift this whole piece by one world" (a
    * single piece can contain both a boundary point at exactly the seam and
-   * interior points on the wrapped side of it) — it has to be a per-point
-   * test: any raw common-space x in the lower half `[0, TILE_SIZE/2)` is on
-   * the wrapped side and gets `+TILE_SIZE`; everything else (including the
-   * exact-seam boundary, at `TILE_SIZE`) is left alone. This is symmetric
-   * for both pieces — the west piece's raw x values never fall below
-   * `TILE_SIZE/2`, so the test is a no-op there, matching its already-correct
-   * behavior.
+   * interior points already on its own natural side) — it has to be a
+   * per-point test, and it's *mirrored* between the two pieces: the west
+   * piece shifts raw x in `[0, TILE_SIZE/2)` up by `+TILE_SIZE` (a no-op for
+   * its own raw values, which never fall below `TILE_SIZE/2`); the east
+   * piece shifts raw x in `[TILE_SIZE/2, TILE_SIZE]` down by `-TILE_SIZE` (a
+   * no-op for its own interior, which never reaches `TILE_SIZE/2`).
+   *
+   * Each piece therefore renders at its *own* natural common-space position
+   * (west near `TILE_SIZE`, east near `0`) instead of both being forced into
+   * one shared, artificially-combined frame. This matters once the viewport
+   * is zoomed into just one piece, away from the seam: deck.gl's own
+   * world-copy/repeat rendering already knows how to place a layer's raw,
+   * unmodified position on screen regardless of which world copy the camera
+   * is centered on (the same mechanism that already renders ordinary,
+   * non-crossing tiles correctly at any zoom) — but only if that position is
+   * the piece's genuine one. Forcing the east piece into the west piece's
+   * frame put it a full world away from wherever the camera was actually
+   * looking whenever only the east piece was in view, leaving it selected
+   * (fetched) but invisible. When *both* pieces are in view (viewport
+   * straddling the seam), deck.gl's own repeat rendering draws each piece at
+   * every world copy it's visible in, so the west piece (near `TILE_SIZE`)
+   * and the east piece (near `0`, repeat-rendered a world copy over at
+   * `TILE_SIZE`) still meet up seamlessly — no manual cross-piece shift
+   * needed for that case either.
    */
   private buildPieceReprojection(
     forwardTransform: ProjectionFunction,
     inverseTransform: ProjectionFunction,
+    piece: "west" | "east",
   ): ReprojectionFns {
     return {
       forwardTransform,
       inverseTransform,
       forwardReproject: (x, y) => {
         const [cx, cy] = this.projectPosition(x, y);
-        return cx < TILE_SIZE / 2 ? [cx + TILE_SIZE, cy] : [cx, cy];
+        const corrected =
+          piece === "west"
+            ? unwrapCommonSpaceX(cx, TILE_SIZE)
+            : cx >= TILE_SIZE / 2
+              ? cx - TILE_SIZE
+              : cx;
+        return [corrected, cy];
       },
-      inverseReproject: (cx, cy) =>
-        this.unprojectPosition(cx >= TILE_SIZE ? cx - TILE_SIZE : cx, cy),
+      inverseReproject: (cx, cy) => {
+        const raw =
+          piece === "west"
+            ? cx >= TILE_SIZE
+              ? cx - TILE_SIZE
+              : cx
+            : cx < 0
+              ? cx + TILE_SIZE
+              : cx;
+        return this.unprojectPosition(raw, cy);
+      },
     };
   }
 }

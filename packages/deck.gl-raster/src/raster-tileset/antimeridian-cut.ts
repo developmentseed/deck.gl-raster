@@ -44,6 +44,19 @@ export function unwrapEastLng(westLng: number, eastLng: number): number {
 }
 
 /**
+ * Correct one reprojected reference point's common-space x for an
+ * antimeridian-crossing tile: raw x in the lower half `[0, tileSize/2)` is
+ * on the wrapped side (proj4 normalized it back into range) and gets
+ * `+tileSize`, continuing past the near-180 side instead of wrapping to the
+ * start of the world. No-op for a point already on the near-180 side,
+ * including the exact seam boundary. See `buildPieceReprojection` for the
+ * full reasoning (same rule, applied there per-piece at render time).
+ */
+export function unwrapCommonSpaceX(x: number, tileSize: number): number {
+  return x < tileSize / 2 ? x + tileSize : x;
+}
+
+/**
  * Locate where a single horizontal edge crosses the antimeridian, as a fraction
  * of the edge's eastward span (0 at the west corner, 1 at the east corner).
  *
