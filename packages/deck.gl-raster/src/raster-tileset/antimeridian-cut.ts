@@ -33,6 +33,27 @@ export interface AntimeridianCut {
 const U_EPSILON = 1e-6;
 
 /**
+ * Maximum longitude span (degrees) either piece may have after the cut.
+ *
+ * `unwrapCommonSpaceX`'s per-point correction (and `buildPieceReprojection`'s
+ * matching per-vertex correction) assumes a piece's own interior never
+ * legitimately crosses the common-space halfway point (x = tileSize/2,
+ * i.e. the piece spans less than 180° of longitude): any point found past
+ * that mark is treated as a wrapped artifact of the seam and shifted a full
+ * world-width. For a piece ≥ 180° wide that assumption breaks — a point can
+ * legitimately cross the halfway mark without having wrapped at all, and
+ * gets wrongly shifted, tearing the mesh. There is no simple per-point or
+ * per-piece fix for this (a true fix needs a continuous per-point unwrap,
+ * which doesn't generalize to arbitrary source CRSs — see the antimeridian
+ * design doc's "Locating and selecting a crossing tile in the traversal"
+ * section), so a piece exceeding this width is rejected outright, the same
+ * way a curved (non-vertical) cut is: the caller falls back to a single
+ * full-mesh render. 170° (not the mathematical limit of 180°) leaves a
+ * margin against floating-point noise right at the boundary.
+ */
+const MAX_PIECE_SPAN_DEG = 170;
+
+/**
  * Unwrap a GeoJSON-flipped edge (RFC 7946 §5.2: west > east marks a
  * crossing) onto the continuous native scale `edgeUCut`'s seam search
  * expects, by adding 360° to `eastLng`. A no-op for an edge already in
@@ -92,6 +113,11 @@ function edgeUCut(westLng: number, eastLng: number): number | undefined {
  * cuts (non-geographic CRSs) — but for now those return `undefined` and fall
  * back to a single full-mesh layer. See issue #575.
  *
+ * Also rejects a cut where either resulting piece would be ≥
+ * {@link MAX_PIECE_SPAN_DEG} wide — see that constant's doc comment — falling
+ * back to a single full-mesh layer the same way an unsupported slanted or
+ * curved cut does.
+ *
  * Assumes u increases eastward (standard north-up geotransform). Corner
  * longitudes may be in either encoding described on {@link CornerLongitudes}.
  */
@@ -111,5 +137,19 @@ export function antimeridianCut(
   if (Math.abs(topUCut - bottomUCut) > U_EPSILON) {
     return undefined;
   }
-  return { uCut: (topUCut + bottomUCut) / 2 };
+  const uCut = (topUCut + bottomUCut) / 2;
+
+  // Reject a piece too wide for unwrapCommonSpaceX's halfway-point
+  // assumption to hold — see MAX_PIECE_SPAN_DEG's doc comment.
+  const totalSpanDeg = unwrapEastLng(topLeft, topRight) - topLeft;
+  const westPieceSpanDeg = uCut * totalSpanDeg;
+  const eastPieceSpanDeg = totalSpanDeg - westPieceSpanDeg;
+  if (
+    westPieceSpanDeg >= MAX_PIECE_SPAN_DEG ||
+    eastPieceSpanDeg >= MAX_PIECE_SPAN_DEG
+  ) {
+    return undefined;
+  }
+
+  return { uCut };
 }
