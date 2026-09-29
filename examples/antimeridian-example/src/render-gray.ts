@@ -1,10 +1,10 @@
+import type { GetTileDataOptions } from "@developmentseed/deck.gl-geotiff";
 import type { RenderTileResult } from "@developmentseed/deck.gl-raster";
 import {
   BlackIsZero,
   CreateTexture,
   LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
-import type { GetTileDataOptions } from "@developmentseed/deck.gl-geotiff";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import type { Texture } from "@luma.gl/core";
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { AntimeridianCut } from "../../src/raster-tileset/antimeridian-cut.js";
 import {
   antimeridianCut,
+  unwrapCommonSpaceX,
   unwrapEastLng,
 } from "../../src/raster-tileset/antimeridian-cut.js";
 
@@ -108,14 +110,82 @@ describe("antimeridianCut", () => {
       }),
     ).toBeUndefined();
   });
+
+  it("locates a cut for a piece far wider than the old (now-removed) 170° per-piece limit", () => {
+    // Native lngs -100..190 (un-normalized, west<east): crosses +180° at
+    // uCut = 280/290. The west piece alone is 280° wide -- comfortably past
+    // the retired per-piece guard, but well under the 360° total-width
+    // limit that's the only one left. See the antimeridian design doc's
+    // "Seam handling" section.
+    const cut = antimeridianCut({
+      topLeft: -100,
+      topRight: 190,
+      bottomLeft: -100,
+      bottomRight: 190,
+    });
+    expect(cut).toBeDefined();
+    expect(cut?.uCut).toBeCloseTo(280 / 290, 9);
+    expect(cut?.totalSpanDeg).toBeCloseTo(290, 9);
+  });
+
+  it("returns undefined for a self-overlapping tile (total width >= 360°)", () => {
+    // -200..200 is 400° wide -- two pixel columns would claim the same
+    // real-world longitude. Invalid data; no correct rendering exists,
+    // cut or not.
+    expect(
+      antimeridianCut({
+        topLeft: -200,
+        topRight: 200,
+        bottomLeft: -200,
+        bottomRight: 200,
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("unwrapCommonSpaceX", () => {
+  const TILE_SIZE = 512;
+
+  it("leaves the seam itself unshifted (maps to exactly tileSize)", () => {
+    const cut: AntimeridianCut = { uCut: 0.5, totalSpanDeg: 40 };
+    expect(unwrapCommonSpaceX(TILE_SIZE, 0.5, cut, TILE_SIZE)).toBeCloseTo(
+      TILE_SIZE,
+      9,
+    );
+  });
+
+  it("does not wrongly shift a wide piece's legitimate low-x point — the false positive the old x<256 heuristic hit", () => {
+    // Mirrors the -100..190 example in the antimeridian design doc's "Seam
+    // handling" section: native lng -90, 10° in from the tile's -100°
+    // corner (u = 10/290), inside a
+    // west piece spanning -100°..180° (280° wide). proj4 never wraps this
+    // point at all — it projects straight to common-space x=128, which the
+    // old `x < tileSize/2` test would have wrongly shifted by +tileSize.
+    const cut: AntimeridianCut = { uCut: 280 / 290, totalSpanDeg: 290 };
+    const u = 10 / 290;
+    const actualX = 128;
+    expect(unwrapCommonSpaceX(actualX, u, cut, TILE_SIZE)).toBeCloseTo(128, 6);
+  });
+
+  it("shifts an east-side point that genuinely wrapped, even in a wide tile, into the combined (seam-anchored) frame", () => {
+    // Same tile; native lng 185° (5° past the seam, u = 285/290) wraps
+    // under proj4 to -175° (common-space x≈7.11), but the seam-anchored
+    // expectation for this u is TILE_SIZE plus 5° of common-space width —
+    // the "combined" box the traversal's bounding volume wants (west below
+    // TILE_SIZE, east above it).
+    const cut: AntimeridianCut = { uCut: 280 / 290, totalSpanDeg: 290 };
+    const u = 285 / 290;
+    const actualX = (-175 / 360 + 0.5) * TILE_SIZE;
+    expect(unwrapCommonSpaceX(actualX, u, cut, TILE_SIZE)).toBeCloseTo(
+      TILE_SIZE + 5 * (TILE_SIZE / 360),
+      6,
+    );
+  });
 });
 
 describe("unwrapEastLng", () => {
   it("adds 360° to a GeoJSON-flipped eastLng (west > east)", () => {
-    expect(unwrapEastLng(179.967798, -179.169819)).toBeCloseTo(
-      180.830181,
-      9,
-    );
+    expect(unwrapEastLng(179.967798, -179.169819)).toBeCloseTo(180.830181, 9);
   });
 
   it("passes through a native un-normalized eastLng unchanged (west < east)", () => {

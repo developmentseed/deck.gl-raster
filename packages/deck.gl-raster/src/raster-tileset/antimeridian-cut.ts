@@ -23,6 +23,14 @@ export interface CornerLongitudes {
 export interface AntimeridianCut {
   /** UV u-coordinate (0..1) where the tile crosses ±180°. */
   uCut: number;
+  /**
+   * Total angular width of the tile (both pieces combined, in degrees) —
+   * `unwrapEastLng(topLeft, topRight) - topLeft` from the edge used to
+   * locate the cut. Used by {@link unwrapCommonSpaceX} to convert a point's
+   * `u` distance from the seam into degrees, and by {@link antimeridianCut}
+   * itself to reject a self-overlapping (≥360°) tile.
+   */
+  totalSpanDeg: number;
 }
 
 /**
@@ -33,25 +41,20 @@ export interface AntimeridianCut {
 const U_EPSILON = 1e-6;
 
 /**
- * Maximum longitude span (degrees) either piece may have after the cut.
+ * Maximum total angular width (degrees, both pieces combined) a tile may
+ * have and still be cut.
  *
- * `unwrapCommonSpaceX`'s per-point correction (and `buildPieceReprojection`'s
- * matching per-vertex correction) assumes a piece's own interior never
- * legitimately crosses the common-space halfway point (x = tileSize/2,
- * i.e. the piece spans less than 180° of longitude): any point found past
- * that mark is treated as a wrapped artifact of the seam and shifted a full
- * world-width. For a piece ≥ 180° wide that assumption breaks — a point can
- * legitimately cross the halfway mark without having wrapped at all, and
- * gets wrongly shifted, tearing the mesh. There is no simple per-point or
- * per-piece fix for this (a true fix needs a continuous per-point unwrap,
- * which doesn't generalize to arbitrary source CRSs — see the antimeridian
- * design doc's "Locating and selecting a crossing tile in the traversal"
- * section), so a piece exceeding this width is rejected outright, the same
- * way a curved (non-vertical) cut is: the caller falls back to a single
- * full-mesh render. 170° (not the mathematical limit of 180°) leaves a
- * margin against floating-point noise right at the boundary.
+ * This is not an accuracy limit on {@link unwrapCommonSpaceX} — its per-point
+ * correction is derived from each point's own distance from the seam (in
+ * already-validated corner longitudes), not a magnitude test against a fixed
+ * midpoint, so it has no per-piece width limit (see
+ * `replace-256-x-heuristic.md`). The one limit that remains is physical, not
+ * a property of this code: a tile ≥360° wide has two pixel columns claiming
+ * the same real-world longitude — self-overlapping, invalid data with no
+ * correct rendering, cut or not. 359.9° (not the exact boundary of 360°)
+ * leaves a margin against floating-point noise.
  */
-const MAX_PIECE_SPAN_DEG = 170;
+const MAX_TOTAL_SPAN_DEG = 359.9;
 
 /**
  * Unwrap a GeoJSON-flipped edge (RFC 7946 §5.2: west > east marks a
@@ -66,15 +69,38 @@ export function unwrapEastLng(westLng: number, eastLng: number): number {
 
 /**
  * Correct one reprojected reference point's common-space x for an
- * antimeridian-crossing tile: raw x in the lower half `[0, tileSize/2)` is
- * on the wrapped side (proj4 normalized it back into range) and gets
- * `+tileSize`, continuing past the near-180 side instead of wrapping to the
- * start of the world. No-op for a point already on the near-180 side,
- * including the exact seam boundary. See `buildPieceReprojection` for the
- * full reasoning (same rule, applied there per-piece at render time).
+ * antimeridian-crossing tile, given the point's own fractional position `u`
+ * (0..1) along the tile's pixel/UV domain — the same domain `cut.uCut` is
+ * defined in.
+ *
+ * Rather than testing the already-wrapped `x` against a fixed midpoint
+ * (`tileSize/2`) — which can't tell "this point wrapped around the seam"
+ * apart from "this point is just far from the seam" once the tile is wide —
+ * this computes an *expected* `x` directly from the point's own signed
+ * distance from the seam (`(u - cut.uCut) * cut.totalSpanDeg`, in degrees,
+ * using the already-validated corner longitudes `antimeridianCut` located
+ * the seam from) and snaps `x` to the representative nearest that
+ * expectation. The seam itself (`u = cut.uCut`) always maps to exactly
+ * `tileSize`; the west side (`u < cut.uCut`) extends below it, the east side
+ * (`u > cut.uCut`) extends above it. See `replace-256-x-heuristic.md` for
+ * the full derivation and why this has no per-piece width limit.
+ *
+ * This is the "combined" form used directly by the traversal's bounding
+ * volume, which wants one contiguous box spanning both pieces around the
+ * seam (west below `tileSize`, east above it). `buildPieceReprojection`'s
+ * east-piece branch re-anchors the result into its own local frame (seam at
+ * `0`, not `tileSize`) by subtracting `tileSize` — see that method's doc
+ * comment.
  */
-export function unwrapCommonSpaceX(x: number, tileSize: number): number {
-  return x < tileSize / 2 ? x + tileSize : x;
+export function unwrapCommonSpaceX(
+  x: number,
+  u: number,
+  cut: AntimeridianCut,
+  tileSize: number,
+): number {
+  const signedDegreesFromSeam = (u - cut.uCut) * cut.totalSpanDeg;
+  const expectedX = tileSize + signedDegreesFromSeam * (tileSize / 360);
+  return x + Math.round((expectedX - x) / tileSize) * tileSize;
 }
 
 /**
@@ -113,10 +139,9 @@ function edgeUCut(westLng: number, eastLng: number): number | undefined {
  * cuts (non-geographic CRSs) — but for now those return `undefined` and fall
  * back to a single full-mesh layer. See issue #575.
  *
- * Also rejects a cut where either resulting piece would be ≥
- * {@link MAX_PIECE_SPAN_DEG} wide — see that constant's doc comment — falling
- * back to a single full-mesh layer the same way an unsupported slanted or
- * curved cut does.
+ * Also rejects a tile whose total width would be ≥ {@link MAX_TOTAL_SPAN_DEG}
+ * — see that constant's doc comment — falling back to a single full-mesh
+ * layer the same way an unsupported slanted or curved cut does.
  *
  * Assumes u increases eastward (standard north-up geotransform). Corner
  * longitudes may be in either encoding described on {@link CornerLongitudes}.
@@ -139,17 +164,11 @@ export function antimeridianCut(
   }
   const uCut = (topUCut + bottomUCut) / 2;
 
-  // Reject a piece too wide for unwrapCommonSpaceX's halfway-point
-  // assumption to hold — see MAX_PIECE_SPAN_DEG's doc comment.
+  // Reject a self-overlapping tile — see MAX_TOTAL_SPAN_DEG's doc comment.
   const totalSpanDeg = unwrapEastLng(topLeft, topRight) - topLeft;
-  const westPieceSpanDeg = uCut * totalSpanDeg;
-  const eastPieceSpanDeg = totalSpanDeg - westPieceSpanDeg;
-  if (
-    westPieceSpanDeg >= MAX_PIECE_SPAN_DEG ||
-    eastPieceSpanDeg >= MAX_PIECE_SPAN_DEG
-  ) {
+  if (totalSpanDeg >= MAX_TOTAL_SPAN_DEG) {
     return undefined;
   }
 
-  return { uCut };
+  return { uCut, totalSpanDeg };
 }

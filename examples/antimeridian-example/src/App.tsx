@@ -86,9 +86,8 @@ export default function App() {
       >
         <Text mb="2" color="gray.600">
           All {redBandUrls.length || 12}{" "}
-          <ExternalLink href="https://cogeo.org">COGs</ExternalLink> in the
-          test catalog: 3 cross the ±180° antimeridian, the other 9 don't —
-          see{" "}
+          <ExternalLink href="https://cogeo.org">COGs</ExternalLink> in the test
+          catalog: 3 cross the ±180° antimeridian, the other 9 don't — see{" "}
           <ExternalLink href="https://github.com/developmentseed/deck.gl-raster/issues/575">
             #575
           </ExternalLink>

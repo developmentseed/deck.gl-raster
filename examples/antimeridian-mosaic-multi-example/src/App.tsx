@@ -97,8 +97,8 @@ export default function App() {
             antimeridian-example
           </ExternalLink>
           , but composed as R/G/B through <code>MosaicLayer</code> +{" "}
-          <code>MultiCOGLayer</code> (the needed use pattern),
-          not just a single-band <code>COGLayer</code>. See{" "}
+          <code>MultiCOGLayer</code> (the needed use pattern), not just a
+          single-band <code>COGLayer</code>. See{" "}
           <ExternalLink href="https://github.com/developmentseed/deck.gl-raster/issues/575">
             #575
           </ExternalLink>

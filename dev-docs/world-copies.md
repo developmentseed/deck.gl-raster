@@ -14,10 +14,23 @@ so panning across the antimeridian evicts visible tiles. See
 - A tile is identified by `(x, y, z)`. Its data and primary-world common-space
   position are computed once (see `RasterTileNode.getBoundingVolume`) and
   cached.
-- For a viewport with `subViewports.length > 1` (Web Mercator + `repeat: true`
-  whose bounds straddle ±180°), the traversal additionally tests each tile's
-  bounding volume **translated** by `worldOffset * 512` along common-space X
-  for `worldOffset` in `±1, ±2, … ±MAX_MAPS`.
+- Whenever repeat mode is active at all (`viewport.subViewports != null` — Web
+  Mercator + `repeat: true`, regardless of whether the *viewport's own*
+  current bounds happen to straddle ±180°), the traversal additionally tests
+  each tile's bounding volume **translated** by `worldOffset * 512` along
+  common-space X for `worldOffset` in `±1, ±2, … ±MAX_MAPS`.
+  - Originally gated on `subViewports.length > 1` instead — that only tests
+    whether the *viewport* currently straddles a seam, which is unrelated to
+    whether a *tile's own* position is on a different world-copy frame than
+    the viewport's canonical one. This wrongly skipped the offset search the
+    moment a user zoomed in tight to one side, away from the seam, even
+    though a tile could still need a shifted pass to be found — see the
+    antimeridian design doc's ["Locating and selecting a crossing tile in the
+    traversal"](specs/2026-05-27-antimeridian-crossing-tile-design.md#locating-and-selecting-a-crossing-tile-in-the-traversal)
+    for the regression this caused and the fix. The equivalent gate in
+    `MosaicTileset2D.getTileIndices` (`packages/deck.gl-geotiff/src/mosaic-layer/mosaic-tileset-2d.ts`)
+    — a structurally different Flatbush/lng-lat-bbox search, not an OBB — was
+    changed the same way for the same reason.
 - A tile is selected if it passes the frustum test at **any** offset.
 - Selected tile indices are returned as `(x, y, z)` triples — the rendering
   pipeline already handles drawing each tile in every visible world copy.
@@ -66,6 +79,18 @@ The traversal walks offset = ±1, ±2, ... until either:
 
 Walk-until-empty terminates quickly in practice. The cap exists to bound
 worst-case behavior at extreme zoom-outs and aspect ratios.
+
+An antimeridian-crossing tile's two pieces (see the antimeridian design doc's
+["Seam handling"](specs/2026-05-27-antimeridian-crossing-tile-design.md#seam-handling))
+rely on this same offset search to be found and drawn when only one piece is
+in view — each piece's mesh sits at its own natural common-space position
+(west near `TILE_SIZE`, east near `0`) rather than a shared frame, so the
+ordinary per-tile offset passes above are what place it correctly, no
+antimeridian-specific traversal logic needed. This holds regardless of how
+wide a piece is: each piece's corrected `x` is bounded by construction to
+`[0, TILE_SIZE]` for any tile under the design doc's `MAX_TOTAL_SPAN_DEG`
+self-overlap limit, so a wide piece never needs more offset passes than an
+ordinary tile — `MAX_MAPS = 3` did not need to scale with piece width.
 
 ## Prior art
 

@@ -1118,8 +1118,12 @@ export function pieceBoxWgs84(
   const refLng = rawCorners[0]![0];
   const path: [number, number][] = rawCorners.map(([lng, lat]) => {
     let unwrapped = lng;
-    while (unwrapped - refLng > 180) unwrapped -= 360;
-    while (unwrapped - refLng < -180) unwrapped += 360;
+    while (unwrapped - refLng > 180) {
+      unwrapped -= 360;
+    }
+    while (unwrapped - refLng < -180) {
+      unwrapped += 360;
+    }
     return [unwrapped, lat];
   });
   const xs = path.map((p) => p[0]);

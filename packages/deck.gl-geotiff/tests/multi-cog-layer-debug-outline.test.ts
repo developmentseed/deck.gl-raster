@@ -8,9 +8,15 @@ import { pieceBoxWgs84 } from "../src/multi-cog-layer.js";
  * corner) values observed for the DEP GeoMAD `066/022` crossing item.
  */
 function crossingProjectTo4326(px: number): [number, number] {
-  if (px === 0) return [179.9677978782272, -15.991730594838703];
-  if (px === 11.949079327358657) return [180, -15.991730594838703];
-  if (px === 320) return [-179.169819449018, -15.991730594838703];
+  if (px === 0) {
+    return [179.9677978782272, -15.991730594838703];
+  }
+  if (px === 11.949079327358657) {
+    return [180, -15.991730594838703];
+  }
+  if (px === 320) {
+    return [-179.169819449018, -15.991730594838703];
+  }
   throw new Error(`unexpected px ${px}`);
 }
 

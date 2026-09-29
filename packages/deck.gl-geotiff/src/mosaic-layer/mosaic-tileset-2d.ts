@@ -127,12 +127,16 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     // direction until an offset comes back empty — see dev-docs/world-copies.md.
     if (viewport.subViewports != null) {
       for (let worldOffset = -1; worldOffset >= -MAX_MAPS; worldOffset--) {
-        if (!searchAtOffset(index, viewportBounds, worldOffset, matchedIndices)) {
+        if (
+          !searchAtOffset(index, viewportBounds, worldOffset, matchedIndices)
+        ) {
           break;
         }
       }
       for (let worldOffset = 1; worldOffset <= MAX_MAPS; worldOffset++) {
-        if (!searchAtOffset(index, viewportBounds, worldOffset, matchedIndices)) {
+        if (
+          !searchAtOffset(index, viewportBounds, worldOffset, matchedIndices)
+        ) {
           break;
         }
       }

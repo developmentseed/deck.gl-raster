@@ -549,9 +549,16 @@ export class RasterTileNode {
       this.descriptor.projectTo4326,
     );
 
-    const commonSpacePositions: [number, number][] = refPointsEPSG3857
-      .map((xy) => rescaleEPSG3857ToCommonSpace(xy))
-      .map(([x, y]) => (cut ? [unwrapCommonSpaceX(x, TILE_SIZE), y] : [x, y]));
+    const commonSpacePositions: [number, number][] = refPointsEPSG3857.map(
+      (xy, i) => {
+        const [x, y] = rescaleEPSG3857ToCommonSpace(xy);
+        if (!cut) {
+          return [x, y];
+        }
+        const u = REF_POINTS_9[i]![0];
+        return [unwrapCommonSpaceX(x, u, cut, TILE_SIZE), y];
+      },
+    );
 
     const refPointPositions: [number, number, number][] = [];
     for (const p of commonSpacePositions) {
@@ -999,10 +1006,14 @@ export function getTileIndices(
     // per-point unwrap rule used for a single tile's reference points.
     bottomLeft[0] = unwrapCommonSpaceX(
       lngLatToWorld([datasetWestLng, minLat])[0],
+      0,
+      datasetCut,
       TILE_SIZE,
     );
     topRight[0] = unwrapCommonSpaceX(
       lngLatToWorld([datasetEastLng, maxLat])[0],
+      1,
+      datasetCut,
       TILE_SIZE,
     );
   }

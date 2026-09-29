@@ -455,11 +455,15 @@ export class RasterTileset2D extends Tileset2D {
         forwardTransform,
         inverseTransform,
         "west",
+        _antimeridianCut,
+        tileWidth,
       );
       _eastReprojection = this.buildPieceReprojection(
         forwardTransform,
         inverseTransform,
         "east",
+        _antimeridianCut,
+        tileWidth,
       );
     }
 
@@ -493,27 +497,19 @@ export class RasterTileset2D extends Tileset2D {
   /**
    * Build a per-piece reprojection bundle for an antimeridian-crossing tile.
    *
-   * A crossing tile's west piece always has native lngs just *below* +180°
-   * (e.g. 179.97°), which `projectPosition` maps to common-space x just
-   * *below* `TILE_SIZE` (e.g. 511.95) — no correction needed. The east
-   * piece's *interior* has native lngs just past −180° after proj4's
-   * wraparound (e.g. −179.17°), mapping to common-space x just *above* 0
-   * (e.g. 1.18) — already its own natural, internally-consistent position.
-   * The east piece's own west edge *is* the seam itself (native lng exactly
-   * 180°), which `projectPosition` maps to common-space x exactly
-   * `TILE_SIZE` — the *same* boundary value as the west piece's east edge,
-   * but *belonging* to the east piece's natural (near-0) frame, so it needs
-   * `-TILE_SIZE` to join up with that piece's interior rather than sitting a
-   * full world away from it.
+   * `forwardReproject` corrects `projectPosition`'s raw (proj4-wrapped)
+   * common-space x per point, using {@link unwrapCommonSpaceX} — which
+   * derives an expected x directly from the point's own distance from the
+   * seam (via its fractional position `u` along the tile, recovered here
+   * with `inverseTransform`) rather than testing the wrapped output against
+   * a fixed midpoint. See that function's doc comment and
+   * `replace-256-x-heuristic.md` for why this is width-independent, unlike
+   * the constant-per-piece-shift approach it replaced.
    *
-   * So the correction can't be "shift this whole piece by one world" (a
-   * single piece can contain both a boundary point at exactly the seam and
-   * interior points already on its own natural side) — it has to be a
-   * per-point test, and it's *mirrored* between the two pieces: the west
-   * piece shifts raw x in `[0, TILE_SIZE/2)` up by `+TILE_SIZE` (a no-op for
-   * its own raw values, which never fall below `TILE_SIZE/2`); the east
-   * piece shifts raw x in `[TILE_SIZE/2, TILE_SIZE]` down by `-TILE_SIZE` (a
-   * no-op for its own interior, which never reaches `TILE_SIZE/2`).
+   * `unwrapCommonSpaceX` itself anchors the seam at `TILE_SIZE` — the west
+   * piece's own natural frame, needing no further adjustment. The east
+   * piece's natural frame instead anchors the seam at `0`, so its branch
+   * re-anchors by subtracting `TILE_SIZE`.
    *
    * Each piece therefore renders at its *own* natural common-space position
    * (west near `TILE_SIZE`, east near `0`) instead of both being forced into
@@ -537,29 +533,28 @@ export class RasterTileset2D extends Tileset2D {
     forwardTransform: ProjectionFunction,
     inverseTransform: ProjectionFunction,
     piece: "west" | "east",
+    cut: AntimeridianCut,
+    tileWidth: number,
   ): ReprojectionFns {
     return {
       forwardTransform,
       inverseTransform,
       forwardReproject: (x, y) => {
         const [cx, cy] = this.projectPosition(x, y);
+        const [px] = inverseTransform(x, y);
+        const u = px / tileWidth;
+        const seamAnchored = unwrapCommonSpaceX(cx, u, cut, TILE_SIZE);
         const corrected =
-          piece === "west"
-            ? unwrapCommonSpaceX(cx, TILE_SIZE)
-            : cx >= TILE_SIZE / 2
-              ? cx - TILE_SIZE
-              : cx;
+          piece === "west" ? seamAnchored : seamAnchored - TILE_SIZE;
         return [corrected, cy];
       },
       inverseReproject: (cx, cy) => {
-        const raw =
-          piece === "west"
-            ? cx >= TILE_SIZE
-              ? cx - TILE_SIZE
-              : cx
-            : cx < 0
-              ? cx + TILE_SIZE
-              : cx;
+        // Undo the east branch's re-anchoring, then reduce into the
+        // canonical [0, TILE_SIZE) range `unprojectPosition` expects — the
+        // exact inverse of `forwardReproject`'s shift, regardless of how
+        // many world-widths it added or subtracted.
+        const seamAnchored = piece === "west" ? cx : cx + TILE_SIZE;
+        const raw = ((seamAnchored % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
         return this.unprojectPosition(raw, cy);
       },
     };

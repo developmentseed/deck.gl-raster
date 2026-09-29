@@ -175,4 +175,49 @@ describe("RasterTileset2D.getTileMetadata — _antimeridianCut", () => {
       expect(y).toBeCloseTo(24, 6);
     });
   });
+
+  describe("wide crossing tile (>170° per-piece width, previously rejected outright)", () => {
+    // Native lngs -100..190 (un-normalized, west<east): crosses +180° at
+    // uCut = 280/290. The west piece alone is 280° wide — well past the
+    // old (now-removed) 170° per-piece guard, but under the 360°
+    // total-width limit. See replace-256-x-heuristic.md.
+    function wideCrossingMetadata() {
+      const level = new AffineTilesetLevel({
+        affine: compose(translation(-100, 24), scale(1, -1)),
+        arrayWidth: 290,
+        arrayHeight: 42,
+        tileWidth: 290,
+        tileHeight: 42,
+        mpu: 1,
+      });
+      const descriptor = new AffineTileset({
+        levels: [level],
+        ...WRAPPING_PROJECTIONS,
+      });
+      const tileset = new RasterTileset2D(tilesetProps(), descriptor);
+      return tileset.getTileMetadata({ x: 0, y: 0, z: 0 });
+    }
+
+    it("still detects and cuts a >170°-wide piece", () => {
+      const metadata = wideCrossingMetadata();
+      expect(metadata._antimeridianCut).toBeDefined();
+      expect(metadata._antimeridianCut?.uCut).toBeCloseTo(280 / 290, 5);
+    });
+
+    it("does not wrongly shift a west piece's legitimate low-x point (the false positive the old heuristic hit)", () => {
+      const metadata = wideCrossingMetadata();
+      // Native lng -90°, 10° in from the tile's -100° corner: no proj4
+      // wrap occurs at all, x=128 is already correct. The old
+      // `x < TILE_SIZE/2` test would have wrongly added TILE_SIZE here.
+      const [cx] = metadata._westReprojection!.forwardReproject(-90, 24);
+      expect(cx).toBeCloseTo(128, 3);
+    });
+
+    it("renders an east-piece point that genuinely wrapped at its own natural near-0 position", () => {
+      const metadata = wideCrossingMetadata();
+      // Native lng 185°, 5° past the seam: proj4 wraps this to -175°.
+      const [cx] = metadata._eastReprojection!.forwardReproject(185, 24);
+      expect(cx).toBeCloseTo(7.11, 1);
+    });
+  });
 });
