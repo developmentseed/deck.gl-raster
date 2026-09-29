@@ -46,6 +46,9 @@ export type MosaicSource = {
  * cache identifier is always defined. */
 type ResolvedSource<MosaicT> = TileIndex & MosaicT & { id: string };
 
+/** Matches raster-tile-traversal.ts's world-copy pass count. */
+const MAX_MAP_COPIES = 3;
+
 export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
   /** Closure returning the parent layer's current sources array. Re-evaluated
    * on each `getTileIndices` call so updates to the layer's `sources` prop
@@ -108,11 +111,33 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       return [];
     }
 
-    const viewportBounds = viewport.getBounds();
-    const indices = index.search(...viewportBounds);
+    const [minX, minY, maxX, maxY] = viewport.getBounds();
+    const matchedIndices = new Set(index.search(minX, minY, maxX, maxY));
+
+    // World-copy passes: when the viewport spans multiple world copies (e.g.
+    // WebMercatorViewport with repeat: true panned across the antimeridian),
+    // `viewport.getBounds()` reports longitudes for only one copy, but a
+    // source's bbox may only be indexed in another copy's range. Re-query the
+    // index with the bounds shifted by ±360°, ±720°… — same idea as
+    // raster-tile-traversal.ts's per-offset frustum passes, just in lng/lat
+    // instead of common-space pixels. See dev-docs/world-copies.md.
+    if ((viewport.subViewports?.length ?? 0) > 1) {
+      for (let offset = -1; offset >= -MAX_MAP_COPIES; offset--) {
+        const shift = offset * 360;
+        for (const i of index.search(minX + shift, minY, maxX + shift, maxY)) {
+          matchedIndices.add(i);
+        }
+      }
+      for (let offset = 1; offset <= MAX_MAP_COPIES; offset++) {
+        const shift = offset * 360;
+        for (const i of index.search(minX + shift, minY, maxX + shift, maxY)) {
+          matchedIndices.add(i);
+        }
+      }
+    }
 
     const sources = this.getSources();
-    const selectedSources = indices.map((sourceIndex) => {
+    const selectedSources = Array.from(matchedIndices).map((sourceIndex) => {
       const source = sources[sourceIndex]!;
       return {
         // Remove once https://github.com/visgl/deck.gl/pull/10299

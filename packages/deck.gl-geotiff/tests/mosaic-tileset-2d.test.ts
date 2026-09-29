@@ -8,12 +8,15 @@ import { MosaicTileset2D } from "../src/mosaic-layer/mosaic-tileset-2d.js";
 function makeViewport(
   bounds: [number, number, number, number],
   zoom = 5,
+  subViewportCount = 0,
 ): Viewport {
   return {
     equals: () => false,
     resolution: undefined,
     zoom,
     getBounds: () => bounds,
+    subViewports:
+      subViewportCount > 1 ? new Array(subViewportCount).fill({}) : undefined,
   } as unknown as Viewport;
 }
 
@@ -122,6 +125,37 @@ describe("MosaicTileset2D center-out ordering", () => {
     const viewport = makeViewport([-10, -10, 10, 10]);
     const result = tileset.getTileIndices({ viewport });
     expect(result[0]!.bbox).toEqual([0.4, 0.4, 0.6, 0.6]);
+  });
+});
+
+describe("MosaicTileset2D world-copy passes", () => {
+  it("finds a source only reachable via a shifted world copy when subViewports > 1", () => {
+    const source: MosaicSource = { bbox: [-175, -5, -170, 5] };
+    const tileset = makeTileset([source]);
+    // Base bounds sit in the +360 world copy; the source's bbox only exists
+    // in the native (-175..-170) copy.
+    const result = tileset.getTileIndices({
+      viewport: makeViewport([185, -5, 195, 5], 5, 2),
+    });
+    expect(result).toHaveLength(1);
+  });
+
+  it("does not search other world copies when subViewports <= 1", () => {
+    const source: MosaicSource = { bbox: [-175, -5, -170, 5] };
+    const tileset = makeTileset([source]);
+    const result = tileset.getTileIndices({
+      viewport: makeViewport([185, -5, 195, 5], 5, 1),
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("dedupes a source matched by more than one world-copy pass", () => {
+    const source: MosaicSource = { bbox: [-350, -5, 15, 5] };
+    const tileset = makeTileset([source]);
+    const result = tileset.getTileIndices({
+      viewport: makeViewport([-1, -5, 11, 5], 5, 2),
+    });
+    expect(result).toHaveLength(1);
   });
 });
 
