@@ -64,8 +64,8 @@ export default function App() {
     id: "antimeridian-line",
     data: [
       [
-        [180, 80],
-        [180, -80],
+        [180, 85],
+        [180, -85],
       ],
     ],
     getPath: (d: [number, number][]) => d,

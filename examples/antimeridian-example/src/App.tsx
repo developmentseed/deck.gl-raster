@@ -12,7 +12,7 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useState } from "react";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
-import { getTileDataGray, renderGrayWhiteToBlack } from "./render-gray.js";
+import { getTileDataGray, renderGray } from "./render-gray.js";
 
 // Every item in the DEP Landsat GeoMAD test catalog (EPSG:3832 / PDC
 // Mercator), shown together as they are — no reprojection-hiding fitBounds.
@@ -40,7 +40,7 @@ export default function App() {
         id: `cog-layer-${url}`,
         geotiff: url,
         getTileData: getTileDataGray,
-        renderTile: renderGrayWhiteToBlack,
+        renderTile: renderGray,
         debug: debugState.debug,
         debugOpacity: debugState.debugOpacity,
         // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
@@ -55,8 +55,8 @@ export default function App() {
     id: "antimeridian-line",
     data: [
       [
-        [180, 80],
-        [180, -80],
+        [180, 85],
+        [180, -85],
       ],
     ],
     getPath: (d: [number, number][]) => d,
