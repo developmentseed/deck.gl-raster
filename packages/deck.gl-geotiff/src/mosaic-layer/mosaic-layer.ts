@@ -13,6 +13,7 @@ import {
 } from "@deck.gl/core";
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
+import { _unwrapEastLng as unwrapEastLng } from "@developmentseed/deck.gl-raster";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
 import Flatbush from "flatbush";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
@@ -128,6 +129,18 @@ const defaultProps: Partial<MosaicLayerProps> = {
 };
 
 /**
+ * A source's bbox may be GeoJSON-flipped (RFC 7946 §5.2: `minX > maxX` marks
+ * an antimeridian crossing) — unwrap it onto a continuous frame so the
+ * Flatbush spatial index and every downstream consumer (priority queue
+ * distance, `MosaicTileset2D`'s viewport search and tile metadata) agree on
+ * one bbox per source.
+ */
+function normalizeSourceBbox<T extends MosaicSource>(source: T): T {
+  const [minX, minY, maxX, maxY] = source.bbox;
+  return { ...source, bbox: [minX, minY, unwrapEastLng(minX, maxX), maxY] };
+}
+
+/**
  * Build the limiter `getPriority` callback for one mosaic source: euclidean
  * distance from the source's bbox center to the current viewport center, in
  * lon/lat degree-space (just an ordering key — great-circle isn't needed).
@@ -181,6 +194,9 @@ export class MosaicLayer<
   declare state: {
     // The index can be null if sources are empty
     index: Flatbush | null;
+    // `props.sources` with each bbox normalized via `normalizeSourceBbox` —
+    // see that function's doc comment.
+    sources: MosaicT[];
   };
 
   override initializeState(context: LayerContext): void {
@@ -199,9 +215,9 @@ export class MosaicLayer<
   }
 
   private _buildSpatialIndex(): void {
-    const { sources } = this.props;
+    const sources = this.props.sources.map(normalizeSourceBbox);
     if (sources.length === 0) {
-      this.setState({ index: null });
+      this.setState({ index: null, sources });
       return;
     }
 
@@ -211,7 +227,7 @@ export class MosaicLayer<
     }
     index.finish();
 
-    this.setState({ index });
+    this.setState({ index, sources });
   }
 
   renderTileLayer(
@@ -235,7 +251,7 @@ export class MosaicLayer<
     // Arrow functions bind to the MosaicLayer instance, which deck.gl reuses
     // across prop updates — so `this.props` and `this.state` always reflect
     // the latest values when the tileset reads them.
-    const getSources = () => this.props.sources;
+    const getSources = () => this.state.sources;
     const getIndex = () => this.state.index;
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
       constructor(opts: any) {

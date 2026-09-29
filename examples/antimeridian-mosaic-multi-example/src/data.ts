@@ -16,17 +16,15 @@ const PARQUET_URL =
  * The 3 items at column `066` cross the antimeridian; the other 9 don't.
  *
  * The STAC bbox for a crossing item is GeoJSON-flipped (RFC 7946 §5.2: crosses
- * ±180° → xmin > xmax, e.g. `066/022`'s `179.97, -179.17`). MosaicLayer's
- * spatial index (Flatbush) is a plain numeric R-tree with no antimeridian
- * awareness — a flipped bbox doesn't mean anything to it — so unwrap onto a
- * continuous frame instead (same convention as antimeridian-cut.ts's
- * `unwrapEastLng`): xmax = −179.169819 + 360 = 180.830181.
+ * ±180° → xmin > xmax, e.g. `066/022`'s `179.97, -179.17`) — passed straight
+ * through here; `MosaicLayer` unwraps a flipped bbox onto a continuous frame
+ * internally.
  */
 export async function fetchGeomadItems(): Promise<GeomadItem[]> {
   const items = await fetchStacGeoparquetItems(PARQUET_URL);
-  return items.map(({ id, bbox: [minX, minY, maxX, maxY], assets }) => ({
+  return items.map(({ id, bbox, assets }) => ({
     id,
-    bbox: [minX, minY, maxX < minX ? maxX + 360 : maxX, maxY],
+    bbox,
     assets: {
       red: assets.red!.href,
       green: assets.green!.href,
