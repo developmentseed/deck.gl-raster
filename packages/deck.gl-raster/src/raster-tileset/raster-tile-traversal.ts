@@ -64,12 +64,6 @@ export const TILE_SIZE = 512;
  */
 const MAX_MAPS = 3;
 
-/** TEMP DEBUG: true if `x` (mod TILE_SIZE) is within 20 units of a seam (0 or TILE_SIZE), to gate noisy per-tile logging to only antimeridian-relevant tiles. */
-function isNearSeam(x: number): boolean {
-  const mod = ((x % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
-  return mod < 20 || mod > TILE_SIZE - 20;
-}
-
 // Reference points used to sample tile boundaries for bounding volume
 // calculation.
 //
@@ -332,12 +326,6 @@ export class RasterTileNode {
         0,
       );
       if (!this.insideBounds(bounds, primaryWorldVolume.commonSpaceBounds)) {
-        if (isNearSeam(primaryWorldVolume.commonSpaceBounds[0])) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            `[AM-DEBUG] BOUNDS-REJECT z=${this.z} x=${this.x} y=${this.y} worldOffset=${worldOffset} tileBounds=${primaryWorldVolume.commonSpaceBounds.map((n) => n.toFixed(1))} datasetBounds=${bounds.map((n) => n.toFixed(1))}`,
-          );
-        }
         return false;
       }
     }
@@ -347,12 +335,6 @@ export class RasterTileNode {
     // Returns: <0 if outside, 0 if intersecting, >0 if fully inside
     const isInside = cullingVolume.computeVisibility(boundingVolume);
     if (isInside < 0) {
-      if (isNearSeam(boundingVolume.center[0] ?? 0)) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[AM-DEBUG] FRUSTUM-REJECT z=${this.z} x=${this.x} y=${this.y} worldOffset=${worldOffset} center=${boundingVolume.center[0]?.toFixed(1)},${boundingVolume.center[1]?.toFixed(1)}`,
-        );
-      }
       return false;
     }
 
@@ -381,12 +363,6 @@ export class RasterTileNode {
         (children === null && this.z >= minZ)
       ) {
         this.selected = true;
-        if (isNearSeam(boundingVolume.center[0] ?? 0)) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            `[AM-DEBUG] SELECTED z=${this.z} x=${this.x} y=${this.y} worldOffset=${worldOffset} devicePixelsPerSourcePixel=${devicePixelsPerSourcePixel.toFixed(3)}`,
-          );
-        }
         return true;
       }
     }
@@ -576,13 +552,6 @@ export class RasterTileNode {
     const commonSpacePositions: [number, number][] = refPointsEPSG3857
       .map((xy) => rescaleEPSG3857ToCommonSpace(xy))
       .map(([x, y]) => (cut ? [unwrapCommonSpaceX(x, TILE_SIZE), y] : [x, y]));
-
-    // eslint-disable-next-line no-console
-    if (cut) {
-      console.warn(
-        `[AM-DEBUG] bbox z=${this.z} x=${this.x} y=${this.y} cut.uCut=${cut.uCut.toFixed(4)} rawX=${refPointsEPSG3857.map((xy) => rescaleEPSG3857ToCommonSpace(xy)[0].toFixed(2)).join(",")} correctedX=${commonSpacePositions.map((p) => p[0].toFixed(2)).join(",")}`,
-      );
-    }
 
     const refPointPositions: [number, number, number][] = [];
     for (const p of commonSpacePositions) {
@@ -1037,10 +1006,6 @@ export function getTileIndices(
       TILE_SIZE,
     );
   }
-  // eslint-disable-next-line no-console
-  console.warn(
-    `[AM-DEBUG] datasetCut=${datasetCut ? datasetCut.uCut.toFixed(4) : "undefined"} datasetLngs=${datasetWestLng.toFixed(3)},${datasetEastLng.toFixed(3)} bottomLeft=${bottomLeft[0].toFixed(2)} topRight=${topRight[0].toFixed(2)}`,
-  );
 
   const bounds: Bounds = [
     bottomLeft[0],
@@ -1080,10 +1045,6 @@ export function getTileIndices(
   // world copies along common-space X. A tile is selected if any pass selects
   // it. The early-break below keeps this cheap when nothing is near a seam.
   // See dev-docs/world-copies.md.
-  // eslint-disable-next-line no-console
-  console.warn(
-    `[AM-DEBUG] subViewports.length=${viewport.subViewports?.length ?? "null"}`,
-  );
   if (viewport.subViewports != null) {
     for (let offset = -1; offset >= -MAX_MAPS; offset--) {
       if (!runOffsetPass(roots, traversalParams, offset)) {

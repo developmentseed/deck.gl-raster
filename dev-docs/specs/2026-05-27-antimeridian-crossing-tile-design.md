@@ -43,9 +43,37 @@ The antimeridian becomes *a tile boundary*, which the pipeline already handles, 
 
 ### Seam handling
 
+> **Updated 2026-09-29** — this section originally described a "wrapped-piece-only, output-sign-based" mechanism (below, struck through for the record). This was replaced by the symmetric per-point rule described first (below). See the implemented version's tests in `raster-tileset-2d-antimeridian.test.ts` and the traversal fix this motivated in "Locating and selecting a crossing tile in the traversal" below.
+
 Splitting at the antimeridian is *almost* enough — but not quite. proj4 normalizes ±180° to the **positive** boundary (+max_X / common-x 512). That's correct for the west piece (its right edge *is* +180°), but the east piece's left edge is also the antimeridian and must sit at common-x 0 (−max_X). With stock proj4 the east piece's seam corner lands at 512 while its interior is near 0, so its seed triangle still spans the world and the reprojector diverges — the original #366 failure.
 
+**As implemented**, the fix is a **symmetric per-point unwrap**, applied in common-space, after `projectPosition` — not piece-specific, not an input-longitude test. Both pieces' `forwardReproject` run every vertex's raw common-space X through a shared helper, `unwrapCommonSpaceX(x, tileSize)` ([`antimeridian-cut.ts`](../../packages/deck.gl-raster/src/raster-tileset/antimeridian-cut.ts)), then each piece applies the mirror-image correction:
+
+- **West piece**: any vertex whose raw X wrapped onto the low end (`x < tileSize/2`) gets `+ tileSize`, joining the west piece's own high-x interior. (This is the rule the struck-through mechanism below also got right — it's only wrong for the *other* piece.)
+- **East piece**: the mirror image — any vertex still sitting on the west piece's high-x frame (`x >= tileSize/2`, which includes the shared seam corner) gets `− tileSize`, joining the east piece's own near-0 interior.
+
+`inverseReproject` mirrors the correction (subtract for west, add for east, only where the corrected value would otherwise land outside `[0, tileSize)`), so round-tripping stays exact.
+
+One outcome worth calling out: this gives each piece its own **natural** common-space position (west near `x≈512`, east near `x≈0`) instead of always anchoring both near a single shared frame. That turned out to be load-bearing for the traversal fix below — a piece now needs no help from the other piece (or the seam) being in view to be found and drawn correctly.
+
+**Why the original mechanism (below) doesn't work:** a single constant-per-piece shift, decided by *which piece* is rendering, is wrong exactly at that piece's own boundary corner — the vertex that coincides with the *other* piece's edge and needs no shift at all. A per-piece constant can't tell "this piece's own interior vertex that happens to be wrapped" apart from "this piece's own boundary vertex that must stay put," because whether a given vertex needs the shift depends on *that vertex's own position*, not on which piece asked. The per-point test above (`x < tileSize/2` vs. `x >= tileSize/2`) gets every vertex right, including the exact seam corner, because it tests the vertex, not the piece.
+
+<details>
+<summary>Original text (superseded, kept for history)</summary>
+
 The fix is local to the **wrapped (negative-side) piece** only: in its `forwardReproject`, **if the projected X comes back positive, subtract one world-width** (the +max boundary → −max). Within that piece the *only* vertex proj4 places on the positive side is the ±180° seam, so this single sign test flips exactly the seam corner and leaves the interior untouched. It is **output-sign-based, not an input-value test** — the seam may be lng +180° or −180° depending on the source's longitude convention, and both pieces share the same seam *input*, so only *which piece* you're rendering decides the handling (known at cut time: the wrapped piece is the one whose interior projects to negative X). `inverseReproject` is unchanged: the piece is now a clean negative range the stock inverse maps back correctly. This is **not** the general phase-unwrap that sank #374 — the piece is known a priori to be wholly on the negative side, so the rule is trivial and deterministic.
+
+</details>
+
+### Locating and selecting a crossing tile in the traversal
+
+> **Added 2026-09-29.** Not in the original design — found once the mechanism above shipped: a crossing tile disappeared once zoomed in tight enough on one side alone that ±180° itself scrolled out of view, reappearing as soon as the seam came back into view. Root cause was that `raster-tile-traversal.ts`'s frustum-culling traversal had no antimeridian awareness at all — three compounding defects, all in `packages/deck.gl-raster/src/raster-tileset/`:
+
+1. **Malformed per-tile bounding volume** — see the updated "Traversal" bullet above. Fixed by reusing `unwrapCommonSpaceX` in `_getGenericBoundingVolume`.
+2. **Malformed dataset-level bounds.** The same problem one level up: `wgs84Bounds` (the `insideBounds` pre-filter checked before frustum culling on every tile) is a naive min/max over densified samples, which for a crossing dataset doesn't correspond to the real west/east corners. Once (1) was fixed this caused a *new* failure — the corrected tile box and the uncorrected dataset box only touched at `x=512` instead of overlapping, rejecting the tile at every zoom. Fixed in `getTileIndices` by recomputing the dataset's own bounds from its real corner longitudes when the dataset itself crosses.
+3. **World-copy offset-pass gate tied to the wrong condition.** The extra ±1..±`MAX_MAPS` bounding-volume passes (for `renderWorldCopies`/repeat mode) were gated on `viewport.subViewports.length > 1` — whether the *viewport's own* visible span currently straddles a ±180° multiple. That's unrelated to whether a *tile's* position is on a different world-copy frame than the viewport's canonical one, which is what the offset passes actually need to answer. Once zoomed in tight to one side, this wrongly skipped the exact offset pass that would have placed the (now correctly shaped) bounding volume in front of the frustum. Fixed by gating on `viewport.subViewports != null` instead — "repeat mode is active at all," not "the viewport itself currently straddles a seam." The early-break in the offset walk keeps this cheap when nothing is near a seam.
+
+The same three-defect pattern, adapted to `MosaicTileset2D`'s structurally different Flatbush/lng-lat-bbox spatial index (`packages/deck.gl-geotiff/src/mosaic-layer/mosaic-tileset-2d.ts`), needed only the world-copy-gate fix (its own version of #3) — a crossing source's bbox is normalized onto a continuous frame by `normalizeSourceBbox` (`mosaic-layer.ts`) before indexing, so it's found only by a query shifted ±360°, ±720°…, which the same `subViewports != null` gate now permits once zoomed in tight. `MultiCOGLayer extends RasterTileLayer`, so it already inherited defects #1/#2's fixes (and the seam-handling fix above) for free via the shared mesh/traversal code.
 
 ### Why not render-as-one
 
@@ -77,7 +105,7 @@ RasterTileLayer._renderSubLayers (per tile)        ← the only split point
 - **Cut builder** (deck.gl-raster) — computes the cut (inverse-project the antimeridian) → 1 or 2 sub-domain seeds. Lives in the tileset's `getTileMetadata` and is stored on tile metadata (per the "tile state on the tile" convention), so it is computed once and shared by both the render and the bounding volume.
 - **`RasterLayer`** ([`raster-layer.ts`](../../packages/deck.gl-raster/src/raster-layer.ts)) — one mesh, one `MeshTextureLayer`, unchanged except a new `initialTriangulation` prop (default: full square) passed to its reprojector.
 - **`RasterTileLayer._renderSubLayers`** — reads the tile's cut info and emits 1 or 2 `RasterLayer`s. Both crossing sub-layers share the **same** `reprojectionFns` (the tile's `_projectPosition`); they differ only in `initialTriangulation` and sublayer id (`…-raster-west` / `…-raster-east`).
-- **Traversal** — a **two-box bounding volume** for a crossing tile (west ≈ `[510,512]`, east ≈ `[0,2]`), each a normal `[0,512]` box, mapping 1:1 to the two `RasterLayer`s and composing with the world-copy traversal's per-offset selection (a crossing tile natively occupies two world bands at offset 0).
+- **Traversal** — originally planned as a **two-box bounding volume** for a crossing tile (west ≈ `[510,512]`, east ≈ `[0,2]`). **As implemented**, it's one tight box instead: the traversal's `_getGenericBoundingVolume` (`raster-tile-traversal.ts`) applies the same `unwrapCommonSpaceX` correction used by `forwardReproject` to its 9 sampled reference points before fitting the `OrientedBoundingBox`, so a crossing tile gets a single box straddling `x=512` rather than one spanning most of `[0,512]`. See "Locating and selecting a crossing tile in the traversal" below for why a second, independent fix was also needed here.
 
 ## Transparency to end users
 
@@ -113,7 +141,7 @@ The initial-triangulation seed subsumes several pending needs into one primitive
 ## Edge cases & risks
 
 - **Degenerate slivers:** the half-pixel-overhang case (`−180.0012°`) splits into a sub-pixel sliver + a main piece. Skip pieces below an ε UV width so we don't emit a degenerate mesh.
-- **Seam between pieces:** west's cut edge lands at common-x 512, east's at 0 ≡ 512 in the +1 world copy — they abut across the world-copy boundary. Encode the shared edge bit-identically (same discipline as adjacent tiles, [`coordinate-systems.md`](../coordinate-systems.md)).
+- **Seam between pieces:** west's cut edge lands at common-x 512, east's at common-x 0 — each piece sits at its own natural position (see "Seam handling" above) rather than a shared frame, and abut across the world-copy boundary via deck.gl's own repeat-rendering. Encode the shared edge bit-identically (same discipline as adjacent tiles, [`coordinate-systems.md`](../coordinate-systems.md)).
 - **delaunator ↔ delatin orientation:** this repo's delatin works in UV (y-down). Verify winding/`inCircle` compatibility with a test (delaunator on the 4 unit-square corners → seed → delatin refines identically to the current hardcoded init).
 - **Texture upload:** both sublayers reference the same tile image; without a shared luma `Texture` it uploads twice. Negligible for the prototype (dateline tiles are a thin strip); optimize later if needed.
 
@@ -122,7 +150,7 @@ The initial-triangulation seed subsumes several pending needs into one primitive
 **Unit**
 - Reprojector seeded with a delaunator-built sub-rectangle (the documented pattern) converges and adds no vertices outside the seed domain; a delaunator unit-square seed refines validly (winding compatibility), equivalent to the current default.
 - Cut location: inverse-projecting the antimeridian yields the expected cut line — a vertical UV column for axis-aligned EPSG:4326 (the `antimeridian.tif` fixture cuts at column 24 / `u ≈ 0.571`), a slanted line for a rotated geotransform; a *curved* cut is detected and errors.
-- Two-box bounding volume for a crossing tile (west/east boxes; correct selection under the world-copy traversal).
+- Bounding volume for a crossing tile is a single tight box straddling the seam (not one spanning most of `[0,512]`); correct selection under the world-copy traversal, including when zoomed in tight to one piece alone (see "Locating and selecting a crossing tile in the traversal" above).
 
 **Integration / visual (cog-basic)**
 - The `antimeridian.tif` fixture renders as a single contiguous image across ±180° (west piece near +180°, east piece near −180°), staying continuous when panning across the seam.

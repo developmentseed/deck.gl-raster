@@ -114,15 +114,18 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     const viewportBounds = viewport.getBounds();
     const matchedIndices = new Set(index.search(...viewportBounds));
 
-    // World-copy passes: when the viewport spans multiple world copies (e.g.
-    // WebMercatorViewport with repeat: true panned across the antimeridian),
-    // `viewport.getBounds()` reports longitudes for only one copy, but a
-    // source's bbox may only be indexed in another copy's range. Re-query the
-    // index with the bounds shifted by ±360°, ±720°… — same idea as
-    // raster-tile-traversal.ts's per-offset frustum passes, just in lng/lat
-    // instead of common-space pixels. Walk each direction until an offset
-    // comes back empty — see dev-docs/world-copies.md.
-    if ((viewport.subViewports?.length ?? 0) > 1) {
+    // World-copy passes: whenever repeat mode is active (`subViewports` is
+    // non-null), a source's bbox may be indexed in a different world-copy
+    // frame than `viewport.getBounds()` reports — e.g. an antimeridian-
+    // crossing source's bbox is normalized/unwrapped onto a continuous frame
+    // (see `normalizeSourceBbox`), so it's only found by a query shifted
+    // ±360°, ±720°… Gating on `subViewports.length > 1` (the viewport's own
+    // bounds currently straddling a ±180° multiple) wrongly skips this once
+    // zoomed in tight to one side alone — the viewport no longer straddles a
+    // seam, but the source's own indexed position can still be a world copy
+    // away from the query. Matches raster-tile-traversal.ts's gate. Walk each
+    // direction until an offset comes back empty — see dev-docs/world-copies.md.
+    if (viewport.subViewports != null) {
       for (let worldOffset = -1; worldOffset >= -MAX_MAPS; worldOffset--) {
         if (!searchAtOffset(index, viewportBounds, worldOffset, matchedIndices)) {
           break;
