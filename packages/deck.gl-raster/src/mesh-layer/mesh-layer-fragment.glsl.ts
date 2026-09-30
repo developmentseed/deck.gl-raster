@@ -5,8 +5,10 @@
  *
  * We edited this to:
  *
- * 1. Remove the hard-coded texture uniform because we want to support integer
- *    and signed integer textures, not only normalized unsigned textures.
+ * 1. Let render pipeline modules supply the color instead of the hard-coded
+ *    texture, because we want to support integer and signed integer textures,
+ *    not only normalized unsigned textures. The hard-coded `sampler` stays
+ *    declared so it matches the binding SimpleMeshLayer always sets.
  * 2. Remove lighting. Raster pixels are data, so they are written verbatim
  *    (like `BitmapLayer`) and never pass through `lighting_getLightColor`. The
  *    mesh is flat, so lighting could only scale the whole raster by a constant:
@@ -18,6 +20,11 @@ export default /* glsl */ `#version 300 es
 
 precision highp float;
 
+// SimpleMeshLayer always binds its standard texture as \`sampler\` (an empty
+// texture when the \`texture\` prop is unset). Declaring it keeps that binding in
+// the shader layout.
+uniform sampler2D sampler;
+
 in vec2 vTexCoord;
 in vec4 vColor;
 
@@ -26,8 +33,10 @@ out vec4 fragColor;
 void main(void) {
   geometry.uv = vTexCoord;
 
-  // We initialize color here before passing into DECKGL_FILTER_COLOR
-  vec4 color;
+  // Start from the SimpleMeshLayer texture, or transparent without one, so
+  // color is defined for DECKGL_FILTER_COLOR. Render pipeline modules that
+  // sample their own (integer or signed) textures replace it.
+  vec4 color = simpleMesh.hasTexture ? texture(sampler, vTexCoord) : vec4(0.0);
   DECKGL_FILTER_COLOR(color, geometry);
 
   fragColor = vec4(color.rgb, color.a * layer.opacity);
