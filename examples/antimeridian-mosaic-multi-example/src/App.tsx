@@ -86,17 +86,8 @@ export default function App() {
         sourcePath="examples/antimeridian-mosaic-multi-example"
       >
         <Text mb="2" color="gray.600">
-          Same {geomadItems.length || 12} DEP GeoMAD items as{" "}
-          <ExternalLink href="https://github.com/developmentseed/deck.gl-raster/tree/main/examples/antimeridian-example">
-            antimeridian-example
-          </ExternalLink>
-          , but composed as R/G/B through <code>MosaicLayer</code> +{" "}
-          <code>MultiCOGLayer</code> (the needed use pattern), not just a
-          single-band <code>COGLayer</code>. See{" "}
-          <ExternalLink href="https://github.com/developmentseed/deck.gl-raster/issues/575">
-            #575
-          </ExternalLink>
-          .
+          Digital Earth Pacific GeoMAD composed through `MosaicLayer` +{" "}
+          `MultiCOGLayer` (R/G/B band composite).
         </Text>
         <Text mb="3" fontSize="xs" color="gray.600">
           <ExternalLink href="https://digitalearthpacific.org">

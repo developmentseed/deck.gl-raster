@@ -1,10 +1,6 @@
 # Antimeridian: Mosaic + MultiCOG Example
 
-Same DEP GeoMAD test catalog as [`antimeridian-example`](../antimeridian-example), but composed through `MosaicLayer` + `MultiCOGLayer` (R/G/B band composite) instead of a single-band `COGLayer` (the needed use pattern). See [#575](https://github.com/developmentseed/deck.gl-raster/issues/575).
-
-`src/data.ts` reads every item directly from the catalog's STAC-geoparquet (via `hyparquet`, no server-side indexing step) and pulls out the bbox and R/G/B asset hrefs. `MosaicLayer` indexes its `sources` by `bbox` in a Flatbush R-tree, unwrapping a GeoJSON-flipped bbox (`minX > maxX`, RFC 7946 §5.2 — the crossing item's encoding) onto a continuous frame internally before indexing.
-
-The debug overlay toggle exercises `MultiCOGLayer`'s own tile-outline rendering (`debug`/`debugOpacity`/`debugLevel`), confirming it also knows about the antimeridian mesh split.
+Digital Earth Pacific GeoMAD composed through `MosaicLayer` + `MultiCOGLayer` (R/G/B band composite).
 
 ## Setup
 

@@ -125,7 +125,7 @@ const EPSG_3857_CIRCUMFERENCE = 2 * Math.PI * WGS84_ELLIPSOID_A;
 const EPSG_3857_HALF_CIRCUMFERENCE = EPSG_3857_CIRCUMFERENCE / 2;
 
 // Maximum latitude representable in Web Mercator (EPSG:3857), in degrees.
-const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
+export const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
 
 /**
  * Raster Tile Node - represents a single tile in a tileset pyramid.

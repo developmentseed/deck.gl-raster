@@ -20,6 +20,7 @@ import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import {
   getTileIndices,
+  MAX_WEB_MERCATOR_LAT,
   rescaleCommonSpaceToEPSG3857,
   TILE_SIZE,
 } from "./raster-tile-traversal.js";
@@ -34,9 +35,6 @@ import type {
   ZRange,
 } from "./types.js";
 import { createInitialWebMercatorTriangulation } from "./web-mercator-clamp.js";
-
-/** Web Mercator's latitude limit, in degrees. */
-const MAX_LAT = 85.0511287798066;
 
 /** Type returned by {@link RasterTileset2D.getTileMetadata} */
 export type RasterTileMetadata = {
@@ -206,7 +204,10 @@ export class RasterTileset2D extends Tileset2D {
     // one.
     this.projectPosition = (x, y) => {
       const [lng, lat] = descriptor.projectTo4326(x, y);
-      return lngLatToWorld([lng, Math.max(-MAX_LAT, Math.min(MAX_LAT, lat))]);
+      return lngLatToWorld([
+        lng,
+        Math.max(-MAX_WEB_MERCATOR_LAT, Math.min(MAX_WEB_MERCATOR_LAT, lat)),
+      ]);
     };
     this.unprojectPosition = (cx, cy) => {
       if (cx >= 0 && cx <= TILE_SIZE) {
@@ -225,12 +226,12 @@ export class RasterTileset2D extends Tileset2D {
     // downstream tile traversal calls `lngLatToWorld` on these bounds which
     // asserts against that range. Global data at ±90° (e.g. reanalysis grids)
     // would otherwise crash tile selection. Clamp here; any polar rows beyond
-    // ±MAX_LAT are unreachable on a Mercator map anyway.
+    // ±MAX_WEB_MERCATOR_LAT are unreachable on a Mercator map anyway.
     this.wgs84Bounds = [
       rawBounds[0],
-      Math.max(rawBounds[1], -MAX_LAT),
+      Math.max(rawBounds[1], -MAX_WEB_MERCATOR_LAT),
       rawBounds[2],
-      Math.min(rawBounds[3], MAX_LAT),
+      Math.min(rawBounds[3], MAX_WEB_MERCATOR_LAT),
     ];
   }
 
