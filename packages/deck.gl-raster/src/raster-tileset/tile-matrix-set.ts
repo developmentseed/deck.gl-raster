@@ -185,15 +185,34 @@ export class TileMatrixSetAdaptor implements RasterTilesetDescriptor {
     return this._levels;
   }
 
+  /**
+   * Bounding box of the TileMatrixSet in its CRS, as `[minX, minY, maxX, maxY]`.
+   *
+   * Uses the TileMatrixSet's `boundingBox` when present. It is optional in OGC
+   * TMS 2.0 (none of morecantile's registry TileMatrixSets set it), so
+   * otherwise this is inferred from the extent of the coarsest tile matrix,
+   * like morecantile's `TileMatrixSet.xy_bbox`.
+   */
   get projectedBounds(): Bounds {
     const { boundingBox } = this.tms;
-    if (!boundingBox) {
-      throw new Error(
-        "Bounding Box inference not yet implemented; should be provided on TileMatrixSet",
-      );
+    if (boundingBox) {
+      const { lowerLeft, upperRight } = boundingBox;
+      return [lowerLeft[0], lowerLeft[1], upperRight[0], upperRight[1]];
     }
 
-    const { lowerLeft, upperRight } = boundingBox;
-    return [lowerLeft[0], lowerLeft[1], upperRight[0], upperRight[1]];
+    // The first and last tiles sit in opposite corners of the matrix, so
+    // together they span it for either `cornerOfOrigin`.
+    const matrix = this.tms.tileMatrices[0]!;
+    const first = xy_bounds(matrix, { x: 0, y: 0 });
+    const last = xy_bounds(matrix, {
+      x: matrix.matrixWidth - 1,
+      y: matrix.matrixHeight - 1,
+    });
+    return [
+      Math.min(first.lowerLeft[0], last.lowerLeft[0]),
+      Math.min(first.lowerLeft[1], last.lowerLeft[1]),
+      Math.max(first.upperRight[0], last.upperRight[0]),
+      Math.max(first.upperRight[1], last.upperRight[1]),
+    ];
   }
 }
