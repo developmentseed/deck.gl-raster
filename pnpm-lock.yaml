@@ -119,12 +119,6 @@ importers:
       '@devseed-ui/collecticons-chakra':
         specifier: ^4.0.0
         version: 4.0.0(@chakra-ui/react@3.35.0(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      hyparquet:
-        specifier: ^1.31.2
-        version: 1.31.2
-      hyparquet-compressors:
-        specifier: ^1.1.2
-        version: 1.1.2
       maplibre-gl:
         specifier: ^5.24.0
         version: 5.24.0
@@ -317,6 +311,12 @@ importers:
       deck.gl-raster-examples-shared:
         specifier: workspace:*
         version: link:../_shared
+      hyparquet:
+        specifier: ^1.31.2
+        version: 1.31.2
+      hyparquet-compressors:
+        specifier: ^1.1.2
+        version: 1.1.2
       maplibre-gl:
         specifier: ^5.24.0
         version: 5.24.0

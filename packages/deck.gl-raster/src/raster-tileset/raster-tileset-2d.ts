@@ -131,11 +131,12 @@ export type RasterTileMetadata = {
    * are the stock, unmodified pixel↔source-CRS transform — the antimeridian
    * discontinuity doesn't live there (it's a property of the projection, not
    * the geotransform). Instead `forwardReproject`/`inverseReproject` correct
-   * for it post-projection, in common-space units: any raw common-space x
-   * below `TILE_SIZE / 2` is on the wrapped side and gets `+TILE_SIZE`,
-   * placing it in the world-copy adjacent to the other piece — see
-   * `buildPieceReprojection`. Built once in `getTileMetadata` for reference
-   * stability across renders.
+   * for it post-projection, in common-space units, via `unwrapCommonSpaceX`:
+   * each point's own signed distance from the seam (from its fractional
+   * position `u` and the already-located cut) decides whether it needs
+   * `+TILE_SIZE`, placing it in the world-copy adjacent to the other piece —
+   * see `buildPieceReprojection`. Built once in `getTileMetadata` for
+   * reference stability across renders.
    */
   _westReprojection?: ReprojectionFns;
 
@@ -502,9 +503,9 @@ export class RasterTileset2D extends Tileset2D {
    * derives an expected x directly from the point's own distance from the
    * seam (via its fractional position `u` along the tile, recovered here
    * with `inverseTransform`) rather than testing the wrapped output against
-   * a fixed midpoint. See that function's doc comment and
-   * `replace-256-x-heuristic.md` for why this is width-independent, unlike
-   * the constant-per-piece-shift approach it replaced.
+   * a fixed midpoint. See that function's doc comment and the design doc's
+   * "Seam handling" section for why this is width-independent, unlike the
+   * constant-per-piece-shift approach it replaced.
    *
    * `unwrapCommonSpaceX` itself anchors the seam at `TILE_SIZE` — the west
    * piece's own natural frame, needing no further adjustment. The east

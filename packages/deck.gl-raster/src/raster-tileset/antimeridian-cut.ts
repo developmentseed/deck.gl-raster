@@ -45,16 +45,15 @@ const U_EPSILON = 1e-6;
  * have and still be cut.
  *
  * This is not an accuracy limit on {@link unwrapCommonSpaceX} — its per-point
- * correction is derived from each point's own distance from the seam (in
+ * correction derives from each point's own distance from the seam (in
  * already-validated corner longitudes), not a magnitude test against a fixed
- * midpoint, so it has no per-piece width limit (see
- * `replace-256-x-heuristic.md`). The one limit that remains is physical, not
- * a property of this code: a tile ≥360° wide has two pixel columns claiming
- * the same real-world longitude — self-overlapping, invalid data with no
- * correct rendering, cut or not. 359.9° (not the exact boundary of 360°)
- * leaves a margin against floating-point noise.
+ * midpoint, so it has no per-piece width limit (see the design doc's "Seam
+ * handling" section). The limit that remains is physical: a tile ≥360° wide
+ * has two pixel columns claiming the same real-world longitude —
+ * self-overlapping, invalid data with no correct rendering, cut or not. The
+ * `>=` check below rejects exactly that case and nothing short of it.
  */
-const MAX_TOTAL_SPAN_DEG = 359.9;
+const MAX_TOTAL_SPAN_DEG = 360;
 
 /**
  * Unwrap a GeoJSON-flipped edge (RFC 7946 §5.2: west > east marks a
@@ -73,21 +72,19 @@ export function unwrapEastLng(westLng: number, eastLng: number): number {
  * (0..1) along the tile's pixel/UV domain — the same domain `cut.uCut` is
  * defined in.
  *
- * Rather than testing the already-wrapped `x` against a fixed midpoint
- * (`tileSize/2`) — which can't tell "this point wrapped around the seam"
- * apart from "this point is just far from the seam" once the tile is wide —
- * this computes an *expected* `x` directly from the point's own signed
+ * A fixed-midpoint test (`tileSize/2`) can't tell "this point wrapped around
+ * the seam" apart from "this point is just far from the seam" once the tile
+ * is wide. Instead, this derives an *expected* x from the point's own signed
  * distance from the seam (`(u - cut.uCut) * cut.totalSpanDeg`, in degrees,
- * using the already-validated corner longitudes `antimeridianCut` located
- * the seam from) and snaps `x` to the representative nearest that
- * expectation. The seam itself (`u = cut.uCut`) always maps to exactly
- * `tileSize`; the west side (`u < cut.uCut`) extends below it, the east side
- * (`u > cut.uCut`) extends above it. See `replace-256-x-heuristic.md` for
- * the full derivation and why this has no per-piece width limit.
+ * using the corner longitudes `antimeridianCut` already validated) and snaps
+ * the real `x` to the copy nearest that expectation. The seam itself
+ * (`u = cut.uCut`) always maps to exactly `tileSize`; the west side
+ * (`u < cut.uCut`) extends below it, the east side (`u > cut.uCut`) extends
+ * above it. See the design doc's "Seam handling" section for the full
+ * derivation and why this has no per-piece width limit.
  *
- * This is the "combined" form used directly by the traversal's bounding
- * volume, which wants one contiguous box spanning both pieces around the
- * seam (west below `tileSize`, east above it). `buildPieceReprojection`'s
+ * This is the "combined" form the traversal's bounding volume uses directly
+ * (one contiguous box spanning both pieces around the seam). `buildPieceReprojection`'s
  * east-piece branch re-anchors the result into its own local frame (seam at
  * `0`, not `tileSize`) by subtracting `tileSize` — see that method's doc
  * comment.

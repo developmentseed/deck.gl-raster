@@ -17,6 +17,4 @@ export { ExampleProvider } from "./components/provider.js";
 export type { RangeSliderProps } from "./components/range-slider.js";
 export { RangeSlider } from "./components/range-slider.js";
 export { UIOverlay } from "./components/ui-overlay.js";
-export type { StacAssets, StacGeoparquetItem } from "./stac-geoparquet.js";
-export { fetchStacGeoparquetItems } from "./stac-geoparquet.js";
 export { system } from "./styles/theme.js";

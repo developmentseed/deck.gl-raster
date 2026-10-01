@@ -180,7 +180,7 @@ describe("RasterTileset2D.getTileMetadata — _antimeridianCut", () => {
     // Native lngs -100..190 (un-normalized, west<east): crosses +180° at
     // uCut = 280/290. The west piece alone is 280° wide — well past the
     // old (now-removed) 170° per-piece guard, but under the 360°
-    // total-width limit. See replace-256-x-heuristic.md.
+    // total-width limit.
     function wideCrossingMetadata() {
       const level = new AffineTilesetLevel({
         affine: compose(translation(-100, 24), scale(1, -1)),

@@ -15,12 +15,6 @@ import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import type { GeomadItem } from "./data.js";
 import { fetchGeomadItems } from "./data.js";
 
-// DEP GeoMAD reflectance stretch — uint16 sampled as r16unorm (shader sees
-// rawDN / 65535), so the display range needs the same division. One
-// item's STAC raster:bands stats state the red band range as [7014, 16807]
-const RESCALE_MIN = 7200 / 65535;
-const RESCALE_MAX = 12000 / 65535;
-
 export default function App() {
   const [geomadItems, setGeomadItems] = useState<GeomadItem[]>([]);
   const [debugState, setDebugState] = useState<DebugState>({
@@ -48,7 +42,7 @@ export default function App() {
         renderPipeline: [
           {
             module: LinearRescale,
-            props: { rescaleMin: RESCALE_MIN, rescaleMax: RESCALE_MAX },
+            props: { rescaleMin: 7200 / 65535, rescaleMax: 12000 / 65535 },
           },
         ],
         debug: debugState.debug,
@@ -57,7 +51,7 @@ export default function App() {
       }),
   });
 
-  // Reference line at the true antimeridian (±180°).
+  // Reference line at the antimeridian (±180°).
   const antimeridianLine = new PathLayer({
     id: "antimeridian-line",
     data: [
