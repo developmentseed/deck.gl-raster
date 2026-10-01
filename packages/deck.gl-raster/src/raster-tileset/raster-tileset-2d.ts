@@ -14,18 +14,13 @@ import type {
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
-import type {
-  InitialTriangulation,
-  ReprojectionFns,
-} from "@developmentseed/raster-reproject";
+import type { InitialTriangulation } from "@developmentseed/raster-reproject";
 import type { Matrix4 } from "@math.gl/core";
-import type { AntimeridianCut } from "./antimeridian-cut.js";
-import { antimeridianCut, unwrapCommonSpaceX } from "./antimeridian-cut.js";
+import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import {
   getTileIndices,
   rescaleCommonSpaceToEPSG3857,
-  rescaleEPSG3857ToCommonSpace,
   TILE_SIZE,
 } from "./raster-tile-traversal.js";
 import { sortItemsByDistanceFromViewportCenter } from "./sort-by-distance.js";
@@ -39,6 +34,9 @@ import type {
   ZRange,
 } from "./types.js";
 import { createInitialWebMercatorTriangulation } from "./web-mercator-clamp.js";
+
+/** Web Mercator's latitude limit, in degrees. */
+const MAX_LAT = 85.0511287798066;
 
 /** Type returned by {@link RasterTileset2D.getTileMetadata} */
 export type RasterTileMetadata = {
@@ -113,35 +111,16 @@ export type RasterTileMetadata = {
    * Web Mercator latitude band (±85.051°), or `undefined` if no clamp is needed.
    * Consumed only by the Web Mercator render path; the globe path renders the
    * full mesh. See {@link createInitialWebMercatorTriangulation}.
+   *
+   * A function of the fetched data's size, since the reprojector's uv spans
+   * the *data* — an edge tile fetched clipped to the image covers less than
+   * the nominal tile. Memoized, so the result is reference-stable across
+   * renders for a given size.
    */
-  _webMercatorInitialTriangulation?: InitialTriangulation;
-
-  /**
-   * Vertical cut at which this tile crosses ±180°, or `undefined` if the tile
-   * does not cross the antimeridian (or crosses with a slanted/curved cut that
-   * the MVP does not yet handle). Consumed by `RasterTileLayer._renderSubLayers`
-   * in the Web Mercator branch to split the tile into a west + east piece. See
-   * {@link antimeridianCut}.
-   */
-  _antimeridianCut?: AntimeridianCut;
-
-  /**
-   * Reprojection bundle for the west piece of an antimeridian-crossing tile,
-   * or `undefined` for non-crossing tiles. `forwardTransform`/`inverseTransform`
-   * are the stock, unmodified pixel↔source-CRS transform — the antimeridian
-   * discontinuity doesn't live there (it's a property of the projection, not
-   * the geotransform). Instead `forwardReproject`/`inverseReproject` correct
-   * for it post-projection, in common-space units, via `unwrapCommonSpaceX`:
-   * each point's own signed distance from the seam (from its fractional
-   * position `u` and the already-located cut) decides whether it needs
-   * `+TILE_SIZE`, placing it in the world-copy adjacent to the other piece —
-   * see `buildPieceReprojection`. Built once in `getTileMetadata` for
-   * reference stability across renders.
-   */
-  _westReprojection?: ReprojectionFns;
-
-  /** East piece counterpart of {@link RasterTileMetadata._westReprojection}. */
-  _eastReprojection?: ReprojectionFns;
+  _webMercatorInitialTriangulation: (
+    dataWidth: number,
+    dataHeight: number,
+  ) => InitialTriangulation | undefined;
 };
 
 /**
@@ -213,11 +192,29 @@ export class RasterTileset2D extends Tileset2D {
     // the tile to keep `RasterLayer`'s reprojection-equality check stable
     // across renders (deck.gl recreates the layer instance every render, so
     // per-render-derived closures would regenerate the mesh every frame).
-    this.projectPosition = (x, y) =>
-      rescaleEPSG3857ToCommonSpace(descriptor.projectTo3857(x, y));
+    //
+    // Forward goes via the source's own lng/lat, *not* normalized: proj4
+    // passes a 4326 source's native longitude through (e.g. −204°), so its
+    // mesh lands continuous in common space with no wrap at all. A projected
+    // source's longitude comes back normalized to (−180°, 180°], so a tile
+    // crossing the antimeridian wraps — `RasterLayer`'s `wrapX` unwraps that.
+    //
+    // Inverse must then accept x from any world copy. Inside the canonical
+    // copy it is the stock 3857 inverse; outside, x maps linearly to an
+    // un-normalized longitude, which `projectFrom4326` passes straight
+    // through for a 4326 source and proj4's `adjlon` folds for a projected
+    // one.
+    this.projectPosition = (x, y) => {
+      const [lng, lat] = descriptor.projectTo4326(x, y);
+      return lngLatToWorld([lng, Math.max(-MAX_LAT, Math.min(MAX_LAT, lat))]);
+    };
     this.unprojectPosition = (cx, cy) => {
-      const [mx, my] = rescaleCommonSpaceToEPSG3857([cx, cy]);
-      return descriptor.projectFrom3857(mx, my);
+      if (cx >= 0 && cx <= TILE_SIZE) {
+        const [mx, my] = rescaleCommonSpaceToEPSG3857([cx, cy]);
+        return descriptor.projectFrom3857(mx, my);
+      }
+      const [lng, lat] = worldToLngLat([cx, cy]);
+      return descriptor.projectFrom4326(lng, lat);
     };
 
     const rawBounds = transformBounds(
@@ -229,7 +226,6 @@ export class RasterTileset2D extends Tileset2D {
     // asserts against that range. Global data at ±90° (e.g. reanalysis grids)
     // would otherwise crash tile selection. Clamp here; any polar rows beyond
     // ±MAX_LAT are unreachable on a Mercator map anyway.
-    const MAX_LAT = 85.0511287798066;
     this.wgs84Bounds = [
       rawBounds[0],
       Math.max(rawBounds[1], -MAX_LAT),
@@ -418,55 +414,26 @@ export class RasterTileset2D extends Tileset2D {
 
     // Clamp the reprojection mesh to the valid Web Mercator latitude band for
     // tiles that extend past ±85.051° (e.g. a global EPSG:4326 image reaching
-    // ±90°). Computed once here so the reference is stable across renders.
-    const cornerLat = (corner: [number, number]) =>
-      this.descriptor.projectTo4326(corner[0], corner[1])[1];
-    const _webMercatorInitialTriangulation =
-      createInitialWebMercatorTriangulation({
-        topLeft: cornerLat(topLeft),
-        topRight: cornerLat(topRight),
-        bottomLeft: cornerLat(bottomLeft),
-        bottomRight: cornerLat(bottomRight),
-      });
-
-    // Detect whether this tile crosses ±180° and locate the vertical cut.
-    // Corner longitudes are native (as proj4 returns them — un-normalized for a
-    // 4326 source with an origin past ±180°). See {@link antimeridianCut}.
-    const cornerLng = (corner: [number, number]) =>
-      this.descriptor.projectTo4326(corner[0], corner[1])[0];
-    const tileWestLng = cornerLng(topLeft);
-    const tileEastLng = cornerLng(topRight);
-    const _antimeridianCut = antimeridianCut({
-      topLeft: tileWestLng,
-      topRight: tileEastLng,
-      bottomLeft: cornerLng(bottomLeft),
-      bottomRight: cornerLng(bottomRight),
-    });
-    // Each piece of a crossing tile needs its `forwardReproject` output
-    // (common space) corrected per-point, not by one constant shift — see
-    // `buildPieceReprojection` for why. West and east each get their OWN
-    // bundle (mirror-image corrections), so each piece renders at its own
-    // natural, internally-consistent position rather than both being forced
-    // into the west piece's frame — see that method's doc comment for why a
-    // single shared bundle breaks visibility when only one piece is in view.
-    let _westReprojection: ReprojectionFns | undefined;
-    let _eastReprojection: ReprojectionFns | undefined;
-    if (_antimeridianCut) {
-      _westReprojection = this.buildPieceReprojection(
-        forwardTransform,
-        inverseTransform,
-        "west",
-        _antimeridianCut,
-        tileWidth,
-      );
-      _eastReprojection = this.buildPieceReprojection(
-        forwardTransform,
-        inverseTransform,
-        "east",
-        _antimeridianCut,
-        tileWidth,
-      );
-    }
+    // ±90°). Latitudes come from the data's own corners, not the nominal
+    // tile's: for a clipped edge tile (e.g. a 36×2 overview in a 64×64 tile)
+    // the nominal corners can be hundreds of degrees past the data.
+    const latAt = (px: number, py: number) =>
+      this.descriptor.projectTo4326(...forwardTransform(px, py))[1];
+    let memoKey: string | undefined;
+    let memoSeed: InitialTriangulation | undefined;
+    const _webMercatorInitialTriangulation = (w: number, h: number) => {
+      const key = `${w}x${h}`;
+      if (key !== memoKey) {
+        memoKey = key;
+        memoSeed = createInitialWebMercatorTriangulation({
+          topLeft: latAt(0, 0),
+          topRight: latAt(w, 0),
+          bottomLeft: latAt(0, h),
+          bottomRight: latAt(w, h),
+        });
+      }
+      return memoSeed;
+    };
 
     return {
       bbox: {
@@ -489,90 +456,6 @@ export class RasterTileset2D extends Tileset2D {
       _projectPosition: this.projectPosition,
       _unprojectPosition: this.unprojectPosition,
       _webMercatorInitialTriangulation,
-      _antimeridianCut,
-      _westReprojection,
-      _eastReprojection,
-    };
-  }
-
-  /**
-   * Build a per-piece reprojection bundle for an antimeridian-crossing tile.
-   *
-   * `forwardReproject` corrects `projectPosition`'s raw (proj4-wrapped)
-   * common-space x per point, using {@link unwrapCommonSpaceX} — which
-   * derives an expected x directly from the point's own distance from the
-   * seam (via its fractional position `u` along the tile, recovered here
-   * with `inverseTransform`) rather than testing the wrapped output against
-   * a fixed midpoint. See that function's doc comment and the design doc's
-   * "Seam handling" section for why this is width-independent, unlike the
-   * constant-per-piece-shift approach it replaced.
-   *
-   * `unwrapCommonSpaceX` itself anchors the seam at `TILE_SIZE` — the west
-   * piece's own natural frame, needing no further adjustment. The east
-   * piece's natural frame instead anchors the seam at `0`, so its branch
-   * re-anchors by subtracting `TILE_SIZE`.
-   *
-   * Each piece therefore renders at its *own* natural common-space position
-   * (west near `TILE_SIZE`, east near `0`) instead of both being forced into
-   * one shared, artificially-combined frame. This matters once the viewport
-   * is zoomed into just one piece, away from the seam: deck.gl's own
-   * world-copy/repeat rendering already knows how to place a layer's raw,
-   * unmodified position on screen regardless of which world copy the camera
-   * is centered on (the same mechanism that already renders ordinary,
-   * non-crossing tiles correctly at any zoom) — but only if that position is
-   * the piece's genuine one. Forcing the east piece into the west piece's
-   * frame put it a full world away from wherever the camera was actually
-   * looking whenever only the east piece was in view, leaving it selected
-   * (fetched) but invisible. When *both* pieces are in view (viewport
-   * straddling the seam), deck.gl's own repeat rendering draws each piece at
-   * every world copy it's visible in, so the west piece (near `TILE_SIZE`)
-   * and the east piece (near `0`, repeat-rendered a world copy over at
-   * `TILE_SIZE`) still meet up seamlessly — no manual cross-piece shift
-   * needed for that case either.
-   */
-  private buildPieceReprojection(
-    forwardTransform: ProjectionFunction,
-    inverseTransform: ProjectionFunction,
-    piece: "west" | "east",
-    cut: AntimeridianCut,
-    tileWidth: number,
-  ): ReprojectionFns {
-    return {
-      forwardTransform,
-      inverseTransform,
-      forwardReproject: (x, y) => {
-        const [cx, cy] = this.projectPosition(x, y);
-        const [px] = inverseTransform(x, y);
-        const u = px / tileWidth;
-        const seamAnchored = unwrapCommonSpaceX(cx, u, cut, TILE_SIZE);
-        const corrected =
-          piece === "west" ? seamAnchored : seamAnchored - TILE_SIZE;
-        return [corrected, cy];
-      },
-      inverseReproject: (cx, cy) => {
-        // Undo the east branch's re-anchoring first, same as before. From
-        // here, `unprojectPosition` alone isn't a true inverse of
-        // `forwardReproject`: it reduces into canonical [0, TILE_SIZE)
-        // before unprojecting, and proj4's own inverse re-normalizes
-        // longitude into (-180°,180°] — losing which world-copy the point
-        // came from whenever that's outside ±180°. Y is unaffected (Mercator's
-        // inverse doesn't mix X into Y), so get `sourceY` the same way as
-        // before and use it, via the stock geotransform, to recover `py`.
-        // For X, invert `unwrapCommonSpaceX`'s own linear formula directly —
-        // exact, since it's the same formula `forwardReproject` used to
-        // produce `seamAnchored` — to get `u`, then let the stock
-        // `forwardTransform` (un-normalized-domain, CRS-correct) produce the
-        // true source point. This never assumes degree units, so it works
-        // identically for a projected (e.g. EPSG:3832) source CRS.
-        const seamAnchored = piece === "west" ? cx : cx + TILE_SIZE;
-        const raw = ((seamAnchored % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
-        const [, sourceY] = this.unprojectPosition(raw, cy);
-        const [, py] = inverseTransform(0, sourceY);
-        const u =
-          cut.uCut +
-          ((seamAnchored - TILE_SIZE) * 360) / (cut.totalSpanDeg * TILE_SIZE);
-        return forwardTransform(u * tileWidth, py);
-      },
     };
   }
 }

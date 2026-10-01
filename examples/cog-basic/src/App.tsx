@@ -1,4 +1,5 @@
 import { NativeSelect, Text } from "@chakra-ui/react";
+import { PathLayer } from "@deck.gl/layers";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type { DebugState } from "deck.gl-raster-examples-shared";
 import {
@@ -18,7 +19,7 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
   {
     // Dev-only fixture served by examples/cog-basic/vite.config.ts from the
     // geotiff-test-data submodule. EPSG:4326, bbox (−204, −18, −162, 24);
-    // crosses native −180° at u ≈ 24/42 — exercises antimeridian split.
+    // crosses native −180° at u ≈ 24/42 — exercises antimeridian unwrap + clip.
     title: "Antimeridian fixture (dev only) (4326)",
     url: `${window.location.origin}/__fixtures/antimeridian.tif`,
   },
@@ -29,6 +30,10 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
   {
     title: "Antimeridian fixture (dev only) (UTM Zone 60)",
     url: `${window.location.origin}/__fixtures/antimeridian_utm60.tif`,
+  },
+  {
+    title: "Antimeridian fixture (dev only) (4326 rotated)",
+    url: `${window.location.origin}/__fixtures/antimeridian_rotated.tif`,
   },
   {
     title: "Antimeridian fixture (dev only) (360°)",
@@ -109,6 +114,21 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
   },
 ];
 
+// Reference line at the antimeridian (±180°).
+const antimeridianLine = new PathLayer({
+  id: "antimeridian-line",
+  data: [
+    [
+      [180, 85],
+      [180, -85],
+    ],
+  ],
+  getPath: (d: [number, number][]) => d,
+  getColor: [255, 0, 200, 255],
+  getWidth: 2,
+  widthUnits: "pixels",
+});
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -153,7 +173,7 @@ export default function App() {
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
-        <DeckGlOverlay layers={[cogLayer]} interleaved />
+        <DeckGlOverlay layers={[cogLayer, antimeridianLine]} interleaved />
       </MaplibreMap>
 
       <ControlPanel title="COGLayer Example" sourcePath="examples/cog-basic">

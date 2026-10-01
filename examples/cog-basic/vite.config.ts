@@ -43,7 +43,10 @@ function localFixtures(): Plugin {
             const m = range ? /^bytes=(\d+)-(\d*)$/.exec(String(range)) : null;
             if (m) {
               const start = Number.parseInt(m[1]!, 10);
-              const end = m[2] ? Number.parseInt(m[2], 10) : stat.size - 1;
+              const requestedEnd = m[2]
+                ? Number.parseInt(m[2], 10)
+                : stat.size - 1;
+              const end = Math.min(requestedEnd, stat.size - 1);
               res.statusCode = 206;
               res.setHeader(
                 "Content-Range",

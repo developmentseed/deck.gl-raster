@@ -8,13 +8,13 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import { triangulateRectangle } from "@developmentseed/raster-reproject";
 import type { Device } from "@luma.gl/core";
 import { renderDebugTileOutline } from "../layer-utils.js";
 import type { RenderTileResult } from "../raster-layer.js";
 import { RasterLayer } from "../raster-layer.js";
 import type { RasterTilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
+import { TILE_SIZE } from "../raster-tileset/raster-tile-traversal.js";
 import type { RasterTileMetadata } from "../raster-tileset/raster-tileset-2d.js";
 
 /**
@@ -391,24 +391,14 @@ export class RasterTileLayer<
     }
 
     const isGlobe = this.context.viewport.resolution !== undefined;
-    const rasterLayers =
-      !isGlobe && tile._antimeridianCut
-        ? this._renderAntimeridianTile({
-            baseId: props.id,
-            tile,
-            data: props.data,
-            tileResult,
-            uCut: tile._antimeridianCut.uCut,
-            descriptor,
-          })
-        : this._renderNormalTile({
-            baseId: props.id,
-            tile,
-            data: props.data,
-            tileResult,
-            descriptor,
-            isGlobe,
-          });
+    const rasterLayers = this._renderNormalTile({
+      baseId: props.id,
+      tile,
+      data: props.data,
+      tileResult,
+      descriptor,
+      isGlobe,
+    });
     return [...rasterLayers, ...debugLayers];
   }
 
@@ -483,50 +473,10 @@ export class RasterTileLayer<
           // is needed).
           initialTriangulation: isGlobe
             ? undefined
-            : tile._webMercatorInitialTriangulation,
-        }),
-      ),
-    ];
-  }
-
-  /**
-   * Build the two `RasterLayer`s for a Web-Mercator tile that crosses ±180°:
-   * a west piece (UV `[0, uCut]`) and an east piece (UV `[uCut, 1]`). Each
-   * piece uses its own `ReprojectionFns` bundle from the tile metadata,
-   * which corrects for the antimeridian discontinuity post-projection, in
-   * common-space units — see `RasterTileset2D.buildPieceReprojection`. The
-   * two pieces thus render in adjacent world copies; deck.gl `repeat: true`
-   * + world-copy traversal (#518) bring them together visually. The split
-   * itself lives in each piece's `triangulateRectangle` seed.
-   */
-  private _renderAntimeridianTile(opts: {
-    baseId: string;
-    tile: Tile2DHeader<DataT> & RasterTileMetadata;
-    data: NonNullable<DataT>;
-    tileResult: RenderTileResult;
-    uCut: number;
-    descriptor: RasterTilesetDescriptor;
-  }): Layer[] {
-    const { baseId, tile, data, tileResult, uCut } = opts;
-    const baseProps = {
-      ...this._baseRasterProps(data, tileResult),
-      coordinateSystem: "cartesian" as const,
-    };
-    return [
-      new RasterLayer(
-        this.getSubLayerProps({
-          ...baseProps,
-          id: `${baseId}-raster-west`,
-          reprojectionFns: tile._westReprojection!,
-          initialTriangulation: triangulateRectangle(0, 0, uCut, 1),
-        }),
-      ),
-      new RasterLayer(
-        this.getSubLayerProps({
-          ...baseProps,
-          id: `${baseId}-raster-east`,
-          reprojectionFns: tile._eastReprojection!,
-          initialTriangulation: triangulateRectangle(uCut, 0, 1, 1),
+            : tile._webMercatorInitialTriangulation(data.width, data.height),
+          // Web Mercator wraps at one world width: unwrap + clip the mesh so
+          // a tile crossing ±180° (along any seam shape) stays continuous.
+          wrapX: isGlobe ? undefined : TILE_SIZE,
         }),
       ),
     ];

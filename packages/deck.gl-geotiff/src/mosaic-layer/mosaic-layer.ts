@@ -13,7 +13,6 @@ import {
 } from "@deck.gl/core";
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
-import { _unwrapEastLng as unwrapEastLng } from "@developmentseed/deck.gl-raster";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
 import Flatbush from "flatbush";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
@@ -137,7 +136,8 @@ const defaultProps: Partial<MosaicLayerProps> = {
  */
 function normalizeSourceBbox<T extends MosaicSource>(source: T): T {
   const [minX, minY, maxX, maxY] = source.bbox;
-  return { ...source, bbox: [minX, minY, unwrapEastLng(minX, maxX), maxY] };
+  const east = maxX < minX ? maxX + 360 : maxX;
+  return { ...source, bbox: [minX, minY, east, maxY] };
 }
 
 /**

@@ -16,7 +16,6 @@ import type {
   MultiRasterTilesetDescriptor,
   ProjectionFunction,
   RasterModule,
-  RasterTileMetadata,
   RasterTilesetDescriptor,
   RasterTilesetLevel,
   RenderTileResult,
@@ -48,6 +47,7 @@ import {
   metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
+import { snapToCopy } from "@developmentseed/raster-reproject";
 import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
@@ -862,53 +862,15 @@ export class MultiCOGLayer extends RasterTileLayer<
     }
 
     // --- Primary tile outline and label ---
-    //
-    // An antimeridian-crossing tile renders as two RasterLayer pieces (see
-    // RasterTileLayer._renderAntimeridianTile); the debug outline needs to
-    // match, or PathLayer connects a corner like 179.97° to −179.17° the
-    // "short" way in lng/lat space — the long way around the globe. Each
-    // piece's own corners stay entirely on one side of ±180°, so no unwrap
-    // correction is needed within a piece — just split at the same `uCut`
-    // pixel used to build the actual render pieces.
-    const { _antimeridianCut, forwardTransform, tileWidth, tileHeight } =
-      tile as unknown as RasterTileMetadata;
-
-    const primaryBoxes: Array<{
-      path: [number, number][];
-      center: [number, number];
-      labelSuffix: string;
-    }> = _antimeridianCut
-      ? [
-          {
-            ...pieceBoxWgs84(
-              forwardTransform,
-              forwardTo4326,
-              0,
-              _antimeridianCut.uCut * tileWidth,
-              tileHeight,
-            ),
-            labelSuffix: " (west)",
-          },
-          {
-            ...pieceBoxWgs84(
-              forwardTransform,
-              forwardTo4326,
-              _antimeridianCut.uCut * tileWidth,
-              tileWidth,
-              tileHeight,
-            ),
-            labelSuffix: " (east)",
-          },
-        ]
-      : [
-          {
-            ...cornersToWgs84Path(
-              primaryLevel.projectedTileCorners(x, y),
-              forwardTo4326,
-            ),
-            labelSuffix: "",
-          },
-        ];
+    const primaryBoxes = [
+      {
+        ...cornersToWgs84Path(
+          primaryLevel.projectedTileCorners(x, y),
+          forwardTo4326,
+        ),
+        labelSuffix: "",
+      },
+    ];
 
     const primaryColor = DEBUG_COLORS[0]!;
 
@@ -921,6 +883,8 @@ export class MultiCOGLayer extends RasterTileLayer<
         getWidth: 2,
         widthUnits: "pixels",
         pickable: false,
+        // Split the outline of a tile crossing ±180° at the antimeridian.
+        wrapLongitude: true,
       }),
     );
 
@@ -933,9 +897,8 @@ export class MultiCOGLayer extends RasterTileLayer<
       primaryDetail += `  ${primaryLevel.metersPerPixel.toFixed(1)}m/px`;
     }
 
-    // Secondary labels are anchored to the first primary piece's center and
-    // stacked below it. A second piece (the "east" half of a crossing tile)
-    // sits at its own separate position, so it needs no stack offset.
+    // Secondary labels are anchored to the primary box's center and stacked
+    // below it.
     const primaryCenter = primaryBoxes[0]!.center;
 
     // Count total label lines stacked at `primaryCenter` for vertical spacing.
@@ -990,6 +953,7 @@ export class MultiCOGLayer extends RasterTileLayer<
             getWidth: 2,
             widthUnits: "pixels",
             pickable: false,
+            wrapLongitude: true,
           }),
         );
       }
@@ -1080,64 +1044,6 @@ function createBandTexture(device: Device, array: RasterArray): Texture {
 }
 
 /**
- * Closed 5-point box path (in WGS84) for a pixel-space rectangle `[x0, 0] ..
- * [x1, height]` within a tile, mapped through `forwardTransform` (pixel →
- * source CRS) then `projectTo4326` (source CRS → WGS84).
- *
- * Used to draw one piece of an antimeridian-crossing tile's debug outline —
- * mirrors `pieceBoxPath` in `@developmentseed/deck.gl-raster`'s
- * `layer-utils.ts`, but stops at WGS84 rather than continuing on to
- * common-space, since `_renderDebugLayers` draws in plain lng/lat.
- *
- * `projectTo4326` normalizes lng to `(−180°, 180°]` — the seam corner shared
- * with the *other* piece projects to the same `+180°` regardless of which
- * piece is asking. For the west piece that's already continuous with its
- * other corners (~179.97°..180°), but for the east piece it isn't
- * (180°..−179.17° would draw as a ~359° span, not the real ~0.83° gap), so
- * every corner is unwrapped by ±360° relative to the box's first corner
- * before PathLayer sees it.
- */
-export function pieceBoxWgs84(
-  forwardTransform: ProjectionFunction,
-  projectTo4326: ProjectionFunction,
-  x0: number,
-  x1: number,
-  height: number,
-): { path: [number, number][]; center: [number, number] } {
-  const corners: [number, number][] = [
-    [x0, 0],
-    [x1, 0],
-    [x1, height],
-    [x0, height],
-    [x0, 0],
-  ];
-  const rawCorners = corners.map(([px, py]) => {
-    const [sx, sy] = forwardTransform(px!, py!);
-    return projectTo4326(sx, sy) as [number, number];
-  });
-  const refLng = rawCorners[0]![0];
-  const path: [number, number][] = rawCorners.map(([lng, lat]) => {
-    let unwrapped = lng;
-    while (unwrapped - refLng > 180) {
-      unwrapped -= 360;
-    }
-    while (unwrapped - refLng < -180) {
-      unwrapped += 360;
-    }
-    return [unwrapped, lat];
-  });
-  const xs = path.map((p) => p[0]);
-  const ys = path.map((p) => p[1]);
-  return {
-    path,
-    center: [
-      (Math.min(...xs) + Math.max(...xs)) / 2,
-      (Math.min(...ys) + Math.max(...ys)) / 2,
-    ],
-  };
-}
-
-/**
  * Project CRS tile corners to WGS84 and return a closed path suitable for
  * PathLayer, plus the center point for label placement.
  *
@@ -1162,8 +1068,9 @@ function cornersToWgs84Path(
   );
   return {
     path: [topLeft, topRight, bottomRight, bottomLeft, topLeft],
+    // Unwrap so a tile crossing ±180° gets its label at the seam.
     center: [
-      (topLeft[0] + bottomRight[0]) / 2,
+      (topLeft[0] + snapToCopy(bottomRight[0], topLeft[0], 360)) / 2,
       (topLeft[1] + bottomRight[1]) / 2,
     ],
   };

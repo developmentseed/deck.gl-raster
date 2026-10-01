@@ -1,240 +1,241 @@
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
-import { compose, scale, translation } from "@developmentseed/affine";
+import type { Affine } from "@developmentseed/affine";
+import { compose, rotation, scale, translation } from "@developmentseed/affine";
+import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { describe, expect, it } from "vitest";
+import { clipMeshToWorld } from "../../src/clip-mesh-to-world.js";
 import { AffineTileset } from "../../src/raster-tileset/affine-tileset.js";
 import { AffineTilesetLevel } from "../../src/raster-tileset/affine-tileset-level.js";
 import { RasterTileset2D } from "../../src/raster-tileset/raster-tileset-2d.js";
+import type { RasterTilesetDescriptor } from "../../src/raster-tileset/tileset-interface.js";
 
-const identity = (x: number, y: number): [number, number] => [x, y];
+// End-to-end: tile metadata → RasterReprojector (wrapX) → clipMeshToWorld,
+// for each antimeridian seam shape in
+// fixtures/geotiff-test-data/rasterio_generated/fixtures/.
 
-const PROJECTIONS = {
-  projectTo3857: identity,
-  projectFrom3857: identity,
-  projectTo4326: identity,
-  projectFrom4326: identity,
-};
-
-function tilesetProps(): Tileset2DProps {
-  return { getTileData: () => new Promise(() => {}) } as Tileset2DProps;
-}
-
-// EPSG:3857's well-known half-circumference (meters at ±180°).
-const HALF_CIRCUMFERENCE = 20037508.342789244;
 const TILE_SIZE = 512;
+const HALF = 20037508.342789244;
+const RAD = Math.PI / 180;
+
+/** proj4 normalizes longitude to (−180°, 180°]. */
+const wrapLng = (lng: number) => lng - 360 * Math.ceil((lng - 180) / 360);
+const toMerc = (lng: number, lat: number): [number, number] => [
+  (lng / 180) * HALF,
+  Math.log(Math.tan(Math.PI / 4 + (lat * RAD) / 2)) * (HALF / Math.PI),
+];
+const fromMerc = (x: number, y: number): [number, number] => [
+  (x / HALF) * 180,
+  (2 * Math.atan(Math.exp((y / HALF) * Math.PI)) - Math.PI / 2) / RAD,
+];
 
 /**
- * Wraps `lngDegrees` to `(−180°, 180°]` before converting to 3857 meters —
- * mimicking what a *projected* source CRS's forward-to-3857 composition
- * does in practice: it passes through a periodic geographic intermediate
- * that proj4 normalizes, so a native lng outside that range wraps (see
- * `buildPieceReprojection`'s doc comment). A source CRS that's *directly*
- * EPSG:4326 (the `antimeridianCut` detection tests below) does not — hence
- * two separate projection mocks in this file.
+ * An EPSG:4326 source: proj4 4326→4326 passes native longitudes through
+ * un-normalized (e.g. −204°), but 4326→3857 wraps them.
  */
-function lngDegreesToWrappedMercatorX(lngDegrees: number): number {
-  let wrapped = lngDegrees;
-  while (wrapped > 180) {
-    wrapped -= 360;
-  }
-  while (wrapped <= -180) {
-    wrapped += 360;
-  }
-  return (wrapped / 180) * HALF_CIRCUMFERENCE;
-}
-
-const WRAPPING_PROJECTIONS = {
-  projectTo3857: (x: number, y: number): [number, number] => [
-    lngDegreesToWrappedMercatorX(x),
-    y,
-  ],
-  projectFrom3857: (x: number, y: number): [number, number] => [
-    (x / HALF_CIRCUMFERENCE) * 180,
-    y,
-  ],
-  // Detection (`antimeridianCut`) needs native, un-normalized corner lngs —
-  // see the `antimeridian.tif` comment below. Identity here matches an
-  // EPSG:4326 source (proj4 4326→4326 does not renormalize).
-  projectTo4326: identity,
-  projectFrom4326: identity,
+const GEOGRAPHIC = {
+  projectTo4326: (x: number, y: number): [number, number] => [x, y],
+  projectFrom4326: (x: number, y: number): [number, number] => [x, y],
+  projectTo3857: (x: number, y: number) => toMerc(wrapLng(x), y),
+  projectFrom3857: fromMerc,
 };
 
-describe("RasterTileset2D.getTileMetadata — _antimeridianCut", () => {
-  it("returns _antimeridianCut on a tile whose native lngs cross ±180 (antimeridian.tif shape)", () => {
-    // antimeridian.tif: rasterio.from_origin(-204, 24, 1, 1), 42×42 EPSG:4326.
-    // One tile covers the whole image, with native lngs (−204, −162) crossing
-    // −180° at u = 24/42.
-    const level = new AffineTilesetLevel({
-      affine: compose(translation(-204, 24), scale(1, -1)),
-      arrayWidth: 42,
-      arrayHeight: 42,
-      tileWidth: 42,
-      tileHeight: 42,
-      mpu: 1,
-    });
-    const descriptor = new AffineTileset({ levels: [level], ...PROJECTIONS });
-    const tileset = new RasterTileset2D(tilesetProps(), descriptor);
+/**
+ * A projected source with *curved* meridians (sinusoidal, central meridian
+ * 177° like UTM 60N). Its lng/lat output is normalized; its inverse folds
+ * longitude against the central meridian (proj4's `adjlon`).
+ */
+const K = 1e5;
+const CENTRAL = 177;
+const sinusoidalTo4326 = (x: number, y: number): [number, number] => {
+  const lat = y / K;
+  return [wrapLng(CENTRAL + x / (K * Math.cos(lat * RAD))), lat];
+};
+const sinusoidalFrom4326 = (lng: number, lat: number): [number, number] => [
+  wrapLng(lng - CENTRAL) * K * Math.cos(lat * RAD),
+  lat * K,
+];
+const SINUSOIDAL = {
+  projectTo4326: sinusoidalTo4326,
+  projectFrom4326: sinusoidalFrom4326,
+  projectTo3857: (x: number, y: number) => toMerc(...sinusoidalTo4326(x, y)),
+  projectFrom3857: (x: number, y: number) =>
+    sinusoidalFrom4326(...fromMerc(x, y)),
+};
 
-    const metadata = tileset.getTileMetadata({ x: 0, y: 0, z: 0 });
-
-    expect(metadata._antimeridianCut).toBeDefined();
-    expect(metadata._antimeridianCut?.uCut).toBeCloseTo(24 / 42, 9);
+function tileset(
+  projections: typeof GEOGRAPHIC,
+  affine: Affine,
+  arrayWidth: number,
+  arrayHeight: number,
+  tileSize: number,
+): { tileset: RasterTileset2D; descriptor: RasterTilesetDescriptor } {
+  const level = new AffineTilesetLevel({
+    affine,
+    arrayWidth,
+    arrayHeight,
+    tileWidth: tileSize,
+    tileHeight: tileSize,
+    mpu: 1,
   });
+  const descriptor = new AffineTileset({ levels: [level], ...projections });
+  const props = { getTileData: () => new Promise(() => {}) } as Tileset2DProps;
+  return { tileset: new RasterTileset2D(props, descriptor), descriptor };
+}
 
-  it("does NOT set _antimeridianCut on a non-crossing tile", () => {
-    // A tile entirely east of the antimeridian: native lngs (0, 170).
-    const level = new AffineTilesetLevel({
-      affine: compose(translation(0, 90), scale(1, -1)),
-      arrayWidth: 170,
-      arrayHeight: 180,
-      tileWidth: 170,
-      tileHeight: 180,
-      mpu: 1,
-    });
-    const descriptor = new AffineTileset({ levels: [level], ...PROJECTIONS });
-    const tileset = new RasterTileset2D(tilesetProps(), descriptor);
+/**
+ * Mesh tile (0, 0, 0). `dataSize` is the fetched data's size — COGLayer
+ * fetches edge tiles clipped to the image, so the mesh spans only the data.
+ */
+function meshTile(t: RasterTileset2D, dataSize?: [number, number]) {
+  const md = t.getTileMetadata({ x: 0, y: 0, z: 0 });
+  const [width, height] = dataSize ?? [md.tileWidth, md.tileHeight];
+  const reprojector = new RasterReprojector(
+    {
+      forwardTransform: md.forwardTransform,
+      inverseTransform: md.inverseTransform,
+      forwardReproject: md._projectPosition,
+      inverseReproject: md._unprojectPosition,
+    },
+    width + 1,
+    height + 1,
+    {
+      initialTriangulation: md._webMercatorInitialTriangulation(width, height),
+      wrapX: 512,
+    },
+  );
+  reprojector.run(0.125, { maxIterations: 2000 });
+  const clipped = clipMeshToWorld(
+    {
+      positions: reprojector.exactOutputPositions,
+      uvs: reprojector.uvs,
+      triangles: reprojector.triangles,
+    },
+    TILE_SIZE,
+  );
+  return { md, reprojector, clipped };
+}
 
-    const metadata = tileset.getTileMetadata({ x: 0, y: 0, z: 0 });
+const SHAPES = {
+  // antimeridian.tif: lng −204..−162, cut at column 24.
+  vertical: () =>
+    tileset(
+      GEOGRAPHIC,
+      compose(translation(-204, 24), scale(1, -1)),
+      42,
+      42,
+      42,
+    ),
+  // antimeridian_rotated.tif: rotated geotransform → straight slanted seam.
+  slanted: () =>
+    tileset(
+      GEOGRAPHIC,
+      compose(translation(-204, 24), compose(rotation(20), scale(1, -1))),
+      42,
+      42,
+      42,
+    ),
+  // antimeridian_utm60.tif-like: ~174°E..173°W, 48°N..56°N, curved seam.
+  curved: () =>
+    tileset(
+      SINUSOIDAL,
+      compose(translation(-2e5, 56e5), scale(2e4, -2e4)),
+      42,
+      42,
+      42,
+    ),
+};
 
-    expect(metadata._antimeridianCut).toBeUndefined();
-    expect(metadata._westReprojection).toBeUndefined();
-    expect(metadata._eastReprojection).toBeUndefined();
-  });
+describe("antimeridian crossing: unwrap + clip", () => {
+  for (const [name, make] of Object.entries(SHAPES)) {
+    describe(name, () => {
+      const { descriptor, tileset: t } = make();
+      const { md, reprojector, clipped } = meshTile(t);
 
-  describe("piece reprojection (buildPieceReprojection)", () => {
-    // Same antimeridian.tif shape (native lngs −204..−162, uCut = 24/42),
-    // but with WRAPPING_PROJECTIONS so `forwardReproject` actually exercises
-    // proj4-style wraparound — the mechanism the fix corrects for.
-    function crossingMetadata() {
-      const level = new AffineTilesetLevel({
-        affine: compose(translation(-204, 24), scale(1, -1)),
-        arrayWidth: 42,
-        arrayHeight: 42,
-        tileWidth: 42,
-        tileHeight: 42,
-        mpu: 1,
+      it("converges", () => {
+        expect(reprojector.getMaxError()).toBeLessThanOrEqual(0.125);
       });
-      const descriptor = new AffineTileset({
-        levels: [level],
-        ...WRAPPING_PROJECTIONS,
+
+      it("is continuous: no triangle jumps across the seam", () => {
+        const { triangles, exactOutputPositions: p } = reprojector;
+        for (let i = 0; i < triangles.length; i += 3) {
+          const xs = [0, 1, 2].map((j) => p[2 * triangles[i + j]!]!);
+          // A wrapped triangle would span ~a whole world (512).
+          expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(TILE_SIZE / 2);
+        }
       });
-      const tileset = new RasterTileset2D(tilesetProps(), descriptor);
-      return tileset.getTileMetadata({ x: 0, y: 0, z: 0 });
-    }
 
-    it("leaves forwardTransform/inverseTransform untouched — the correction lives in forwardReproject, not the geotransform", () => {
-      const metadata = crossingMetadata();
-      expect(metadata._westReprojection!.forwardTransform(5, 5)).toEqual(
-        metadata.forwardTransform(5, 5),
-      );
-      expect(metadata._eastReprojection!.inverseTransform(5, 5)).toEqual(
-        metadata.inverseTransform(5, 5),
-      );
-    });
-
-    it("leaves a point that wraps to common-space x ≥ TILE_SIZE/2 unshifted (west piece's own territory)", () => {
-      const metadata = crossingMetadata();
-      // Native lng −204° wraps to +156° → common-space x ≈ 477.9 (≥ 256).
-      const [cx] = metadata._westReprojection!.forwardReproject(-204, 24);
-      expect(cx).toBeGreaterThanOrEqual(TILE_SIZE / 2);
-      expect(cx).toBeCloseTo(477.87, 1);
-    });
-
-    it("leaves the east piece's interior unshifted (already its own natural, near-0 position)", () => {
-      const metadata = crossingMetadata();
-      // Native lng −162° wraps to −162° (already in range) → common-space
-      // x ≈ 25.6 (< 256) — left as-is, since this IS the east piece's own
-      // natural position. Forcing it to join the west piece's frame (the old
-      // +TILE_SIZE behavior) put it a full world away from wherever the
-      // camera was actually looking whenever only the east piece was in
-      // view — see `buildPieceReprojection`'s doc comment.
-      const [cx] = metadata._eastReprojection!.forwardReproject(-162, 24);
-      expect(cx).toBeCloseTo(25.6, 1);
-    });
-
-    it("shifts the seam corner by -TILE_SIZE for the east piece, joining its own interior instead of the west piece's frame", () => {
-      // The seam itself: native lng −180° wraps to exactly +180° →
-      // common-space x = TILE_SIZE exactly (512). For the WEST piece this is
-      // its own natural east edge — no shift. For the EAST piece this same
-      // raw value is its own west edge, but belongs to the east piece's
-      // natural (near-0) frame, so it shifts by -TILE_SIZE to join up with
-      // that piece's interior (≈25.6) rather than sitting a full world away.
-      const metadata = crossingMetadata();
-      const [westCx] = metadata._westReprojection!.forwardReproject(-180, 24);
-      const [eastCx] = metadata._eastReprojection!.forwardReproject(-180, 24);
-      expect(westCx).toBeCloseTo(TILE_SIZE, 9);
-      expect(eastCx).toBeCloseTo(0, 9);
-    });
-
-    it("round-trips forwardReproject/inverseReproject for a shifted point", () => {
-      const metadata = crossingMetadata();
-      const { forwardReproject, inverseReproject } =
-        metadata._eastReprojection!;
-      const [cx, cy] = forwardReproject(-162, 24);
-      const [x, y] = inverseReproject(cx, cy);
-      expect(x).toBeCloseTo(-162, 6);
-      expect(y).toBeCloseTo(24, 6);
-    });
-
-    it("round-trips forwardReproject/inverseReproject for a west-piece point whose native lng is outside ±180 (the case that actually wraps)", () => {
-      // Unlike the east-piece round-trip above (native lng -162, already
-      // inside (-180,180], so a naive inverse is a no-op there), -191.4 is
-      // native west-piece territory that genuinely wraps: proj4 normalizes
-      // it to +168.6 going forward. A naive inverse that reduces to
-      // [0, TILE_SIZE) and unprojects would wrongly return +168.6 instead of
-      // -191.4 — exactly the bug `RasterReprojector`'s mesh refinement hit
-      // (reported as `currentError=360`, a full-period disagreement).
-      const metadata = crossingMetadata();
-      const { forwardReproject, inverseReproject } =
-        metadata._westReprojection!;
-      const [cx, cy] = forwardReproject(-191.4, 24);
-      const [x, y] = inverseReproject(cx, cy);
-      expect(x).toBeCloseTo(-191.4, 6);
-      expect(y).toBeCloseTo(24, 6);
-    });
-  });
-
-  describe("wide crossing tile (>170° per-piece width, previously rejected outright)", () => {
-    // Native lngs -100..190 (un-normalized, west<east): crosses +180° at
-    // uCut = 280/290. The west piece alone is 280° wide — well past the
-    // old (now-removed) 170° per-piece guard, but under the 360°
-    // total-width limit.
-    function wideCrossingMetadata() {
-      const level = new AffineTilesetLevel({
-        affine: compose(translation(-100, 24), scale(1, -1)),
-        arrayWidth: 290,
-        arrayHeight: 42,
-        tileWidth: 290,
-        tileHeight: 42,
-        mpu: 1,
+      it("actually straddles a world boundary, and clips into [0, 512]", () => {
+        const xs = reprojector.exactOutputPositions.filter(
+          (_, i) => i % 2 === 0,
+        );
+        const copies = new Set(xs.map((x) => Math.floor(x / TILE_SIZE)));
+        expect(copies.size).toBe(2);
+        for (let i = 0; i < clipped.positions.length; i += 2) {
+          expect(clipped.positions[i]!).toBeGreaterThanOrEqual(-1e-9);
+          expect(clipped.positions[i]!).toBeLessThanOrEqual(TILE_SIZE + 1e-9);
+        }
       });
-      const descriptor = new AffineTileset({
-        levels: [level],
-        ...WRAPPING_PROJECTIONS,
+
+      it("places every vertex at its true longitude (mod one world)", () => {
+        const { uvs, exactOutputPositions: p } = reprojector;
+        for (let i = 0; i < uvs.length / 2; i++) {
+          const [sx, sy] = md.forwardTransform(
+            uvs[2 * i]! * md.tileWidth,
+            uvs[2 * i + 1]! * md.tileHeight,
+          );
+          const [lng] = descriptor.projectTo4326(sx, sy);
+          const expected = ((lng + 180) / 360) * TILE_SIZE;
+          const diff = (p[2 * i]! - expected) / TILE_SIZE;
+          expect(Math.abs(diff - Math.round(diff))).toBeLessThan(1e-9);
+        }
       });
-      const tileset = new RasterTileset2D(tilesetProps(), descriptor);
-      return tileset.getTileMetadata({ x: 0, y: 0, z: 0 });
-    }
 
-    it("still detects and cuts a >170°-wide piece", () => {
-      const metadata = wideCrossingMetadata();
-      expect(metadata._antimeridianCut).toBeDefined();
-      expect(metadata._antimeridianCut?.uCut).toBeCloseTo(280 / 290, 5);
+      it("round-trips forward/inverse from either world copy", () => {
+        for (const [px, py] of [
+          [1, 1],
+          [21, 21],
+          [41, 41],
+          [41, 1],
+          [1, 41],
+        ] as const) {
+          const [sx, sy] = md.forwardTransform(px, py);
+          const [cx, cy] = md._projectPosition(sx, sy);
+          for (const shift of [0, TILE_SIZE, -TILE_SIZE]) {
+            const [rx, ry] = md._unprojectPosition(cx + shift, cy);
+            const [rpx, rpy] = md.inverseTransform(rx, ry);
+            if (shift === 0 || name === "curved") {
+              // A projected source folds any copy back; a 4326 source only
+              // round-trips from the copy forward placed it in — the only
+              // one the mesh ever asks about.
+              expect(rpx).toBeCloseTo(px, 6);
+              expect(rpy).toBeCloseTo(py, 6);
+            }
+          }
+        }
+      });
     });
+  }
 
-    it("does not wrongly shift a west piece's legitimate low-x point (the false positive the old heuristic hit)", () => {
-      const metadata = wideCrossingMetadata();
-      // Native lng -90°, 10° in from the tile's -100° corner: no proj4
-      // wrap occurs at all, x=128 is already correct. The old
-      // `x < TILE_SIZE/2` test would have wrongly added TILE_SIZE here.
-      const [cx] = metadata._westReprojection!.forwardReproject(-90, 24);
-      expect(cx).toBeCloseTo(128, 3);
-    });
+  describe("world-spanning (antimeridian_360.tif overview)", () => {
+    // 36×2 px at 10°/px in a 64 px tile, fetched clipped: −180..180.
+    const { tileset: t } = tileset(
+      GEOGRAPHIC,
+      compose(translation(-180, 10), scale(10, -10)),
+      36,
+      2,
+      64,
+    );
+    const { reprojector, clipped } = meshTile(t, [36, 2]);
 
-    it("renders an east-piece point that genuinely wrapped at its own natural near-0 position", () => {
-      const metadata = wideCrossingMetadata();
-      // Native lng 185°, 5° past the seam: proj4 wraps this to -175°.
-      const [cx] = metadata._eastReprojection!.forwardReproject(185, 24);
-      expect(cx).toBeCloseTo(7.11, 1);
+    it("converges and covers exactly one world, with no gap", () => {
+      expect(reprojector.getMaxError()).toBeLessThanOrEqual(0.125);
+      const xs = clipped.positions.filter((_, i) => i % 2 === 0);
+      expect(Math.min(...xs)).toBeCloseTo(0, 6);
+      expect(Math.max(...xs)).toBeCloseTo(TILE_SIZE, 6);
+      for (let i = 0; i < clipped.positions.length; i += 2) {
+        expect(clipped.positions[i]!).toBeGreaterThanOrEqual(-1e-9);
+        expect(clipped.positions[i]!).toBeLessThanOrEqual(TILE_SIZE + 1e-9);
+      }
     });
   });
 });

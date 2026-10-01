@@ -20,6 +20,7 @@
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import { transformBounds } from "@developmentseed/proj";
+import { unwrapAlong } from "@developmentseed/raster-reproject";
 import { Vector3 } from "@math.gl/core";
 import {
   CullingVolume,
@@ -29,7 +30,6 @@ import {
 } from "@math.gl/culling";
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
-import { antimeridianCut, unwrapCommonSpaceX } from "./antimeridian-cut.js";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import type {
   RasterTilesetDescriptor,
@@ -427,10 +427,19 @@ export class RasterTileNode {
     const [minX, minY, maxX, maxY] = bounds;
     const [tileMinX, tileMinY, tileMaxX, tileMaxY] = commonSpaceBounds;
 
-    const inside =
-      tileMinX < maxX && tileMaxX > minX && tileMinY < maxY && tileMaxY > minY;
-
-    return inside;
+    if (!(tileMinY < maxY && tileMaxY > minY)) {
+      return false;
+    }
+    // X is periodic: a box unwrapped across ±180° may sit a world copy away
+    // from the dataset bounds (each is unwrapped from its own anchor), so
+    // test overlap in every copy either could be in.
+    for (let k = -1; k <= 1; k++) {
+      const shift = k * TILE_SIZE;
+      if (tileMinX + shift < maxX && tileMaxX + shift > minX) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -529,36 +538,36 @@ export class RasterTileNode {
 
     const tileCorners = this.level.projectedTileCorners(this.x, this.y);
 
-    // Detect whether this tile crosses ±180°. proj4's forward-to-3857
-    // (below) wraps longitudes outside (-180°, 180°] back into range, so a
-    // crossing tile's reference points past the seam land on the opposite
-    // edge of common space unless corrected — see `unwrapCommonSpaceX`.
-    const cornerLng = (corner: Point): number =>
-      this.descriptor.projectTo4326(corner[0], corner[1])[0];
-    const cut = antimeridianCut({
-      topLeft: cornerLng(tileCorners.topLeft),
-      topRight: cornerLng(tileCorners.topRight),
-      bottomLeft: cornerLng(tileCorners.bottomLeft),
-      bottomRight: cornerLng(tileCorners.bottomRight),
-    });
-
-    const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
-      REF_POINTS_9,
-      tileCorners,
-      this.descriptor.projectTo3857,
-      this.descriptor.projectTo4326,
-    );
-
-    const commonSpacePositions: [number, number][] = refPointsEPSG3857.map(
-      (xy, i) => {
-        const [x, y] = rescaleEPSG3857ToCommonSpace(xy);
-        if (!cut) {
-          return [x, y];
-        }
-        const u = REF_POINTS_9[i]![0];
-        return [unwrapCommonSpaceX(x, u, cut, TILE_SIZE), y];
-      },
-    );
+    // proj4's forward-to-3857 wraps longitudes into (-180°, 180°], so a tile
+    // crossing ±180° has reference points on both edges of common space.
+    // Unwrap each against the tile center, walking the uv path between them
+    // (see `unwrapAlong`), so the box is one tight volume around the seam —
+    // matching the unwrapped mesh `RasterLayer` renders.
+    const [center, ...rest] = REF_POINTS_9;
+    const commonSpaceAt = (relX: number, relY: number): [number, number] =>
+      rescaleEPSG3857ToCommonSpace(
+        sampleReferencePointsInEPSG3857(
+          [[relX, relY]],
+          tileCorners,
+          this.descriptor.projectTo3857,
+          this.descriptor.projectTo4326,
+        )[0]!,
+      );
+    const centerPosition = commonSpaceAt(center![0], center![1]);
+    const commonSpacePositions: [number, number][] = [
+      centerPosition,
+      ...rest.map(([relX, relY]): [number, number] => {
+        const lerp = (t: number) =>
+          commonSpaceAt(
+            center![0] + t * (relX - center![0]),
+            center![1] + t * (relY - center![1]),
+          );
+        return [
+          unwrapAlong((t) => lerp(t)[0], centerPosition[0], TILE_SIZE),
+          lerp(1)[1],
+        ];
+      }),
+    ];
 
     const refPointPositions: [number, number, number][] = [];
     for (const p of commonSpacePositions) {
@@ -975,47 +984,14 @@ export function getTileIndices(
   const bottomLeft = lngLatToWorld([minLng, minLat]);
   const topRight = lngLatToWorld([maxLng, maxLat]);
 
-  // `wgs84Bounds` is derived from `descriptor.projectedBounds` via a plain
-  // min/max over densified samples (see `RasterTileset2D`'s constructor),
-  // which — like a single tile's naive reference-point reprojection — loses
-  // antimeridian awareness for a crossing dataset. Detect crossing directly
-  // from the dataset's own corner longitudes (mirroring the per-tile
-  // `cornerLng`/`antimeridianCut` check in `_getGenericBoundingVolume`) and
-  // apply the same `unwrapCommonSpaceX` correction, so this bounds pre-filter
-  // agrees with the now-corrected per-tile bounding volumes it's compared
-  // against in `RasterTileNode.update`'s `insideBounds` check — otherwise a
-  // crossing tile's corrected box (starting at x=TILE_SIZE) and this
-  // uncorrected dataset box (ending at x=TILE_SIZE) merely touch instead of
-  // overlapping, and the tile is wrongly rejected at every zoom.
-  const [projMinX, , projMaxX, projMaxY] = descriptor.projectedBounds;
-  const datasetWestLng = descriptor.projectTo4326(projMinX, projMaxY)[0];
-  const datasetEastLng = descriptor.projectTo4326(projMaxX, projMaxY)[0];
-  const datasetCut = antimeridianCut({
-    topLeft: datasetWestLng,
-    topRight: datasetEastLng,
-    bottomLeft: datasetWestLng,
-    bottomRight: datasetEastLng,
-  });
-  if (datasetCut) {
-    // `bottomLeft`/`topRight` above came from `wgs84Bounds`'s already-lossy
-    // min/max (mixed together from densified samples on both sides of the
-    // seam) — patching those two numbers independently would collapse the
-    // box, since they no longer correspond to "the west corner" and "the
-    // east corner" individually. Recompute each corner's common-space x
-    // directly from its own real longitude instead, then apply the same
-    // per-point unwrap rule used for a single tile's reference points.
-    bottomLeft[0] = unwrapCommonSpaceX(
-      lngLatToWorld([datasetWestLng, minLat])[0],
-      0,
-      datasetCut,
-      TILE_SIZE,
-    );
-    topRight[0] = unwrapCommonSpaceX(
-      lngLatToWorld([datasetEastLng, maxLat])[0],
-      1,
-      datasetCut,
-      TILE_SIZE,
-    );
+  // `wgs84Bounds` is a plain min/max over densified samples, which for a
+  // dataset crossing ±180° (projected source, normalized longitudes) spans
+  // nearly the whole world. Unwrap the dataset's corners along its perimeter
+  // instead and keep whichever x-range is narrower.
+  const [unwrappedWest, unwrappedEast] = unwrappedLngRange(descriptor);
+  if (unwrappedEast - unwrappedWest < maxLng - minLng) {
+    bottomLeft[0] = lngLatToWorld([unwrappedWest, minLat])[0];
+    topRight[0] = lngLatToWorld([unwrappedEast, maxLat])[0];
   }
 
   const bounds: Bounds = [
@@ -1238,4 +1214,43 @@ function bilerpPoint(
     p00[0] * w00 + p10[0] * w10 + p01[0] * w01 + p11[0] * w11,
     p00[1] * w00 + p10[1] * w10 + p01[1] * w01 + p11[1] * w11,
   ];
+}
+
+/**
+ * West/east longitude of a dataset's corners, unwrapped continuously along
+ * its perimeter (top-left → top-right → bottom-right → bottom-left).
+ *
+ * ponytail: corners only; a curved edge whose longitude extreme is mid-edge
+ * gets a slightly tight box. Densify if a dataset is ever culled by it.
+ */
+function unwrappedLngRange(
+  descriptor: RasterTilesetDescriptor,
+): [number, number] {
+  const [minX, minY, maxX, maxY] = descriptor.projectedBounds;
+  const path: [number, number][] = [
+    [minX, maxY],
+    [maxX, maxY],
+    [maxX, minY],
+    [minX, minY],
+  ];
+  const lngAt = ([x, y]: [number, number]) => descriptor.projectTo4326(x, y)[0];
+  const lngs = [lngAt(path[0]!)];
+  for (let i = 1; i < path.length; i++) {
+    const [ax, ay] = path[i - 1]!;
+    const [bx, by] = path[i]!;
+    lngs.push(
+      unwrapAlong(
+        (t) => lngAt([ax + t * (bx - ax), ay + t * (by - ay)]),
+        lngs[i - 1]!,
+        360,
+      ),
+    );
+  }
+  const [topLeft, topRight, bottomRight, bottomLeft] = lngs as [
+    number,
+    number,
+    number,
+    number,
+  ];
+  return [Math.min(topLeft, bottomLeft), Math.max(topRight, bottomRight)];
 }
