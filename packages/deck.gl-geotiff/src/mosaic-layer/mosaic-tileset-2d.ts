@@ -4,6 +4,7 @@ import type {
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
+import type { Bounds } from "@developmentseed/deck.gl-raster";
 import type Flatbush from "flatbush";
 
 /** Tile index.
@@ -120,9 +121,15 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     }
 
     const viewportBounds = viewport.getBounds();
-    const indices = index.search(...viewportBounds);
+    let indices = index.search(...viewportBounds);
 
     const sources = this.getSources();
+    // Read `extent` on every call: TileLayer updates it through `setOptions`.
+    const extent = this.opts.extent as Bounds | null;
+    if (extent) {
+      indices = indices.filter((i) => overlaps(sources[i]!.bbox, extent));
+    }
+
     return indices.map((sourceIndex) => {
       const source = sources[sourceIndex]!;
       return {
@@ -136,4 +143,12 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       };
     });
   }
+}
+
+/**
+ * Whether two `[minX, minY, maxX, maxY]` boxes overlap. Boxes that only share
+ * an edge or a corner don't, as with tiles and `extent` in deck.gl's TileLayer.
+ */
+function overlaps(a: Bounds, b: Bounds): boolean {
+  return a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 }
