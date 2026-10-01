@@ -238,7 +238,7 @@ export class RasterTileLayer<
    */
   protected _renderDebug(
     tile: Tile2DHeader<DataT>,
-    _data: DataT | null,
+    data: DataT | null,
   ): Layer[] {
     const descriptor = this._tilesetDescriptor();
     if (!descriptor) {
@@ -251,6 +251,7 @@ export class RasterTileLayer<
       `${this.id}-${tile.id}-bounds`,
       tile as Tile2DHeader<DataT> & RasterTileMetadata,
       descriptor.projectTo4326,
+      data,
     );
   }
 
