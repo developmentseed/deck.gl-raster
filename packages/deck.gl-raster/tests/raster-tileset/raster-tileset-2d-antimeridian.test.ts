@@ -174,6 +174,23 @@ describe("RasterTileset2D.getTileMetadata — _antimeridianCut", () => {
       expect(x).toBeCloseTo(-162, 6);
       expect(y).toBeCloseTo(24, 6);
     });
+
+    it("round-trips forwardReproject/inverseReproject for a west-piece point whose native lng is outside ±180 (the case that actually wraps)", () => {
+      // Unlike the east-piece round-trip above (native lng -162, already
+      // inside (-180,180], so a naive inverse is a no-op there), -191.4 is
+      // native west-piece territory that genuinely wraps: proj4 normalizes
+      // it to +168.6 going forward. A naive inverse that reduces to
+      // [0, TILE_SIZE) and unprojects would wrongly return +168.6 instead of
+      // -191.4 — exactly the bug `RasterReprojector`'s mesh refinement hit
+      // (reported as `currentError=360`, a full-period disagreement).
+      const metadata = crossingMetadata();
+      const { forwardReproject, inverseReproject } =
+        metadata._westReprojection!;
+      const [cx, cy] = forwardReproject(-191.4, 24);
+      const [x, y] = inverseReproject(cx, cy);
+      expect(x).toBeCloseTo(-191.4, 6);
+      expect(y).toBeCloseTo(24, 6);
+    });
   });
 
   describe("wide crossing tile (>170° per-piece width, previously rejected outright)", () => {

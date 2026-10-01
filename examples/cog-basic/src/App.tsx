@@ -19,8 +19,12 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
     // Dev-only fixture served by examples/cog-basic/vite.config.ts from the
     // geotiff-test-data submodule. EPSG:4326, bbox (−204, −18, −162, 24);
     // crosses native −180° at u ≈ 24/42 — exercises antimeridian split.
-    title: "Antimeridian fixture (dev only)",
-    url: "/__fixtures/antimeridian.tif",
+    title: "Antimeridian fixture (dev only) (4326)",
+    url: `${window.location.origin}/__fixtures/antimeridian.tif`,
+  },
+  {
+    title: "Antimeridian fixture (dev only) (3832)",
+    url: "https://s3.us-west-2.amazonaws.com/dep-public-staging/dep_ls_geomad/0-3-1-test/066/022/2025/dep_ls_geomad_066_022_2025_red.tif",
   },
   {
     title: "Sentinel-2 True Color Image (New York, 2026)",

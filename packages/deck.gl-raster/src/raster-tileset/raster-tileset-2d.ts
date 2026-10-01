@@ -550,13 +550,28 @@ export class RasterTileset2D extends Tileset2D {
         return [corrected, cy];
       },
       inverseReproject: (cx, cy) => {
-        // Undo the east branch's re-anchoring, then reduce into the
-        // canonical [0, TILE_SIZE) range `unprojectPosition` expects — the
-        // exact inverse of `forwardReproject`'s shift, regardless of how
-        // many world-widths it added or subtracted.
+        // Undo the east branch's re-anchoring first, same as before. From
+        // here, `unprojectPosition` alone isn't a true inverse of
+        // `forwardReproject`: it reduces into canonical [0, TILE_SIZE)
+        // before unprojecting, and proj4's own inverse re-normalizes
+        // longitude into (-180°,180°] — losing which world-copy the point
+        // came from whenever that's outside ±180°. Y is unaffected (Mercator's
+        // inverse doesn't mix X into Y), so get `sourceY` the same way as
+        // before and use it, via the stock geotransform, to recover `py`.
+        // For X, invert `unwrapCommonSpaceX`'s own linear formula directly —
+        // exact, since it's the same formula `forwardReproject` used to
+        // produce `seamAnchored` — to get `u`, then let the stock
+        // `forwardTransform` (un-normalized-domain, CRS-correct) produce the
+        // true source point. This never assumes degree units, so it works
+        // identically for a projected (e.g. EPSG:3832) source CRS.
         const seamAnchored = piece === "west" ? cx : cx + TILE_SIZE;
         const raw = ((seamAnchored % TILE_SIZE) + TILE_SIZE) % TILE_SIZE;
-        return this.unprojectPosition(raw, cy);
+        const [, sourceY] = this.unprojectPosition(raw, cy);
+        const [, py] = inverseTransform(0, sourceY);
+        const u =
+          cut.uCut +
+          ((seamAnchored - TILE_SIZE) * 360) / (cut.totalSpanDeg * TILE_SIZE);
+        return forwardTransform(u * tileWidth, py);
       },
     };
   }
