@@ -1,5 +1,8 @@
+import * as affine from "@developmentseed/affine";
 import { describe, expect, it } from "vitest";
 import { resolveSecondaryTiles } from "../../src/multi-raster-tileset/secondary-tile-resolver.js";
+import { AffineTilesetLevel } from "../../src/raster-tileset/affine-tileset-level.js";
+import { overlappingTileSpan } from "../../src/raster-tileset/tile-span.js";
 import type { RasterTilesetLevel } from "../../src/raster-tileset/tileset-interface.js";
 import type { Corners, Point } from "../../src/raster-tileset/types.js";
 
@@ -56,12 +59,16 @@ function gridLevel(opts: {
       projectedMaxX: number,
       projectedMaxY: number,
     ) => {
-      // Use ceil-1 for both min and max so that exact tile boundaries are treated
-      // as inclusive on the left tile (the boundary point belongs to the tile ending there).
-      let minCol = Math.ceil((projectedMinX - originX) / tileCrsWidth) - 1;
-      let maxCol = Math.ceil((projectedMaxX - originX) / tileCrsWidth) - 1;
-      let minRow = Math.ceil((originY - projectedMaxY) / tileCrsHeight) - 1;
-      let maxRow = Math.ceil((originY - projectedMinY) / tileCrsHeight) - 1;
+      // Tiles that only share an edge with the box are left out, as the
+      // `RasterTilesetLevel` contract requires.
+      let [minCol, maxCol] = overlappingTileSpan(
+        (projectedMinX - originX) / tileCrsWidth,
+        (projectedMaxX - originX) / tileCrsWidth,
+      );
+      let [minRow, maxRow] = overlappingTileSpan(
+        (originY - projectedMaxY) / tileCrsHeight,
+        (originY - projectedMinY) / tileCrsHeight,
+      );
       minCol = Math.max(0, Math.min(matrixWidth - 1, minCol));
       maxCol = Math.max(0, Math.min(matrixWidth - 1, maxCol));
       minRow = Math.max(0, Math.min(matrixHeight - 1, minRow));
@@ -120,14 +127,59 @@ describe("resolveSecondaryTiles", () => {
   });
 
   it("handles primary tile spanning two secondary tiles", () => {
-    // Primary tile (2,0): covers [605120, 7997440] to [607680, 8000000]
-    // Crosses boundary between secondary (0,0) and (1,0)
-    const result = resolveSecondaryTiles(primaryLevel, 2, 0, secondaryLevel, 0);
-    expect(result.tileIndices.length).toBe(2);
-    // Stitched: [600000..610240], width=10240
-    // scaleX = 2560 / 10240 = 0.25, offsetX = (605120-600000)/10240 = 0.5
+    // Secondary grid shifted left by half a primary tile, so its column
+    // boundaries fall at 603840, 608960, ...
+    const shiftedSecondary = gridLevel({
+      originX: origin.x - 1280,
+      originY: origin.y,
+      cellSize: 20,
+      tileWidth: 256,
+      tileHeight: 256,
+      matrixWidth: 22,
+      matrixHeight: 22,
+    });
+    // Primary tile (1,0): covers [602560, 7997440] to [605120, 8000000]
+    // Crosses the boundary at 603840 between secondary (0,0) and (1,0)
+    const result = resolveSecondaryTiles(
+      primaryLevel,
+      1,
+      0,
+      shiftedSecondary,
+      0,
+    );
+    expect(result.tileIndices).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ]);
+    // Stitched: [598720..608960], width=10240
+    // scaleX = 2560 / 10240 = 0.25, offsetX = (602560-598720)/10240 = 0.375
     expect(result.uvTransform[2]).toBeCloseTo(0.25);
-    expect(result.uvTransform[0]).toBeCloseTo(0.5);
+    expect(result.uvTransform[0]).toBeCloseTo(0.375);
+  });
+
+  it("fetches one 20 m tile for a 10 m tile whose edges lie on its edges", () => {
+    // Sentinel-2-like 10 m and 20 m bands with 1024 px tiles. Primary tile
+    // (1,1) is the bottom-right quarter of secondary tile (0,0): its right and
+    // bottom edges are secondary tile edges.
+    const transform: affine.Affine = [10, 0, 600000, 0, -10, 5000040];
+    const primary = new AffineTilesetLevel({
+      affine: transform,
+      arrayWidth: 10980,
+      arrayHeight: 10980,
+      tileWidth: 1024,
+      tileHeight: 1024,
+      mpu: 1,
+    });
+    const secondary = new AffineTilesetLevel({
+      affine: affine.compose(transform, affine.scale(2)),
+      arrayWidth: 5490,
+      arrayHeight: 5490,
+      tileWidth: 1024,
+      tileHeight: 1024,
+      mpu: 1,
+    });
+    const result = resolveSecondaryTiles(primary, 1, 1, secondary, 0);
+    expect(result.tileIndices).toEqual([{ x: 0, y: 0 }]);
   });
 
   it("returns identity-like transform when grids align exactly", () => {

@@ -1,5 +1,6 @@
 import type { Affine } from "@developmentseed/affine";
 import * as affine from "@developmentseed/affine";
+import { overlappingTileSpan } from "./tile-span.js";
 import type { RasterTilesetLevel } from "./tileset-interface.js";
 import type { Bounds, Corners, ProjectionFunction } from "./types.js";
 
@@ -135,14 +136,17 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
     const maxColIdx = this.matrixWidth - 1;
     const maxRowIdx = this.matrixHeight - 1;
 
+    const [firstCol, lastCol] = overlappingTileSpan(pixMinX / tw, pixMaxX / tw);
+    const [firstRow, lastRow] = overlappingTileSpan(pixMinY / th, pixMaxY / th);
+
     // Asymmetric clamping: only clamp minCol/minRow up from below and
     // maxCol/maxRow down from above. If the bbox lies entirely outside the
     // array, this produces an empty range (min > max) so the consumer's
     // `for (i = min; i <= max; i++)` loop does nothing.
-    const minCol = Math.max(0, Math.floor(pixMinX / tw));
-    const maxCol = Math.min(maxColIdx, Math.floor(pixMaxX / tw));
-    const minRow = Math.max(0, Math.floor(pixMinY / th));
-    const maxRow = Math.min(maxRowIdx, Math.floor(pixMaxY / th));
+    const minCol = Math.max(0, firstCol);
+    const maxCol = Math.min(maxColIdx, lastCol);
+    const minRow = Math.max(0, firstRow);
+    const maxRow = Math.min(maxRowIdx, lastRow);
 
     return { minCol, maxCol, minRow, maxRow };
   }
