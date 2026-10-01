@@ -21,7 +21,7 @@
     "@biomejs/biome": "^2.5.14",
     "publint": "^0.3.24",
     "tsup": "^8.5.1",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "pnpm": {
     "overrides": {
