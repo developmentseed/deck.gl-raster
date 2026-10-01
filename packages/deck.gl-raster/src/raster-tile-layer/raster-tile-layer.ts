@@ -64,7 +64,6 @@ export type RasterTileLayerProps<
   Pick<
     TileLayerProps<DataT>,
     | "debounceTime"
-    | "extent"
     | "maxCacheByteSize"
     | "maxCacheSize"
     | "maxRequests"
@@ -85,6 +84,16 @@ export type RasterTileLayerProps<
      * `_tilesetDescriptor()` method.
      */
     tilesetDescriptor?: RasterTilesetDescriptor;
+
+    /**
+     * Only load tiles that overlap this bounding box, given as
+     * `[minLng, minLat, maxLng, maxLat]` in WGS84 degrees.
+     *
+     * Tiles are always limited to the tileset descriptor's bounds; this narrows
+     * them further, e.g. to load part of a global TileMatrixSet such as
+     * WebMercatorQuad.
+     */
+    extent?: number[] | null;
 
     /**
      * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
