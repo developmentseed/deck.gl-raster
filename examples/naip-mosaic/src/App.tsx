@@ -465,8 +465,10 @@ export default function App() {
           bearing: 0,
         }}
         maxBounds={[
-          [STAC_BBOX[0] - 1, STAC_BBOX[1] - 1],
-          [STAC_BBOX[2] + 1, STAC_BBOX[3] + 1],
+          STAC_BBOX[0] - 1,
+          STAC_BBOX[1] - 1,
+          STAC_BBOX[2] + 1,
+          STAC_BBOX[3] + 1,
         ]}
         minZoom={4}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
