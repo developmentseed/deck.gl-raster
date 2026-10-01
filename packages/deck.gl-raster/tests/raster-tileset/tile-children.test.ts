@@ -8,6 +8,7 @@ import {
 import * as affine from "@developmentseed/affine";
 import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { describe, expect, it } from "vitest";
+import { AffineTileset } from "../../src/raster-tileset/affine-tileset.js";
 import { AffineTilesetLevel } from "../../src/raster-tileset/affine-tileset-level.js";
 import { getTileIndices } from "../../src/raster-tileset/raster-tile-traversal.js";
 import { TileMatrixSetAdaptor } from "../../src/raster-tileset/tile-matrix-set.js";
@@ -334,5 +335,25 @@ describe("getTileIndices", () => {
         expect(overlappingTiles(tileKeys(descriptor, viewport))).toEqual([]);
       },
     );
+  });
+
+  it("selects each tile once when levels are not aligned", () => {
+    const descriptor = new AffineTileset({
+      levels: cogLevels(10980, 512),
+      ...projections,
+    });
+    const [longitude, latitude] = projections.projectTo4326(
+      54900,
+      5_000_000 - 54900,
+    );
+    const viewport = new WebMercatorViewport({
+      longitude,
+      latitude,
+      zoom: 10,
+      width: 1024,
+      height: 768,
+    });
+    const keys = tileKeys(descriptor, viewport);
+    expect(keys.length).toBe(new Set(keys).size);
   });
 });
