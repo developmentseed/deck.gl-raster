@@ -27,6 +27,14 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
     url: "https://s3.us-west-2.amazonaws.com/dep-public-staging/dep_ls_geomad/0-3-1-test/066/022/2025/dep_ls_geomad_066_022_2025_red.tif",
   },
   {
+    title: "Antimeridian fixture (dev only) (UTM Zone 60)",
+    url: `${window.location.origin}/__fixtures/antimeridian_utm60.tif`,
+  },
+  {
+    title: "Antimeridian fixture (dev only) (360°)",
+    url: `${window.location.origin}/__fixtures/antimeridian_360.tif`,
+  },
+  {
     title: "Sentinel-2 True Color Image (New York, 2026)",
     url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
   },
