@@ -14,18 +14,15 @@ import type {
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
-import type {
-  InitialTriangulation,
-  ReprojectionFns,
-} from "@developmentseed/raster-reproject";
+import type { InitialTriangulation } from "@developmentseed/raster-reproject";
 import type { Matrix4 } from "@math.gl/core";
-import type { AntimeridianCut } from "./antimeridian-cut.js";
-import { antimeridianCut } from "./antimeridian-cut.js";
+import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import {
   getTileIndices,
+  MAX_WEB_MERCATOR_LAT,
   rescaleCommonSpaceToEPSG3857,
-  rescaleEPSG3857ToCommonSpace,
+  TILE_SIZE,
 } from "./raster-tile-traversal.js";
 import { sortItemsByDistanceFromViewportCenter } from "./sort-by-distance.js";
 import type { RasterTilesetDescriptor } from "./tileset-interface.js";
@@ -112,34 +109,16 @@ export type RasterTileMetadata = {
    * Web Mercator latitude band (±85.051°), or `undefined` if no clamp is needed.
    * Consumed only by the Web Mercator render path; the globe path renders the
    * full mesh. See {@link createInitialWebMercatorTriangulation}.
+   *
+   * A function of the fetched data's size, since the reprojector's uv spans
+   * the *data* — an edge tile fetched clipped to the image covers less than
+   * the nominal tile. Memoized, so the result is reference-stable across
+   * renders for a given size.
    */
-  _webMercatorInitialTriangulation?: InitialTriangulation;
-
-  /**
-   * Vertical cut at which this tile crosses ±180°, or `undefined` if the tile
-   * does not cross the antimeridian (or crosses with a slanted/curved cut that
-   * the MVP does not yet handle). Consumed by `RasterTileLayer._renderSubLayers`
-   * in the Web Mercator branch to split the tile into a west + east piece. See
-   * {@link antimeridianCut}.
-   */
-  _antimeridianCut?: AntimeridianCut;
-
-  /**
-   * Reprojection bundle for the west piece of an antimeridian-crossing tile,
-   * or `undefined` for non-crossing tiles. The piece's `forwardTransform`
-   * composes a `+k·360°` longitude shift onto the original geotransform so
-   * the piece's native longitudes land inside proj4's valid `(−180°, 180°]`
-   * range — letting the stock `_projectPosition` / `_unprojectPosition`
-   * round-trip cleanly (which the reprojector's error metric relies on).
-   * The visual side effect is that the west piece renders in the world-copy
-   * where its lngs end up after the shift; world-copy traversal places it
-   * adjacent to the east piece. Built once in `getTileMetadata` for
-   * reference stability across renders.
-   */
-  _westReprojection?: ReprojectionFns;
-
-  /** East piece counterpart of {@link RasterTileMetadata._westReprojection}. */
-  _eastReprojection?: ReprojectionFns;
+  _webMercatorInitialTriangulation: (
+    dataWidth: number,
+    dataHeight: number,
+  ) => InitialTriangulation | undefined;
 };
 
 /**
@@ -211,11 +190,32 @@ export class RasterTileset2D extends Tileset2D {
     // the tile to keep `RasterLayer`'s reprojection-equality check stable
     // across renders (deck.gl recreates the layer instance every render, so
     // per-render-derived closures would regenerate the mesh every frame).
-    this.projectPosition = (x, y) =>
-      rescaleEPSG3857ToCommonSpace(descriptor.projectTo3857(x, y));
+    //
+    // Forward goes via the source's own lng/lat, *not* normalized: proj4
+    // passes a 4326 source's native longitude through (e.g. −204°), so its
+    // mesh lands continuous in common space with no wrap at all. A projected
+    // source's longitude comes back normalized to (−180°, 180°], so a tile
+    // crossing the antimeridian wraps — `RasterLayer`'s `wrapX` unwraps that.
+    //
+    // Inverse must then accept x from any world copy. Inside the canonical
+    // copy it is the stock 3857 inverse; outside, x maps linearly to an
+    // un-normalized longitude, which `projectFrom4326` passes straight
+    // through for a 4326 source and proj4's `adjlon` folds for a projected
+    // one.
+    this.projectPosition = (x, y) => {
+      const [lng, lat] = descriptor.projectTo4326(x, y);
+      return lngLatToWorld([
+        lng,
+        Math.max(-MAX_WEB_MERCATOR_LAT, Math.min(MAX_WEB_MERCATOR_LAT, lat)),
+      ]);
+    };
     this.unprojectPosition = (cx, cy) => {
-      const [mx, my] = rescaleCommonSpaceToEPSG3857([cx, cy]);
-      return descriptor.projectFrom3857(mx, my);
+      if (cx >= 0 && cx <= TILE_SIZE) {
+        const [mx, my] = rescaleCommonSpaceToEPSG3857([cx, cy]);
+        return descriptor.projectFrom3857(mx, my);
+      }
+      const [lng, lat] = worldToLngLat([cx, cy]);
+      return descriptor.projectFrom4326(lng, lat);
     };
 
     const rawBounds = transformBounds(
@@ -226,13 +226,12 @@ export class RasterTileset2D extends Tileset2D {
     // downstream tile traversal calls `lngLatToWorld` on these bounds which
     // asserts against that range. Global data at ±90° (e.g. reanalysis grids)
     // would otherwise crash tile selection. Clamp here; any polar rows beyond
-    // ±MAX_LAT are unreachable on a Mercator map anyway.
-    const MAX_LAT = 85.0511287798066;
+    // ±MAX_WEB_MERCATOR_LAT are unreachable on a Mercator map anyway.
     this.wgs84Bounds = [
       rawBounds[0],
-      Math.max(rawBounds[1], -MAX_LAT),
+      Math.max(rawBounds[1], -MAX_WEB_MERCATOR_LAT),
       rawBounds[2],
-      Math.min(rawBounds[3], MAX_LAT),
+      Math.min(rawBounds[3], MAX_WEB_MERCATOR_LAT),
     ];
   }
 
@@ -416,51 +415,26 @@ export class RasterTileset2D extends Tileset2D {
 
     // Clamp the reprojection mesh to the valid Web Mercator latitude band for
     // tiles that extend past ±85.051° (e.g. a global EPSG:4326 image reaching
-    // ±90°). Computed once here so the reference is stable across renders.
-    const cornerLat = (corner: [number, number]) =>
-      this.descriptor.projectTo4326(corner[0], corner[1])[1];
-    const _webMercatorInitialTriangulation =
-      createInitialWebMercatorTriangulation({
-        topLeft: cornerLat(topLeft),
-        topRight: cornerLat(topRight),
-        bottomLeft: cornerLat(bottomLeft),
-        bottomRight: cornerLat(bottomRight),
-      });
-
-    // Detect whether this tile crosses ±180° and locate the vertical cut.
-    // Corner longitudes are native (as proj4 returns them — un-normalized for a
-    // 4326 source with an origin past ±180°). See {@link antimeridianCut}.
-    const cornerLng = (corner: [number, number]) =>
-      this.descriptor.projectTo4326(corner[0], corner[1])[0];
-    const tileWestLng = cornerLng(topLeft);
-    const tileEastLng = cornerLng(topRight);
-    const _antimeridianCut = antimeridianCut({
-      topLeft: tileWestLng,
-      topRight: tileEastLng,
-      bottomLeft: cornerLng(bottomLeft),
-      bottomRight: cornerLng(bottomRight),
-    });
-
-    // For each piece of a crossing tile, compose a `+k·360°` longitude shift
-    // into the geotransform so the piece's native lngs sit inside proj4's
-    // valid range. The reprojector's error metric uses `inverseReproject`
-    // round-trip, which only works when proj4 doesn't have to normalize.
-    let _westReprojection: ReprojectionFns | undefined;
-    let _eastReprojection: ReprojectionFns | undefined;
-    if (_antimeridianCut) {
-      const { uCut } = _antimeridianCut;
-      const lngAtCut = tileWestLng + uCut * (tileEastLng - tileWestLng);
-      _westReprojection = this.buildPieceReprojection(
-        forwardTransform,
-        inverseTransform,
-        (tileWestLng + lngAtCut) / 2,
-      );
-      _eastReprojection = this.buildPieceReprojection(
-        forwardTransform,
-        inverseTransform,
-        (lngAtCut + tileEastLng) / 2,
-      );
-    }
+    // ±90°). Latitudes come from the data's own corners, not the nominal
+    // tile's: for a clipped edge tile (e.g. a 36×2 overview in a 64×64 tile)
+    // the nominal corners can be hundreds of degrees past the data.
+    const latAt = (px: number, py: number) =>
+      this.descriptor.projectTo4326(...forwardTransform(px, py))[1];
+    let memoKey: string | undefined;
+    let memoSeed: InitialTriangulation | undefined;
+    const _webMercatorInitialTriangulation = (w: number, h: number) => {
+      const key = `${w}x${h}`;
+      if (key !== memoKey) {
+        memoKey = key;
+        memoSeed = createInitialWebMercatorTriangulation({
+          topLeft: latAt(0, 0),
+          topRight: latAt(w, 0),
+          bottomLeft: latAt(0, h),
+          bottomRight: latAt(w, h),
+        });
+      }
+      return memoSeed;
+    };
 
     return {
       bbox: {
@@ -483,41 +457,6 @@ export class RasterTileset2D extends Tileset2D {
       _projectPosition: this.projectPosition,
       _unprojectPosition: this.unprojectPosition,
       _webMercatorInitialTriangulation,
-      _antimeridianCut,
-      _westReprojection,
-      _eastReprojection,
-    };
-  }
-
-  /**
-   * Build a per-piece reprojection bundle for an antimeridian-crossing tile.
-   * Picks the `k·360°` longitude shift that brings the piece's native lngs
-   * (identified by `pieceMidLng`) into proj4's valid range, composes that
-   * shift into the geotransform, and pairs it with the stock projection
-   * pair. The composed closures are stable for the tile's lifetime.
-   */
-  private buildPieceReprojection(
-    forwardTransform: ProjectionFunction,
-    inverseTransform: ProjectionFunction,
-    pieceMidLng: number,
-  ): ReprojectionFns {
-    const lngShift = -Math.round(pieceMidLng / 360) * 360;
-    if (lngShift === 0) {
-      return {
-        forwardTransform,
-        inverseTransform,
-        forwardReproject: this.projectPosition,
-        inverseReproject: this.unprojectPosition,
-      };
-    }
-    return {
-      forwardTransform: (px, py) => {
-        const [x, y] = forwardTransform(px, py);
-        return [x + lngShift, y];
-      },
-      inverseTransform: (x, y) => inverseTransform(x - lngShift, y),
-      forwardReproject: this.projectPosition,
-      inverseReproject: this.unprojectPosition,
     };
   }
 }

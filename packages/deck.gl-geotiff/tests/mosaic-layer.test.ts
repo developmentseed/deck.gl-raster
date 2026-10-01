@@ -9,7 +9,7 @@ const A: Item = { id: "A", bbox: [0, 0, 10, 10] };
 const B: Item = { id: "B", bbox: [20, 0, 30, 10] };
 const C: Item = { id: "C", bbox: [40, 0, 50, 10] };
 
-type LayerState = { index: Flatbush | null };
+type LayerState = { index: Flatbush | null; sources: Item[] };
 
 type LayerInternals = {
   initializeState: () => void;
@@ -34,7 +34,7 @@ function makeBareLayer(sources: Item[]) {
     sources,
     renderSource: () => null,
   });
-  const state: LayerState = { index: null };
+  const state: LayerState = { index: null, sources: [] };
   Object.assign(layer as object, { state });
   Object.assign(layer as object, {
     setState: (updates: Partial<LayerState>) => Object.assign(state, updates),
@@ -132,5 +132,27 @@ describe("MosaicLayer spatial index lifecycle", () => {
     const { oldProps, newProps } = setSources(layer, [A, B]);
     internals.updateState({ props: newProps, oldProps, ...NOOP_PARAMS });
     expect(state.index?.numItems).toBe(2);
+  });
+});
+
+describe("MosaicLayer bbox normalization", () => {
+  it("unwraps a GeoJSON-flipped bbox before indexing it", () => {
+    // RFC 7946 §5.2: crosses ±180° → xmin > xmax.
+    const crossing: Item = { id: "crossing", bbox: [179.97, -5, -179.17, 5] };
+    const { state, internals } = makeBareLayer([crossing]);
+    internals.initializeState();
+
+    expect(state.sources).toEqual([
+      { id: "crossing", bbox: [179.97, -5, 180.83, 5] },
+    ]);
+    // Findable via a continuous-frame query straddling the seam, which a
+    // still-flipped bbox (xmin > xmax) could never match in Flatbush.
+    expect(state.index?.search(179, -5, 181, 5)).toEqual([0]);
+  });
+
+  it("leaves a non-crossing bbox unchanged", () => {
+    const { state, internals } = makeBareLayer([A]);
+    internals.initializeState();
+    expect(state.sources).toEqual([A]);
   });
 });

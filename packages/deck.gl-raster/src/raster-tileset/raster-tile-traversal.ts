@@ -20,6 +20,7 @@
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import { transformBounds } from "@developmentseed/proj";
+import { unwrapAlong } from "@developmentseed/raster-reproject";
 import { Vector3 } from "@math.gl/core";
 import {
   CullingVolume,
@@ -124,7 +125,7 @@ const EPSG_3857_CIRCUMFERENCE = 2 * Math.PI * WGS84_ELLIPSOID_A;
 const EPSG_3857_HALF_CIRCUMFERENCE = EPSG_3857_CIRCUMFERENCE / 2;
 
 // Maximum latitude representable in Web Mercator (EPSG:3857), in degrees.
-const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
+export const MAX_WEB_MERCATOR_LAT = 85.05112877980659;
 
 /**
  * Raster Tile Node - represents a single tile in a tileset pyramid.
@@ -426,10 +427,19 @@ export class RasterTileNode {
     const [minX, minY, maxX, maxY] = bounds;
     const [tileMinX, tileMinY, tileMaxX, tileMaxY] = commonSpaceBounds;
 
-    const inside =
-      tileMinX < maxX && tileMaxX > minX && tileMinY < maxY && tileMaxY > minY;
-
-    return inside;
+    if (!(tileMinY < maxY && tileMaxY > minY)) {
+      return false;
+    }
+    // X is periodic: a box unwrapped across ±180° may sit a world copy away
+    // from the dataset bounds (each is unwrapped from its own anchor), so
+    // test overlap in every copy either could be in.
+    for (let k = -1; k <= 1; k++) {
+      const shift = k * TILE_SIZE;
+      if (tileMinX + shift < maxX && tileMaxX + shift > minX) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -528,16 +538,36 @@ export class RasterTileNode {
 
     const tileCorners = this.level.projectedTileCorners(this.x, this.y);
 
-    const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
-      REF_POINTS_9,
-      tileCorners,
-      this.descriptor.projectTo3857,
-      this.descriptor.projectTo4326,
-    );
-
-    const commonSpacePositions = refPointsEPSG3857.map((xy) =>
-      rescaleEPSG3857ToCommonSpace(xy),
-    );
+    // proj4's forward-to-3857 wraps longitudes into (-180°, 180°], so a tile
+    // crossing ±180° has reference points on both edges of common space.
+    // Unwrap each against the tile center, walking the uv path between them
+    // (see `unwrapAlong`), so the box is one tight volume around the seam —
+    // matching the unwrapped mesh `RasterLayer` renders.
+    const [center, ...rest] = REF_POINTS_9;
+    const commonSpaceAt = (relX: number, relY: number): [number, number] =>
+      rescaleEPSG3857ToCommonSpace(
+        sampleReferencePointsInEPSG3857(
+          [[relX, relY]],
+          tileCorners,
+          this.descriptor.projectTo3857,
+          this.descriptor.projectTo4326,
+        )[0]!,
+      );
+    const centerPosition = commonSpaceAt(center![0], center![1]);
+    const commonSpacePositions: [number, number][] = [
+      centerPosition,
+      ...rest.map(([relX, relY]): [number, number] => {
+        const lerp = (t: number) =>
+          commonSpaceAt(
+            center![0] + t * (relX - center![0]),
+            center![1] + t * (relY - center![1]),
+          );
+        return [
+          unwrapAlong((t) => lerp(t)[0], centerPosition[0], TILE_SIZE),
+          lerp(1)[1],
+        ];
+      }),
+    ];
 
     const refPointPositions: [number, number, number][] = [];
     for (const p of commonSpacePositions) {
@@ -953,6 +983,17 @@ export function getTileIndices(
   const [minLng, minLat, maxLng, maxLat] = wgs84Bounds;
   const bottomLeft = lngLatToWorld([minLng, minLat]);
   const topRight = lngLatToWorld([maxLng, maxLat]);
+
+  // `wgs84Bounds` is a plain min/max over densified samples, which for a
+  // dataset crossing ±180° (projected source, normalized longitudes) spans
+  // nearly the whole world. Unwrap the dataset's corners along its perimeter
+  // instead and keep whichever x-range is narrower.
+  const [unwrappedWest, unwrappedEast] = unwrappedLngRange(descriptor);
+  if (unwrappedEast - unwrappedWest < maxLng - minLng) {
+    bottomLeft[0] = lngLatToWorld([unwrappedWest, minLat])[0];
+    topRight[0] = lngLatToWorld([unwrappedEast, maxLat])[0];
+  }
+
   const bounds: Bounds = [
     bottomLeft[0],
     bottomLeft[1],
@@ -983,13 +1024,15 @@ export function getTileIndices(
     root.update(traversalParams);
   }
 
-  // World-copy passes: when the viewport spans multiple world copies (e.g.
-  // WebMercatorViewport with repeat: true panned across the antimeridian),
+  // World-copy passes: whenever repeat mode is active (`subViewports` is
+  // non-null — not just when the viewport's own bounds currently straddle a
+  // ±180° multiple, which says nothing about whether some tile's position
+  // is on a different world-copy frame than the viewport's canonical one),
   // re-run the traversal with the tile bounding volumes shifted by ±1, ±2…
   // world copies along common-space X. A tile is selected if any pass selects
-  // it. See dev-docs/world-copies.md.
-  const subViewportCount = viewport.subViewports?.length ?? 0;
-  if (subViewportCount > 1) {
+  // it. The early-break below keeps this cheap when nothing is near a seam.
+  // See dev-docs/world-copies.md.
+  if (viewport.subViewports != null) {
     for (let offset = -1; offset >= -MAX_MAPS; offset--) {
       if (!runOffsetPass(roots, traversalParams, offset)) {
         break;
@@ -1171,4 +1214,43 @@ function bilerpPoint(
     p00[0] * w00 + p10[0] * w10 + p01[0] * w01 + p11[0] * w11,
     p00[1] * w00 + p10[1] * w10 + p01[1] * w01 + p11[1] * w11,
   ];
+}
+
+/**
+ * West/east longitude of a dataset's corners, unwrapped continuously along
+ * its perimeter (top-left → top-right → bottom-right → bottom-left).
+ *
+ * ponytail: corners only; a curved edge whose longitude extreme is mid-edge
+ * gets a slightly tight box. Densify if a dataset is ever culled by it.
+ */
+function unwrappedLngRange(
+  descriptor: RasterTilesetDescriptor,
+): [number, number] {
+  const [minX, minY, maxX, maxY] = descriptor.projectedBounds;
+  const path: [number, number][] = [
+    [minX, maxY],
+    [maxX, maxY],
+    [maxX, minY],
+    [minX, minY],
+  ];
+  const lngAt = ([x, y]: [number, number]) => descriptor.projectTo4326(x, y)[0];
+  const lngs = [lngAt(path[0]!)];
+  for (let i = 1; i < path.length; i++) {
+    const [ax, ay] = path[i - 1]!;
+    const [bx, by] = path[i]!;
+    lngs.push(
+      unwrapAlong(
+        (t) => lngAt([ax + t * (bx - ax), ay + t * (by - ay)]),
+        lngs[i - 1]!,
+        360,
+      ),
+    );
+  }
+  const [topLeft, topRight, bottomRight, bottomLeft] = lngs as [
+    number,
+    number,
+    number,
+    number,
+  ];
+  return [Math.min(topLeft, bottomLeft), Math.max(topRight, bottomRight)];
 }

@@ -8,13 +8,13 @@ import type {
 } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
-import { triangulateRectangle } from "@developmentseed/raster-reproject";
 import type { Device } from "@luma.gl/core";
 import { renderDebugTileOutline } from "../layer-utils.js";
 import type { RenderTileResult } from "../raster-layer.js";
 import { RasterLayer } from "../raster-layer.js";
 import type { RasterTilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
+import { TILE_SIZE } from "../raster-tileset/raster-tile-traversal.js";
 import type { RasterTileMetadata } from "../raster-tileset/raster-tileset-2d.js";
 
 /**
@@ -238,7 +238,7 @@ export class RasterTileLayer<
    */
   protected _renderDebug(
     tile: Tile2DHeader<DataT>,
-    _data: DataT | null,
+    data: DataT | null,
   ): Layer[] {
     const descriptor = this._tilesetDescriptor();
     if (!descriptor) {
@@ -251,6 +251,7 @@ export class RasterTileLayer<
       `${this.id}-${tile.id}-bounds`,
       tile as Tile2DHeader<DataT> & RasterTileMetadata,
       descriptor.projectTo4326,
+      data,
     );
   }
 
@@ -391,23 +392,14 @@ export class RasterTileLayer<
     }
 
     const isGlobe = this.context.viewport.resolution !== undefined;
-    const rasterLayers =
-      !isGlobe && tile._antimeridianCut
-        ? this._renderAntimeridianTile({
-            baseId: props.id,
-            tile,
-            data: props.data,
-            tileResult,
-            uCut: tile._antimeridianCut.uCut,
-          })
-        : this._renderNormalTile({
-            baseId: props.id,
-            tile,
-            data: props.data,
-            tileResult,
-            descriptor,
-            isGlobe,
-          });
+    const rasterLayers = this._renderNormalTile({
+      baseId: props.id,
+      tile,
+      data: props.data,
+      tileResult,
+      descriptor,
+      isGlobe,
+    });
     return [...rasterLayers, ...debugLayers];
   }
 
@@ -482,56 +474,10 @@ export class RasterTileLayer<
           // is needed).
           initialTriangulation: isGlobe
             ? undefined
-            : tile._webMercatorInitialTriangulation,
-        }),
-      ),
-    ];
-  }
-
-  /**
-   * Build the two `RasterLayer`s for a Web-Mercator tile that crosses ±180°:
-   * a west piece (UV `[0, uCut]`) and an east piece (UV `[uCut, 1]`). Each
-   * piece uses its own `ReprojectionFns` bundle from the tile metadata —
-   * the bundle composes a `+k·360°` longitude shift into the geotransform
-   * so the piece's native lngs stay inside proj4's valid range, and pairs
-   * it with the stock `_projectPosition`/`_unprojectPosition` so the
-   * forward/inverse round-trip cleanly. The two pieces thus render in
-   * different world copies; deck.gl `repeat: true` + world-copy traversal
-   * (#518) bring them together visually. The split itself lives in each
-   * piece's `triangulateRectangle` seed.
-   */
-  private _renderAntimeridianTile(opts: {
-    baseId: string;
-    tile: Tile2DHeader<DataT> & RasterTileMetadata;
-    data: NonNullable<DataT>;
-    tileResult: RenderTileResult;
-    uCut: number;
-  }): Layer[] {
-    const { baseId, tile, data, tileResult, uCut } = opts;
-    // `antimeridianCut` returns the seam location as a fraction of the tile's
-    // geographic span (0..1 over the full west→east lng range). `RasterLayer`
-    // constructs its reprojector with `width + 1` (raster-layer.ts:252), so
-    // the reprojector's UV*(W-1) = pixel-index maps UV `(seamCol / W)`
-    // exactly onto the seam pixel — no scaling needed here.
-    const baseProps = {
-      ...this._baseRasterProps(data, tileResult),
-      coordinateSystem: "cartesian" as const,
-    };
-    return [
-      new RasterLayer(
-        this.getSubLayerProps({
-          ...baseProps,
-          id: `${baseId}-raster-west`,
-          reprojectionFns: tile._westReprojection!,
-          initialTriangulation: triangulateRectangle(0, 0, uCut, 1),
-        }),
-      ),
-      new RasterLayer(
-        this.getSubLayerProps({
-          ...baseProps,
-          id: `${baseId}-raster-east`,
-          reprojectionFns: tile._eastReprojection!,
-          initialTriangulation: triangulateRectangle(uCut, 0, 1, 1),
+            : tile._webMercatorInitialTriangulation(data.width, data.height),
+          // Web Mercator wraps at one world width: unwrap + clip the mesh so
+          // a tile crossing ±180° (along any seam shape) stays continuous.
+          wrapX: isGlobe ? undefined : TILE_SIZE,
         }),
       ),
     ];

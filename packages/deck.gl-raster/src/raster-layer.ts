@@ -12,6 +12,8 @@ import type {
   ReprojectionFns,
 } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
+import type { Mesh2D } from "./clip-mesh-to-world.js";
+import { clipMeshToWorld } from "./clip-mesh-to-world.js";
 import { splitFloat64Array } from "./fp64.js";
 import { buildUniformGridMesh } from "./globe-grid-mesh.js";
 import type { RasterModule } from "./gpu-modules/types.js";
@@ -45,7 +47,7 @@ const DEBUG_COLORS: [number, number, number][] = [
 ];
 
 type DebugData = {
-  reprojector: RasterReprojector;
+  mesh: Mesh2D;
   length: number;
 };
 
@@ -86,6 +88,16 @@ export interface RasterLayerProps extends CompositeLayerProps {
    * regenerating the mesh every frame.
    */
   initialTriangulation?: InitialTriangulation;
+
+  /**
+   * Period of the output x axis (one world width in common space) when the
+   * output wraps, e.g. Web Mercator. When set, the reprojector unwraps the
+   * mesh across the antimeridian and the finished mesh is clipped at each
+   * world boundary — so a tile crossing ±180° along any seam shape renders
+   * as one continuous mesh. See `RasterReprojector`'s `wrapX` option and
+   * {@link clipMeshToWorld}.
+   */
+  wrapX?: number;
 
   /**
    * The image to display. Accepts any luma.gl `TextureSource` (e.g. a URL,
@@ -145,6 +157,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
   declare state: {
     reprojector?: RasterReprojector;
+    /** The rendered (clipped) mesh in 2D, for the debug wireframe. */
+    debugMesh?: Mesh2D;
     /**
      * Mesh in the exact shape SimpleMeshLayer expects.
      *
@@ -199,7 +213,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       props.height !== oldProps.height ||
       reprojectionFnsChanged ||
       props.maxError !== oldProps.maxError ||
-      props.initialTriangulation !== oldProps.initialTriangulation;
+      props.initialTriangulation !== oldProps.initialTriangulation ||
+      props.wrapX !== oldProps.wrapX;
 
     if (needsMeshUpdate) {
       this._generateMesh();
@@ -212,6 +227,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       height,
       reprojectionFns,
       initialTriangulation,
+      wrapX,
       maxError = DEFAULT_MAX_ERROR,
     } = this.props;
 
@@ -228,6 +244,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         buildUniformGridMesh(reprojectionFns, width + 1, height + 1);
       this.setState({
         reprojector: undefined,
+        debugMesh: undefined,
         mesh: {
           indices: { value: indices, size: 1 },
           attributes: {
@@ -251,14 +268,15 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       reprojectionFns,
       width + 1,
       height + 1,
-      { initialTriangulation },
+      { initialTriangulation, wrapX },
     );
     reprojector.run(maxError);
-    const { indices, positions64High, positions64Low, texCoords } =
-      reprojectorToMesh(reprojector);
+    const { indices, positions64High, positions64Low, texCoords, mesh2D } =
+      reprojectorToMesh(reprojector, wrapX);
 
     this.setState({
       reprojector,
+      debugMesh: mesh2D,
       mesh: {
         indices: { value: indices, size: 1 },
         attributes: {
@@ -271,10 +289,10 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 
   renderDebugLayer(): Layer | null {
-    const { reprojector } = this.state;
+    const { debugMesh } = this.state;
     const { debugOpacity } = this.props;
 
-    if (!reprojector) {
+    if (!debugMesh) {
       return null;
     }
 
@@ -283,7 +301,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
         id: "polygon",
         // https://deck.gl/docs/developer-guide/performance#supply-binary-blobs-to-the-data-prop
         // This `data` gets passed into `getPolygon` with the row index.
-        data: { reprojector, length: reprojector.triangles.length / 3 },
+        data: { mesh: debugMesh, length: debugMesh.triangles.length / 3 },
         getPolygon: (
           _: any,
           {
@@ -294,8 +312,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
             data: DebugData;
           },
         ) => {
-          const triangles = data.reprojector.triangles;
-          const positions = reprojector.exactOutputPositions;
+          const { triangles, positions } = data.mesh;
 
           const a = triangles[index * 3]!;
           const b = triangles[index * 3 + 1]!;
@@ -369,19 +386,31 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 }
 
-function reprojectorToMesh(reprojector: RasterReprojector): {
+function reprojectorToMesh(
+  reprojector: RasterReprojector,
+  wrapX?: number,
+): {
   indices: Uint32Array;
   positions64High: Float32Array;
   positions64Low: Float32Array;
   texCoords: Float32Array;
+  mesh2D: Mesh2D;
 } {
-  const numVertices = reprojector.uvs.length / 2;
-  const texCoords = new Float32Array(reprojector.uvs);
+  const mesh = {
+    positions: reprojector.exactOutputPositions,
+    uvs: reprojector.uvs,
+    triangles: reprojector.triangles,
+  };
+  const mesh2D = wrapX === undefined ? mesh : clipMeshToWorld(mesh, wrapX);
+  const { positions: xy, uvs, triangles } = mesh2D;
+
+  const numVertices = uvs.length / 2;
+  const texCoords = new Float32Array(uvs);
 
   const positions = new Float64Array(numVertices * 3);
   for (let i = 0; i < numVertices; i++) {
-    positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
-    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
+    positions[i * 3] = xy[i * 2]!;
+    positions[i * 3 + 1] = xy[i * 2 + 1]!;
     // z (flat on the ground)
     positions[i * 3 + 2] = 0;
   }
@@ -391,12 +420,13 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   const [positions64Low, positions64High] = splitFloat64Array(positions);
 
   // TODO: Consider using 16-bit indices if the mesh is small enough
-  const indices = new Uint32Array(reprojector.triangles);
+  const indices = new Uint32Array(triangles);
 
   return {
     indices,
     positions64High,
     positions64Low,
     texCoords,
+    mesh2D,
   };
 }

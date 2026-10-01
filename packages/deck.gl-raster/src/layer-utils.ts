@@ -1,42 +1,54 @@
 import type { _Tile2DHeader as Tile2DHeader } from "@deck.gl/geo-layers";
 import { PathLayer, TextLayer } from "@deck.gl/layers";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
+import { snapToCopy } from "@developmentseed/raster-reproject";
 import type { RasterTileMetadata } from "./raster-tileset/index.js";
+
+// Samples per outline edge; keeps each step well under 180° so a tile
+// spanning the whole world (or crossing ±180°) unwraps correctly.
+const EDGE_SAMPLES = 16;
 
 export function renderDebugTileOutline(
   id: string,
   tile: Tile2DHeader & RasterTileMetadata,
   forwardTo4326: ReprojectionFns["forwardReproject"],
+  /** Pixel size of the tile's data; edge tiles are smaller than nominal. */
+  size?: { width: number; height: number } | null,
 ) {
-  const { projectedCorners } = tile;
-
-  // Create a closed path in WGS84 projection around the tile bounds
+  // Outline the tile's *data*, not its nominal footprint: an edge tile (e.g. a
+  // 72×4 image in a 512×512 tile) would otherwise extend hundreds of degrees
+  // past the data.
   //
-  // The tile has a `bbox` field which is already the bounding box in WGS84,
-  // but that uses `transformBounds` and densifies edges. So the corners of
-  // the bounding boxes don't line up with each other.
-  //
-  // In this case in the debug mode, it looks better if we ignore the actual
-  // non-linearities of the edges and just draw a box connecting the
-  // reprojected corners. In any case, the _image itself_ will be densified
-  // on the edges as a feature of the mesh generation.
-  const { topLeft, topRight, bottomRight, bottomLeft } = projectedCorners;
-  const topLeftWgs84 = forwardTo4326(topLeft[0], topLeft[1]);
-  const topRightWgs84 = forwardTo4326(topRight[0], topRight[1]);
-  const bottomRightWgs84 = forwardTo4326(bottomRight[0], bottomRight[1]);
-  const bottomLeftWgs84 = forwardTo4326(bottomLeft[0], bottomLeft[1]);
-
-  const path = [
-    topLeftWgs84,
-    topRightWgs84,
-    bottomRightWgs84,
-    bottomLeftWgs84,
-    topLeftWgs84,
+  // Each edge is sampled in pixel space and unwrapped point-to-point, so a
+  // 360°-wide tile draws as a full band instead of collapsing to zero width.
+  // `wrapLongitude` then splits the path at ±180°.
+  const w = size?.width ?? tile.tileWidth;
+  const h = size?.height ?? tile.tileHeight;
+  const ring: [number, number][] = [
+    [0, 0],
+    [w, 0],
+    [w, h],
+    [0, h],
+    [0, 0],
   ];
+  const path: number[][] = [];
+  for (let e = 0; e < 4; e++) {
+    const [x0, y0] = ring[e]!;
+    const [x1, y1] = ring[e + 1]!;
+    for (let i = e === 0 ? 0 : 1; i <= EDGE_SAMPLES; i++) {
+      const t = i / EDGE_SAMPLES;
+      const [lon, lat] = forwardTo4326(
+        ...tile.forwardTransform(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t),
+      );
+      const prev = path[path.length - 1];
+      path.push([prev ? snapToCopy(lon, prev[0]!, 360) : lon, lat]);
+    }
+  }
 
+  // Label at the middle of the unwrapped tile.
   const center = [
-    (topLeftWgs84[0] + bottomRightWgs84[0]) / 2,
-    (topLeftWgs84[1] + bottomRightWgs84[1]) / 2,
+    (path[0]![0]! + path[2 * EDGE_SAMPLES]![0]!) / 2,
+    (path[0]![1]! + path[2 * EDGE_SAMPLES]![1]!) / 2,
   ];
   const labelLayer = new TextLayer({
     id: `${id}-label`,
@@ -62,6 +74,8 @@ export function renderDebugTileOutline(
     getWidth: 2,
     widthUnits: "pixels",
     pickable: false,
+    // Split the outline of a tile crossing ±180° at the antimeridian.
+    wrapLongitude: true,
   });
 
   return [outlineLayer, labelLayer];

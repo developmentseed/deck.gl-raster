@@ -46,6 +46,9 @@ export type MosaicSource = {
  * cache identifier is always defined. */
 type ResolvedSource<MosaicT> = TileIndex & MosaicT & { id: string };
 
+/** Matches raster-tile-traversal.ts's world-copy pass count. */
+const MAX_MAPS = 3;
+
 export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
   /** Closure returning the parent layer's current sources array. Re-evaluated
    * on each `getTileIndices` call so updates to the layer's `sources` prop
@@ -109,12 +112,51 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     }
 
     const viewportBounds = viewport.getBounds();
-    const indices = index.search(...viewportBounds);
+    const matchedIndices = new Set(index.search(...viewportBounds));
 
+    // World-copy passes: whenever repeat mode is active (`subViewports` is
+    // non-null), a source's bbox may be indexed in a different world-copy
+    // frame than `viewport.getBounds()` reports — e.g. an antimeridian-
+    // crossing source's bbox is normalized/unwrapped onto a continuous frame
+    // (see `normalizeSourceBbox`), so it's only found by a query shifted
+    // ±360°, ±720°… Gating on `subViewports.length > 1` (the viewport's own
+    // bounds currently straddling a ±180° multiple) wrongly skips this once
+    // zoomed in tight to one side alone — the viewport no longer straddles a
+    // seam, but the source's own indexed position can still be a world copy
+    // away from the query. Matches raster-tile-traversal.ts's gate. Walk each
+    // direction until an offset comes back empty — see dev-docs/world-copies.md.
+    if (viewport.subViewports != null) {
+      for (let worldOffset = -1; worldOffset >= -MAX_MAPS; worldOffset--) {
+        if (
+          !searchAtOffset(index, viewportBounds, worldOffset, matchedIndices)
+        ) {
+          break;
+        }
+      }
+      for (let worldOffset = 1; worldOffset <= MAX_MAPS; worldOffset++) {
+        if (
+          !searchAtOffset(index, viewportBounds, worldOffset, matchedIndices)
+        ) {
+          break;
+        }
+      }
+    }
+
+    // `index` and `sources` are read from two separate closures backed by
+    // the same MosaicLayer instance; a matched index can transiently point
+    // past the end of `sources` for one frame if `getTileIndices` runs
+    // between the layer's own `sources` prop updating and its Flatbush index
+    // finishing its rebuild for the new array (e.g. right after an async
+    // `sources` load populates the layer for the first time). Skip rather
+    // than crash — the next tick's rebuilt index resolves it.
     const sources = this.getSources();
-    const selectedSources = indices.map((sourceIndex) => {
-      const source = sources[sourceIndex]!;
-      return {
+    const selectedSources: ResolvedSource<MosaicT>[] = [];
+    for (const sourceIndex of matchedIndices) {
+      const source = sources[sourceIndex];
+      if (source === undefined) {
+        continue;
+      }
+      selectedSources.push({
         // Remove once https://github.com/visgl/deck.gl/pull/10299
         // is merged and released
         x: 0,
@@ -122,8 +164,8 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
         z: 0,
         ...source,
         id: source.id ?? String(sourceIndex),
-      };
-    });
+      });
+    }
 
     const { maxRequests } = this.opts;
     if (selectedSources.length <= maxRequests) {
@@ -139,4 +181,30 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       },
     );
   }
+}
+
+/**
+ * Query `index` with `bounds` shifted by `worldOffset * 360°` of longitude,
+ * adding any matched source indices into `matched`. Returns `true` if this
+ * offset matched anything, signaling the caller to keep walking further from
+ * the primary world; `false` stops that direction's walk (the offset has
+ * moved past the visible range).
+ */
+function searchAtOffset(
+  index: Flatbush,
+  bounds: [number, number, number, number],
+  worldOffset: number,
+  matched: Set<number>,
+): boolean {
+  const shift = worldOffset * 360;
+  const found = index.search(
+    bounds[0] + shift,
+    bounds[1],
+    bounds[2] + shift,
+    bounds[3],
+  );
+  for (const i of found) {
+    matched.add(i);
+  }
+  return found.length > 0;
 }

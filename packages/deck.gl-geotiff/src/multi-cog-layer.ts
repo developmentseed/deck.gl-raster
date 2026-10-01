@@ -47,6 +47,7 @@ import {
   metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
+import { snapToCopy } from "@developmentseed/raster-reproject";
 import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
@@ -861,36 +862,46 @@ export class MultiCOGLayer extends RasterTileLayer<
     }
 
     // --- Primary tile outline and label ---
-    const primaryCrsCorners = primaryLevel.projectedTileCorners(x, y);
-    const { path: primaryPath, center: primaryCenter } = cornersToWgs84Path(
-      primaryCrsCorners,
-      forwardTo4326,
-    );
+    const primaryBoxes = [
+      {
+        ...cornersToWgs84Path(
+          primaryLevel.projectedTileCorners(x, y),
+          forwardTo4326,
+        ),
+        labelSuffix: "",
+      },
+    ];
 
     const primaryColor = DEBUG_COLORS[0]!;
 
     layers.push(
       new PathLayer({
         id: `${tileId}-debug-primary-outline`,
-        data: [primaryPath],
+        data: primaryBoxes.map((box) => box.path),
         getPath: (d) => d,
         getColor: primaryColor.outline,
         getWidth: 2,
         widthUnits: "pixels",
         pickable: false,
+        // Split the outline of a tile crossing ±180° at the antimeridian.
+        wrapLongitude: true,
       }),
     );
 
     // Build primary label text
-    let primaryText = `x=${x} y=${y} z=${z}`;
+    let primaryDetail = "";
     if (debugLevel >= 2) {
-      primaryText += `  ${data.width}x${data.height}`;
+      primaryDetail += `  ${data.width}x${data.height}`;
     }
     if (debugLevel >= 3) {
-      primaryText += `  ${primaryLevel.metersPerPixel.toFixed(1)}m/px`;
+      primaryDetail += `  ${primaryLevel.metersPerPixel.toFixed(1)}m/px`;
     }
 
-    // Count total label lines for vertical stacking
+    // Secondary labels are anchored to the primary box's center and stacked
+    // below it.
+    const primaryCenter = primaryBoxes[0]!.center;
+
+    // Count total label lines stacked at `primaryCenter` for vertical spacing.
     const secondaryNames = data.debugInfo
       ? [...data.debugInfo.bands.keys()]
       : [];
@@ -901,15 +912,14 @@ export class MultiCOGLayer extends RasterTileLayer<
     layers.push(
       new TextLayer({
         id: `${tileId}-debug-primary-label`,
-        data: [
-          {
-            position: primaryCenter,
-            text: primaryText,
-          },
-        ],
+        data: primaryBoxes.map((box) => ({
+          position: box.center,
+          text: `x=${x} y=${y} z=${z}${box.labelSuffix}${primaryDetail}`,
+        })),
         getColor: primaryColor.text,
         getSize: 14,
-        getPixelOffset: [0, -topOffset],
+        getPixelOffset: (_d: unknown, { index }: { index: number }) =>
+          index === 0 ? [0, -topOffset] : [0, 0],
         sizeUnits: "pixels",
         outlineWidth: 3,
         outlineColor: [0, 0, 0, 255],
@@ -943,6 +953,7 @@ export class MultiCOGLayer extends RasterTileLayer<
             getWidth: 2,
             widthUnits: "pixels",
             pickable: false,
+            wrapLongitude: true,
           }),
         );
       }
@@ -1057,8 +1068,9 @@ function cornersToWgs84Path(
   );
   return {
     path: [topLeft, topRight, bottomRight, bottomLeft, topLeft],
+    // Unwrap so a tile crossing ±180° gets its label at the seam.
     center: [
-      (topLeft[0] + bottomRight[0]) / 2,
+      (topLeft[0] + snapToCopy(bottomRight[0], topLeft[0], 360)) / 2,
       (topLeft[1] + bottomRight[1]) / 2,
     ],
   };
