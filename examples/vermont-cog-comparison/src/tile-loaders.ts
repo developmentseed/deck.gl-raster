@@ -16,10 +16,10 @@ export type TileTextureData = {
 /**
  * Tile loader for 3- or 4-band pixel-interleaved COGs.
  *
- * Fetches the source tile, asserts pixel-interleaved layout, expands
- * 3-band data to RGBA via `addAlphaChannel` (WebGL2 has no rgb-only 8-bit
- * texture format), and uploads as `rgba8unorm`. For 4-band data the
- * source-side alpha (NIR) is overridden by the shader pipeline (see
+ * Fetches the source tile and expands 3-band data to RGBA via
+ * `addAlphaChannel` (WebGL2 has no rgb-only 8-bit texture format), which also
+ * interleaves a band-separate tile, then uploads as `rgba8unorm`. For 4-band
+ * data the source-side alpha (NIR) is overridden by the shader pipeline (see
  * `SetAlpha1`).
  */
 export async function getTileDataRGBA(
@@ -28,11 +28,7 @@ export async function getTileDataRGBA(
 ): Promise<TileTextureData> {
   const { device, x, y, signal } = options;
   const tile = await image.fetchTile(x, y, { signal, boundless: false });
-  const array = addAlphaChannel(tile.array);
-  if (array.layout === "band-separate") {
-    throw new Error("Vermont COGs are expected to be pixel-interleaved");
-  }
-  const { width, height, data } = array;
+  const { width, height, data } = addAlphaChannel(tile.array);
   const texture = device.createTexture({
     data,
     format: "rgba8unorm",

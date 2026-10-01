@@ -4,25 +4,25 @@ import type {
   ConcurrencyLimiter,
   Priority,
   RasterArray,
+  RasterArrayPixelInterleaved,
 } from "@developmentseed/geotiff";
-import { GeoTIFF } from "@developmentseed/geotiff";
+import { GeoTIFF, toPixelInterleaved } from "@developmentseed/geotiff";
 import type { Converter } from "proj4";
 
 /**
  * Add an alpha channel to an RGB image array.
  *
  * Only supports input arrays with 3 (RGB) or 4 (RGBA) channels. If the input is
- * already RGBA, it is returned unchanged.
+ * already RGBA, it is returned unchanged. Band-separate input is interleaved
+ * first, so the result is always pixel-interleaved.
  */
-export function addAlphaChannel(rgbImage: RasterArray): RasterArray {
+export function addAlphaChannel(
+  rgbImage: RasterArray,
+): RasterArrayPixelInterleaved {
   const { height, width } = rgbImage;
 
   if (rgbImage.layout === "band-separate") {
-    // This should be pretty easy to do by just returning an additional array of
-    // 255s
-    // But not sure if we'll want to do that, because it's fine to upload 3
-    // separate textures.
-    throw new Error("Band-separate images not yet implemented.");
+    return addAlphaChannel(toPixelInterleaved(rgbImage));
   }
 
   if (rgbImage.data.length === height * width * 4) {

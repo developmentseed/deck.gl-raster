@@ -12,7 +12,7 @@ import {
   WhiteIsZero,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
-import { parseColormap } from "@developmentseed/geotiff";
+import { parseColormap, toPixelInterleaved } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GetTileDataOptions } from "../cog-layer.js";
 import { addAlphaChannel } from "./geotiff.js";
@@ -161,14 +161,20 @@ function createUnormPipeline(
 
     let numSamples = samplesPerPixel;
 
+    // A PlanarConfiguration=2 image decodes to one array per band, which can't be
+    // uploaded as a single texture. Interleave it so the rest of this function -
+    // and the shader pipeline built above - sees the same thing it would for a
+    // pixel-interleaved image. Uploading one texture per band and sampling a
+    // sampler2DArray would avoid this copy, but needs the render pipeline to know
+    // how many textures a tile has; see #159.
+    if (array.layout === "band-separate") {
+      array = toPixelInterleaved(array);
+    }
+
     if (samplesPerPixel === 3) {
       // WebGL2 doesn't have an RGB-only texture format; it requires RGBA.
       array = addAlphaChannel(array);
       numSamples = 4;
-    }
-
-    if (array.layout === "band-separate") {
-      throw new Error("Band-separate images not yet implemented.");
     }
 
     const textureFormat = inferTextureFormat(
