@@ -27,12 +27,7 @@ export type MosaicLayerProps<
     TileLayerProps,
     // NOTE: `debounceTime` is intentionally not exposed.
     // See https://github.com/developmentseed/deck.gl-raster/issues/562
-    | "extent"
-    | "maxCacheByteSize"
-    | "maxCacheSize"
-    | "maxRequests"
-    | "maxZoom"
-    | "minZoom"
+    "maxCacheByteSize" | "maxCacheSize" | "maxRequests" | "maxZoom" | "minZoom"
   > & {
     /**
      * List of mosaic sources to render.
@@ -54,6 +49,17 @@ export type MosaicLayerProps<
      * arbitrary mutations of `sources`.
      */
     sources: MosaicT[];
+
+    /**
+     * Only load and render sources whose `bbox` overlaps this bounding box,
+     * given as `[minLng, minLat, maxLng, maxLat]` in WGS84 degrees.
+     *
+     * A source that overlaps it is drawn in full, not clipped to it. To limit
+     * what a source loads as well, pass the same `extent` to the layers
+     * `renderSource` returns. Unlike in deck.gl's TileLayer, it does not keep
+     * sources loading below `minZoom`.
+     */
+    extent?: number[] | null;
 
     /**
      * Caps concurrent HTTP requests for this layer's source fetches.
