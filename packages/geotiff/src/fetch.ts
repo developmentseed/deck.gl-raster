@@ -114,6 +114,7 @@ async function assembleTile(
     predictor,
     planarConfiguration,
     lercParameters,
+    littleEndian: self.image.tiff.isLittleEndian,
   };
   const [decodedPixels, mask] = await Promise.all([
     decodeTile(tileBytes, decoderMetadata, pool),
@@ -233,6 +234,7 @@ async function decodeMask(
     planarConfiguration:
       maskImage.value(TiffTag.PlanarConfiguration) ??
       PlanarConfiguration.Contig,
+    littleEndian: maskImage.tiff.isLittleEndian,
   };
 
   const decoderFn = (

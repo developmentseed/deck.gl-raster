@@ -1,5 +1,5 @@
-import type { PlanarConfiguration, Predictor } from "@cogeotiff/core";
-import { Compression, SampleFormat } from "@cogeotiff/core";
+import type { PlanarConfiguration } from "@cogeotiff/core";
+import { Compression, Predictor, SampleFormat } from "@cogeotiff/core";
 import type { RasterTypedArray } from "./array.js";
 import { decode as decodeViaCanvas } from "./codecs/canvas.js";
 import { decode as decodeDeflate } from "./codecs/deflate.js";
@@ -41,6 +41,7 @@ export type DecoderMetadata = {
   predictor: Predictor;
   planarConfiguration: PlanarConfiguration;
   lercParameters?: number[] | null;
+  littleEndian?: boolean;
 };
 
 /**
@@ -115,9 +116,19 @@ export async function decode(
       bitsPerSample,
       samplesPerPixel,
       planarConfiguration,
+      littleEndian = true,
     } = metadata;
+    // Predictor 3 byte planes are most significant byte first in every file,
+    // and applyPredictor reassembles them in platform order, so only the other
+    // layouts carry the file's byte order.
+    const swapped =
+      !littleEndian &&
+      bitsPerSample > 8 &&
+      predictor !== Predictor.FloatingPoint
+        ? swapBytes(result, bitsPerSample / 8)
+        : result;
     const predicted = applyPredictor(
-      result,
+      swapped,
       predictor,
       width,
       height,
@@ -132,6 +143,23 @@ export async function decode(
   }
 
   return result;
+}
+
+/**
+ * Reverse the byte order of every `bytesPerSample`-byte sample.
+ *
+ * Writes to a new buffer: an uncompressed decoder returns the caller's bytes,
+ * which may be shared with a block cache.
+ */
+function swapBytes(buffer: ArrayBuffer, bytesPerSample: number): ArrayBuffer {
+  const src = new Uint8Array(buffer);
+  const out = new Uint8Array(src.length);
+  for (let i = 0; i < src.length; i += bytesPerSample) {
+    for (let b = 0; b < bytesPerSample; b++) {
+      out[i + b] = src[i + bytesPerSample - 1 - b]!;
+    }
+  }
+  return out.buffer;
 }
 
 /**
