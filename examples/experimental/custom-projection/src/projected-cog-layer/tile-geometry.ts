@@ -22,6 +22,12 @@ const PIXEL_EPSILON = 1e-6;
 const UV_EPSILON = 1e-9;
 
 /**
+ * Geographic tiles are meshed up to this latitude and no further; see
+ * {@link computeDomainPixelRect}.
+ */
+const MAX_MESH_LATITUDE = 89.5;
+
+/**
  * Bilinearly interpolate across a quad: `(0, 0)` is `topLeft`, `(1, 1)` is
  * `bottomRight`.
  */
@@ -189,12 +195,13 @@ export interface DomainPixelRectOptions {
  * clipped to the image: the UVs depend on the decoded tile's size, which is
  * only known at render time (see {@link pixelRectToTriangulation}).
  *
- * The rectangle also stops one source row short of either pole. In a polar
+ * The rectangle also stops short of either pole: at {@link MAX_MESH_LATITUDE},
+ * or one source row from the pole if that is further away. In a polar
  * projection a geographic tile's row at ±90° collapses to a point; the
  * reprojector measures error in source pixels and, in the degenerate triangles
  * fanning out from the pole, never converges. The closer to the pole the mesh
- * reaches, the finer it has to be split, so trimming exactly one row keeps the
- * hole at one source pixel (a few screen pixels at most) at every level.
+ * reaches, the finer it has to be split, so the half-degree hole (about 110 km
+ * across the pole) roughly halves the triangles of a view over the pole.
  *
  * @returns the rectangle; `undefined` when no clamp is needed or the tile is
  *   not a geographic grid (the caller then meshes the full tile); `null` when
@@ -221,7 +228,7 @@ export function computeDomainPixelRect(
 
   const [minLng, minLat, maxLng, maxLat] = fromBounds;
   const rowDegrees = Math.abs(topLeft[1] - bottomLeft[1]) / tileHeight;
-  const poleGuard = 90 - rowDegrees;
+  const poleGuard = Math.min(90 - rowDegrees, MAX_MESH_LATITUDE);
   const latLow = Math.max(minLat, -poleGuard);
   const latHigh = Math.min(maxLat, poleGuard);
 
@@ -267,6 +274,57 @@ export function computeDomainPixelRect(
     return undefined;
   }
   return [x0, y0, x1, y1];
+}
+
+/** Rows sampled when measuring a tile's pixel aspect ratio. */
+const ASPECT_ROWS = 16;
+
+/** Columns sampled when measuring a tile's pixel aspect ratio. */
+const ASPECT_COLUMNS = 4;
+
+/** Options for {@link columnErrorScale}. */
+export interface ColumnErrorScaleOptions {
+  /** Tile-local pixel → map coordinates. */
+  pixelToMap: ProjectionFunction;
+  /** The part of the tile that is meshed, in tile-local pixels. */
+  rect: PixelRect;
+}
+
+/**
+ * How much to stretch a tile's pixel grid horizontally before measuring mesh
+ * error: the widest a source pixel gets on the map relative to its height,
+ * capped at 1.
+ *
+ * The reprojector measures error in source pixels, as if each were square on
+ * the map. On a polar map a lng/lat pixel at latitude φ is only about `cos(φ)`
+ * as wide as it is tall, so near the pole the columns are slivers and the
+ * reprojector keeps splitting triangles to correct errors far smaller than a
+ * screen pixel. Stretching the grid by this factor makes pixels square where
+ * their columns are widest, so column error is never underestimated anywhere
+ * in the tile. The aspect ratio is measured in the map itself rather than on
+ * the sphere, so it also holds in projections that aren't conformal, such as
+ * Equal Earth.
+ *
+ * Only use this for geographic grids (see {@link isGeographicGrid}), whose
+ * meshed rectangle lies inside the projection's domain. Elsewhere the map
+ * clamps points to the domain, which would shrink the measured widths.
+ */
+export function columnErrorScale(options: ColumnErrorScaleOptions): number {
+  const { pixelToMap, rect } = options;
+  const [x0, y0, x1, y1] = rect;
+  const distance = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  let scale = 0;
+  for (let i = 0; i < ASPECT_COLUMNS; i++) {
+    // Column samples stay inside the rectangle, so their neighbors do too.
+    const x = x0 + ((x1 - x0) * (i + 0.5)) / ASPECT_COLUMNS;
+    for (let j = 0; j <= ASPECT_ROWS; j++) {
+      const y = y0 + ((y1 - y0) * j) / ASPECT_ROWS;
+      const width = distance(pixelToMap(x + 0.5, y), pixelToMap(x - 0.5, y));
+      const height = distance(pixelToMap(x, y + 0.5), pixelToMap(x, y - 0.5));
+      scale = Math.max(scale, width / height);
+    }
+  }
+  return Number.isFinite(scale) && scale > 0 ? Math.min(1, scale) : 1;
 }
 
 /**

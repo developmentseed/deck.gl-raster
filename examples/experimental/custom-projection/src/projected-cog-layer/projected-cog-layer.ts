@@ -298,16 +298,19 @@ export class ProjectedCOGLayer<
     const rasterLayer = new RasterLayer(
       this.getSubLayerProps({
         id: `${props.id}-raster`,
-        width,
         height,
         // Passing `image: undefined` explicitly causes a black flash; see
         // RasterTileLayer.
         ...(image !== undefined && { image }),
         renderPipeline,
         maxError,
+        // `width` only sizes the pixel grid the mesh is refined on; stretching
+        // it with the transforms reweighs column error without changing the
+        // mesh's UVs. See `ProjectedTileMetadata.meshXScale`.
+        width: width * tile.meshXScale,
         reprojectionFns: {
-          forwardTransform: tile.forwardTransform,
-          inverseTransform: tile.inverseTransform,
+          forwardTransform: tile.meshForwardTransform,
+          inverseTransform: tile.meshInverseTransform,
           forwardReproject: projection.sourceToMap,
           inverseReproject: tile.inverseReproject,
         },

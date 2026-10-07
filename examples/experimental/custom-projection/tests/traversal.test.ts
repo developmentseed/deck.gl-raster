@@ -115,6 +115,7 @@ describe("pole guard", () => {
       ],
       fromBounds: undefined,
     });
-    expect(rect?.[1]).toBeCloseTo(1, 9);
+    // Meshing stops at 89.5°: half a degree of the tile's 40° over 512 rows.
+    expect(rect?.[1]).toBeCloseTo(6.4, 9);
   });
 });
