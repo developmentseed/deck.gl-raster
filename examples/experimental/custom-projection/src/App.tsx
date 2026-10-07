@@ -22,7 +22,6 @@ import type { DebugState } from "deck.gl-raster-examples-shared";
 import {
   ControlPanel,
   DebugControls,
-  ExternalLink,
   Field,
   loadingWidgetProps,
 } from "deck.gl-raster-examples-shared";
@@ -57,8 +56,6 @@ import { PROJECTIONS } from "./projections.js";
 
 /** The world-coordinate CRS of every view: WGS84 longitude/latitude. */
 const FROM_CRS = "EPSG:4326";
-
-const UPSTREAM_PR_URL = "https://github.com/visgl/deck.gl/pull/10741";
 
 /**
  * Optional starting state from the URL, e.g.
@@ -418,19 +415,7 @@ export default function App() {
                   : "—"}
               </Code>
             </Text>
-            <Text mt="1" wordBreak="break-all">
-              <Code fontSize="2xs">{preset.toCrs}</Code>
-            </Text>
           </Box>
-
-          <Text fontSize="xs" color="gray.600">
-            The view is a stand-in for deck.gl's experimental{" "}
-            <ExternalLink href={UPSTREAM_PR_URL}>
-              CustomProjectionView
-            </ExternalLink>
-            , merged for deck.gl v10. It takes the same proj4 converter and view
-            state, so moving to the official view is mostly an import change.
-          </Text>
 
           <Text fontSize="xs" color="gray.500">
             Raster:{" "}
