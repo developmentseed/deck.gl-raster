@@ -49,8 +49,7 @@ export const OVERLAYS: Overlay[] = [
     // Contains the South Pole, so it only renders in the Antarctic projection
     // (see `Dataset.projections`).
     projections: ["antarctic"],
-    description:
-      "Ice flow speed at 120 m from ITS_LIVE, natively in Antarctic Polar Stereographic.",
+    description: "Ice flow speed, natively in Antarctic Polar Stereographic.",
     ...ITS_LIVE_ATTRIBUTION,
   },
   {
@@ -60,8 +59,7 @@ export const OVERLAYS: Overlay[] = [
     // Stops short of the North Pole and the antimeridian, so it also renders
     // in the world projections; it is outside the Antarctic one.
     projections: ["arctic", "equal-earth", "web-mercator"],
-    description:
-      "Ice flow speed at 120 m from ITS_LIVE, natively in Arctic Polar Stereographic.",
+    description: "Ice flow speed, natively in Arctic Polar Stereographic.",
     ...ITS_LIVE_ATTRIBUTION,
   },
 ];
