@@ -1,14 +1,19 @@
 # Custom projections (experimental)
 
-Cloud-Optimized GeoTIFFs rendered in arbitrary planar map projections,
-including polar stereographic, which Web Mercator can't show. There is no
-basemap: rasters, coastlines and graticule are all drawn by deck.gl in the
+Cloud-Optimized GeoTIFFs rendered in arbitrary planar map projections.
+
+Rasters, coastlines and graticule are all drawn by deck.gl in the
 map's own CRS.
 
 > [!WARNING]
-> Experimental. This example demonstrates what's possible ahead of official
-> support in deck.gl; its architecture hasn't been reviewed and it may change
-> or be withdrawn.
+> This example is experimental.
+>
+> This is intended to demonstrate how deck.gl-raster will support custom projections in the future once deck.gl v10 is released.
+>
+> See [visgl/deck.gl#10739](https://github.com/visgl/deck.gl/issues/10739) for
+> more information.
+
+To view locally:
 
 ```bash
 pnpm install
@@ -16,85 +21,6 @@ pnpm build
 cd examples/experimental/custom-projection
 pnpm dev
 ```
-
-Projections: Arctic Polar Stereographic (EPSG:3413), Antarctic Polar
-Stereographic (EPSG:3031), Equal Earth (EPSG:8857), and Web Mercator through
-the same pipeline for comparison. Rasters: GEBCO 2026 global elevation
-(EPSG:4326, reprojected on the fly), the NASA Explorer Base Map (natively
-EPSG:3031), and EOxCloudless 2024 (EPSG:4326). Overlay: ITS_LIVE ice
-velocity for Antarctica (EPSG:3031) and Greenland (EPSG:3413). Each source
-keeps its own CRS and is reprojected into the map's on the GPU.
-
-Views can be bookmarked with URL parameters (`projection`, `raster`,
-`overlay`, `center` as `lng,lat`, `zoom`):
-
-| View | Query |
-| --- | --- |
-| Arctic bathymetry and topography | `?projection=arctic` |
-| Greenland ice flow over GEBCO | `?projection=arctic&overlay=itslive-greenland&center=-62,72&zoom=4.2` |
-| Antarctica, native EPSG:3031 data | `?projection=antarctic&raster=nasa-antarctic&overlay=itslive-antarctica` |
-| Svalbard close-up | `?center=15,79&zoom=6` |
-| Equal Earth world | `?projection=equal-earth` |
-
-## How it works
-
-deck.gl merged experimental support for custom projections in
-[visgl/deck.gl#10741](https://github.com/visgl/deck.gl/pull/10741)
-(`_CustomProjectionView`, tracked in
-[#10739](https://github.com/visgl/deck.gl/issues/10739)). It will ship with
-deck.gl v10; deck.gl-raster is on 9.4. This example has three parts:
-
-- **`src/custom-projection/`**: a stand-in for `_CustomProjectionView` built
-  on deck.gl 9.4's `OrthographicView`. It takes the same options (a proj4
-  converter as `projection`, `fromCrs`, `toCrs`, `fromBounds`) and the same
-  `{center: [lng, lat], zoom}` view state. Its common space, zoom levels and
-  `preproject` / `postUnproject` / `projectFlat` / `projectionSignature`
-  match upstream's.
-- **`src/projected-cog-layer/`**: `ProjectedCOGLayer`, a `COGLayer` that
-  also works in a custom-projection view. It selects tiles in the map's CRS
-  (`CustomProjectionTileset2D`) and has `RasterLayer` reproject each tile
-  straight into map meters, drawn with `coordinateSystem: "cartesian"`. That
-  is upstream's convention for preprojected positions. It only uses viewport
-  members upstream's viewport also has, and takes the projection's domain as
-  a `fromBounds` prop, since upstream doesn't expose it. In any other view it
-  behaves like a plain `COGLayer`.
-- **`src/context-layers.ts`**: coastlines, graticule and the projection's
-  outline, projected on the CPU into map meters.
-
-Source pixels are mapped to the view through lng/lat, by composing the COG's
-`projectTo4326` with the view's converter. The layer never needs a proj4
-definition of the map CRS, only the converter the view already has.
-
-## Moving to deck.gl's `_CustomProjectionView`
-
-Once deck.gl v10 ships, two changes are needed, and they must land together:
-
-1. **In this example**, replace the shim import in `App.tsx`:
-
-   ```ts
-   import { _CustomProjectionView as CustomProjectionView } from "@deck.gl/core";
-   ```
-
-   Then delete `src/custom-projection/`. Move `pixelToWorld` (the cursor
-   readout) into `App.tsx`, since it only uses members both viewports share.
-   The tests build projection contexts from the shim's viewport, so port them
-   to `_CustomProjectionViewport` or drop them. The layers already get the
-   projection's domain through their `fromBounds` prop, which upstream's
-   viewport doesn't expose.
-2. **In deck.gl-raster**, detect the globe with `instanceof GlobeViewport`
-   rather than `viewport.resolution !== undefined` (in `RasterLayer` and
-   `RasterTileLayer`). Upstream's viewport sets `resolution = 0`. Without this
-   change, `RasterLayer` would take its globe-only path, which meshes a uniform
-   grid and ignores the seed that trims tiles at the domain edge and the poles.
-   Geographic tiles at the poles would then render broken.
-
-Upstream also adds pitch and bearing. Tile culling already uses the camera
-frustum, but the level-of-detail test assumes a top-down camera.
-
-Longer term, `ProjectedCOGLayer`'s logic belongs in deck.gl-raster itself,
-as a third mode next to Web Mercator and globe in `RasterTileset2D` and
-`RasterTileLayer`. Then `COGLayer`, `ZarrLayer` and `MultiCOGLayer` would all
-work in a custom-projection view.
 
 ## Limitations
 
