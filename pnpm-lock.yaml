@@ -392,6 +392,85 @@ importers:
         specifier: ^8.3.1
         version: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0)
 
+  examples/experimental/custom-projection:
+    dependencies:
+      '@chakra-ui/react':
+        specifier: ^3.37.0
+        version: 3.37.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@deck.gl/core':
+        specifier: ^9.4.0
+        version: 9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
+      '@deck.gl/geo-layers':
+        specifier: ^9.4.0
+        version: 9.4.0(1911ea764947fb8f33e4dca0f8034ddd)
+      '@deck.gl/layers':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
+      '@deck.gl/mesh-layers':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
+      '@deck.gl/react':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@deck.gl/widgets@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
+      '@developmentseed/deck.gl-geotiff':
+        specifier: workspace:^
+        version: link:../../../packages/deck.gl-geotiff
+      '@developmentseed/deck.gl-raster':
+        specifier: workspace:^
+        version: link:../../../packages/deck.gl-raster
+      '@developmentseed/geotiff':
+        specifier: workspace:^
+        version: link:../../../packages/geotiff
+      '@developmentseed/raster-reproject':
+        specifier: workspace:^
+        version: link:../../../packages/raster-reproject
+      '@luma.gl/core':
+        specifier: ^9.4.2
+        version: 9.4.2
+      '@math.gl/core':
+        specifier: ^4.1.0
+        version: 4.1.0
+      '@math.gl/culling':
+        specifier: ^4.1.0
+        version: 4.1.0
+      '@math.gl/web-mercator':
+        specifier: ^4.1.0
+        version: 4.1.0
+      deck.gl-raster-examples-shared:
+        specifier: workspace:*
+        version: link:../../_shared
+      proj4:
+        specifier: ^2.22.0
+        version: 2.22.0(geotiff@3.0.5)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.0(react@19.3.0)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.1
+        version: 6.1.1(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0))
+      gh-pages:
+        specifier: ^6.3.0
+        version: 6.3.0
+      vite:
+        specifier: ^8.3.1
+        version: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0)
+      vitest:
+        specifier: ^5.0.2
+        version: 5.0.2(@types/node@26.6.3)(happy-dom@20.0.11)(jsdom@30.1.1(@noble/hashes@1.8.0))(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0))
+
   examples/land-cover:
     dependencies:
       '@chakra-ui/react':
@@ -2360,6 +2439,14 @@ packages:
     peerDependencies:
       '@deck.gl/core': ^9.4.0
       '@luma.gl/core': ^9.4.2
+  '@deck.gl/react@9.4.0':
+    resolution: {integrity: sha512-bDzQB4qJguHfrb/8sxS/YDMwoKAGGIp3cyw7vAbnwzkyZ/uoGTH4EMHJfATtxjI8d1eZYuzqxD/P6yE21UjJZA==}
+    peerDependencies:
+      '@deck.gl/core': ^9.4.0
+      '@deck.gl/widgets': ^9.4.0
+      react: '>=16.3.0'
+      react-dom: '>=16.3.0'
+
       '@luma.gl/engine': ^9.4.2
       '@luma.gl/gltf': ^9.4.2
       '@luma.gl/shadertools': ^9.4.2
@@ -11077,6 +11164,13 @@ snapshots:
       '@luma.gl/engine': 9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
       '@luma.gl/gltf': 9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
       '@luma.gl/shadertools': 9.4.2(@luma.gl/core@9.4.2)
+  '@deck.gl/react@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@deck.gl/widgets@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      '@deck.gl/core': 9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
+      '@deck.gl/widgets': 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+
       '@math.gl/core': 4.1.0
       '@math.gl/culling': 4.1.0
       '@math.gl/web-mercator': 4.1.0
