@@ -163,6 +163,30 @@ const zarrExamples: Example[] = [
   },
 ];
 
+/**
+ * Examples published to show what deck.gl-raster makes possible, before their
+ * architecture has been reviewed and endorsed.
+ *
+ * Their sources live under `examples/experimental/`, but their `href` omits
+ * that segment — the published URL must not change when an example graduates,
+ * so promotion is a pure `git mv`.
+ */
+const experimentalExamples: Example[] = [
+  {
+    title: "Custom Projections",
+    description: (
+      <>
+        Render COGs in polar stereographic, Equal Earth, and other map
+        projections. A preview of deck.gl v10's custom projection support.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/custom-projection/",
+    image: "/deck.gl-raster/img/custom-projection-antarctica-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/custom-projection",
+  },
+];
+
 function ExampleCard({
   title,
   description,
@@ -229,6 +253,17 @@ export default function Examples(): ReactNode {
           <Heading as="h2">Zarr Examples</Heading>
           <div className={styles.grid}>
             {zarrExamples.map((ex) => (
+              <ExampleCard key={ex.title} {...ex} />
+            ))}
+          </div>
+          <Heading as="h2">Experimental Examples</Heading>
+          <p className={styles.intro}>
+            These demonstrate what deck.gl-raster makes possible, but their
+            architecture has not been reviewed and endorsed. Treat them as
+            demonstrations rather than patterns to copy.
+          </p>
+          <div className={styles.grid}>
+            {experimentalExamples.map((ex) => (
               <ExampleCard key={ex.title} {...ex} />
             ))}
           </div>

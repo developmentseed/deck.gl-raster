@@ -8,6 +8,16 @@ These examples are intended to show **how to use deck.gl-raster, specifically**.
 
 The **UI design** is entirely LLM generated and should not be learned from.
 
+## Experimental examples
+
+[`experimental/`](experimental/) holds examples published to show what
+`deck.gl-raster` makes possible, before their architecture has been reviewed and
+endorsed. Unlike the examples above, they are **not** intended for learning or
+reuse — they may change substantially or be withdrawn.
+
+Each one is badged as experimental in the app and listed in its own section on
+the docs examples page.
+
 ## Running an example
 
 ```sh
