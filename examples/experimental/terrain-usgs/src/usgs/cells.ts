@@ -40,10 +40,17 @@ type CellShape = {
  */
 export const CELLS = [
   {
+    // Phantom Ranch, where the Colorado River runs through the Granite Gorge.
+    // Picked over the neighbouring South Rim cell (`x39y400`), which is only
+    // ~35% covered and renders as islands of terrain in a void — lidar
+    // acquisition followed the canyon, not the plateau. This cell is ~97%
+    // covered, and is the largest file in the project at 328 MB.
     id: "grand-canyon",
-    label: "Grand Canyon — South Rim, AZ",
-    url: `${BASE_URL}/AZ_GrandCanyonNP_2019_B19/TIFF/USGS_1M_12_x39y400_AZ_GrandCanyonNP_2019_B19.tif`,
-    elevationRange: [750, 2250],
+    label: "Grand Canyon — Phantom Ranch, AZ",
+    url: `${BASE_URL}/AZ_GrandCanyonNP_2019_B19/TIFF/USGS_1M_12_x40y400_AZ_GrandCanyonNP_2019_B19.tif`,
+    // Measured from the coarsest overview: the river sits at 734 m and the rim
+    // reaches 2285 m.
+    elevationRange: [730, 2290],
   },
   {
     id: "zion",

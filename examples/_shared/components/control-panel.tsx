@@ -42,6 +42,16 @@ export interface ControlPanelProps {
   /** Panel width (any CSS length / Chakra size). Defaults to `"350px"`. */
   width?: string;
   /**
+   * Marks the example as experimental, showing an "EXPERIMENTAL" badge beside
+   * the title and a short caveat beneath it.
+   *
+   * Set this on every example under `examples/experimental/` — those are
+   * published to demonstrate what deck.gl-raster makes possible, but their
+   * architecture has not been reviewed and may change or be withdrawn.
+   * Defaults to `false`.
+   */
+  experimental?: boolean;
+  /**
    * Documentation URL for the footer "Documentation ↗" link. Defaults to the
    * deck.gl-raster docs site.
    */
@@ -70,6 +80,7 @@ export function ControlPanel({
   width = "350px",
   docsHref = DEFAULT_DOCS_URL,
   sourcePath,
+  experimental = false,
   children,
 }: ControlPanelProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -104,9 +115,29 @@ export function ControlPanel({
         p="0"
         m="0"
       >
-        <Heading as="h2" size="md">
-          {title}
-        </Heading>
+        <Flex alignItems="center" gap="2" wrap="wrap">
+          <Heading as="h2" size="md">
+            {title}
+          </Heading>
+          {experimental ? (
+            <chakra.span
+              fontSize="2xs"
+              fontWeight="bold"
+              letterSpacing="wide"
+              textTransform="uppercase"
+              color="orange.800"
+              bg="orange.100"
+              borderWidth="1px"
+              borderColor="orange.300"
+              borderRadius="sm"
+              px="1.5"
+              py="0.5"
+              whiteSpace="nowrap"
+            >
+              Experimental
+            </chakra.span>
+          ) : null}
+        </Flex>
         <chakra.span
           fontSize="xs"
           transition="transform 0.2s"
@@ -117,6 +148,23 @@ export function ControlPanel({
       </chakra.button>
       {open ? (
         <Box mt="3" fontSize="sm">
+          {experimental ? (
+            <Box
+              mb="3"
+              p="2"
+              fontSize="xs"
+              color="orange.900"
+              bg="orange.50"
+              borderLeftWidth="3px"
+              borderColor="orange.400"
+              borderRadius="sm"
+            >
+              This example is <strong>experimental</strong>. It shows what
+              deck.gl-raster makes possible, but its architecture has not been
+              reviewed — treat it as a demonstration rather than a pattern to
+              copy.
+            </Box>
+          ) : null}
           {children}
         </Box>
       ) : null}

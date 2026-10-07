@@ -124,6 +124,31 @@ const zarrExamples: Example[] = [
   },
 ];
 
+/**
+ * Examples published to show what deck.gl-raster makes possible, before their
+ * architecture has been reviewed and endorsed.
+ *
+ * Their sources live under `examples/experimental/`, but their `href` omits
+ * that segment — the published URL must not change when an example graduates,
+ * so promotion is a pure `git mv`.
+ */
+const experimentalExamples: Example[] = [
+  {
+    title: "GPU Hillshade — USGS 3DEP",
+    description: (
+      <>
+        Compute hillshade, slope, and tinted relief on the GPU from USGS 3DEP
+        1-meter lidar elevation, with an interactive sun angle. Uses a custom
+        convolutional shader module and a one-texel tile halo to avoid seams.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/terrain-usgs/",
+    image: "/deck.gl-raster/img/hillshade-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/terrain-usgs",
+  },
+];
+
 function ExampleCard({
   title,
   description,
@@ -190,6 +215,18 @@ export default function Examples(): ReactNode {
           <Heading as="h2">Zarr Examples</Heading>
           <div className={styles.grid}>
             {zarrExamples.map((ex) => (
+              <ExampleCard key={ex.title} {...ex} />
+            ))}
+          </div>
+          <Heading as="h2">Experimental Examples</Heading>
+          <p className={styles.intro}>
+            These demonstrate what deck.gl-raster makes possible, but their
+            architecture has not been reviewed and endorsed. Treat them as
+            demonstrations rather than patterns to copy — they may change
+            substantially or be withdrawn.
+          </p>
+          <div className={styles.grid}>
+            {experimentalExamples.map((ex) => (
               <ExampleCard key={ex.title} {...ex} />
             ))}
           </div>

@@ -163,9 +163,12 @@ export default function App() {
       <MaplibreMap
         ref={mapRef}
         initialViewState={{
-          longitude: -112.14,
-          latitude: 36.06,
-          zoom: 10,
+          // Phantom Ranch, matching the default cell. `onGeoTIFFLoad` fits to
+          // the file's real bounds once it opens; this just avoids a first
+          // frame pointed somewhere else.
+          longitude: -112.095,
+          latitude: 36.1,
+          zoom: 11,
           pitch: 0,
           bearing: 0,
         }}
@@ -180,7 +183,8 @@ export default function App() {
 
       <ControlPanel
         title="GPU Hillshade — USGS 3DEP"
-        sourcePath="examples/terrain-usgs"
+        sourcePath="examples/experimental/terrain-usgs"
+        experimental
       >
         <Text mb="3" color="gray.600">
           Slope and relief shading computed on the GPU from{" "}
