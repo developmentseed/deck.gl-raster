@@ -305,10 +305,27 @@ export default function App() {
         sourcePath="examples/experimental/custom-projection"
       >
         <Text mb="3" color="gray.600">
-          Cloud-Optimized GeoTIFFs reprojected on the GPU into any planar
-          projection — here polar stereographic, which Web Mercator can't show.
-          No basemap: everything is drawn by deck.gl in the map's own CRS.
+          Cloud-Optimized GeoTIFFs reprojected on the GPU into{" "}
+          <strong>custom projections</strong>. There's no basemap here because
+          Maplibre doesn't support custom projections; everything is drawn by
+          deck.gl.
         </Text>
+
+        <Box
+          mb="3"
+          p="2"
+          fontSize="xs"
+          color="orange.900"
+          bg="orange.50"
+          borderLeftWidth="3px"
+          borderColor="orange.400"
+          borderRadius="sm"
+        >
+          This is an <strong>experimental preview</strong> of functionality that
+          deck.gl-raster will support once deck.gl v10 is released. Until then
+          it relies on an interim stand-in for deck.gl's custom projection view
+          and may change.
+        </Box>
 
         <Stack gap="3">
           <Field label="Projection">
