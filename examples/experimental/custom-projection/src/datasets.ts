@@ -56,8 +56,7 @@ export const DATASETS: Dataset[] = [
     title: "GEBCO 2026 elevation (global)",
     url: `${SOURCE_COOP_S3}/ausantarctic/gebco/GEBCO_2026.tif`,
     kind: "elevation",
-    description:
-      "Global land and ocean-floor elevation in EPSG:4326, reprojected on the fly into the map's projection — including both poles.",
+    description: "Global land and ocean-floor elevation in EPSG:4326.",
     attribution: "GEBCO Compilation Group (2026) GEBCO 2026 Grid",
     attributionUrl: "https://www.gebco.net/",
   },
@@ -78,8 +77,7 @@ export const DATASETS: Dataset[] = [
     title: "EOxCloudless 2024 (global)",
     url: "https://s3.us-east-1.amazonaws.com/ds-deck.gl-raster-public/cog/viewing-basic_s2cloudless-2024_geodetic-zoom-3_3bands_8bit.tif",
     kind: "rgb",
-    description:
-      "Cloudless Sentinel-2 mosaic in EPSG:4326. Sentinel-2 doesn't image the high Arctic or the open Southern Ocean, so expect holes there.",
+    description: "Cloudless Sentinel-2 mosaic in EPSG:4326.",
     attribution:
       "EOxCloudless by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2024), CC BY-NC-SA 4.0",
     attributionUrl: "https://cloudless.eox.at",

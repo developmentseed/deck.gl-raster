@@ -41,8 +41,7 @@ export const PROJECTIONS: ProjectionPreset[] = [
     fromBounds: [-180, -20, 180, 90],
     initialViewState: { center: [-135, 68.2, 0], zoom: 2.6 },
     graticuleStep: { lng: 30, lat: 10 },
-    description:
-      "NSIDC Sea Ice Polar Stereographic North — the standard grid for Arctic sea ice and Greenland data.",
+    description: "",
   },
   {
     id: "antarctic",
@@ -53,8 +52,7 @@ export const PROJECTIONS: ProjectionPreset[] = [
     fromBounds: [-180, -90, 180, 20],
     initialViewState: { center: [-90, -71, 0], zoom: 2.8 },
     graticuleStep: { lng: 30, lat: 10 },
-    description:
-      "The standard grid for Antarctic data (REMA, BedMachine, MEaSUREs).",
+    description: "",
   },
   {
     id: "equal-earth",
@@ -65,7 +63,7 @@ export const PROJECTIONS: ProjectionPreset[] = [
     fromBounds: [-180, -90, 180, 90],
     initialViewState: { center: [-70, 0, 0], zoom: 1 },
     graticuleStep: { lng: 30, lat: 30 },
-    description: "An equal-area world projection.",
+    description: "",
   },
   {
     id: "web-mercator",
