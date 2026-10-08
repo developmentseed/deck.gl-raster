@@ -37,6 +37,12 @@ export interface OoklaFileInfo {
   numColumnsRead: number;
   /** Number of columns in the file. */
   numColumns: number;
+  /** Number of row groups, the smallest unit the file can be read in. */
+  numRowGroups: number;
+  /** Rows in the largest row group. */
+  maxRowGroupRows: number;
+  /** Compressed bytes of the columns we read in the largest row group. */
+  maxRowGroupBytesToRead: number;
 }
 
 /** One Parquet row group, ready to hand to a `GeoArrowScatterplotLayer`. */
@@ -127,16 +133,25 @@ function summarize(file: ParquetFile): OoklaFileInfo {
   let bytesToRead = 0;
   let totalBytes = 0;
   let numColumns = 0;
+  let maxRowGroupRows = 0;
+  let maxRowGroupBytesToRead = 0;
   for (const rowGroup of metadata.rowGroups()) {
     numRows += rowGroup.numRows();
     numColumns = rowGroup.numColumns();
+    maxRowGroupRows = Math.max(maxRowGroupRows, rowGroup.numRows());
+    let rowGroupBytesToRead = 0;
     for (const column of rowGroup.columns()) {
       const size = column.compressedSize();
       totalBytes += size;
       if (COLUMNS.includes(column.columnPath().join("."))) {
-        bytesToRead += size;
+        rowGroupBytesToRead += size;
       }
     }
+    bytesToRead += rowGroupBytesToRead;
+    maxRowGroupBytesToRead = Math.max(
+      maxRowGroupBytesToRead,
+      rowGroupBytesToRead,
+    );
   }
   return {
     numRows,
@@ -144,6 +159,9 @@ function summarize(file: ParquetFile): OoklaFileInfo {
     totalBytes,
     numColumnsRead: COLUMNS.length,
     numColumns,
+    numRowGroups: metadata.numRowGroups(),
+    maxRowGroupRows,
+    maxRowGroupBytesToRead,
   };
 }
 

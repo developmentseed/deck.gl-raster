@@ -156,6 +156,7 @@ export default function App() {
   );
 
   const numLoaded = batches.reduce((sum, { batch }) => sum + batch.numRows, 0);
+  const isLoading = loadSeconds === null && error === null;
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -236,6 +237,31 @@ export default function App() {
                   }`
                 : "Opening Parquet file…"}
           </Text>
+
+          {fileInfo ? (
+            // Highlighted while the points download, since that's when the
+            // file layout is felt.
+            <Box
+              p="2"
+              fontSize="xs"
+              borderLeftWidth="3px"
+              borderRadius="sm"
+              color={isLoading ? "orange.900" : "gray.700"}
+              bg={isLoading ? "orange.50" : "gray.50"}
+              borderColor={isLoading ? "orange.400" : "gray.300"}
+            >
+              Ookla's file isn't chunked for visualization: its{" "}
+              {numberFormat.format(fileInfo.numRows)} rows sit in just{" "}
+              {fileInfo.numRowGroups} row groups of up to{" "}
+              {numberFormat.format(fileInfo.maxRowGroupRows)} rows, each
+              covering a large part of the world. Nothing can be drawn until a
+              whole row group (up to{" "}
+              {formatMegabytes(fileInfo.maxRowGroupBytesToRead)}) has
+              downloaded, and there's no way to fetch only the area in view.
+              Smaller, spatially sorted row groups would let points stream in
+              progressively.
+            </Box>
+          ) : null}
 
           <Field
             label={`Download speed: ${minMbps === null ? "0" : formatMbps(minMbps)}–${
