@@ -14,6 +14,9 @@ export function ExternalLink({ href, children }: ExternalLinkProps) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
+      // Chakra's Link defaults to inline-flex, so a link that wraps becomes a
+      // full-width box and pushes any punctuation after it onto the next line.
+      display="inline"
       color="brand.600"
       textDecorationLine="underline"
       textUnderlineOffset="2px"

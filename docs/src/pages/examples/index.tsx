@@ -209,6 +209,19 @@ const experimentalExamples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/custom-projection",
   },
+  {
+    title: "GeoArrow Overlay",
+    description: (
+      <>
+        3.4 million GeoArrow points, streamed from Parquet with parquet-wasm,
+        over a global imagery COG.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/geoarrow-overlay/",
+    image: "/deck.gl-raster/img/geoarrow-overlay-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/geoarrow-overlay",
+  },
 ];
 
 function ExampleCard({
