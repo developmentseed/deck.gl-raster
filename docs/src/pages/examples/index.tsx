@@ -283,8 +283,6 @@ export default function Examples(): ReactNode {
           <Heading as="h2">Explainers</Heading>
           <p className={styles.intro}>
             Animated explanations of how deck.gl-raster works under the hood.
-            Their code hasn't been reviewed, so treat them as explanations
-            rather than patterns to copy.
           </p>
           <div className={styles.grid}>
             {explainerExamples.map((ex) => (
