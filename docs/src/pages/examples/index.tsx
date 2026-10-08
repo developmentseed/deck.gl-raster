@@ -198,6 +198,24 @@ const experimentalExamples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/geoarrow-overlay",
   },
+  {
+    title: "Titiler Tiles",
+    description: (
+      <>
+        Render NumPy array tiles from a{" "}
+        <Link to="https://developmentseed.org/titiler/">titiler</Link> server
+        with{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-raster/classes/RasterTileLayer/">
+          RasterTileLayer
+        </Link>
+        .
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/titiler-cog/",
+    image: "/deck.gl-raster/img/titiler-cog-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/titiler-cog",
+  },
 ];
 
 /**
