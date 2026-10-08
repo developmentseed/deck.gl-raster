@@ -24,7 +24,7 @@
     "@math.gl/polygon": "^4.1.0",
     "apache-arrow": "^21.1.0",
     "deck.gl-raster-examples-shared": "workspace:*",
-    "maplibre-gl": "^5.24.0",
+    "maplibre-gl": "^6.12.0",
     "parquet-wasm": "^0.9.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
