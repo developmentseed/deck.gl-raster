@@ -164,30 +164,6 @@ const zarrExamples: Example[] = [
 ];
 
 /**
- * Animated explanations of how deck.gl-raster works internally. Their code is
- * unreviewed and not meant as a pattern to copy.
- *
- * Their sources live under `examples/explainers/`, but their `href` omits that
- * segment, like the experimental examples.
- */
-const explainerExamples: Example[] = [
-  {
-    title: "Reprojection Explainer",
-    description: (
-      <>
-        A step-by-step animation of how deck.gl-raster reprojects a raster on
-        the GPU: cutting it into triangles, refining them where the distortion
-        is largest, and stretching the image inside each one.
-      </>
-    ),
-    href: "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/",
-    image: "/deck.gl-raster/img/reprojection-explainer-examples-card.jpg",
-    source:
-      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/explainers/reprojection-explainer",
-  },
-];
-
-/**
  * Examples published to show what deck.gl-raster makes possible, before their
  * architecture has been reviewed and endorsed.
  *
@@ -221,6 +197,30 @@ const experimentalExamples: Example[] = [
     image: "/deck.gl-raster/img/geoarrow-overlay-example-card.jpg",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/geoarrow-overlay",
+  },
+];
+
+/**
+ * Animated explanations of how deck.gl-raster works internally. Their code is
+ * unreviewed and not meant as a pattern to copy.
+ *
+ * Their sources live under `examples/explainers/`, but their `href` omits that
+ * segment, like the experimental examples.
+ */
+const explainerExamples: Example[] = [
+  {
+    title: "Reprojection Explainer",
+    description: (
+      <>
+        A step-by-step animation of how deck.gl-raster reprojects a raster on
+        the GPU: cutting it into triangles, refining them where the distortion
+        is largest, and stretching the image inside each one.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/",
+    image: "/deck.gl-raster/img/reprojection-explainer-examples-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/explainers/reprojection-explainer",
   },
 ];
 
@@ -293,15 +293,6 @@ export default function Examples(): ReactNode {
               <ExampleCard key={ex.title} {...ex} />
             ))}
           </div>
-          <Heading as="h2">Explainers</Heading>
-          <p className={styles.intro}>
-            Animated explanations of how deck.gl-raster works under the hood.
-          </p>
-          <div className={styles.grid}>
-            {explainerExamples.map((ex) => (
-              <ExampleCard key={ex.title} {...ex} />
-            ))}
-          </div>
           <Heading as="h2">Experimental Examples</Heading>
           <p className={styles.intro}>
             These demonstrate what deck.gl-raster makes possible, but their
@@ -310,6 +301,15 @@ export default function Examples(): ReactNode {
           </p>
           <div className={styles.grid}>
             {experimentalExamples.map((ex) => (
+              <ExampleCard key={ex.title} {...ex} />
+            ))}
+          </div>
+          <Heading as="h2">Explainers</Heading>
+          <p className={styles.intro}>
+            Animated explanations of how deck.gl-raster works under the hood.
+          </p>
+          <div className={styles.grid}>
+            {explainerExamples.map((ex) => (
               <ExampleCard key={ex.title} {...ex} />
             ))}
           </div>
