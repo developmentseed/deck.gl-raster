@@ -18,6 +18,15 @@ reuse — they may change substantially or be withdrawn.
 Each one is badged as experimental in the app and listed in its own section on
 the docs examples page.
 
+## Explainers
+
+[`explainers/`](explainers/) holds animated explanations of how
+`deck.gl-raster` works internally, such as how it reprojects rasters with a
+triangle mesh. Their code is LLM-generated and unreviewed: like the
+experimental examples, they are **not** intended for learning or reuse.
+
+They are listed in their own section on the docs examples page.
+
 ## Running an example
 
 ```sh

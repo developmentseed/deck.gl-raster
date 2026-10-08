@@ -193,7 +193,8 @@ on their own, without a narrator:
 
 ### Where it lives
 
-A new example at `examples/reprojection-explainer` on branch
+An explainer (its code is unreviewed) at
+`examples/explainers/reprojection-explainer` on branch
 `kyle/reprojection-explainer`, with the standard scaffold (Vite, React,
 `deck.gl-raster-examples-shared`). It uses the imperative `Deck` class, so no
 new `@deck.gl/react` dependency. It adds `@luma.gl/engine` for the custom

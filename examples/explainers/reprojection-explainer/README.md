@@ -11,8 +11,9 @@ inside each triangle. The animation itself is drawn the same way: as textured
 triangles whose texture coordinates the GPU interpolates. Nothing reprojected
 is stored; every frame is drawn live from the source image.
 
-Unlike the other examples, this one explains the algorithm rather than showing
-how to use the library's layers: it draws with its own `TexturedTrianglesLayer`
+This is an [explainer](../../README.md#explainers): its code was generated with
+an LLM and hasn't been reviewed, so don't treat it as a pattern to copy. It
+explains the algorithm rather than showing how to use the library's layers: it draws with its own `TexturedTrianglesLayer`
 instead of `RasterLayer`, and `src/scene/refinement.ts` reads
 `RasterReprojector`'s private refinement queue to record each split.
 
@@ -57,6 +58,6 @@ because browsers ignore GDAL's `.aux.xml` sidecar.
 ```bash
 pnpm install
 pnpm build   # the example imports the workspace packages from their dist/
-cd examples/reprojection-explainer
+cd examples/explainers/reprojection-explainer
 pnpm dev
 ```

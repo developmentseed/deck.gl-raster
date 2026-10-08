@@ -21,7 +21,7 @@ export function TuningPanel({ settings, onChange }: TuningPanelProps) {
     <ControlPanel
       title="Tuning"
       position="top-left"
-      sourcePath="examples/reprojection-explainer"
+      sourcePath="examples/explainers/reprojection-explainer"
     >
       <Row text="Flight style">
         <select

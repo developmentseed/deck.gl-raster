@@ -163,6 +163,13 @@ const zarrExamples: Example[] = [
   },
 ];
 
+/**
+ * Animated explanations of how deck.gl-raster works internally. Their code is
+ * unreviewed and not meant as a pattern to copy.
+ *
+ * Their sources live under `examples/explainers/`, but their `href` omits that
+ * segment, like the experimental examples.
+ */
 const explainerExamples: Example[] = [
   {
     title: "Reprojection Explainer",
@@ -176,7 +183,7 @@ const explainerExamples: Example[] = [
     href: "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/",
     image: "/deck.gl-raster/img/reprojection-explainer-examples-card.jpg",
     source:
-      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/reprojection-explainer",
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/explainers/reprojection-explainer",
   },
 ];
 
@@ -273,7 +280,12 @@ export default function Examples(): ReactNode {
               <ExampleCard key={ex.title} {...ex} />
             ))}
           </div>
-          <Heading as="h2">How It Works</Heading>
+          <Heading as="h2">Explainers</Heading>
+          <p className={styles.intro}>
+            Animated explanations of how deck.gl-raster works under the hood.
+            Their code hasn't been reviewed, so treat them as explanations
+            rather than patterns to copy.
+          </p>
           <div className={styles.grid}>
             {explainerExamples.map((ex) => (
               <ExampleCard key={ex.title} {...ex} />

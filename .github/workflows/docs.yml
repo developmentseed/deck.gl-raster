@@ -41,14 +41,16 @@ jobs:
 
       - name: Build examples
         run: |
-          # Experimental examples live one level deeper but publish to the same
-          # flat URL space: `basename` drops the `experimental/` segment, so an
-          # example keeps its URL when it graduates out of that directory.
-          for dir in examples/*/ examples/experimental/*/; do
+          # Experimental examples and explainers live one level deeper but
+          # publish to the same flat URL space: `basename` drops the
+          # `experimental/` or `explainers/` segment, so an example keeps its
+          # URL when it moves between these directories.
+          for dir in examples/*/ examples/experimental/*/ examples/explainers/*/; do
             example=$(basename "$dir")
-            # `examples/experimental/` itself matches the first glob and has no
-            # package.json. Skip it before `node -p` runs, since the step uses
-            # `bash -e` and a failed command substitution would abort the build.
+            # `examples/experimental/` and `examples/explainers/` themselves
+            # match the first glob and have no package.json. Skip them before
+            # `node -p` runs, since the step uses `bash -e` and a failed
+            # command substitution would abort the build.
             if [ ! -f "$dir/package.json" ]; then
               echo "Skipping $example (not a package)"
               continue
