@@ -1,6 +1,7 @@
 import * as affine from "@developmentseed/affine";
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
 import { tileTransform, xy_bounds } from "@developmentseed/morecantile";
+import { overlappingTileSpan } from "./tile-span.js";
 import type {
   RasterTilesetDescriptor,
   RasterTilesetLevel,
@@ -70,7 +71,9 @@ class TileMatrixAdaptor implements RasterTilesetLevel {
    * 1. Treating each TileMatrix as an independent, axis-aligned grid in CRS space
    * 2. Mapping the parent tile's CRS bounding box into the child grid
    * 3. Returning the inclusive range of child tile indices whose spatial extent
-   *    intersects the parent tile
+   *    overlaps the parent tile. A child that only shares an edge with the
+   *    parent is excluded, so in an aligned pyramid such as WebMercatorQuad
+   *    each parent has exactly its 2×2 children.
    *
    * The returned indices are clamped to the valid extents of the child matrix
    * (`[0, matrixWidth)` and `[0, matrixHeight)`).
@@ -111,11 +114,14 @@ class TileMatrixAdaptor implements RasterTilesetLevel {
     const originY = pointOfOrigin[1];
 
     // Convert CRS bounds → tile indices
-    let minCol = Math.floor((projectedMinX - originX) / childTileWidthCRS);
-    let maxCol = Math.floor((projectedMaxX - originX) / childTileWidthCRS);
-
-    let minRow = Math.floor((originY - projectedMaxY) / childTileHeightCRS);
-    let maxRow = Math.floor((originY - projectedMinY) / childTileHeightCRS);
+    let [minCol, maxCol] = overlappingTileSpan(
+      (projectedMinX - originX) / childTileWidthCRS,
+      (projectedMaxX - originX) / childTileWidthCRS,
+    );
+    let [minRow, maxRow] = overlappingTileSpan(
+      (originY - projectedMaxY) / childTileHeightCRS,
+      (originY - projectedMinY) / childTileHeightCRS,
+    );
 
     // Clamp to matrix bounds
     minCol = Math.max(0, Math.min(matrixWidth - 1, minCol));

@@ -1010,7 +1010,28 @@ export function getTileIndices(
     root.getSelected(selectedNodes);
   }
 
-  return selectedNodes;
+  return uniqueTiles(selectedNodes);
+}
+
+/**
+ * Drop repeated tile indices, keeping the first node for each `z/x/y`.
+ *
+ * Each parent creates its own child nodes, so a tile that is a child of two
+ * parents can be selected once through each. That happens when pyramid levels
+ * are not aligned (e.g. COG overviews with odd sizes), where a child tile can
+ * straddle two parents, and in TileMatrixSets whose rounded cellSizes push a
+ * parent's edge past a child's edge.
+ */
+function uniqueTiles(nodes: RasterTileNode[]): RasterTileNode[] {
+  const seen = new Set<string>();
+  return nodes.filter((node) => {
+    const key = `${node.z}/${node.x}/${node.y}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 /**
