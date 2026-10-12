@@ -173,7 +173,7 @@ const zarrExamples: Example[] = [
  */
 const experimentalExamples: Example[] = [
   {
-    title: "Custom Projections",
+    title: "Preview: Custom Projections",
     description: (
       <>
         Render COGs in polar stereographic, Equal Earth, and other map
@@ -231,8 +231,7 @@ const explainerExamples: Example[] = [
     description: (
       <>
         A step-by-step animation of how deck.gl-raster reprojects a raster on
-        the GPU: cutting it into triangles, refining them where the distortion
-        is largest, and stretching the image inside each one.
+        the GPU.
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/",
