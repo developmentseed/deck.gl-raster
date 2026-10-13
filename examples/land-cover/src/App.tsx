@@ -49,6 +49,7 @@ export default function App() {
   const [debug, setDebug] = useState(false);
   const [debugOpacity, setDebugOpacity] = useState(0.25);
   const [meshMaxError, setMeshMaxError] = useState(0.125);
+  const [errorSpace, setErrorSpace] = useState<"source" | "target">("source");
   const [selected, setSelected] = useState<Set<number>>(
     () => new Set(ALL_NLCD_CODES),
   );
@@ -101,6 +102,7 @@ export default function App() {
     debug,
     debugOpacity,
     maxError: meshMaxError,
+    _errorSpace: errorSpace,
     epsgResolver,
     getTileData,
     renderTile,
@@ -150,11 +152,13 @@ export default function App() {
           debug={debug}
           debugOpacity={debugOpacity}
           meshMaxError={meshMaxError}
+          errorSpace={errorSpace}
           selected={selected}
           onSelectedChange={setSelected}
           onDebugChange={setDebug}
           onDebugOpacityChange={setDebugOpacity}
           onMeshMaxErrorChange={setMeshMaxError}
+          onErrorSpaceChange={setErrorSpace}
         />
       </UIOverlay>
     </div>

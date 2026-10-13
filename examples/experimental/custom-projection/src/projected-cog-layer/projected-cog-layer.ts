@@ -266,7 +266,7 @@ export class ProjectedCOGLayer<
     projection: ProjectionContext,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): Layer[] {
-    const { maxError, debug, debugOpacity } = this.props;
+    const { maxError, debug, debugOpacity, _errorSpace } = this.props;
     const tile = props.tile as Tile2DHeader<DataT> & ProjectedTileMetadata;
 
     const debugLayers: Layer[] = debug
@@ -294,6 +294,9 @@ export class ProjectedCOGLayer<
     }
     const { image, renderPipeline } = tileResult;
     const { width, height } = props.data;
+    // Target mode measures error on the map, so the column stretch that
+    // approximates that in source pixels is not applied.
+    const stretched = _errorSpace !== "target";
 
     const rasterLayer = new RasterLayer(
       this.getSubLayerProps({
@@ -304,13 +307,18 @@ export class ProjectedCOGLayer<
         ...(image !== undefined && { image }),
         renderPipeline,
         maxError,
+        _errorSpace,
         // `width` only sizes the pixel grid the mesh is refined on; stretching
         // it with the transforms reweighs column error without changing the
         // mesh's UVs. See `ProjectedTileMetadata.meshXScale`.
-        width: width * tile.meshXScale,
+        width: stretched ? width * tile.meshXScale : width,
         reprojectionFns: {
-          forwardTransform: tile.meshForwardTransform,
-          inverseTransform: tile.meshInverseTransform,
+          forwardTransform: stretched
+            ? tile.meshForwardTransform
+            : tile.forwardTransform,
+          inverseTransform: stretched
+            ? tile.meshInverseTransform
+            : tile.inverseTransform,
           forwardReproject: projection.sourceToMap,
           inverseReproject: tile.inverseReproject,
         },
