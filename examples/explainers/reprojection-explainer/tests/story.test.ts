@@ -6,9 +6,10 @@ import {
   uniqueEdges,
 } from "../src/animation/story.js";
 import { buildScene } from "../src/scene/build-scene.js";
+import { NLCD_SCENARIO } from "../src/scene/nlcd.js";
 
 // 8 px keeps the test mesh small: 100 triangles.
-const scene = buildScene({ finalMaxError: 8 });
+const scene = buildScene({ scenario: NLCD_SCENARIO, finalMaxError: 8 });
 const story = createStory(scene, DEFAULT_STORY_SETTINGS);
 
 describe("createStory", () => {
@@ -146,16 +147,16 @@ describe("createStory", () => {
 
 describe("counterText", () => {
   it("rounds large errors and converts them to kilometres", () => {
-    expect(counterText(2, 260.9)).toBe(
+    expect(counterText(2, 260.9, { kmPerPixel: 1.92 })).toBe(
       "2 triangles · max error 261 px (≈ 501 km)",
     );
   });
 
   it("keeps one decimal for small errors", () => {
-    expect(counterText(194, 4)).toBe(
+    expect(counterText(194, 4, { kmPerPixel: 1.92 })).toBe(
       "194 triangles · max error 4.0 px (≈ 8 km)",
     );
-    expect(counterText(1512, 0.5)).toBe(
+    expect(counterText(1512, 0.5, { kmPerPixel: 1.92 })).toBe(
       "1,512 triangles · max error 0.5 px (< 1 km)",
     );
   });
@@ -186,6 +187,15 @@ describe("titles and descriptions", () => {
       expect(step.title.length).toBeGreaterThan(0);
       expect(descriptionText(story.indexOf(step)).length).toBeGreaterThan(40);
     }
+  });
+
+  it("keeps the NLCD scenario's hand-written text", () => {
+    expect(descriptionText(0)).toBe(
+      "This is the image we want to render. It's stored in an Albers equal-area projection, but we want to display it in Web Mercator. Note the 49th parallel: in Albers equal-area it's curved, while in Web Mercator it's a straight line.",
+    );
+    expect(descriptionText(2)).toBe(
+      "We project the corners of each triangle to Web Mercator, then stretch the image linearly within each triangle. There's a lot of distortion, because we've only projected the corners: at the center of the image, it's 261 input pixels, or about 500 km.",
+    );
   });
 
   it("states the 2-triangle error from the recorded refinement", () => {

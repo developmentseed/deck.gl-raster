@@ -5,11 +5,11 @@ import type { Hud as HudState } from "./animation/frame.js";
 import { Player } from "./animation/player.js";
 import type { StoryStep } from "./animation/story.js";
 import { createStory, PARALLEL_COLOR } from "./animation/story.js";
-import nlcdUrl from "./assets/nlcd-albers-2500.png";
 import { frameToLayers } from "./render/frame-to-layers.js";
 import { bakedParallel, buildScene } from "./scene/build-scene.js";
 import type { SlideFit } from "./scene/layout.js";
 import { fitSlide, SLIDE_HEIGHT, SLIDE_WIDTH } from "./scene/layout.js";
+import { scenarioById } from "./scene/scenarios.js";
 import {
   composeTexture,
   createImageTexture,
@@ -24,7 +24,7 @@ import { TuningPanel } from "./ui/tuning-panel.js";
 /** Fill behind nodata pixels, so the whole image rectangle reads as a sheet. */
 const SHEET_COLOR = "#232a36";
 
-/** Width of the 49th parallel baked into the texture, in source pixels. */
+/** Width of the reference parallel baked into the texture, in source pixels. */
 const PARALLEL_WIDTH = 7;
 
 /** How long the controls stay up after the pointer last moved, in ms. */
@@ -122,9 +122,15 @@ export default function App() {
   const playerRef = useRef<Player | null>(null);
   const storyRef = useRef<StoryStep[] | null>(null);
   const textureRef = useRef<Texture | null>(null);
+  /** Scenario ids of the story and the texture: frames draw only when they match. */
+  const storyScenarioRef = useRef<string | null>(null);
+  const textureScenarioRef = useRef<string | null>(null);
 
   const [device, setDevice] = useState<Device | null>(null);
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [image, setImage] = useState<{
+    scenarioId: string;
+    element: HTMLImageElement;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -143,7 +149,14 @@ export default function App() {
 
   const { finalMaxError, flightStyle, flightMs, arcHeight, schedule, speed } =
     settings;
-  const scene = useMemo(() => buildScene({ finalMaxError }), [finalMaxError]);
+  const scenario = useMemo(
+    () => scenarioById(settings.scenario),
+    [settings.scenario],
+  );
+  const scene = useMemo(
+    () => buildScene({ scenario, finalMaxError }),
+    [scenario, finalMaxError],
+  );
   const story = useMemo(
     () => createStory(scene, { flightStyle, flightMs, arcHeight, schedule }),
     [scene, flightStyle, flightMs, arcHeight, schedule],
@@ -245,10 +258,10 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    loadImage(nlcdUrl).then(
+    loadImage(scenario.imageUrl).then(
       (loaded) => {
         if (!cancelled) {
-          setImage(loaded);
+          setImage({ scenarioId: scenario.id, element: loaded });
         }
       },
       (reason: unknown) => {
@@ -260,20 +273,21 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scenario]);
 
-  // Upload the image, with the 49th parallel baked in, once the GPU is ready.
+  // Upload the image, with its reference parallel baked in, once the GPU is
+  // ready.
   useEffect(() => {
-    if (!device || !image) {
+    if (!device || !image || image.scenarioId !== scenario.id) {
       return;
     }
     let texture: Texture;
     try {
-      const canvas = composeTexture(image, {
+      const canvas = composeTexture(image.element, {
         background: SHEET_COLOR,
         lines: [
           {
-            points: bakedParallel(),
+            points: bakedParallel(scenario),
             color: PARALLEL_COLOR,
             width: PARALLEL_WIDTH,
           },
@@ -285,14 +299,16 @@ export default function App() {
       return;
     }
     textureRef.current = texture;
+    textureScenarioRef.current = scenario.id;
     setError(null);
     return () => {
       if (textureRef.current === texture) {
         textureRef.current = null;
+        textureScenarioRef.current = null;
       }
       texture.destroy();
     };
-  }, [device, image]);
+  }, [device, image, scenario]);
 
   // A rebuilt story (after tuning) gets a new player on the same step. Steps
   // whose timing didn't change keep their place, so switching the flight
@@ -315,9 +331,10 @@ export default function App() {
       }
       playerRef.current = player;
       storyRef.current = story;
+      storyScenarioRef.current = scenario.id;
     }
     player.setSpeed(speed);
-  }, [story, speed]);
+  }, [story, speed, scenario]);
 
   // Animation loop: evaluate the current step and hand deck.gl the layers.
   useEffect(() => {
@@ -337,6 +354,10 @@ export default function App() {
       const steps = storyRef.current;
       const texture = textureRef.current;
       if (!deck || !player || !steps || !texture) {
+        return;
+      }
+      // Right after a scenario switch, the new image may still be loading.
+      if (textureScenarioRef.current !== storyScenarioRef.current) {
         return;
       }
       const index = player.stepIndex;
@@ -452,6 +473,9 @@ export default function App() {
         stepNumber={stepIndex + 1}
         title={currentStep.title}
         description={descriptions ? currentStep.description : null}
+        sourceName={scenario.sourceName}
+        targetName={scenario.targetName}
+        credit={scenario.credit}
       >
         <ControlBar
           titles={story.map((step) => step.title)}

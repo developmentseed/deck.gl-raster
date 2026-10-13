@@ -1,8 +1,8 @@
 import { ControlPanel } from "deck.gl-raster-examples-shared";
 import type { ReactNode } from "react";
 import type { FlightStyle } from "../animation/flight.js";
+import { scenarioById } from "../scene/scenarios.js";
 import type { AppSettings } from "../settings.js";
-import { FINAL_MAX_ERROR_CHOICES } from "../settings.js";
 
 /** Props of {@link TuningPanel}. */
 export type TuningPanelProps = {
@@ -43,7 +43,7 @@ export function TuningPanel({ settings, onChange }: TuningPanelProps) {
             update("finalMaxError", Number(event.target.value))
           }
         >
-          {FINAL_MAX_ERROR_CHOICES.map((px) => (
+          {scenarioById(settings.scenario).maxErrorChoices.map((px) => (
             <option key={px} value={px}>
               {px} px
             </option>

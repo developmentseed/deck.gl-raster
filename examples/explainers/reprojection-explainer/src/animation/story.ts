@@ -1,7 +1,6 @@
 import type { TriangleSoup } from "../layers/triangle-soup.js";
 import type { Scene } from "../scene/build-scene.js";
 import { LIBRARY_DEFAULT_MAX_ERROR } from "../scene/build-scene.js";
-import { NLCD_PIXEL_KM } from "../scene/nlcd.js";
 import type { ErrorSample } from "../scene/refinement.js";
 import type { FlightOptions, FlightPaths, FlightStyle } from "./flight.js";
 import { eastFirstDelays, flightDuration, flightPositions } from "./flight.js";
@@ -97,7 +96,7 @@ export type StoryStep = {
   frame(timeMs: number, options?: FrameOptions): Frame;
 };
 
-/** Colour of the 49th parallel baked into the texture. */
+/** Colour of the reference parallel baked into the texture. */
 export const PARALLEL_COLOR = "#ff5a5a";
 
 const SOURCE_EDGES: Rgba = [255, 255, 255, 200];
@@ -142,7 +141,8 @@ const DOTS_MIN_STEP_MS = 150;
  * The seven steps of the explainer, each a pure function from time to a
  * {@link Frame}:
  *
- * 1. `start`: the source image, and the true 49°N on an empty target panel.
+ * 1. `start`: the source image, and the true reference parallel on an empty
+ *    target panel.
  * 2. `cut`: the 2-triangle seed's edges appear.
  * 3. `first-attempt`: the 2 triangles fly over; the border misses the line.
  * 4. `measure`: the test points of the seed triangles and their errors.
@@ -154,7 +154,9 @@ export function createStory(
   scene: Scene,
   settings: StorySettings,
 ): StoryStep[] {
-  const { layout, record } = scene;
+  const { layout, record, scenario } = scene;
+  const counter = (triangles: number, errorPx: number) =>
+    counterText(triangles, errorPx, { kmPerPixel: scenario.kmPerPixel });
   const finalK = record.steps.length;
   const flight: FlightOptions = {
     style: settings.flightStyle,
@@ -305,7 +307,7 @@ export function createStory(
   const labels: Label[] = [
     {
       id: "parallel-source",
-      text: "49°N",
+      text: scenario.parallel.label,
       x: sourceMid[0],
       y: sourceMid[1] - 30,
       align: "center",
@@ -314,7 +316,7 @@ export function createStory(
     },
     {
       id: "parallel-target",
-      text: "49°N",
+      text: scenario.parallel.label,
       x: targetEnd[0] + 12,
       y: targetEnd[1],
       align: "left",
@@ -468,10 +470,10 @@ export function createStory(
         ]
       : [];
 
-  const finalCounter = counterText(triangleCount(finalK), maxErrorAt(finalK));
+  const finalCounter = counter(triangleCount(finalK), maxErrorAt(finalK));
   const seedErrorPx = Math.round(record.seedMaxError);
   const seedErrorKm =
-    Math.round((record.seedMaxError * NLCD_PIXEL_KM) / 10) * 10;
+    Math.round((record.seedMaxError * scenario.kmPerPixel) / 10) * 10;
   const defaultCount = scene.defaultTriangleCount.toLocaleString("en-US");
   const caption = `At the library's default tolerance (${LIBRARY_DEFAULT_MAX_ERROR} px), this image would get ${defaultCount} triangles.`;
 
@@ -479,9 +481,7 @@ export function createStory(
   const start: StoryStep = {
     id: "start",
     title: "The input image",
-    description: [
-      "This is the image we want to render. It's stored in an Albers equal-area projection, but we want to display it in Web Mercator. Note the 49th parallel: in Albers equal-area it's curved, while in Web Mercator it's a straight line.",
-    ],
+    description: scenario.introduction,
     durationMs: 0,
     frame: () => ({
       meshes: [mesh("source", soup("source", 0), withAlpha(SOURCE_EDGES, 0))],
@@ -520,9 +520,11 @@ export function createStory(
   const firstAttempt: StoryStep = {
     id: "first-attempt",
     title: "Project the corners",
-    description: [
-      `We project the corners of each triangle to Web Mercator, then stretch the image linearly within each triangle. There's a lot of distortion, because we've only projected the corners: at the center of the image, it's ${seedErrorPx} input pixels, or about ${seedErrorKm} km.`,
-    ],
+    description: scenario.firstAttempt({
+      error: seedErrorPx,
+      errorKm: seedErrorKm,
+      pixels: "input pixels",
+    }),
     durationMs: revealAt + 600,
     frame: (t) => {
       const reveal = easeInOutCubic(progress(t, revealAt, 500));
@@ -535,9 +537,7 @@ export function createStory(
         lines: [...truthLines, ...gapLine(0, reveal, pin)],
         dots: splitDots(0, reveal, pin, 0),
         hud: hud(
-          reveal > 0
-            ? counterText(triangleCount(0), record.seedMaxError)
-            : null,
+          reveal > 0 ? counter(triangleCount(0), record.seedMaxError) : null,
         ),
       };
     },
@@ -597,7 +597,7 @@ export function createStory(
           ...splitDots(0, 1, pin, 0),
         ],
         hud: {
-          ...hud(counterText(triangleCount(0), record.seedMaxError)),
+          ...hud(counter(triangleCount(0), record.seedMaxError)),
           labels: [...labels, ...errorLabels],
         },
       };
@@ -681,7 +681,7 @@ export function createStory(
             ...sampleDots(splitSamples(k), dotAlpha, dotAlpha),
             ...splitDots(k, dotAlpha, guess, 0),
           ],
-          hud: hud(counterText(triangleCount(k), step.split.error)),
+          hud: hud(counter(triangleCount(k), step.split.error)),
         };
       }
 
@@ -716,7 +716,7 @@ export function createStory(
           ],
           lines: [...truthLines, ...gapLine(k, dotAlpha, pin)],
           dots: splitDots(k, dotAlpha, pin, arrived),
-          hud: hud(counterText(triangleCount(after), step.split.error)),
+          hud: hud(counter(triangleCount(after), step.split.error)),
         };
       }
 
@@ -752,7 +752,7 @@ export function createStory(
         ],
         lines: truthLines,
         dots: settledDot,
-        hud: hud(counterText(triangleCount(after), step.maxError)),
+        hud: hud(counter(triangleCount(after), step.maxError)),
       };
     },
   };
@@ -823,10 +823,20 @@ export function createStory(
   return [start, cut, firstAttempt, measure, refine, flyOver, result];
 }
 
+/** Options for {@link counterText}. */
+export type CounterTextOptions = {
+  /** Ground size of one pixel, in km. */
+  kmPerPixel: number;
+};
+
 /** "N triangles · max error X px (≈ Y km)". */
-export function counterText(triangles: number, errorPx: number): string {
+export function counterText(
+  triangles: number,
+  errorPx: number,
+  options: CounterTextOptions,
+): string {
   const px = formatPx(errorPx);
-  const km = errorPx * NLCD_PIXEL_KM;
+  const km = errorPx * options.kmPerPixel;
   const distance =
     km < 1 ? "< 1 km" : `≈ ${Math.round(km).toLocaleString("en-US")} km`;
   return `${triangles.toLocaleString("en-US")} triangles · max error ${px} px (${distance})`;
