@@ -30,6 +30,49 @@ const SAMPLE_POINTS: [number, number, number][] = [
 const DEFAULT_MAX_ERROR = 0.125;
 
 /**
+ * Max bisection depth when unwrapping a seed vertex along the path from the
+ * previous one (see {@link RasterReprojector}'s `wrapX` option).
+ */
+const MAX_UNWRAP_DEPTH = 12;
+
+/**
+ * Shift `x` by a whole number of `period`s to the copy nearest `ref`.
+ *
+ * Standard phase unwrapping: exact whenever the true value is within
+ * `period / 2` of `ref`.
+ */
+export function snapToCopy(x: number, ref: number, period: number): number {
+  return x + Math.round((ref - x) / period) * period;
+}
+
+/**
+ * Unwrap the periodic value at the end of a path against its already-unwrapped
+ * start: `xAt(t)` gives the raw (any-copy) value at `t ∈ [0, 1]`, `x0` the
+ * unwrapped value at `t = 0`. Always samples the midpoint and bisects until
+ * each step is under a quarter period, so endpoints exactly one period apart
+ * (a 360°-wide tile) resolve correctly.
+ */
+export function unwrapAlong(
+  xAt: (t: number) => number,
+  x0: number,
+  period: number,
+  t0 = 0,
+  t1 = 1,
+  depth = 0,
+): number {
+  const tm = (t0 + t1) / 2;
+  let xm = snapToCopy(xAt(tm), x0, period);
+  if (Math.abs(xm - x0) >= period / 4 && depth < MAX_UNWRAP_DEPTH) {
+    xm = unwrapAlong(xAt, x0, period, t0, tm, depth + 1);
+  }
+  const x1 = snapToCopy(xAt(t1), xm, period);
+  if (Math.abs(x1 - xm) >= period / 4 && depth < MAX_UNWRAP_DEPTH) {
+    return unwrapAlong(xAt, xm, period, tm, t1, depth + 1);
+  }
+  return x1;
+}
+
+/**
  * A seed triangulation for {@link RasterReprojector}, in delaunator's data
  * shape. All UV coordinates must lie in `[0, 1]`. The triangulation must be a
  * valid (ideally Delaunay) mesh — its triangles are NOT legalized on seeding.
@@ -177,6 +220,12 @@ export class RasterReprojector {
    * of just the uv coordinates?
    */
   private _candidatesUV: number[];
+  /**
+   * Interpolated output x at each triangle's candidate point — the reference a
+   * new vertex's exact x is snapped to when `wrapX` is set.
+   */
+  private _candidatesOutX: number[];
+  private _wrapX: number | undefined;
   private _queueIndices: number[];
 
   private _queue: number[];
@@ -188,7 +237,20 @@ export class RasterReprojector {
     reprojectors: ReprojectionFns,
     width: number,
     height: number = width,
-    options: { initialTriangulation?: InitialTriangulation } = {},
+    options: {
+      initialTriangulation?: InitialTriangulation;
+      /**
+       * Period of the output x axis (e.g. one world width), if the output
+       * CRS wraps. When set, every vertex's exact output x is snapped to the
+       * copy nearest a reference, so the mesh stays continuous across the
+       * wrap: a refined vertex snaps to its parent triangle's interpolated
+       * x (off only by reprojection error); a seed vertex is unwrapped along
+       * the uv path from the previous seed vertex. `forwardReproject` may
+       * return any copy; `inverseReproject` must accept any copy. Output x
+       * is then unbounded — callers clip the mesh at multiples of the period.
+       */
+      wrapX?: number;
+    } = {},
   ) {
     this.reprojectors = reprojectors;
     this.width = width;
@@ -201,6 +263,8 @@ export class RasterReprojector {
     // additional triangle data
     this._halfedges = [];
     this._candidatesUV = [];
+    this._candidatesOutX = [];
+    this._wrapX = options.wrapX;
     this._queueIndices = [];
 
     this._queue = []; // queue of added triangles
@@ -220,7 +284,23 @@ export class RasterReprojector {
    */
   private _seed(seed: InitialTriangulation): void {
     for (let i = 0; i < seed.uvs.length; i += 2) {
-      this._addPoint(seed.uvs[i]!, seed.uvs[i + 1]!);
+      const u = seed.uvs[i]!;
+      const v = seed.uvs[i + 1]!;
+      if (this._wrapX === undefined || i === 0) {
+        this._addPoint(u, v);
+        continue;
+      }
+      // No parent triangle to reference yet: unwrap along the path from the
+      // previous seed vertex instead.
+      const u0 = seed.uvs[i - 2]!;
+      const v0 = seed.uvs[i - 1]!;
+      const x0 = this.exactOutputPositions[i - 2]!;
+      const refX = unwrapAlong(
+        (t) => this._project(u0 + t * (u - u0), v0 + t * (v - v0))[0],
+        x0,
+        this._wrapX,
+      );
+      this._addPoint(u, v, refX);
     }
     for (let i = 0; i < seed.triangles.length; i++) {
       this.triangles[i] = seed.triangles[i]!;
@@ -322,6 +402,7 @@ export class RasterReprojector {
     // Note that upstream also initializes the point of max error to [0, 0]
     let maxErrorU: number = 0;
     let maxErrorV: number = 0;
+    let maxErrorOutX: number = 0;
 
     // Recall that the sample point is in barycentric coordinates
     for (const samplePoint of SAMPLE_POINTS) {
@@ -390,6 +471,7 @@ export class RasterReprojector {
         maxError = err;
         maxErrorU = uvSampleU;
         maxErrorV = uvSampleV;
+        maxErrorOutX = outSampleX;
       }
     }
 
@@ -411,6 +493,7 @@ export class RasterReprojector {
     // update triangle metadata
     this._candidatesUV[2 * t] = maxErrorU;
     this._candidatesUV[2 * t + 1] = maxErrorV;
+    this._candidatesOutX[t] = maxErrorOutX;
 
     // add triangle to priority queue
     this._queuePush(t, maxError);
@@ -438,7 +521,7 @@ export class RasterReprojector {
     const pu = this._candidatesUV[2 * t]!;
     const pv = this._candidatesUV[2 * t + 1]!;
 
-    const pn = this._addPoint(pu, pv);
+    const pn = this._addPoint(pu, pv, this._candidatesOutX[t]);
 
     if (orient(au, av, bu, bv, pu, pv) === 0) {
       this._handleCollinear(pn, e0);
@@ -461,22 +544,29 @@ export class RasterReprojector {
     }
   }
 
+  // exact output position of a uv point via reprojection
+  private _project(u: number, v: number): [number, number] {
+    const pixelX = u * (this.width - 1);
+    const pixelY = v * (this.height - 1);
+    const inputPosition = this.reprojectors.forwardTransform(pixelX, pixelY);
+    return this.reprojectors.forwardReproject(
+      inputPosition[0],
+      inputPosition[1],
+    );
+  }
+
   // add coordinates for a new vertex
-  private _addPoint(u: number, v: number): number {
+  private _addPoint(u: number, v: number, refX?: number): number {
     const i = this.uvs.length >> 1;
     this.uvs.push(u, v);
 
     // compute and store exact output position via reprojection
-    const pixelX = u * (this.width - 1);
-    const pixelY = v * (this.height - 1);
-    const inputPosition = this.reprojectors.forwardTransform(pixelX, pixelY);
-    const exactOutputPosition = this.reprojectors.forwardReproject(
-      inputPosition[0],
-      inputPosition[1],
-    );
+    const [x, y] = this._project(u, v);
     this.exactOutputPositions.push(
-      exactOutputPosition[0]!,
-      exactOutputPosition[1]!,
+      this._wrapX === undefined || refX === undefined
+        ? x
+        : snapToCopy(x, refX, this._wrapX),
+      y,
     );
 
     return i;

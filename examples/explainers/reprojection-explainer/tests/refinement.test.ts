@@ -7,6 +7,8 @@ import {
 import {
   barycentric,
   countTriangles,
+  findFlip,
+  minAngle,
   recordRefinement,
 } from "../src/scene/refinement.js";
 
@@ -47,6 +49,61 @@ describe("recordRefinement", () => {
     const p = record.positions;
     expect(first.guess[0]).toBeCloseTo((p[0]! + p[6]!) / 2, 3);
     expect(first.guess[1]).toBeCloseTo((p[1]! + p[7]!) / 2, 3);
+  });
+
+  it("splits at the worst of the triangle's 4 test points", () => {
+    for (const { split } of record.steps) {
+      expect(split.samples).toHaveLength(4);
+      const worst = split.samples.reduce((a, b) => (b.error > a.error ? b : a));
+      expect(worst.uv[0]).toBeCloseTo(split.uv[0], 12);
+      expect(worst.uv[1]).toBeCloseTo(split.uv[1], 12);
+      expect(worst.error).toBeCloseTo(split.error, 9);
+    }
+  });
+
+  it("scores every triangle, the largest score being the max error", () => {
+    expect(Math.max(...record.seedScores)).toBeCloseTo(record.seedMaxError, 3);
+    for (const step of record.steps) {
+      expect(step.scores).toHaveLength(step.triangles.length / 3);
+      expect(Math.max(...step.scores)).toBeCloseTo(step.maxError, 3);
+    }
+  });
+
+  it("finds a single edge flip that makes fatter triangles", () => {
+    const flip = findFlip(record, NLCD_WIDTH, NLCD_HEIGHT)!;
+    expect(flip).not.toBeNull();
+    const after = record.steps[flip.step]!.triangles;
+    const corners = (mesh: Uint32Array, t: number) =>
+      [0, 1, 2].map((i) => {
+        const v = mesh[3 * t + i]!;
+        return [
+          record.uvs[2 * v]! * NLCD_WIDTH,
+          record.uvs[2 * v + 1]! * NLCD_HEIGHT,
+        ] as [number, number];
+      }) as [[number, number], [number, number], [number, number]];
+    const thinnest = (mesh: Uint32Array) =>
+      Math.min(...flip.triangles.map((t) => minAngle(...corners(mesh, t))));
+    expect(thinnest(after)).toBeGreaterThan(1.5 * thinnest(flip.before));
+    // Only the two flipped triangles differ.
+    let changed = 0;
+    for (let t = 0; t < after.length / 3; t++) {
+      if (
+        after.subarray(3 * t, 3 * t + 3).join() !==
+        flip.before.subarray(3 * t, 3 * t + 3).join()
+      ) {
+        changed++;
+      }
+    }
+    expect(changed).toBe(2);
+  });
+
+  it("measures both seed triangles, worst at the shared diagonal", () => {
+    expect(record.seedSamples).toHaveLength(2);
+    const worst = record.seedSamples
+      .flat()
+      .reduce((a, b) => (b.error > a.error ? b : a));
+    expect(worst.uv).toEqual([0.5, 0.5]);
+    expect(worst.error).toBeCloseTo(record.seedMaxError, 9);
   });
 
   it("records the split triangle's index in the mesh before the split", () => {

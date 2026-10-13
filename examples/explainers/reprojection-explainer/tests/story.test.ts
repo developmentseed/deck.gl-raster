@@ -12,12 +12,14 @@ const scene = buildScene({ finalMaxError: 8 });
 const story = createStory(scene, DEFAULT_STORY_SETTINGS);
 
 describe("createStory", () => {
-  it("has the six steps in order", () => {
+  it("has the eight steps in order", () => {
     expect(story.map((step) => step.id)).toEqual([
       "start",
       "cut",
       "first-attempt",
+      "measure",
       "refine",
+      "flip",
       "fly-over",
       "result",
     ]);
@@ -31,7 +33,7 @@ describe("createStory", () => {
   });
 
   it("draws every refinement phase without throwing", () => {
-    const refine = story[3]!;
+    const refine = story[4]!;
     for (let t = 0; t <= refine.durationMs; t += 37) {
       expect(() => refine.frame(t)).not.toThrow();
     }
@@ -44,18 +46,39 @@ describe("createStory", () => {
     expect(frame.meshes[0]!.edgeColor[3]).toBe(0);
   });
 
-  it("ends the first attempt showing the error", () => {
+  it("hides the true outline until the corners are projected", () => {
+    const ids = (frame: { lines: { id: string }[] }) =>
+      frame.lines.map((line) => line.id);
+    expect(ids(story[0]!.frame(0))).toEqual(["truth-parallel"]);
+    expect(ids(story[1]!.frame(story[1]!.durationMs))).toEqual([
+      "truth-parallel",
+    ]);
+    const step = story[2]!;
+    const outline = (t: number) =>
+      step.frame(t).lines.find((line) => line.id === "truth-outline")!;
+    expect(outline(0).color[3]).toBe(0);
+    expect(outline(step.durationMs).color[3]).toBeGreaterThan(0);
+  });
+
+  it("leaves measuring the error to the next step", () => {
     const step = story[2]!;
     const frame = step.frame(step.durationMs);
-    expect(frame.hud.counter).toContain("2 triangles");
-    expect(frame.hud.counter).toContain("261 px");
-    expect(frame.dots.map((dot) => dot.id)).toEqual(
-      expect.arrayContaining(["split-source", "split-exact", "split-pin"]),
-    );
+    expect(frame.hud.counter).toBeNull();
+    expect(frame.dots).toEqual([]);
+  });
+
+  it("shows every distinct seed test point and labels the worst", () => {
+    const step = story[3]!;
+    const frame = step.frame(step.durationMs);
+    // 2 triangles × 4 points, minus the shared diagonal's midpoint.
+    const guesses = frame.dots.find((dot) => dot.id === "samples-guess")!;
+    expect(guesses.points).toHaveLength(7);
+    const worst = frame.hud.labels.filter((l) => l.text.includes("worst"));
+    expect(worst.map((l) => l.text)).toEqual(["261 px · worst"]);
   });
 
   it("ends the refinement at the final mesh", () => {
-    const step = story[3]!;
+    const step = story[4]!;
     const frame = step.frame(step.durationMs);
     const target = frame.meshes.find((mesh) => mesh.id === "target")!;
     expect(target.soup.vertexCount / 3).toBe(100);
@@ -63,16 +86,31 @@ describe("createStory", () => {
     expect(frame.dots).toEqual([]);
   });
 
+  it("shows a thin pair of triangles, then the flipped pair", () => {
+    const step = story[5]!;
+    const flip = scene.flip!;
+    const target = (t: number) =>
+      step.frame(t).meshes.find((mesh) => mesh.id === "target")!.soup;
+    const after = scene.record.steps[flip.step]!.triangles;
+    expect(target(0).vertexCount).toBe(after.length);
+    expect(target(0).positions).not.toEqual(target(step.durationMs).positions);
+    const diagonal = step
+      .frame(step.durationMs)
+      .lines.find((line) => line.id === "flip-diagonal")!;
+    expect(diagonal.color.slice(0, 3)).toEqual([48, 209, 88]);
+    expect(descriptionText(5)).toContain(`split ${flip.step + 1}`);
+  });
+
   for (const flightStyle of ["direct", "fly-then-snap"] as const) {
     it(`lands every triangle on its exact position (${flightStyle})`, () => {
       const flyOver = createStory(scene, {
         ...DEFAULT_STORY_SETTINGS,
         flightStyle,
-      })[4]!;
+      })[6]!;
       const flight = flyOver
         .frame(flyOver.durationMs)
         .meshes.find((mesh) => mesh.id === "flight")!;
-      const target = story[5]!
+      const target = story[7]!
         .frame(0)
         .meshes.find((mesh) => mesh.id === "target")!;
       expect(flight.soup.positions.length).toBe(target.soup.positions.length);
@@ -83,7 +121,7 @@ describe("createStory", () => {
   }
 
   it("names the library's default triangle count in the closing caption", () => {
-    const step = story[5]!;
+    const step = story[7]!;
     expect(step.frame(step.durationMs).hud.caption).toContain("6,001");
   });
 });
@@ -133,25 +171,25 @@ describe("titles and descriptions", () => {
   });
 
   it("states the 2-triangle error from the recorded refinement", () => {
-    expect(descriptionText(2)).toContain("261 input pixels, or about 500 km");
+    expect(descriptionText(3)).toContain("261 input pixels, or about 500 km");
   });
 
   it("states the threshold the refinement stopped at", () => {
-    expect(descriptionText(3)).toContain("(here 8 px)");
+    expect(descriptionText(4)).toContain("(here 8 px)");
   });
 
   it("links to delatin and names the default triangle count", () => {
-    const runs = story[5]!.description;
+    const runs = story[7]!.description;
     expect(runs).toContainEqual({
       text: "delatin",
       href: "https://github.com/mapbox/delatin",
     });
-    expect(descriptionText(5)).toContain("would get 6,001 triangles");
+    expect(descriptionText(7)).toContain("would get 6,001 triangles");
   });
 });
 
 describe("refinement scrubber", () => {
-  const refine = story[3]!;
+  const refine = story[4]!;
   const scrubber = refine.scrubber!;
   const steps = scene.record.steps.length;
 
@@ -169,9 +207,18 @@ describe("refinement scrubber", () => {
     }
   });
 
-  it("shows the split's dots when paused, even on fast steps", () => {
+  it("shows the split's dots and test points when paused, even on fast steps", () => {
     const fast = scrubber.timeAt(steps - 1);
-    expect(refine.frame(fast, { paused: true }).dots.length).toBe(3);
+    expect(
+      refine.frame(fast, { paused: true }).dots.map((dot) => dot.id),
+    ).toEqual([
+      "samples-source",
+      "samples-guess",
+      "samples-exact",
+      "split-source",
+      "split-exact",
+      "split-pin",
+    ]);
     expect(refine.frame(fast).dots.length).toBe(0);
   });
 
@@ -187,6 +234,21 @@ describe("refinement scrubber", () => {
           : scene.record.steps[position - 1]!.triangles.length;
       expect(target.soup.vertexCount).toBe(triangles);
     }
+  });
+
+  it("shades every triangle by its score, the split one in orange", () => {
+    const k = 5;
+    const frame = refine.frame(scrubber.timeAt(k), { paused: true });
+    const tints = frame.meshes.find((mesh) => mesh.id === "target")!.soup
+      .tints!;
+    const alphas = Array.from(
+      { length: tints.length / 12 },
+      (_, t) => tints[12 * t + 3]!,
+    );
+    expect(alphas.every((alpha) => alpha > 0)).toBe(true);
+    const split = scene.record.steps[k]!.split.index;
+    expect(tints[12 * split + 1]).toBeGreaterThan(0.5); // orange, not red
+    expect(frame.hud.caption).toContain("score");
   });
 
   it("only exists on the refinement step", () => {
