@@ -7,6 +7,8 @@ import {
 import {
   barycentric,
   countTriangles,
+  findFlip,
+  minAngle,
   recordRefinement,
 } from "../src/scene/refinement.js";
 
@@ -65,6 +67,34 @@ describe("recordRefinement", () => {
       expect(step.scores).toHaveLength(step.triangles.length / 3);
       expect(Math.max(...step.scores)).toBeCloseTo(step.maxError, 3);
     }
+  });
+
+  it("finds a single edge flip that makes fatter triangles", () => {
+    const flip = findFlip(record, NLCD_WIDTH, NLCD_HEIGHT)!;
+    expect(flip).not.toBeNull();
+    const after = record.steps[flip.step]!.triangles;
+    const corners = (mesh: Uint32Array, t: number) =>
+      [0, 1, 2].map((i) => {
+        const v = mesh[3 * t + i]!;
+        return [
+          record.uvs[2 * v]! * NLCD_WIDTH,
+          record.uvs[2 * v + 1]! * NLCD_HEIGHT,
+        ] as [number, number];
+      }) as [[number, number], [number, number], [number, number]];
+    const thinnest = (mesh: Uint32Array) =>
+      Math.min(...flip.triangles.map((t) => minAngle(...corners(mesh, t))));
+    expect(thinnest(after)).toBeGreaterThan(1.5 * thinnest(flip.before));
+    // Only the two flipped triangles differ.
+    let changed = 0;
+    for (let t = 0; t < after.length / 3; t++) {
+      if (
+        after.subarray(3 * t, 3 * t + 3).join() !==
+        flip.before.subarray(3 * t, 3 * t + 3).join()
+      ) {
+        changed++;
+      }
+    }
+    expect(changed).toBe(2);
   });
 
   it("measures both seed triangles, worst at the shared diagonal", () => {

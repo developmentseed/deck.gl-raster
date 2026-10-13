@@ -36,8 +36,12 @@ instead of `RasterLayer`, and `src/scene/refinement.ts` reads
    midpoint splits both triangles on that edge), the new corner snaps to its
    exact position, and only the new triangles are measured again. A slider
    scrubs through the splits; stop on one to see its triangle's test points.
-6. **Map each triangle**: every triangle of the final mesh flies into place.
-7. **Done**: the edges fade, leaving the reprojected image.
+6. **Flip thin triangles**: one real edge flip from the refinement. A split
+   leaves two thin triangles; their shared edge swings to the other diagonal,
+   making two fatter ones. Doing this after every split keeps the mesh a
+   Delaunay triangulation, so the 4 test points stay spread out.
+7. **Map each triangle**: every triangle of the final mesh flies into place.
+8. **Done**: the edges fade, leaving the reprojected image.
 
 Each step has a title and a description. The control bar at the bottom
 appears when the mouse moves, and hides when it rests so it stays off the
@@ -50,7 +54,7 @@ screen while presenting from the keyboard.
 | → / Space / PageDown | Finish the current animation, or go to the next step |
 | ← / PageUp | Previous step |
 | R | Replay the current step |
-| 1–7 | Jump to a step |
+| 1–8 | Jump to a step |
 | D | Show or hide the step descriptions |
 | F | Switch flight style (direct, or fly then snap) |
 | H | Show the tuning panel |

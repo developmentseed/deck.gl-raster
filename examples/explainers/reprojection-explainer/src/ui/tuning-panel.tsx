@@ -78,7 +78,7 @@ export function TuningPanel({ settings, onChange }: TuningPanelProps) {
         onChange={(value) => update("arcHeight", value)}
       />
       <p style={{ fontSize: 13, color: "#57606a", marginTop: 12 }}>
-        → / Space / PageDown: next · ← / PageUp: back · R: replay · 1–7: jump to
+        → / Space / PageDown: next · ← / PageUp: back · R: replay · 1–8: jump to
         step · D: descriptions · F: flight style · H: hide this panel
       </p>
     </ControlPanel>

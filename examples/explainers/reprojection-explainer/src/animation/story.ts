@@ -51,6 +51,7 @@ export type StoryStepId =
   | "first-attempt"
   | "measure"
   | "refine"
+  | "flip"
   | "fly-over"
   | "result";
 
@@ -112,6 +113,8 @@ const SLOTS: Rgba = [255, 255, 255, 70];
 const HIGHLIGHT: UnitColor = [1, 0.62, 0.04, 0.55];
 /** Tint of a triangle with the worst score; others are fainter. */
 const HEAT: UnitColor = [1, 0.27, 0.23, 0.3];
+/** Tint of the two triangles an edge flip made. */
+const FLIPPED: UnitColor = [0.19, 0.82, 0.35, 0.45];
 /** Tint of the triangles a split just made. */
 const FRESH: UnitColor = [1, 0.62, 0.04, 0.2];
 const DOT_RADIUS = 7;
@@ -131,11 +134,14 @@ const MEASURE_POINTS_MS = 600;
 const MEASURE_GAPS_AT = 900;
 const MEASURE_WORST_AT = 2100;
 const MEASURE_MS = 3000;
+const FLIP_SWING_AT = 1200;
+const FLIP_SWING_MS = 900;
+const FLIP_MS = 3400;
 /** Refinement steps shorter than this hide their dots, to avoid flicker. */
 const DOTS_MIN_STEP_MS = 150;
 
 /**
- * The seven steps of the explainer, each a pure function from time to a
+ * The eight steps of the explainer, each a pure function from time to a
  * {@link Frame}:
  *
  * 1. `start`: the source image, and the true 49°N on an empty target panel.
@@ -143,8 +149,9 @@ const DOTS_MIN_STEP_MS = 150;
  * 3. `first-attempt`: the 2 triangles fly over; the border misses the line.
  * 4. `measure`: the 4 test points of each seed triangle and their errors.
  * 5. `refine`: replay of `refine()`, on both panels in sync.
- * 6. `fly-over`: every final triangle flies into its slot.
- * 7. `result`: the edges fade, leaving the reprojected image.
+ * 6. `flip`: one edge flip from the refinement, undone and redone.
+ * 7. `fly-over`: every final triangle flies into its slot.
+ * 8. `result`: the edges fade, leaving the reprojected image.
  */
 export function createStory(
   scene: Scene,
@@ -750,7 +757,97 @@ export function createStory(
     },
   };
 
-  // 6. Fly over
+  // 6. Flip
+  const { flip } = scene;
+  const flipAfter = flip ? flip.step + 1 : finalK;
+  const flipBefore = flip
+    ? {
+        source: createSoup({
+          triangles: flip.before,
+          positions: scene.sourceXY,
+          uvs: record.uvs,
+        }),
+        target: createSoup({
+          triangles: flip.before,
+          positions: scene.targetXY,
+          uvs: record.uvs,
+        }),
+      }
+    : null;
+  const sourceAt = (vertex: number): [number, number] => [
+    scene.sourceXY[2 * vertex]!,
+    scene.sourceXY[2 * vertex + 1]!,
+  ];
+  const flipStep: StoryStep = {
+    id: "flip",
+    title: "Flip thin triangles",
+    description: [
+      "Joining a new vertex to the corners around it can leave long, thin triangles. Those are bad for us: their 4 test points bunch up along one line and can miss the error, and a long triangle needs more splits to get its error down. ",
+      "But any two triangles that share an edge form a four-sided shape, and it can be cut along either diagonal. So after each split, we check each pair of neighbours and switch to the other diagonal whenever it makes fatter triangles. This is called a ",
+      { text: "Delaunay triangulation", emphasis: true },
+      ". ",
+      flip
+        ? `Here, split ${flip.step + 1} left two thin triangles (orange); flipping their shared edge makes two fatter ones (green). Flipped triangles are measured again, just like the new ones.`
+        : "Flipped triangles are measured again, just like the new ones.",
+    ],
+    durationMs: flip ? FLIP_MS : 0,
+    frame: (t) => {
+      const counter = hud(
+        counterText(triangleCount(flipAfter), maxErrorAt(flipAfter)),
+        "Swap a shared edge when the other diagonal makes fatter triangles.",
+      );
+      if (!flip || !flipBefore) {
+        return {
+          meshes: [
+            mesh("source", soup("source", finalK), SOURCE_EDGES),
+            mesh("target", soup("target", finalK), TARGET_EDGES),
+          ],
+          lines: truthLines,
+          dots: [],
+          hud: counter,
+        };
+      }
+      const show = easeInOutCubic(progress(t, 0, 500));
+      const swing = easeInOutCubic(progress(t, FLIP_SWING_AT, FLIP_SWING_MS));
+      const flipped = swing >= 0.5;
+      const pair = new Set(flip.triangles);
+      const tint = (triangle: number): UnitColor | null =>
+        pair.has(triangle)
+          ? flipped
+            ? FLIPPED
+            : scaleAlpha(HIGHLIGHT, show)
+          : null;
+      const [u, w] = flip.from;
+      const [p, x] = flip.to;
+      const diagonal = (at: (vertex: number) => [number, number]) => [
+        lerp2(at(u), at(p), swing),
+        lerp2(at(w), at(x), swing),
+      ];
+      const source = flipped ? soup("source", flipAfter) : flipBefore.source;
+      const target = flipped ? soup("target", flipAfter) : flipBefore.target;
+      return {
+        meshes: [
+          mesh("source", tinted(source, flipAfter, tint), SOURCE_EDGES),
+          mesh("target", tinted(target, flipAfter, tint), TARGET_EDGES),
+        ],
+        lines: [
+          ...truthLines,
+          {
+            id: "flip-diagonal",
+            paths: [diagonal(sourceAt), diagonal(vertexTarget)],
+            color: withAlpha(mixColor(RED, GREEN, swing), show),
+            width: 3,
+            dashed: false,
+            under: false,
+          },
+        ],
+        dots: [],
+        hud: counter,
+      };
+    },
+  };
+
+  // 7. Fly over
   const finalFlight = makeFlight(finalK, FINAL_SPREAD_MS);
   const flyOver: StoryStep = {
     id: "fly-over",
@@ -781,7 +878,7 @@ export function createStory(
     },
   };
 
-  // 7. Result
+  // 8. Result
   const result: StoryStep = {
     id: "result",
     title: "Done",
@@ -811,7 +908,7 @@ export function createStory(
     },
   };
 
-  return [start, cut, firstAttempt, measure, refine, flyOver, result];
+  return [start, cut, firstAttempt, measure, refine, flipStep, flyOver, result];
 }
 
 /** "N triangles · max error X px (≈ Y km)". */
@@ -854,6 +951,15 @@ function withAlpha(color: Rgba, alpha: number): Rgba {
 /** `color` with its alpha multiplied by `alpha`. */
 function scaleAlpha(color: UnitColor, alpha: number): UnitColor {
   return [color[0], color[1], color[2], color[3] * clamp01(alpha)];
+}
+
+/** Linear blend between two points. */
+function lerp2(
+  a: [number, number],
+  b: [number, number],
+  t: number,
+): [number, number] {
+  return [lerp(a[0], b[0], t), lerp(a[1], b[1], t)];
 }
 
 /** Linear blend between two tints. */

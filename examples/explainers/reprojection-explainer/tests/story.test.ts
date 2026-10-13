@@ -12,13 +12,14 @@ const scene = buildScene({ finalMaxError: 8 });
 const story = createStory(scene, DEFAULT_STORY_SETTINGS);
 
 describe("createStory", () => {
-  it("has the seven steps in order", () => {
+  it("has the eight steps in order", () => {
     expect(story.map((step) => step.id)).toEqual([
       "start",
       "cut",
       "first-attempt",
       "measure",
       "refine",
+      "flip",
       "fly-over",
       "result",
     ]);
@@ -85,16 +86,31 @@ describe("createStory", () => {
     expect(frame.dots).toEqual([]);
   });
 
+  it("shows a thin pair of triangles, then the flipped pair", () => {
+    const step = story[5]!;
+    const flip = scene.flip!;
+    const target = (t: number) =>
+      step.frame(t).meshes.find((mesh) => mesh.id === "target")!.soup;
+    const after = scene.record.steps[flip.step]!.triangles;
+    expect(target(0).vertexCount).toBe(after.length);
+    expect(target(0).positions).not.toEqual(target(step.durationMs).positions);
+    const diagonal = step
+      .frame(step.durationMs)
+      .lines.find((line) => line.id === "flip-diagonal")!;
+    expect(diagonal.color.slice(0, 3)).toEqual([48, 209, 88]);
+    expect(descriptionText(5)).toContain(`split ${flip.step + 1}`);
+  });
+
   for (const flightStyle of ["direct", "fly-then-snap"] as const) {
     it(`lands every triangle on its exact position (${flightStyle})`, () => {
       const flyOver = createStory(scene, {
         ...DEFAULT_STORY_SETTINGS,
         flightStyle,
-      })[5]!;
+      })[6]!;
       const flight = flyOver
         .frame(flyOver.durationMs)
         .meshes.find((mesh) => mesh.id === "flight")!;
-      const target = story[6]!
+      const target = story[7]!
         .frame(0)
         .meshes.find((mesh) => mesh.id === "target")!;
       expect(flight.soup.positions.length).toBe(target.soup.positions.length);
@@ -105,7 +121,7 @@ describe("createStory", () => {
   }
 
   it("names the library's default triangle count in the closing caption", () => {
-    const step = story[6]!;
+    const step = story[7]!;
     expect(step.frame(step.durationMs).hud.caption).toContain("6,001");
   });
 });
@@ -163,12 +179,12 @@ describe("titles and descriptions", () => {
   });
 
   it("links to delatin and names the default triangle count", () => {
-    const runs = story[6]!.description;
+    const runs = story[7]!.description;
     expect(runs).toContainEqual({
       text: "delatin",
       href: "https://github.com/mapbox/delatin",
     });
-    expect(descriptionText(6)).toContain("would get 6,001 triangles");
+    expect(descriptionText(7)).toContain("would get 6,001 triangles");
   });
 });
 
