@@ -16,7 +16,11 @@ import {
   loadImage,
 } from "./scene/texture.js";
 import type { AppSettings } from "./settings.js";
-import { settingsFromUrl, urlWithSettings } from "./settings.js";
+import {
+  settingsFromUrl,
+  toggleErrorSpace,
+  urlWithSettings,
+} from "./settings.js";
 import { ControlBar } from "./ui/control-bar.js";
 import { Hud } from "./ui/hud.js";
 import { TuningPanel } from "./ui/tuning-panel.js";
@@ -149,15 +153,22 @@ export default function App() {
   /** When a touch last revealed the hidden controls (performance.now()). */
   const touchRevealAtRef = useRef(Number.NEGATIVE_INFINITY);
 
-  const { finalMaxError, flightStyle, flightMs, arcHeight, schedule, speed } =
-    settings;
+  const {
+    finalMaxError,
+    errorSpace,
+    flightStyle,
+    flightMs,
+    arcHeight,
+    schedule,
+    speed,
+  } = settings;
   const scenario = useMemo(
     () => scenarioById(settings.scenario),
     [settings.scenario],
   );
   const scene = useMemo(
-    () => buildScene({ scenario, finalMaxError }),
-    [scenario, finalMaxError],
+    () => buildScene({ scenario, finalMaxError, errorSpace }),
+    [scenario, finalMaxError, errorSpace],
   );
   const story = useMemo(
     () => createStory(scene, { flightStyle, flightMs, arcHeight, schedule }),
@@ -208,7 +219,7 @@ export default function App() {
     writeDescriptions(descriptions);
   }, [descriptions]);
 
-  // Keep the scenario in the address bar, so a view can be linked.
+  // Keep the scenario and metric in the address bar, so a view can be linked.
   useEffect(() => {
     const href = urlWithSettings(window.location.href, settings);
     if (href !== window.location.href) {
@@ -435,6 +446,10 @@ export default function App() {
             flightStyle:
               current.flightStyle === "direct" ? "fly-then-snap" : "direct",
           }));
+          break;
+        case "m":
+        case "M":
+          setSettings(toggleErrorSpace);
           break;
         case "h":
         case "H":

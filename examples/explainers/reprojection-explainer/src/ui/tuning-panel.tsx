@@ -1,6 +1,7 @@
 import { ControlPanel } from "deck.gl-raster-examples-shared";
 import type { ReactNode } from "react";
 import type { FlightStyle } from "../animation/flight.js";
+import type { ErrorSpace } from "../scene/refinement.js";
 import { SCENARIOS, scenarioById } from "../scene/scenarios.js";
 import type { AppSettings } from "../settings.js";
 
@@ -72,6 +73,18 @@ export function TuningPanel({ settings, onChange }: TuningPanelProps) {
           ))}
         </select>
       </Row>
+      <Row text="Error measured">
+        <select
+          aria-label="Error measured"
+          value={settings.errorSpace}
+          onChange={(event) =>
+            update("errorSpace", event.target.value as ErrorSpace)
+          }
+        >
+          <option value="source">In input pixels</option>
+          <option value="target">On the map</option>
+        </select>
+      </Row>
       <Range
         label="Speed"
         min={0.25}
@@ -101,7 +114,8 @@ export function TuningPanel({ settings, onChange }: TuningPanelProps) {
       />
       <p style={{ fontSize: 13, color: "#57606a", marginTop: 12 }}>
         → / Space / PageDown: next · ← / PageUp: back · R: replay · 1–7: jump to
-        step · D: descriptions · F: flight style · H: hide this panel
+        step · D: descriptions · F: flight style · M: error measured · H: hide
+        this panel
       </p>
     </ControlPanel>
   );

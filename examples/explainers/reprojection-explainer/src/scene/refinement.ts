@@ -13,6 +13,12 @@ export const SAMPLE_POINTS: [number, number, number][] = [
   [0, 0.5, 0.5],
 ];
 
+/**
+ * Where `RasterReprojector` measures a mesh's error: in source pixels (the
+ * default), or on the map in units of one source pixel's size there.
+ */
+export type ErrorSpace = "source" | "target";
+
 /** One test point of a triangle, measured the way the library does. */
 export type ErrorSample = {
   /** Texture coordinate of the point (0–1, v down). */
@@ -22,8 +28,14 @@ export type ErrorSample = {
   /** Where it really belongs: its exact reprojection (target CRS). */
   exact: [number, number];
   /**
-   * Distance between the point and the guess mapped back into the source
-   * image, in source pixels.
+   * The guess mapped back into the image (0–1, v down): the part of the image
+   * that belongs where the GPU draws this point.
+   */
+  sampled: [number, number];
+  /**
+   * The point's error, in pixels of the reprojector's {@link ErrorSpace}: the
+   * distance from `uv` to `sampled` in source pixels, or the distance from
+   * `guess` to `exact` over one source pixel's size on the map.
    */
   error: number;
 };
@@ -41,7 +53,7 @@ export type RefinementSplit = {
    * interpolation of the triangle's exact output positions (target CRS).
    */
   guess: [number, number];
-  /** Error at that point before the split, in source pixels. */
+  /** Error at that point before the split, in pixels. */
   error: number;
   /** The triangle's 4 test points; the worst one is the split point. */
   samples: ErrorSample[];
@@ -55,13 +67,16 @@ export type RefinementStep = {
   vertex: number;
   /** Triangle vertex ids after this step, 3 per triangle. */
   triangles: Uint32Array;
-  /** Largest remaining error after this step, in source pixels. */
+  /** Largest remaining error after this step, in pixels. */
   maxError: number;
   /** Each triangle's score after this step: its worst test point's error. */
   scores: Float32Array;
 };
 
-/** The refinement history of one mesh, from its 2-triangle seed. */
+/**
+ * The refinement history of one mesh, from its 2-triangle seed. Errors are in
+ * pixels of the {@link ErrorSpace} it was recorded in.
+ */
 export type RefinementRecord = {
   /** Texture coordinates of every vertex of the final mesh, 2 per vertex. */
   uvs: Float64Array;
@@ -69,7 +84,7 @@ export type RefinementRecord = {
   positions: Float64Array;
   /** Triangle vertex ids of the seed mesh. */
   seedTriangles: Uint32Array;
-  /** Largest error of the seed mesh, in source pixels. */
+  /** Largest error of the seed mesh, in pixels. */
   seedMaxError: number;
   /** Each seed triangle's score: its worst test point's error. */
   seedScores: Float32Array;
@@ -85,18 +100,26 @@ export type RecordRefinementOptions = {
   width: number;
   /** Image height in pixels. */
   height: number;
-  /** Stop once the largest error is at most this many source pixels. */
+  /** Stop once the largest error is at most this many pixels. */
   maxError: number;
+  /** Where to measure the error. Defaults to `"source"`. */
+  errorSpace?: ErrorSpace;
   /** Safety cap on the number of steps. */
   maxSteps?: number;
 };
 
-/** Private `RasterReprojector` state that reveals the next split. */
+/**
+ * Private `RasterReprojector` state that reveals the next split, and how the
+ * error is measured.
+ */
 type ReprojectorInternals = {
   _queue: number[];
   _errors: number[];
   _queueIndices: number[];
   _candidatesUV: number[];
+  _errorSpace: ErrorSpace;
+  /** One source pixel's size on the map (1 in source mode). */
+  _pixelSize: number;
 };
 
 /**
@@ -111,8 +134,10 @@ export function recordRefinement(
   fns: ReprojectionFns,
   options: RecordRefinementOptions,
 ): RefinementRecord {
-  const { width, height, maxError, maxSteps = 10_000 } = options;
-  const reprojector = new RasterReprojector(fns, width + 1, height + 1);
+  const { width, height, maxError, errorSpace, maxSteps = 10_000 } = options;
+  const reprojector = new RasterReprojector(fns, width + 1, height + 1, {
+    errorSpace,
+  });
   const internals = reprojector as unknown as ReprojectorInternals;
   const seedTriangles = Uint32Array.from(reprojector.triangles);
   const seedMaxError = reprojector.getMaxError();
@@ -179,15 +204,20 @@ export function recordRefinement(
 
 /**
  * Measure a triangle's 4 test points the way `RasterReprojector` does:
- * linearly interpolate the corners' exact output positions, reproject that
- * guess back into the source image, and compare with where the point is.
- * Vertex ids stay valid after later splits, so this works on any snapshot.
+ * linearly interpolate the corners' exact output positions into the GPU's
+ * guess, then compare it with the truth. In source mode, map the guess back
+ * into the image and compare with where the point is, in source pixels. In
+ * target mode, compare it with the point's exact position on the map, over
+ * the reprojector's pixel size. Vertex ids stay valid after later splits, so
+ * this works on any snapshot.
  */
 function measureTriangle(
   reprojector: RasterReprojector,
   [a, b, c]: [number, number, number],
 ): ErrorSample[] {
   const { uvs, exactOutputPositions: out, reprojectors: fns } = reprojector;
+  const { _errorSpace: errorSpace, _pixelSize: pixelSize } =
+    reprojector as unknown as ReprojectorInternals;
   const mix = (array: number[], offset: number, w: number[]) =>
     w[0]! * array[2 * a + offset]! +
     w[1]! * array[2 * b + offset]! +
@@ -199,11 +229,16 @@ function measureTriangle(
     const pixel = [uv[0] * pixelScale[0], uv[1] * pixelScale[1]] as const;
     const sampled = fns.inverseTransform(...fns.inverseReproject(...guess));
     const exact = fns.forwardReproject(...fns.forwardTransform(...pixel));
+    const error =
+      errorSpace === "target"
+        ? Math.hypot(exact[0] - guess[0], exact[1] - guess[1]) / pixelSize
+        : Math.hypot(pixel[0] - sampled[0], pixel[1] - sampled[1]);
     return {
       uv,
       guess,
       exact,
-      error: Math.hypot(pixel[0] - sampled[0], pixel[1] - sampled[1]),
+      sampled: [sampled[0] / pixelScale[0], sampled[1] / pixelScale[1]],
+      error,
     };
   });
 }
@@ -249,15 +284,24 @@ export function barycentric(
  */
 const COUNT_MAX_ITERATIONS = 100_000;
 
-/** Number of triangles `RasterReprojector` builds for an image at `maxError`. */
+/**
+ * Number of triangles `RasterReprojector` builds for an image at `maxError`,
+ * measured in `errorSpace` (`"source"` by default).
+ */
 export function countTriangles(
   fns: ReprojectionFns,
-  options: { width: number; height: number; maxError: number },
+  options: {
+    width: number;
+    height: number;
+    maxError: number;
+    errorSpace?: ErrorSpace;
+  },
 ): number {
   const reprojector = new RasterReprojector(
     fns,
     options.width + 1,
     options.height + 1,
+    { errorSpace: options.errorSpace },
   );
   reprojector.run(options.maxError, { maxIterations: COUNT_MAX_ITERATIONS });
   return reprojector.triangles.length / 3;

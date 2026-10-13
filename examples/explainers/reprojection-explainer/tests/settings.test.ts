@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { settingsFromUrl, urlWithSettings } from "../src/settings.js";
+import {
+  settingsFromUrl,
+  toggleErrorSpace,
+  urlWithSettings,
+} from "../src/settings.js";
 
 describe("settings in the URL", () => {
   it("defaults to the NLCD scenario at its default tolerance", () => {
@@ -29,5 +33,39 @@ describe("settings in the URL", () => {
         settingsFromUrl(""),
       ),
     ).toBe("https://example.com/explainer/");
+  });
+
+  it("measures error in source pixels by default", () => {
+    expect(settingsFromUrl("").errorSpace).toBe("source");
+  });
+
+  it("measures error on the map with ?metric=target", () => {
+    expect(settingsFromUrl("?metric=target").errorSpace).toBe("target");
+  });
+
+  it("ignores an unknown metric", () => {
+    expect(settingsFromUrl("?metric=meters").errorSpace).toBe("source");
+  });
+
+  it("writes the metric into the URL, leaving the default out", () => {
+    const target = settingsFromUrl("?scenario=arctic&metric=target");
+    expect(urlWithSettings("https://example.com/explainer/", target)).toBe(
+      "https://example.com/explainer/?scenario=arctic&metric=target",
+    );
+    expect(
+      urlWithSettings(
+        "https://example.com/explainer/?metric=target",
+        settingsFromUrl(""),
+      ),
+    ).toBe("https://example.com/explainer/");
+  });
+});
+
+describe("toggleErrorSpace", () => {
+  it("flips between source pixels and the map, keeping other settings", () => {
+    const source = settingsFromUrl("?scenario=arctic");
+    const target = toggleErrorSpace(source);
+    expect(target).toEqual({ ...source, errorSpace: "target" });
+    expect(toggleErrorSpace(target)).toEqual(source);
   });
 });

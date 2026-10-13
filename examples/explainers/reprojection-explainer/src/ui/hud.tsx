@@ -116,13 +116,14 @@ export function Hud({
           {label.text}
         </div>
       ))}
+      {/* One line, centred under the map: a narrow map must not wrap it. */}
       <div
         style={{
           position: "absolute",
-          left: layout.target.x,
+          left: layout.target.x + layout.target.width / 2,
           top: layout.target.y + layout.target.height + 22,
-          width: layout.target.width,
-          textAlign: "center",
+          transform: "translateX(-50%)",
+          whiteSpace: "nowrap",
           fontSize: 26,
           fontVariantNumeric: "tabular-nums",
           opacity: hud.counter ? 1 : 0,
