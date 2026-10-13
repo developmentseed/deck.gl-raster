@@ -26,6 +26,7 @@ const FIXTURES = [
   { variant: "rasterio", name: "float32_1band_lerc_block32" },
   { variant: "rasterio", name: "float32_1band_lerc_deflate_block32" },
   { variant: "rasterio", name: "float32_1band_lerc_zstd_block32" },
+  { variant: "rasterio", name: "float32_1band_deflate_block64_predictor3" },
   {
     variant: "rasterio",
     name: "float32_1band_deflate_block64_predictor3_big_endian",
@@ -51,6 +52,7 @@ const FIXTURES = [
   { variant: "rasterio", name: "uint8_1band_lzw_block64_predictor2" },
   { variant: "rasterio", name: "uint8_nonrgb_deflate_block64_cog" },
   { variant: "rasterio", name: "uint8_rgb_deflate_block64_cog" },
+  { variant: "rasterio", name: "uint8_rgb_deflate_block64_predictor2" },
   // WebP parsing uses canvas and is web-only
   // { variant: "rasterio", name: "uint8_rgb_webp_block64_cog" },
   // WebP parsing uses canvas and is web-only
