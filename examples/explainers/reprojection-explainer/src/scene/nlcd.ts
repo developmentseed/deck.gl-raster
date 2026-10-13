@@ -85,7 +85,7 @@ export const NLCD_TO_WEB_MERCATOR: ReprojectionFns = {
 /** The default scenario: CONUS land cover, from Albers to Web Mercator. */
 export const NLCD_SCENARIO: Scenario = {
   id: "nlcd",
-  label: "NLCD land cover: Albers → Web Mercator",
+  label: "NLCD land cover → Web Mercator",
   imageUrl: nlcdUrl,
   width: NLCD_WIDTH,
   height: NLCD_HEIGHT,
