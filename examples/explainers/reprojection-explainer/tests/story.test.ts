@@ -3,14 +3,24 @@ import {
   counterText,
   createStory,
   DEFAULT_STORY_SETTINGS,
+  seedPointPhrase,
   uniqueEdges,
 } from "../src/animation/story.js";
+import { ARCTIC_SCENARIO } from "../src/scene/arctic.js";
 import { buildScene } from "../src/scene/build-scene.js";
+import { SLIDE_WIDTH } from "../src/scene/layout.js";
 import { NLCD_SCENARIO } from "../src/scene/nlcd.js";
 
 // 8 px keeps the test mesh small: 100 triangles.
 const scene = buildScene({ scenario: NLCD_SCENARIO, finalMaxError: 8 });
 const story = createStory(scene, DEFAULT_STORY_SETTINGS);
+// The same, with the error measured on the map: 106 triangles.
+const targetScene = buildScene({
+  scenario: NLCD_SCENARIO,
+  finalMaxError: 8,
+  errorSpace: "output",
+});
+const targetStory = createStory(targetScene, DEFAULT_STORY_SETTINGS);
 
 describe("createStory", () => {
   it("has the seven steps in order", () => {
@@ -25,19 +35,25 @@ describe("createStory", () => {
     ]);
   });
 
-  it("draws the start and end of every step", () => {
-    for (const step of story) {
-      expect(() => step.frame(0)).not.toThrow();
-      expect(() => step.frame(step.durationMs)).not.toThrow();
-    }
-  });
+  for (const [mode, steps] of [
+    ["input", story],
+    ["output", targetStory],
+  ] as const) {
+    it(`draws the start and end of every step (${mode})`, () => {
+      for (const step of steps) {
+        expect(() => step.frame(0)).not.toThrow();
+        expect(() => step.frame(step.durationMs)).not.toThrow();
+      }
+    });
 
-  it("draws every refinement phase without throwing", () => {
-    const refine = story[4]!;
-    for (let t = 0; t <= refine.durationMs; t += 37) {
-      expect(() => refine.frame(t)).not.toThrow();
-    }
-  });
+    it(`draws every refinement phase without throwing (${mode})`, () => {
+      const refine = steps[4]!;
+      for (let t = 0; t <= refine.durationMs; t += 37) {
+        expect(() => refine.frame(t)).not.toThrow();
+        expect(() => refine.frame(t, { paused: true })).not.toThrow();
+      }
+    });
+  }
 
   it("starts with the 2-triangle seed and no edges", () => {
     const frame = story[0]!.frame(0);
@@ -71,8 +87,8 @@ describe("createStory", () => {
   });
 
   /** The measure step's error labels, once they're all in. */
-  const errorLabels = () => {
-    const step = story[3]!;
+  const errorLabels = (steps = story) => {
+    const step = steps[3]!;
     const frame = step.frame(step.durationMs);
     return {
       frame,
@@ -95,20 +111,74 @@ describe("createStory", () => {
     }
   });
 
-  it("keeps each error label clear of its dot", () => {
-    const { frame, labels } = errorLabels();
-    const exact = frame.dots.find((dot) => dot.id === "samples-exact")!.points;
-    labels.forEach((label, i) => {
-      const [x, y] = exact[i]!;
-      if (label.align === "left") {
-        expect(label.x).toBeGreaterThan(x + 10);
-      } else if (label.align === "right") {
-        expect(label.x).toBeLessThan(x - 10);
-      } else {
-        // Centred labels sit above or below the dot, past half a line.
-        expect(Math.abs(label.y - y)).toBeGreaterThan(0.6 * label.size! + 10);
-      }
+  // Each mode labels the gap it measures, past its true end: the test point
+  // in the input image for source pixels, the exact spot on the map for
+  // target pixels.
+  for (const [mode, steps, labelledDot] of [
+    ["input", story, "samples-source"],
+    ["output", targetStory, "samples-exact"],
+  ] as const) {
+    it(`labels each error next to the end of its gap (${mode})`, () => {
+      const { frame, labels } = errorLabels(steps);
+      const ends = frame.dots.find((dot) => dot.id === labelledDot)!.points;
+      expect(labels).toHaveLength(ends.length);
+      labels.forEach((label, i) => {
+        const [x, y] = ends[i]!;
+        expect(Math.hypot(label.x - x, label.y - y)).toBeLessThan(40);
+        if (label.align === "left") {
+          expect(label.x).toBeGreaterThan(x + 10);
+        } else if (label.align === "right") {
+          expect(label.x).toBeLessThan(x - 10);
+        } else {
+          // Centred labels sit above or below the dot, past half a line.
+          expect(Math.abs(label.y - y)).toBeGreaterThan(0.6 * label.size! + 10);
+        }
+      });
     });
+  }
+
+  // Below the panel titles, above the description, and on the slide.
+  for (const scenario of [NLCD_SCENARIO, ARCTIC_SCENARIO]) {
+    for (const errorSpace of ["input", "output"] as const) {
+      it(`keeps the ${scenario.id} error labels clear of the text (${errorSpace})`, () => {
+        const steps = createStory(
+          buildScene({ scenario, finalMaxError: 32, errorSpace }),
+          DEFAULT_STORY_SETTINGS,
+        );
+        for (const label of errorLabels(steps).labels) {
+          const size = label.size!;
+          // A generous estimate of the label's width: 0.6 em per character.
+          const width = 0.6 * size * label.text.length;
+          const left =
+            label.align === "left"
+              ? label.x
+              : label.align === "right"
+                ? label.x - width
+                : label.x - width / 2;
+          expect(left).toBeGreaterThanOrEqual(0);
+          expect(left + width).toBeLessThanOrEqual(SLIDE_WIDTH);
+          expect(label.y - 0.6 * size).toBeGreaterThanOrEqual(150);
+          expect(label.y + 0.6 * size).toBeLessThanOrEqual(790);
+        }
+      });
+    }
+  }
+
+  it("draws each test point's gap in the input image (source)", () => {
+    const { frame } = errorLabels();
+    const points = (id: string) =>
+      frame.dots.find((dot) => dot.id === id)!.points;
+    const gaps = frame.lines.find((line) => line.id === "samples-source-gap")!;
+    expect(gaps.paths).toEqual(
+      points("samples-source").map((p, i) => [p, points("samples-sampled")[i]]),
+    );
+  });
+
+  it("draws no gaps in the input image when measuring in output pixels", () => {
+    const { frame } = errorLabels(targetStory);
+    const ids = [...frame.dots, ...frame.lines].map((item) => item.id);
+    expect(ids).not.toContain("samples-sampled");
+    expect(ids).not.toContain("samples-source-gap");
   });
 
   it("ends the refinement at the final mesh", () => {
@@ -143,9 +213,27 @@ describe("createStory", () => {
     const step = story[6]!;
     expect(step.frame(step.durationMs).hud.caption).toContain("6,001");
   });
+
+  it("counts the default triangles on the map when measuring there", () => {
+    const step = targetStory[6]!;
+    expect(step.frame(step.durationMs).hud.caption).toContain("6,563");
+  });
+
+  it("states the unit of the error being measured in the counter", () => {
+    const end = (steps: typeof story) =>
+      steps[2]!.frame(steps[2]!.durationMs).hud.counter;
+    expect(end(story)).toContain("max error 261 px (");
+    expect(end(targetStory)).toContain("max error 279 output px (");
+  });
 });
 
 describe("counterText", () => {
+  it("names the unit it's given", () => {
+    expect(counterText(2, 279, { kmPerPixel: 1.92, unit: "output px" })).toBe(
+      "2 triangles · max error 279 output px (≈ 536 km)",
+    );
+  });
+
   it("rounds large errors and converts them to kilometres", () => {
     expect(counterText(2, 260.9, { kmPerPixel: 1.92 })).toBe(
       "2 triangles · max error 261 px (≈ 501 km)",
@@ -175,8 +263,8 @@ describe("uniqueEdges", () => {
 });
 
 /** The plain text of a step's description. */
-function descriptionText(index: number): string {
-  return story[index]!.description.map((run) =>
+function descriptionText(index: number, steps = story): string {
+  return steps[index]!.description.map((run) =>
     typeof run === "string" ? run : run.text,
   ).join("");
 }
@@ -200,6 +288,12 @@ describe("titles and descriptions", () => {
 
   it("states the 2-triangle error from the recorded refinement", () => {
     expect(descriptionText(2)).toContain("261 input pixels, or about 500 km");
+  });
+
+  it("states where and how far off the 2-triangle mesh is in output pixels", () => {
+    expect(descriptionText(2, targetStory)).toContain(
+      "at the middle of the image's top edge, it's 279 output pixels, or about 540 km",
+    );
   });
 
   it("states the threshold the refinement stopped at", () => {
@@ -247,11 +341,28 @@ describe("refinement scrubber", () => {
       "samples-source",
       "samples-guess",
       "samples-exact",
+      "samples-sampled",
       "split-source",
       "split-exact",
       "split-pin",
     ]);
     expect(refine.frame(fast).dots.length).toBe(0);
+  });
+
+  it("leaves the input image's gaps out of a paused split in output mode", () => {
+    const targetRefine = targetStory[4]!;
+    const k = targetScene.record.steps.length - 1;
+    const frame = targetRefine.frame(targetRefine.scrubber!.timeAt(k), {
+      paused: true,
+    });
+    expect(frame.dots.map((dot) => dot.id)).toEqual([
+      "samples-source",
+      "samples-guess",
+      "samples-exact",
+      "split-source",
+      "split-exact",
+      "split-pin",
+    ]);
   });
 
   it("matches the mesh being drawn during playback", () => {
@@ -311,5 +422,29 @@ describe("refinement scrubber", () => {
     expect(
       story.filter((step) => step.scrubber).map((step) => step.id),
     ).toEqual(["refine"]);
+  });
+});
+
+describe("seedPointPhrase", () => {
+  it("names the image center and the middle of each edge", () => {
+    expect(seedPointPhrase([0.5, 0.5])).toBe("at the center of the image");
+    expect(seedPointPhrase([0.5, 0])).toBe(
+      "at the middle of the image's top edge",
+    );
+    expect(seedPointPhrase([0.5, 1])).toBe(
+      "at the middle of the image's bottom edge",
+    );
+    expect(seedPointPhrase([0, 0.5])).toBe(
+      "at the middle of the image's left edge",
+    );
+    expect(seedPointPhrase([1, 0.5])).toBe(
+      "at the middle of the image's right edge",
+    );
+  });
+
+  it("names a triangle's center", () => {
+    expect(seedPointPhrase([2 / 3, 1 / 3])).toBe(
+      "at the center of one of the triangles",
+    );
   });
 });

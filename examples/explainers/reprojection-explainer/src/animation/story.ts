@@ -1,6 +1,8 @@
 import type { TriangleSoup } from "../layers/triangle-soup.js";
 import type { Scene } from "../scene/build-scene.js";
 import { LIBRARY_DEFAULT_MAX_ERROR } from "../scene/build-scene.js";
+import type { Rect } from "../scene/layout.js";
+import { SOURCE_BOX, TARGET_BOX } from "../scene/layout.js";
 import type { ErrorSample } from "../scene/refinement.js";
 import type { FlightOptions, FlightPaths, FlightStyle } from "./flight.js";
 import { eastFirstDelays, flightDuration, flightPositions } from "./flight.js";
@@ -122,6 +124,12 @@ const SAMPLE_RADIUS = 4;
 /** Font sizes of the error labels: the worst one, and the rest. */
 const WORST_LABEL_SIZE = 22;
 const SAMPLE_LABEL_SIZE = 16;
+/**
+ * Where error labels may go: each panel's box, widened into the gap between
+ * the panels, and stretched up to the panel titles and down to the counter.
+ */
+const SOURCE_LABEL_AREA = labelArea(SOURCE_BOX);
+const TARGET_LABEL_AREA = labelArea(TARGET_BOX);
 
 const CUT_MS = 900;
 const FIRST_SPREAD_MS = 250;
@@ -155,8 +163,14 @@ export function createStory(
   settings: StorySettings,
 ): StoryStep[] {
   const { layout, record, scenario } = scene;
+  // Each mode draws and labels the gap it measures: in the input image for
+  // input pixels, on the map for output pixels.
+  const inputMode = scene.errorSpace === "input";
   const counter = (triangles: number, errorPx: number) =>
-    counterText(triangles, errorPx, { kmPerPixel: scenario.kmPerPixel });
+    counterText(triangles, errorPx, {
+      kmPerPixel: scenario.kmPerPixel,
+      unit: inputMode ? "px" : "output px",
+    });
   const finalK = record.steps.length;
   const flight: FlightOptions = {
     style: settings.flightStyle,
@@ -397,21 +411,31 @@ export function createStory(
     ];
   };
 
-  /** Test points on the slide: source dot, GPU guess, exact spot, gap. */
+  /**
+   * Test points on the slide: the point in the image, the GPU's guess and the
+   * exact spot on the map, and the guess mapped back into the image; with the
+   * gap on the map (guess to exact) and in the image (point to mapped back).
+   */
   type SampleSlide = {
     source: [number, number][];
     guess: [number, number][];
     exact: [number, number][];
+    sampled: [number, number][];
     gaps: [number, number][][];
+    sourceGaps: [number, number][][];
   };
   const toSlide = (samples: ErrorSample[]): SampleSlide => {
+    const source = samples.map((s) => layout.uvToSource(...s.uv));
     const guess = samples.map((s) => layout.targetToSlide(...s.guess));
     const exact = samples.map((s) => layout.targetToSlide(...s.exact));
+    const sampled = samples.map((s) => layout.uvToSource(...s.sampled));
     return {
-      source: samples.map((s) => layout.uvToSource(...s.uv)),
+      source,
       guess,
       exact,
+      sampled,
       gaps: guess.map((g, i) => [g, exact[i]!]),
+      sourceGaps: source.map((p, i) => [p, sampled[i]!]),
     };
   };
   const splitSampleCache = new Map<number, SampleSlide>();
@@ -423,7 +447,11 @@ export function createStory(
     }
     return cached;
   };
-  /** Small dots for test points: white in the source, red guess, green exact. */
+  /**
+   * Small dots for test points: white in the image, red guess and green exact
+   * spot on the map; in source mode, also the red guess mapped back into the
+   * image, which arrives with the exact spot.
+   */
   const sampleDots = (
     points: SampleSlide,
     pointsAlpha: number,
@@ -453,9 +481,20 @@ export function createStory(
             color: withAlpha(GREEN, exactAlpha),
             radius: SAMPLE_RADIUS,
           },
+          ...(inputMode
+            ? [
+                {
+                  id: "samples-sampled",
+                  points: points.sampled,
+                  color: withAlpha(RED, exactAlpha),
+                  radius: SAMPLE_RADIUS,
+                },
+              ]
+            : []),
         ]
       : []),
   ];
+  /** The test points' gaps on the map, and in source mode in the image. */
   const sampleGaps = (points: SampleSlide, alpha: number): LineDraw[] =>
     alpha > 0
       ? [
@@ -467,8 +506,28 @@ export function createStory(
             dashed: false,
             under: false,
           },
+          ...(inputMode
+            ? [
+                {
+                  id: "samples-source-gap",
+                  paths: points.sourceGaps,
+                  color: withAlpha(RED, alpha),
+                  width: 1.5,
+                  dashed: false,
+                  under: false,
+                },
+              ]
+            : []),
         ]
       : [];
+
+  // The seed triangles share their diagonal, so drop its repeated midpoint.
+  const seedSamples = [
+    ...new Map(
+      record.seedSamples.flat().map((s) => [s.uv.join(","), s]),
+    ).values(),
+  ];
+  const worstSample = seedSamples.reduce((a, b) => (b.error > a.error ? b : a));
 
   const finalCounter = counter(triangleCount(finalK), maxErrorAt(finalK));
   const seedErrorPx = Math.round(record.seedMaxError);
@@ -521,9 +580,10 @@ export function createStory(
     id: "first-attempt",
     title: "Project the corners",
     description: scenario.firstAttempt({
+      where: seedPointPhrase(worstSample.uv),
       error: seedErrorPx,
       errorKm: seedErrorKm,
-      pixels: "input pixels",
+      pixels: inputMode ? "input pixels" : "output pixels",
     }),
     durationMs: revealAt + 600,
     frame: (t) => {
@@ -544,14 +604,7 @@ export function createStory(
   };
 
   // 4. Measure
-  // The seed triangles share their diagonal, so drop its repeated midpoint.
-  const seedSamples = [
-    ...new Map(
-      record.seedSamples.flat().map((s) => [s.uv.join(","), s]),
-    ).values(),
-  ];
   const seedSlide = toSlide(seedSamples);
-  const worstSample = seedSamples.reduce((a, b) => (b.error > a.error ? b : a));
   const measure: StoryStep = {
     id: "measure",
     title: "Measure the error",
@@ -570,13 +623,22 @@ export function createStory(
       const errorLabels: Label[] = seedSamples.map((sample, i) => {
         const isWorst = sample === worstSample;
         const size = isWorst ? WORST_LABEL_SIZE : SAMPLE_LABEL_SIZE;
+        const text = `${formatPx(sample.error)} px${isWorst ? " · worst" : ""}`;
         return {
           id: `sample-error-${i}`,
-          text: `${formatPx(sample.error)} px${isWorst ? " · worst" : ""}`,
-          ...labelBeyond(seedSlide.guess[i]!, seedSlide.exact[i]!, {
-            clearance: isWorst ? 18 : 14,
-            size,
-          }),
+          text,
+          // Past the true end of the gap being measured: the test point in
+          // the image, or its exact spot on the map.
+          ...labelBeyond(
+            inputMode ? seedSlide.sampled[i]! : seedSlide.guess[i]!,
+            inputMode ? seedSlide.source[i]! : seedSlide.exact[i]!,
+            {
+              clearance: isWorst ? 18 : 14,
+              size,
+              text,
+              area: inputMode ? SOURCE_LABEL_AREA : TARGET_LABEL_AREA,
+            },
+          ),
           color: "#ffffff",
           opacity: gaps * (isWorst ? 1 : others),
           size,
@@ -827,6 +889,8 @@ export function createStory(
 export type CounterTextOptions = {
   /** Ground size of one pixel, in km. */
   kmPerPixel: number;
+  /** Unit of the error, e.g. "output px". Defaults to "px". */
+  unit?: string;
 };
 
 /** "N triangles · max error X px (≈ Y km)". */
@@ -836,10 +900,35 @@ export function counterText(
   options: CounterTextOptions,
 ): string {
   const px = formatPx(errorPx);
+  const unit = options.unit ?? "px";
   const km = errorPx * options.kmPerPixel;
   const distance =
     km < 1 ? "< 1 km" : `≈ ${Math.round(km).toLocaleString("en-US")} km`;
-  return `${triangles.toLocaleString("en-US")} triangles · max error ${px} px (${distance})`;
+  return `${triangles.toLocaleString("en-US")} triangles · max error ${px} ${unit} (${distance})`;
+}
+
+/**
+ * Where a test point of the 2-triangle seed sits in the image, for step 3:
+ * "at the center of the image", "at the middle of the image's top edge", and
+ * so on. `uv` is one of the seed's test points (0–1, v down).
+ */
+export function seedPointPhrase([u, v]: [number, number]): string {
+  if (u === 0.5 && v === 0.5) {
+    return "at the center of the image";
+  }
+  const edge =
+    v === 0
+      ? "top"
+      : v === 1
+        ? "bottom"
+        : u === 0
+          ? "left"
+          : u === 1
+            ? "right"
+            : null;
+  return edge
+    ? `at the middle of the image's ${edge} edge`
+    : "at the center of one of the triangles";
 }
 
 /** Whole pixels from 10 px up, one decimal below. */
@@ -875,30 +964,99 @@ function scaleAlpha(color: UnitColor, alpha: number): UnitColor {
   return [color[0], color[1], color[2], color[3] * clamp01(alpha)];
 }
 
+/** A label's anchor and alignment. */
+type LabelPlacement = Pick<Label, "x" | "y" | "align">;
+
+/** Options for {@link labelBeyond}. */
+type LabelBeyondOptions = {
+  /** Gap between the dot's centre and the label, in slide units. */
+  clearance: number;
+  /** Font size, in slide units. */
+  size: number;
+  /** The label's text, to estimate its width. */
+  text: string;
+  /** Where the label must stay. */
+  area: Rect;
+};
+
 /**
  * Where to put a label for the dot at `to`, so it covers neither that dot nor
  * the line to it from `from`: just past `to`, continuing away from `from`.
- * `clearance` is the gap to the dot's centre, and `size` the font size, both
- * in slide units.
+ * Where that leaves `area`, beside the dot instead (clear of the line too),
+ * and as a last resort before it.
  */
 function labelBeyond(
   from: [number, number],
   to: [number, number],
-  { clearance, size }: { clearance: number; size: number },
-): Pick<Label, "x" | "y" | "align"> {
-  const dx = to[0] - from[0];
-  const dy = to[1] - from[1];
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    return dx >= 0
-      ? { x: to[0] + clearance, y: to[1], align: "left" }
-      : { x: to[0] - clearance, y: to[1], align: "right" };
-  }
+  { clearance, size, text, area }: LabelBeyondOptions,
+): LabelPlacement {
+  const right: LabelPlacement = {
+    x: to[0] + clearance,
+    y: to[1],
+    align: "left",
+  };
+  const left: LabelPlacement = {
+    x: to[0] - clearance,
+    y: to[1],
+    align: "right",
+  };
   // Labels are vertically centred on their anchor, so also clear half a line.
   const offset = clearance + size * 0.6;
-  return {
+  const below: LabelPlacement = {
     x: to[0],
-    y: dy >= 0 ? to[1] + offset : to[1] - offset,
+    y: to[1] + offset,
     align: "center",
+  };
+  const above: LabelPlacement = {
+    x: to[0],
+    y: to[1] - offset,
+    align: "center",
+  };
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const candidates =
+    Math.abs(dx) >= Math.abs(dy)
+      ? dx >= 0
+        ? [right, above, below, left]
+        : [left, above, below, right]
+      : dy >= 0
+        ? [below, right, left, above]
+        : [above, right, left, below];
+  return (
+    candidates.find((placement) =>
+      labelFits(placement, { size, text, area }),
+    ) ?? candidates[0]!
+  );
+}
+
+/** Whether a label placed at `placement` stays inside `area`. */
+function labelFits(
+  { x, y, align }: LabelPlacement,
+  { size, text, area }: Pick<LabelBeyondOptions, "size" | "text" | "area">,
+): boolean {
+  // A generous estimate of the rendered width: 0.6 em per character.
+  const width = 0.6 * size * text.length;
+  const left =
+    align === "left" ? x : align === "right" ? x - width : x - width / 2;
+  return (
+    left >= area.x &&
+    left + width <= area.x + area.width &&
+    y - 0.6 * size >= area.y &&
+    y + 0.6 * size <= area.y + area.height
+  );
+}
+
+/**
+ * The slide area error labels may cover in a panel: its box, widened by
+ * half the gap between the panels, from just under the panel titles to just
+ * above the counter and description.
+ */
+function labelArea(box: Rect): Rect {
+  return {
+    x: box.x - 60,
+    y: box.y - 15,
+    width: box.width + 120,
+    height: box.height + 35,
   };
 }
 

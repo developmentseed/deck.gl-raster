@@ -109,7 +109,7 @@ export const NLCD_SCENARIO: Scenario = {
   introduction: [
     "This is the image we want to render. It's stored in an Albers equal-area projection, but we want to display it in Web Mercator. Note the 49th parallel: in Albers equal-area it's curved, while in Web Mercator it's a straight line.",
   ],
-  firstAttempt: ({ error, errorKm, pixels }) => [
-    `We project the corners of each triangle to Web Mercator, then stretch the image linearly within each triangle. There's a lot of distortion, because we've only projected the corners: at the center of the image, it's ${error} ${pixels}, or about ${errorKm} km.`,
+  firstAttempt: ({ where, error, errorKm, pixels }) => [
+    `We project the corners of each triangle to Web Mercator, then stretch the image linearly within each triangle. There's a lot of distortion, because we've only projected the corners: ${where}, it's ${error} ${pixels}, or about ${errorKm} km.`,
   ],
 };

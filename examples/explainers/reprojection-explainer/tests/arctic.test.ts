@@ -32,43 +32,49 @@ describe("Arctic georeferencing", () => {
   });
 });
 
-describe("Arctic scene", () => {
-  for (const finalMaxError of ARCTIC_SCENARIO.maxErrorChoices) {
-    it(`converges at ${finalMaxError} px`, () => {
+describe.each(["input", "output"] as const)(
+  "Arctic scene, error measured in %s space",
+  (errorSpace) => {
+    for (const finalMaxError of ARCTIC_SCENARIO.maxErrorChoices) {
+      it(`converges at ${finalMaxError} px`, () => {
+        const { record } = buildScene({
+          scenario: ARCTIC_SCENARIO,
+          finalMaxError,
+          errorSpace,
+        });
+        const last = record.steps[record.steps.length - 1]!;
+        expect(last.maxError).toBeLessThanOrEqual(finalMaxError);
+      });
+    }
+
+    it("counts its triangles at the library default to convergence", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        countTriangles(ARCTIC_SCENARIO.fns, {
+          width: ARCTIC_WIDTH,
+          height: ARCTIC_HEIGHT,
+          maxError: 0.125,
+          errorSpace,
+        });
+        // RasterReprojector warns when it stops before reaching the tolerance.
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("is worst at the middle of the bottom edge for the 2-triangle mesh", () => {
       const { record } = buildScene({
         scenario: ARCTIC_SCENARIO,
-        finalMaxError,
+        finalMaxError: 32,
+        errorSpace,
       });
-      const last = record.steps[record.steps.length - 1]!;
-      expect(last.maxError).toBeLessThanOrEqual(finalMaxError);
+      const worst = record.seedSamples
+        .flat()
+        .reduce((a, b) => (b.error > a.error ? b : a));
+      // 0° longitude at 30°N: across the largest circle from the seam the
+      // collapsed mesh lies on.
+      expect(worst.uv).toEqual([0.5, 1]);
     });
-  }
-
-  it("counts its triangles at the library default to convergence", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      countTriangles(ARCTIC_SCENARIO.fns, {
-        width: ARCTIC_WIDTH,
-        height: ARCTIC_HEIGHT,
-        maxError: 0.125,
-      });
-      // RasterReprojector warns when it stops before reaching the tolerance.
-      expect(warn).not.toHaveBeenCalled();
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it("is worst at the middle of the bottom edge for the 2-triangle mesh", () => {
-    const { record } = buildScene({
-      scenario: ARCTIC_SCENARIO,
-      finalMaxError: 32,
-    });
-    const worst = record.seedSamples
-      .flat()
-      .reduce((a, b) => (b.error > a.error ? b : a));
-    // 0° longitude at 30°N: across the largest circle from the seam the
-    // collapsed mesh lies on. The step 3 text says so.
-    expect(worst.uv).toEqual([0.5, 1]);
-  });
-});
+  },
+);

@@ -6,17 +6,19 @@ import {
   parallelPolyline,
   polylineBounds,
 } from "./lines.js";
-import type { RefinementRecord } from "./refinement.js";
+import type { ErrorSpace, RefinementRecord } from "./refinement.js";
 import { countTriangles, recordRefinement } from "./refinement.js";
 import type { Scenario } from "./scenario.js";
 
-/** The library's default mesh tolerance, in source pixels. */
+/** The library's default mesh tolerance, in pixels. */
 export const LIBRARY_DEFAULT_MAX_ERROR = 0.125;
 
 /** Everything the animation needs, precomputed in slide units. */
 export type Scene = {
   /** The image and projections being animated. */
   scenario: Scenario;
+  /** Where the refinement measured the error. */
+  errorSpace: ErrorSpace;
   /** Panel placement and coordinate mappings. */
   layout: Layout;
   /** The recorded refinement, from the 2-triangle seed to the final mesh. */
@@ -38,13 +40,19 @@ export type Scene = {
   outlineTarget: Polyline;
   /** The reference parallel on the source panel. */
   parallelSource: Polyline;
-  /** Triangles the library builds for this image at its default tolerance. */
+  /**
+   * Triangles the library builds for this image at its default tolerance,
+   * with the error measured in {@link Scene.errorSpace}.
+   */
   defaultTriangleCount: number;
-  /** The tolerance the refinement stopped at, in source pixels. */
+  /** The tolerance the refinement stopped at, in pixels. */
   finalMaxError: number;
 };
 
-/** The library-default triangle count per scenario; slow to compute. */
+/**
+ * The library-default triangle count per scenario and error space, keyed
+ * `"<scenario id>:<error space>"`; slow to compute.
+ */
 const defaultTriangleCounts = new Map<string, number>();
 
 /** Options for {@link buildScene}. */
@@ -53,19 +61,22 @@ export type BuildSceneOptions = {
   scenario: Scenario;
   /** Tolerance the recorded refinement stops at, in pixels. */
   finalMaxError: number;
+  /** Where to measure the error. Defaults to `"input"`. */
+  errorSpace?: ErrorSpace;
 };
 
 /**
- * Record the refinement down to `finalMaxError` pixels and place every vertex
- * and reference line on the slide.
+ * Record the refinement down to `finalMaxError` pixels, measured in
+ * `errorSpace`, and place every vertex and reference line on the slide.
  */
 export function buildScene(options: BuildSceneOptions): Scene {
-  const { scenario, finalMaxError } = options;
+  const { scenario, finalMaxError, errorSpace = "input" } = options;
   const { fns, width, height } = scenario;
   const record = recordRefinement(fns, {
     width,
     height,
     maxError: finalMaxError,
+    errorSpace,
   });
   const outline = imageOutlineInTarget(fns, width, height);
   const layout = createLayout({
@@ -99,19 +110,22 @@ export function buildScene(options: BuildSceneOptions): Scene {
     guessXY.set(layout.targetToSlide(...step.split.guess), 2 * k);
   });
 
-  let defaultTriangleCount = defaultTriangleCounts.get(scenario.id);
+  const countKey = `${scenario.id}:${errorSpace}`;
+  let defaultTriangleCount = defaultTriangleCounts.get(countKey);
   if (defaultTriangleCount === undefined) {
     defaultTriangleCount = countTriangles(fns, {
       width,
       height,
       maxError: LIBRARY_DEFAULT_MAX_ERROR,
+      errorSpace,
     });
-    defaultTriangleCounts.set(scenario.id, defaultTriangleCount);
+    defaultTriangleCounts.set(countKey, defaultTriangleCount);
   }
 
   const { parallel } = scenario;
   return {
     scenario,
+    errorSpace,
     layout,
     record,
     sourceXY,

@@ -20,11 +20,16 @@ export type ReferenceParallel = {
 
 /** Values {@link Scenario.firstAttempt} can quote. */
 export type FirstAttemptNumbers = {
+  /**
+   * Where the 2-triangle mesh's largest error is, e.g. "at the center of the
+   * image". It depends on where the error is measured.
+   */
+  where: string;
   /** The 2-triangle mesh's largest error, rounded. */
   error: number;
   /** That error on the ground, rounded to 10 km. */
   errorKm: number;
-  /** The error's unit, e.g. "input pixels". */
+  /** The error's unit: "input pixels" or "output pixels". */
   pixels: string;
 };
 
@@ -67,6 +72,6 @@ export type Scenario = {
   credit?: { text: string; href: string };
   /** Description of step 1. */
   introduction: TextRun[];
-  /** Description of step 3, quoting the 2-triangle mesh's error. */
+  /** Description of step 3, quoting where and how large the 2-triangle mesh's error is. */
   firstAttempt(numbers: FirstAttemptNumbers): TextRun[];
 };

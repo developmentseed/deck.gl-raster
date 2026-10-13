@@ -100,7 +100,7 @@ export const ARCTIC_SCENARIO: Scenario = {
   introduction: [
     "[Draft] This band of satellite imagery is stored in longitude and latitude, but we want to display it on a polar map of the Arctic. Note the Arctic Circle: in longitude and latitude it's a straight line, while on the polar map it's a circle around the North Pole.",
   ],
-  firstAttempt: ({ error, errorKm, pixels }) => [
-    `[Draft] We project the corners of each triangle to the polar map, then stretch the image linearly within each triangle. The image's left and right edges are almost the same meridian, so its four corners land almost on one line and the whole image collapses onto it: at the middle of its bottom edge, the error is ${error} ${pixels}, or about ${errorKm.toLocaleString("en-US")} km.`,
+  firstAttempt: ({ where, error, errorKm, pixels }) => [
+    `[Draft] We project the corners of each triangle to the polar map, then stretch the image linearly within each triangle. The image's left and right edges are almost the same meridian, so its four corners land almost on one line and the whole image collapses onto it: ${where}, the error is ${error} ${pixels}, or about ${errorKm.toLocaleString("en-US")} km.`,
   ],
 };
