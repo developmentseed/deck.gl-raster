@@ -22,17 +22,20 @@ instead of `RasterLayer`, and `src/scene/refinement.ts` reads
 1. **The input image**: the image as stored, and the true 49°N line in Web
    Mercator.
 2. **Two triangles**: the image is split into 2 triangles.
-3. **Project the corners**: the 2 triangles fly over. Their corners land
-   exactly, but the border sags far below the true line.
+3. **Project the corners**: the 2 triangles fly over and the image's true
+   outline appears. Their corners land exactly, but the border sags far below
+   the true line.
 4. **Measure the error**: each triangle is tested at 4 points, its centroid
    and its 3 edge midpoints. A red dot marks where the GPU draws each point and
    a green dot where it belongs. The gap, mapped back into the input image, is
-   the error in input pixels. A triangle's score is its worst point.
+   the error in input pixels. A triangle's score is its worst point; here the
+   worst is the middle of the image.
 5. **Refine the mesh**: the library's refinement, replayed one split at a time.
-   The triangle with the worst score is split at its worst test point (an edge
+   Every triangle is shaded red by its score, read from the library's priority
+   queue. The triangle with the worst score (orange) is split at its worst test point (an edge
    midpoint splits both triangles on that edge), the new corner snaps to its
    exact position, and only the new triangles are measured again. A slider
-   scrubs through the splits; pause it to see each triangle's test points.
+   scrubs through the splits; stop on one to see its triangle's test points.
 6. **Map each triangle**: every triangle of the final mesh flies into place.
 7. **Done**: the edges fade, leaving the reprojected image.
 

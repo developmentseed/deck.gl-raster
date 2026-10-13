@@ -59,6 +59,14 @@ describe("recordRefinement", () => {
     }
   });
 
+  it("scores every triangle, the largest score being the max error", () => {
+    expect(Math.max(...record.seedScores)).toBeCloseTo(record.seedMaxError, 3);
+    for (const step of record.steps) {
+      expect(step.scores).toHaveLength(step.triangles.length / 3);
+      expect(Math.max(...step.scores)).toBeCloseTo(step.maxError, 3);
+    }
+  });
+
   it("measures both seed triangles, worst at the shared diagonal", () => {
     expect(record.seedSamples).toHaveLength(2);
     const worst = record.seedSamples

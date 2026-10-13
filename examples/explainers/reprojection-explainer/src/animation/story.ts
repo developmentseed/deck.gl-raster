@@ -109,10 +109,14 @@ const TRUTH: Rgba = [255, 255, 255, 230];
 const OUTLINE: Rgba = [255, 255, 255, 110];
 const SLOTS: Rgba = [255, 255, 255, 70];
 /** Tint of the triangle about to be split. */
-const HIGHLIGHT: UnitColor = [1, 0.62, 0.04, 0.35];
+const HIGHLIGHT: UnitColor = [1, 0.62, 0.04, 0.55];
+/** Tint of a triangle with the worst score; others are fainter. */
+const HEAT: UnitColor = [1, 0.27, 0.23, 0.3];
 /** Tint of the triangles a split just made. */
 const FRESH: UnitColor = [1, 0.62, 0.04, 0.2];
 const DOT_RADIUS = 7;
+const HEAT_CAPTION =
+  "Shading shows each triangle's score. The worst (orange) is split next.";
 const SAMPLE: Rgba = [255, 255, 255, 255];
 const SAMPLE_RADIUS = 4;
 
@@ -160,6 +164,11 @@ export function createStory(
   const trianglesAt = (k: number): Uint32Array =>
     k === 0 ? record.seedTriangles : record.steps[k - 1]!.triangles;
   const triangleCount = (k: number): number => trianglesAt(k).length / 3;
+  const scoresAt = (k: number): Float32Array =>
+    k === 0 ? record.seedScores : record.steps[k - 1]!.scores;
+  /** Shade by score relative to the worst: brighter is worse. */
+  const heat = (k: number, triangle: number): UnitColor =>
+    scaleAlpha(HEAT, scoresAt(k)[triangle]! / maxErrorAt(k));
   const maxErrorAt = (k: number): number =>
     k === 0 ? record.seedMaxError : record.steps[k - 1]!.maxError;
 
@@ -246,24 +255,25 @@ export function createStory(
     };
   };
 
-  const truthLines: LineDraw[] = [
-    {
-      id: "truth-outline",
-      paths: [scene.outlineTarget],
-      color: OUTLINE,
-      width: 1.5,
-      dashed: true,
-      under: false,
-    },
-    {
-      id: "truth-parallel",
-      paths: [scene.parallelTarget],
-      color: TRUTH,
-      width: 2,
-      dashed: true,
-      under: false,
-    },
-  ];
+  /** The image's true outline on the target panel, hidden before step 3. */
+  const outlinePaths = [scene.outlineTarget];
+  const truthOutline = (alpha: number): LineDraw => ({
+    id: "truth-outline",
+    paths: outlinePaths,
+    color: withAlpha(OUTLINE, alpha),
+    width: 1.5,
+    dashed: true,
+    under: false,
+  });
+  const truthParallel: LineDraw = {
+    id: "truth-parallel",
+    paths: [scene.parallelTarget],
+    color: TRUTH,
+    width: 2,
+    dashed: true,
+    under: false,
+  };
+  const truthLines: LineDraw[] = [truthOutline(1), truthParallel];
   const slotPaths = uniqueEdges(trianglesAt(finalK)).map(
     ([a, b]): [number, number][] => [vertexTarget(a), vertexTarget(b)],
   );
@@ -462,7 +472,7 @@ export function createStory(
     durationMs: 0,
     frame: () => ({
       meshes: [mesh("source", soup("source", 0), withAlpha(SOURCE_EDGES, 0))],
-      lines: truthLines,
+      lines: [truthParallel],
       dots: [],
       hud: hud(null),
     }),
@@ -484,7 +494,7 @@ export function createStory(
         meshes: [
           mesh("source", soup("source", 0), withAlpha(SOURCE_EDGES, edges)),
         ],
-        lines: truthLines,
+        lines: [truthParallel],
         dots: [],
         hud: hud(null),
       };
@@ -498,24 +508,19 @@ export function createStory(
     id: "first-attempt",
     title: "Project the corners",
     description: [
-      `We project the corners of each triangle to Web Mercator, then stretch the image linearly within each triangle. There's a lot of distortion, because we've only projected the corners: at the center of the image, it's ${seedErrorPx} input pixels, or about ${seedErrorKm} km.`,
+      "We project the corners of each triangle to Web Mercator, then stretch the image linearly within each triangle. The corners land exactly where they belong, but the edges between them stay straight, while the image's true outline (dashed) is curved. Everything between the corners is off: the red 49th parallel in the image sags well below the true line.",
     ],
     durationMs: revealAt + 600,
     frame: (t) => {
       const reveal = easeInOutCubic(progress(t, revealAt, 500));
-      const pin = guessAt(0);
       return {
         meshes: [
           mesh("source", soup("source", 0), SOURCE_EDGES),
           mesh("flight", seedFlight.soupAt(t), TARGET_EDGES),
         ],
-        lines: [...truthLines, ...gapLine(0, reveal, pin)],
-        dots: splitDots(0, reveal, pin, 0),
-        hud: hud(
-          reveal > 0
-            ? counterText(triangleCount(0), record.seedMaxError)
-            : null,
-        ),
+        lines: [truthOutline(reveal), truthParallel],
+        dots: [],
+        hud: hud(null),
       };
     },
   };
@@ -535,14 +540,15 @@ export function createStory(
     description: [
       "How wrong is the straight-line stretch? Each triangle is tested at ",
       { text: "4 points", emphasis: true },
-      ": its centroid and the midpoint of each edge. The red dot is where the GPU draws a test point, blended linearly from the triangle's corners. The green dot is where that point really belongs. To score it, the red position is projected back into the input image, and its distance from the test point is the error, in input pixels. Each triangle is scored by its worst test point, and the triangles are ranked with the worst first.",
+      ": its centroid and the midpoint of each edge. The red dot is where the GPU draws a test point, blended linearly from the triangle's corners. The green dot is where that point really belongs. To score it, the red position is projected back into the input image, and its distance from the test point is the error, in input pixels. Each triangle is scored by its worst test point, and the triangles are ranked with the worst first. ",
+      `Here the worst point is the middle of the image: ${seedErrorPx} input pixels, or about ${seedErrorKm} km.`,
     ],
     durationMs: MEASURE_MS,
     frame: (t) => {
       const points = easeInOutCubic(progress(t, 0, MEASURE_POINTS_MS));
       const gaps = easeInOutCubic(progress(t, MEASURE_GAPS_AT, 600));
       const worst = easeInOutCubic(progress(t, MEASURE_WORST_AT, 600));
-      const tint = (): UnitColor => scaleAlpha(HIGHLIGHT, 0.5 * worst);
+      const tint = (): UnitColor => scaleAlpha(HIGHLIGHT, 0.35 * worst);
       const errorLabels: Label[] = seedSamples.map((sample, i) => {
         // Just past the green dot, continuing the line from the red one.
         const [gx, gy] = seedSlide.guess[i]!;
@@ -588,7 +594,7 @@ export function createStory(
     id: "refine",
     title: "Refine the mesh",
     description: [
-      "We take the triangle with the largest error and add a vertex at its worst test point, at the point's exact position. If that point is the midpoint of an edge, both triangles that share the edge are split. Then edges are flipped where needed to avoid thin triangles (keeping the mesh a Delaunay triangulation). Only the new triangles are measured, at 4 test points each. Every other triangle keeps its score. ",
+      "Every triangle has a score: the error at its worst test point. The stronger a triangle's red shading, the higher its score. We take the triangle with the highest score (orange) and add a vertex at its worst test point, at the point's exact position. If that point is the midpoint of an edge, both triangles that share the edge are split. Then edges are flipped where needed to avoid thin triangles (keeping the mesh a Delaunay triangulation). Only the new triangles are measured, at 4 test points each. Every other triangle keeps its score. ",
       `We repeat until the largest error is below a threshold (here ${scene.finalMaxError} px). Drag the slider to stop on a split and see its triangle's test points.`,
     ],
     durationMs: refineMs,
@@ -641,8 +647,10 @@ export function createStory(
         const fadeIn = easeInOutCubic(
           progress(t, timing.start, (timing.highlightEnd - timing.start) * 0.6),
         );
-        const tint = (triangle: number): UnitColor | null =>
-          triangle === step.split.index ? scaleAlpha(HIGHLIGHT, fadeIn) : null;
+        const tint = (triangle: number): UnitColor =>
+          triangle === step.split.index
+            ? mixUnit(heat(k, triangle), HIGHLIGHT, fadeIn)
+            : heat(k, triangle);
         return {
           meshes: [
             mesh("source", tinted(soup("source", k), k, tint), SOURCE_EDGES),
@@ -657,7 +665,10 @@ export function createStory(
             ...sampleDots(splitSamples(k), dotAlpha, dotAlpha),
             ...splitDots(k, dotAlpha, guess, 0),
           ],
-          hud: hud(counterText(triangleCount(k), step.split.error)),
+          hud: hud(
+            counterText(triangleCount(k), step.split.error),
+            HEAT_CAPTION,
+          ),
         };
       }
 
@@ -675,8 +686,8 @@ export function createStory(
           lerp(guess[0], exact[0], arrived),
           lerp(guess[1], exact[1], arrived),
         ];
-        const tint = (triangle: number): UnitColor | null =>
-          fresh.has(triangle) ? FRESH : null;
+        const tint = (triangle: number): UnitColor =>
+          fresh.has(triangle) ? FRESH : heat(after, triangle);
         return {
           meshes: [
             mesh(
@@ -692,14 +703,19 @@ export function createStory(
           ],
           lines: [...truthLines, ...gapLine(k, dotAlpha, pin)],
           dots: splitDots(k, dotAlpha, pin, arrived),
-          hud: hud(counterText(triangleCount(after), step.split.error)),
+          hud: hud(
+            counterText(triangleCount(after), step.split.error),
+            HEAT_CAPTION,
+          ),
         };
       }
 
-      // Hold: the new triangles settle and their tint fades.
+      // Hold: the new triangles are measured and take on their score's shade.
       const fade = 1 - progress(t, timing.snapEnd, timing.end - timing.snapEnd);
-      const tint = (triangle: number): UnitColor | null =>
-        fresh.has(triangle) ? scaleAlpha(FRESH, fade) : null;
+      const tint = (triangle: number): UnitColor =>
+        fresh.has(triangle)
+          ? mixUnit(heat(after, triangle), FRESH, fade)
+          : heat(after, triangle);
       const settledDot: DotDraw[] =
         dotAlpha * fade > 0
           ? [
@@ -726,7 +742,10 @@ export function createStory(
         ],
         lines: truthLines,
         dots: settledDot,
-        hud: hud(counterText(triangleCount(after), step.maxError)),
+        hud: hud(
+          counterText(triangleCount(after), step.maxError),
+          HEAT_CAPTION,
+        ),
       };
     },
   };
@@ -835,6 +854,16 @@ function withAlpha(color: Rgba, alpha: number): Rgba {
 /** `color` with its alpha multiplied by `alpha`. */
 function scaleAlpha(color: UnitColor, alpha: number): UnitColor {
   return [color[0], color[1], color[2], color[3] * clamp01(alpha)];
+}
+
+/** Linear blend between two tints. */
+function mixUnit(a: UnitColor, b: UnitColor, t: number): UnitColor {
+  return [
+    lerp(a[0], b[0], t),
+    lerp(a[1], b[1], t),
+    lerp(a[2], b[2], t),
+    lerp(a[3], b[3], t),
+  ];
 }
 
 /** Linear blend between two colours. */

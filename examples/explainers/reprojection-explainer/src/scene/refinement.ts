@@ -57,6 +57,8 @@ export type RefinementStep = {
   triangles: Uint32Array;
   /** Largest remaining error after this step, in source pixels. */
   maxError: number;
+  /** Each triangle's score after this step: its worst test point's error. */
+  scores: Float32Array;
 };
 
 /** The refinement history of one mesh, from its 2-triangle seed. */
@@ -69,6 +71,8 @@ export type RefinementRecord = {
   seedTriangles: Uint32Array;
   /** Largest error of the seed mesh, in source pixels. */
   seedMaxError: number;
+  /** Each seed triangle's score: its worst test point's error. */
+  seedScores: Float32Array;
   /** The 4 test points of each seed triangle. */
   seedSamples: ErrorSample[][];
   /** One entry per `refine()` call, in order. Vertex ids are stable. */
@@ -91,6 +95,7 @@ export type RecordRefinementOptions = {
 type ReprojectorInternals = {
   _queue: number[];
   _errors: number[];
+  _queueIndices: number[];
   _candidatesUV: number[];
 };
 
@@ -111,6 +116,13 @@ export function recordRefinement(
   const internals = reprojector as unknown as ReprojectorInternals;
   const seedTriangles = Uint32Array.from(reprojector.triangles);
   const seedMaxError = reprojector.getMaxError();
+  // Every triangle sits in the priority queue, keyed by its worst error.
+  const scores = () =>
+    Float32Array.from(
+      { length: reprojector.triangles.length / 3 },
+      (_, t) => internals._errors[internals._queueIndices[t]!]!,
+    );
+  const seedScores = scores();
   const seedSamples = Array.from({ length: seedTriangles.length / 3 }, (_, t) =>
     measureTriangle(reprojector, [
       seedTriangles[3 * t]!,
@@ -150,6 +162,7 @@ export function recordRefinement(
       vertex,
       triangles: Uint32Array.from(reprojector.triangles),
       maxError: reprojector.getMaxError(),
+      scores: scores(),
     });
   }
 
@@ -158,6 +171,7 @@ export function recordRefinement(
     positions: Float64Array.from(reprojector.exactOutputPositions),
     seedTriangles,
     seedMaxError,
+    seedScores,
     seedSamples,
     steps,
   };

@@ -45,14 +45,25 @@ describe("createStory", () => {
     expect(frame.meshes[0]!.edgeColor[3]).toBe(0);
   });
 
-  it("ends the first attempt showing the error", () => {
+  it("hides the true outline until the corners are projected", () => {
+    const ids = (frame: { lines: { id: string }[] }) =>
+      frame.lines.map((line) => line.id);
+    expect(ids(story[0]!.frame(0))).toEqual(["truth-parallel"]);
+    expect(ids(story[1]!.frame(story[1]!.durationMs))).toEqual([
+      "truth-parallel",
+    ]);
+    const step = story[2]!;
+    const outline = (t: number) =>
+      step.frame(t).lines.find((line) => line.id === "truth-outline")!;
+    expect(outline(0).color[3]).toBe(0);
+    expect(outline(step.durationMs).color[3]).toBeGreaterThan(0);
+  });
+
+  it("leaves measuring the error to the next step", () => {
     const step = story[2]!;
     const frame = step.frame(step.durationMs);
-    expect(frame.hud.counter).toContain("2 triangles");
-    expect(frame.hud.counter).toContain("261 px");
-    expect(frame.dots.map((dot) => dot.id)).toEqual(
-      expect.arrayContaining(["split-source", "split-exact", "split-pin"]),
-    );
+    expect(frame.hud.counter).toBeNull();
+    expect(frame.dots).toEqual([]);
   });
 
   it("shows every distinct seed test point and labels the worst", () => {
@@ -144,7 +155,7 @@ describe("titles and descriptions", () => {
   });
 
   it("states the 2-triangle error from the recorded refinement", () => {
-    expect(descriptionText(2)).toContain("261 input pixels, or about 500 km");
+    expect(descriptionText(3)).toContain("261 input pixels, or about 500 km");
   });
 
   it("states the threshold the refinement stopped at", () => {
@@ -207,6 +218,21 @@ describe("refinement scrubber", () => {
           : scene.record.steps[position - 1]!.triangles.length;
       expect(target.soup.vertexCount).toBe(triangles);
     }
+  });
+
+  it("shades every triangle by its score, the split one in orange", () => {
+    const k = 5;
+    const frame = refine.frame(scrubber.timeAt(k), { paused: true });
+    const tints = frame.meshes.find((mesh) => mesh.id === "target")!.soup
+      .tints!;
+    const alphas = Array.from(
+      { length: tints.length / 12 },
+      (_, t) => tints[12 * t + 3]!,
+    );
+    expect(alphas.every((alpha) => alpha > 0)).toBe(true);
+    const split = scene.record.steps[k]!.split.index;
+    expect(tints[12 * split + 1]).toBeGreaterThan(0.5); // orange, not red
+    expect(frame.hud.caption).toContain("score");
   });
 
   it("only exists on the refinement step", () => {
