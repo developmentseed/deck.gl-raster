@@ -119,9 +119,13 @@ export async function decode(
       planarConfiguration,
       littleEndian,
     } = metadata;
-    // Predictor 3 byte planes are most significant byte first in every file,
-    // and applyPredictor reassembles them in platform order, so only the other
-    // layouts carry the file's byte order.
+    // Samples wider than one byte are stored in the file's byte order, so a big
+    // endian file must be swapped to platform order before decoding the
+    // predictor.
+    //
+    // The exception is predictor 3 (floating point predictor): its byte planes
+    // are **always** most significant byte first, regardless of the file's byte
+    // order, and applyPredictor already reassembles them in platform order.
     const needsByteSwap =
       !littleEndian &&
       bitsPerSample > 8 &&
