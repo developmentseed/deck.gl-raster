@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-13
 - **Issues:** related to [#673](https://github.com/developmentseed/deck.gl-raster/pull/673) (antimeridian), [#566](https://github.com/developmentseed/deck.gl-raster/issues/566) (globe faceting), [#694](https://github.com/developmentseed/deck.gl-raster/pull/694) (custom projections)
-- **Status:** Design, awaiting review
+- **Status:** Implemented end to end on this branch as a preview to try out; awaiting review
 
 ## Problem
 
@@ -80,7 +80,7 @@ unit.
 | NLCD (Albers → Web Mercator), 0.125 px | 6,001 triangles; worst error on the map 0.147 | 6,563 triangles |
 | NLCD, 4 px | 194 triangles | 160 triangles |
 | EPSG:4326 tile 60–85°N → Web Mercator, 0.125 px | 2,394 triangles; worst error on the map 0.54 | 5,602 triangles |
-| EPSG:4326 band 30–85°N (±179.9°) → polar stereographic, 4 px | 1,100 triangles, 38% of vertices north of 70°N | 980 triangles, 13% north of 70°N |
+| EPSG:4326 band 30–85°N (±179.9°) → polar stereographic, 4 px | 1,038 triangles, 38% of vertices north of 70°N | 980 triangles, 13% north of 70°N |
 | EPSG:4326 band 70–88°N, all longitudes → polar stereographic | never converges (the inverse confuses the two edges) | 10,524 triangles |
 | EPSG:3832 world tile reaching −87° (rows squashed by the ±85.05° clamp) | stuck at 32 px | 360 triangles |
 | UTM 60N tile across 180°, with inverse functions that throw | needs the inverse | 40 triangles; inverse never called |
@@ -211,7 +211,15 @@ In `examples/explainers/reprojection-explainer`:
   gap on the map, as today. Source mode adds, in the input image, a line from
   each test point to where the GPU's drawn position maps back, and puts the
   labels there; the map's dots and gaps stay, unlabeled. Paused test points in
-  the refine step follow the same rule.
+  the refine step follow the same rule. Each label sits past the gap's true
+  end (the test point in the image, the exact spot on the map), and moves
+  beside its dot where that would cover the panel titles, the counter or the
+  description.
+- **Where the first attempt is worst.** Step 3 names the 2-triangle mesh's
+  worst test point from the recorded refinement rather than assuming it,
+  because it moves with the metric: NLCD's is the image center in source
+  pixels but the middle of the top edge on the map, where Web Mercator
+  stretches the map most.
 - **Units.** Source mode keeps "px" in the counter and "input pixels" in step 3.
   Target mode uses "px on the map" and "pixels on the map" as draft wording;
   Kyle finalizes it. The "≈ km" conversion uses the scenario's kilometers per
@@ -236,7 +244,8 @@ scenarios from the scenario brainstorm can be added later on the same picker.
 - kilometers per pixel (the center pixel's ground size), for the counter;
 - the default tolerance;
 - the text for step 1, and the scenario-specific part of step 3's sentence
-  (target name, where the worst point is, units). Steps 2 and 4–7 are generic.
+  (target name; the story fills in where the worst point is and the units).
+  Steps 2 and 4–7 are generic.
 
 The NLCD constants in `src/scene/nlcd.ts` become the NLCD scenario.
 `build-scene`, `story`, `hud` and `texture` take a scenario instead of
@@ -272,8 +281,7 @@ not change.
   tell them apart (it never converges). Stopping at 85°N keeps the pole, where
   every longitude meets, out of the image.
 - **Numbers.** The center pixel's ground size is about 14 km. At 4 px the
-  source metric needs about 1,100 triangles and the target metric about 980
-  (from the probe above).
+  source metric needs 1,038 triangles and the target metric 980.
 - **Text.** Kyle writes step 1 and step 3's sentence. Until then the code
   carries drafts, flagged in the PR as needing his text before merge.
 
@@ -283,9 +291,13 @@ not change.
 
 1. **A comparison script**, run on demand (not in CI), that prints a markdown
    table per case and tolerance: triangle count, worst error on the map, worst
-   error in source pixels, projection calls and time. Cases: NLCD; the
-   EPSG:4326 60–85°N tile in Web Mercator; the Arctic band in polar
-   stereographic; a UTM tile; the `geotiff-test-data` fixtures.
+   error in source pixels, projection calls and time. Cases: the reprojector's
+   JSON fixtures (NLCD in Albers, NAIP in UTM 18N, LINZ in NZTM, MODIS in
+   sinusoidal; each scaled to an overview at most 2048 px on its long side) in
+   Web Mercator; an EPSG:4326 60–85°N tile in Web Mercator; an EPSG:4326
+   67.5–89.9°N tile and the 30–85°N band in polar stereographic. Run it with
+   `COMPARE_ERROR_SPACES=1 pnpm exec vitest run tests/compare-error-spaces.test.ts --silent=false`
+   in `packages/raster-reproject`.
 2. **The examples** (section 2): flip the toggle with the mesh wireframe on, in
    headed Chrome.
 3. **The explainer** (sections 3 and 4): NLCD and the Arctic scenario.
