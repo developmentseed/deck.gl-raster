@@ -12,14 +12,13 @@ const scene = buildScene({ finalMaxError: 8 });
 const story = createStory(scene, DEFAULT_STORY_SETTINGS);
 
 describe("createStory", () => {
-  it("has the eight steps in order", () => {
+  it("has the seven steps in order", () => {
     expect(story.map((step) => step.id)).toEqual([
       "start",
       "cut",
       "first-attempt",
       "measure",
       "refine",
-      "flip",
       "fly-over",
       "result",
     ]);
@@ -46,35 +45,69 @@ describe("createStory", () => {
     expect(frame.meshes[0]!.edgeColor[3]).toBe(0);
   });
 
-  it("hides the true outline until the corners are projected", () => {
-    const ids = (frame: { lines: { id: string }[] }) =>
-      frame.lines.map((line) => line.id);
-    expect(ids(story[0]!.frame(0))).toEqual(["truth-parallel"]);
-    expect(ids(story[1]!.frame(story[1]!.durationMs))).toEqual([
-      "truth-parallel",
-    ]);
-    const step = story[2]!;
-    const outline = (t: number) =>
-      step.frame(t).lines.find((line) => line.id === "truth-outline")!;
-    expect(outline(0).color[3]).toBe(0);
-    expect(outline(step.durationMs).color[3]).toBeGreaterThan(0);
+  it("shows the image's true outline from the first step", () => {
+    const ids = story[0]!.frame(0).lines.map((line) => line.id);
+    expect(ids).toEqual(["truth-outline", "truth-parallel"]);
   });
 
-  it("leaves measuring the error to the next step", () => {
+  it("ends the first attempt showing the error", () => {
     const step = story[2]!;
     const frame = step.frame(step.durationMs);
-    expect(frame.hud.counter).toBeNull();
-    expect(frame.dots).toEqual([]);
+    expect(frame.hud.counter).toContain("2 triangles");
+    expect(frame.hud.counter).toContain("261 px");
+    expect(frame.dots.map((dot) => dot.id)).toEqual(
+      expect.arrayContaining(["split-source", "split-exact", "split-pin"]),
+    );
   });
 
-  it("shows every distinct seed test point and labels the worst", () => {
+  it("starts measuring where the first attempt ends", () => {
+    const ids = (items: { id: string }[]) => items.map((item) => item.id);
+    const end = story[2]!.frame(story[2]!.durationMs);
+    const start = story[3]!.frame(0);
+    expect(ids(start.dots)).toEqual(ids(end.dots));
+    expect(ids(start.lines)).toEqual(ids(end.lines));
+    expect(start.hud.counter).toBe(end.hud.counter);
+  });
+
+  /** The measure step's error labels, once they're all in. */
+  const errorLabels = () => {
     const step = story[3]!;
     const frame = step.frame(step.durationMs);
+    return {
+      frame,
+      labels: frame.hud.labels.filter((l) => l.id.startsWith("sample-error")),
+    };
+  };
+
+  it("labels every distinct seed test point, the worst one largest", () => {
+    const { frame, labels } = errorLabels();
     // 2 triangles × 4 points, minus the shared diagonal's midpoint.
     const guesses = frame.dots.find((dot) => dot.id === "samples-guess")!;
     expect(guesses.points).toHaveLength(7);
-    const worst = frame.hud.labels.filter((l) => l.text.includes("worst"));
-    expect(worst.map((l) => l.text)).toEqual(["261 px · worst"]);
+    expect(labels).toHaveLength(7);
+    const worst = labels.find((l) => l.text.includes("worst"))!;
+    expect(worst.text).toBe("261 px · worst");
+    for (const label of labels) {
+      if (label !== worst) {
+        expect(label.size).toBeLessThan(worst.size!);
+      }
+    }
+  });
+
+  it("keeps each error label clear of its dot", () => {
+    const { frame, labels } = errorLabels();
+    const exact = frame.dots.find((dot) => dot.id === "samples-exact")!.points;
+    labels.forEach((label, i) => {
+      const [x, y] = exact[i]!;
+      if (label.align === "left") {
+        expect(label.x).toBeGreaterThan(x + 10);
+      } else if (label.align === "right") {
+        expect(label.x).toBeLessThan(x - 10);
+      } else {
+        // Centred labels sit above or below the dot, past half a line.
+        expect(Math.abs(label.y - y)).toBeGreaterThan(0.6 * label.size! + 10);
+      }
+    });
   });
 
   it("ends the refinement at the final mesh", () => {
@@ -86,31 +119,16 @@ describe("createStory", () => {
     expect(frame.dots).toEqual([]);
   });
 
-  it("shows a thin pair of triangles, then the flipped pair", () => {
-    const step = story[5]!;
-    const flip = scene.flip!;
-    const target = (t: number) =>
-      step.frame(t).meshes.find((mesh) => mesh.id === "target")!.soup;
-    const after = scene.record.steps[flip.step]!.triangles;
-    expect(target(0).vertexCount).toBe(after.length);
-    expect(target(0).positions).not.toEqual(target(step.durationMs).positions);
-    const diagonal = step
-      .frame(step.durationMs)
-      .lines.find((line) => line.id === "flip-diagonal")!;
-    expect(diagonal.color.slice(0, 3)).toEqual([48, 209, 88]);
-    expect(descriptionText(5)).toContain(`split ${flip.step + 1}`);
-  });
-
   for (const flightStyle of ["direct", "fly-then-snap"] as const) {
     it(`lands every triangle on its exact position (${flightStyle})`, () => {
       const flyOver = createStory(scene, {
         ...DEFAULT_STORY_SETTINGS,
         flightStyle,
-      })[6]!;
+      })[5]!;
       const flight = flyOver
         .frame(flyOver.durationMs)
         .meshes.find((mesh) => mesh.id === "flight")!;
-      const target = story[7]!
+      const target = story[6]!
         .frame(0)
         .meshes.find((mesh) => mesh.id === "target")!;
       expect(flight.soup.positions.length).toBe(target.soup.positions.length);
@@ -121,7 +139,7 @@ describe("createStory", () => {
   }
 
   it("names the library's default triangle count in the closing caption", () => {
-    const step = story[7]!;
+    const step = story[6]!;
     expect(step.frame(step.durationMs).hud.caption).toContain("6,001");
   });
 });
@@ -171,7 +189,7 @@ describe("titles and descriptions", () => {
   });
 
   it("states the 2-triangle error from the recorded refinement", () => {
-    expect(descriptionText(3)).toContain("261 input pixels, or about 500 km");
+    expect(descriptionText(2)).toContain("261 input pixels, or about 500 km");
   });
 
   it("states the threshold the refinement stopped at", () => {
@@ -179,12 +197,12 @@ describe("titles and descriptions", () => {
   });
 
   it("links to delatin and names the default triangle count", () => {
-    const runs = story[7]!.description;
+    const runs = story[6]!.description;
     expect(runs).toContainEqual({
       text: "delatin",
       href: "https://github.com/mapbox/delatin",
     });
-    expect(descriptionText(7)).toContain("would get 6,001 triangles");
+    expect(descriptionText(6)).toContain("would get 6,001 triangles");
   });
 });
 
@@ -236,19 +254,43 @@ describe("refinement scrubber", () => {
     }
   });
 
-  it("shades every triangle by its score, the split one in orange", () => {
+  /** The target mesh's per-vertex RGBA tints at a slider position. */
+  const tintsAt = (position: number): Float32Array =>
+    refine
+      .frame(scrubber.timeAt(position), { paused: true })
+      .meshes.find((mesh) => mesh.id === "target")!.soup.tints!;
+
+  it("tints the triangle being split orange", () => {
     const k = 5;
-    const frame = refine.frame(scrubber.timeAt(k), { paused: true });
-    const tints = frame.meshes.find((mesh) => mesh.id === "target")!.soup
-      .tints!;
-    const alphas = Array.from(
-      { length: tints.length / 12 },
-      (_, t) => tints[12 * t + 3]!,
-    );
-    expect(alphas.every((alpha) => alpha > 0)).toBe(true);
     const split = scene.record.steps[k]!.split.index;
-    expect(tints[12 * split + 1]).toBeGreaterThan(0.5); // orange, not red
-    expect(frame.hud.caption).toContain("score");
+    // Green channel: 0.62 for orange, 0.27 for the red error tint.
+    expect(tintsAt(k)[12 * split + 1]).toBeGreaterThan(0.5);
+  });
+
+  it("fades the error tint as the mesh converges", () => {
+    // Mean tint alpha of the triangles that aren't being split.
+    const heat = (position: number) => {
+      const tints = tintsAt(position);
+      const split = scene.record.steps[position]!.split.index;
+      const alphas = Array.from(
+        { length: tints.length / 12 },
+        (_, t) => tints[12 * t + 3]!,
+      ).filter((_, t) => t !== split);
+      return alphas.reduce((sum, alpha) => sum + alpha, 0) / alphas.length;
+    };
+    // The seed triangle that isn't split first still has the seed's error.
+    expect(heat(0)).toBeCloseTo(0.3, 5);
+    expect(heat(0)).toBeGreaterThan(heat(20));
+    expect(heat(20)).toBeGreaterThan(heat(steps - 1));
+  });
+
+  it("clears the tint once the error is below the threshold", () => {
+    const tints = refine
+      .frame(refine.durationMs - 1e-6)
+      .meshes.find((mesh) => mesh.id === "target")!.soup.tints!;
+    for (let i = 3; i < tints.length; i += 4) {
+      expect(tints[i]).toBeCloseTo(0, 3);
+    }
   });
 
   it("only exists on the refinement step", () => {

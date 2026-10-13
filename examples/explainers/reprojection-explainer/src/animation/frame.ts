@@ -61,6 +61,8 @@ export type Label = {
   color: string;
   /** Opacity, 0–1. */
   opacity: number;
+  /** Font size in slide units; 22 when omitted. */
+  size?: number;
 };
 
 /** Text drawn over the slide. */

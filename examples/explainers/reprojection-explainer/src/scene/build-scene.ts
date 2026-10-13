@@ -8,8 +8,8 @@ import {
   polylineBounds,
 } from "./lines.js";
 import { NLCD_HEIGHT, NLCD_TO_WEB_MERCATOR, NLCD_WIDTH } from "./nlcd.js";
-import type { FlipExample, RefinementRecord } from "./refinement.js";
-import { countTriangles, findFlip, recordRefinement } from "./refinement.js";
+import type { RefinementRecord } from "./refinement.js";
+import { countTriangles, recordRefinement } from "./refinement.js";
 
 /** Latitude of the parallel the animation tracks: the US–Canada border. */
 export const PARALLEL_LAT = 49;
@@ -50,8 +50,6 @@ export type Scene = {
   defaultTriangleCount: number;
   /** The tolerance the refinement stopped at, in source pixels. */
   finalMaxError: number;
-  /** One edge flip from the refinement, to show on its own. */
-  flip: FlipExample | null;
 };
 
 let defaultTriangleCountCache: number | undefined;
@@ -125,7 +123,6 @@ export function buildScene(options: { finalMaxError: number }): Scene {
     ).map(([x, y]) => layout.targetToSlide(x, y)),
     parallelSource: bakedParallel().map(([x, y]) => layout.pixelToSource(x, y)),
     defaultTriangleCount: defaultTriangleCountCache,
-    flip: findFlip(record, NLCD_WIDTH, NLCD_HEIGHT),
     finalMaxError: options.finalMaxError,
   };
 }

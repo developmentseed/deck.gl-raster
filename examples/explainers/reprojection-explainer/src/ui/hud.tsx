@@ -206,7 +206,7 @@ function labelStyle(label: Label): CSSProperties {
     transform: `translate(${shift}, -50%)`,
     color: label.color,
     opacity: label.opacity,
-    fontSize: 22,
+    fontSize: label.size ?? 22,
     fontWeight: 600,
     whiteSpace: "nowrap",
     textShadow: "0 1px 3px rgba(0, 0, 0, 0.8)",
