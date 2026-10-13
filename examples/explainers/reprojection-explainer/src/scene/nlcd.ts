@@ -2,6 +2,8 @@ import type { Affine } from "@developmentseed/affine";
 import { apply, invert } from "@developmentseed/affine";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import proj4 from "proj4";
+import nlcdUrl from "../assets/nlcd-albers-2500.png";
+import type { Scenario } from "./scenario.js";
 
 /** Width of `nlcd-albers-2500.png`, in pixels. */
 export const NLCD_WIDTH = 2500;
@@ -78,4 +80,36 @@ export const NLCD_TO_WEB_MERCATOR: ReprojectionFns = {
   inverseTransform: albersToPixel,
   forwardReproject: albersToWebMercator,
   inverseReproject: webMercatorToAlbers,
+};
+
+/** The default scenario: CONUS land cover, from Albers to Web Mercator. */
+export const NLCD_SCENARIO: Scenario = {
+  id: "nlcd",
+  label: "NLCD land cover: Albers → Web Mercator",
+  imageUrl: nlcdUrl,
+  width: NLCD_WIDTH,
+  height: NLCD_HEIGHT,
+  fns: NLCD_TO_WEB_MERCATOR,
+  lngLatToPixel: (lng, lat) => albersToPixel(...lngLatToAlbers(lng, lat)),
+  lngLatToTarget: lngLatToWebMercator,
+  sourceName: "Albers equal-area",
+  targetName: "Web Mercator",
+  // The US–Canada border, across the image's top corners.
+  parallel: {
+    lat: 49,
+    lngRange: [-129.3, -63.1],
+    label: "49°N",
+    targetSamples: 2,
+  },
+  outlineSamples: 12,
+  kmPerPixel: NLCD_PIXEL_KM,
+  // 32 px: 24 triangles; 1 px: 802 triangles.
+  maxErrorChoices: [1, 2, 4, 8, 16, 32],
+  defaultMaxError: 4,
+  introduction: [
+    "This is the image we want to render. It's stored in an Albers equal-area projection, but we want to display it in Web Mercator. Note the 49th parallel: in Albers equal-area it's curved, while in Web Mercator it's a straight line.",
+  ],
+  firstAttempt: ({ error, errorKm, pixels }) => [
+    `We project the corners of each triangle to Web Mercator, then stretch the image linearly within each triangle. There's a lot of distortion, because we've only projected the corners: at the center of the image, it's ${error} ${pixels}, or about ${errorKm} km.`,
+  ],
 };

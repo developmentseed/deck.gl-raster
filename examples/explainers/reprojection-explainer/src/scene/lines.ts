@@ -1,10 +1,4 @@
-import {
-  albersToPixel,
-  albersToWebMercator,
-  lngLatToAlbers,
-  lngLatToWebMercator,
-  pixelToAlbers,
-} from "./nlcd.js";
+import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 
 /** A polyline as a list of `[x, y]` points. */
 export type Polyline = [number, number][];
@@ -12,26 +6,17 @@ export type Polyline = [number, number][];
 /** Bounding box `[minX, minY, maxX, maxY]`. */
 export type Bounds = [number, number, number, number];
 
-/** A parallel (constant latitude) in the source image's pixel coordinates. */
-export function parallelInPixels(
+/**
+ * A parallel (constant latitude) across `lngRange`, with each point mapped by
+ * `project` from longitude, latitude (degrees) into the wanted coordinates.
+ */
+export function parallelPolyline(
+  project: (lng: number, lat: number) => [number, number],
   lat: number,
   lngRange: [number, number],
   samples = 129,
 ): Polyline {
-  return sampleRange(lngRange, samples).map((lng) =>
-    albersToPixel(...lngLatToAlbers(lng, lat)),
-  );
-}
-
-/** A parallel (constant latitude) in Web Mercator metres. */
-export function parallelInWebMercator(
-  lat: number,
-  lngRange: [number, number],
-  samples = 129,
-): Polyline {
-  return sampleRange(lngRange, samples).map((lng) =>
-    lngLatToWebMercator(lng, lat),
-  );
+  return sampleRange(lngRange, samples).map((lng) => project(lng, lat));
 }
 
 /**
@@ -62,14 +47,15 @@ export function imageOutlineInPixels(
   return ring;
 }
 
-/** The image's outline reprojected to Web Mercator metres. */
-export function imageOutlineInWebMercator(
+/** The image's outline reprojected to the target CRS. */
+export function imageOutlineInTarget(
+  fns: ReprojectionFns,
   width: number,
   height: number,
   samplesPerEdge = 64,
 ): Polyline {
   return imageOutlineInPixels(width, height, samplesPerEdge).map(([x, y]) =>
-    albersToWebMercator(...pixelToAlbers(x, y)),
+    fns.forwardReproject(...fns.forwardTransform(x, y)),
   );
 }
 
