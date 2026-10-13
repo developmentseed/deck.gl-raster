@@ -26,6 +26,7 @@ const FIXTURES = [
   { variant: "rasterio", name: "float32_1band_lerc_block32" },
   { variant: "rasterio", name: "float32_1band_lerc_deflate_block32" },
   { variant: "rasterio", name: "float32_1band_lerc_zstd_block32" },
+  { variant: "rasterio", name: "float32_1band_lerc_block64_big_endian" },
   { variant: "rasterio", name: "float32_1band_deflate_block64_predictor3" },
   {
     variant: "rasterio",
@@ -34,6 +35,7 @@ const FIXTURES = [
 
   { variant: "rasterio", name: "int8_3band_zstd_block64" },
 
+  { variant: "rasterio", name: "uint16_1band_lerc_block64_big_endian" },
   { variant: "rasterio", name: "uint16_1band_lzw_block128_predictor2" },
   {
     variant: "rasterio",
