@@ -1,5 +1,6 @@
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { TextRun } from "../animation/story.js";
+import type { EdgeSamples } from "./lines.js";
 
 /** A parallel drawn in both panels and baked into the image. */
 export type ReferenceParallel = {
@@ -51,8 +52,11 @@ export type Scenario = {
   targetName: string;
   /** The parallel the animation tracks. */
   parallel: ReferenceParallel;
-  /** Points per image edge in the dashed outline on the map. */
-  outlineSamples: number;
+  /**
+   * Points per image edge in the dashed outline on the map. Like the
+   * parallel, each segment should stay longer than a dash.
+   */
+  outlineSamples: EdgeSamples;
   /** Ground size of one source pixel near the image center, in km. */
   kmPerPixel: number;
   /** Final mesh tolerances offered in the tuning panel, in pixels. */

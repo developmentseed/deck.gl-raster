@@ -1,8 +1,9 @@
+import { ARCTIC_SCENARIO } from "./arctic.js";
 import { NLCD_SCENARIO } from "./nlcd.js";
 import type { Scenario } from "./scenario.js";
 
 /** Every scenario the explainer offers, in tuning-panel order. */
-export const SCENARIOS: readonly Scenario[] = [NLCD_SCENARIO];
+export const SCENARIOS: readonly Scenario[] = [NLCD_SCENARIO, ARCTIC_SCENARIO];
 
 /** The scenario shown when the URL names none (or an unknown one). */
 export const DEFAULT_SCENARIO: Scenario = NLCD_SCENARIO;

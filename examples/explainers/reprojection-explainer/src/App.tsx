@@ -16,7 +16,7 @@ import {
   loadImage,
 } from "./scene/texture.js";
 import type { AppSettings } from "./settings.js";
-import { DEFAULT_SETTINGS } from "./settings.js";
+import { settingsFromUrl, urlWithSettings } from "./settings.js";
 import { ControlBar } from "./ui/control-bar.js";
 import { Hud } from "./ui/hud.js";
 import { TuningPanel } from "./ui/tuning-panel.js";
@@ -132,7 +132,9 @@ export default function App() {
     element: HTMLImageElement;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(() =>
+    settingsFromUrl(window.location.search),
+  );
   const [panelOpen, setPanelOpen] = useState(false);
   const [fit, setFit] = useState(windowFit);
   const [hud, setHud] = useState<HudState>(EMPTY_HUD);
@@ -205,6 +207,14 @@ export default function App() {
   useEffect(() => {
     writeDescriptions(descriptions);
   }, [descriptions]);
+
+  // Keep the scenario in the address bar, so a view can be linked.
+  useEffect(() => {
+    const href = urlWithSettings(window.location.href, settings);
+    if (href !== window.location.href) {
+      window.history.replaceState(window.history.state, "", href);
+    }
+  }, [settings]);
 
   // Show the controls while the pointer moves; hide them when it rests, so
   // they stay off the projector while presenting with the keyboard.

@@ -1,7 +1,7 @@
 import { ControlPanel } from "deck.gl-raster-examples-shared";
 import type { ReactNode } from "react";
 import type { FlightStyle } from "../animation/flight.js";
-import { scenarioById } from "../scene/scenarios.js";
+import { SCENARIOS, scenarioById } from "../scene/scenarios.js";
 import type { AppSettings } from "../settings.js";
 
 /** Props of {@link TuningPanel}. */
@@ -23,6 +23,28 @@ export function TuningPanel({ settings, onChange }: TuningPanelProps) {
       position="top-left"
       sourcePath="examples/explainers/reprojection-explainer"
     >
+      <Row text="Scenario">
+        <select
+          aria-label="Scenario"
+          // Shrink to fit the panel rather than push past its edge.
+          style={{ minWidth: 0 }}
+          value={settings.scenario}
+          onChange={(event) => {
+            const scenario = scenarioById(event.target.value);
+            onChange({
+              ...settings,
+              scenario: scenario.id,
+              finalMaxError: scenario.defaultMaxError,
+            });
+          }}
+        >
+          {SCENARIOS.map((scenario) => (
+            <option key={scenario.id} value={scenario.id}>
+              {scenario.label}
+            </option>
+          ))}
+        </select>
+      </Row>
       <Row text="Flight style">
         <select
           aria-label="Flight style"
