@@ -118,6 +118,14 @@ export type RasterTileLayerProps<
     maxError?: number;
 
     /**
+     * Where mesh refinement measures error: in source pixels (`"source"`,
+     * the default) or on the map (`"target"`). See `RasterReprojector`'s
+     * `errorSpace` option.
+     * @internal Experimental; may change or be removed.
+     */
+    _errorSpace?: "source" | "target";
+
+    /**
      * Show triangulation mesh + tile outlines.
      * @default false
      */
@@ -412,7 +420,7 @@ export class RasterTileLayer<
     descriptor: RasterTilesetDescriptor,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): Layer[] {
-    const { maxError, debug, debugOpacity } = this.props;
+    const { maxError, debug, debugOpacity, _errorSpace } = this.props;
     const tile = props.tile as Tile2DHeader<DataT> & RasterTileMetadata;
 
     const debugLayers = debug
@@ -474,6 +482,7 @@ export class RasterTileLayer<
         ...(image !== undefined && { image }),
         renderPipeline,
         maxError,
+        _errorSpace,
         reprojectionFns,
         // Web Mercator: clamp the mesh to the valid latitude band for tiles
         // past ±85.051°. Globe renders the full mesh (it shows the poles).

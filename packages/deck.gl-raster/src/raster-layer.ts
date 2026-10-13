@@ -114,6 +114,14 @@ export interface RasterLayerProps extends CompositeLayerProps {
    */
   maxError?: number;
 
+  /**
+   * Where mesh refinement measures error: in source pixels (`"source"`, the
+   * default) or on the map (`"target"`). See `RasterReprojector`'s
+   * `errorSpace` option. Ignored on the globe, which uses a uniform grid.
+   * @internal Experimental; may change or be removed.
+   */
+  _errorSpace?: "source" | "target";
+
   /** If set, enables debug mode for visualizing the mesh and reprojection process. */
   debug?: boolean;
 
@@ -199,7 +207,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       props.height !== oldProps.height ||
       reprojectionFnsChanged ||
       props.maxError !== oldProps.maxError ||
-      props.initialTriangulation !== oldProps.initialTriangulation;
+      props.initialTriangulation !== oldProps.initialTriangulation ||
+      props._errorSpace !== oldProps._errorSpace;
 
     if (needsMeshUpdate) {
       this._generateMesh();
@@ -213,6 +222,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       reprojectionFns,
       initialTriangulation,
       maxError = DEFAULT_MAX_ERROR,
+      _errorSpace,
     } = this.props;
 
     // TEMPORARY GLOBE VIEW HACK:
@@ -251,7 +261,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       reprojectionFns,
       width + 1,
       height + 1,
-      { initialTriangulation },
+      { initialTriangulation, errorSpace: _errorSpace },
     );
     reprojector.run(maxError);
     const { indices, positions64High, positions64Low, texCoords } =
