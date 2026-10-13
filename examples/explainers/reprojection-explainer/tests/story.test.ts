@@ -196,11 +196,15 @@ describe("titles and descriptions", () => {
     expect(descriptionText(4)).toContain("(here 8 px)");
   });
 
-  it("links to delatin and names the default triangle count", () => {
+  it("links to delatin and its author, and names the default triangle count", () => {
     const runs = story[6]!.description;
     expect(runs).toContainEqual({
       text: "delatin",
       href: "https://github.com/mapbox/delatin",
+    });
+    expect(runs).toContainEqual({
+      text: "Volodymyr Agafonkin",
+      href: "https://agafonkin.com/",
     });
     expect(descriptionText(6)).toContain("would get 6,001 triangles");
   });

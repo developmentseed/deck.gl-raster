@@ -795,7 +795,9 @@ export function createStory(
     description: [
       "That's it! The image is now projected into our target coordinate system. Finding the set of triangles, called mesh generation, is efficient and fast on the CPU. Then the hard work of resampling pixels happens on the GPU. This approach is derived from ",
       { text: "delatin", href: "https://github.com/mapbox/delatin" },
-      ", a terrain mesh generation library written by Volodymyr Agafonkin. See ",
+      ", a terrain mesh generation library written by ",
+      { text: "Volodymyr Agafonkin", href: "https://agafonkin.com/" },
+      ". See ",
       { text: "its demo", href: "https://mapbox.github.io/delatin/" },
       ` for how this process works for terrain. ${caption}`,
     ],
