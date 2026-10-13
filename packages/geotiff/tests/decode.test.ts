@@ -32,6 +32,7 @@ describe("decode", () => {
       height,
       predictor,
       planarConfiguration,
+      littleEndian: tiff.tiff.isLittleEndian,
     });
 
     const bytesPerSample = bitsPerSample[0]! / 8;
@@ -68,6 +69,7 @@ describe("decode", () => {
       height,
       predictor,
       planarConfiguration,
+      littleEndian: tiff.tiff.isLittleEndian,
     });
 
     const bytesPerSample = bitsPerSample[0]! / 8;
@@ -103,6 +105,7 @@ describe("decode", () => {
       height,
       predictor,
       planarConfiguration,
+      littleEndian: tiff.tiff.isLittleEndian,
     });
 
     const bytesPerSample = bitsPerSample[0]! / 8;

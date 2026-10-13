@@ -41,7 +41,8 @@ export type DecoderMetadata = {
   predictor: Predictor;
   planarConfiguration: PlanarConfiguration;
   lercParameters?: number[] | null;
-  littleEndian?: boolean;
+  /** Whether the source TIFF is little endian (`II`) rather than big endian (`MM`). */
+  littleEndian: boolean;
 };
 
 /**
@@ -116,7 +117,7 @@ export async function decode(
       bitsPerSample,
       samplesPerPixel,
       planarConfiguration,
-      littleEndian = true,
+      littleEndian,
     } = metadata;
     // Predictor 3 byte planes are most significant byte first in every file,
     // and applyPredictor reassembles them in platform order, so only the other
