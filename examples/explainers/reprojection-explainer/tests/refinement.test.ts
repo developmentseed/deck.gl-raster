@@ -49,6 +49,25 @@ describe("recordRefinement", () => {
     expect(first.guess[1]).toBeCloseTo((p[1]! + p[7]!) / 2, 3);
   });
 
+  it("splits at the worst of the triangle's 4 test points", () => {
+    for (const { split } of record.steps) {
+      expect(split.samples).toHaveLength(4);
+      const worst = split.samples.reduce((a, b) => (b.error > a.error ? b : a));
+      expect(worst.uv[0]).toBeCloseTo(split.uv[0], 12);
+      expect(worst.uv[1]).toBeCloseTo(split.uv[1], 12);
+      expect(worst.error).toBeCloseTo(split.error, 9);
+    }
+  });
+
+  it("measures both seed triangles, worst at the shared diagonal", () => {
+    expect(record.seedSamples).toHaveLength(2);
+    const worst = record.seedSamples
+      .flat()
+      .reduce((a, b) => (b.error > a.error ? b : a));
+    expect(worst.uv).toEqual([0.5, 0.5]);
+    expect(worst.error).toBeCloseTo(record.seedMaxError, 9);
+  });
+
   it("records the split triangle's index in the mesh before the split", () => {
     let before = record.seedTriangles;
     for (const step of record.steps.slice(0, 20)) {

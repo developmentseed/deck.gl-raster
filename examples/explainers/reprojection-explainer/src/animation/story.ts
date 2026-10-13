@@ -2,6 +2,7 @@ import type { TriangleSoup } from "../layers/triangle-soup.js";
 import type { Scene } from "../scene/build-scene.js";
 import { LIBRARY_DEFAULT_MAX_ERROR } from "../scene/build-scene.js";
 import { NLCD_PIXEL_KM } from "../scene/nlcd.js";
+import type { ErrorSample } from "../scene/refinement.js";
 import type { FlightOptions, FlightPaths, FlightStyle } from "./flight.js";
 import { eastFirstDelays, flightDuration, flightPositions } from "./flight.js";
 import type {
@@ -48,6 +49,7 @@ export type StoryStepId =
   | "start"
   | "cut"
   | "first-attempt"
+  | "measure"
   | "refine"
   | "fly-over"
   | "result";
@@ -111,6 +113,8 @@ const HIGHLIGHT: UnitColor = [1, 0.62, 0.04, 0.35];
 /** Tint of the triangles a split just made. */
 const FRESH: UnitColor = [1, 0.62, 0.04, 0.2];
 const DOT_RADIUS = 7;
+const SAMPLE: Rgba = [255, 255, 255, 255];
+const SAMPLE_RADIUS = 4;
 
 const CUT_MS = 900;
 const FIRST_SPREAD_MS = 250;
@@ -119,19 +123,24 @@ const CLEAR_MS = 500;
 const SNAP_DELAY_MS = 300;
 const SNAP_MS = 1200;
 const RESULT_MS = 1200;
+const MEASURE_POINTS_MS = 600;
+const MEASURE_GAPS_AT = 900;
+const MEASURE_WORST_AT = 2100;
+const MEASURE_MS = 3000;
 /** Refinement steps shorter than this hide their dots, to avoid flicker. */
 const DOTS_MIN_STEP_MS = 150;
 
 /**
- * The six steps of the explainer, each a pure function from time to a
+ * The seven steps of the explainer, each a pure function from time to a
  * {@link Frame}:
  *
  * 1. `start`: the source image, and the true 49°N on an empty target panel.
  * 2. `cut`: the 2-triangle seed's edges appear.
  * 3. `first-attempt`: the 2 triangles fly over; the border misses the line.
- * 4. `refine`: replay of `refine()`, on both panels in sync.
- * 5. `fly-over`: every final triangle flies into its slot.
- * 6. `result`: the edges fade, leaving the reprojected image.
+ * 4. `measure`: the 4 test points of each seed triangle and their errors.
+ * 5. `refine`: replay of `refine()`, on both panels in sync.
+ * 6. `fly-over`: every final triangle flies into its slot.
+ * 7. `result`: the edges fade, leaving the reprojected image.
  */
 export function createStory(
   scene: Scene,
@@ -363,6 +372,79 @@ export function createStory(
     ];
   };
 
+  /** Test points on the slide: source dot, GPU guess, exact spot, gap. */
+  type SampleSlide = {
+    source: [number, number][];
+    guess: [number, number][];
+    exact: [number, number][];
+    gaps: [number, number][][];
+  };
+  const toSlide = (samples: ErrorSample[]): SampleSlide => {
+    const guess = samples.map((s) => layout.targetToSlide(...s.guess));
+    const exact = samples.map((s) => layout.targetToSlide(...s.exact));
+    return {
+      source: samples.map((s) => layout.uvToSource(...s.uv)),
+      guess,
+      exact,
+      gaps: guess.map((g, i) => [g, exact[i]!]),
+    };
+  };
+  const splitSampleCache = new Map<number, SampleSlide>();
+  const splitSamples = (k: number): SampleSlide => {
+    let cached = splitSampleCache.get(k);
+    if (!cached) {
+      cached = toSlide(record.steps[k]!.split.samples);
+      splitSampleCache.set(k, cached);
+    }
+    return cached;
+  };
+  /** Small dots for test points: white in the source, red guess, green exact. */
+  const sampleDots = (
+    points: SampleSlide,
+    pointsAlpha: number,
+    exactAlpha: number,
+  ): DotDraw[] => [
+    ...(pointsAlpha > 0
+      ? [
+          {
+            id: "samples-source",
+            points: points.source,
+            color: withAlpha(SAMPLE, pointsAlpha),
+            radius: SAMPLE_RADIUS,
+          },
+          {
+            id: "samples-guess",
+            points: points.guess,
+            color: withAlpha(RED, pointsAlpha),
+            radius: SAMPLE_RADIUS,
+          },
+        ]
+      : []),
+    ...(exactAlpha > 0
+      ? [
+          {
+            id: "samples-exact",
+            points: points.exact,
+            color: withAlpha(GREEN, exactAlpha),
+            radius: SAMPLE_RADIUS,
+          },
+        ]
+      : []),
+  ];
+  const sampleGaps = (points: SampleSlide, alpha: number): LineDraw[] =>
+    alpha > 0
+      ? [
+          {
+            id: "samples-gap",
+            paths: points.gaps,
+            color: withAlpha(RED, alpha),
+            width: 1.5,
+            dashed: false,
+            under: false,
+          },
+        ]
+      : [];
+
   const finalCounter = counterText(triangleCount(finalK), maxErrorAt(finalK));
   const seedErrorPx = Math.round(record.seedMaxError);
   const seedErrorKm =
@@ -438,14 +520,76 @@ export function createStory(
     },
   };
 
-  // 4. Refine
+  // 4. Measure
+  // The seed triangles share their diagonal, so drop its repeated midpoint.
+  const seedSamples = [
+    ...new Map(
+      record.seedSamples.flat().map((s) => [s.uv.join(","), s]),
+    ).values(),
+  ];
+  const seedSlide = toSlide(seedSamples);
+  const worstSample = seedSamples.reduce((a, b) => (b.error > a.error ? b : a));
+  const measure: StoryStep = {
+    id: "measure",
+    title: "Measure the error",
+    description: [
+      "How wrong is the straight-line stretch? Each triangle is tested at ",
+      { text: "4 points", emphasis: true },
+      ": its centroid and the midpoint of each edge. The red dot is where the GPU draws a test point, blended linearly from the triangle's corners. The green dot is where that point really belongs. To score it, the red position is projected back into the input image, and its distance from the test point is the error, in input pixels. Each triangle is scored by its worst test point, and the triangles are ranked with the worst first.",
+    ],
+    durationMs: MEASURE_MS,
+    frame: (t) => {
+      const points = easeInOutCubic(progress(t, 0, MEASURE_POINTS_MS));
+      const gaps = easeInOutCubic(progress(t, MEASURE_GAPS_AT, 600));
+      const worst = easeInOutCubic(progress(t, MEASURE_WORST_AT, 600));
+      const tint = (): UnitColor => scaleAlpha(HIGHLIGHT, 0.5 * worst);
+      const errorLabels: Label[] = seedSamples.map((sample, i) => {
+        // Just past the green dot, continuing the line from the red one.
+        const [gx, gy] = seedSlide.guess[i]!;
+        const [ex, ey] = seedSlide.exact[i]!;
+        const length = Math.hypot(ex - gx, ey - gy) || 1;
+        const isWorst = sample === worstSample;
+        return {
+          id: `sample-error-${i}`,
+          text: `${formatPx(sample.error)} px${isWorst && worst > 0 ? " · worst" : ""}`,
+          x: ex + ((ex - gx) / length) * 26,
+          y: ey + ((ey - gy) / length) * 26,
+          align: "center",
+          color: "#ffffff",
+          opacity: gaps * (isWorst ? 1 : 1 - 0.3 * worst),
+        };
+      });
+      return {
+        meshes: [
+          mesh("source", tinted(soup("source", 0), 0, tint), SOURCE_EDGES),
+          mesh("target", tinted(soup("target", 0), 0, tint), TARGET_EDGES),
+        ],
+        lines: [...truthLines, ...sampleGaps(seedSlide, gaps)],
+        dots: [
+          ...sampleDots(seedSlide, points, gaps),
+          ...splitDots(0, worst, guessAt(0), 0),
+        ],
+        hud: {
+          ...hud(counterText(triangleCount(0), record.seedMaxError)),
+          labels: [...labels, ...errorLabels],
+          caption:
+            worst > 0
+              ? "The worst test point is where the first new vertex goes."
+              : null,
+        },
+      };
+    },
+  };
+
+  // 5. Refine
   const timings = scheduleRefinement(finalK, settings.schedule);
   const refineMs = timings.length > 0 ? timings[timings.length - 1]!.end : 0;
   const refine: StoryStep = {
     id: "refine",
     title: "Refine the mesh",
     description: [
-      `We add a new vertex where the distortion is highest and rebuild the triangles around it. Then we find the next place of highest distortion and add a vertex there, too. We continue until the maximum error is below a threshold (here ${scene.finalMaxError} px).`,
+      "We take the triangle with the largest error and add a vertex at its worst test point, at the point's exact position. If that point is the midpoint of an edge, both triangles that share the edge are split. Then edges are flipped where needed to avoid thin triangles (keeping the mesh a Delaunay triangulation). Only the new triangles are measured, at 4 test points each. Every other triangle keeps its score. ",
+      `We repeat until the largest error is below a threshold (here ${scene.finalMaxError} px). Drag the slider to stop on a split and see its triangle's test points.`,
     ],
     durationMs: refineMs,
     scrubber:
@@ -504,8 +648,15 @@ export function createStory(
             mesh("source", tinted(soup("source", k), k, tint), SOURCE_EDGES),
             mesh("target", tinted(soup("target", k), k, tint), TARGET_EDGES),
           ],
-          lines: [...truthLines, ...gapLine(k, dotAlpha, guess)],
-          dots: splitDots(k, dotAlpha, guess, 0),
+          lines: [
+            ...truthLines,
+            ...sampleGaps(splitSamples(k), dotAlpha),
+            ...gapLine(k, dotAlpha, guess),
+          ],
+          dots: [
+            ...sampleDots(splitSamples(k), dotAlpha, dotAlpha),
+            ...splitDots(k, dotAlpha, guess, 0),
+          ],
           hud: hud(counterText(triangleCount(k), step.split.error)),
         };
       }
@@ -580,7 +731,7 @@ export function createStory(
     },
   };
 
-  // 5. Fly over
+  // 6. Fly over
   const finalFlight = makeFlight(finalK, FINAL_SPREAD_MS);
   const flyOver: StoryStep = {
     id: "fly-over",
@@ -611,7 +762,7 @@ export function createStory(
     },
   };
 
-  // 6. Result
+  // 7. Result
   const result: StoryStep = {
     id: "result",
     title: "Done",
@@ -641,17 +792,21 @@ export function createStory(
     },
   };
 
-  return [start, cut, firstAttempt, refine, flyOver, result];
+  return [start, cut, firstAttempt, measure, refine, flyOver, result];
 }
 
 /** "N triangles · max error X px (≈ Y km)". */
 export function counterText(triangles: number, errorPx: number): string {
-  const px =
-    errorPx >= 10 ? Math.round(errorPx).toString() : errorPx.toFixed(1);
+  const px = formatPx(errorPx);
   const km = errorPx * NLCD_PIXEL_KM;
   const distance =
     km < 1 ? "< 1 km" : `≈ ${Math.round(km).toLocaleString("en-US")} km`;
   return `${triangles.toLocaleString("en-US")} triangles · max error ${px} px (${distance})`;
+}
+
+/** Whole pixels from 10 px up, one decimal below. */
+function formatPx(errorPx: number): string {
+  return errorPx >= 10 ? Math.round(errorPx).toString() : errorPx.toFixed(1);
 }
 
 /** Each edge of a triangle mesh once, as a pair of vertex ids. */

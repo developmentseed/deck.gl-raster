@@ -12,11 +12,12 @@ const scene = buildScene({ finalMaxError: 8 });
 const story = createStory(scene, DEFAULT_STORY_SETTINGS);
 
 describe("createStory", () => {
-  it("has the six steps in order", () => {
+  it("has the seven steps in order", () => {
     expect(story.map((step) => step.id)).toEqual([
       "start",
       "cut",
       "first-attempt",
+      "measure",
       "refine",
       "fly-over",
       "result",
@@ -31,7 +32,7 @@ describe("createStory", () => {
   });
 
   it("draws every refinement phase without throwing", () => {
-    const refine = story[3]!;
+    const refine = story[4]!;
     for (let t = 0; t <= refine.durationMs; t += 37) {
       expect(() => refine.frame(t)).not.toThrow();
     }
@@ -54,8 +55,18 @@ describe("createStory", () => {
     );
   });
 
-  it("ends the refinement at the final mesh", () => {
+  it("shows every distinct seed test point and labels the worst", () => {
     const step = story[3]!;
+    const frame = step.frame(step.durationMs);
+    // 2 triangles × 4 points, minus the shared diagonal's midpoint.
+    const guesses = frame.dots.find((dot) => dot.id === "samples-guess")!;
+    expect(guesses.points).toHaveLength(7);
+    const worst = frame.hud.labels.filter((l) => l.text.includes("worst"));
+    expect(worst.map((l) => l.text)).toEqual(["261 px · worst"]);
+  });
+
+  it("ends the refinement at the final mesh", () => {
+    const step = story[4]!;
     const frame = step.frame(step.durationMs);
     const target = frame.meshes.find((mesh) => mesh.id === "target")!;
     expect(target.soup.vertexCount / 3).toBe(100);
@@ -68,11 +79,11 @@ describe("createStory", () => {
       const flyOver = createStory(scene, {
         ...DEFAULT_STORY_SETTINGS,
         flightStyle,
-      })[4]!;
+      })[5]!;
       const flight = flyOver
         .frame(flyOver.durationMs)
         .meshes.find((mesh) => mesh.id === "flight")!;
-      const target = story[5]!
+      const target = story[6]!
         .frame(0)
         .meshes.find((mesh) => mesh.id === "target")!;
       expect(flight.soup.positions.length).toBe(target.soup.positions.length);
@@ -83,7 +94,7 @@ describe("createStory", () => {
   }
 
   it("names the library's default triangle count in the closing caption", () => {
-    const step = story[5]!;
+    const step = story[6]!;
     expect(step.frame(step.durationMs).hud.caption).toContain("6,001");
   });
 });
@@ -137,21 +148,21 @@ describe("titles and descriptions", () => {
   });
 
   it("states the threshold the refinement stopped at", () => {
-    expect(descriptionText(3)).toContain("(here 8 px)");
+    expect(descriptionText(4)).toContain("(here 8 px)");
   });
 
   it("links to delatin and names the default triangle count", () => {
-    const runs = story[5]!.description;
+    const runs = story[6]!.description;
     expect(runs).toContainEqual({
       text: "delatin",
       href: "https://github.com/mapbox/delatin",
     });
-    expect(descriptionText(5)).toContain("would get 6,001 triangles");
+    expect(descriptionText(6)).toContain("would get 6,001 triangles");
   });
 });
 
 describe("refinement scrubber", () => {
-  const refine = story[3]!;
+  const refine = story[4]!;
   const scrubber = refine.scrubber!;
   const steps = scene.record.steps.length;
 
@@ -169,9 +180,18 @@ describe("refinement scrubber", () => {
     }
   });
 
-  it("shows the split's dots when paused, even on fast steps", () => {
+  it("shows the split's dots and test points when paused, even on fast steps", () => {
     const fast = scrubber.timeAt(steps - 1);
-    expect(refine.frame(fast, { paused: true }).dots.length).toBe(3);
+    expect(
+      refine.frame(fast, { paused: true }).dots.map((dot) => dot.id),
+    ).toEqual([
+      "samples-source",
+      "samples-guess",
+      "samples-exact",
+      "split-source",
+      "split-exact",
+      "split-pin",
+    ]);
     expect(refine.frame(fast).dots.length).toBe(0);
   });
 

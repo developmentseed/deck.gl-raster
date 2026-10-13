@@ -24,11 +24,17 @@ instead of `RasterLayer`, and `src/scene/refinement.ts` reads
 2. **Two triangles**: the image is split into 2 triangles.
 3. **Project the corners**: the 2 triangles fly over. Their corners land
    exactly, but the border sags far below the true line.
-4. **Refine the mesh**: the library's refinement, replayed one split at a time.
-   Each split lands where the straight-line guess is furthest off, and the new
-   corner snaps to its exact position. A slider scrubs through the splits.
-5. **Map each triangle**: every triangle of the final mesh flies into place.
-6. **Done**: the edges fade, leaving the reprojected image.
+4. **Measure the error**: each triangle is tested at 4 points, its centroid
+   and its 3 edge midpoints. A red dot marks where the GPU draws each point and
+   a green dot where it belongs. The gap, mapped back into the input image, is
+   the error in input pixels. A triangle's score is its worst point.
+5. **Refine the mesh**: the library's refinement, replayed one split at a time.
+   The triangle with the worst score is split at its worst test point (an edge
+   midpoint splits both triangles on that edge), the new corner snaps to its
+   exact position, and only the new triangles are measured again. A slider
+   scrubs through the splits; pause it to see each triangle's test points.
+6. **Map each triangle**: every triangle of the final mesh flies into place.
+7. **Done**: the edges fade, leaving the reprojected image.
 
 Each step has a title and a description. The control bar at the bottom
 appears when the mouse moves, and hides when it rests so it stays off the
@@ -41,7 +47,7 @@ screen while presenting from the keyboard.
 | → / Space / PageDown | Finish the current animation, or go to the next step |
 | ← / PageUp | Previous step |
 | R | Replay the current step |
-| 1–6 | Jump to a step |
+| 1–7 | Jump to a step |
 | D | Show or hide the step descriptions |
 | F | Switch flight style (direct, or fly then snap) |
 | H | Show the tuning panel |
