@@ -177,6 +177,23 @@ export class RasterReprojector {
    * of just the uv coordinates?
    */
   private _candidatesUV: number[];
+
+  /**
+   * The exact output position of each triangle's candidate, kept in target
+   * mode so a candidate that becomes a vertex is not projected again. `NaN`
+   * when no test point of the triangle had a finite error.
+   */
+  private _candidatesXY: number[];
+
+  /** Where test-point errors are measured. See the constructor's options. */
+  private _errorSpace: "source" | "target";
+
+  /**
+   * In target mode, one source pixel's size on the map at the center of the
+   * meshed area: the unit of target-space error. `1` in source mode.
+   */
+  private _pixelSize: number;
+
   private _queueIndices: number[];
 
   private _queue: number[];
@@ -188,7 +205,23 @@ export class RasterReprojector {
     reprojectors: ReprojectionFns,
     width: number,
     height: number = width,
-    options: { initialTriangulation?: InitialTriangulation } = {},
+    options: {
+      initialTriangulation?: InitialTriangulation;
+      /**
+       * Where each test point's error is measured. Experimental.
+       *
+       * - `"source"` (default): in source pixels. The GPU's position for the
+       *   test point is mapped back into the image with the inverse
+       *   functions, and the error is its distance from the test point, like
+       *   gdalwarp's `-et`.
+       * - `"target"`: on the map. The error is the distance between where the
+       *   test point belongs and where the GPU draws it, divided by one source
+       *   pixel's size on the map at the center of the meshed area, so
+       *   `maxError` is still a number of pixels. The inverse functions are
+       *   never called.
+       */
+      errorSpace?: "source" | "target";
+    } = {},
   ) {
     this.reprojectors = reprojectors;
     this.width = width;
@@ -201,6 +234,7 @@ export class RasterReprojector {
     // additional triangle data
     this._halfedges = [];
     this._candidatesUV = [];
+    this._candidatesXY = [];
     this._queueIndices = [];
 
     this._queue = []; // queue of added triangles
@@ -208,7 +242,11 @@ export class RasterReprojector {
     this._pending = []; // triangles pending addition to queue
     this._pendingLen = 0;
 
-    this._seed(options.initialTriangulation ?? UNIT_SQUARE_TRIANGULATION);
+    const seed = options.initialTriangulation ?? UNIT_SQUARE_TRIANGULATION;
+    this._errorSpace = options.errorSpace ?? "source";
+    this._pixelSize =
+      this._errorSpace === "target" ? this._measurePixelSize(seed) : 1;
+    this._seed(seed);
     this._flush();
   }
 
@@ -230,6 +268,8 @@ export class RasterReprojector {
     for (let t = 0; t < numTriangles; t++) {
       this._candidatesUV[2 * t] = 0;
       this._candidatesUV[2 * t + 1] = 0;
+      this._candidatesXY[2 * t] = Number.NaN;
+      this._candidatesXY[2 * t + 1] = Number.NaN;
       this._queueIndices[t] = -1;
       this._pending[this._pendingLen++] = t;
     }
@@ -238,7 +278,7 @@ export class RasterReprojector {
   /**
    * Refine the mesh until its maximum error gets below the given one
    *
-   * @param maxError The maximum reprojection error in input pixels that the mesh should achieve.
+   * @param maxError The maximum error the mesh should achieve, in pixels: source pixels, or in target mode, one source pixel's size on the map at the center of the meshed area.
    * @param maxIterations Optional safeguard to prevent infinite loops in case of non-convergence. If the mesh fails to converge within this number of iterations, a warning will be logged and the function will return early.
    *
    * @return  {[type]}  [return description]
@@ -323,6 +363,10 @@ export class RasterReprojector {
     let maxErrorU: number = 0;
     let maxErrorV: number = 0;
 
+    // In target mode, the exact output position of that point
+    let maxErrorX = Number.NaN;
+    let maxErrorY = Number.NaN;
+
     // Recall that the sample point is in barycentric coordinates
     for (const samplePoint of SAMPLE_POINTS) {
       // Get the UV coordinates of the sample point
@@ -366,30 +410,44 @@ export class RasterReprojector {
       const pixelExactX = uvSampleU * (this.width - 1);
       const pixelExactY = uvSampleV * (this.height - 1);
 
-      // Reproject these linearly-interpolated coordinates **from target CRS
-      // to input CRS**. This gives us the **exact position in input space**
-      // of the linearly interpolated sample point in output space.
-      const inputCRSSampled = this.reprojectors.inverseReproject(
-        outSampleX,
-        outSampleY,
-      );
+      let err: number;
+      let exactX = Number.NaN;
+      let exactY = Number.NaN;
+      if (this._errorSpace === "target") {
+        // Where the sample point belongs on the map vs. where the GPU draws
+        // it, in units of one source pixel's size on the map.
+        [exactX, exactY] = this._projectPixel(pixelExactX, pixelExactY);
+        err =
+          Math.hypot(exactX - outSampleX, exactY - outSampleY) /
+          this._pixelSize;
+      } else {
+        // Reproject these linearly-interpolated coordinates **from target CRS
+        // to input CRS**. This gives us the **exact position in input space**
+        // of the linearly interpolated sample point in output space.
+        const inputCRSSampled = this.reprojectors.inverseReproject(
+          outSampleX,
+          outSampleY,
+        );
 
-      // Find the pixel coordinates of the sampled point by using the inverse
-      // geotransform.
-      const pixelSampled = this.reprojectors.inverseTransform(
-        inputCRSSampled[0],
-        inputCRSSampled[1],
-      );
+        // Find the pixel coordinates of the sampled point by using the
+        // inverse geotransform.
+        const pixelSampled = this.reprojectors.inverseTransform(
+          inputCRSSampled[0],
+          inputCRSSampled[1],
+        );
 
-      // 4. error in pixel space
-      const dx = pixelExactX - pixelSampled[0];
-      const dy = pixelExactY - pixelSampled[1];
-      const err = Math.hypot(dx, dy);
+        // 4. error in pixel space
+        const dx = pixelExactX - pixelSampled[0];
+        const dy = pixelExactY - pixelSampled[1];
+        err = Math.hypot(dx, dy);
+      }
 
       if (err > maxError) {
         maxError = err;
         maxErrorU = uvSampleU;
         maxErrorV = uvSampleV;
+        maxErrorX = exactX;
+        maxErrorY = exactY;
       }
     }
 
@@ -411,6 +469,8 @@ export class RasterReprojector {
     // update triangle metadata
     this._candidatesUV[2 * t] = maxErrorU;
     this._candidatesUV[2 * t + 1] = maxErrorV;
+    this._candidatesXY[2 * t] = maxErrorX;
+    this._candidatesXY[2 * t + 1] = maxErrorY;
 
     // add triangle to priority queue
     this._queuePush(t, maxError);
@@ -438,7 +498,7 @@ export class RasterReprojector {
     const pu = this._candidatesUV[2 * t]!;
     const pv = this._candidatesUV[2 * t + 1]!;
 
-    const pn = this._addPoint(pu, pv);
+    const pn = this._addPoint(pu, pv, this._candidateExactPosition(t));
 
     if (orient(au, av, bu, bv, pu, pv) === 0) {
       this._handleCollinear(pn, e0);
@@ -462,24 +522,70 @@ export class RasterReprojector {
   }
 
   // add coordinates for a new vertex
-  private _addPoint(u: number, v: number): number {
+  private _addPoint(u: number, v: number, exact?: [number, number]): number {
     const i = this.uvs.length >> 1;
     this.uvs.push(u, v);
 
-    // compute and store exact output position via reprojection
-    const pixelX = u * (this.width - 1);
-    const pixelY = v * (this.height - 1);
-    const inputPosition = this.reprojectors.forwardTransform(pixelX, pixelY);
-    const exactOutputPosition = this.reprojectors.forwardReproject(
-      inputPosition[0],
-      inputPosition[1],
-    );
-    this.exactOutputPositions.push(
-      exactOutputPosition[0]!,
-      exactOutputPosition[1]!,
-    );
+    // Exact output position via reprojection, unless target mode already
+    // projected this point as a sample point.
+    const [x, y] =
+      exact ?? this._projectPixel(u * (this.width - 1), v * (this.height - 1));
+    this.exactOutputPositions.push(x, y);
 
     return i;
+  }
+
+  /** Exact output position of a point given in pixel coordinates. */
+  private _projectPixel(px: number, py: number): [number, number] {
+    const input = this.reprojectors.forwardTransform(px, py);
+    return this.reprojectors.forwardReproject(input[0], input[1]);
+  }
+
+  /**
+   * The stored exact position of triangle `t`'s candidate in target mode, or
+   * `undefined` to project it afresh (source mode, or no finite candidate).
+   */
+  private _candidateExactPosition(t: number): [number, number] | undefined {
+    if (this._errorSpace !== "target") {
+      return undefined;
+    }
+    const x = this._candidatesXY[2 * t]!;
+    const y = this._candidatesXY[2 * t + 1]!;
+    return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : undefined;
+  }
+
+  /**
+   * One source pixel's size on the map at the center of the seed's UV bounds:
+   * the geometric mean of how far one pixel to the right and one pixel down
+   * move on the map. The unit of target-space error.
+   */
+  private _measurePixelSize(seed: InitialTriangulation): number {
+    let minU = Number.POSITIVE_INFINITY;
+    let maxU = Number.NEGATIVE_INFINITY;
+    let minV = Number.POSITIVE_INFINITY;
+    let maxV = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < seed.uvs.length; i += 2) {
+      minU = Math.min(minU, seed.uvs[i]!);
+      maxU = Math.max(maxU, seed.uvs[i]!);
+      minV = Math.min(minV, seed.uvs[i + 1]!);
+      maxV = Math.max(maxV, seed.uvs[i + 1]!);
+    }
+    const u = (minU + maxU) / 2;
+    const v = (minV + maxV) / 2;
+    const px = u * (this.width - 1);
+    const py = v * (this.height - 1);
+    const [cx, cy] = this._projectPixel(px, py);
+    const [rx, ry] = this._projectPixel(px + 1, py);
+    const [dx, dy] = this._projectPixel(px, py + 1);
+    const size = Math.sqrt(
+      Math.hypot(rx - cx, ry - cy) * Math.hypot(dx - cx, dy - cy),
+    );
+    if (!Number.isFinite(size) || size <= 0) {
+      throw new Error(
+        `RasterReprojector: errorSpace "target" needs a finite, positive pixel size on the map, but the pixel at uv (${u}, ${v}) of a ${this.width}×${this.height} mesh measured ${size}.`,
+      );
+    }
+    return size;
   }
 
   // add or update a triangle in the mesh
@@ -518,6 +624,8 @@ export class RasterReprojector {
     // init triangle metadata
     this._candidatesUV[2 * t + 0] = 0;
     this._candidatesUV[2 * t + 1] = 0;
+    this._candidatesXY[2 * t + 0] = Number.NaN;
+    this._candidatesXY[2 * t + 1] = Number.NaN;
     this._queueIndices[t] = -1;
 
     // add triangle to pending queue for later rasterization
