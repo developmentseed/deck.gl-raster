@@ -212,4 +212,43 @@ describe("decode big endian tiles", () => {
       expect(pixels(result)).toEqual(expected);
     }
   });
+
+  it("swaps samples decoded from LERC", async () => {
+    // libtiff swaps samples into the file's byte order before LERC encodes
+    // them, so the same LERC data in an MM file holds byte-swapped values.
+    const tiff = await loadGeoTIFF("float32_1band_lerc_block32", "rasterio");
+    const image = tiff.tiff.images[0]!;
+    const tile = await image.getTile(0, 0);
+    const { width, height } = image.tileSize;
+    const metadata = {
+      sampleFormat: SampleFormat.Float,
+      bitsPerSample: 32,
+      samplesPerPixel: 1,
+      width,
+      height,
+      predictor: Predictor.None,
+      planarConfiguration: PlanarConfiguration.Contig,
+      lercParameters: tiff.cachedTags.lercParameters,
+    };
+
+    const bandBytes = async (littleEndian: boolean) => {
+      const result = await decode(tile!.bytes, tile!.compression, {
+        ...metadata,
+        littleEndian,
+      });
+      if (result.layout !== "band-separate") {
+        throw new Error("expected band-separate output");
+      }
+      const band = result.bands[0]!;
+      return new Uint8Array(band.buffer, band.byteOffset, band.byteLength);
+    };
+    const little = await bandBytes(true);
+    const big = await bandBytes(false);
+
+    const expected = new Uint8Array(little.length);
+    for (let i = 0; i < little.length; i += 4) {
+      expected.set(little.subarray(i, i + 4).reverse(), i);
+    }
+    expect(big).toEqual(expected);
+  });
 });

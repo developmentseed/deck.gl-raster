@@ -135,7 +135,7 @@ export async function decode(
       if (!canSwapBytesInPlace(result, bytes)) {
         buffer = result.slice(0);
       }
-      swapBytesInPlace(buffer, bitsPerSample / 8);
+      swapBytesInPlace(new Uint8Array(buffer), bitsPerSample / 8);
     }
     const predicted = applyPredictor(
       buffer,
@@ -150,6 +150,22 @@ export async function decode(
       layout: "pixel-interleaved",
       data: toTypedArray(predicted, metadata),
     };
+  }
+
+  // Codecs that return typed pixels, like LERC, also return samples in the
+  // file's byte order. libtiff swaps samples into the file's byte order before
+  // handing them to any codec, so the LERC data in a big endian file holds
+  // byte-swapped values.
+  const { littleEndian, bitsPerSample } = metadata;
+  if (!littleEndian && bitsPerSample > 8) {
+    const arrays =
+      result.layout === "pixel-interleaved" ? [result.data] : result.bands;
+    for (const array of arrays) {
+      swapBytesInPlace(
+        new Uint8Array(array.buffer, array.byteOffset, array.byteLength),
+        bitsPerSample / 8,
+      );
+    }
   }
 
   return result;
@@ -172,8 +188,7 @@ function canSwapBytesInPlace(
 /**
  * Reverse the byte order of every `bytesPerSample`-byte sample, in place.
  */
-function swapBytesInPlace(buffer: ArrayBuffer, bytesPerSample: number): void {
-  const bytes = new Uint8Array(buffer);
+function swapBytesInPlace(bytes: Uint8Array, bytesPerSample: number): void {
   for (let i = 0; i + bytesPerSample <= bytes.length; i += bytesPerSample) {
     for (let lo = i, hi = i + bytesPerSample - 1; lo < hi; lo++, hi--) {
       const tmp = bytes[lo]!;
