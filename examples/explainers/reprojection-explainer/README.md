@@ -80,7 +80,7 @@ screen while presenting from the keyboard.
 | D | Show or hide the step descriptions |
 | F | Switch flight style (direct, or fly then snap) |
 | M | Switch where the error is measured (input pixels, or the map) |
-| H | Open or collapse the tuning panel (the sidebar on the left) |
+| P | Open or collapse the tuning panel (the sidebar on the left) |
 
 The scenario and the error metric are kept in the URL, so a view can be
 linked.

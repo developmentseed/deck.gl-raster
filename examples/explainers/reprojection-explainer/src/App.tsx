@@ -451,8 +451,8 @@ export default function App() {
         case "M":
           setSettings(toggleErrorSpace);
           break;
-        case "h":
-        case "H":
+        case "p":
+        case "P":
           setPanelOpen((open) => !open);
           break;
         case "d":

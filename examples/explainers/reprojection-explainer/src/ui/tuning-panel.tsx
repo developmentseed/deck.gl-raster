@@ -42,7 +42,7 @@ export type TuningPanelProps = {
 
 /**
  * Rehearsal controls in a sidebar beside the slide, so they never cover the
- * animation. It starts collapsed to a rail that opens it (as does H).
+ * animation. It starts collapsed to a rail that opens it (as does P).
  */
 export function TuningPanel({
   open,
@@ -98,7 +98,7 @@ export function TuningPanel({
               type="button"
               aria-label="Hide the tuning panel"
               aria-expanded={true}
-              title="Hide (H)"
+              title="Hide (P)"
               onClick={() => onOpenChange(false)}
               style={ICON_BUTTON_STYLE}
             >
@@ -229,7 +229,7 @@ export function TuningPanel({
           type="button"
           aria-label="Show the tuning panel"
           aria-expanded={false}
-          title="Tuning (H)"
+          title="Tuning (P)"
           onClick={() => onOpenChange(true)}
           style={{
             display: "flex",
@@ -259,7 +259,7 @@ export function TuningPanel({
               >
                 Tuning
               </span>
-              <Key>H</Key>
+              <Key>P</Key>
             </>
           )}
         </button>
@@ -293,7 +293,7 @@ function KeyList() {
     [<Key key="d">D</Key>, "Show or hide descriptions"],
     [<Key key="f">F</Key>, "Switch flight style"],
     [<Key key="m">M</Key>, "Switch where error is measured"],
-    [<Key key="h">H</Key>, "Show or hide this panel"],
+    [<Key key="p">P</Key>, "Show or hide this panel"],
   ];
   return (
     <div
