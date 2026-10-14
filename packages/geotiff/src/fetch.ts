@@ -517,11 +517,11 @@ async function getTile(
  * Look up a tile's byte range: its `TileOffsets` and `TileByteCounts`
  * entries.
  *
- * When those tables don't fit in the bytes read at open, cogeotiff reads each
- * entry lazily through the header source, whose cache shares one request
- * among every tile with entries in the same chunk. So the lookup runs without
- * `signal`: forwarding it would let one tile's abort fail every other tile
- * sharing that request
+ * When those tables don't fit in the bytes read at open, {@link TiffImage}
+ * reads each entry lazily through the header source, whose cache shares one
+ * request among every tile with entries in the same chunk. So the lookup runs
+ * without `signal`: forwarding it would let one tile's abort fail every other
+ * tile sharing that request
  * (https://github.com/developmentseed/deck.gl-raster/issues/690). Instead,
  * `signal` only ends this caller's wait, rejecting with `signal.reason` at
  * once, while the request runs on and fills the cache for the next tile.
@@ -532,13 +532,20 @@ function getTileByteRange(
   options?: { signal?: AbortSignal },
 ): Promise<ByteRange> {
   const signal = options?.signal;
+  // Already aborted: reject without starting a lookup.
   if (signal?.aborted) {
     return Promise.reject(signal.reason);
   }
+  // The main change from upstream cogeotiff, whose `getTile` calls
+  // `getTileSize(idx, options)` and so forwards the signal into the shared
+  // read. We leave the signal out, so aborting this caller can't fail the
+  // read for other tiles waiting on it.
   const lookup = image.getTileSize(index);
   if (!signal) {
     return lookup;
   }
+  // Settle with the lookup, unless the signal aborts first: then reject with
+  // `signal.reason` at once, while the lookup carries on for other tiles.
   return new Promise((resolve, reject) => {
     const onAbort = () => reject(signal.reason);
     signal.addEventListener("abort", onAbort, { once: true });
