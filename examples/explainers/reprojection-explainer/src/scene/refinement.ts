@@ -280,11 +280,11 @@ export function barycentric(
 }
 
 /**
- * Iteration cap for {@link countTriangles}: room for about 200,000
- * triangles. The library's default (10,000) stops the Arctic scenario at
- * 0.125 px before it converges.
+ * Iteration cap for {@link countTriangles}: room for about 50,000 triangles.
+ * The library's default (10,000) stops the Arctic scenario at 0.125 px before
+ * it converges; it needs about 17,000.
  */
-const COUNT_MAX_ITERATIONS = 100_000;
+const COUNT_MAX_ITERATIONS = 25_000;
 
 /**
  * Number of triangles `RasterReprojector` builds for an image at `maxError`,
