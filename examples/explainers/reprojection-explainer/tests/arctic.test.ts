@@ -90,6 +90,12 @@ describe("Arctic text", () => {
       typeof run === "string" ? run : run.text,
     ).join("");
 
+  it("keeps the hand-written step 1", () => {
+    expect(text(0)).toBe(
+      "This band of satellite imagery is stored in longitude and latitude, but we want to display it on a polar map of the Arctic. Note the Arctic Circle: in longitude and latitude it's a straight line, while on the polar map it's a circle around the North Pole.",
+    );
+  });
+
   it("keeps the hand-written step 3", () => {
     expect(text(2)).toBe(
       "We project the corners of each triangle to the polar map. The image's edges lie on virtually the same meridian, so its four corners land almost on the same line and the image has zero width.",

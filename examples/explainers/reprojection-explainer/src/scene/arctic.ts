@@ -64,8 +64,6 @@ export const ARCTIC_TO_POLAR_STEREOGRAPHIC: ReprojectionFns = {
  * A band of the Arctic in longitude/latitude, rolled into a ring on a polar
  * map. Its pixels shrink to slivers on the map toward the pole, which is
  * where the two error metrics disagree most.
- *
- * Step 1's text is a draft, to be replaced with hand-written text.
  */
 export const ARCTIC_SCENARIO: Scenario = {
   id: "arctic",
@@ -98,7 +96,7 @@ export const ARCTIC_SCENARIO: Scenario = {
     href: "https://earthobservatory.nasa.gov/features/BlueMarble",
   },
   introduction: [
-    "[Draft] This band of satellite imagery is stored in longitude and latitude, but we want to display it on a polar map of the Arctic. Note the Arctic Circle: in longitude and latitude it's a straight line, while on the polar map it's a circle around the North Pole.",
+    "This band of satellite imagery is stored in longitude and latitude, but we want to display it on a polar map of the Arctic. Note the Arctic Circle: in longitude and latitude it's a straight line, while on the polar map it's a circle around the North Pole.",
   ],
   firstAttempt: () => [
     "We project the corners of each triangle to the polar map. The image's edges lie on virtually the same meridian, so its four corners land almost on the same line and the image has zero width.",
