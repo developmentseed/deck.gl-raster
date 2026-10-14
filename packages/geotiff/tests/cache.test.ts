@@ -1,7 +1,7 @@
 import type { Source } from "@chunkd/source";
 import { SourceView } from "@chunkd/source";
 import { describe, expect, it } from "vitest";
-import { CacheMiddleware } from "../src/cache.js";
+import { LRUCacheMiddleware } from "../src/cache.js";
 
 /** A read the test settles by hand. */
 interface PendingRead {
@@ -25,10 +25,12 @@ function manualSource(): { source: Source; reads: PendingRead[] } {
   return { source, reads };
 }
 
-describe("CacheMiddleware", () => {
+describe("LRUCacheMiddleware", () => {
   it("shares one read among concurrent and later reads of a range", async () => {
     const { source, reads } = manualSource();
-    const view = new SourceView(source, [new CacheMiddleware({ size: 1024 })]);
+    const view = new SourceView(source, [
+      new LRUCacheMiddleware({ size: 1024 }),
+    ]);
     const bytes = new ArrayBuffer(100);
 
     const first = view.fetch(0, 100);
@@ -43,7 +45,9 @@ describe("CacheMiddleware", () => {
 
   it("retries a range whose read failed", async () => {
     const { source, reads } = manualSource();
-    const view = new SourceView(source, [new CacheMiddleware({ size: 1024 })]);
+    const view = new SourceView(source, [
+      new LRUCacheMiddleware({ size: 1024 }),
+    ]);
     const bytes = new ArrayBuffer(100);
 
     const failed = view.fetch(0, 100);
@@ -59,7 +63,9 @@ describe("CacheMiddleware", () => {
   it("a failed read the cache already dropped does not evict a newer read of the same range", async () => {
     const { source, reads } = manualSource();
     // Room for one 100-byte read, so each new range pushes older ones out.
-    const view = new SourceView(source, [new CacheMiddleware({ size: 100 })]);
+    const view = new SourceView(source, [
+      new LRUCacheMiddleware({ size: 100 }),
+    ]);
 
     const stale = view.fetch(0, 100);
     for (const offset of [100, 200, 300]) {

@@ -249,7 +249,7 @@ interface LimiterMiddlewareOptions {
  * request is dropped before any network I/O fires.
  *
  * Composed into a {@link SourceView}'s middleware list alongside other
- * middlewares (`SourceChunk`, `CacheMiddleware`, …). Place it after
+ * middlewares (`SourceChunk`, `LRUCacheMiddleware`, …). Place it after
  * caching so cache hits don't burn a slot.
  *
  * @example
@@ -259,7 +259,7 @@ interface LimiterMiddlewareOptions {
  *
  * const view = new SourceView(source, [
  *   new SourceChunk({ size: 64 * 1024 }),
- *   new CacheMiddleware({ size: 8 * 1024 * 1024 }),
+ *   new LRUCacheMiddleware({ size: 8 * 1024 * 1024 }),
  *   new LimiterMiddleware({ url, limiter }),
  * ]);
  * ```

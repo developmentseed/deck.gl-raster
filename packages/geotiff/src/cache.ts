@@ -13,22 +13,25 @@ interface CacheEntry {
 }
 
 /**
- * chunkd middleware that caches each read by its byte range, so concurrent
- * and later reads of a range share one request.
+ * chunkd middleware that caches each read by its byte range in an
+ * approximate LRU cache bounded by bytes, so concurrent and later reads of a
+ * range share one request.
  *
- * Adapted from `SourceCache` in `@chunkd/middleware` 11.3.1, which keeps a
- * read that fails and replays the failure to every later reader of that
- * range (https://github.com/blacha/chunkd/issues/1733). Here a failed read is
- * evicted, so the next reader retries it.
+ * The LRU approximation uses two generations, the scheme of hashlru and
+ * quick-lru: entries accumulate in `current` until it holds more than
+ * `maxSize` bytes, then `current` becomes `previous` and the old `previous`
+ * is dropped. A hit in `previous` moves the entry back to `current`. So a
+ * range stays cached as long as it is read at least once per generation, and
+ * the cache holds about twice `maxSize` at most.
  *
- * Eviction is generational, as upstream: entries accumulate in `current`
- * until it holds more than `maxSize` bytes, then `current` becomes `previous`
- * and the old `previous` is dropped. A hit in `previous` moves the entry back
- * to `current`.
+ * Adapted from `SourceCache` in `@chunkd/middleware` 11.3.1, which uses the
+ * same scheme but keeps a read that fails and replays the failure to every
+ * later reader of that range (https://github.com/blacha/chunkd/issues/1733).
+ * Here a failed read is evicted, so the next reader retries it.
  *
  * @internal
  */
-export class CacheMiddleware implements SourceMiddleware {
+export class LRUCacheMiddleware implements SourceMiddleware {
   readonly name = "cache";
   private readonly maxSize: number;
   /** Bytes held by `current`. */
