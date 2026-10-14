@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-14
 - **Issues:** [#171](https://github.com/developmentseed/deck.gl-raster/issues/171) (imagery crossing ±180°), [#366](https://github.com/developmentseed/deck.gl-raster/issues/366) (global COG tiles at ±180° never converge)
-- **Status:** Proposed
+- **Status:** Implemented in [#714](https://github.com/developmentseed/deck.gl-raster/pull/714)
 - **Supersedes:** [`2026-05-27-antimeridian-crossing-tile-design.md`](./2026-05-27-antimeridian-crossing-tile-design.md) (cut each crossing tile in two), and the approaches in [#269](https://github.com/developmentseed/deck.gl-raster/pull/269), [#374](https://github.com/developmentseed/deck.gl-raster/pull/374), [#576](https://github.com/developmentseed/deck.gl-raster/pull/576) and [#673](https://github.com/developmentseed/deck.gl-raster/pull/673)
 - **Builds on:** [#518](https://github.com/developmentseed/deck.gl-raster/pull/518) (tile selection across world copies), [#574](https://github.com/developmentseed/deck.gl-raster/pull/574) (initial triangulations), [#711](https://github.com/developmentseed/deck.gl-raster/pull/711) (output-pixel error)
 
