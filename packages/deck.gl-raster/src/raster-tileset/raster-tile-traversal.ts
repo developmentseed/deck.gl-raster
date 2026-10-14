@@ -524,7 +524,7 @@ export class RasterTileNode {
     boundingVolume: OrientedBoundingBox;
     commonSpaceBounds: Bounds;
   } {
-    const [minZ, maxZ] = zRange;
+    const [minZ] = zRange;
 
     const tileCorners = this.level.projectedTileCorners(this.x, this.y);
 
@@ -539,24 +539,38 @@ export class RasterTileNode {
       rescaleEPSG3857ToCommonSpace(xy),
     );
 
-    const refPointPositions: [number, number, number][] = [];
-    for (const p of commonSpacePositions) {
-      refPointPositions.push([p[0], p[1], minZ]);
+    // Filter out NaN positions that arise when tile corners lie outside the
+    // CRS domain (e.g. corners of a bounding rectangle that extend beyond
+    // a Mollweide ellipse). Use only the valid subset for the OBB and AABB.
+    const validPositions = commonSpacePositions.filter(
+      ([x, y]) => Number.isFinite(x) && Number.isFinite(y),
+    );
 
-      if (minZ !== maxZ) {
-        // Also sample at maximum elevation to capture the full 3D volume
-        refPointPositions.push([p[0], p[1], maxZ]);
-      }
+    // If no reference point projects successfully the tile lies entirely
+    // outside the CRS valid domain (e.g. a corner tile whose entire extent
+    // is outside the Mollweide ellipse). Return a degenerate bounding volume
+    // placed far off-screen so both the AABB bounds check and frustum
+    // culling reject it — never selecting it for rendering.
+    if (validPositions.length === 0) {
+      const OFF = -1e8;
+      return {
+        boundingVolume: makeOrientedBoundingBoxFromPoints([
+          [OFF, OFF, minZ],
+          [OFF + 100, OFF, minZ],
+          [OFF, OFF + 100, minZ],
+          [OFF + 100, OFF + 100, minZ],
+        ]),
+        commonSpaceBounds: [OFF, OFF, OFF + 100, OFF + 100],
+      };
     }
 
-    // Compute [minx, miny, maxx, maxy] in common space for quick bounds check
-    // TODO: this doesn't densify edges
+    // Compute [minx, miny, maxx, maxy] in common space for the bounds check
     let minX = Number.POSITIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
     let maxX = Number.NEGATIVE_INFINITY;
     let maxY = Number.NEGATIVE_INFINITY;
 
-    for (const [x, y] of commonSpacePositions) {
+    for (const [x, y] of validPositions) {
       if (x < minX) {
         minX = x;
       }
@@ -572,8 +586,23 @@ export class RasterTileNode {
     }
 
     const commonSpaceBounds: Bounds = [minX, minY, maxX, maxY];
+
+    // Build the OBB from AABB corners with a minimum 1-unit extent in each
+    // axis. makeOrientedBoundingBoxFromPoints produces a degenerate OBB when
+    // the input points are collinear — which happens for projections like
+    // Mollweide where the only valid reference points all fall on the same
+    // latitude (the equatorial band). A degenerate OBB causes
+    // computeVisibility to return -1 (outside frustum), incorrectly culling
+    // the tile. The AABB insideBounds check handles precise culling.
+    const safeMaxX = Math.max(maxX, minX + 1);
+    const safeMaxY = Math.max(maxY, minY + 1);
     return {
-      boundingVolume: makeOrientedBoundingBoxFromPoints(refPointPositions),
+      boundingVolume: makeOrientedBoundingBoxFromPoints([
+        [minX, minY, minZ],
+        [safeMaxX, minY, minZ],
+        [minX, safeMaxY, minZ],
+        [safeMaxX, safeMaxY, minZ],
+      ]),
       commonSpaceBounds,
     };
   }

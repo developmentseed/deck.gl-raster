@@ -247,6 +247,68 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     // To account for this, we add 1 to both width and height when generating
     // the mesh. This also solves obvious gaps in between neighboring tiles in
     // the COGLayer.
+    //
+    // For tiles that straddle the CRS domain boundary (e.g. a Mollweide tile
+    // with one corner outside the ellipse), the adaptive reprojector wastes its
+    // entire iteration budget refining OOD-vertex triangles, leaving the valid
+    // area under-refined (reprojection error 100s of pixels). Detect these
+    // "border tiles" up front and use a dense uniform grid instead: OOD-vertex
+    // triangles are simply filtered out, producing a clean domain-edge cutoff
+    // at predictable 1/(BORDER_GRID_SIZE) tile-fraction resolution.
+    const { forwardTransform, forwardReproject, inverseReproject } =
+      reprojectionFns;
+    const borderCorners: [number, number][] = [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [1, 1],
+    ];
+    // Tile width in projected CRS units for the round-trip error threshold.
+    const tileWidthCRS = Math.abs(
+      forwardTransform(width, 0)[0] - forwardTransform(0, 0)[0],
+    );
+    const roundTripThreshold = tileWidthCRS * 0.01;
+    const isBorderTile = borderCorners.some(([u, v]) => {
+      const [ix, iy] = forwardTransform(u * width, v * height);
+      const [ox, oy] = forwardReproject(ix, iy);
+      if (!Number.isFinite(ox) || !Number.isFinite(oy)) {
+        return true;
+      }
+      // Round-trip check: OOD corners where forwardReproject clamps to a
+      // finite domain-boundary position instead of returning NaN. The clamped
+      // value re-projects back to a CRS position far from the original,
+      // revealing the OOD via large round-trip error.
+      if (inverseReproject && roundTripThreshold > 0) {
+        const [ix2, iy2] = inverseReproject(ox, oy);
+        if (!Number.isFinite(ix2) || !Number.isFinite(iy2)) {
+          return true;
+        }
+        const err = Math.sqrt(
+          (ix2 - ix) * (ix2 - ix) + (iy2 - iy) * (iy2 - iy),
+        );
+        if (err > roundTripThreshold) {
+          return true;
+        }
+      }
+      return false;
+    });
+    if (isBorderTile) {
+      const { indices, positions64High, positions64Low, texCoords } =
+        buildClippedGridMesh(reprojectionFns, width + 1, height + 1);
+      this.setState({
+        reprojector: undefined,
+        mesh: {
+          indices: { value: indices, size: 1 },
+          attributes: {
+            POSITION: { value: positions64High, size: 3 },
+            TEXCOORD_0: { value: texCoords, size: 2 },
+          },
+        },
+        positions64Low,
+      });
+      return;
+    }
+
     const reprojector = new RasterReprojector(
       reprojectionFns,
       width + 1,
@@ -379,19 +441,38 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   const texCoords = new Float32Array(reprojector.uvs);
 
   const positions = new Float64Array(numVertices * 3);
+  // Track which vertices are outside the CRS domain (NaN output position).
+  const isOOD = new Uint8Array(numVertices);
   for (let i = 0; i < numVertices; i++) {
-    positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
-    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
+    const x = reprojector.exactOutputPositions[i * 2]!;
+    const y = reprojector.exactOutputPositions[i * 2 + 1]!;
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
     // z (flat on the ground)
     positions[i * 3 + 2] = 0;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      isOOD[i] = 1;
+    }
+  }
+
+  // Filter out any triangle that contains an out-of-domain vertex. This
+  // clips the rendered mesh cleanly at the CRS boundary without relying on
+  // undefined GPU NaN behaviour.
+  const allTriangles = reprojector.triangles;
+  const filteredTriangles: number[] = [];
+  for (let t = 0; t * 3 < allTriangles.length; t++) {
+    const a = allTriangles[t * 3]!;
+    const b = allTriangles[t * 3 + 1]!;
+    const c = allTriangles[t * 3 + 2]!;
+    if (!isOOD[a] && !isOOD[b] && !isOOD[c]) {
+      filteredTriangles.push(a, b, c);
+    }
   }
 
   // Split the float64 positions into high and low parts for fp64 emulation in
   // the shader.
   const [positions64Low, positions64High] = splitFloat64Array(positions);
-
-  // TODO: Consider using 16-bit indices if the mesh is small enough
-  const indices = new Uint32Array(reprojector.triangles);
+  const indices = new Uint32Array(filteredTriangles);
 
   return {
     indices,
@@ -399,4 +480,97 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
     positions64Low,
     texCoords,
   };
+}
+
+/**
+ * Build a dense uniform grid mesh over a tile, filtering out any triangle
+ * that contains a vertex whose output position is outside the CRS domain
+ * (i.e. forwardReproject returned NaN or fails the round-trip check). Used
+ * for "border tiles" where the CRS boundary passes through the tile; the
+ * adaptive reprojector handles these poorly because OOD-vertex triangles
+ * consume its entire iteration budget and leave the valid area under-refined.
+ */
+const BORDER_GRID_SIZE = 64;
+
+function buildClippedGridMesh(
+  reprojectionFns: ReprojectionFns,
+  width: number,
+  height: number,
+  gridSize = BORDER_GRID_SIZE,
+): {
+  indices: Uint32Array;
+  positions64High: Float32Array;
+  positions64Low: Float32Array;
+  texCoords: Float32Array;
+} {
+  const { forwardTransform, forwardReproject, inverseReproject } =
+    reprojectionFns;
+  const cols = gridSize;
+  const rows = gridSize;
+  const numVerts = (cols + 1) * (rows + 1);
+
+  const positions = new Float64Array(numVerts * 3);
+  const texCoords = new Float32Array(numVerts * 2);
+  const isOOD = new Uint8Array(numVerts);
+
+  // Tile CRS width for round-trip error threshold (same logic as isBorderTile).
+  const tileWidthCRS = Math.abs(
+    forwardTransform(width - 1, 0)[0] - forwardTransform(0, 0)[0],
+  );
+  const roundTripThreshold = tileWidthCRS * 0.01;
+
+  let vi = 0;
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      const u = c / cols;
+      const v = r / rows;
+      const pixelX = u * (width - 1);
+      const pixelY = v * (height - 1);
+      const [ix, iy] = forwardTransform(pixelX, pixelY);
+      const [ox, oy] = forwardReproject(ix, iy);
+      positions[vi * 3] = ox;
+      positions[vi * 3 + 1] = oy;
+      positions[vi * 3 + 2] = 0;
+      texCoords[vi * 2] = u;
+      texCoords[vi * 2 + 1] = v;
+      let ood = !Number.isFinite(ox) || !Number.isFinite(oy);
+      if (!ood && inverseReproject && roundTripThreshold > 0) {
+        const [ix2, iy2] = inverseReproject(ox, oy);
+        if (!Number.isFinite(ix2) || !Number.isFinite(iy2)) {
+          ood = true;
+        } else {
+          const err = Math.sqrt(
+            (ix2 - ix) * (ix2 - ix) + (iy2 - iy) * (iy2 - iy),
+          );
+          if (err > roundTripThreshold) {
+            ood = true;
+          }
+        }
+      }
+      if (ood) {
+        isOOD[vi] = 1;
+      }
+      vi++;
+    }
+  }
+
+  const filteredIndices: number[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const i0 = r * (cols + 1) + c;
+      const i1 = i0 + 1;
+      const i2 = i0 + (cols + 1);
+      const i3 = i2 + 1;
+      if (!isOOD[i0] && !isOOD[i2] && !isOOD[i1]) {
+        filteredIndices.push(i0, i2, i1);
+      }
+      if (!isOOD[i1] && !isOOD[i2] && !isOOD[i3]) {
+        filteredIndices.push(i1, i2, i3);
+      }
+    }
+  }
+
+  const [positions64Low, positions64High] = splitFloat64Array(positions);
+  const indices = new Uint32Array(filteredIndices);
+  return { indices, positions64High, positions64Low, texCoords };
 }
