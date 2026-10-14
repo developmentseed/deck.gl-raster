@@ -12,6 +12,8 @@
  * license, then subject to further modifications.
  */
 
+import { nearestCopy, unwrapAlong } from "./wrap.js";
+
 /**
  * Barycentric sample points in uv space for where to sample reprojection
  * errors.
@@ -197,6 +199,12 @@ export class RasterReprojector {
    */
   private _pixelSize: number;
 
+  /**
+   * The period of the output's x axis, if it wraps around. See the
+   * constructor's `wrapX` option.
+   */
+  private _wrapX: number | undefined;
+
   private _queueIndices: number[];
 
   private _queue: number[];
@@ -227,6 +235,26 @@ export class RasterReprojector {
        * This option is experimental and may change or be removed.
        */
       _errorSpace?: "input" | "output";
+      /**
+       * The period of the output's x axis, if it wraps around: one world width
+       * (512 in deck.gl's common space) for Web Mercator, where an image can
+       * cross the antimeridian.
+       *
+       * A projection returns x in one copy of the world, so an image that
+       * crosses the wrap has corners on both sides of it. With `wrapX`, each
+       * vertex goes on the copy next to its neighbors instead:
+       *
+       * - a test point's exact position is compared with the copy nearest
+       *   where the GPU draws it, and keeps that copy when it becomes a vertex;
+       * - each corner of the initial triangulation is unwrapped by walking the
+       *   straight path to it from the first corner.
+       *
+       * The mesh then stays in one piece across the wrap, and its x may run
+       * past one period. Callers clip it at multiples of `wrapX`.
+       *
+       * Requires `_errorSpace: "output"`.
+       */
+      wrapX?: number;
     } = {},
   ) {
     this.reprojectors = reprojectors;
@@ -250,6 +278,19 @@ export class RasterReprojector {
 
     const seed = options.initialTriangulation ?? UNIT_SQUARE_TRIANGULATION;
     this._errorSpace = options._errorSpace ?? "input";
+    this._wrapX = options.wrapX;
+    if (this._wrapX !== undefined) {
+      if (this._errorSpace !== "output") {
+        throw new Error(
+          `RasterReprojector: wrapX needs _errorSpace "output", but it is "${this._errorSpace}".`,
+        );
+      }
+      if (!(this._wrapX > 0 && Number.isFinite(this._wrapX))) {
+        throw new Error(
+          `RasterReprojector: wrapX must be a finite, positive period, but it is ${this._wrapX}.`,
+        );
+      }
+    }
     this._pixelSize =
       this._errorSpace === "output" ? this._measurePixelSize(seed) : 1;
     this._seed(seed);
@@ -264,7 +305,13 @@ export class RasterReprojector {
    */
   private _seed(seed: InitialTriangulation): void {
     for (let i = 0; i < seed.uvs.length; i += 2) {
-      this._addPoint(seed.uvs[i]!, seed.uvs[i + 1]!);
+      const u = seed.uvs[i]!;
+      const v = seed.uvs[i + 1]!;
+      if (this._wrapX !== undefined && i > 0) {
+        this._addPoint(u, v, this._unwrapFromFirstVertex(u, v, this._wrapX));
+        continue;
+      }
+      this._addPoint(u, v);
     }
     for (let i = 0; i < seed.triangles.length; i++) {
       this.triangles[i] = seed.triangles[i]!;
@@ -423,6 +470,11 @@ export class RasterReprojector {
         // Where the sample point belongs on the map vs. where the GPU draws
         // it, in output pixels: one input pixel's size on the map.
         [exactX, exactY] = this._projectPixel(pixelExactX, pixelExactY);
+        if (this._wrapX !== undefined) {
+          // Measure to the copy nearest where the GPU draws the point. The
+          // point keeps that copy if it becomes a vertex.
+          exactX = nearestCopy(exactX, outSampleX, this._wrapX);
+        }
         err =
           Math.hypot(exactX - outSampleX, exactY - outSampleY) /
           this._pixelSize;
@@ -568,6 +620,37 @@ export class RasterReprojector {
   }
 
   /**
+   * Exact output position of a point given in UV coordinates, with its x on
+   * the copy reached by walking the straight UV path to it from the first
+   * vertex.
+   *
+   * Used for the corners of the initial triangulation, which have no triangle
+   * yet to compare against.
+   */
+  private _unwrapFromFirstVertex(
+    u: number,
+    v: number,
+    period: number,
+  ): [number, number] {
+    const u0 = this.uvs[0]!;
+    const v0 = this.uvs[1]!;
+    const xAt = (t: number) =>
+      this._projectPixel(
+        (u0 + t * (u - u0)) * (this.width - 1),
+        (v0 + t * (v - v0)) * (this.height - 1),
+      )[0];
+    const x = unwrapAlong(xAt, {
+      start: this.exactOutputPositions[0]!,
+      period,
+    });
+    const y = this._projectPixel(
+      u * (this.width - 1),
+      v * (this.height - 1),
+    )[1];
+    return [x, y];
+  }
+
+  /**
    * One input pixel's size on the map at the center of the seed's UV bounds.
    *
    * Steps of half a pixel either side of that point give local derivatives `dx`
@@ -603,10 +686,13 @@ export class RasterReprojector {
     const up = this._projectPixel(px, py - 0.5);
     const down = this._projectPixel(px, py + 0.5);
 
-    // Compute local derivatives and jacobian
-    const rx = right[0] - left[0];
+    // Compute local derivatives and jacobian. With `wrapX`, the steps may
+    // straddle the wrap, so take the short way around.
+    const shortX = (x: number) =>
+      this._wrapX === undefined ? x : nearestCopy(x, 0, this._wrapX);
+    const rx = shortX(right[0] - left[0]);
     const ry = right[1] - left[1];
-    const dx = down[0] - up[0];
+    const dx = shortX(down[0] - up[0]);
     const dy = down[1] - up[1];
     const size = Math.sqrt(Math.abs(rx * dy - ry * dx));
 
