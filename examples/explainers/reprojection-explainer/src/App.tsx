@@ -474,92 +474,106 @@ export default function App() {
 
   return (
     <div
-      ref={rootRef}
       style={{
         position: "fixed",
         inset: 0,
+        display: "flex",
         overflow: "hidden",
         background: "#0d1117",
       }}
     >
-      <canvas
-        ref={canvasRef}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-        }}
+      <TuningPanel
+        open={panelOpen}
+        onOpenChange={setPanelOpen}
+        settings={settings}
+        onChange={setSettings}
       />
-      <Hud
-        fit={fit}
-        layout={scene.layout}
-        hud={hud}
-        stepNumber={stepIndex + 1}
-        title={currentStep.title}
-        description={descriptions ? currentStep.description : null}
-        sourceName={scenario.sourceName}
-        targetName={scenario.targetName}
-        credit={scenario.credit}
+      {/* The stage: the slide is letterboxed into whatever the panel leaves. */}
+      <div
+        ref={rootRef}
+        style={{
+          position: "relative",
+          flex: 1,
+          minWidth: 0,
+          overflow: "hidden",
+        }}
       >
-        <ControlBar
-          titles={story.map((step) => step.title)}
-          stepIndex={stepIndex}
-          visible={controlsVisible}
-          descriptions={descriptions}
-          paused={paused}
-          scrubber={
-            currentStep.scrubber
-              ? {
-                  count: currentStep.scrubber.count,
-                  position: scrubPosition,
-                  label: currentStep.scrubber.label(scrubPosition),
-                }
-              : null
-          }
-          onDescriptionsChange={setDescriptions}
-          onPrevious={() => playerRef.current?.previous()}
-          onNext={() => playerRef.current?.next()}
-          onReplay={() => playerRef.current?.replay()}
-          onResume={() => playerRef.current?.resume()}
-          onJump={(index) => playerRef.current?.jumpTo(index)}
-          onScrub={(position) => {
-            const player = playerRef.current;
-            const scrubber =
-              storyRef.current?.[player?.stepIndex ?? -1]?.scrubber;
-            if (player && scrubber) {
-              player.seek(scrubber.timeAt(position));
-            }
-          }}
-          onHoverChange={(hovering) => {
-            hoveringControlsRef.current = hovering;
-            if (!hovering) {
-              // Restart the idle timer: hover can end without a pointermove,
-              // e.g. when a slider drag is released off the bar.
-              showControlsRef.current?.();
-            }
-          }}
-          shouldIgnoreClick={() =>
-            performance.now() - touchRevealAtRef.current < TOUCH_REVEAL_MS
-          }
-        />
-      </Hud>
-      {error ? (
-        <div
+        <canvas
+          ref={canvasRef}
           style={{
             position: "absolute",
-            left: 20,
-            bottom: 20,
-            color: "#ff7b72",
-            fontSize: 16,
+            inset: 0,
+            width: "100%",
+            height: "100%",
           }}
+        />
+        <Hud
+          fit={fit}
+          layout={scene.layout}
+          hud={hud}
+          stepNumber={stepIndex + 1}
+          title={currentStep.title}
+          description={descriptions ? currentStep.description : null}
+          sourceName={scenario.sourceName}
+          targetName={scenario.targetName}
+          credit={scenario.credit}
         >
-          {error}
-        </div>
-      ) : null}
-      {panelOpen ? (
-        <TuningPanel settings={settings} onChange={setSettings} />
-      ) : null}
+          <ControlBar
+            titles={story.map((step) => step.title)}
+            stepIndex={stepIndex}
+            visible={controlsVisible}
+            descriptions={descriptions}
+            paused={paused}
+            scrubber={
+              currentStep.scrubber
+                ? {
+                    count: currentStep.scrubber.count,
+                    position: scrubPosition,
+                    label: currentStep.scrubber.label(scrubPosition),
+                  }
+                : null
+            }
+            onDescriptionsChange={setDescriptions}
+            onPrevious={() => playerRef.current?.previous()}
+            onNext={() => playerRef.current?.next()}
+            onReplay={() => playerRef.current?.replay()}
+            onResume={() => playerRef.current?.resume()}
+            onJump={(index) => playerRef.current?.jumpTo(index)}
+            onScrub={(position) => {
+              const player = playerRef.current;
+              const scrubber =
+                storyRef.current?.[player?.stepIndex ?? -1]?.scrubber;
+              if (player && scrubber) {
+                player.seek(scrubber.timeAt(position));
+              }
+            }}
+            onHoverChange={(hovering) => {
+              hoveringControlsRef.current = hovering;
+              if (!hovering) {
+                // Restart the idle timer: hover can end without a pointermove,
+                // e.g. when a slider drag is released off the bar.
+                showControlsRef.current?.();
+              }
+            }}
+            shouldIgnoreClick={() =>
+              performance.now() - touchRevealAtRef.current < TOUCH_REVEAL_MS
+            }
+          />
+        </Hud>
+        {error ? (
+          <div
+            style={{
+              position: "absolute",
+              left: 20,
+              bottom: 20,
+              color: "#ff7b72",
+              fontSize: 16,
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
