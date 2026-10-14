@@ -32,8 +32,11 @@ const TEXT_COLOR = "#e6edf3";
 const MUTED_COLOR = "#8b949e";
 const LINK_COLOR = "#58a6ff";
 
-/** Top of the description block, in slide units. */
-const DESCRIPTION_TOP = 800;
+/**
+ * Top of the description block, in slide units: clear of the counter under
+ * the map, which ends near y 803 when the map fills its panel (the Arctic).
+ */
+const DESCRIPTION_TOP = 830;
 
 /**
  * The HTML over the slide: the step title, panel titles, labels, the counter,
