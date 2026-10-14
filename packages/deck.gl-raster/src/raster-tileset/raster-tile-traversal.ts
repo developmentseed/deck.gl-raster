@@ -20,6 +20,7 @@
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import { transformBounds } from "@developmentseed/proj";
+import { unwrapAlong } from "@developmentseed/raster-reproject";
 import { Vector3 } from "@math.gl/core";
 import {
   CullingVolume,
@@ -54,7 +55,7 @@ import type {
  * The origin (0,0) is at the top-left corner, and (512,512) is at the
  * bottom-right.
  */
-const TILE_SIZE = 512;
+export const TILE_SIZE = 512;
 
 /**
  * Maximum number of world copies to test on each side of the primary world
@@ -332,7 +333,18 @@ export class RasterTileNode {
     // Frustum culling
     // Test if tile's bounding volume intersects the camera frustum
     // Returns: <0 if outside, 0 if intersecting, >0 if fully inside
-    const isInside = cullingVolume.computeVisibility(boundingVolume);
+    let isInside = cullingVolume.computeVisibility(boundingVolume);
+    // In Web Mercator, a tile across the antimeridian runs past the world's
+    // edge, and RasterLayer draws the part past the edge one world over. Test
+    // that part there too.
+    const shift = project ? 0 : otherPartShift(commonSpaceBounds, worldOffset);
+    if (isInside < 0 && shift !== 0) {
+      const otherPart = translateBoundingVolume(
+        { boundingVolume, commonSpaceBounds },
+        shift,
+      );
+      isInside = cullingVolume.computeVisibility(otherPart.boundingVolume);
+    }
     if (isInside < 0) {
       return false;
     }
@@ -426,10 +438,14 @@ export class RasterTileNode {
     const [minX, minY, maxX, maxY] = bounds;
     const [tileMinX, tileMinY, tileMaxX, tileMaxY] = commonSpaceBounds;
 
-    const inside =
-      tileMinX < maxX && tileMaxX > minX && tileMinY < maxY && tileMaxY > minY;
-
-    return inside;
+    if (!(tileMinY < maxY && tileMaxY > minY)) {
+      return false;
+    }
+    // Across the antimeridian, the tile's box and the dataset's bounds can be
+    // unwrapped from different starting points, a world apart.
+    return [0, -TILE_SIZE, TILE_SIZE].some(
+      (shift) => tileMinX + shift < maxX && tileMaxX + shift > minX,
+    );
   }
 
   /**
@@ -538,6 +554,29 @@ export class RasterTileNode {
     const commonSpacePositions = refPointsEPSG3857.map((xy) =>
       rescaleEPSG3857ToCommonSpace(xy),
     );
+
+    // proj4 returns x inside one world, so the reference points of a tile
+    // across the antimeridian land at both edges of it. Walk to each one from
+    // the tile's center (the first reference point) instead, so the box hugs
+    // the tile.
+    const xAt = (relX: number, relY: number) =>
+      rescaleEPSG3857ToCommonSpace(
+        sampleReferencePointsInEPSG3857(
+          [[relX, relY]],
+          tileCorners,
+          this.descriptor.projectTo3857,
+          this.descriptor.projectTo4326,
+        )[0]!,
+      )[0];
+    const [centerX, centerY] = REF_POINTS_9[0]!;
+    for (let i = 1; i < REF_POINTS_9.length; i++) {
+      const [relX, relY] = REF_POINTS_9[i]!;
+      commonSpacePositions[i]![0] = unwrapAlong(
+        (t) =>
+          xAt(centerX + t * (relX - centerX), centerY + t * (relY - centerY)),
+        { start: commonSpacePositions[0]![0], period: TILE_SIZE },
+      );
+    }
 
     const refPointPositions: [number, number, number][] = [];
     for (const p of commonSpacePositions) {
@@ -1066,6 +1105,29 @@ function getMetersPerPixelAtCommonSpaceBounds(
   // recursed to the finest level.
   const [, lat] = worldToLngLat([(minX + maxX) / 2, (minY + maxY) / 2]);
   return getMetersPerPixel(lat, zoom);
+}
+
+/**
+ * How far to move a tile's bounding volume to test the part of it that
+ * `RasterLayer` draws one world over: `-TILE_SIZE` if the tile's box runs past
+ * the world's east edge, `TILE_SIZE` if it runs past the west edge, else `0`.
+ *
+ * @param commonSpaceBounds The tile's box, at `worldOffset`.
+ * @param worldOffset The world copy the box was moved to.
+ */
+function otherPartShift(
+  commonSpaceBounds: Bounds,
+  worldOffset: number,
+): number {
+  const minX = commonSpaceBounds[0] - worldOffset * TILE_SIZE;
+  const maxX = commonSpaceBounds[2] - worldOffset * TILE_SIZE;
+  if (maxX > TILE_SIZE) {
+    return -TILE_SIZE;
+  }
+  if (minX < 0) {
+    return TILE_SIZE;
+  }
+  return 0;
 }
 
 /**

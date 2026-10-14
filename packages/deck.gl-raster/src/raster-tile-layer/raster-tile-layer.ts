@@ -19,6 +19,7 @@ import type { RenderTileResult } from "../raster-layer.js";
 import { RasterLayer } from "../raster-layer.js";
 import type { RasterTilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
+import { TILE_SIZE } from "../raster-tileset/raster-tile-traversal.js";
 import type { RasterTileMetadata } from "../raster-tileset/raster-tileset-2d.js";
 
 /**
@@ -491,6 +492,9 @@ export class RasterTileLayer<
         initialTriangulation: isGlobe
           ? undefined
           : tile._webMercatorInitialTriangulation,
+        // Web Mercator wraps at one world: keep a tile that crosses the
+        // antimeridian in one piece. Only output mode can unwrap.
+        _wrapX: !isGlobe && _errorSpace === "output" ? TILE_SIZE : undefined,
         debug,
         debugOpacity,
         coordinateSystem,
