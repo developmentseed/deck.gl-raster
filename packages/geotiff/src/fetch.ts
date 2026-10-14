@@ -336,7 +336,7 @@ async function findBandSeparateTileByteRanges(
   const numBands = self.cachedTags.samplesPerPixel;
   const tileSizes = [...Array(numBands).keys()].map((band) => {
     const bandIdx = band * tilesPerBand + y * tilesPerRow + x;
-    return self.image.getTileSize(bandIdx, options);
+    return getTileByteRange(self.image, bandIdx, options);
   });
   return Promise.all(tileSizes);
 }
@@ -463,9 +463,9 @@ async function fetchBandSeparateTileBytesMultiple(
  *
  * Though this function lives upstream in @cogeotiff/core, we vendor it here
  * so we can route the *tile data* read through a separate source. The tile's
- * byte range is looked up via `image.getTileSize(idx)`, which inside cogeotiff
- * uses the source that was passed to `Tiff.create` (our header source — cached
- * for small repeated reads). The actual tile bytes are then fetched from
+ * byte range is looked up via {@link getTileByteRange}, which reads it through
+ * the source that was passed to `Tiff.create` (our header source — cached for
+ * small repeated reads). The actual tile bytes are then fetched from
  * `dataSource`, which is the raw HTTP source with no caching: tile data is
  * large and read once, so caching it would just evict header metadata.
  */
@@ -503,17 +503,56 @@ async function getTile(
     );
   }
 
-  // image.getTileSize() reads TileOffsets[idx] and TileByteCounts[idx] from
-  // the header source (cogeotiff's lazy per-entry path, served by the chunk
-  // cache). It does NOT read tile data — only the 4–8 byte offset/count
-  // entries. Thread the signal so a cache-miss read aborts (and releases its
-  // limiter slot) alongside the data fetch.
-  const { offset, imageSize } = await image.getTileSize(idx, {
+  // Reads TileOffsets[idx] and TileByteCounts[idx] from the header source,
+  // not tile data: only the 4–8 byte offset/count entries.
+  const { offset, imageSize } = await getTileByteRange(image, idx, {
     signal: options?.signal,
   });
 
   // The actual tile bytes go through dataSource (uncached HTTP).
   return getBytes(image, offset, imageSize, dataSource, options);
+}
+
+/**
+ * Look up a tile's byte range: its `TileOffsets` and `TileByteCounts`
+ * entries.
+ *
+ * When those tables don't fit in the bytes read at open, cogeotiff reads each
+ * entry lazily through the header source, whose cache shares one request
+ * among every tile with entries in the same chunk. So the lookup runs without
+ * `signal`: forwarding it would let one tile's abort fail every other tile
+ * sharing that request
+ * (https://github.com/developmentseed/deck.gl-raster/issues/690). Instead,
+ * `signal` only ends this caller's wait, rejecting with `signal.reason` at
+ * once, while the request runs on and fills the cache for the next tile.
+ */
+function getTileByteRange(
+  image: TiffImage,
+  index: number,
+  options?: { signal?: AbortSignal },
+): Promise<ByteRange> {
+  const signal = options?.signal;
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason);
+  }
+  const lookup = image.getTileSize(index);
+  if (!signal) {
+    return lookup;
+  }
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    lookup.then(
+      (range) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(range);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 /**
@@ -642,7 +681,7 @@ export async function getMultipleBytes(
 /**
  * Load multiple tiles in a single batched I/O round trip.
  *
- * Resolves the offset/size of every requested tile via `image.getTileSize`
+ * Resolves the offset/size of every requested tile via {@link getTileByteRange}
  * (header-source reads — small entries, served by the chunk cache), then fetches
  * the tile data through {@link getMultipleBytes} (uncached `dataSource`, with
  * range coalescing). Returns one entry per input tile, in input order; sparse
@@ -692,7 +731,7 @@ export async function getTiles(
   });
 
   const sizes = await Promise.all(
-    indices.map((i) => image.getTileSize(i, { signal: options?.signal })),
+    indices.map((i) => getTileByteRange(image, i, { signal: options?.signal })),
   );
   return getMultipleBytes(
     image,
