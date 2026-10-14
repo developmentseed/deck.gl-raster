@@ -87,6 +87,30 @@ describe("clipMeshToWorld", () => {
     });
   });
 
+  it("cuts a triangle across three worlds into a part in each", () => {
+    const mesh: Mesh2D = {
+      positions: [400, 0, 1200, 0, 400, 10],
+      uvs: [0, 0, 1, 0, 0, 1],
+      triangles: [0, 1, 2],
+    };
+    const clipped = clipMeshToWorld(mesh, WORLD);
+    expect(clipped.triangles.length / 3).toBeGreaterThanOrEqual(3);
+    expect(area(clipped)).toBeCloseTo(area(mesh), 9);
+    for (const x of xsOf(clipped)) {
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(WORLD);
+    }
+  });
+
+  it("leaves a triangle with a position that isn't finite where it is", () => {
+    const mesh: Mesh2D = {
+      positions: [100, 0, Number.POSITIVE_INFINITY, 0, 100, 10],
+      uvs: [0, 0, 1, 0, 0, 1],
+      triangles: [0, 1, 2],
+    };
+    expect(clipMeshToWorld(mesh, WORLD)).toEqual(mesh);
+  });
+
   it("cuts a mesh across x = 0 and moves its west part forward a world", () => {
     // From x = −12 to 18.
     const clipped = clipMeshToWorld(rectangle(-12), WORLD);

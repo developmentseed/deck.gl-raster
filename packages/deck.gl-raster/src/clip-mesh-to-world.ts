@@ -34,19 +34,27 @@ export function clipMeshToWorld(mesh: Mesh2D, period: number): Mesh2D {
   const { positions, uvs, triangles } = mesh;
 
   // The world copies each triangle covers, from `first` to `last`. A triangle
-  // that ends exactly on a world's edge doesn't reach into the next one.
-  const first: number[] = [];
-  const last: number[] = [];
-  for (let t = 0; t < triangles.length; t += 3) {
-    const xs = [0, 1, 2].map((j) => positions[2 * triangles[t + j]!]!);
-    const a = Math.floor(Math.min(...xs) / period);
-    first.push(a);
-    last.push(Math.max(a, Math.ceil(Math.max(...xs) / period) - 1));
+  // that ends exactly on a world's edge doesn't reach into the next one. One
+  // with a position that isn't finite stays where it is.
+  const count = triangles.length / 3;
+  const first = new Float64Array(count);
+  const last = new Float64Array(count);
+  let oneWorld = true;
+  for (let t = 0; t < count; t++) {
+    const x0 = positions[2 * triangles[3 * t]!]!;
+    const x1 = positions[2 * triangles[3 * t + 1]!]!;
+    const x2 = positions[2 * triangles[3 * t + 2]!]!;
+    const a = Math.floor(Math.min(x0, x1, x2) / period);
+    const b = Math.max(a, Math.ceil(Math.max(x0, x1, x2) / period) - 1);
+    const finite = Number.isFinite(a) && Number.isFinite(b);
+    first[t] = finite ? a : 0;
+    last[t] = finite ? b : 0;
+    oneWorld &&= first[t] === first[0] && last[t] === first[0];
   }
 
   // Most meshes lie inside one world: move them whole.
   const copy = first[0] ?? 0;
-  if (first.every((a, t) => a === copy && last[t] === copy)) {
+  if (oneWorld) {
     if (copy === 0) {
       return mesh;
     }
@@ -81,10 +89,14 @@ export function clipMeshToWorld(mesh: Mesh2D, period: number): Mesh2D {
     return index;
   };
 
-  for (let t = 0; t < triangles.length; t += 3) {
-    const corners = [triangles[t]!, triangles[t + 1]!, triangles[t + 2]!];
-    const a = first[t / 3]!;
-    const b = last[t / 3]!;
+  for (let t = 0; t < count; t++) {
+    const corners = [
+      triangles[3 * t]!,
+      triangles[3 * t + 1]!,
+      triangles[3 * t + 2]!,
+    ];
+    const a = first[t]!;
+    const b = last[t]!;
     if (a === b) {
       for (const i of corners) {
         out.triangles.push(sharedVertex(i, a));
