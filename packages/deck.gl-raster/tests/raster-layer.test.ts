@@ -1,5 +1,6 @@
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { describe, expect, it, vi } from "vitest";
+import type { RasterLayerProps } from "../src/raster-layer.js";
 
 vi.mock("../src/mesh-layer/mesh-layer.js", () => ({
   MeshTextureLayer: class CapturingMeshTextureLayer {
@@ -26,13 +27,14 @@ const REPROJECTION_FNS: ReprojectionFns = {
  * object + assign, and short-circuits `getSubLayerProps` so MeshTextureLayer
  * receives the exact prop shape we hand it.
  */
-function makeBareLayer() {
+function makeBareLayer(extra: Partial<RasterLayerProps> = {}) {
   const layer = new RasterLayer({
     id: "test",
     width: 4,
     height: 4,
     reprojectionFns: REPROJECTION_FNS,
     image: {} as never,
+    ...extra,
   });
   const internalState: Record<string, unknown> = {};
   Object.assign(layer as object, { state: internalState });
@@ -160,5 +162,32 @@ describe("RasterLayer mesh fp64 split", () => {
       const highOnlyErr = Math.abs(positions[i * 3]! - vx);
       expect(highOnlyErr).toBeLessThan(2);
     }
+  });
+});
+
+describe("RasterLayer._errorSpace", () => {
+  it("passes _errorSpace to the reprojector", () => {
+    const { layer, internalState } = makeBareLayer({ _errorSpace: "output" });
+    (layer as unknown as { _generateMesh: () => void })._generateMesh();
+    const reprojector = internalState.reprojector as { _errorSpace: string };
+    expect(reprojector._errorSpace).toBe("output");
+  });
+
+  it("rebuilds the mesh when _errorSpace changes", () => {
+    const { layer } = makeBareLayer();
+    const bare = layer as unknown as {
+      props: RasterLayerProps;
+      _generateMesh: () => void;
+      updateState: (params: unknown) => void;
+    };
+    const generate = vi
+      .spyOn(bare, "_generateMesh")
+      .mockImplementation(() => {});
+    bare.updateState({
+      props: { ...bare.props, _errorSpace: "output" },
+      oldProps: { ...bare.props, _errorSpace: "input" },
+      changeFlags: {},
+    });
+    expect(generate).toHaveBeenCalledTimes(1);
   });
 });

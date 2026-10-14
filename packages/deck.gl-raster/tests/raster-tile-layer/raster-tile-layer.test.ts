@@ -85,3 +85,36 @@ describe("RasterTileLayer.isLoaded", () => {
     expect(layer.isLoaded).toBe(true);
   });
 });
+
+describe("RasterTileLayer._errorSpace", () => {
+  it("passes _errorSpace to each tile's RasterLayer", () => {
+    const layer = new RasterTileLayer({
+      id: "t",
+      _errorSpace: "output",
+    } as RasterTileLayerProps);
+    Object.assign(layer as object, {
+      context: { viewport: { resolution: undefined } },
+      getSubLayerProps: <T>(props: T) => props,
+    });
+    const identity = (x: number, y: number): [number, number] => [x, y];
+    const tile = {
+      forwardTransform: identity,
+      inverseTransform: identity,
+      _projectPosition: identity,
+      _unprojectPosition: identity,
+      _webMercatorInitialTriangulation: undefined,
+    };
+    const layers = (
+      layer as unknown as {
+        _renderSubLayers: (
+          ...args: unknown[]
+        ) => { props: Record<string, unknown> }[];
+      }
+    )._renderSubLayers(
+      { id: "t-0-0-0", data: { width: 4, height: 4 }, tile, _offset: 0 },
+      {},
+      () => ({ image: {} }),
+    );
+    expect(layers[0]!.props._errorSpace).toBe("output");
+  });
+});
