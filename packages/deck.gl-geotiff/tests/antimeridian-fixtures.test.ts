@@ -220,8 +220,10 @@ describe("antimeridian fixtures", () => {
                 expect(unwrapped.max - unwrapped.min, where).toBeLessThan(
                   WORLD / 2,
                 );
-                expect(unwrapped.min, where).toBeLessThan(WORLD);
-                expect(unwrapped.max, where).toBeGreaterThan(WORLD);
+                // In one piece, across one edge of the world (x = 0 or 512).
+                expect(Math.floor(unwrapped.max / WORLD), where).toBe(
+                  Math.floor(unwrapped.min / WORLD) + 1,
+                );
                 expect(drawn.widestTriangle, where).toBeLessThan(WORLD / 2);
                 // Drawn as two parts, one at each edge of the world.
                 expect(drawn.min, where).toBe(0);

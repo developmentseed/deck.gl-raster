@@ -27,15 +27,20 @@ export function nearestCopy(x: number, ref: number, period: number): number {
  * `valueAt(t)` gives the value at `t` along the path, from `0` to `1`, in any
  * copy. The path is walked in steps, and each step is moved to the copy
  * nearest the step before. Steps are halved until each moves less than a
- * quarter period, so the result is right as long as the value changes
- * continuously along the path. That holds even when the two ends are a whole
- * period apart, like the two edges of a 360°-wide image, which come back from
- * a projection at the same x.
+ * quarter period, and the midpoint is always checked, so two ends a whole
+ * period apart are found: like the two edges of a 360°-wide image, which come
+ * back from a projection at the same x.
+ *
+ * The result is right when the value changes smoothly along the path, as a
+ * longitude does along a straight line across an image. A path that winds
+ * around a pole, or a value that jumps most of a period between two steps
+ * the walk accepts, has no single answer and can give the wrong copy.
  *
  * @param valueAt The value at `t` along the path, in any copy.
  * @param options.start The unwrapped value at `t = 0`.
  * @param options.period The period of the axis, such as one world width.
  * @returns The unwrapped value at `t = 1`.
+ * @internal Shared with deck.gl-raster; not part of the public API.
  */
 export function unwrapAlong(
   valueAt: (t: number) => number,

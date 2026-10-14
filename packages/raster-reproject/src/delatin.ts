@@ -107,6 +107,21 @@ const UNIT_SQUARE_TRIANGULATION: InitialTriangulation = triangulateRectangle(
   1,
 );
 
+/** The center of an {@link InitialTriangulation}'s UV bounds. */
+function uvCenter(seed: InitialTriangulation): [number, number] {
+  let minU = Number.POSITIVE_INFINITY;
+  let maxU = Number.NEGATIVE_INFINITY;
+  let minV = Number.POSITIVE_INFINITY;
+  let maxV = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < seed.uvs.length; i += 2) {
+    minU = Math.min(minU, seed.uvs[i]!);
+    maxU = Math.max(maxU, seed.uvs[i]!);
+    minV = Math.min(minV, seed.uvs[i + 1]!);
+    maxV = Math.max(maxV, seed.uvs[i + 1]!);
+  }
+  return [(minU + maxU) / 2, (minV + maxV) / 2];
+}
+
 export interface ReprojectionFns {
   /**
    * Convert from UV coordinates to input CRS coordinates.
@@ -247,7 +262,8 @@ export class RasterReprojector {
        * - a test point's exact position is compared with the copy nearest
        *   where the GPU draws it, and keeps that copy when it becomes a vertex;
        * - each corner of the initial triangulation is unwrapped by walking the
-       *   straight path to it from the first corner.
+       *   straight path to it from the center of its UV bounds, which is inside
+       *   the image even when a corner is a pole.
        *
        * The mesh then stays in one piece across the wrap, and its x may run
        * past one period. Callers clip it at multiples of `wrapX`.
@@ -304,11 +320,12 @@ export class RasterReprojector {
    * triangle for the first reprojection-error pass.
    */
   private _seed(seed: InitialTriangulation): void {
+    const center = uvCenter(seed);
     for (let i = 0; i < seed.uvs.length; i += 2) {
       const u = seed.uvs[i]!;
       const v = seed.uvs[i + 1]!;
-      if (this._wrapX !== undefined && i > 0) {
-        this._addPoint(u, v, this._unwrapFromFirstVertex(u, v, this._wrapX));
+      if (this._wrapX !== undefined) {
+        this._addPoint(u, v, this._unwrapFrom(center, [u, v], this._wrapX));
         continue;
       }
       this._addPoint(u, v);
@@ -621,28 +638,22 @@ export class RasterReprojector {
 
   /**
    * Exact output position of a point given in UV coordinates, with its x on
-   * the copy reached by walking the straight UV path to it from the first
-   * vertex.
+   * the copy reached by walking the straight UV path to it from `from`.
    *
    * Used for the corners of the initial triangulation, which have no triangle
    * yet to compare against.
    */
-  private _unwrapFromFirstVertex(
-    u: number,
-    v: number,
+  private _unwrapFrom(
+    [u0, v0]: [number, number],
+    [u, v]: [number, number],
     period: number,
   ): [number, number] {
-    const u0 = this.uvs[0]!;
-    const v0 = this.uvs[1]!;
     const xAt = (t: number) =>
       this._projectPixel(
         (u0 + t * (u - u0)) * (this.width - 1),
         (v0 + t * (v - v0)) * (this.height - 1),
       )[0];
-    const x = unwrapAlong(xAt, {
-      start: this.exactOutputPositions[0]!,
-      period,
-    });
+    const x = unwrapAlong(xAt, { start: xAt(0), period });
     const y = this._projectPixel(
       u * (this.width - 1),
       v * (this.height - 1),
@@ -662,21 +673,8 @@ export class RasterReprojector {
    * unit of `output` mode's error, one output pixel.
    */
   private _measurePixelSize(seed: InitialTriangulation): number {
-    // Find the bounding box of uv coordinates from the initial triangulation
-    let minU = Number.POSITIVE_INFINITY;
-    let maxU = Number.NEGATIVE_INFINITY;
-    let minV = Number.POSITIVE_INFINITY;
-    let maxV = Number.NEGATIVE_INFINITY;
-    for (let i = 0; i < seed.uvs.length; i += 2) {
-      minU = Math.min(minU, seed.uvs[i]!);
-      maxU = Math.max(maxU, seed.uvs[i]!);
-      minV = Math.min(minV, seed.uvs[i + 1]!);
-      maxV = Math.max(maxV, seed.uvs[i + 1]!);
-    }
-
     // Center coordinates in uv and pixel space
-    const u = (minU + maxU) / 2;
-    const v = (minV + maxV) / 2;
+    const [u, v] = uvCenter(seed);
     const px = u * (this.width - 1);
     const py = v * (this.height - 1);
 

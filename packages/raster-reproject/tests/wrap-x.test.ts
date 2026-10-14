@@ -83,6 +83,24 @@ describe("unwrapAlong", () => {
     );
   });
 
+  it("follows a path west across the wrap", () => {
+    // From 10 to −30, but the values wrap up to 512 below 0.
+    const valueAt = (t: number) => (((10 - 40 * t) % WORLD) + WORLD) % WORLD;
+    expect(unwrapAlong(valueAt, { start: 10, period: WORLD })).toBeCloseTo(
+      -30,
+      9,
+    );
+  });
+
+  it("stays in the copy of a start outside the first world", () => {
+    const valueAt = (t: number) => (100 + 50 * t) % WORLD;
+    const start = 100 + 2 * WORLD;
+    expect(unwrapAlong(valueAt, { start, period: WORLD })).toBeCloseTo(
+      150 + 2 * WORLD,
+      9,
+    );
+  });
+
   it("ends a whole period away when the path goes once around", () => {
     // Both ends wrap to 0, like the two edges of a 360°-wide image.
     const valueAt = (t: number) => (WORLD * t) % WORLD;
@@ -188,9 +206,11 @@ describe("RasterReprojector wrapX", () => {
     });
     r.run(0.125);
     expect(r.getMaxError()).toBeLessThanOrEqual(0.125);
+    // In one piece, across one edge of the world (x = 0 or 512).
     const xs = xsOf(r);
-    expect(Math.min(...xs)).toBeLessThan(WORLD);
-    expect(Math.max(...xs)).toBeGreaterThan(WORLD);
+    expect(Math.floor(Math.max(...xs) / WORLD)).toBe(
+      Math.floor(Math.min(...xs) / WORLD) + 1,
+    );
     expect(widestTriangle(r)).toBeLessThan(WORLD / 2);
   });
 
@@ -205,4 +225,55 @@ describe("RasterReprojector wrapX", () => {
       /wrapX/,
     );
   });
+});
+
+describe("RasterReprojector wrapX around a pole", () => {
+  // A quarter of an Antarctic polar stereographic grid, with the South Pole at
+  // its top left corner and the 180° meridian down its left edge.
+  const polarToLngLat = proj4(
+    "+proj=stere +lat_0=-90 +lat_ts=-71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
+    "EPSG:4326",
+  );
+  const size = 256;
+  const metres = 3_000_000;
+  const fns: ReprojectionFns = {
+    forwardTransform: (px, py) => [(px / size) * metres, -(py / size) * metres],
+    inverseTransform: throws,
+    forwardReproject: (x, y) => {
+      const [lng, lat] = polarToLngLat.forward<[number, number]>([x, y]);
+      return lngLatToCommon(lng, Math.max(lat, -85.05112878));
+    },
+    inverseReproject: throws,
+  };
+
+  it("meshes a tile with the pole at a corner as it would without wrapX", () => {
+    const options = { _errorSpace: "output" as const };
+    const plain = new RasterReprojector(fns, size + 1, size + 1, options);
+    const wrapped = new RasterReprojector(fns, size + 1, size + 1, {
+      ...options,
+      wrapX: WORLD,
+    });
+    plain.run(0.125, { maxIterations: 2000 });
+    wrapped.run(0.125, { maxIterations: 2000 });
+    expect(wrapped.triangles).toEqual(plain.triangles);
+    expect(wrapped.exactOutputPositions).toEqual(plain.exactOutputPositions);
+  });
+});
+
+describe("RasterReprojector wrapX validation", () => {
+  const fns: ReprojectionFns = {
+    forwardTransform: (x, y) => [x, y],
+    inverseTransform: throws,
+    forwardReproject: lngLatToCommon,
+    inverseReproject: throws,
+  };
+
+  for (const wrapX of [0, -WORLD, Number.NaN, Number.POSITIVE_INFINITY]) {
+    it(`throws for a period of ${wrapX}`, () => {
+      expect(
+        () =>
+          new RasterReprojector(fns, 9, 9, { _errorSpace: "output", wrapX }),
+      ).toThrow(/wrapX/);
+    });
+  }
 });
