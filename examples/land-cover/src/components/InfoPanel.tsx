@@ -1,4 +1,11 @@
-import { Checkbox, Code, Slider, Stack, Text } from "@chakra-ui/react";
+import {
+  Checkbox,
+  Code,
+  NativeSelect,
+  Slider,
+  Stack,
+  Text,
+} from "@chakra-ui/react";
 import {
   ControlPanel,
   ExternalLink,
@@ -11,11 +18,14 @@ interface InfoPanelProps {
   debug: boolean;
   debugOpacity: number;
   meshMaxError: number;
+  /** Where mesh refinement measures error. Experimental. */
+  errorSpace: "input" | "output";
   selected: Set<number>;
   onSelectedChange: (next: Set<number>) => void;
   onDebugChange: (checked: boolean) => void;
   onDebugOpacityChange: (opacity: number) => void;
   onMeshMaxErrorChange: (error: number) => void;
+  onErrorSpaceChange: (errorSpace: "input" | "output") => void;
 }
 
 const debugOverlayTooltip = `Red squares depict the underlying COG tile structure.
@@ -30,11 +40,13 @@ export function InfoPanel({
   debug,
   debugOpacity,
   meshMaxError,
+  errorSpace,
   selected,
   onSelectedChange,
   onDebugChange,
   onDebugOpacityChange,
   onMeshMaxErrorChange,
+  onErrorSpaceChange,
 }: InfoPanelProps) {
   return (
     <ControlPanel title="NLCD Land Cover" sourcePath="examples/land-cover">
@@ -134,6 +146,21 @@ export function InfoPanel({
                     </Slider.Thumb>
                   </Slider.Control>
                 </Slider.Root>
+              </Field>
+
+              <Field label="Mesh error measured">
+                <NativeSelect.Root size="sm">
+                  <NativeSelect.Field
+                    value={errorSpace}
+                    onChange={(e) =>
+                      onErrorSpaceChange(e.target.value as "input" | "output")
+                    }
+                  >
+                    <option value="input">In input pixels</option>
+                    <option value="output">In output pixels</option>
+                  </NativeSelect.Field>
+                  <NativeSelect.Indicator />
+                </NativeSelect.Root>
               </Field>
             </>
           ) : null}

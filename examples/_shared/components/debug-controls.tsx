@@ -11,6 +11,11 @@ export interface DebugState {
    * `COGLayer`). Omit to hide the detail-level selector.
    */
   debugLevel?: 1 | 2 | 3;
+  /**
+   * Optional mesh error space. Omit to hide the selector. Experimental: see
+   * `RasterLayer`'s `_errorSpace`.
+   */
+  errorSpace?: "input" | "output";
 }
 
 export interface DebugControlsProps {
@@ -38,7 +43,7 @@ export function DebugControls({
   onChange,
   label = "Debug overlay",
 }: DebugControlsProps) {
-  const { debug, debugOpacity, debugLevel } = value;
+  const { debug, debugOpacity, debugLevel, errorSpace } = value;
 
   return (
     <Stack gap="3" mt="3" pt="3" borderTopWidth="1px" borderColor="gray.200">
@@ -55,6 +60,26 @@ export function DebugControls({
 
       {debug ? (
         <Stack gap="3">
+          {errorSpace !== undefined ? (
+            <Field label="Mesh error measured">
+              <NativeSelect.Root size="sm">
+                <NativeSelect.Field
+                  value={errorSpace}
+                  onChange={(e) => {
+                    onChange({
+                      ...value,
+                      errorSpace: e.target.value as "input" | "output",
+                    });
+                  }}
+                >
+                  <option value="input">In input pixels</option>
+                  <option value="output">In output pixels</option>
+                </NativeSelect.Field>
+                <NativeSelect.Indicator />
+              </NativeSelect.Root>
+            </Field>
+          ) : null}
+
           {debugLevel !== undefined ? (
             <Field label="Detail level">
               <NativeSelect.Root size="sm">
