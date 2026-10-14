@@ -177,12 +177,12 @@ the globe adds an option to measure in 3D.
   `RasterLayer` next to `maxError` (`_renderNormalTile`). `COGLayer`,
   `ZarrLayer` and `MultiCOGLayer` extend `RasterTileLayer`, so they need no
   code of their own.
-- Changing the prop re-meshes visible tiles from data already loaded; nothing
-  is fetched again.
+- Changing the prop re-meshes every cached tile from data already loaded, as
+  changing `maxError` does; nothing is fetched again.
 
-Two examples get an "Error space: source / target" toggle next to their
-existing mesh (debug) control, so you can flip between modes over the same view
-and watch the wireframe:
+Two examples get a "Mesh error measured" select (in source pixels, or on the
+map) under their existing "Debug overlay" control, so you can flip between
+modes over the same view and watch the wireframe:
 
 - **land-cover** (the NLCD COG, Albers → Web Mercator): the mild case.
 - **custom-projection** (EPSG:4326 and polar data in polar stereographic): the
@@ -250,8 +250,9 @@ scenarios from the scenario brainstorm can be added later on the same picker.
 The NLCD constants in `src/scene/nlcd.ts` become the NLCD scenario.
 `build-scene`, `story`, `hud` and `texture` take a scenario instead of
 importing NLCD constants. A test pins NLCD's current numbers (261 px seed
-error, 194 triangles at 4 px, 6,001 at 0.125 px), so the default explainer does
-not change.
+error, 194 triangles at 4 px, 6,001 at 0.125 px), so the refactor doesn't change
+the default explainer. (Section 3 does: source mode now draws its gaps in the
+input image in step 4.)
 
 **The Arctic scenario:**
 
@@ -307,7 +308,8 @@ not change.
 - it meets its tolerance on the map in every case (true by construction; the
   script checks it);
 - on typical mid-latitude data it adds at most about 25% more triangles at the
-  default 0.125 tolerance (NLCD: +9%);
+  default 0.125 tolerance (NLCD: +9% at 2500 px wide but −11% at a 2048 px
+  overview; the sign varies with the image and the tolerance);
 - it is no slower per mesh;
 - the examples show no visual regressions.
 
