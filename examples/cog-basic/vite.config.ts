@@ -36,6 +36,10 @@ function localFixtures(): Plugin {
         fsp
           .stat(filePath)
           .then((stat) => {
+            if (!stat.isFile()) {
+              next();
+              return;
+            }
             res.setHeader("Content-Type", "image/tiff");
             res.setHeader("Accept-Ranges", "bytes");
             const range = req.headers.range;
@@ -53,11 +57,13 @@ function localFixtures(): Plugin {
                 `bytes ${start}-${end}/${stat.size}`,
               );
               res.setHeader("Content-Length", String(end - start + 1));
-              createReadStream(filePath, { start, end }).pipe(res);
+              createReadStream(filePath, { start, end })
+                .on("error", next)
+                .pipe(res);
               return;
             }
             res.setHeader("Content-Length", String(stat.size));
-            createReadStream(filePath).pipe(res);
+            createReadStream(filePath).on("error", next).pipe(res);
           })
           .catch(next);
       });

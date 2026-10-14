@@ -22,13 +22,16 @@ type CogOption = {
   title: string;
   url: string;
   attribution?: ReactNode;
-  /** A test image that crosses the antimeridian, which needs output mode. */
-  crossesAntimeridian?: boolean;
+  /**
+   * A test image at the antimeridian: picking it switches to output mode,
+   * which can mesh across 180°, and draws the antimeridian.
+   */
+  antimeridianTest?: boolean;
 };
 
 /**
- * Test images that cross the antimeridian, from the geotiff-test-data
- * submodule, served by `vite.config.ts` in development only.
+ * Test images at the antimeridian, from the geotiff-test-data submodule,
+ * served by `vite.config.ts` in development only. All but the last cross it.
  */
 const ANTIMERIDIAN_FIXTURES: CogOption[] = import.meta.env.DEV
   ? [
@@ -40,7 +43,7 @@ const ANTIMERIDIAN_FIXTURES: CogOption[] = import.meta.env.DEV
     ].map(([name, crs]) => ({
       title: `Antimeridian test image: ${crs} (dev only)`,
       url: `${window.location.origin}/__fixtures/${name}.tif`,
-      crossesAntimeridian: true,
+      antimeridianTest: true,
     }))
   : [];
 
@@ -189,7 +192,7 @@ export default function App() {
       >
         <DeckGlOverlay
           layers={
-            selected.crossesAntimeridian
+            selected.antimeridianTest
               ? [cogLayer, antimeridianLayer]
               : [cogLayer]
           }
@@ -214,7 +217,7 @@ export default function App() {
                 const index = Number(e.target.value);
                 setSelectedIndex(index);
                 // Only output mode can mesh an image across the antimeridian.
-                if (COG_OPTIONS[index]?.crossesAntimeridian) {
+                if (COG_OPTIONS[index]?.antimeridianTest) {
                   setDebugState((state) => ({
                     ...state,
                     errorSpace: "output",
