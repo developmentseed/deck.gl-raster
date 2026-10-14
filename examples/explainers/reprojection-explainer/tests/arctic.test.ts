@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createStory, DEFAULT_STORY_SETTINGS } from "../src/animation/story.js";
 import {
   ARCTIC_HEIGHT,
   ARCTIC_SCENARIO,
@@ -78,3 +79,20 @@ describe.each(["input", "output"] as const)(
     });
   },
 );
+
+describe("Arctic text", () => {
+  const story = createStory(
+    buildScene({ scenario: ARCTIC_SCENARIO, finalMaxError: 32 }),
+    DEFAULT_STORY_SETTINGS,
+  );
+  const text = (index: number) =>
+    story[index]!.description.map((run) =>
+      typeof run === "string" ? run : run.text,
+    ).join("");
+
+  it("keeps the hand-written step 3", () => {
+    expect(text(2)).toBe(
+      "We project the corners of each triangle to the polar map. The image's edges lie on virtually the same meridian, so its four corners land almost on the same line and the image has zero width.",
+    );
+  });
+});

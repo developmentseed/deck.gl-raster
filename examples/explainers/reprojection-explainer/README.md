@@ -27,7 +27,7 @@ image and target projection:
 | NLCD land cover (default) | `?scenario=nlcd` | Albers equal-area | Web Mercator | 49°N |
 | Arctic | `?scenario=arctic` | Longitude/latitude, 30–85°N | Polar stereographic (EPSG:3413) | Arctic Circle |
 
-The Arctic's step 1 and step 3 text is a draft, marked "[Draft]".
+The Arctic's step 1 text is a draft, marked "[Draft]".
 
 ## Error metric
 
