@@ -121,3 +121,104 @@ describe("tile selection across the antimeridian", () => {
     });
   }
 });
+
+describe("tile selection around a pole", () => {
+  const R = 6378137;
+  const LON_0 = -45;
+
+  /** Spherical north polar stereographic metres → longitude, latitude. */
+  const polarToLngLat = (x: number, y: number): [number, number] => {
+    const rho = Math.hypot(x, y);
+    const lat = 90 - (2 * Math.atan(rho / (2 * R)) * 180) / Math.PI;
+    let lng = LON_0 + (Math.atan2(x, -y) * 180) / Math.PI;
+    if (lng <= -180) {
+      lng += 360;
+    }
+    return [lng, lat];
+  };
+
+  // The extent of NSIDC's sea ice grid (EPSG:3413), which has the North Pole
+  // inside it, as a 4-level quadtree of 256 px tiles.
+  const [minX, minY, maxX, maxY] = [-3850000, -5350000, 3750000, 5850000];
+  const levels = [0, 1, 2, 3].map((z) => {
+    const n = 2 ** z;
+    const tileWidth = (maxX - minX) / n;
+    const tileHeight = (maxY - minY) / n;
+    return {
+      matrixWidth: n,
+      matrixHeight: n,
+      tileWidth: 256,
+      tileHeight: 256,
+      metersPerPixel: Math.max(tileWidth, tileHeight) / 256,
+      projectedTileCorners: (col: number, row: number) => ({
+        topLeft: [minX + col * tileWidth, maxY - row * tileHeight],
+        topRight: [minX + (col + 1) * tileWidth, maxY - row * tileHeight],
+        bottomLeft: [minX + col * tileWidth, maxY - (row + 1) * tileHeight],
+        bottomRight: [
+          minX + (col + 1) * tileWidth,
+          maxY - (row + 1) * tileHeight,
+        ],
+      }),
+      tileTransform: () => {
+        throw new Error("not used in this test");
+      },
+      crsBoundsToTileRange: () => ({
+        minCol: 0,
+        maxCol: n - 1,
+        minRow: 0,
+        maxRow: n - 1,
+      }),
+    } as RasterTilesetDescriptor["levels"][number];
+  });
+  const polar: RasterTilesetDescriptor = {
+    levels,
+    projectTo3857: (x, y) => {
+      const [lng, lat] = polarToLngLat(x, y);
+      return lngLatTo3857(lng, Math.min(lat, 85.05112878));
+    },
+    projectTo4326: polarToLngLat,
+    projectFrom3857: identity,
+    projectFrom4326: identity,
+    projectedBounds: [minX, minY, maxX, maxY],
+  };
+
+  it("bounds a tile around the pole across every longitude", () => {
+    const node = new RasterTileNode(0, 0, 0, { descriptor: polar });
+    const { commonSpaceBounds } = node.getBoundingVolume(
+      [0, 0],
+      null,
+      new BoundingVolumeCache(),
+    );
+    expect(commonSpaceBounds[0]).toBe(0);
+    expect(commonSpaceBounds[2]).toBe(WORLD);
+  });
+
+  for (const repeat of [false, true]) {
+    it(`selects tiles at every longitude${repeat ? " with repeat" : ""}`, () => {
+      for (const longitude of [-160, -100, -60, -40, -20, 0, 60, 120]) {
+        for (const latitude of [55, 65, 75]) {
+          const viewport = new WebMercatorViewport({
+            longitude,
+            latitude,
+            zoom: 6,
+            width: 800,
+            height: 600,
+            repeat,
+          });
+          const selected = getTileIndices(polar, {
+            viewport,
+            maxZ: 3,
+            zRange: null,
+            // Every longitude, down to the Mercator limit, as RasterTileset2D
+            // clamps a polar dataset's bounds.
+            wgs84Bounds: [-180, 30, 180, 85.05112878],
+          });
+          expect(
+            selected.length,
+            `at ${longitude}°, ${latitude}°`,
+          ).toBeGreaterThan(0);
+        }
+      }
+    });
+  }
+});

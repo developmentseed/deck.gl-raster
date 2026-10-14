@@ -551,7 +551,7 @@ export class RasterTileNode {
       this.descriptor.projectTo4326,
     );
 
-    const commonSpacePositions = refPointsEPSG3857.map((xy) =>
+    let commonSpacePositions = refPointsEPSG3857.map((xy) =>
       rescaleEPSG3857ToCommonSpace(xy),
     );
 
@@ -559,24 +559,38 @@ export class RasterTileNode {
     // across the antimeridian land at both edges of it. Walk to each one from
     // the tile's center (the first reference point) instead, so the box hugs
     // the tile.
+    const clampedProjectTo3857 = makeClampedForwardTo3857(
+      this.descriptor.projectTo3857,
+      this.descriptor.projectTo4326,
+    );
+    const { topLeft, topRight, bottomLeft, bottomRight } = tileCorners;
     const xAt = (relX: number, relY: number) =>
       rescaleEPSG3857ToCommonSpace(
-        sampleReferencePointsInEPSG3857(
-          [[relX, relY]],
-          tileCorners,
-          this.descriptor.projectTo3857,
-          this.descriptor.projectTo4326,
-        )[0]!,
+        clampedProjectTo3857(
+          ...bilerpPoint(
+            topLeft,
+            topRight,
+            bottomLeft,
+            bottomRight,
+            relX,
+            relY,
+          ),
+        ),
       )[0];
     const [centerX, centerY] = REF_POINTS_9[0]!;
     for (let i = 1; i < REF_POINTS_9.length; i++) {
       const [relX, relY] = REF_POINTS_9[i]!;
-      commonSpacePositions[i]![0] = unwrapAlong(
+      const x = unwrapAlong(
         (t) =>
           xAt(centerX + t * (relX - centerX), centerY + t * (relY - centerY)),
         { start: commonSpacePositions[0]![0], period: TILE_SIZE },
       );
+      // Keep proj4's x where the walk can't place the point.
+      if (Number.isFinite(x)) {
+        commonSpacePositions[i]![0] = x;
+      }
     }
+    commonSpacePositions = coverWorldIfWide(commonSpacePositions);
 
     const refPointPositions: [number, number, number][] = [];
     for (const p of commonSpacePositions) {
@@ -1108,6 +1122,27 @@ function getMetersPerPixelAtCommonSpaceBounds(
 }
 
 /**
+ * Reference points that span half a world or more may wind around a pole,
+ * where longitude has no continuous unwrap. Replace them with the corners of
+ * a box across the whole world, at their latitudes.
+ */
+function coverWorldIfWide(positions: [number, number][]): [number, number][] {
+  const xs = positions.map(([x]) => x);
+  if (!(Math.max(...xs) - Math.min(...xs) >= TILE_SIZE / 2)) {
+    return positions;
+  }
+  const ys = positions.map(([, y]) => y);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return [
+    [0, minY],
+    [TILE_SIZE, minY],
+    [0, maxY],
+    [TILE_SIZE, maxY],
+  ];
+}
+
+/**
  * How far to move a tile's bounding volume to test the part of it that
  * `RasterLayer` draws one world over: `-TILE_SIZE` if the tile's box runs past
  * the world's east edge, `TILE_SIZE` if it runs past the west edge, else `0`.
@@ -1152,9 +1187,9 @@ function translateBoundingVolume(
     translatedCenter,
     boundingVolume.halfAxes,
   );
-  // `update()`'s bounds check always re-reads the offset-0 `commonSpaceBounds`,
-  // so this translated AABB isn't consumed in production — it's kept for API
-  // symmetry with `boundingVolume` and is asserted directly by unit tests.
+  // `update()`'s bounds check always re-reads the offset-0 `commonSpaceBounds`.
+  // `otherPartShift` reads this translated AABB, moved back by the offset, to
+  // find the part of a tile past the world's edge.
   const translatedBounds: Bounds = [
     commonSpaceBounds[0] + dx,
     commonSpaceBounds[1],
