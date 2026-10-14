@@ -248,18 +248,18 @@ interface LimiterMiddlewareOptions {
  * `limiter.acquire`, so if the caller aborts while the call is queued the
  * request is dropped before any network I/O fires.
  *
- * Composed into a {@link SourceView}'s middleware list alongside the chunkd
- * middlewares (`SourceChunk`, `SourceCache`, …). Place it after caching so
- * cache hits don't burn a slot.
+ * Composed into a {@link SourceView}'s middleware list alongside other
+ * middlewares (`SourceChunk`, `CacheMiddleware`, …). Place it after
+ * caching so cache hits don't burn a slot.
  *
  * @example
  * ```ts
  * import { SourceView } from "@chunkd/source";
- * import { SourceCache, SourceChunk } from "@chunkd/middleware";
+ * import { SourceChunk } from "@chunkd/middleware";
  *
  * const view = new SourceView(source, [
  *   new SourceChunk({ size: 64 * 1024 }),
- *   new SourceCache({ size: 8 * 1024 * 1024 }),
+ *   new CacheMiddleware({ size: 8 * 1024 * 1024 }),
  *   new LimiterMiddleware({ url, limiter }),
  * ]);
  * ```

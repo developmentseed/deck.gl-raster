@@ -1,4 +1,4 @@
-import { SourceCache, SourceChunk } from "@chunkd/middleware";
+import { SourceChunk } from "@chunkd/middleware";
 import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
@@ -6,6 +6,7 @@ import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
+import { CacheMiddleware } from "./cache.js";
 import type { ColorInterp } from "./colorinterp.js";
 import { inferColorInterpretation } from "./colorinterp.js";
 import { crsFromGeoKeys } from "./crs.js";
@@ -331,7 +332,7 @@ export class GeoTIFF {
 
     // When a limiter is supplied, slot a LimiterMiddleware into both
     // sources' middleware stacks. On the header source, it sits *after*
-    // SourceChunk + SourceCache so a cache hit short-circuits and never
+    // SourceChunk + CacheMiddleware so a cache hit short-circuits and never
     // consumes a slot — only network reads that escape the cache are gated.
     // On the data source (no caching), every fetch is gated. Both stacks
     // share one LimiterMiddleware instance, so they share one per-origin pool.
@@ -345,7 +346,7 @@ export class GeoTIFF {
 
     const view = new SourceView(source, [
       new SourceChunk({ size: chunkSize }),
-      new SourceCache({ size: cacheSize }),
+      new CacheMiddleware({ size: cacheSize }),
       ...(limiter ? [limiter] : []),
     ]);
 
