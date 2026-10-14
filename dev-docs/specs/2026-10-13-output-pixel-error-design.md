@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-13
 - **Issues:** related to [#673](https://github.com/developmentseed/deck.gl-raster/pull/673) (antimeridian), [#566](https://github.com/developmentseed/deck.gl-raster/issues/566) (globe faceting), [#694](https://github.com/developmentseed/deck.gl-raster/pull/694) (custom projections); previewed end to end in [#708](https://github.com/developmentseed/deck.gl-raster/pull/708)
-- **Status:** Sections 1, 2 and 5 implemented: the reprojector option, the layer prop, the example toggles and the comparison script. Sections 3 and 4 (the explainer) follow in a separate PR.
+- **Status:** Implemented: sections 1, 2 and 5 (the reprojector option, the layer prop, the example toggles and the comparison script) in [#711](https://github.com/developmentseed/deck.gl-raster/pull/711), and sections 3 and 4 (the explainer) in [#712](https://github.com/developmentseed/deck.gl-raster/pull/712).
 
 ## Problem
 
@@ -216,8 +216,7 @@ modes over the same view and watch the wireframe:
 
 ### 3. Explainer: metric toggle
 
-Sections 3 and 4 come in a separate PR. In
-`examples/explainers/reprojection-explainer`:
+In `examples/explainers/reprojection-explainer`:
 
 - **Setting.** `errorSpace` (`"input"` default) in `AppSettings`, chosen in
   the tuning panel next to the tolerance, flipped with the `M` key, and read
@@ -382,7 +381,6 @@ screen, and it converges where input mode cannot.
   column stretch, the 89.5° cut at the poles (input mode can't converge where
   a whole row of a geographic tile meets at the pole), and the longitude
   unwrap in `tileInverseReproject`.
-- **The explainer:** sections 3 and 4, closing #708.
 - **[#710](https://github.com/developmentseed/deck.gl-raster/issues/710):**
   pass `maxError`, `debug`, `debugOpacity` and `_errorSpace` to tiles through
   `updateTriggers` instead of a new `TilesetFactory` class on every render.
