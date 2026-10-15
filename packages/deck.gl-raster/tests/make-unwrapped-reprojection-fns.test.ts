@@ -139,4 +139,44 @@ describe("makeUnwrappedReprojectionFns", () => {
       centeredOnZero.triangles.length,
     );
   });
+
+  it("doesn't walk onto a corner that's a pole, where x is undefined", () => {
+    // A south polar stereographic image, on a sphere, with the South Pole at
+    // its top left corner. At the pole itself, this projection gives no
+    // longitude.
+    const R = 6378137;
+    const size = 64;
+    const metres = 3_000_000;
+    const fns: ReprojectionFns = {
+      forwardTransform: (px, py) => [
+        (px / size) * metres,
+        -(py / size) * metres,
+      ],
+      inverseTransform: (x, y) => [(x / metres) * size, (-y / metres) * size],
+      forwardReproject: (x, y) => {
+        const rho = Math.hypot(x, y);
+        const lat = -90 + (2 * Math.atan(rho / (2 * R)) * 180) / Math.PI;
+        const lng = rho === 0 ? Number.NaN : (Math.atan2(x, y) * 180) / Math.PI;
+        return lngLatToCommon(lng, Math.max(lat, -85));
+      },
+      inverseReproject: throws,
+    };
+    const build = (f: ReprojectionFns) => {
+      const r = new RasterReprojector(f, size + 1, size + 1, {
+        _errorSpace: "output",
+      });
+      r.run(0.125, { maxIterations: 1000 });
+      return r;
+    };
+    const plain = build(fns);
+    const unwrapped = build(
+      makeUnwrappedReprojectionFns(fns, {
+        width: size,
+        height: size,
+        period: WORLD,
+      }),
+    );
+    // Only the pole's own vertex has no x, as without unwrapping.
+    expect(unwrapped.exactOutputPositions).toEqual(plain.exactOutputPositions);
+  });
 });
