@@ -53,4 +53,17 @@ describe("getGeographicBounds", () => {
       north: Math.max(...lats),
     });
   });
+
+  it("bounds all of a rotated image", async () => {
+    // Rotated 20°, its corners reach from 204°W to 150.2°W, written as 156° to
+    // 209.8°, and from 15.5°S to 38.4°N.
+    const { west, south, east, north } = await boundsOf(
+      "antimeridian_rotated",
+      WGS84,
+    );
+    expect(west).toBeCloseTo(156, 9);
+    expect(east).toBeCloseTo(209.8, 1);
+    expect(south).toBeCloseTo(-15.5, 1);
+    expect(north).toBeCloseTo(38.4, 1);
+  });
 });
