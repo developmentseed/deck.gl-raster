@@ -1,4 +1,5 @@
 import { NativeSelect, Text } from "@chakra-ui/react";
+import { PathLayer } from "@deck.gl/layers";
 import { LoadingWidget } from "@deck.gl/widgets";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type { DebugState } from "deck.gl-raster-examples-shared";
@@ -17,7 +18,58 @@ import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
 
-const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
+type CogOption = {
+  title: string;
+  url: string;
+  attribution?: ReactNode;
+  /**
+   * A test image at the antimeridian: picking it switches to output mode,
+   * which can mesh across 180°, and draws the antimeridian.
+   */
+  antimeridianTest?: boolean;
+};
+
+/**
+ * Test images at the antimeridian, from the geotiff-test-data submodule,
+ * served by `vite.config.ts` in development only. All but the last cross it.
+ */
+const ANTIMERIDIAN_FIXTURES: CogOption[] = import.meta.env.DEV
+  ? [
+      ["antimeridian", "EPSG:4326"],
+      ["antimeridian_rotated", "EPSG:4326, rotated"],
+      ["antimeridian_UTM_60N", "UTM zone 60N"],
+      ["antimeridian_epsg3832", "EPSG:3832"],
+      ["antimeridian_edge_to_edge", "EPSG:4326, 180°W to 180°E"],
+    ].map(([name, crs]) => ({
+      title: `Antimeridian test image: ${crs} (dev only)`,
+      url: `${window.location.origin}/__fixtures/${name}.tif`,
+      antimeridianTest: true,
+    }))
+  : [];
+
+/**
+ * The antimeridian, drawn over the antimeridian test images: at 180° and at
+ * -180°, since only one of them is in the world copy the map is centered in.
+ */
+const antimeridianLayer = new PathLayer({
+  id: "antimeridian",
+  data: [
+    [
+      [180, 85.05],
+      [180, -85.05],
+    ],
+    [
+      [-180, 85.05],
+      [-180, -85.05],
+    ],
+  ],
+  getPath: (d: [number, number][]) => d,
+  getColor: [255, 0, 200, 255],
+  getWidth: 2,
+  widthUnits: "pixels",
+});
+
+const COG_OPTIONS: CogOption[] = [
   {
     title: "Sentinel-2 True Color Image (New York, 2026)",
     url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
@@ -96,6 +148,7 @@ const COG_OPTIONS: { title: string; url: string; attribution?: ReactNode }[] = [
       </>
     ),
   },
+  ...ANTIMERIDIAN_FIXTURES,
 ];
 
 export default function App() {
@@ -104,6 +157,7 @@ export default function App() {
   const [debugState, setDebugState] = useState<DebugState>({
     debug: false,
     debugOpacity: 0.25,
+    errorSpace: "input",
   });
 
   const selected = COG_OPTIONS[selectedIndex];
@@ -113,6 +167,7 @@ export default function App() {
     geotiff: selected.url,
     debug: debugState.debug,
     debugOpacity: debugState.debugOpacity,
+    _errorSpace: debugState.errorSpace,
     onGeoTIFFLoad: (tiff, options) => {
       (window as unknown as { tiff: unknown }).tiff = tiff;
       const { west, south, east, north } = options.geographicBounds;
@@ -143,7 +198,11 @@ export default function App() {
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
         <DeckGlOverlay
-          layers={[cogLayer]}
+          layers={
+            selected.antimeridianTest
+              ? [cogLayer, antimeridianLayer]
+              : [cogLayer]
+          }
           widgets={[new LoadingWidget(loadingWidgetProps)]}
           interleaved
         />
@@ -161,7 +220,17 @@ export default function App() {
           <NativeSelect.Root>
             <NativeSelect.Field
               value={selectedIndex}
-              onChange={(e) => setSelectedIndex(Number(e.target.value))}
+              onChange={(e) => {
+                const index = Number(e.target.value);
+                setSelectedIndex(index);
+                // Only output mode can mesh an image across the antimeridian.
+                if (COG_OPTIONS[index]?.antimeridianTest) {
+                  setDebugState((state) => ({
+                    ...state,
+                    errorSpace: "output",
+                  }));
+                }
+              }}
             >
               {COG_OPTIONS.map((opt, i) => (
                 <option key={opt.url} value={i}>
