@@ -2,7 +2,7 @@
 
 - **Date:** 2026-05-27
 - **Issues:** [#171](https://github.com/developmentseed/deck.gl-raster/issues/171), [#366](https://github.com/developmentseed/deck.gl-raster/issues/366)
-- **Status:** Proposed
+- **Status:** Superseded by [`2026-10-14-antimeridian-unwrap-design.md`](./2026-10-14-antimeridian-unwrap-design.md), which keeps each crossing tile as one mesh now that the reprojector can measure error in output pixels
 - **Prerequisite (merged):** [#517](https://github.com/developmentseed/deck.gl-raster/issues/517) / [#518](https://github.com/developmentseed/deck.gl-raster/pull/518) — multi-world-copy tile traversal
 - **Related:** [#182](https://github.com/developmentseed/deck.gl-raster/issues/182), [#351](https://github.com/developmentseed/deck.gl-raster/pull/351) (reprojector sub-domain / cutline), [`dev-docs/coordinate-systems.md`](../coordinate-systems.md), [`dev-docs/world-copies.md`](../world-copies.md)
 - **Informed by (not the basis):** [#353](https://github.com/developmentseed/deck.gl-raster/pull/353) (rejected: global proj4 `+over` hack), [#374](https://github.com/developmentseed/deck.gl-raster/pull/374) and [#269](https://github.com/developmentseed/deck.gl-raster/pull/269) (AI-generated unwrap attempts)
