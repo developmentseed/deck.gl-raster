@@ -45,7 +45,9 @@ const DEBUG_COLORS: [number, number, number][] = [
 ];
 
 type DebugData = {
-  reprojector: RasterReprojector;
+  indices: Uint32Array;
+  positions64High: Float32Array;
+  positions64Low: Float32Array;
   length: number;
 };
 
@@ -279,7 +281,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       return;
     }
     const { indices, positions64High, positions64Low, texCoords } =
-      reprojectorToMesh(reprojector);
+      meshToBuffers(drawnMesh);
 
     this.setState({
       reprojector,
@@ -295,19 +297,25 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 
   renderDebugLayer(): Layer | null {
-    const { reprojector } = this.state;
+    const { mesh, positions64Low } = this.state;
     const { debugOpacity } = this.props;
 
-    if (!reprojector) {
+    if (!mesh || !positions64Low) {
       return null;
     }
 
+    const indices = mesh.indices.value;
     return new PolygonLayer(
       this.getSubLayerProps({
         id: "polygon",
         // https://deck.gl/docs/developer-guide/performance#supply-binary-blobs-to-the-data-prop
         // This `data` gets passed into `getPolygon` with the row index.
-        data: { reprojector, length: reprojector.triangles.length / 3 },
+        data: {
+          indices,
+          positions64High: mesh.attributes.POSITION.value,
+          positions64Low,
+          length: indices.length / 3,
+        },
         getPolygon: (
           _: any,
           {
@@ -318,19 +326,18 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
             data: DebugData;
           },
         ) => {
-          const triangles = data.reprojector.triangles;
-          const positions = reprojector.exactOutputPositions;
+          const { indices, positions64High: high, positions64Low: low } = data;
 
-          const a = triangles[index * 3]!;
-          const b = triangles[index * 3 + 1]!;
-          const c = triangles[index * 3 + 2]!;
+          const a = indices[index * 3]!;
+          const b = indices[index * 3 + 1]!;
+          const c = indices[index * 3 + 2]!;
 
-          return [
-            [positions[a * 2]!, positions[a * 2 + 1]!],
-            [positions[b * 2]!, positions[b * 2 + 1]!],
-            [positions[c * 2]!, positions[c * 2 + 1]!],
-            [positions[a * 2]!, positions[a * 2 + 1]!],
+          // Recombine float32 high and low parts to get position
+          const position = (vertex: number): [number, number] => [
+            high[vertex * 3]! + low[vertex * 3]!,
+            high[vertex * 3 + 1]! + low[vertex * 3 + 1]!,
           ];
+          return [position(a), position(b), position(c), position(a)];
         },
         getFillColor: (
           _: any,
@@ -393,19 +400,19 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
   }
 }
 
-function reprojectorToMesh(reprojector: RasterReprojector): {
+function meshToBuffers(mesh: Mesh2D): {
   indices: Uint32Array;
   positions64High: Float32Array;
   positions64Low: Float32Array;
   texCoords: Float32Array;
 } {
-  const numVertices = reprojector.uvs.length / 2;
-  const texCoords = new Float32Array(reprojector.uvs);
+  const numVertices = mesh.uvs.length / 2;
+  const texCoords = new Float32Array(mesh.uvs);
 
   const positions = new Float64Array(numVertices * 3);
   for (let i = 0; i < numVertices; i++) {
-    positions[i * 3] = reprojector.exactOutputPositions[i * 2]!;
-    positions[i * 3 + 1] = reprojector.exactOutputPositions[i * 2 + 1]!;
+    positions[i * 3] = mesh.positions[i * 2]!;
+    positions[i * 3 + 1] = mesh.positions[i * 2 + 1]!;
     // z (flat on the ground)
     positions[i * 3 + 2] = 0;
   }
@@ -415,7 +422,7 @@ function reprojectorToMesh(reprojector: RasterReprojector): {
   const [positions64Low, positions64High] = splitFloat64Array(positions);
 
   // TODO: Consider using 16-bit indices if the mesh is small enough
-  const indices = new Uint32Array(reprojector.triangles);
+  const indices = new Uint32Array(mesh.triangles);
 
   return {
     indices,
