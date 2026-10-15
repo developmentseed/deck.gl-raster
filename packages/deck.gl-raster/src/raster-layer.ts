@@ -12,10 +12,13 @@ import type {
   ReprojectionFns,
 } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
+import type { Mesh2D } from "./clip-mesh-to-world.js";
+import { clipMeshToWorld } from "./clip-mesh-to-world.js";
 import { splitFloat64Array } from "./fp64.js";
 import { buildUniformGridMesh } from "./globe-grid-mesh.js";
 import type { RasterModule } from "./gpu-modules/types.js";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer.js";
+import { unwrapReprojectionFns } from "./unwrap-reprojection-fns.js";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
@@ -126,6 +129,18 @@ export interface RasterLayerProps extends CompositeLayerProps {
    */
   _errorSpace?: "input" | "output";
 
+  /**
+   * The period of the output's x axis, if it wraps around: one world width
+   * (512) for Web Mercator in deck.gl's common space.
+   *
+   * An image that crosses the wrap (the antimeridian) is then meshed in one
+   * piece, the short way across, and drawn cut at the world's edge, each part
+   * inside the world. Needs `_errorSpace: "output"`.
+   *
+   * @internal Experimental; may change or be removed.
+   */
+  _wrapX?: number;
+
   /** If set, enables debug mode for visualizing the mesh and reprojection process. */
   debug?: boolean;
 
@@ -212,7 +227,8 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       reprojectionFnsChanged ||
       props.maxError !== oldProps.maxError ||
       props.initialTriangulation !== oldProps.initialTriangulation ||
-      props._errorSpace !== oldProps._errorSpace;
+      props._errorSpace !== oldProps._errorSpace ||
+      props._wrapX !== oldProps._wrapX;
 
     if (needsMeshUpdate) {
       this._generateMesh();
@@ -227,6 +243,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       initialTriangulation,
       maxError = DEFAULT_MAX_ERROR,
       _errorSpace,
+      _wrapX,
     } = this.props;
 
     // TEMPORARY GLOBE VIEW HACK:
@@ -263,12 +280,25 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     // the COGLayer.
     let reprojector: RasterReprojector;
     try {
-      reprojector = new RasterReprojector(
-        reprojectionFns,
-        width + 1,
-        height + 1,
-        { initialTriangulation, _errorSpace },
-      );
+      if (_wrapX !== undefined && _errorSpace !== "output") {
+        throw new Error('RasterLayer: _wrapX needs _errorSpace: "output".');
+      }
+
+      // When `_wrapX` is defined, make the projection continuous across the
+      // wrap, so the reprojector meshes an image that crosses it in one piece.
+      const fns =
+        _wrapX === undefined
+          ? reprojectionFns
+          : unwrapReprojectionFns(reprojectionFns, {
+              width,
+              height,
+              period: _wrapX,
+            });
+
+      reprojector = new RasterReprojector(fns, width + 1, height + 1, {
+        initialTriangulation,
+        _errorSpace,
+      });
       reprojector.run(maxError);
     } catch (error) {
       // Draw nothing rather than the mesh from earlier props, and report it.
@@ -280,6 +310,18 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       this.raiseError(error as Error, "building the reprojection mesh");
       return;
     }
+    const reprojected: Mesh2D = {
+      positions: reprojector.exactOutputPositions,
+      uvs: reprojector.uvs,
+      triangles: reprojector.triangles,
+    };
+
+    // When `_wrapX` is set, the mesh may run past the world's edge.
+    //
+    // We need to cut it on the world's edge, so each part is drawn inside the
+    // correct world.
+    const drawnMesh =
+      _wrapX === undefined ? reprojected : clipMeshToWorld(reprojected, _wrapX);
     const { indices, positions64High, positions64Low, texCoords } =
       meshToBuffers(drawnMesh);
 

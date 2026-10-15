@@ -165,6 +165,46 @@ describe("RasterLayer mesh fp64 split", () => {
   });
 });
 
+describe("RasterLayer debug overlay", () => {
+  it("outlines each triangle of the mesh", () => {
+    // Far from the origin, where a float32 alone can't hold the positions.
+    const { layer, internalState } = makeBareLayer({
+      reprojectionFns: {
+        ...REPROJECTION_FNS,
+        forwardReproject: (x, y) => [13_000_000 + x * 0.3, 4_500_000 + y * 0.3],
+      },
+    });
+    const bare = layer as unknown as {
+      _generateMesh: () => void;
+      renderDebugLayer: () => {
+        props: {
+          data: { length: number };
+          getPolygon: (
+            object: unknown,
+            info: { index: number; data: unknown },
+          ) => [number, number][];
+        };
+      };
+    };
+    bare._generateMesh();
+    const { exactOutputPositions: positions, triangles } =
+      internalState.reprojector as {
+        exactOutputPositions: number[];
+        triangles: number[];
+      };
+    const { data, getPolygon } = bare.renderDebugLayer().props;
+    expect(data.length).toBe(triangles.length / 3);
+    for (let index = 0; index < data.length; index++) {
+      const polygon = getPolygon(null, { index, data });
+      [0, 1, 2, 0].forEach((corner, j) => {
+        const vertex = triangles[index * 3 + corner]!;
+        expect(polygon[j]![0]).toBeCloseTo(positions[vertex * 2]!, 6);
+        expect(polygon[j]![1]).toBeCloseTo(positions[vertex * 2 + 1]!, 6);
+      });
+    }
+  });
+});
+
 describe("RasterLayer._errorSpace", () => {
   it("passes _errorSpace to the reprojector", () => {
     const { layer, internalState } = makeBareLayer({ _errorSpace: "output" });
@@ -247,6 +287,117 @@ describe("RasterLayer mesh errors", () => {
       expect.objectContaining({
         message: expect.stringContaining("_errorSpace"),
       }),
+      "building the reprojection mesh",
+    );
+  });
+});
+
+describe("RasterLayer._wrapX", () => {
+  const WORLD = 512;
+
+  /**
+   * Longitude/latitude to Web Mercator in deck.gl's common space, wrapping
+   * longitude into [-180°, 180°] like proj4.
+   */
+  const lngLatToCommon = (lng: number, lat: number): [number, number] => {
+    const wrapped = Math.abs(lng) <= 180 ? lng : lng - Math.sign(lng) * 360;
+    const phi = (lat * Math.PI) / 180;
+    return [
+      ((wrapped + 180) / 360) * WORLD,
+      (0.5 + Math.log(Math.tan(Math.PI / 4 + phi / 2)) / (2 * Math.PI)) * WORLD,
+    ];
+  };
+
+  /** A 4x4 px longitude/latitude image from 204°W to 162°W, across -180°. */
+  const CROSSING_FNS: ReprojectionFns = {
+    forwardTransform: (px, py) => [-204 + (px / 4) * 42, 24 - (py / 4) * 42],
+    inverseTransform: (x, y) => [((x + 204) / 42) * 4, ((24 - y) / 42) * 4],
+    forwardReproject: lngLatToCommon,
+    inverseReproject: identity,
+  };
+
+  function makeCrossingLayer(extra: Partial<RasterLayerProps> = {}) {
+    return makeBareLayer({
+      reprojectionFns: CROSSING_FNS,
+      _errorSpace: "output",
+      _wrapX: WORLD,
+      ...extra,
+    });
+  }
+
+  it("rebuilds the mesh when _wrapX changes", () => {
+    const { layer } = makeBareLayer();
+    const bare = layer as unknown as {
+      props: RasterLayerProps;
+      _generateMesh: () => void;
+      updateState: (params: unknown) => void;
+    };
+    const generate = vi
+      .spyOn(bare, "_generateMesh")
+      .mockImplementation(() => {});
+    bare.updateState({
+      props: { ...bare.props, _wrapX: WORLD },
+      oldProps: { ...bare.props, _wrapX: undefined },
+      changeFlags: {},
+    });
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws an image across the antimeridian inside the world, at both edges", () => {
+    const { layer, internalState } = makeCrossingLayer();
+    (layer as unknown as { _generateMesh: () => void })._generateMesh();
+    const high = (internalState.mesh as WrappedMesh).attributes.POSITION.value;
+    const low = internalState.positions64Low as Float32Array;
+    const xs: number[] = [];
+    for (let i = 0; i < high.length; i += 3) {
+      xs.push(high[i]! + low[i]!);
+    }
+    for (const x of xs) {
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(WORLD);
+    }
+    // 24° of the image is west of 180°, 18° east of it.
+    expect(Math.min(...xs)).toBeCloseTo(0, 6);
+    expect(Math.max(...xs)).toBeCloseTo(WORLD, 6);
+    // No triangle goes the long way around, across the rest of the world.
+    const indices = (internalState.mesh as WrappedMesh).indices.value;
+    for (let t = 0; t < indices.length; t += 3) {
+      const span = [0, 1, 2].map((j) => xs[indices[t + j]!]!);
+      expect(Math.max(...span) - Math.min(...span)).toBeLessThan(WORLD / 2);
+    }
+  });
+
+  it("draws the debug overlay inside the world too", () => {
+    const { layer } = makeCrossingLayer();
+    const bare = layer as unknown as {
+      _generateMesh: () => void;
+      renderDebugLayer: () => {
+        props: {
+          data: { length: number };
+          getPolygon: (
+            object: unknown,
+            info: { index: number; data: unknown },
+          ) => [number, number][];
+        };
+      };
+    };
+    bare._generateMesh();
+    const { data, getPolygon } = bare.renderDebugLayer().props;
+    for (let index = 0; index < data.length; index++) {
+      const xs = getPolygon(null, { index, data }).map(([x]) => x);
+      expect(Math.min(...xs)).toBeGreaterThanOrEqual(0);
+      expect(Math.max(...xs)).toBeLessThanOrEqual(WORLD);
+      expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(WORLD / 2);
+    }
+  });
+
+  it("reports an error without output mode", () => {
+    const { layer } = makeCrossingLayer({ _errorSpace: "input" });
+    const raiseError = vi.fn();
+    Object.assign(layer as object, { raiseError });
+    (layer as unknown as { _generateMesh: () => void })._generateMesh();
+    expect(raiseError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("_wrapX") }),
       "building the reprojection mesh",
     );
   });
