@@ -22,18 +22,16 @@ type CogOption = {
   title: string;
   url: string;
   attribution?: ReactNode;
-  /**
-   * A test image at the antimeridian: picking it switches to output mode,
-   * which can mesh across 180°, and draws the antimeridian.
-   */
-  antimeridianTest?: boolean;
+  /** Draw the antimeridian over this image. */
+  renderAntimeridian?: boolean;
 };
 
 /**
- * Test images at the antimeridian, from the geotiff-test-data submodule,
- * served by `vite.config.ts` in development only. All but the last cross it.
+ * Test images from the geotiff-test-data submodule, served by `vite.config.ts`
+ * in development only. For now these are the antimeridian test images, and
+ * all but the last cross it.
  */
-const ANTIMERIDIAN_FIXTURES: CogOption[] = import.meta.env.DEV
+const DEV_FIXTURES: CogOption[] = import.meta.env.DEV
   ? [
       ["antimeridian", "EPSG:4326"],
       ["antimeridian_rotated", "EPSG:4326, rotated"],
@@ -43,13 +41,13 @@ const ANTIMERIDIAN_FIXTURES: CogOption[] = import.meta.env.DEV
     ].map(([name, crs]) => ({
       title: `Antimeridian test image: ${crs} (dev only)`,
       url: `${window.location.origin}/__fixtures/${name}.tif`,
-      antimeridianTest: true,
+      renderAntimeridian: true,
     }))
   : [];
 
 /**
- * The antimeridian, drawn over the antimeridian test images: at 180° and at
- * -180°, since only one of them is in the world copy the map is centered in.
+ * The antimeridian, drawn over images with `renderAntimeridian`: at 180° and
+ * at -180°, since only one of them is in the world copy the map is centered in.
  */
 const antimeridianLayer = new PathLayer({
   id: "antimeridian",
@@ -73,6 +71,11 @@ const COG_OPTIONS: CogOption[] = [
   {
     title: "Sentinel-2 True Color Image (New York, 2026)",
     url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
+  },
+  {
+    title: "Sentinel-2 True Color Image (Fiji, across the antimeridian, 2025)",
+    url: "https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/1/K/AB/2025/4/S2B_T01KAB_20250427T221939_L2A/TCI.tif",
+    renderAntimeridian: true,
   },
   {
     title: "New Zealand 2024-2025 10m RGB",
@@ -148,7 +151,7 @@ const COG_OPTIONS: CogOption[] = [
       </>
     ),
   },
-  ...ANTIMERIDIAN_FIXTURES,
+  ...DEV_FIXTURES,
 ];
 
 export default function App() {
@@ -199,7 +202,7 @@ export default function App() {
       >
         <DeckGlOverlay
           layers={
-            selected.antimeridianTest
+            selected.renderAntimeridian
               ? [cogLayer, antimeridianLayer]
               : [cogLayer]
           }
@@ -223,8 +226,9 @@ export default function App() {
               onChange={(e) => {
                 const index = Number(e.target.value);
                 setSelectedIndex(index);
-                // Only output mode can mesh an image across the antimeridian.
-                if (COG_OPTIONS[index]?.antimeridianTest) {
+                // Only output mode can mesh an image across the antimeridian,
+                // until it's the only mode.
+                if (COG_OPTIONS[index]?.renderAntimeridian) {
                   setDebugState((state) => ({
                     ...state,
                     errorSpace: "output",
