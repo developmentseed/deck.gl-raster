@@ -149,9 +149,13 @@ unit of output-mode error, one output pixel:
    geometric mean overstates it. MODIS sinusoidal pixels far from the central
    meridian are sheared by about 40° in Web Mercator, and the geometric mean
    would make the tolerance 16% looser there.
-4. If the result is not a finite positive number, throw an error that names the
-   mode, the UV center, the image size and the value. (Output mode is
-   experimental; failing loudly helps find such cases.)
+4. If the result is not a finite positive number, measure the same way at each
+   point of a 5x5 grid across the UV bounds, edges included, and use the median
+   of the sizes that are finite and positive. A polar tile whose center is past
+   Web Mercator's latitude limit needs this: the clamp collapses its center
+   pixel onto the map's top edge, and for a tile around the pole, only its
+   corners may be inside the limit. If no point gives a size, throw an error
+   that names the mode, the UV center, the image size and the value.
 
 For #673's antimeridian pieces, which can be triangles, the measuring point
 should become the seed's area-weighted centroid: the bounding box's center of

@@ -192,8 +192,9 @@ export class RasterReprojector {
   /**
    * In `output` mode, one input pixel's size on the map.
    *
-   * This is measured at the center of the meshed area. The unit of error is one
-   * output pixel. This value is `1` in `input` mode.
+   * This is measured at the center of the meshed area, or across it where the
+   * pixel at the center has no size (see `_measurePixelSize`). The unit of
+   * error is one output pixel. This value is `1` in `input` mode.
    */
   private _pixelSize: number;
 
@@ -221,7 +222,8 @@ export class RasterReprojector {
        * - `"output"`: in output pixels. The error is the distance on the map
        *   between where the test point belongs and where the GPU draws it, then
        *   divided by one input pixel's size on the map at the center of the
-       *   meshed area. So the unit of `maxError` is still a number of pixels.
+       *   meshed area, or across it where the pixel at the center has no size.
+       *   So the unit of `maxError` is still a number of pixels.
        *   The inverse functions are never called.
        *
        * This option is experimental and may change or be removed.
@@ -284,7 +286,7 @@ export class RasterReprojector {
   /**
    * Refine the mesh until its maximum error gets below the given one
    *
-   * @param maxError The maximum error the mesh should achieve, in pixels: input pixels, or in output mode, output pixels (one input pixel's size on the map at the center of the meshed area).
+   * @param maxError The maximum error the mesh should achieve, in pixels: input pixels, or in output mode, output pixels (one input pixel's size on the map, normally at the center of the meshed area).
    * @param maxIterations Optional safeguard to prevent infinite loops in case of non-convergence. If the mesh fails to converge within this number of iterations, a warning will be logged and the function will return early.
    *
    * @return  {[type]}  [return description]
@@ -568,15 +570,14 @@ export class RasterReprojector {
   }
 
   /**
-   * One input pixel's size on the map at the center of the seed's UV bounds.
+   * One input pixel's size on the map, the unit of `output` mode's error, one
+   * output pixel.
    *
-   * Steps of half a pixel either side of that point give local derivatives `dx`
-   * and `dy` of the projection, thus computing the local Jacobian.
-   *
-   *
-   * The pixel covers the parallelogram they span, of area `|det J| = |r.x·d.y -
-   * r.y·d.x|`, and its size is the side of a square with that area. This is the
-   * unit of `output` mode's error, one output pixel.
+   * It's measured at the center of the seed's UV bounds. Where the pixel there
+   * has no size on the map, as for a polar tile whose center is past Web
+   * Mercator's latitude limit, it's the median of the sizes measured on a 5x5
+   * grid across the bounds, edges included, leaving out any that are zero or
+   * not finite.
    */
   private _measurePixelSize(seed: InitialTriangulation): number {
     // Find the bounding box of uv coordinates from the initial triangulation
@@ -591,13 +592,51 @@ export class RasterReprojector {
       maxV = Math.max(maxV, seed.uvs[i + 1]!);
     }
 
-    // Center coordinates in uv and pixel space
+    const isSize = (size: number) => Number.isFinite(size) && size > 0;
+
+    // Center coordinates in uv space
     const u = (minU + maxU) / 2;
     const v = (minV + maxV) / 2;
+    const centerSize = this._pixelSizeAt(u, v);
+    if (isSize(centerSize)) {
+      return centerSize;
+    }
+
+    const sizes: number[] = [];
+    for (let i = 0; i <= 4; i++) {
+      for (let j = 0; j <= 4; j++) {
+        const size = this._pixelSizeAt(
+          minU + (i / 4) * (maxU - minU),
+          minV + (j / 4) * (maxV - minV),
+        );
+        if (isSize(size)) {
+          sizes.push(size);
+        }
+      }
+    }
+    if (sizes.length === 0) {
+      throw new Error(
+        `RasterReprojector: _errorSpace "output" needs a finite, positive pixel size on the map, but the pixel at uv (${u}, ${v}) of a ${this.width}x${this.height} mesh measured ${centerSize}, and so did every pixel on a 5x5 grid across the meshed area.`,
+      );
+    }
+    sizes.sort((a, b) => a - b);
+    return sizes[sizes.length >> 1]!;
+  }
+
+  /**
+   * One input pixel's size on the map at a point given in UV coordinates.
+   *
+   * Steps of half a pixel either side of that point give local derivatives `dx`
+   * and `dy` of the projection, thus computing the local Jacobian.
+   *
+   * The pixel covers the parallelogram they span, of area `|det J| = |r.x*d.y -
+   * r.y*d.x|`, and its size is the side of a square with that area.
+   */
+  private _pixelSizeAt(u: number, v: number): number {
     const px = u * (this.width - 1);
     const py = v * (this.height - 1);
 
-    // Forward project 1 pixel width and height around the center pixel
+    // Forward project 1 pixel width and height around the pixel
     const left = this._projectPixel(px - 0.5, py);
     const right = this._projectPixel(px + 0.5, py);
     const up = this._projectPixel(px, py - 0.5);
@@ -608,14 +647,7 @@ export class RasterReprojector {
     const ry = right[1] - left[1];
     const dx = down[0] - up[0];
     const dy = down[1] - up[1];
-    const size = Math.sqrt(Math.abs(rx * dy - ry * dx));
-
-    if (!Number.isFinite(size) || size <= 0) {
-      throw new Error(
-        `RasterReprojector: _errorSpace "output" needs a finite, positive pixel size on the map, but the pixel at uv (${u}, ${v}) of a ${this.width}x${this.height} mesh measured ${size}.`,
-      );
-    }
-    return size;
+    return Math.sqrt(Math.abs(rx * dy - ry * dx));
   }
 
   // add or update a triangle in the mesh

@@ -198,7 +198,60 @@ describe("RasterReprojector _errorSpace", () => {
     }
   });
 
-  it("throws when the center pixel has no size on the map", () => {
+  it("measures the pixel size elsewhere when the center pixel has no size", () => {
+    // Flat in a band 4 px tall around the center row, and moved rigidly
+    // elsewhere: the center pixel has no size on the map, and every pixel
+    // outside the band is 1 x 1.
+    const center = 31.5;
+    const banded: ReprojectionFns = {
+      forwardTransform: identity,
+      inverseTransform: identity,
+      forwardReproject: (x, y) => [
+        x,
+        Math.abs(y - center) <= 2 ? center : y - 2 * Math.sign(y - center),
+      ],
+      inverseReproject: throws,
+    };
+    const r = new RasterReprojector(banded, 64, 64, { _errorSpace: "output" });
+    expect((r as unknown as { _pixelSize: number })._pixelSize).toBe(1);
+  });
+
+  it("meshes a polar tile whose center is past Web Mercator's latitude limit", () => {
+    // North polar stereographic on a sphere, with the pole at the tile's
+    // center, projected to Web Mercator with latitude clamped to its limit, as
+    // RasterTileLayer does. Most of the tile, the center included, collapses
+    // onto the map's top edge: only its corners are inside the limit.
+    const R = 6378137;
+    const metres = 1_000_000;
+    const size = 256;
+    const polar: ReprojectionFns = {
+      forwardTransform: (px, py) => [
+        (px / size - 0.5) * metres,
+        (0.5 - py / size) * metres,
+      ],
+      inverseTransform: throws,
+      forwardReproject: (x, y) => {
+        const lng = (Math.atan2(x, -y) * 180) / Math.PI;
+        const lat =
+          90 - (2 * Math.atan(Math.hypot(x, y) / (2 * R)) * 180) / Math.PI;
+        const phi = (Math.min(lat, 85.051129) * Math.PI) / 180;
+        return [
+          ((lng + 180) / 360) * 512,
+          (0.5 + Math.log(Math.tan(Math.PI / 4 + phi / 2)) / (2 * Math.PI)) *
+            512,
+        ];
+      },
+      inverseReproject: throws,
+    };
+    const r = new RasterReprojector(polar, size + 1, size + 1, {
+      _errorSpace: "output",
+    });
+    const pixelSize = (r as unknown as { _pixelSize: number })._pixelSize;
+    expect(Number.isFinite(pixelSize)).toBe(true);
+    expect(pixelSize).toBeGreaterThan(0);
+  });
+
+  it("throws when no pixel in the meshed area has a size on the map", () => {
     const flat: ReprojectionFns = {
       ...curved,
       forwardReproject: () => [0, 0],
