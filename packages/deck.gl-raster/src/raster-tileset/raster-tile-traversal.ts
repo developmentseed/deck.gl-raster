@@ -19,7 +19,7 @@
 
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
-import { transformBounds } from "@developmentseed/proj";
+import { transformBounds, unwrapAlong } from "@developmentseed/proj";
 import { Vector3 } from "@math.gl/core";
 import {
   CullingVolume,
@@ -332,7 +332,19 @@ export class RasterTileNode {
     // Frustum culling
     // Test if tile's bounding volume intersects the camera frustum
     // Returns: <0 if outside, 0 if intersecting, >0 if fully inside
-    const isInside = cullingVolume.computeVisibility(boundingVolume);
+    let isInside = cullingVolume.computeVisibility(boundingVolume);
+
+    // In Web Mercator, a tile across the antimeridian runs past the world's
+    // edge, and RasterLayer draws the part past the edge one world over. Test
+    // that part there too.
+    const shift = project ? 0 : otherPartShift(commonSpaceBounds, worldOffset);
+    if (isInside < 0 && shift !== 0) {
+      const otherPart = translateBoundingVolume(
+        { boundingVolume, commonSpaceBounds },
+        shift,
+      );
+      isInside = cullingVolume.computeVisibility(otherPart.boundingVolume);
+    }
     if (isInside < 0) {
       return false;
     }
@@ -426,8 +438,12 @@ export class RasterTileNode {
     const [minX, minY, maxX, maxY] = bounds;
     const [tileMinX, tileMinY, tileMaxX, tileMaxY] = commonSpaceBounds;
 
-    const inside =
-      tileMinX < maxX && tileMaxX > minX && tileMinY < maxY && tileMaxY > minY;
+    // Across the antimeridian, the tile's box and the dataset's bounds can be
+    // unwrapped from different starting points, a world apart.
+    const overlapsX = [0, -TILE_SIZE, TILE_SIZE].some(
+      (shift) => tileMinX + shift < maxX && tileMaxX + shift > minX,
+    );
+    const inside = overlapsX && tileMinY < maxY && tileMaxY > minY;
 
     return inside;
   }
@@ -535,8 +551,8 @@ export class RasterTileNode {
       this.descriptor.projectTo4326,
     );
 
-    const commonSpacePositions = refPointsEPSG3857.map((xy) =>
-      rescaleEPSG3857ToCommonSpace(xy),
+    const commonSpacePositions = coverWorldIfWide(
+      refPointsEPSG3857.map((xy) => rescaleEPSG3857ToCommonSpace(xy)),
     );
 
     const refPointPositions: [number, number, number][] = [];
@@ -682,10 +698,16 @@ function makeClampedForwardTo3857(
  * tiles this is equivalent to the old AABB lerp; for rotated tiles it correctly
  * samples the actual quadrilateral rather than its bounding box.
  *
+ * proj4 returns x inside one world, so the points of a tile across the
+ * antimeridian would land at both edges of it. Instead, each point's x is
+ * unwrapped by walking to it from the first point, the tile's center: the
+ * points stay together, and may run past the world's edge.
+ *
  * Note that EPSG:3857 is **not** the same as deck.gl's common space — deck.gl's
  * common space is 512 units wide, while EPSG:3857 uses meters.
  *
- * @param refPoints  Reference points as `[relX, relY]` fractions in `[0, 1]`.
+ * @param refPoints  Reference points as `[relX, relY]` fractions in `[0, 1]`,
+ *                   the tile's center first.
  * @param tileCorners  The four CRS corners of the tile.
  */
 function sampleReferencePointsInEPSG3857(
@@ -699,21 +721,27 @@ function sampleReferencePointsInEPSG3857(
     projectTo3857,
     projectTo4326,
   );
-  const refPointPositions: [number, number][] = [];
-
-  for (const [relX, relY] of refPoints) {
-    const [geoX, geoY] = bilerpPoint(
-      topLeft,
-      topRight,
-      bottomLeft,
-      bottomRight,
-      relX,
-      relY,
+  const projectAt = (relX: number, relY: number) =>
+    clampedProjectTo3857(
+      ...bilerpPoint(topLeft, topRight, bottomLeft, bottomRight, relX, relY),
     );
-    refPointPositions.push(clampedProjectTo3857(geoX, geoY));
-  }
 
-  return refPointPositions;
+  const [centerX, centerY] = refPoints[0]!;
+  const start = projectAt(centerX, centerY)[0];
+  return refPoints.map(([relX, relY]) => {
+    const [x, y] = projectAt(relX, relY);
+    const unwrappedX = unwrapAlong(
+      (t) =>
+        projectAt(
+          centerX + t * (relX - centerX),
+          centerY + t * (relY - centerY),
+        )[0],
+      { start, period: EPSG_3857_CIRCUMFERENCE },
+    );
+
+    // Keep proj4's x where the walk can't place the point.
+    return [Number.isFinite(unwrappedX) ? unwrappedX : x, y];
+  });
 }
 
 /**
@@ -1069,6 +1097,50 @@ function getMetersPerPixelAtCommonSpaceBounds(
 }
 
 /**
+ * Reference points that span half a world or more may wind around a pole,
+ * where longitude has no continuous unwrap. Replace them with the corners of
+ * a box across the whole world, at their latitudes.
+ */
+function coverWorldIfWide(positions: [number, number][]): [number, number][] {
+  const xs = positions.map(([x]) => x);
+  if (!(Math.max(...xs) - Math.min(...xs) >= TILE_SIZE / 2)) {
+    return positions;
+  }
+  const ys = positions.map(([, y]) => y);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return [
+    [0, minY],
+    [TILE_SIZE, minY],
+    [0, maxY],
+    [TILE_SIZE, maxY],
+  ];
+}
+
+/**
+ * How far to move a tile's bounding volume to test the part of it that
+ * `RasterLayer` draws one world over: `-TILE_SIZE` if the tile's box runs past
+ * the world's east edge, `TILE_SIZE` if it runs past the west edge, else `0`.
+ *
+ * @param commonSpaceBounds The tile's box, at `worldOffset`.
+ * @param worldOffset The world copy the box was moved to.
+ */
+function otherPartShift(
+  commonSpaceBounds: Bounds,
+  worldOffset: number,
+): number {
+  const minX = commonSpaceBounds[0] - worldOffset * TILE_SIZE;
+  const maxX = commonSpaceBounds[2] - worldOffset * TILE_SIZE;
+  if (maxX > TILE_SIZE) {
+    return -TILE_SIZE;
+  }
+  if (minX < 0) {
+    return TILE_SIZE;
+  }
+  return 0;
+}
+
+/**
  * Translate a tile's bounding volume by `dx` units along common-space X.
  *
  * Returns a fresh OBB and AABB; does not mutate the input. Used by the
@@ -1090,9 +1162,9 @@ function translateBoundingVolume(
     translatedCenter,
     boundingVolume.halfAxes,
   );
-  // `update()`'s bounds check always re-reads the offset-0 `commonSpaceBounds`,
-  // so this translated AABB isn't consumed in production — it's kept for API
-  // symmetry with `boundingVolume` and is asserted directly by unit tests.
+  // `update()`'s bounds check always re-reads the offset-0 `commonSpaceBounds`.
+  // `otherPartShift` reads this translated AABB, moved back by the offset, to
+  // find the part of a tile past the world's edge.
   const translatedBounds: Bounds = [
     commonSpaceBounds[0] + dx,
     commonSpaceBounds[1],
