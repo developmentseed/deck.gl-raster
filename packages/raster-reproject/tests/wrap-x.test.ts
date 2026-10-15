@@ -214,6 +214,35 @@ describe("RasterReprojector wrapX", () => {
     expect(widestTriangle(r)).toBeLessThan(WORLD / 2);
   });
 
+  it("meshes an edge block whose padding reaches past 180°, though its image doesn't", () => {
+    // The last column of a Digital Earth Pacific COG in EPSG:3832 (#366): its
+    // image ends at 179.97°E, but a full 512 px block of 30 m pixels, as
+    // MultiCOGLayer fetches it, runs on to 180.07°E.
+    const pdcToLngLat = proj4(
+      "+proj=merc +lon_0=150 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
+      "EPSG:4326",
+    );
+    const [west, north, metres, size] = [3_332_160, -1_984_000, 30, 512];
+    const fns: ReprojectionFns = {
+      forwardTransform: (px, py) => [west + px * metres, north - py * metres],
+      inverseTransform: throws,
+      forwardReproject: (x, y) =>
+        lngLatToCommon(...pdcToLngLat.forward<[number, number]>([x, y])),
+      inverseReproject: throws,
+    };
+    const r = new RasterReprojector(fns, size + 1, size + 1, {
+      _errorSpace: "output",
+      wrapX: WORLD,
+    });
+    r.run(0.125);
+    expect(r.getMaxError()).toBeLessThanOrEqual(0.125);
+    // 15.36 km of Mercator x, the short way across 180°.
+    const xs = xsOf(r);
+    const blockWidth = ((size * metres) / (2 * Math.PI * 6378137)) * WORLD;
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(blockWidth, 6);
+    expect(widestTriangle(r)).toBeLessThan(WORLD / 2);
+  });
+
   it("throws without output mode", () => {
     const fns: ReprojectionFns = {
       forwardTransform: (x, y) => [x, y],

@@ -12,7 +12,12 @@
 
 - **A.** Tile selection across world copies (#517). Fixed by #518.
 - **B.** A global EPSG:4326 COG whose edge tile touches or overhangs ±180°
-  never converges in Web Mercator (#366).
+  never converges in Web Mercator (#366). So does an image that stops just
+  short of 180° when its edge tiles are fetched as full blocks
+  (`boundless: true`, as `MultiCOGLayer` does): the blocks' padding crosses
+  180° though the image doesn't. #366's Digital Earth Pacific COG in EPSG:3832
+  ends at 179.97°E, and its 512 px edge blocks run on to 180.07°E. `COGLayer`
+  cuts edge tiles to the image, so it doesn't hit this.
 - **C.** An image whose grid really crosses ±180°, such as a UTM zone 60 scene
   or an EPSG:4326 image stored from 170° to 190° (#171).
 
@@ -158,6 +163,8 @@ outline still joins the corners with straight lines, as before.
 - `wrapX` leaves a tile that doesn't cross unchanged.
 - The pixel size of a seed centered on the seam is right.
 - A polar tile with the pole at a corner meshes as it would without `wrapX`.
+- An EPSG:3832 edge block whose padding crosses 180°, though its image
+  doesn't, meshes the short way.
 - `wrapX` without output mode, or with a period that isn't finite and
   positive, throws.
 
