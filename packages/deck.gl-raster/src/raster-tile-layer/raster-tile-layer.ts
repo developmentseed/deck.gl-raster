@@ -19,6 +19,7 @@ import type { RenderTileResult } from "../raster-layer.js";
 import { RasterLayer } from "../raster-layer.js";
 import type { RasterTilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
+import { TILE_SIZE } from "../raster-tileset/raster-tile-traversal.js";
 import type { RasterTileMetadata } from "../raster-tileset/raster-tileset-2d.js";
 
 /**
@@ -446,6 +447,8 @@ export class RasterTileLayer<
     const isGlobe = this.context.viewport.resolution !== undefined;
     let reprojectionFns: ReprojectionFns;
     let coordinateSystem: CoordinateSystem;
+    // The period of the mesh's x axis, if it wraps around.
+    let wrapX: number | undefined;
     if (isGlobe) {
       // Globe view
       reprojectionFns = {
@@ -472,6 +475,9 @@ export class RasterTileLayer<
         inverseReproject: _unprojectPosition,
       };
       coordinateSystem = "cartesian";
+      // Common space wraps every world: RasterLayer meshes a tile that
+      // crosses the antimeridian in one piece, cut at the world's edge.
+      wrapX = TILE_SIZE;
     }
 
     const rasterLayer = new RasterLayer(
@@ -491,6 +497,8 @@ export class RasterTileLayer<
         initialTriangulation: isGlobe
           ? undefined
           : tile._webMercatorInitialTriangulation,
+        // Wrapping needs output mode.
+        _wrapX: _errorSpace === "output" ? wrapX : undefined,
         debug,
         debugOpacity,
         coordinateSystem,

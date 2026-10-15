@@ -118,3 +118,55 @@ describe("RasterTileLayer._errorSpace", () => {
     expect(layers[0]!.props._errorSpace).toBe("output");
   });
 });
+
+describe("RasterTileLayer world wrap", () => {
+  /** The props of one tile's RasterLayer, rendered in the given view. */
+  function rasterLayerProps(
+    props: Partial<RasterTileLayerProps>,
+    { globe = false } = {},
+  ): Record<string, unknown> {
+    const layer = new RasterTileLayer({
+      id: "t",
+      ...props,
+    } as RasterTileLayerProps);
+    Object.assign(layer as object, {
+      context: { viewport: { resolution: globe ? 1 : undefined } },
+      getSubLayerProps: <T>(p: T) => p,
+    });
+    const identity = (x: number, y: number): [number, number] => [x, y];
+    const tile = {
+      forwardTransform: identity,
+      inverseTransform: identity,
+      _projectPosition: identity,
+      _unprojectPosition: identity,
+      _webMercatorInitialTriangulation: undefined,
+    };
+    const layers = (
+      layer as unknown as {
+        _renderSubLayers: (
+          ...args: unknown[]
+        ) => { props: Record<string, unknown> }[];
+      }
+    )._renderSubLayers(
+      { id: "t-0-0-0", data: { width: 4, height: 4 }, tile, _offset: 0 },
+      {},
+      () => ({ image: {} }),
+    );
+    return layers[0]!.props;
+  }
+
+  it("wraps Web Mercator meshes at one world in output mode", () => {
+    expect(rasterLayerProps({ _errorSpace: "output" })._wrapX).toBe(512);
+  });
+
+  it("doesn't wrap in input mode, which can't", () => {
+    expect(rasterLayerProps({})._wrapX).toBeUndefined();
+    expect(rasterLayerProps({ _errorSpace: "input" })._wrapX).toBeUndefined();
+  });
+
+  it("doesn't wrap on the globe, which has no world edge", () => {
+    expect(
+      rasterLayerProps({ _errorSpace: "output" }, { globe: true })._wrapX,
+    ).toBeUndefined();
+  });
+});
