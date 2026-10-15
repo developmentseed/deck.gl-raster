@@ -17,8 +17,8 @@ import { clipMeshToWorld } from "./clip-mesh-to-world.js";
 import { splitFloat64Array } from "./fp64.js";
 import { buildUniformGridMesh } from "./globe-grid-mesh.js";
 import type { RasterModule } from "./gpu-modules/types.js";
+import { makeUnwrappedReprojectionFns } from "./make-unwrapped-reprojection-fns.js";
 import { MeshTextureLayer } from "./mesh-layer/mesh-layer.js";
-import { unwrapReprojectionFns } from "./unwrap-reprojection-fns.js";
 
 const DEFAULT_MAX_ERROR = 0.125;
 
@@ -289,7 +289,7 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       const fns =
         _wrapX === undefined
           ? reprojectionFns
-          : unwrapReprojectionFns(reprojectionFns, {
+          : makeUnwrappedReprojectionFns(reprojectionFns, {
               width,
               height,
               period: _wrapX,

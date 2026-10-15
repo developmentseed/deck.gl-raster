@@ -1,7 +1,7 @@
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { describe, expect, it } from "vitest";
-import { unwrapReprojectionFns } from "../src/unwrap-reprojection-fns.js";
+import { makeUnwrappedReprojectionFns } from "../src/make-unwrapped-reprojection-fns.js";
 
 /** One world width in deck.gl's common space. */
 const WORLD = 512;
@@ -29,7 +29,8 @@ type Bounds = { west: number; south: number; east: number; north: number };
 /**
  * Mesh a north-up longitude/latitude image of `width`x`height` pixels into
  * Web Mercator, the way `RasterLayer` does: `width + 1` by `height + 1`, in
- * output mode, through {@link unwrapReprojectionFns} unless `unwrap` is false.
+ * output mode, through {@link makeUnwrappedReprojectionFns} unless `unwrap`
+ * is false.
  */
 function mesh(
   { west, south, east, north }: Bounds,
@@ -45,7 +46,9 @@ function mesh(
     inverseReproject: throws,
   };
   const r = new RasterReprojector(
-    unwrap ? unwrapReprojectionFns(fns, { width, height, period: WORLD }) : fns,
+    unwrap
+      ? makeUnwrappedReprojectionFns(fns, { width, height, period: WORLD })
+      : fns,
     width + 1,
     height + 1,
     { _errorSpace: "output" },
@@ -68,7 +71,7 @@ function widestTriangle(r: RasterReprojector): number {
   return widest;
 }
 
-describe("unwrapReprojectionFns", () => {
+describe("makeUnwrappedReprojectionFns", () => {
   // The extent of the antimeridian.tif fixture: 42° wide, crossing -180°.
   const crossing: Bounds = { west: -204, south: -18, east: -162, north: 24 };
   // The same image moved 60° east, off the seam.

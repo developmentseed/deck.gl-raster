@@ -8,8 +8,9 @@ import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 const INSIDE_CORNER = 1 - 1e-6;
 
 /**
- * Make an image's forward projection continuous across an output x axis that
- * wraps around, such as Web Mercator's, which repeats every world width.
+ * Wrap an image's reprojection functions so that the forward projection is
+ * continuous across an output x axis that wraps around, such as Web
+ * Mercator's, which repeats every world width.
  *
  * A projection returns x in one copy of the world, so where an image crosses
  * the wrap (the antimeridian), neighboring pixels land a whole period apart,
@@ -31,7 +32,7 @@ const INSIDE_CORNER = 1 - 1e-6;
  * @param options.period The period of the output's x axis, such as one world
  *   width.
  */
-export function unwrapReprojectionFns(
+export function makeUnwrappedReprojectionFns(
   fns: ReprojectionFns,
   options: { width: number; height: number; period: number },
 ): ReprojectionFns {
