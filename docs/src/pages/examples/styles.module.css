@@ -31,6 +31,20 @@
   display: block;
 }
 
+/* Stack every screenshot in one grid cell so they crossfade in place. */
+.cardSlideshow {
+  display: grid;
+}
+
+.cardSlideshow .cardImage {
+  grid-area: 1 / 1;
+  transition: opacity 0.6s ease;
+}
+
+.cardSlideshow .cardImageHidden {
+  opacity: 0;
+}
+
 .card:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }

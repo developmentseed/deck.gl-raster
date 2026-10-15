@@ -1,7 +1,9 @@
 import Link from "@docusaurus/Link";
 import Heading from "@theme/Heading";
 import Layout from "@theme/Layout";
+import clsx from "clsx";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { FaGithub } from "react-icons/fa";
 
 import styles from "./styles.module.css";
@@ -10,9 +12,13 @@ type Example = {
   title: string;
   description: ReactNode;
   href: string;
-  image: string;
+  /** One image, or several screenshots for the card to cycle through. */
+  image: string | string[];
   source: string;
 };
+
+/** How long a multi-image card shows each screenshot before the next. */
+const SLIDESHOW_INTERVAL_MS = 2000;
 
 const cogExamples: Example[] = [
   {
@@ -91,7 +97,13 @@ const cogExamples: Example[] = [
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/sentinel-2/",
-    image: "/deck.gl-raster/img/sentinel-2-examples-card.jpg",
+    image: [
+      "/deck.gl-raster/img/sentinel-2-examples-card.jpg",
+      "/deck.gl-raster/img/sentinel-2-kamchatka.jpg",
+      "/deck.gl-raster/img/sentinel-2-mt-etna.jpg",
+      "/deck.gl-raster/img/sentinel-2-nile-delta.jpg",
+      "/deck.gl-raster/img/sentinel-2-sossusvlei.jpg",
+    ],
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/sentinel-2",
   },
@@ -241,6 +253,47 @@ const explainerExamples: Example[] = [
   },
 ];
 
+/**
+ * Crossfade through several screenshots of one example, holding each for
+ * {@link SLIDESHOW_INTERVAL_MS}. Stays on the first when the viewer prefers
+ * reduced motion.
+ */
+function CardSlideshow({
+  images,
+  title,
+}: {
+  images: string[];
+  title: string;
+}): ReactNode {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    const id = setInterval(() => {
+      setActive((i) => (i + 1) % images.length);
+    }, SLIDESHOW_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [images.length]);
+
+  return (
+    <div className={styles.cardSlideshow}>
+      {images.map((src, i) => (
+        <img
+          key={src}
+          src={src}
+          alt={i === 0 ? title : ""}
+          className={clsx(
+            styles.cardImage,
+            i !== active && styles.cardImageHidden,
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
 function ExampleCard({
   title,
   description,
@@ -251,7 +304,11 @@ function ExampleCard({
   return (
     <div className={styles.card}>
       <Link href={href} target="_blank" rel="noopener noreferrer">
-        <img src={image} alt={title} className={styles.cardImage} />
+        {typeof image === "string" ? (
+          <img src={image} alt={title} className={styles.cardImage} />
+        ) : (
+          <CardSlideshow images={image} title={title} />
+        )}
       </Link>
       <div className={styles.cardBody}>
         <Heading as="h3">{title}</Heading>
