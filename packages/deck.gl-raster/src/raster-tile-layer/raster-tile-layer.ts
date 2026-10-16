@@ -145,6 +145,20 @@ export type RasterTileLayerProps<
      * per-tile signal.
      */
     signal?: AbortSignal;
+
+    /**
+     * Lowest and highest elevation, in meters, of the surface the raster is
+     * drawn on, such as the terrain under a COG draped with deck.gl's
+     * `TerrainExtension`.
+     *
+     * Tiles are selected for the volume between these heights instead of for
+     * the ground at sea level, so tiles the terrain lifts into view still
+     * load. This only changes which tiles load; it doesn't move the raster.
+     * Ignored in `GlobeView`.
+     *
+     * @default null
+     */
+    zRange?: [number, number] | null;
   };
 
 const defaultProps: DefaultProps<RasterTileLayerProps> = {
@@ -152,6 +166,9 @@ const defaultProps: DefaultProps<RasterTileLayerProps> = {
   maxError: 0.125,
   debug: false,
   debugOpacity: 0.5,
+  // Compared by value, so an inline array doesn't re-render the layer on
+  // every update.
+  zRange: { type: "array", value: null, optional: true, compare: true },
 };
 
 /**
@@ -355,6 +372,7 @@ export class RasterTileLayer<
       maxCacheByteSize,
       maxRequests,
       refinementStrategy,
+      zRange,
       updateTriggers,
       onTileError,
       onTileLoad,
@@ -389,6 +407,7 @@ export class RasterTileLayer<
       maxCacheByteSize,
       maxRequests,
       refinementStrategy,
+      zRange,
       onTileError,
       onTileLoad,
       onTileUnload: this._onTileUnloadCallback(),

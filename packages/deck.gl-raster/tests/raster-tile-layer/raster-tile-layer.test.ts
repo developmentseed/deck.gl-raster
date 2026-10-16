@@ -86,6 +86,51 @@ describe("RasterTileLayer.isLoaded", () => {
   });
 });
 
+describe("RasterTileLayer zRange", () => {
+  /** The props of the inner TileLayer that `renderLayers` returns. */
+  function innerTileLayerProps(
+    props: Partial<RasterTileLayerProps>,
+  ): Record<string, unknown> | undefined {
+    const layer = new RasterTileLayer({
+      id: "t",
+      tilesetDescriptor: {} as RasterTileLayerProps["tilesetDescriptor"],
+      getTileData: vi.fn(),
+      renderTile: vi.fn(),
+      ...props,
+    });
+    Object.assign(layer as object, { context: { device: {} } });
+    const tileLayer = layer.renderLayers() as {
+      props: Record<string, unknown>;
+    } | null;
+    return tileLayer?.props;
+  }
+
+  it("passes zRange to its inner TileLayer", () => {
+    expect(innerTileLayerProps({ zRange: [500, 2500] })?.zRange).toEqual([
+      500, 2500,
+    ]);
+  });
+
+  it("passes null when zRange is unset", () => {
+    expect(innerTileLayerProps({})?.zRange).toBeNull();
+  });
+
+  it("treats a new zRange array with the same heights as unchanged", () => {
+    // deck.gl diffs each prop with its prop type's `equal`, which it keeps on
+    // the props under this symbol.
+    type PropType = {
+      equal: (a: unknown, b: unknown, propType: PropType) => boolean;
+    };
+    const layer = new RasterTileLayer({ id: "t" });
+    const propTypes = (
+      layer.props as unknown as Record<symbol, Record<string, PropType>>
+    )[Symbol.for("propTypes")]!;
+    const zRange = propTypes.zRange!;
+    expect(zRange.equal([500, 2100], [500, 2100], zRange)).toBe(true);
+    expect(zRange.equal([500, 2100], [500, 2600], zRange)).toBe(false);
+  });
+});
+
 describe("RasterTileLayer._errorSpace", () => {
   it("passes _errorSpace to each tile's RasterLayer", () => {
     const layer = new RasterTileLayer({
