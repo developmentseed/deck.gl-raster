@@ -66,10 +66,11 @@ jobs:
             cp -r "$dir/dist/." "docs/static/examples/$example/"
           done
 
-      - name: Inject Plausible into examples
+      - name: Inject Plausible and favicon into examples
         run: |
           find docs/static/examples -name "index.html" | while read f; do
             sed -i 's#</head>#<script async src="https://plausible.io/js/pa-GXbpwCRHPm1QSDOLNB_on.js"></script><script>window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init()</script></head>#' "$f"
+            sed -i 's#</head>#<link rel="icon" href="/deck.gl-raster/img/ds_favicon.png"></head>#' "$f"
           done
 
       - name: Build docs
