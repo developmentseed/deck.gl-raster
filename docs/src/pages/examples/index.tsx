@@ -237,10 +237,7 @@ const experimentalExamples: Example[] = [
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/cog-terrain/",
-    image: [
-      "/deck.gl-raster/img/cog-terrain-examples-card.jpg",
-      "/deck.gl-raster/img/cog-terrain-grand-canyon.jpg",
-    ],
+    image: "/deck.gl-raster/img/cog-terrain-naip-pikes-peak.jpg",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/cog-terrain",
   },
