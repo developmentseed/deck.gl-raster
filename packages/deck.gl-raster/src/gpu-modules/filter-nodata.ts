@@ -5,7 +5,7 @@ export type FilterNoDataValProps = {
   /**
    * The sentinel nodata value, in the same units as `color.r` after any
    * earlier pipeline modules. Pixels whose red channel exactly equals
-   * this value are discarded.
+   * this value are discarded. Pass `NaN` to discard NaN pixels.
    */
   value: number;
 };
@@ -21,14 +21,14 @@ uniform ${MODULE_NAME}Uniforms {
 
 /**
  * A shader module that filters out (discards) pixels whose value matches the
- * provided nodata value.
+ * provided nodata value, including `NaN`.
  */
 export const FilterNoDataVal = {
   name: MODULE_NAME,
   fs: uniformBlock,
   inject: {
     "fs:DECKGL_FILTER_COLOR": /* glsl */ `
-    if (color.r == nodata.value) {
+    if (color.r == nodata.value || (isnan(nodata.value) && isnan(color.r))) {
       discard;
     }
     `,
