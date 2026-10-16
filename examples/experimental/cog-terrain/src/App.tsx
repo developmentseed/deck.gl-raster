@@ -1,6 +1,6 @@
 import { chakra, NativeSelect, Slider, Stack, Text } from "@chakra-ui/react";
 import type { MapViewState } from "@deck.gl/core";
-import { MapView, TerrainController } from "@deck.gl/core";
+import { MapView, TerrainController, WebMercatorViewport } from "@deck.gl/core";
 import type { TerrainExtensionProps } from "@deck.gl/extensions";
 import {
   ClipExtension,
@@ -12,7 +12,7 @@ import DeckGL from "@deck.gl/react";
 import { LoadingWidget } from "@deck.gl/widgets";
 import type { COGLayerProps } from "@developmentseed/deck.gl-geotiff";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
-import { lngLatToWorld } from "@math.gl/web-mercator";
+import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 import {
   ControlPanel,
   ExternalLink,
@@ -21,7 +21,7 @@ import {
 } from "deck.gl-raster-examples-shared";
 import "@deck.gl/widgets/stylesheet.css";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { NaipTileData } from "./naip.js";
 import {
   NAIP_FALSE_COLOR_TILE_PROPS,
@@ -62,9 +62,10 @@ function terrariumDecoder(
 const DEFAULT_EXAGGERATION = 1.5;
 
 /**
- * `TerrainController` moves the camera's target to the ground under the
- * center of the view, so the camera follows the terrain as you pan and zoom.
- * A steep pitch can still put it inside a nearby ridge, so pitch is capped.
+ * `TerrainController` moves the camera's target toward the ground under the
+ * center of the view as you move, so the camera rises and falls with the
+ * terrain. A steep pitch can still put it inside a nearby ridge, so pitch is
+ * capped.
  */
 const MAX_PITCH = 70;
 
@@ -86,17 +87,22 @@ type RasterDataset = {
 
 /** The camera for both NAIP options. */
 const NAIP_INITIAL_VIEW_STATE: MapViewState = {
-  // Looking west across Pikes Peak, with the whole view inside the images.
-  longitude: -105.06,
+  // Looking west at Pikes Peak's east face. TerrainController's first pick
+  // moves the target up to the ground and zooms in to keep the camera in
+  // place. This start keeps that zoom under maxZoom, past which the camera
+  // would jump back, in windows at least 620 px tall, and keeps the whole
+  // view inside the images in windows up to 1100 px tall.
+  longitude: -105.08,
   latitude: 38.84,
-  zoom: 12.8,
-  pitch: 60,
+  zoom: 12.4,
+  pitch: 35,
   bearing: -90,
   // COGLayer picks every tile's resolution for the zoom at the center of the
-  // view, however far away the tile is, so a tilted view loads full-resolution
-  // tiles out to the horizon. Each zoom level past 15 about triples the NAIP
-  // tiles that loads (over 2,000 at zoom 17), and a device pixel ratio of 2
-  // asks for one level finer still. These caps keep it to a few hundred tiles.
+  // view, however far away the tile is, so a tilted view loads tiles at the
+  // center's resolution out to the horizon. Each zoom level past 15 about
+  // triples the number of NAIP tiles it loads (over 2,000 at zoom 17), and a
+  // device pixel ratio of 2 asks for one level finer still. These caps keep
+  // it to a few hundred tiles.
   maxPitch: 60,
   maxZoom: 14,
 };
@@ -117,7 +123,7 @@ const RASTER_DATASETS: RasterDataset[] = [
         <ExternalLink href="https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/">
           NAIP mosaic example
         </ExternalLink>{" "}
-        streams all 924 tiles of this survey.
+        streams 924 of this survey's COGs.
       </>
     ),
     initialViewState: NAIP_INITIAL_VIEW_STATE,
@@ -224,10 +230,53 @@ function unionBounds(boxes: Bounds[]): Bounds | null {
 }
 
 /** `bounds` in Web Mercator common space, as `[minX, minY, maxX, maxY]`. */
-function toCommonSpace([west, south, east, north]: Bounds): Bounds {
+function toCommonSpace([west, south, east, north]: Bounds): [
+  number,
+  number,
+  number,
+  number,
+] {
   const [minX, minY] = lngLatToWorld([west, south]);
   const [maxX, maxY] = lngLatToWorld([east, north]);
   return [minX!, minY!, maxX!, maxY!];
+}
+
+/**
+ * `viewState` with the camera's height above sea level multiplied by `ratio`,
+ * looking the same way, as a view whose target is at sea level.
+ *
+ * The exaggeration scales every terrain height, and scaling the camera's
+ * height with it keeps the camera above the ground. A new `TerrainController`
+ * then moves the target up to the ground on its first pick, without moving
+ * the camera.
+ */
+function scaleCameraHeight(
+  viewState: MapViewState,
+  ratio: number,
+): MapViewState {
+  // The controller's view states carry the canvas size. The example's canvas
+  // fills the window, which stands in until the first one arrives.
+  const { width = window.innerWidth, height = window.innerHeight } =
+    viewState as MapViewState & { width?: number; height?: number };
+  const viewport = new WebMercatorViewport({ ...viewState, width, height });
+  const [x, y, z] = viewport.cameraPosition;
+  const pitch = ((viewState.pitch ?? 0) * Math.PI) / 180;
+  const bearing = ((viewState.bearing ?? 0) * Math.PI) / 180;
+  // From the moved camera to sea level along the center of the view, in Web
+  // Mercator common units.
+  const distance = (z! * ratio) / Math.cos(pitch);
+  const [longitude, latitude] = worldToLngLat([
+    x! + Math.sin(bearing) * Math.sin(pitch) * distance,
+    y! + Math.cos(bearing) * Math.sin(pitch) * distance,
+  ]);
+  return {
+    ...viewState,
+    longitude: longitude!,
+    latitude: latitude!,
+    // The camera is `altitude` canvas heights from its target, in pixels.
+    zoom: Math.log2((viewport.altitude * height) / distance),
+    position: [0, 0, 0],
+  };
 }
 
 export default function App() {
@@ -238,17 +287,29 @@ export default function App() {
   // a scene: the same camera and terrain.
   const scene = dataset.urls[0]!;
 
-  // A new view, and so a new TerrainController, per scene. The controller
-  // jumps its target to the ground only on its first pick and then eases it,
-  // so one reused across scenes would start at the last scene's height.
+  // Where the camera starts: a scene's start view, or the camera scaled with a
+  // new exaggeration. Each start gets a new view, and so a new
+  // TerrainController. The controller moves its target to the ground in one
+  // step only on its first pick, and eases it after that, so a reused one
+  // would keep the last ground height.
+  const [camera, setCamera] = useState({
+    key: 0,
+    viewState: RASTER_DATASETS[0]!.initialViewState,
+  });
   const view = useMemo(
     () =>
       new MapView({
-        id: `map-${scene}`,
+        id: `map-${camera.key}`,
         controller: { type: TerrainController },
       }),
-    [scene],
+    [camera.key],
   );
+  // The camera as it is now, to scale when the exaggeration changes.
+  const viewStateRef = useRef<MapViewState>(camera.viewState);
+  const startCamera = (viewState: MapViewState) => {
+    viewStateRef.current = viewState;
+    setCamera((c) => ({ key: c.key + 1, viewState }));
+  };
 
   // The slider position, and the exaggeration applied to the terrain. Each
   // change reloads the terrain tiles, so it's applied when the slider is
@@ -259,8 +320,8 @@ export default function App() {
 
   // The lowest and highest elevation in the terrain tiles loaded so far. The
   // COGs select their tiles for this range of heights instead of for sea
-  // level. It starts over whenever the terrain changes (a new dataset or
-  // exaggeration), and its tiles all load again.
+  // level. It starts over for a new scene, whose terrain all loads again, and
+  // is rescaled for a new exaggeration.
   const [terrainZRange, setTerrainZRange] = useState<[number, number] | null>(
     null,
   );
@@ -278,15 +339,28 @@ export default function App() {
   }, []);
 
   // Each COG's WGS84 bounds, reported once its header loads. The terrain only
-  // loads tiles inside the current dataset's bounds, since there's nothing to
-  // drape anywhere else.
+  // loads tiles that overlap the current dataset's bounds, since there's
+  // nothing to drape anywhere else.
   const [cogBounds, setCogBounds] = useState<Record<string, Bounds>>({});
   const terrainExtent = useMemo(
     () =>
       unionBounds(
         dataset.urls.flatMap((url) => (cogBounds[url] ? [cogBounds[url]] : [])),
       ),
-    [dataset, cogBounds],
+    [dataset.urls, cogBounds],
+  );
+
+  // TerrainLayer compares these by reference, so make new ones only when they
+  // change: a new decoder reloads every terrain tile, and a new clip box
+  // re-renders them all. TerrainLayer's meshes are in Web Mercator common
+  // space, so the clip box is too.
+  const elevationDecoder = useMemo(
+    () => terrariumDecoder(exaggeration),
+    [exaggeration],
+  );
+  const clipBounds = useMemo(
+    () => terrainExtent && toCommonSpace(terrainExtent),
+    [terrainExtent],
   );
 
   const layers = useMemo(() => {
@@ -294,20 +368,19 @@ export default function App() {
     // to, so it waits rather than load tiles everywhere in view.
     const terrain =
       terrainExtent &&
+      clipBounds &&
       new TerrainLayer({
         // A new layer per scene, so its tiles all load (and report their
         // elevations) again.
         id: `terrain-${scene}`,
         elevationData: TERRAIN_TILES_URL,
-        elevationDecoder: terrariumDecoder(exaggeration),
+        elevationDecoder,
         maxZoom: TERRAIN_MAX_ZOOM,
         extent: terrainExtent,
         // Tiles load whole, so also stop drawing terrain outside the COGs'
-        // bounds. TerrainLayer's meshes are in Web Mercator common space, so
-        // the clip box is too, and it clips by pixel rather than by each tile
-        // mesh's anchor.
+        // bounds, by pixel rather than by each tile mesh's anchor.
         extensions: [new ClipExtension()],
-        clipBounds: toCommonSpace(terrainExtent),
+        clipBounds,
         clipByInstance: false,
         color: TERRAIN_COLOR,
         // Makes this layer the surface that layers with the TerrainExtension
@@ -356,9 +429,10 @@ export default function App() {
   }, [
     dataset,
     scene,
-    exaggeration,
+    elevationDecoder,
     terrainZRange,
     terrainExtent,
+    clipBounds,
     onTerrainTileLoad,
   ]);
 
@@ -373,9 +447,12 @@ export default function App() {
     >
       <DeckGL
         views={view}
-        initialViewState={dataset.initialViewState}
+        initialViewState={camera.viewState}
         layers={layers}
         widgets={[new LoadingWidget(loadingWidgetProps)]}
+        onViewStateChange={({ viewState }) => {
+          viewStateRef.current = viewState as MapViewState;
+        }}
       />
 
       <ControlPanel
@@ -428,9 +505,10 @@ export default function App() {
                     (d) => d.id === e.target.value,
                   )!;
                   setDatasetId(next.id);
-                  // Only a new scene's terrain loads again, reporting its
-                  // elevations as it does.
+                  // A new scene starts its camera over, and its terrain loads
+                  // again, reporting its elevations as it does.
                   if (next.urls[0] !== scene) {
+                    startCamera(next.initialViewState);
                     setTerrainZRange(null);
                   }
                 }}
@@ -462,8 +540,18 @@ export default function App() {
               onValueChangeEnd={(details) => {
                 const value = details.value[0]!;
                 if (value !== exaggeration) {
+                  const ratio = value / exaggeration;
                   setExaggeration(value);
-                  setTerrainZRange(null);
+                  // Every decoded height scales with the exaggeration, so the
+                  // measured range does too. Measuring it again would select
+                  // tiles for sea level until the terrain reloads.
+                  setTerrainZRange(
+                    (range) => range && [range[0] * ratio, range[1] * ratio],
+                  );
+                  // TerrainController moves the camera only as you interact,
+                  // so scale the camera's height with the terrain's, or a
+                  // higher terrain would rise around it.
+                  startCamera(scaleCameraHeight(viewStateRef.current, ratio));
                 }
               }}
             >

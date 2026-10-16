@@ -68,14 +68,16 @@ const cog = new COGLayer(cogProps);
   terrain, because the terrain lifts them into view. The example doesn't
   hard-code it: as each terrain tile loads, `TerrainLayer`'s `onTileLoad`
   reports the tile mesh's `header.boundingBox`, and the example widens the
-  range to include it, as `TerrainLayer` does for its own `zRange`.
-- `TerrainController` moves the camera's target to the ground under the
-  center of the view, so the camera follows the terrain as you pan and zoom.
-  It finds the ground by picking, so the `TerrainLayer` must be pickable.
+  range to include it. `TerrainLayer` sets its own `zRange` from the same
+  field, in `onViewportLoad`.
+- `TerrainController` moves the camera's target toward the ground under the
+  center of the view as you move, so the camera rises and falls with the
+  terrain. It finds the ground by picking, so the `TerrainLayer` must be
+  pickable.
 - The `TerrainLayer`'s `extent` is the union of the COGs' WGS84 bounds, which
   `COGLayer`'s `onGeoTIFFLoad` reports once a COG's header loads. Terrain
-  tiles then load only where there's imagery to drape. The example doesn't
-  create the `TerrainLayer` until the first COG reports its bounds.
+  tiles then load only where they overlap the COGs' bounds. The example
+  doesn't create the `TerrainLayer` until the first COG reports its bounds.
 - Tiles load whole, so a `ClipExtension` on the `TerrainLayer` also stops it
   drawing outside those bounds. `TerrainLayer`'s meshes are in Web Mercator
   common space, so `clipBounds` is too (converted with `lngLatToWorld`), and
@@ -97,8 +99,17 @@ WGS84 bounds that deck.gl-raster computes for every COG tile, so the COG can be
 in any projection and tiled any way.
 
 The vertical exaggeration slider multiplies the Terrarium decoder's scales and
-offset. `TerrainLayer` then reloads its tiles, and the measured `zRange` grows
-with them.
+offset, so every height scales by the same factor. `TerrainLayer` then reloads
+its tiles, and the example rescales the measured `zRange` rather than
+measuring it again. The decoder is memoized: `TerrainLayer` compares it by
+reference, and a new one reloads every terrain tile.
+
+`TerrainController` doesn't move the camera when the terrain rises, so at a
+higher exaggeration the camera could end up inside a mountain. The example
+scales the camera's height above sea level by the same factor, which keeps it
+above the ground, and gives the view a new controller there. The new
+controller's first pick moves its target up to the ground without moving the
+camera.
 
 NAIP has four bands: red, green, blue and near-infrared. `COGLayer`'s default
 pipeline would draw the fourth band as alpha, so the NAIP options pass their
@@ -118,13 +129,13 @@ COG tiles.
   as deeper terrain tiles load. Terrain Tiles stop at zoom 15, so draped
   imagery can't be sharper than about zoom 17. 30 cm NAIP imagery is softer
   draped than it would be flat.
-- **Tilted views load full-resolution tiles to the horizon.** `COGLayer` picks
-  every tile's resolution for the zoom at the center of the view, however far
-  away the tile is. Over the NAIP images, a view tilted to 65 degrees loads
-  about 250 tiles at zoom 15 and over 2,000 at zoom 17, and a device pixel
-  ratio of 2 asks for one level finer still. The NAIP option therefore stops
-  at zoom 14 and pitch 60, and gives each COG a 64 MB tile cache, so memory
-  stays bounded.
+- **Tilted views load tiles at the center's resolution out to the horizon.**
+  `COGLayer` picks every tile's resolution for the zoom at the center of the
+  view, however far away the tile is. Over the NAIP images, a view tilted to
+  65 degrees loads about 250 tiles at zoom 15 and over 2,000 at zoom 17, and a
+  device pixel ratio of 2 asks for one level finer still. The NAIP options
+  therefore stop at zoom 14 and pitch 60. Each COG also evicts its tiles out
+  of view once its cached tiles pass 64 MB, so memory stays bounded.
 - **No terrain, no COG.** Where no terrain tile is drawn (outside the terrain's
   coverage, or while terrain tiles load), the COG isn't drawn either. Outside
   the COGs' bounds there's no terrain, by design.
@@ -138,13 +149,16 @@ COG tiles.
   props are typed as `TerrainLayerProps`, though it passes inline in
   `new TerrainLayer({...})`. `TerrainLayer` doesn't re-render tiles it has
   already drawn when `material` changes, so set it when you create the layer.
-- **The camera's target eases toward the ground.** `TerrainController` moves
-  its target to the ground in one step only on its first pick. After that it
-  moves it 5% of the way on each update during an interaction, and not at all
-  while idle, so a fast zoom onto a steep peak can leave the camera inside the
-  mountain until you move again. The example makes a new view, and so a new controller, for each
-  dataset, so each starts at its own ground height. It also caps pitch at 70
-  degrees, since a steeper camera more often ends up inside a nearby ridge.
+- **The camera's target eases toward the ground.** `TerrainController` picks
+  the ground under the center of the view every 500 ms, except during a drag.
+  It moves its target there in one step only on its first pick. After that it
+  moves it 5% of the way toward the latest pick on each update during an
+  interaction, and not at all while idle. So a long drag across a ridge or a
+  fast zoom onto a steep peak can leave the camera inside the mountain until
+  you move again. The example makes a new view, and so a new controller, for
+  each scene (the two NAIP options share one) and each exaggeration, so each
+  starts at its own ground height. It also caps pitch at 70 degrees (60 for
+  NAIP), since a steeper camera more often ends up inside a nearby ridge.
 - **One view.** deck.gl renders the drape textures from the first view only,
   so other views show draped layers only where the first view's terrain tiles
   cover them.

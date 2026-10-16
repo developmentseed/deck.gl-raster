@@ -50,6 +50,10 @@ async function getTileData(
   if (array.layout === "band-separate") {
     throw new Error("NAIP tiles are pixel interleaved");
   }
+  // The signal stops the fetch but not the decode, so a tile cancelled while
+  // decoding still gets here. deck.gl doesn't unload a tile that loads after
+  // its layer is gone, so a texture made for it would never be destroyed.
+  signal?.throwIfAborted();
   const { width, height, data } = array;
   const texture = device.createTexture({
     data,
@@ -119,7 +123,8 @@ export const NAIP_TILE_PROPS = {
   renderTile: renderTrueColor,
   onTileUnload: (tile: Tile2DHeader<NaipTileData>) =>
     tile.content?.texture.destroy(),
-  // Cap each COG's cache of tiles out of view at 64 MB, about 64 tiles.
+  // Keep tiles out of view only while each COG's tiles, counting those in
+  // view, total under 64 MB, about 64 tiles. Tiles in view are never evicted.
   // Without a byte budget, TileLayer keeps up to five times as many tiles as
   // are selected, and a tilted view over NAIP selects hundreds.
   maxCacheByteSize: 64 * 1024 * 1024,
