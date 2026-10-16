@@ -5,6 +5,7 @@ export type {
 export { COGLayer } from "./cog-layer.js";
 export { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 export { addAlphaChannel } from "./geotiff/geotiff.js";
+export type { TextureDataT } from "./geotiff/render-pipeline.js";
 export { createTextureProps, inferTextureFormat } from "./geotiff/texture.js";
 export type { MosaicLayerProps } from "./mosaic-layer/mosaic-layer.js";
 export { MosaicLayer } from "./mosaic-layer/mosaic-layer.js";

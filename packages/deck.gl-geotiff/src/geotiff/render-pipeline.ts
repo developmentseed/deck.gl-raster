@@ -18,11 +18,20 @@ import type { GetTileDataOptions } from "../cog-layer.js";
 import { addAlphaChannel } from "./geotiff.js";
 import { inferTextureFormat } from "./texture.js";
 
+/**
+ * The tile data returned by the default `getTileData` of {@link COGLayer}, and
+ * the layer's default `DataT`.
+ */
 export type TextureDataT = {
+  /** Tile height in pixels. */
   height: number;
+  /** Tile width in pixels. */
   width: number;
+  /** Byte length of the tile's pixel data plus its mask, if any. */
   byteLength: number;
+  /** The tile's pixel data, uploaded as a GPU texture. */
   texture: Texture;
+  /** The tile's mask as a single-channel texture, when the tile has a mask. */
   mask?: Texture;
 };
 
