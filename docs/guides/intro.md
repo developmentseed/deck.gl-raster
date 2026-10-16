@@ -27,7 +27,7 @@ deck.gl-raster is a collection of TypeScript modules to enable loading [GeoTIFF]
 - **Efficient streaming**: Intelligent COG rendering fetches only visible image portions
 - **Multi-resolution support**: Automatic overview selection based on zoom level
 
-[^1]: The raster reprojection has not been tested on polar projections or when spanning the antimeridian.
+[^1]: The raster reprojection has not been tested on polar projections.
 
 ## Packages
 

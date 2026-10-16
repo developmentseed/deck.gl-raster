@@ -112,21 +112,14 @@ export type RasterTileLayerProps<
     renderTile?: (data: DataT) => RenderTileResult | null;
 
     /**
-     * Maximum reprojection error in pixels for mesh refinement.
+     * Maximum reprojection error for mesh refinement: how far a tile's mesh
+     * may draw a point from where it belongs on the map, in output pixels
+     * (one input pixel's size on the map, normally at the center of the
+     * meshed area).
      * Lower values create denser meshes.
      * @default 0.125
      */
     maxError?: number;
-
-    /**
-     * Where mesh refinement measures error: in input pixels (`"input"`, the
-     * default) or output pixels (`"output"`).
-     *
-     * This is passed on to the `RasterReprojector`.
-     *
-     * @internal Experimental; may change or be removed.
-     */
-    _errorSpace?: "input" | "output";
 
     /**
      * Show triangulation mesh + tile outlines.
@@ -423,7 +416,7 @@ export class RasterTileLayer<
     descriptor: RasterTilesetDescriptor,
     renderTile: NonNullable<RasterTileLayerProps<DataT>["renderTile"]>,
   ): Layer[] {
-    const { maxError, debug, debugOpacity, _errorSpace } = this.props;
+    const { maxError, debug, debugOpacity } = this.props;
     const tile = props.tile as Tile2DHeader<DataT> & RasterTileMetadata;
 
     const debugLayers = debug
@@ -490,15 +483,13 @@ export class RasterTileLayer<
         ...(image !== undefined && { image }),
         renderPipeline,
         maxError,
-        _errorSpace,
         reprojectionFns,
         // Web Mercator: clamp the mesh to the valid latitude band for tiles
         // past ±85.051°. Globe renders the full mesh (it shows the poles).
         initialTriangulation: isGlobe
           ? undefined
           : tile._webMercatorInitialTriangulation,
-        // Wrapping needs output mode.
-        _wrapX: _errorSpace === "output" ? wrapX : undefined,
+        _wrapX: wrapX,
         debug,
         debugOpacity,
         coordinateSystem,

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-13
 - **Issues:** related to [#673](https://github.com/developmentseed/deck.gl-raster/pull/673) (antimeridian), [#566](https://github.com/developmentseed/deck.gl-raster/issues/566) (globe faceting), [#694](https://github.com/developmentseed/deck.gl-raster/pull/694) (custom projections); previewed end to end in [#708](https://github.com/developmentseed/deck.gl-raster/pull/708)
-- **Status:** Implemented: sections 1, 2 and 5 (the reprojector option, the layer prop, the example toggles and the comparison script) in [#711](https://github.com/developmentseed/deck.gl-raster/pull/711), and sections 3 and 4 (the explainer) in [#712](https://github.com/developmentseed/deck.gl-raster/pull/712).
+- **Status:** Implemented: sections 1, 2 and 5 (the reprojector option, the layer prop, the example toggles and the comparison script) in [#711](https://github.com/developmentseed/deck.gl-raster/pull/711), and sections 3 and 4 (the explainer) in [#712](https://github.com/developmentseed/deck.gl-raster/pull/712). Since then the layers always measure error in output pixels: their `_errorSpace` prop and the examples' toggles are gone, and only `RasterReprojector` keeps both modes.
 
 ## Problem
 
@@ -380,13 +380,14 @@ screen, and it converges where input mode cannot.
 
 ## Follow-ups
 
-- **Output mode only** (see the decision in section 5). That PR can also delete
-  input mode's workarounds in the custom-projection example: the `meshXScale`
-  column stretch, the 89.5° cut at the poles (input mode can't converge where
-  a whole row of a geographic tile meets at the pole), and the longitude
-  unwrap in `tileInverseReproject`.
+- **Output mode only** (see the decision in section 5): done for the layers,
+  which also removed the custom-projection example's `meshXScale` column
+  stretch. Input mode's other workarounds in that example remain: the 89.5°
+  cut at the poles (input mode can't converge where a whole row of a
+  geographic tile meets at the pole), and the longitude unwrap in
+  `tileInverseReproject`.
 - **[#710](https://github.com/developmentseed/deck.gl-raster/issues/710):**
-  pass `maxError`, `debug`, `debugOpacity` and `_errorSpace` to tiles through
+  pass `maxError`, `debug` and `debugOpacity` to tiles through
   `updateTriggers` instead of a new `TilesetFactory` class on every render.
 - **[#566](https://github.com/developmentseed/deck.gl-raster/issues/566):** the
   globe, measuring output-pixel error in 3D.

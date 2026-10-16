@@ -314,14 +314,14 @@ cartesian/common space rather than converting to lng/lat.
 ### Why delatin's triangulation is unaffected by the common-space move
 
 We apply the `× scale + offset` by wrapping the `forwardReproject` /
-`inverseReproject` functions, *not* inside the reprojector. Delatin
-measures refinement error in **pixel space** (it inverse-projects the
-interpolated output back to pixels and compares). Barycentric
-interpolation commutes with an affine transform
-(`interp(f(a),f(b),f(c)) = f(interp(a,b,c))` when weights sum to 1), and
-`inverseReproject` undoes the affine before going to pixels — so as long
-as *both* fns are wrapped consistently, the pixel-space error, and thus
-the triangulation, is identical to 3857-meter output.
+`inverseReproject` functions, *not* inside the reprojector. `RasterLayer`
+has delatin measure refinement error in **output pixels**: the distance
+between a point's exact and interpolated output positions, divided by one
+input pixel's size in the output. Barycentric interpolation commutes with
+an affine transform (`interp(f(a),f(b),f(c)) = f(interp(a,b,c))` when
+weights sum to 1), so a uniform scale and offset multiplies both that
+distance and the pixel size by `scale`: the error, and thus the
+triangulation, is identical to 3857-meter output.
 
 ## Performance: fp64 cost is vertex-only
 

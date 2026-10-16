@@ -205,48 +205,20 @@ describe("RasterLayer debug overlay", () => {
   });
 });
 
-describe("RasterLayer._errorSpace", () => {
-  it("passes _errorSpace to the reprojector", () => {
-    const { layer, internalState } = makeBareLayer({ _errorSpace: "output" });
+describe("RasterLayer error space", () => {
+  it("builds the mesh without the inverse functions", () => {
+    const unused = (): [number, number] => {
+      throw new Error("not used in output mode");
+    };
+    const { layer, internalState } = makeBareLayer({
+      reprojectionFns: {
+        ...REPROJECTION_FNS,
+        inverseTransform: unused,
+        inverseReproject: unused,
+      },
+    });
     (layer as unknown as { _generateMesh: () => void })._generateMesh();
-    const reprojector = internalState.reprojector as { _errorSpace: string };
-    expect(reprojector._errorSpace).toBe("output");
-  });
-
-  it("rebuilds the mesh when _errorSpace changes", () => {
-    const { layer } = makeBareLayer();
-    const bare = layer as unknown as {
-      props: RasterLayerProps;
-      _generateMesh: () => void;
-      updateState: (params: unknown) => void;
-    };
-    const generate = vi
-      .spyOn(bare, "_generateMesh")
-      .mockImplementation(() => {});
-    bare.updateState({
-      props: { ...bare.props, _errorSpace: "output" },
-      oldProps: { ...bare.props, _errorSpace: "input" },
-      changeFlags: {},
-    });
-    expect(generate).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the mesh when _errorSpace is unchanged", () => {
-    const { layer } = makeBareLayer({ _errorSpace: "output" });
-    const bare = layer as unknown as {
-      props: RasterLayerProps;
-      _generateMesh: () => void;
-      updateState: (params: unknown) => void;
-    };
-    const generate = vi
-      .spyOn(bare, "_generateMesh")
-      .mockImplementation(() => {});
-    bare.updateState({
-      props: { ...bare.props },
-      oldProps: { ...bare.props },
-      changeFlags: {},
-    });
-    expect(generate).not.toHaveBeenCalled();
+    expect(internalState.mesh).toBeDefined();
   });
 });
 
@@ -258,7 +230,6 @@ describe("RasterLayer mesh errors", () => {
   function makeFailingLayer() {
     const { layer, internalState } = makeBareLayer({
       reprojectionFns: { ...REPROJECTION_FNS, forwardReproject: () => [0, 0] },
-      _errorSpace: "output",
     });
     Object.assign(internalState, {
       mesh: {},
@@ -285,7 +256,7 @@ describe("RasterLayer mesh errors", () => {
     bare._generateMesh();
     expect(raiseError).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining("_errorSpace"),
+        message: expect.stringContaining("pixel size"),
       }),
       "building the reprojection mesh",
     );
@@ -319,7 +290,6 @@ describe("RasterLayer._wrapX", () => {
   function makeCrossingLayer(extra: Partial<RasterLayerProps> = {}) {
     return makeBareLayer({
       reprojectionFns: CROSSING_FNS,
-      _errorSpace: "output",
       _wrapX: WORLD,
       ...extra,
     });
@@ -389,16 +359,5 @@ describe("RasterLayer._wrapX", () => {
       expect(Math.max(...xs)).toBeLessThanOrEqual(WORLD);
       expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(WORLD / 2);
     }
-  });
-
-  it("reports an error without output mode", () => {
-    const { layer } = makeCrossingLayer({ _errorSpace: "input" });
-    const raiseError = vi.fn();
-    Object.assign(layer as object, { raiseError });
-    (layer as unknown as { _generateMesh: () => void })._generateMesh();
-    expect(raiseError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining("_wrapX") }),
-      "building the reprojection mesh",
-    );
   });
 });

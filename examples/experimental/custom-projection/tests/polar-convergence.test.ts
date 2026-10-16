@@ -98,7 +98,7 @@ describe("geographic tiles in polar views", () => {
               },
               width + 1,
               height + 1,
-              { initialTriangulation: seed },
+              { initialTriangulation: seed, _errorSpace: "output" },
             );
             reprojector.run(0.125, { maxIterations: 10_000 });
             const error = reprojector.getMaxError();
