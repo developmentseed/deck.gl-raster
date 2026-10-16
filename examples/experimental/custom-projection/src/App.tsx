@@ -102,7 +102,6 @@ export default function App() {
   const [debugState, setDebugState] = useState<DebugState>({
     debug: false,
     debugOpacity: 0.25,
-    errorSpace: "input",
   });
   const [cursor, setCursor] = useState<number[] | null>(null);
   const [coastlines, setCoastlines] = useState<LngLat[][] | null>(null);
@@ -213,7 +212,6 @@ export default function App() {
       fromBounds: preset.fromBounds,
       debug: debugState.debug,
       debugOpacity: debugState.debugOpacity,
-      _errorSpace: debugState.errorSpace,
     };
     if (dataset.kind === "rgb") {
       return new ProjectedCOGLayer(common);
@@ -241,9 +239,8 @@ export default function App() {
       renderTile: makeRenderVelocityTile(colormapTexture),
       onTileUnload: (tile) => tile.content?.texture.destroy(),
       opacity: 0.9,
-      _errorSpace: debugState.errorSpace,
     });
-  }, [overlay, preset, colormapTexture, debugState.errorSpace]);
+  }, [overlay, preset, colormapTexture]);
 
   const layers = [
     ...context.below,

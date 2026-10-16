@@ -19,7 +19,6 @@ import { isCustomProjectionViewport } from "./projection-context.js";
 import type { PixelRect, Point } from "./tile-geometry.js";
 import {
   boundsIntersect,
-  columnErrorScale,
   computeDomainPixelRect,
   cornersToLngLat,
   insideBounds,
@@ -65,18 +64,6 @@ export type ProjectedTileMetadata = {
   domainPixelRect: PixelRect | undefined;
   /** Whether the tile has no part inside the projection's domain. */
   outsideDomain: boolean;
-  /**
-   * Horizontal stretch of the pixel grid the tile is meshed on, so the
-   * reprojector weighs column error by how wide columns are on the map. 1
-   * except for geographic grids away from the equator; see
-   * {@link columnErrorScale}. The mesh's UVs, and so the texture, are
-   * unaffected.
-   */
-  meshXScale: number;
-  /** `forwardTransform` on the stretched pixel grid (see `meshXScale`). */
-  meshForwardTransform: ProjectionFunction;
-  /** `inverseTransform` on the stretched pixel grid (see `meshXScale`). */
-  meshInverseTransform: ProjectionFunction;
   /**
    * Render-time cache of the mesh seed derived from `domainPixelRect` for the
    * decoded tile size (see `ProjectedCOGLayer`). Kept on the tile so the seed
@@ -131,8 +118,6 @@ type TileGeometry = {
   outsideDomain: boolean;
   /** See {@link ProjectedTileMetadata.domainPixelRect}. */
   domainPixelRect: PixelRect | undefined;
-  /** See {@link ProjectedTileMetadata.meshXScale}. */
-  meshXScale: number;
   /**
    * Outline, in common space, of the part of the tile that is actually drawn:
    * inside the image (edge tiles are clipped) and inside the domain.
@@ -304,7 +289,6 @@ export class CustomProjectionTileset2D extends Tileset2D {
     const { forwardTransform, inverseTransform } = level.tileTransform(x, y);
 
     const [west, south, east, north] = geometry.lngLatBounds ?? [0, 0, 0, 0];
-    const { meshXScale } = geometry;
     return {
       bbox: { west, south, east, north },
       tileWidth,
@@ -317,23 +301,18 @@ export class CustomProjectionTileset2D extends Tileset2D {
       mapRing: geometry.mapRing,
       domainPixelRect: geometry.domainPixelRect,
       outsideDomain: geometry.outsideDomain,
-      meshXScale,
-      meshForwardTransform: (px, py) => forwardTransform(px / meshXScale, py),
-      meshInverseTransform: (sx, sy) => {
-        const [px, py] = inverseTransform(sx, sy);
-        return [px * meshXScale, py];
-      },
     };
   }
 
   /**
-   * The map → source projection the reprojector uses for one tile.
+   * The map-to-source projection for one tile. RasterLayer measures mesh error
+   * in output pixels, so it never calls this, but `ReprojectionFns` needs one.
    *
    * In most projections the antimeridian is just another line on the map
    * (in a polar view, a ray from the pole). The inverse projection still
    * returns longitudes in [-180, 180], so a point just past +180° comes back
    * as -180°: for a geographic tile on the +180° edge, that is the far side
-   * of the source grid, and the reprojector's error check sees an error as
+   * of the source grid, and an error check in source pixels sees an error as
    * wide as the whole level and never converges. For geographic tiles,
    * unwrap the inverse's longitude to within 180° of the tile's center.
    */
@@ -545,16 +524,6 @@ export class CustomProjectionTileset2D extends Tileset2D {
           ).map(([x, y]) => this.toCommon(x, y))
         : [];
 
-    const meshXScale =
-      drawnPixels > 0 &&
-      isGeographicGrid(cornersToLngLat(corners, sourceToLngLat))
-        ? columnErrorScale({
-            pixelToMap: (px, py) =>
-              this.projection.sourceToMap(...forwardTransform(px, py)),
-            rect: drawn,
-          })
-        : 1;
-
     return {
       mapRing,
       boundingVolume: new AxisAlignedBoundingBox(
@@ -564,7 +533,6 @@ export class CustomProjectionTileset2D extends Tileset2D {
       lngLatBounds,
       outsideDomain: outsideDomain || mapRing.length < 3,
       domainPixelRect: domainRect ?? undefined,
-      meshXScale,
       drawnRing,
       drawnPixels,
     };

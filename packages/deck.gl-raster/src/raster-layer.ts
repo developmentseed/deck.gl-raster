@@ -113,21 +113,13 @@ export interface RasterLayerProps extends CompositeLayerProps {
   renderPipeline?: RasterModule[] | null;
 
   /**
-   * Maximum reprojection error in pixels for mesh refinement.
+   * Maximum reprojection error for mesh refinement: how far the mesh may draw
+   * a point from where it belongs on the map, in output pixels (one input
+   * pixel's size on the map, normally at the center of the meshed area).
    * Lower values create denser meshes with higher accuracy.
    * @default 0.125
    */
   maxError?: number;
-
-  /**
-   * Where mesh refinement measures error: in input pixels (`"input"`, the
-   * default) or output pixels (`"output"`).
-   *
-   * This is passed on to the `RasterReprojector`.
-   *
-   * @internal Experimental; may change or be removed.
-   */
-  _errorSpace?: "input" | "output";
 
   /**
    * The period of the output's x axis, if it wraps around: one world width
@@ -135,7 +127,7 @@ export interface RasterLayerProps extends CompositeLayerProps {
    *
    * An image that crosses the wrap (the antimeridian) is then meshed in one
    * piece, the short way across, and drawn cut at the world's edge, each part
-   * inside the world. Needs `_errorSpace: "output"`.
+   * inside the world.
    *
    * @internal Experimental; may change or be removed.
    */
@@ -227,7 +219,6 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       reprojectionFnsChanged ||
       props.maxError !== oldProps.maxError ||
       props.initialTriangulation !== oldProps.initialTriangulation ||
-      props._errorSpace !== oldProps._errorSpace ||
       props._wrapX !== oldProps._wrapX;
 
     if (needsMeshUpdate) {
@@ -242,7 +233,6 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       reprojectionFns,
       initialTriangulation,
       maxError = DEFAULT_MAX_ERROR,
-      _errorSpace,
       _wrapX,
     } = this.props;
 
@@ -280,10 +270,6 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
     // the COGLayer.
     let reprojector: RasterReprojector;
     try {
-      if (_wrapX !== undefined && _errorSpace !== "output") {
-        throw new Error('RasterLayer: _wrapX needs _errorSpace: "output".');
-      }
-
       // When `_wrapX` is defined, make the projection continuous across the
       // wrap, so the reprojector meshes an image that crosses it in one piece.
       const fns =
@@ -297,7 +283,10 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
       reprojector = new RasterReprojector(fns, width + 1, height + 1, {
         initialTriangulation,
-        _errorSpace,
+        // Measure error on the map, in output pixels. This calls only the
+        // forward functions, which `_wrapX` needs: it unwraps the forward
+        // projection, so the inverse functions no longer match it.
+        _errorSpace: "output",
       });
       reprojector.run(maxError);
     } catch (error) {

@@ -160,7 +160,6 @@ export default function App() {
   const [debugState, setDebugState] = useState<DebugState>({
     debug: false,
     debugOpacity: 0.25,
-    errorSpace: "input",
   });
 
   const selected = COG_OPTIONS[selectedIndex];
@@ -170,7 +169,6 @@ export default function App() {
     geotiff: selected.url,
     debug: debugState.debug,
     debugOpacity: debugState.debugOpacity,
-    _errorSpace: debugState.errorSpace,
     onGeoTIFFLoad: (tiff, options) => {
       (window as unknown as { tiff: unknown }).tiff = tiff;
       const { west, south, east, north } = options.geographicBounds;
@@ -223,18 +221,7 @@ export default function App() {
           <NativeSelect.Root>
             <NativeSelect.Field
               value={selectedIndex}
-              onChange={(e) => {
-                const index = Number(e.target.value);
-                setSelectedIndex(index);
-                // Only output mode can mesh an image across the antimeridian,
-                // until it's the only mode.
-                if (COG_OPTIONS[index]?.renderAntimeridian) {
-                  setDebugState((state) => ({
-                    ...state,
-                    errorSpace: "output",
-                  }));
-                }
-              }}
+              onChange={(e) => setSelectedIndex(Number(e.target.value))}
             >
               {COG_OPTIONS.map((opt, i) => (
                 <option key={opt.url} value={i}>

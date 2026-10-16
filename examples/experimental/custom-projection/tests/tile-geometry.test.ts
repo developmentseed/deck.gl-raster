@@ -1,8 +1,6 @@
 import type { Corners } from "@developmentseed/deck.gl-raster";
-import proj4 from "proj4";
 import { describe, expect, it } from "vitest";
 import {
-  columnErrorScale,
   computeDomainPixelRect,
   insideBounds,
   isGeographicGrid,
@@ -12,14 +10,8 @@ import {
   sampleGrid,
   wrapLongitudeDelta,
 } from "../src/projected-cog-layer/tile-geometry.js";
-import { PROJECTIONS } from "../src/projections.js";
 
 const identity = (x: number, y: number): [number, number] => [x, y];
-
-/** A preset's PROJ string. */
-function presetCrs(id: string): string {
-  return PROJECTIONS.find((preset) => preset.id === id)!.toCrs;
-}
 
 /** A 512 px EPSG:4326 tile spanning `west..east`, `north..south`. */
 function geographicTile(
@@ -167,73 +159,5 @@ describe("helpers", () => {
       [7.5, 2.5],
     ]);
     expect(grid.every((p) => insideBounds(p, [0, 0, 10, 10]))).toBe(true);
-  });
-});
-
-describe("columnErrorScale", () => {
-  /** Pixel → lng/lat for a 512 px EPSG:4326 tile. */
-  function geographicPixels(
-    west: number,
-    north: number,
-    east: number,
-    south: number,
-  ) {
-    return (px: number, py: number): [number, number] => [
-      west + ((east - west) * px) / 512,
-      north - ((north - south) * py) / 512,
-    ];
-  }
-
-  /** Pixel → map for a 512 px EPSG:4326 tile shown in `crs`. */
-  function mapPixels(crs: string, tile: [number, number, number, number]) {
-    const toMap = proj4("EPSG:4326", crs).forward;
-    const pixelToLngLat = geographicPixels(...tile);
-    return (px: number, py: number) =>
-      toMap(pixelToLngLat(px, py)) as [number, number];
-  }
-
-  it("is cos(latitude) at the most equatorward row on a polar stereographic map", () => {
-    const scale = columnErrorScale({
-      pixelToMap: mapPixels(presetCrs("arctic"), [0, 80, 20, 60]),
-      rect: [0, 0, 512, 512],
-    });
-    // Within the WGS84 ellipsoid's ~0.2% departure from the sphere.
-    expect(scale).toBeCloseTo(Math.cos(Math.PI / 3), 2);
-  });
-
-  it("only measures the meshed part of the tile", () => {
-    // Rows 0..256 of an 80°..60° tile reach down to 70°.
-    const scale = columnErrorScale({
-      pixelToMap: mapPixels(presetCrs("arctic"), [0, 80, 20, 60]),
-      rect: [0, 0, 512, 256],
-    });
-    expect(scale).toBeCloseTo(Math.cos((70 * Math.PI) / 180), 2);
-  });
-
-  it("measures in the map, so non-conformal maps get their own ratio", () => {
-    // Equal Earth stretches parallels near the poles: its columns at 60° are
-    // wider relative to rows than on the sphere.
-    const scale = columnErrorScale({
-      pixelToMap: mapPixels(presetCrs("equal-earth"), [0, 80, 20, 60]),
-      rect: [0, 0, 512, 512],
-    });
-    expect(scale).toBeGreaterThan(Math.cos(Math.PI / 3) + 0.1);
-    expect(scale).toBeLessThanOrEqual(1);
-  });
-
-  it("is 1 when pixels are already square on the map", () => {
-    const scale = columnErrorScale({
-      pixelToMap: (px, py) => [px * 100, py * 100],
-      rect: [0, 0, 512, 512],
-    });
-    expect(scale).toBeCloseTo(1, 9);
-  });
-
-  it("never stretches beyond 1", () => {
-    const scale = columnErrorScale({
-      pixelToMap: (px, py) => [px * 300, py * 100],
-      rect: [0, 0, 512, 512],
-    });
-    expect(scale).toBe(1);
   });
 });

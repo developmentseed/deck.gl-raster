@@ -253,7 +253,6 @@ describe("antimeridian fixtures", () => {
                   inverseReproject: tile._unprojectPosition,
                 },
                 initialTriangulation: tile._webMercatorInitialTriangulation,
-                _errorSpace: "output",
                 _wrapX: WORLD,
               });
               expect(reprojector.getMaxError(), where).toBeLessThanOrEqual(
@@ -305,7 +304,6 @@ describe("antimeridian fixtures", () => {
               inverseReproject: tile._unprojectPosition,
             },
             initialTriangulation: tile._webMercatorInitialTriangulation,
-            _errorSpace: "output",
             _wrapX: WORLD,
           });
           const { min, max } = xExtents(
@@ -337,7 +335,6 @@ describe("an edge block whose padding crosses the antimeridian (#366)", () => {
         ),
         inverseReproject: unused,
       },
-      _errorSpace: "output",
       _wrapX: WORLD,
     });
     expect(reprojector.getMaxError()).toBeLessThanOrEqual(0.125);
@@ -380,7 +377,6 @@ describe("a tile with a pole at its corner", () => {
         ),
         inverseReproject: unused,
       },
-      _errorSpace: "output",
     };
     const plain = meshOf(props);
     const wrapped = meshOf({ ...props, _wrapX: WORLD });

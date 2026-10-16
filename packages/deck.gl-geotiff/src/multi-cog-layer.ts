@@ -202,7 +202,10 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     pool?: DecoderPool;
 
     /**
-     * Maximum reprojection error in pixels for mesh refinement.
+     * Maximum reprojection error for mesh refinement: how far a tile's mesh
+     * may draw a point from where it belongs on the map, in output pixels
+     * (one input pixel's size on the map, normally at the center of the
+     * meshed area).
      * Lower values create denser meshes with higher accuracy.
      *
      * @default 0.125

@@ -38,14 +38,10 @@ pnpm dev
   presets' domains therefore extend 20° past the equator, so whole-hemisphere
   polar datasets like the NASA basemap stay inside them.
 - Geographic grids stop half a degree short of each pole, where their rows
-  collapse to a point. That leaves a hole about 110 km across at the pole; the
-  closer the mesh gets to the pole, the more triangles it needs.
-- The reprojector measures mesh error in source pixels, as if they were
-  square. Lng/lat pixels near a pole are slivers on a polar map, so the
-  example stretches each geographic tile's pixel grid by the pixels' aspect
-  ratio on the map before meshing (`columnErrorScale`). Without it a view
-  straight over the pole needed over half a million triangles. The library
-  should measure error in the output projection instead.
+  collapse to a point. That leaves a hole about 110 km across at the pole. The
+  cut dates from when the mesh's error was measured in source pixels, which
+  never converged there; in output pixels it does, and the cut saves only
+  about 1% of the triangles.
 - Projections whose valid area isn't a lng/lat box, such as a single
   hemisphere in orthographic, aren't handled.
 - Switching projection refetches tiles: each projection gets its own tile

@@ -131,39 +131,6 @@ describe("RasterTileLayer zRange", () => {
   });
 });
 
-describe("RasterTileLayer._errorSpace", () => {
-  it("passes _errorSpace to each tile's RasterLayer", () => {
-    const layer = new RasterTileLayer({
-      id: "t",
-      _errorSpace: "output",
-    } as RasterTileLayerProps);
-    Object.assign(layer as object, {
-      context: { viewport: { resolution: undefined } },
-      getSubLayerProps: <T>(props: T) => props,
-    });
-    const identity = (x: number, y: number): [number, number] => [x, y];
-    const tile = {
-      forwardTransform: identity,
-      inverseTransform: identity,
-      _projectPosition: identity,
-      _unprojectPosition: identity,
-      _webMercatorInitialTriangulation: undefined,
-    };
-    const layers = (
-      layer as unknown as {
-        _renderSubLayers: (
-          ...args: unknown[]
-        ) => { props: Record<string, unknown> }[];
-      }
-    )._renderSubLayers(
-      { id: "t-0-0-0", data: { width: 4, height: 4 }, tile, _offset: 0 },
-      {},
-      () => ({ image: {} }),
-    );
-    expect(layers[0]!.props._errorSpace).toBe("output");
-  });
-});
-
 describe("RasterTileLayer world wrap", () => {
   /** The props of one tile's RasterLayer, rendered in the given view. */
   function rasterLayerProps(
@@ -200,18 +167,11 @@ describe("RasterTileLayer world wrap", () => {
     return layers[0]!.props;
   }
 
-  it("wraps Web Mercator meshes at one world in output mode", () => {
-    expect(rasterLayerProps({ _errorSpace: "output" })._wrapX).toBe(512);
-  });
-
-  it("doesn't wrap in input mode, which can't", () => {
-    expect(rasterLayerProps({})._wrapX).toBeUndefined();
-    expect(rasterLayerProps({ _errorSpace: "input" })._wrapX).toBeUndefined();
+  it("wraps Web Mercator meshes at one world", () => {
+    expect(rasterLayerProps({})._wrapX).toBe(512);
   });
 
   it("doesn't wrap on the globe, which has no world edge", () => {
-    expect(
-      rasterLayerProps({ _errorSpace: "output" }, { globe: true })._wrapX,
-    ).toBeUndefined();
+    expect(rasterLayerProps({}, { globe: true })._wrapX).toBeUndefined();
   });
 });
