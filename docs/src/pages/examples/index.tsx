@@ -228,6 +228,22 @@ const experimentalExamples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/titiler-cog",
   },
+  {
+    title: "COG on Terrain",
+    description: (
+      <>
+        Drape COGs in their own projections over Web Mercator 3D terrain tiles
+        with deck.gl's experimental TerrainExtension.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/cog-terrain/",
+    image: [
+      "/deck.gl-raster/img/cog-terrain-examples-card.jpg",
+      "/deck.gl-raster/img/cog-terrain-grand-canyon.jpg",
+    ],
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/cog-terrain",
+  },
 ];
 
 /**
