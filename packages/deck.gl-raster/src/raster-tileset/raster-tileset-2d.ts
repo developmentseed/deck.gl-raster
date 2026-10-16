@@ -220,6 +220,11 @@ export class RasterTileset2D extends Tileset2D {
    * requires a notion of clamping to a coarser z, which doesn't
    * generalize to descriptors with sparse or single overviews. See
    * `dev-docs/zoom-terminology.md` for the rationale.
+   *
+   * `extent` (`[minX, minY, maxX, maxY]`, in WGS84 longitude/latitude) limits
+   * selection to tiles that overlap both it and the descriptor's bounds.
+   * Unlike in deck.gl's default tileset, it does not keep tiles loading below
+   * `minZoom`.
    */
   override getTileIndices(opts: {
     viewport: Viewport;
@@ -251,6 +256,26 @@ export class RasterTileset2D extends Tileset2D {
       return [];
     }
 
+    // Read `extent` on every call: TileLayer updates it through `setOptions`.
+    let wgs84Bounds = this.wgs84Bounds;
+    const { extent } = this.opts;
+    if (extent) {
+      const [minX, minY, maxX, maxY] = extent as Bounds;
+      wgs84Bounds = [
+        Math.max(wgs84Bounds[0], minX),
+        Math.max(wgs84Bounds[1], minY),
+        Math.min(wgs84Bounds[2], maxX),
+        Math.min(wgs84Bounds[3], maxY),
+      ];
+      // An extent that misses (or only touches) the data selects nothing.
+      if (
+        wgs84Bounds[0] >= wgs84Bounds[2] ||
+        wgs84Bounds[1] >= wgs84Bounds[3]
+      ) {
+        return [];
+      }
+    }
+
     const maxAvailableZ = this.descriptor.levels.length - 1;
     const maxZ =
       typeof opts.maxZoom === "number"
@@ -261,7 +286,7 @@ export class RasterTileset2D extends Tileset2D {
       viewport,
       maxZ,
       zRange: opts.zRange ?? null,
-      wgs84Bounds: this.wgs84Bounds,
+      wgs84Bounds,
       pixelRatio: this.getPixelRatio(),
       boundingVolumeCache: this.boundingVolumeCache,
     });
