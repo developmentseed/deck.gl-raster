@@ -283,8 +283,9 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
 
       reprojector = new RasterReprojector(fns, width + 1, height + 1, {
         initialTriangulation,
-        // Output mode measures error on the map and never calls the inverse
-        // functions, which `_wrapX`'s unwrapped projection doesn't match.
+        // Measure error on the map, in output pixels. This calls only the
+        // forward functions, which `_wrapX` needs: it unwraps the forward
+        // projection, so the inverse functions no longer match it.
         _errorSpace: "output",
       });
       reprojector.run(maxError);
