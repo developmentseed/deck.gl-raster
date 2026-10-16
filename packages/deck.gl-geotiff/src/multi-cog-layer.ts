@@ -332,6 +332,11 @@ async function openCogSources(
  * (COGs) in parallel, builds a {@link RasterTilesetDescriptor} for each, and groups
  * them into a single {@link MultiRasterTilesetDescriptor}.
  *
+ * Use this layer when the COGs are separate files of **one** composite image:
+ * the same scene with the same spatial extent, such as the per-band files of
+ * one Sentinel-2 scene. To render multiple images as a mosaic, use
+ * {@link MosaicLayer}.
+ *
  * The finest-resolution source is automatically selected as the primary
  * tileset, which drives the tile grid. Secondary sources are sampled at the
  * closest matching resolution.
