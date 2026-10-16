@@ -421,9 +421,21 @@ importers:
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../../packages/deck.gl-geotiff
+      '@developmentseed/deck.gl-raster':
+        specifier: workspace:^
+        version: link:../../../packages/deck.gl-raster
+      '@developmentseed/geotiff':
+        specifier: workspace:^
+        version: link:../../../packages/geotiff
       '@luma.gl/core':
         specifier: ^9.4.2
         version: 9.4.2
+      '@luma.gl/shadertools':
+        specifier: ^9.4.2
+        version: 9.4.2(@luma.gl/core@9.4.2)
+      '@math.gl/web-mercator':
+        specifier: ^4.1.0
+        version: 4.1.0
       deck.gl-raster-examples-shared:
         specifier: workspace:*
         version: link:../../_shared

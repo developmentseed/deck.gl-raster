@@ -156,6 +156,11 @@ export type RasterTileLayerProps<
      * load. This only changes which tiles load; it doesn't move the raster.
      * Ignored in `GlobeView`.
      *
+     * A deck.gl `TerrainLayer`'s tiles report their elevations: in its
+     * `onTileLoad`, each tile's mesh has a `header.boundingBox`, which is
+     * also how `TerrainLayer` sets its own `zRange`. The `cog-terrain`
+     * example widens this range as terrain tiles load.
+     *
      * @default null
      */
     zRange?: [number, number] | null;

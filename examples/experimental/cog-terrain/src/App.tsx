@@ -1,14 +1,18 @@
-import { chakra, NativeSelect, Stack, Text } from "@chakra-ui/react";
+import { chakra, NativeSelect, Slider, Stack, Text } from "@chakra-ui/react";
 import type { MapViewState } from "@deck.gl/core";
-import { MapView } from "@deck.gl/core";
+import { MapView, TerrainController } from "@deck.gl/core";
 import type { TerrainExtensionProps } from "@deck.gl/extensions";
-import { _TerrainExtension as TerrainExtension } from "@deck.gl/extensions";
+import {
+  ClipExtension,
+  _TerrainExtension as TerrainExtension,
+} from "@deck.gl/extensions";
 import type { TerrainLayerProps } from "@deck.gl/geo-layers";
 import { TerrainLayer } from "@deck.gl/geo-layers";
 import DeckGL from "@deck.gl/react";
 import { LoadingWidget } from "@deck.gl/widgets";
 import type { COGLayerProps } from "@developmentseed/deck.gl-geotiff";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
+import { lngLatToWorld } from "@math.gl/web-mercator";
 import {
   ControlPanel,
   ExternalLink,
@@ -17,23 +21,21 @@ import {
 } from "deck.gl-raster-examples-shared";
 import "@deck.gl/widgets/stylesheet.css";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import type { NaipTileData } from "./naip.js";
+import {
+  NAIP_FALSE_COLOR_TILE_PROPS,
+  NAIP_PIKES_PEAK_URLS,
+  NAIP_TILE_PROPS,
+} from "./naip.js";
 
 /**
  * Elevation from the Terrain Tiles open dataset on AWS: Terrarium-encoded
- * PNGs in the Web Mercator XYZ grid, which has nothing to do with either COG's
- * own tile grid.
+ * PNGs in the Web Mercator XYZ grid, which has nothing to do with the COGs'
+ * own tile grids.
  */
 const TERRAIN_TILES_URL =
   "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
-
-/** Terrarium encoding: meters = R * 256 + G + B / 256 - 32768. */
-const TERRARIUM_DECODER: TerrainLayerProps["elevationDecoder"] = {
-  rScaler: 256,
-  gScaler: 1,
-  bScaler: 1 / 256,
-  offset: -32768,
-};
 
 /** Deepest zoom level in the Terrain Tiles dataset. */
 const TERRAIN_MAX_ZOOM = 15;
@@ -42,38 +44,103 @@ const TERRAIN_MAX_ZOOM = 15;
 const TERRAIN_COLOR: [number, number, number] = [190, 190, 190];
 
 /**
- * deck.gl's default `MapController` keeps the camera's target at sea level,
- * so the camera gets closer to the ground as you zoom in or tilt, and over
- * high terrain it can end up inside a mountain. Each map caps zoom and pitch
- * to make that rare: zoomed and tilted all the way in over either map's
- * starting point, the camera stays at least 650 m above the ground facing
- * north, east, south or west, in windows 600 to 1100 px tall. Over higher
- * ground it can still end up inside the terrain.
+ * Terrarium decoding, meters = R * 256 + G + B / 256 - 32768, with elevations
+ * multiplied by `exaggeration`.
  */
-const MAX_PITCH = 65;
+function terrariumDecoder(
+  exaggeration: number,
+): TerrainLayerProps["elevationDecoder"] {
+  return {
+    rScaler: 256 * exaggeration,
+    gScaler: exaggeration,
+    bScaler: exaggeration / 256,
+    offset: -32768 * exaggeration,
+  };
+}
 
-const MAP_VIEW = new MapView({ id: "map", controller: true });
+/** Vertical exaggeration at startup. */
+const DEFAULT_EXAGGERATION = 1.5;
 
-/** A COG to drape over the terrain, and a camera that frames it. */
-type Dataset = {
+/**
+ * `TerrainController` moves the camera's target to the ground under the
+ * center of the view, so the camera follows the terrain as you pan and zoom.
+ * A steep pitch can still put it inside a nearby ridge, so pitch is capped.
+ */
+const MAX_PITCH = 70;
+
+/** One or more COGs to drape over the terrain, and where to start the camera. */
+type RasterDataset = {
   id: string;
   title: string;
-  url: string;
+  /** The COGs, each drawn by its own COGLayer. */
+  urls: string[];
   /** Shown under the dataset picker. */
   description: ReactNode;
-  /**
-   * Lowest and highest terrain elevation under the COG, in meters. The COG
-   * selects its tiles for this range of heights instead of for sea level.
-   */
-  zRange: [number, number];
   initialViewState: MapViewState;
+  /**
+   * Tile loading and rendering for COGs that COGLayer's default pipeline
+   * draws wrong, like NAIP's four bands.
+   */
+  tileProps?: typeof NAIP_TILE_PROPS;
 };
 
-const DATASETS: Dataset[] = [
+/** The camera for both NAIP options. */
+const NAIP_INITIAL_VIEW_STATE: MapViewState = {
+  // Looking west across Pikes Peak, with the whole view inside the images.
+  longitude: -105.06,
+  latitude: 38.84,
+  zoom: 12.8,
+  pitch: 60,
+  bearing: -90,
+  // COGLayer picks every tile's resolution for the zoom at the center of the
+  // view, however far away the tile is, so a tilted view loads full-resolution
+  // tiles out to the horizon. Each zoom level past 15 about triples the NAIP
+  // tiles that loads (over 2,000 at zoom 17), and a device pixel ratio of 2
+  // asks for one level finer still. These caps keep it to a few hundred tiles.
+  maxPitch: 60,
+  maxZoom: 14,
+};
+
+const RASTER_DATASETS: RasterDataset[] = [
+  {
+    id: "naip-pikes-peak",
+    title: "NAIP aerial imagery, Pikes Peak (2023)",
+    urls: NAIP_PIKES_PEAK_URLS,
+    tileProps: NAIP_TILE_PROPS,
+    description: (
+      <>
+        Nine 30 cm{" "}
+        <ExternalLink href="https://planetarycomputer.microsoft.com/dataset/naip">
+          NAIP
+        </ExternalLink>{" "}
+        COGs in UTM zone 13N, one COGLayer each. The{" "}
+        <ExternalLink href="https://developmentseed.org/deck.gl-raster/examples/naip-mosaic/">
+          NAIP mosaic example
+        </ExternalLink>{" "}
+        streams all 924 tiles of this survey.
+      </>
+    ),
+    initialViewState: NAIP_INITIAL_VIEW_STATE,
+  },
+  {
+    id: "naip-pikes-peak-false-color",
+    title: "NAIP false-color infrared, Pikes Peak (2023)",
+    urls: NAIP_PIKES_PEAK_URLS,
+    tileProps: NAIP_FALSE_COLOR_TILE_PROPS,
+    description: (
+      <>
+        The same NAIP COGs with near-infrared shown as red, red as green and
+        green as blue, so healthy vegetation is bright red.
+      </>
+    ),
+    initialViewState: NAIP_INITIAL_VIEW_STATE,
+  },
   {
     id: "swiss-map",
     title: "Swiss National Map 1:1 million",
-    url: "https://data.geo.admin.ch/ch.swisstopo.pixelkarte-farbe-pk1000.noscale/swiss-map-raster1000_1000/swiss-map-raster1000_1000_krel_50_2056.tif",
+    urls: [
+      "https://data.geo.admin.ch/ch.swisstopo.pixelkarte-farbe-pk1000.noscale/swiss-map-raster1000_1000/swiss-map-raster1000_1000_krel_50_2056.tif",
+    ],
     description: (
       <>
         swisstopo's{" "}
@@ -83,8 +150,6 @@ const DATASETS: Dataset[] = [
         at 50 m per pixel, in the Swiss LV95 grid (EPSG:2056). © swisstopo
       </>
     ),
-    // Sea level to Mont Blanc (4,808 m).
-    zRange: [0, 4810],
     initialViewState: {
       longitude: 7.95,
       latitude: 46.6,
@@ -92,14 +157,16 @@ const DATASETS: Dataset[] = [
       pitch: 65,
       bearing: 0,
       maxPitch: MAX_PITCH,
-      // See MAX_PITCH. Past this, the 50 m pixels are only magnified anyway.
-      maxZoom: 12,
+      // Past this, the 50 m pixels are only magnified.
+      maxZoom: 13,
     },
   },
   {
     id: "kanab-point",
     title: "USGS topographic map, Grand Canyon (1962)",
-    url: "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/AZ/AZ_Kanab%20Point_314712_1962_62500_geo.tif",
+    urls: [
+      "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/GeoTIFF/AZ/AZ_Kanab%20Point_314712_1962_62500_geo.tif",
+    ],
     description: (
       <>
         The 1962 Kanab Point, AZ 1:62,500 quadrangle from the USGS{" "}
@@ -109,8 +176,6 @@ const DATASETS: Dataset[] = [
         , at 5.3 m per pixel in a NAD27 polyconic projection.
       </>
     ),
-    // The terrain under this quad ranges from about 540 m to 2,060 m.
-    zRange: [500, 2100],
     initialViewState: {
       longitude: -112.62,
       latitude: 36.37,
@@ -118,46 +183,184 @@ const DATASETS: Dataset[] = [
       pitch: 60,
       bearing: 20,
       maxPitch: MAX_PITCH,
-      // See MAX_PITCH. About where the map's 5.3 m pixels fill screen pixels.
-      maxZoom: 13.5,
+      // Past this, the 5.3 m pixels are only magnified.
+      maxZoom: 15,
     },
   },
 ];
 
+/** Widen `range` to include `[minZ, maxZ]`, rounded outward to 100 m. */
+function widenZRange(
+  range: [number, number] | null,
+  minZ: number,
+  maxZ: number,
+): [number, number] {
+  // Rounding means most tiles change nothing, so the COGs aren't updated on
+  // every terrain tile that loads.
+  const low = Math.floor(minZ / 100) * 100;
+  const high = Math.ceil(maxZ / 100) * 100;
+  if (range && range[0] <= low && range[1] >= high) {
+    return range;
+  }
+  return range
+    ? [Math.min(range[0], low), Math.max(range[1], high)]
+    : [low, high];
+}
+
+/** `[west, south, east, north]`, in degrees. */
+type Bounds = [number, number, number, number];
+
+/** The smallest box containing all of `boxes`, or `null` if there are none. */
+function unionBounds(boxes: Bounds[]): Bounds | null {
+  if (boxes.length === 0) {
+    return null;
+  }
+  return [
+    Math.min(...boxes.map((b) => b[0])),
+    Math.min(...boxes.map((b) => b[1])),
+    Math.max(...boxes.map((b) => b[2])),
+    Math.max(...boxes.map((b) => b[3])),
+  ];
+}
+
+/** `bounds` in Web Mercator common space, as `[minX, minY, maxX, maxY]`. */
+function toCommonSpace([west, south, east, north]: Bounds): Bounds {
+  const [minX, minY] = lngLatToWorld([west, south]);
+  const [maxX, maxY] = lngLatToWorld([east, north]);
+  return [minX!, minY!, maxX!, maxY!];
+}
+
 export default function App() {
-  const [datasetId, setDatasetId] = useState(DATASETS[0]!.id);
-  const dataset = DATASETS.find((d) => d.id === datasetId)!;
+  const [datasetId, setDatasetId] = useState(RASTER_DATASETS[0]!.id);
+  const dataset = RASTER_DATASETS.find((d) => d.id === datasetId)!;
+
+  // Options that draw the same COGs, like NAIP in true and false color, share
+  // a scene: the same camera and terrain.
+  const scene = dataset.urls[0]!;
+
+  // A new view, and so a new TerrainController, per scene. The controller
+  // jumps its target to the ground only on its first pick and then eases it,
+  // so one reused across scenes would start at the last scene's height.
+  const view = useMemo(
+    () =>
+      new MapView({
+        id: `map-${scene}`,
+        controller: { type: TerrainController },
+      }),
+    [scene],
+  );
+
+  // The slider position, and the exaggeration applied to the terrain. Each
+  // change reloads the terrain tiles, so it's applied when the slider is
+  // released.
+  const [exaggerationInput, setExaggerationInput] =
+    useState(DEFAULT_EXAGGERATION);
+  const [exaggeration, setExaggeration] = useState(DEFAULT_EXAGGERATION);
+
+  // The lowest and highest elevation in the terrain tiles loaded so far. The
+  // COGs select their tiles for this range of heights instead of for sea
+  // level. It starts over whenever the terrain changes (a new dataset or
+  // exaggeration), and its tiles all load again.
+  const [terrainZRange, setTerrainZRange] = useState<[number, number] | null>(
+    null,
+  );
+  const onTerrainTileLoad = useCallback<
+    NonNullable<TerrainLayerProps["onTileLoad"]>
+  >((tile) => {
+    const mesh = tile.content?.[0] as {
+      header?: { boundingBox?: [number[], number[]] };
+    } | null;
+    const boundingBox = mesh?.header?.boundingBox;
+    if (boundingBox) {
+      const [[, , minZ], [, , maxZ]] = boundingBox;
+      setTerrainZRange((range) => widenZRange(range, minZ!, maxZ!));
+    }
+  }, []);
+
+  // Each COG's WGS84 bounds, reported once its header loads. The terrain only
+  // loads tiles inside the current dataset's bounds, since there's nothing to
+  // drape anywhere else.
+  const [cogBounds, setCogBounds] = useState<Record<string, Bounds>>({});
+  const terrainExtent = useMemo(
+    () =>
+      unionBounds(
+        dataset.urls.flatMap((url) => (cogBounds[url] ? [cogBounds[url]] : [])),
+      ),
+    [dataset, cogBounds],
+  );
 
   const layers = useMemo(() => {
-    const terrain = new TerrainLayer({
-      id: "terrain",
-      elevationData: TERRAIN_TILES_URL,
-      elevationDecoder: TERRARIUM_DECODER,
-      maxZoom: TERRAIN_MAX_ZOOM,
-      color: TERRAIN_COLOR,
-      // Makes this layer the surface that layers with the TerrainExtension
-      // are draped over. TerrainLayer doesn't set it by default.
-      operation: "terrain+draw",
+    // Until a COG reports its bounds, there's no extent to limit the terrain
+    // to, so it waits rather than load tiles everywhere in view.
+    const terrain =
+      terrainExtent &&
+      new TerrainLayer({
+        // A new layer per scene, so its tiles all load (and report their
+        // elevations) again.
+        id: `terrain-${scene}`,
+        elevationData: TERRAIN_TILES_URL,
+        elevationDecoder: terrariumDecoder(exaggeration),
+        maxZoom: TERRAIN_MAX_ZOOM,
+        extent: terrainExtent,
+        // Tiles load whole, so also stop drawing terrain outside the COGs'
+        // bounds. TerrainLayer's meshes are in Web Mercator common space, so
+        // the clip box is too, and it clips by pixel rather than by each tile
+        // mesh's anchor.
+        extensions: [new ClipExtension()],
+        clipBounds: toCommonSpace(terrainExtent),
+        clipByInstance: false,
+        color: TERRAIN_COLOR,
+        // Makes this layer the surface that layers with the TerrainExtension
+        // are draped over. TerrainLayer doesn't set it by default.
+        operation: "terrain+draw",
+        // TerrainController picks the terrain to find the ground's height.
+        pickable: true,
+        onTileLoad: onTerrainTileLoad,
+      });
+
+    const cogs = dataset.urls.map((url) => {
+      // COGLayerProps doesn't include extension props, so an inline object
+      // literal fails TypeScript's excess property check on
+      // `terrainDrawMode`. Build the props separately.
+      const props = {
+        id: `cog-${url}`,
+        geotiff: url,
+        extensions: [new TerrainExtension()],
+        // Required. Left unset, the extension picks "offset" for
+        // deck.gl-raster's mesh layer, which lifts only the reprojection
+        // mesh's few vertices onto the terrain, so ridges cut through the
+        // image.
+        terrainDrawMode: "drape",
+        // Without it, tiles are culled as if the ground were at sea level, so
+        // tiles the terrain lifts into view near the camera never load.
+        zRange: terrainZRange,
+        // Re-render the tiles when only their colors change, as between the
+        // two NAIP options.
+        updateTriggers: { renderTile: dataset.id },
+        onGeoTIFFLoad: (
+          _,
+          { geographicBounds: { west, south, east, north } },
+        ) =>
+          setCogBounds((bounds) =>
+            bounds[url]
+              ? bounds
+              : { ...bounds, [url]: [west, south, east, north] },
+          ),
+      } satisfies COGLayerProps & TerrainExtensionProps;
+      return dataset.tileProps
+        ? new COGLayer<NaipTileData>({ ...props, ...dataset.tileProps })
+        : new COGLayer(props);
     });
 
-    // COGLayerProps doesn't include extension props, so these go through a
-    // typed variable: an inline object literal fails TypeScript's excess
-    // property check on `terrainDrawMode`.
-    const cogProps: COGLayerProps & TerrainExtensionProps = {
-      id: `cog-${dataset.id}`,
-      geotiff: dataset.url,
-      extensions: [new TerrainExtension()],
-      // Required. Left unset, the extension picks "offset" for
-      // deck.gl-raster's mesh layer, which lifts only the reprojection mesh's
-      // few vertices onto the terrain, so ridges cut through the image.
-      terrainDrawMode: "drape",
-      // Without it, tiles are culled as if the ground were at sea level, so
-      // tiles the terrain lifts into view near the camera never load.
-      zRange: dataset.zRange,
-    };
-
-    return [terrain, new COGLayer(cogProps)];
-  }, [dataset]);
+    return [terrain, ...cogs];
+  }, [
+    dataset,
+    scene,
+    exaggeration,
+    terrainZRange,
+    terrainExtent,
+    onTerrainTileLoad,
+  ]);
 
   return (
     <div
@@ -169,15 +372,10 @@ export default function App() {
       }}
     >
       <DeckGL
-        views={MAP_VIEW}
+        views={view}
         initialViewState={dataset.initialViewState}
         layers={layers}
         widgets={[new LoadingWidget(loadingWidgetProps)]}
-        // Nothing here is pickable, but deck.gl still picks on every pointer
-        // down, and in deck.gl 9.4 its picking pass draws a `terrain+draw`
-        // layer that isn't pickable with colors that decode to no layer,
-        // logging "Picked non-existent layer". Turn picking off entirely.
-        _pickable={false}
       />
 
       <ControlPanel
@@ -225,9 +423,19 @@ export default function App() {
             <NativeSelect.Root size="sm">
               <NativeSelect.Field
                 value={dataset.id}
-                onChange={(e) => setDatasetId(e.target.value)}
+                onChange={(e) => {
+                  const next = RASTER_DATASETS.find(
+                    (d) => d.id === e.target.value,
+                  )!;
+                  setDatasetId(next.id);
+                  // Only a new scene's terrain loads again, reporting its
+                  // elevations as it does.
+                  if (next.urls[0] !== scene) {
+                    setTerrainZRange(null);
+                  }
+                }}
               >
-                {DATASETS.map((d) => (
+                {RASTER_DATASETS.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.title}
                   </option>
@@ -239,6 +447,36 @@ export default function App() {
           <Text fontSize="xs" color="gray.600" mt="-1">
             {dataset.description}
           </Text>
+
+          <Field label={`Vertical exaggeration: ${exaggerationInput}x`}>
+            <Slider.Root
+              size="sm"
+              width="full"
+              min={1}
+              max={3}
+              step={0.5}
+              value={[exaggerationInput]}
+              onValueChange={(details) =>
+                setExaggerationInput(details.value[0]!)
+              }
+              onValueChangeEnd={(details) => {
+                const value = details.value[0]!;
+                if (value !== exaggeration) {
+                  setExaggeration(value);
+                  setTerrainZRange(null);
+                }
+              }}
+            >
+              <Slider.Control>
+                <Slider.Track>
+                  <Slider.Range />
+                </Slider.Track>
+                <Slider.Thumb index={0}>
+                  <Slider.HiddenInput />
+                </Slider.Thumb>
+              </Slider.Control>
+            </Slider.Root>
+          </Field>
 
           <Text fontSize="xs" color="gray.600">
             Right-drag, or drag with Shift held, to tilt and rotate the view.
