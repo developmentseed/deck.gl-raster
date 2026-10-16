@@ -8,11 +8,13 @@ import {
   CreateTexture,
   cieLabToRGB,
   FilterNoDataVal,
+  GrayAlpha,
   MaskTexture,
+  Opaque,
   WhiteIsZero,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
-import { parseColormap } from "@developmentseed/geotiff";
+import { ColorInterp, parseColormap } from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GetTileDataOptions } from "../cog-layer.js";
 import { addAlphaChannel } from "./geotiff.js";
@@ -110,6 +112,11 @@ function createUnormPipeline(
       },
     },
   ];
+
+  const alpha = alphaModule(geotiff);
+  if (alpha) {
+    renderPipeline.push(alpha);
+  }
 
   if (nodata !== null) {
     // Since values are 0-1 for unorm textures, scale nodata to [0, 1]
@@ -227,6 +234,39 @@ function createUnormPipeline(
   };
 
   return { getTileData, renderTile };
+}
+
+/**
+ * The module that sets alpha from the image's bands, or `null` when the
+ * texture's alpha channel is already right.
+ *
+ * A four-band RGB texture draws its fourth band as alpha, which is wrong when
+ * that band isn't alpha. A two-band gray texture samples its alpha band into
+ * `color.g`, which the gray-to-RGB module overwrites.
+ */
+function alphaModule(geotiff: GeoTIFF): RasterModule | null {
+  const { photometric, samplesPerPixel } = geotiff.cachedTags;
+  switch (photometric) {
+    case Photometric.Rgb:
+      if (
+        samplesPerPixel === 4 &&
+        geotiff.colorInterp[3] !== ColorInterp.ALPHA
+      ) {
+        return { module: Opaque };
+      }
+      return null;
+    case Photometric.MinIsBlack:
+    case Photometric.MinIsWhite:
+      if (
+        samplesPerPixel === 2 &&
+        geotiff.colorInterp[1] === ColorInterp.ALPHA
+      ) {
+        return { module: GrayAlpha };
+      }
+      return null;
+    default:
+      return null;
+  }
 }
 
 function photometricInterpretationToRGB({

@@ -1,6 +1,7 @@
 import { Photometric } from "@cogeotiff/core";
 import { ExtraSample } from "./ifd.js";
 
+/** A band's color interpretation, named as in rasterio's `ColorInterp`. */
 export enum ColorInterp {
   UNDEFINED = "undefined",
   GRAY = "gray",
@@ -73,8 +74,8 @@ export function inferColorInterpretation({
 /**
  * Color interpretation for the `count` trailing (non-primary) bands.
  *
- * A band is ALPHA if its extra sample is unassociated alpha, otherwise
- * UNDEFINED.
+ * A band is ALPHA if its extra sample is associated or unassociated alpha, as
+ * in GDAL, otherwise UNDEFINED.
  *
  * Bands without a corresponding extra sample (e.g. a multi-band
  * grayscale/multispectral stack) are UNDEFINED, keeping the result one entry
@@ -85,6 +86,7 @@ function trailingBands(
   count: number,
 ): ColorInterp[] {
   return Array.from({ length: count }, (_, i) =>
+    extraSamples?.[i] === ExtraSample.AssociatedAlpha ||
     extraSamples?.[i] === ExtraSample.UnassociatedAlpha
       ? ColorInterp.ALPHA
       : ColorInterp.UNDEFINED,
