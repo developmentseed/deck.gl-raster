@@ -346,6 +346,17 @@ export class RasterTileLayer<
     // `Deck.useDevicePixels`). The drawing-buffer ratio is the
     // *effective* DPR Deck is rendering at.
     const device = this.context.device;
+    // `TilesetFactory` is a new class on every call, and that is load-bearing.
+    // deck.gl compares `TilesetClass` by identity, so on every render the inner
+    // `TileLayer` sees a changed prop and rebuilds each cached tile's sublayers
+    // (it builds the tileset itself once, from the first class). That rebuild
+    // carries prop changes into tiles that are already loaded: `maxError`,
+    // `debug` and `debugOpacity`; the props that `getSubLayerProps` copies into
+    // each tile's `RasterLayer`, such as `opacity` and `extensions`; and
+    // subclass props read while rendering tiles, such as MultiCOGLayer's
+    // `composite`. Creating the class once would leave loaded tiles stale
+    // unless all of those were declared in `updateTriggers.renderSubLayers`.
+    // See #710.
     class TilesetFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
         super(opts, descriptor, {
