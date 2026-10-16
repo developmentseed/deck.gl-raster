@@ -64,8 +64,9 @@ const DEFAULT_EXAGGERATION = 1.5;
 /**
  * `TerrainController` moves the camera's target toward the ground under the
  * center of the view as you move, so the camera rises and falls with the
- * terrain. A steep pitch can still put it inside a nearby ridge, so pitch is
- * capped.
+ * terrain. A steep pitch can still put it inside a nearby ridge, so pitch
+ * stops at 70 degrees. That's above deck.gl's default of 60, which would clamp
+ * the Swiss view's 65-degree start.
  */
 const MAX_PITCH = 70;
 
@@ -89,9 +90,10 @@ type RasterDataset = {
 const NAIP_INITIAL_VIEW_STATE: MapViewState = {
   // Looking west at Pikes Peak's east face. TerrainController's first pick
   // moves the target up to the ground and zooms in to keep the camera in
-  // place. This start keeps that zoom under maxZoom, past which the camera
-  // would jump back, in windows at least 620 px tall, and keeps the whole
-  // view inside the images in windows up to 1100 px tall.
+  // place. At the default exaggeration, this start keeps that zoom under
+  // maxZoom, past which the camera would jump back, in windows at least
+  // 630 px tall, and keeps the whole view inside the images in windows up to
+  // 1760x1100.
   longitude: -105.08,
   latitude: 38.84,
   zoom: 12.4,
@@ -243,21 +245,18 @@ function toCommonSpace([west, south, east, north]: Bounds): [
 
 /**
  * `viewState` with the camera's height above sea level multiplied by `ratio`,
- * looking the same way, as a view whose target is at sea level.
- *
- * The exaggeration scales every terrain height, and scaling the camera's
- * height with it keeps the camera above the ground. A new `TerrainController`
- * then moves the target up to the ground on its first pick, without moving
- * the camera.
+ * looking the same way, as a view whose target is at sea level. A new
+ * `TerrainController` then moves the target to the ground it first picks,
+ * without moving the camera.
  */
 function scaleCameraHeight(
   viewState: MapViewState,
   ratio: number,
 ): MapViewState {
-  // The controller's view states carry the canvas size. The example's canvas
-  // fills the window, which stands in until the first one arrives.
-  const { width = window.innerWidth, height = window.innerHeight } =
-    viewState as MapViewState & { width?: number; height?: number };
+  // The example's canvas fills the window. The controller's view states carry
+  // a size too, but it's stale after a resize until you next move the map.
+  const width = window.innerWidth;
+  const height = window.innerHeight;
   const viewport = new WebMercatorViewport({ ...viewState, width, height });
   const [x, y, z] = viewport.cameraPosition;
   const pitch = ((viewState.pitch ?? 0) * Math.PI) / 180;
@@ -287,11 +286,11 @@ export default function App() {
   // a scene: the same camera and terrain.
   const scene = dataset.urls[0]!;
 
-  // Where the camera starts: a scene's start view, or the camera scaled with a
-  // new exaggeration. Each start gets a new view, and so a new
-  // TerrainController. The controller moves its target to the ground in one
-  // step only on its first pick, and eases it after that, so a reused one
-  // would keep the last ground height.
+  // Where the camera starts: a scene's start view, or after an exaggeration
+  // change, the current camera, raised if the terrain rose. Each start gets a
+  // new view, and so a new TerrainController. The controller moves its target
+  // to the ground in one step only on its first pick, and eases it after that,
+  // so a reused one would keep the last ground height.
   const [camera, setCamera] = useState({
     key: 0,
     viewState: RASTER_DATASETS[0]!.initialViewState,
@@ -506,10 +505,13 @@ export default function App() {
                   )!;
                   setDatasetId(next.id);
                   // A new scene starts its camera over, and its terrain loads
-                  // again, reporting its elevations as it does.
+                  // again, reporting its elevations as it does. The start
+                  // views are set for the default exaggeration.
                   if (next.urls[0] !== scene) {
                     startCamera(next.initialViewState);
                     setTerrainZRange(null);
+                    setExaggeration(DEFAULT_EXAGGERATION);
+                    setExaggerationInput(DEFAULT_EXAGGERATION);
                   }
                 }}
               >
@@ -549,9 +551,13 @@ export default function App() {
                     (range) => range && [range[0] * ratio, range[1] * ratio],
                   );
                   // TerrainController moves the camera only as you interact,
-                  // so scale the camera's height with the terrain's, or a
-                  // higher terrain would rise around it.
-                  startCamera(scaleCameraHeight(viewStateRef.current, ratio));
+                  // so raise the camera with a higher terrain, or the terrain
+                  // would rise around it. A lower terrain leaves the camera
+                  // where it is: lowered too, the camera would be nearer the
+                  // ground, and the new controller could zoom past maxZoom.
+                  startCamera(
+                    scaleCameraHeight(viewStateRef.current, Math.max(1, ratio)),
+                  );
                 }
               }}
             >

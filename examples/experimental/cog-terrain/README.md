@@ -106,10 +106,12 @@ reference, and a new one reloads every terrain tile.
 
 `TerrainController` doesn't move the camera when the terrain rises, so at a
 higher exaggeration the camera could end up inside a mountain. The example
-scales the camera's height above sea level by the same factor, which keeps it
-above the ground, and gives the view a new controller there. The new
-controller's first pick moves its target up to the ground without moving the
-camera.
+raises the camera's height above sea level by the same factor, which keeps it
+above the ground, and gives the view a new controller there. Its first pick
+moves its target to the ground without moving the camera. A lower exaggeration
+leaves the camera where it is: lowered too, it would be nearer the ground, and
+that first pick could zoom it past `maxZoom`. A new scene starts at the
+default exaggeration, which its start view is set for.
 
 NAIP has four bands: red, green, blue and near-infrared. `COGLayer`'s default
 pipeline would draw the fourth band as alpha, so the NAIP options pass their
@@ -141,7 +143,9 @@ COG tiles.
   the COGs' bounds there's no terrain, by design.
 - **GPU memory.** Each terrain tile's texture can take up to 16 MB, and they're
   kept while the terrain tile is cached. A pitched 1280x800 view of the Alps
-  used about 390 MB for these textures.
+  used about 390 MB for these textures. deck.gl 9.4 doesn't delete a terrain
+  tile's texture when it drops the tile, so each new scene leaves the old
+  textures for garbage collection.
 - **Lighting shades the COG.** The terrain's lighting darkens the draped
   colors. `material: false` on the `TerrainLayer` doesn't turn it off in
   deck.gl 9.4, but luma.gl's `material: {unlit: true}` does. deck.gl's
@@ -157,8 +161,13 @@ COG tiles.
   fast zoom onto a steep peak can leave the camera inside the mountain until
   you move again. The example makes a new view, and so a new controller, for
   each scene (the two NAIP options share one) and each exaggeration, so each
-  starts at its own ground height. It also caps pitch at 70 degrees (60 for
-  NAIP), since a steeper camera more often ends up inside a nearby ridge.
+  starts at its own ground height. After an exaggeration change, though, that
+  first pick can miss the visible ground. Raising NAIP to 2x put the target on
+  terrain beyond the summit, 2.4 km below the slope the camera sees, even with
+  every terrain tile loaded. The target then eases to the ground only as you
+  move, so zooming straight in can take the camera into the slope. It also
+  lets pitch go to 70 degrees, above deck.gl's default of 60, but no further,
+  since a steeper camera more often ends up inside a nearby ridge.
 - **One view.** deck.gl renders the drape textures from the first view only,
   so other views show draped layers only where the first view's terrain tiles
   cover them.

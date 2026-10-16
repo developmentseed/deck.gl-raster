@@ -51,8 +51,7 @@ async function getTileData(
     throw new Error("NAIP tiles are pixel interleaved");
   }
   // The signal stops the fetch but not the decode, so a tile cancelled while
-  // decoding still gets here. deck.gl doesn't unload a tile that loads after
-  // its layer is gone, so a texture made for it would never be destroyed.
+  // decoding still gets here. Nothing would draw a texture made for it.
   signal?.throwIfAborted();
   const { width, height, data } = array;
   const texture = device.createTexture({
