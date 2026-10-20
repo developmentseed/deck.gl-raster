@@ -241,9 +241,10 @@ export class MosaicLayer<
     } = this.props;
 
     // TileLayer creates the tileset only once, so these closures stay bound to
-    // the first MosaicLayer instance. Each render makes a new instance, and
-    // deck.gl hands it the same `state` object, but `this.props` here stays the
-    // first instance's props. So both closures read `this.state`.
+    // the first MosaicLayer instance. Apps create a new MosaicLayer on every
+    // render, and deck.gl hands it the same `state` object, but `this.props`
+    // here stays the first instance's props. So both closures read
+    // `this.state`.
     const getSources = () => this.state.sources;
     const getIndex = () => this.state.index;
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
