@@ -213,6 +213,16 @@ describe("MosaicLayer sources across layer instances", () => {
     expect(loaded).toEqual(["A", "B", "C"]);
   });
 
+  it("loads sources passed after an empty first render", async () => {
+    const render = makeMosaicRenderer();
+    await render([]);
+
+    const { fetched, loaded, errors } = await render([A, B]);
+    expect(errors).toEqual([]);
+    expect(fetched).toEqual(["A", "B"]);
+    expect(loaded).toEqual(["A", "B"]);
+  });
+
   it("drops sources removed after the first render", async () => {
     const render = makeMosaicRenderer();
     await render([A, B, C]);
