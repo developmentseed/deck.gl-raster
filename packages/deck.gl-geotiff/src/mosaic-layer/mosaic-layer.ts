@@ -187,6 +187,8 @@ export class MosaicLayer<
   declare state: {
     // The index can be null if sources are empty
     index: Flatbush | null;
+    // The sources the index was built from
+    sources: MosaicT[];
   };
 
   override initializeState(context: LayerContext): void {
@@ -207,7 +209,7 @@ export class MosaicLayer<
   private _buildSpatialIndex(): void {
     const { sources } = this.props;
     if (sources.length === 0) {
-      this.setState({ index: null });
+      this.setState({ index: null, sources });
       return;
     }
 
@@ -217,7 +219,7 @@ export class MosaicLayer<
     }
     index.finish();
 
-    this.setState({ index });
+    this.setState({ index, sources });
   }
 
   renderTileLayer(
@@ -238,10 +240,11 @@ export class MosaicLayer<
       onViewportLoad,
     } = this.props;
 
-    // Arrow functions bind to the MosaicLayer instance, which deck.gl reuses
-    // across prop updates — so `this.props` and `this.state` always reflect
-    // the latest values when the tileset reads them.
-    const getSources = () => this.props.sources;
+    // TileLayer creates the tileset only once, so these closures stay bound to
+    // the first MosaicLayer instance. Each render makes a new instance, and
+    // deck.gl hands it the same `state` object, but `this.props` here stays the
+    // first instance's props. So both closures read `this.state`.
+    const getSources = () => this.state.sources;
     const getIndex = () => this.state.index;
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
       constructor(opts: any) {
