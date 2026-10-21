@@ -6,6 +6,7 @@ import type { Frame, Hud as HudState } from "./animation/frame.js";
 import { Player } from "./animation/player.js";
 import type { StoryStep } from "./animation/story.js";
 import { createPlaceholderStory } from "./animation/story.js";
+import { checkTextureSupport } from "./render/textures.js";
 import type { SlideFit } from "./scene/layout.js";
 import { fitSlide, SLIDE_HEIGHT, SLIDE_WIDTH } from "./scene/layout.js";
 import type { SceneData } from "./scene/load.js";
@@ -35,7 +36,8 @@ type Ready = {
 };
 
 /** Load everything the story draws. */
-async function startup(_device: Device): Promise<Ready> {
+async function startup(device: Device): Promise<Ready> {
+  checkTextureSupport(device);
   const scene = await loadScene();
   return { scene, story: createPlaceholderStory(), layers: () => [] };
 }
