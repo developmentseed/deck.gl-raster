@@ -1,8 +1,12 @@
 import { FIXTURE_FILE, FIXTURE_URL } from "../scene/constants.js";
+import { LAND_FILE } from "../scene/land.js";
 import type { LoadProgress } from "../scene/load.js";
 
-/** What is loading, from where, for a presenter on a slow network. */
-const LOADING_TEXT = `Loading ${FIXTURE_FILE} from ${new URL(FIXTURE_URL).host}...`;
+/**
+ * What is loading, from where, for a presenter on a slow network. Both files
+ * are on GitHub.
+ */
+const LOADING_TEXT = `Loading ${FIXTURE_FILE} and ${LAND_FILE} from ${new URL(FIXTURE_URL).host}...`;
 
 // GitHub's dark palette, like the side panel.
 const TRACK = "#30363d";
@@ -33,7 +37,7 @@ export function Loading({ progress }: LoadingProps) {
       </div>
       <div
         role="progressbar"
-        aria-label="Loading the image"
+        aria-label="Loading the image and the land"
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={done}

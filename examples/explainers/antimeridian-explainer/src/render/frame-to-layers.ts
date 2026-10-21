@@ -1,9 +1,15 @@
 import type { Layer, Viewport } from "@deck.gl/core";
 import type { PathStyleExtensionProps } from "@deck.gl/extensions";
 import { PathStyleExtension } from "@deck.gl/extensions";
-import { PathLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { PathLayer, PolygonLayer, ScatterplotLayer } from "@deck.gl/layers";
 import type { Texture } from "@luma.gl/core";
-import type { DotDraw, Frame, LineDraw, MeshDraw } from "../animation/frame.js";
+import type {
+  DotDraw,
+  Frame,
+  LineDraw,
+  MeshDraw,
+  PolygonDraw,
+} from "../animation/frame.js";
 import { TexturedTrianglesLayer } from "../layers/textured-triangles-layer.js";
 
 type Path = [number, number][];
@@ -23,14 +29,17 @@ export type Assets = {
 };
 
 /**
- * Turn a frame into deck.gl layers: lines marked `under`, then meshes, then
- * the other lines, then dots. Each layer's id starts with its view's id, so
- * {@link layerFilter} draws it in that view only.
+ * Turn a frame into deck.gl layers: polygons and lines marked `under`, then
+ * meshes, then the other polygons and lines, then dots. Each layer's id
+ * starts with its view's id, so {@link layerFilter} draws it in that view
+ * only.
  */
 export function frameToLayers(frame: Frame, assets: Assets): Layer[] {
   return [
+    ...frame.polygons.filter((polygon) => polygon.under).map(polygonLayer),
     ...frame.lines.filter((line) => line.under).map(lineLayer),
     ...frame.meshes.map((mesh) => meshLayer(mesh, assets.texture)),
+    ...frame.polygons.filter((polygon) => !polygon.under).map(polygonLayer),
     ...frame.lines.filter((line) => !line.under).map(lineLayer),
     ...frame.dots.map(dotLayer),
   ];
@@ -56,6 +65,25 @@ function meshLayer(mesh: MeshDraw, texture: Texture): Layer {
     edgeWidth: mesh.edgeWidth,
     opacity: mesh.opacity,
     parameters: PARAMETERS,
+  });
+}
+
+function polygonLayer(draw: PolygonDraw): Layer {
+  return new PolygonLayer<[number, number][][]>({
+    id: `${draw.view}:polygons-${draw.id}`,
+    data: draw.polygons,
+    getPolygon: (rings) => rings,
+    filled: draw.fill !== undefined,
+    stroked: draw.line !== undefined,
+    getFillColor: draw.fill ?? [0, 0, 0, 0],
+    getLineColor: draw.line ?? [0, 0, 0, 0],
+    getLineWidth: 1,
+    lineWidthUnits: "pixels",
+    parameters: PARAMETERS,
+    updateTriggers: {
+      getFillColor: draw.fill?.join(","),
+      getLineColor: draw.line?.join(","),
+    },
   });
 }
 

@@ -42,6 +42,21 @@ export type LineDraw = {
   under?: boolean;
 };
 
+/** Filled or outlined polygons to draw, such as land. */
+export type PolygonDraw = {
+  /** Stable id; becomes part of the deck.gl layer id. */
+  id: string;
+  view: ViewId;
+  /** Polygons in the view's units: each an outer ring, then holes. */
+  polygons: [number, number][][][];
+  /** Fill colour; omit for outlines only. */
+  fill?: Rgba;
+  /** Outline colour; omit for no outlines. */
+  line?: Rgba;
+  /** Draw beneath everything else instead of over the meshes. */
+  under?: boolean;
+};
+
 /** Dots to draw. */
 export type DotDraw = {
   /** Stable id; becomes part of the deck.gl layer id. */
@@ -87,6 +102,8 @@ export type Hud = {
 export type Frame = {
   /** The map views shown in this frame, and what each shows. */
   cameras: Partial<Record<MapViewId, Camera>>;
+  /** Land and coastlines. */
+  polygons: PolygonDraw[];
   /** Textured triangle meshes, drawn in order. */
   meshes: MeshDraw[];
   /** Polylines. */
@@ -101,6 +118,7 @@ export type Frame = {
 export function emptyFrame(): Frame {
   return {
     cameras: {},
+    polygons: [],
     meshes: [],
     lines: [],
     dots: [],

@@ -17,6 +17,7 @@ const REPROJECTION_EXPLAINER_URL =
   "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/";
 const DEVSEED_URL = "https://developmentseed.org/";
 const FIXTURE_REPO_URL = "https://github.com/developmentseed/geotiff-test-data";
+const NATURAL_EARTH_URL = "https://www.naturalearthdata.com/";
 
 // GitHub's dark palette, like the slide.
 const BACKGROUND = "#161b22";
@@ -116,6 +117,13 @@ export function SidePanel({ open, onOpenChange }: SidePanelProps) {
                   geotiff-test-data ↗
                 </FooterLink>{" "}
                 (antimeridian_UTM_60N.tif).
+              </p>
+              <p style={{ margin: "10px 0 0", lineHeight: 1.5, color: MUTED }}>
+                The land on the maps is 1:50m land polygons from{" "}
+                <FooterLink href={NATURAL_EARTH_URL}>
+                  Natural Earth ↗
+                </FooterLink>{" "}
+                (public domain).
               </p>
             </Section>
           </div>

@@ -1,6 +1,8 @@
 import type { Mesh2D } from "@developmentseed/deck.gl-raster/internal/clip-mesh-to-world.js";
 import type { TriangleSoup } from "../layers/triangle-soup.js";
 import { MAX_ERROR, PERIOD } from "../scene/constants.js";
+import type { LandPolygon } from "../scene/land.js";
+import { landInRange } from "../scene/land.js";
 import type { Camera } from "../scene/layout.js";
 import {
   CLOSEUP_BOX,
@@ -15,7 +17,14 @@ import {
 import type { SourceImage } from "../scene/load.js";
 import type { MeshScene } from "../scene/mesh.js";
 import { CORNER_IDS } from "../scene/mesh.js";
-import type { Frame, Label, LineDraw, Rgba, ViewId } from "./frame.js";
+import type {
+  Frame,
+  Label,
+  LineDraw,
+  PolygonDraw,
+  Rgba,
+  ViewId,
+} from "./frame.js";
 import { emptyFrame } from "./frame.js";
 import { easeInOutCubic, lerp, progress } from "./math.js";
 import type { ScheduleOptions } from "./refine-schedule.js";
@@ -59,6 +68,12 @@ const RAW: Rgba = [240, 100, 85, 255];
 const SNAPPED: Rgba = [90, 220, 130, 255];
 /** The 180° meridian. */
 const MERIDIAN: Rgba = [255, 166, 87, 255];
+/** Land under the map views, a shade lighter than the slide. */
+const LAND_FILL: Rgba = [33, 40, 49, 255];
+/** Coastlines under the map views. */
+const LAND_LINE: Rgba = [62, 70, 81, 255];
+/** Coastlines up close, over everything. */
+const COAST: Rgba = [230, 237, 243, 190];
 
 /** How long a corner takes to fly from the image to the map, in ms. */
 const FLIGHT_MS = 900;
@@ -236,6 +251,27 @@ function graticule(view: ViewId, opacity: number): LineDraw {
   };
 }
 
+/** Land under a map view, faded by `opacity`; nothing when there is none. */
+function landUnder(
+  view: ViewId,
+  polygons: [number, number][][][],
+  opacity: number,
+): PolygonDraw[] {
+  if (polygons.length === 0) {
+    return [];
+  }
+  return [
+    {
+      id: "land",
+      view,
+      polygons,
+      fill: withAlpha(LAND_FILL, opacity),
+      line: withAlpha(LAND_LINE, opacity),
+      under: true,
+    },
+  ];
+}
+
 /** RGBA with its alpha scaled by `opacity`. */
 function withAlpha([r, g, b, a]: Rgba, opacity: number): Rgba {
   return [r, g, b, Math.round(a * opacity)];
@@ -306,10 +342,14 @@ const IMAGE_QUAD = {
   uvs: [0, 0, 1, 0, 1, 1, 0, 1],
 };
 
-/** The story: nine steps that follow one image's mesh across 180°. */
+/**
+ * The story: nine steps that follow one image's mesh across 180°, with `land`
+ * under the map views (none by default).
+ */
 export function createStory(
   scene: MeshScene,
   _image: SourceImage,
+  land: LandPolygon[] = [],
 ): StoryStep[] {
   const centerY = scene.center.position[1];
   const worldWidth = PERIOD + 2 * WORLD_MARGIN;
@@ -319,6 +359,8 @@ export function createStory(
     center: [PERIOD / 2, centerY],
     scale: MAP_BOX.width / worldWidth,
   };
+  /** The land the whole-world views show, past both edges included. */
+  const worldLand = landInRange(land, [-WORLD_MARGIN, PERIOD + WORLD_MARGIN]);
   const imageSoupWhole = imageSoup(IMAGE_QUAD);
   const meridianPath = scene.meridian.map((uv) => uvToSlide(uv));
 
@@ -406,6 +448,7 @@ export function createStory(
   /** The whole-world map, with its edges (steps 1-4). */
   const pushWorld = (frame: Frame, opacity: number) => {
     frame.cameras.world = worldCamera;
+    frame.polygons.push(...landUnder("world", worldLand, opacity));
     frame.lines.push(
       graticule("world", opacity),
       worldEdges("world", worldCamera, opacity),
@@ -603,6 +646,12 @@ export function createStory(
     ],
     24,
   );
+  const closeupHalfWidth = closeupCamera.rect.width / 2 / closeupCamera.scale;
+  /** The land the close-up shows: the Aleutians, either side of the seam. */
+  const closeupLand = landInRange(land, [
+    closeupCamera.center[0] - closeupHalfWidth,
+    closeupCamera.center[0] + closeupHalfWidth,
+  ]);
 
   /**
    * The world morphing into the strip as `split` runs 0-1, then the close-up
@@ -618,6 +667,7 @@ export function createStory(
       easeInOutCubic(options.split),
     );
     frame.cameras.strip = strip;
+    frame.polygons.push(...landUnder("strip", worldLand, 1));
     frame.lines.push(graticule("strip", 1), worldEdges("strip", strip, 1));
     frame.hud.labels.push(...worldEdgeLabels(strip, 1));
     if (options.split < 1) {
@@ -625,6 +675,17 @@ export function createStory(
     }
     const closeup = closeupCamera;
     frame.cameras.closeup = closeup;
+    frame.polygons.push(...landUnder("closeup", closeupLand, options.opacity));
+    if (closeupLand.length > 0) {
+      // Up close, coastlines go over everything, so the islands show through
+      // the image.
+      frame.polygons.push({
+        id: "coast",
+        view: "closeup",
+        polygons: closeupLand,
+        line: withAlpha(COAST, options.opacity),
+      });
+    }
     frame.lines.push(worldEdges("closeup", closeup, options.opacity));
     const [seamX] = commonToSlide(closeup, [0, 0]);
     frame.hud.labels.push(

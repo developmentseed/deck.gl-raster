@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Frame } from "../src/animation/frame.js";
 import type { StoryStep } from "../src/animation/story.js";
 import { createStory } from "../src/animation/story.js";
+import { landToCommon } from "../src/scene/land.js";
 import { IMAGE_BOX } from "../src/scene/layout.js";
 import type { MeshScene } from "../src/scene/mesh.js";
 import { makeProjection } from "../src/scene/projection.js";
@@ -371,5 +372,58 @@ describe("beats hold on finished frames", () => {
       (l) => l.id === "world-edges" && l.view === "closeup",
     );
     expect(edges?.color[3]).toBe(Math.round(255 * 0.8));
+  });
+});
+
+describe("the real map", () => {
+  // An island at 179°E-179.5°E, 51°N-52°N, under the image's west part.
+  const land = landToCommon({
+    features: [
+      {
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [179, 51],
+              [179.5, 51],
+              [179.5, 52],
+              [179, 52],
+              [179, 51],
+            ],
+          ],
+        },
+      },
+    ],
+  });
+  const landStory = () => createStory(scene, fakeImage(), land);
+  const polygon = (frame: Frame, id: string, view: string) =>
+    frame.polygons.find((p) => p.id === id && p.view === view);
+
+  it("draws land under the world map", () => {
+    const step = landStory()[0]!;
+    const drawn = polygon(step.frame(step.durationMs), "land", "world");
+    expect(drawn?.under).toBe(true);
+    expect(drawn?.polygons.length).toBeGreaterThan(0);
+  });
+
+  it("draws coastlines over everything up close, in every step that shows it", () => {
+    const steps = landStory();
+    for (const index of [4, 5, 6, 7, 8]) {
+      const step = steps[index]!;
+      const coast = polygon(step.frame(step.durationMs), "coast", "closeup");
+      expect(coast?.under, `step ${index + 1}`).toBeFalsy();
+      expect(coast?.line, `step ${index + 1}`).toBeDefined();
+    }
+  });
+
+  it("puts land just west of 180° west of the seam up close", () => {
+    const step = landStory()[6]!;
+    const coast = polygon(step.frame(step.durationMs), "coast", "closeup");
+    const xs = coast!.polygons[0]![0]!.map(([x]) => x);
+    expect(Math.max(...xs)).toBeLessThan(0);
+  });
+
+  it("draws no land when there is none", () => {
+    expect(end(0).polygons).toHaveLength(0);
   });
 });

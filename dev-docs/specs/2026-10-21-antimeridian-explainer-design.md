@@ -207,6 +207,10 @@ Two panels:
   Bering Sea, and a live Natural Earth file is allowed; that is the builder's
   call too.
 
+  After #767 opened, Kyle asked to see this on a real map. So every map view
+  draws Natural Earth's 1:50m land under the meshes, and the close-up draws
+  its coastlines over everything, so the Aleutians show through the image.
+
 ### Data loading
 
 The data is fetched live; bundling it isn't needed. At startup, behind a
@@ -234,6 +238,10 @@ loading screen with a progress bar, the app:
    Each call matches `RasterLayer`'s in its arguments, including
    `makeUnwrappedReprojectionFns` with the image's width and height, and
    `RasterReprojector` with width + 1 and height + 1.
+
+Alongside the image, it reads the Natural Earth land. The land is only the
+backdrop: if it can't be read, the app logs a warning and the maps keep their
+graticule alone.
 
 **The walk's samples** are recorded by calling `unwrapAlong` with a recording
 `valueAt`, along the same path `makeUnwrappedReprojectionFns` walks: from the

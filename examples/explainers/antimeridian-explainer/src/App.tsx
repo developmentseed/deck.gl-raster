@@ -8,6 +8,8 @@ import type { StoryStep } from "./animation/story.js";
 import { createStory } from "./animation/story.js";
 import { frameToLayers, layerFilter } from "./render/frame-to-layers.js";
 import { createImageTexture, imageCanvas } from "./render/texture.js";
+import type { LandPolygon } from "./scene/land.js";
+import { loadLand } from "./scene/land.js";
 import type { SlideFit } from "./scene/layout.js";
 import {
   fitSlide,
@@ -55,7 +57,21 @@ async function startup(
   device: Device,
   onProgress: (progress: LoadProgress) => void,
 ): Promise<Ready> {
-  const image = await loadImage({ onProgress });
+  // The image's two reads and the land's one, in whichever order they finish.
+  const progress: LoadProgress = { done: 0, total: 3 };
+  const advance = () => {
+    progress.done += 1;
+    onProgress({ ...progress });
+  };
+  // The land is only the backdrop: without it, the maps keep their graticule.
+  const landRead = loadLand()
+    .catch((reason: unknown): LandPolygon[] => {
+      console.warn(reason);
+      return [];
+    })
+    .finally(advance);
+  const image = await loadImage({ onProgress: advance });
+  const land = await landRead;
   const projection = await makeProjection(image);
   const scene = buildMeshScene(projection, {
     width: image.width,
@@ -65,7 +81,7 @@ async function startup(
   return {
     image,
     scene,
-    story: createStory(scene, image),
+    story: createStory(scene, image, land),
     layers: (frame) => frameToLayers(frame, { texture }),
   };
 }

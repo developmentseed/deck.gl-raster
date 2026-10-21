@@ -78,6 +78,17 @@ values run 1 to 42, one per column, colored here with a viridis-like ramp. At
 startup the app checks its size, transform and CRS against
 `src/scene/constants.ts`, and stops with an error if any of them changed.
 
+The land on the maps is [Natural Earth](https://www.naturalearthdata.com/)'s
+1:50m land polygons (public domain), read live from GitHub at release v5.1.2:
+
+```
+https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_50m_land.geojson
+```
+
+Natural Earth splits land at ±180°, so no polygon crosses the antimeridian.
+The land is only the backdrop: if it can't be read, the app logs a warning and
+draws the maps with their graticule alone.
+
 ## Run
 
 ```bash

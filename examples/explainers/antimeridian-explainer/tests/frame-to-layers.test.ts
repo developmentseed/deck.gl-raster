@@ -71,3 +71,47 @@ describe("layerFilter", () => {
     );
   });
 });
+
+describe("frameToLayers: land", () => {
+  it("draws land under everything, and coastlines over the meshes", () => {
+    const ring: [number, number][] = [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+    ];
+    const frame: Frame = {
+      ...emptyFrame(),
+      meshes: [
+        {
+          id: "mesh",
+          view: "closeup",
+          soup,
+          edgeColor: [0, 0, 0, 0],
+          edgeWidth: 1,
+          opacity: 1,
+        },
+      ],
+      polygons: [
+        {
+          id: "coast",
+          view: "closeup",
+          polygons: [[ring]],
+          line: [255, 255, 255, 255],
+        },
+        {
+          id: "land",
+          view: "closeup",
+          polygons: [[ring]],
+          fill: [33, 38, 45, 255],
+          under: true,
+        },
+      ],
+    };
+    const ids = frameToLayers(frame, assets).map((layer) => layer.id);
+    expect(ids).toEqual([
+      "closeup:polygons-land",
+      "closeup:mesh-mesh",
+      "closeup:polygons-coast",
+    ]);
+  });
+});
