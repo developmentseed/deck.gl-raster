@@ -3,7 +3,7 @@ import { assembleTiles, GeoTIFF } from "@developmentseed/geotiff";
 import type { BandId } from "./constants.js";
 import { BAND_IDS, BANDS, bandUrl, SCENE_ORIGIN } from "./constants.js";
 import type { ImageGeometry, StoryTile } from "./geometry.js";
-import { levelFor, resolveStoryTile } from "./geometry.js";
+import { imagesByLevel, levelFor, resolveStoryTile } from "./geometry.js";
 
 /** An image (a GeoTIFF or one of its overviews) that can fetch tiles. */
 export type ImageLike = ImageGeometry & {
@@ -134,10 +134,12 @@ export async function loadScene(
     images[band] = image;
   });
 
+  const levels = (band: BandId) =>
+    imagesByLevel(images[band]).map((image) => levelFor(band, image));
   const tile = resolveStoryTile({
-    b04: levelFor("b04", images.b04),
-    b11: levelFor("b11", images.b11),
-    b01: levelFor("b01", images.b01),
+    b04: levels("b04"),
+    b11: levels("b11"),
+    b01: levels("b01"),
   });
 
   const fetched = {} as Record<BandId, Tile[]>;
@@ -148,7 +150,10 @@ export async function loadScene(
       forBand(band, async () => {
         const image = images[band];
         const cover = tile.bands[band];
-        const tiles = await image.fetchTiles(
+        // The image at the level the tiles were resolved on, as the layer's
+        // selectImage picks it.
+        const level = imagesByLevel(image)[cover.z]!;
+        const tiles = await level.fetchTiles(
           cover.tiles.map(({ x, y }): [number, number] => [x, y]),
           { boundless: false, signal },
         );
@@ -156,8 +161,8 @@ export async function loadScene(
         stitched[band] = assembleTiles(tiles, {
           width: cover.stitchedWidth,
           height: cover.stitchedHeight,
-          tileWidth: image.tileWidth,
-          tileHeight: image.tileHeight,
+          tileWidth: level.tileWidth,
+          tileHeight: level.tileHeight,
           minCol: cover.minCol,
           minRow: cover.minRow,
         });

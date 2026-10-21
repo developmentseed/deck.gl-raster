@@ -1,19 +1,46 @@
 import { describe, expect, it } from "vitest";
 import type { BandId } from "../src/scene/constants.js";
+import type { ImageGeometry } from "../src/scene/geometry.js";
 import {
   insetRect,
   levelFor,
   resolveStoryTile,
 } from "../src/scene/geometry.js";
+import { fakeLevels } from "./fake-scene.js";
 
 const levels = {
-  b04: levelFor("b04"),
-  b11: levelFor("b11"),
-  b01: levelFor("b01"),
+  b04: fakeLevels("b04"),
+  b11: fakeLevels("b11"),
+  b01: fakeLevels("b01"),
 } satisfies Record<BandId, unknown>;
+
+/** A made-up image of the scene with square pixels of `pixelSize` metres. */
+function sceneImage(pixelSize: number): ImageGeometry {
+  return {
+    width: 109800 / pixelSize,
+    height: 109800 / pixelSize,
+    tileWidth: 1024,
+    tileHeight: 1024,
+    transform: [pixelSize, 0, 600000, 0, -pixelSize, 4400020],
+  };
+}
 
 describe("resolveStoryTile", () => {
   const tile = resolveStoryTile(levels);
+
+  it("takes the 20 m and 60 m tiles from full resolution, as the layer does", () => {
+    // Every overview is coarser than the 10 m primary, so the layer falls
+    // back to each band's finest level: index 3 of 4, coarsest first.
+    expect([tile.bands.b11.z, tile.bands.b01.z]).toEqual([3, 3]);
+  });
+
+  it("picks secondary levels with the layer's rule, not as the finest", () => {
+    // Below a 20 m level, made-up 10 m and 5 m levels: the layer picks the
+    // closest level at least as fine as the 10 m primary, so 10 m.
+    const ladder = [20, 10, 5].map((size) => levelFor("b11", sceneImage(size)));
+    const picked = resolveStoryTile({ ...levels, b11: ladder }).bands.b11;
+    expect(picked.z).toBe(1);
+  });
 
   it("covers tile (4, 4) with one 20 m tile, as its top-left quarter", () => {
     const b11 = tile.bands.b11;
@@ -56,6 +83,7 @@ describe("resolveStoryTile", () => {
       uvTransform: [0, 0, 1, 1],
       minCol: 4,
       minRow: 4,
+      z: 4,
     });
   });
 });

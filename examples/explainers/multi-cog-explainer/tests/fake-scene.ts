@@ -1,6 +1,53 @@
+import type { AffineTilesetLevel } from "@developmentseed/deck.gl-raster";
 import type { RasterArray } from "@developmentseed/geotiff";
-import { levelFor, resolveStoryTile } from "../src/scene/geometry.js";
+import type { BandId } from "../src/scene/constants.js";
+import { BANDS, SCENE_ORIGIN } from "../src/scene/constants.js";
+import type { ImageGeometry } from "../src/scene/geometry.js";
+import {
+  imagesByLevel,
+  levelFor,
+  resolveStoryTile,
+} from "../src/scene/geometry.js";
 import type { SceneData } from "../src/scene/load.js";
+
+/** Each band's overview widths, finest first, as in the files on AWS. */
+const OVERVIEW_WIDTHS: Record<BandId, number[]> = {
+  b04: [5490, 2745, 1373, 687],
+  b11: [2745, 1373, 687],
+  b01: [915, 458, 229],
+};
+
+/**
+ * A band's levels, coarsest first, from the real files' sizes, built the way
+ * `loadScene` builds them from the files.
+ */
+export function fakeLevels(band: BandId): AffineTilesetLevel[] {
+  const spec = BANDS[band];
+  const image = (width: number, block: number): ImageGeometry => {
+    const pixelSize = (spec.size * spec.pixelSize) / width;
+    return {
+      width,
+      height: width,
+      tileWidth: block,
+      tileHeight: block,
+      transform: [
+        pixelSize,
+        0,
+        SCENE_ORIGIN[0],
+        0,
+        -pixelSize,
+        SCENE_ORIGIN[1],
+      ],
+    };
+  };
+  const full = {
+    ...image(spec.size, spec.block),
+    overviews: OVERVIEW_WIDTHS[band].map((width) =>
+      image(width, spec.overviewBlock),
+    ),
+  };
+  return imagesByLevel(full).map((level) => levelFor(band, level));
+}
 
 /** A single-band array whose value at (x, y) is `value(x, y)`. */
 export function fakeArray(
@@ -33,9 +80,9 @@ export function fakeArray(
  */
 export function fakeScene(): SceneData {
   const tile = resolveStoryTile({
-    b04: levelFor("b04"),
-    b11: levelFor("b11"),
-    b01: levelFor("b01"),
+    b04: fakeLevels("b04"),
+    b11: fakeLevels("b11"),
+    b01: fakeLevels("b01"),
   });
   const piece = (x: number, y: number) => ({
     x,

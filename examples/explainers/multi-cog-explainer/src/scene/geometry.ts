@@ -1,6 +1,7 @@
 import type {
   AffineTilesetLevelOptions,
   Corners,
+  RasterTilesetLevel,
   UvTransform,
 } from "@developmentseed/deck.gl-raster";
 import {
@@ -34,6 +35,8 @@ export type StoryBand = {
   minCol: number;
   /** Row of the first covering tile. */
   minRow: number;
+  /** Which of the band's levels the tiles come from, coarsest first. */
+  z: number;
 };
 
 /** The story tile, and how each band covers it. */
@@ -78,18 +81,31 @@ export function levelFor(
 }
 
 /**
+ * An image and its overviews, coarsest first and full resolution last: the
+ * order of `MultiCOGLayer`'s levels, so a level's index picks its image.
+ */
+export function imagesByLevel<T>(image: T & { overviews: T[] }): T[] {
+  return [...[...image.overviews].reverse(), image];
+}
+
+/**
  * Resolve how each band covers the story tile, with the functions
- * `MultiCOGLayer` calls: the 10 m band is the primary grid, and the other two
- * are resolved with `selectSecondaryLevel` and `resolveSecondaryTiles`.
+ * `MultiCOGLayer` calls: the 10 m band's full-resolution level is the primary
+ * grid, and the other two bands are resolved with `selectSecondaryLevel` and
+ * `resolveSecondaryTiles`.
+ *
+ * Each band's levels are ordered as {@link imagesByLevel} orders its images.
  */
 export function resolveStoryTile(
-  levels: Record<BandId, AffineTilesetLevel>,
+  levels: Record<BandId, RasterTilesetLevel[]>,
 ): StoryTile {
-  const primary = levels.b04;
+  const primaryZ = levels.b04.length - 1;
+  const primary = levels.b04[primaryZ]!;
   const { x, y } = STORY_TILE;
   const secondary = (band: "b11" | "b01"): StoryBand => {
-    const level = selectSecondaryLevel([levels[band]], primary.metersPerPixel);
-    const resolution = resolveSecondaryTiles(primary, x, y, level, 0);
+    const level = selectSecondaryLevel(levels[band], primary.metersPerPixel);
+    const z = levels[band].indexOf(level);
+    const resolution = resolveSecondaryTiles(primary, x, y, level, z);
     return {
       tiles: resolution.tileIndices,
       stitchedWidth: resolution.stitchedWidth,
@@ -97,6 +113,7 @@ export function resolveStoryTile(
       uvTransform: resolution.uvTransform,
       minCol: resolution.minCol,
       minRow: resolution.minRow,
+      z,
     };
   };
   return {
@@ -109,6 +126,7 @@ export function resolveStoryTile(
         uvTransform: [0, 0, 1, 1],
         minCol: x,
         minRow: y,
+        z: primaryZ,
       },
       b11: secondary("b11"),
       b01: secondary("b01"),
