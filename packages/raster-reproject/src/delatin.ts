@@ -201,9 +201,9 @@ export class RasterReprojector {
   private _queueIndices: number[];
 
   /**
-   * Memo of each edge's midpoint sample, keyed by the edge's vertex pair: the
-   * exact output position in `output` mode, or the inverse-mapped pixel
-   * position in `input` mode.
+   * Memo of each edge's midpoint sample, keyed by the edge's vertex pair
+   * (lower vertex index, then higher): the exact output position in `output`
+   * mode, or the inverse-mapped pixel position in `input` mode.
    *
    * Vertices are never removed, so an edge's midpoint sample never changes.
    * The two triangles on an edge, and every rebuild of them after a legalize
@@ -211,7 +211,7 @@ export class RasterReprojector {
    * all projections. Cleared when {@link run} finishes, since the mesh is kept
    * for the tile's lifetime but is rarely refined further.
    */
-  private _edgeSamples: Map<number, [number, number]>;
+  private _edgeSamples: Map<number, Map<number, [number, number]>>;
 
   private _queue: number[];
   private _errors: number[];
@@ -395,11 +395,13 @@ export class RasterReprojector {
     for (let s = 0; s < SAMPLE_POINTS.length; s++) {
       const samplePoint = SAMPLE_POINTS[s]!;
       // Edge samples (s = 1..3) are memoized by their vertex pair.
-      let edgeKey = -1;
+      let lo = -1;
+      let hi = -1;
       if (s > 0) {
-        const i0 = s === 3 ? b : a;
-        const i1 = s === 1 ? b : c;
-        edgeKey = edgeSampleKey(i0 >> 1, i1 >> 1);
+        const i0 = (s === 3 ? b : a) >> 1;
+        const i1 = (s === 1 ? b : c) >> 1;
+        lo = i0 < i1 ? i0 : i1;
+        hi = i0 < i1 ? i1 : i0;
       }
       // Get the UV coordinates of the sample point
       const uvSampleU = barycentricMix(
@@ -448,13 +450,13 @@ export class RasterReprojector {
       if (this._errorSpace === "output") {
         // Where the sample point belongs on the map vs. where the GPU draws
         // it, in output pixels: one input pixel's size on the map.
-        const memo = edgeKey >= 0 ? this._edgeSamples.get(edgeKey) : undefined;
+        const memo = lo >= 0 ? this._edgeSamples.get(lo)?.get(hi) : undefined;
         if (memo !== undefined) {
           [exactX, exactY] = memo;
         } else {
           [exactX, exactY] = this._projectPixel(pixelExactX, pixelExactY);
-          if (edgeKey >= 0) {
-            this._edgeSamples.set(edgeKey, [exactX, exactY]);
+          if (lo >= 0) {
+            this._memoizeEdgeSample(lo, hi, [exactX, exactY]);
           }
         }
         err =
@@ -465,7 +467,7 @@ export class RasterReprojector {
         // to input CRS**. This gives us the **exact position in input space**
         // of the linearly interpolated sample point in output space.
         let pixelSampled =
-          edgeKey >= 0 ? this._edgeSamples.get(edgeKey) : undefined;
+          lo >= 0 ? this._edgeSamples.get(lo)?.get(hi) : undefined;
         if (pixelSampled === undefined) {
           const inputCRSSampled = this.reprojectors.inverseReproject(
             outSampleX,
@@ -478,8 +480,8 @@ export class RasterReprojector {
             inputCRSSampled[0],
             inputCRSSampled[1],
           );
-          if (edgeKey >= 0) {
-            this._edgeSamples.set(edgeKey, pixelSampled);
+          if (lo >= 0) {
+            this._memoizeEdgeSample(lo, hi, pixelSampled);
           }
         }
 
@@ -521,6 +523,20 @@ export class RasterReprojector {
 
     // add triangle to priority queue
     this._queuePush(t, maxError);
+  }
+
+  /** Remember the midpoint sample of the edge between vertices `lo` < `hi`. */
+  private _memoizeEdgeSample(
+    lo: number,
+    hi: number,
+    sample: [number, number],
+  ): void {
+    let row = this._edgeSamples.get(lo);
+    if (row === undefined) {
+      row = new Map();
+      this._edgeSamples.set(lo, row);
+    }
+    row.set(hi, sample);
   }
 
   // process the next triangle in the queue, splitting it with a new point
@@ -934,16 +950,6 @@ export class RasterReprojector {
     }
     return i > i0;
   }
-}
-
-/**
- * Key an undirected edge by its two vertex indices.
- *
- * Packs the smaller index into the high bits, so the key is the same from both
- * triangles on the edge. 2^26 vertices per axis keeps the key an exact integer.
- */
-function edgeSampleKey(i0: number, i1: number): number {
-  return i0 < i1 ? i0 * 67108864 + i1 : i1 * 67108864 + i0;
 }
 
 function orient(
