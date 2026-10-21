@@ -54,6 +54,8 @@ export type WalkSample = {
   uv: [number, number];
   /** Its x as proj4 returns it, in one world. */
   raw: number;
+  /** Its y, the same in every copy of the world. */
+  y: number;
   /** Its x moved to the copy nearest the sample before it. */
   x: number;
 };
@@ -155,7 +157,7 @@ export function buildMeshScene(
       unwrapped: at(wrapped, px, py),
     };
     walks[id] = recordWalk({
-      xAt: (x, y) => at(fns, x, y)[0],
+      positionAt: (x, y) => at(fns, x, y),
       from: centerPixel,
       to: [px, py],
       start: center.position[0],
@@ -206,20 +208,20 @@ export function buildMeshScene(
  * `makeUnwrappedReprojectionFns` takes, recording every sample it asks for.
  */
 function recordWalk(options: {
-  xAt: (px: number, py: number) => number;
+  positionAt: (px: number, py: number) => [number, number];
   from: [number, number];
   to: [number, number];
   start: number;
   size: [number, number];
 }): Walk {
-  const { xAt, from, to, start, size } = options;
+  const { positionAt, from, to, start, size } = options;
   const calls: Omit<WalkSample, "x">[] = [];
   const end = unwrapAlong(
     (t) => {
       const px = from[0] + t * INSIDE_CORNER * (to[0] - from[0]);
       const py = from[1] + t * INSIDE_CORNER * (to[1] - from[1]);
-      const raw = xAt(px, py);
-      calls.push({ t, uv: [px / size[0], py / size[1]], raw });
+      const [raw, y] = positionAt(px, py);
+      calls.push({ t, uv: [px / size[0], py / size[1]], raw, y });
       return raw;
     },
     { start, period: PERIOD },

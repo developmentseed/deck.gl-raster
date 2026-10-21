@@ -3,9 +3,13 @@ import type { TriangleSoup } from "../layers/triangle-soup.js";
 import { PERIOD } from "../scene/constants.js";
 import type { Camera } from "../scene/layout.js";
 import {
+  CLOSEUP_BOX,
+  cameraForBounds,
   commonToSlide,
   IMAGE_BOX,
+  lerpCamera,
   MAP_BOX,
+  STRIP_BOX,
   uvToSlide,
 } from "../scene/layout.js";
 import type { SourceImage } from "../scene/load.js";
@@ -43,6 +47,8 @@ const WHITE: Rgba = [230, 237, 243, 255];
 const GRID: Rgba = [139, 148, 158, 70];
 /** proj4's raw answers, a world away. */
 const RAW: Rgba = [240, 100, 85, 255];
+/** Points moved to the copy of the world they belong in. */
+const SNAPPED: Rgba = [90, 220, 130, 255];
 /** The 180° meridian. */
 const MERIDIAN: Rgba = [255, 166, 87, 255];
 
@@ -60,6 +66,34 @@ function flyPoint(
 ): [number, number] {
   const e = easeInOutCubic(t);
   return [lerp(from[0], to[0], e), lerp(from[1], to[1], e)];
+}
+
+/** How long the map takes to split into the strip and the close-up, in ms. */
+const SPLIT_MS = 700;
+
+/** How long each corner's walk takes, in ms. */
+const WALK_MS = 800;
+
+/** The bounds `[minX, minY, maxX, maxY]` of flat `[x, y, ...]` positions. */
+function boundsOf(
+  positions: ArrayLike<number>,
+): [number, number, number, number] {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < positions.length; i += 2) {
+    minX = Math.min(minX, positions[i]!);
+    maxX = Math.max(maxX, positions[i]!);
+    minY = Math.min(minY, positions[i + 1]!);
+    maxY = Math.max(maxY, positions[i + 1]!);
+  }
+  return [minX, minY, maxX, maxY];
+}
+
+/** One decimal, as the labels write coordinates. */
+function short(value: number): string {
+  return value.toFixed(1);
 }
 
 /** A count with thousands separators, as the HUD writes it. */
@@ -450,5 +484,171 @@ export function createStory(
     },
   };
 
-  return [imageStep, seedStep, cornersStep, plainStep];
+  /** The whole world, squeezed into the strip (from step 5). */
+  const stripCamera: Camera = {
+    rect: STRIP_BOX,
+    center: [PERIOD / 2, centerY],
+    scale: STRIP_BOX.width / worldWidth,
+  };
+  const meshBounds = boundsOf(scene.mesh.positions);
+  /** The seam up close: the unwrapped mesh, with room past the world's edge. */
+  const closeupCamera = cameraForBounds(
+    CLOSEUP_BOX,
+    [
+      meshBounds[0] - 3,
+      meshBounds[1] - 1,
+      meshBounds[2] + 3,
+      meshBounds[3] + 1,
+    ],
+    24,
+  );
+
+  /**
+   * The world morphing into the strip as `split` runs 0-1, then the close-up
+   * of the seam, fading in with `opacity` (steps 5-9).
+   */
+  const pushSplit = (
+    frame: Frame,
+    options: { split: number; opacity: number },
+  ): { strip: Camera; closeup: Camera | null } => {
+    const strip = lerpCamera(
+      worldCamera,
+      stripCamera,
+      easeInOutCubic(options.split),
+    );
+    frame.cameras.strip = strip;
+    frame.lines.push(graticule("strip", 1), worldEdges("strip", strip, 1));
+    frame.hud.labels.push(...worldEdgeLabels(strip, 1));
+    if (options.split < 1) {
+      return { strip, closeup: null };
+    }
+    const closeup = closeupCamera;
+    frame.cameras.closeup = closeup;
+    frame.lines.push(worldEdges("closeup", closeup, options.opacity));
+    const [seamX] = commonToSlide(closeup, [0, 0]);
+    frame.hud.labels.push(
+      label("seam", "-180° = 180°", [seamX, CLOSEUP_BOX.y + 16], {
+        color: css(MERIDIAN),
+        opacity: options.opacity,
+        size: 18,
+      }),
+      label(
+        "past-edge",
+        "past the world's west edge",
+        [(CLOSEUP_BOX.x + seamX) / 2, CLOSEUP_BOX.y + CLOSEUP_BOX.height - 18],
+        { opacity: options.opacity, size: 18 },
+      ),
+      label(
+        "map-title",
+        "The map · the whole world (top) and the seam up close",
+        [MAP_BOX.x + MAP_BOX.width / 2, MAP_BOX.y + MAP_BOX.height + 34],
+        { opacity: options.opacity, size: 22 },
+      ),
+    );
+    return { strip, closeup };
+  };
+
+  /** Step 5: walk from the center to each corner, keeping x continuous. */
+  const walkStep: StoryStep = {
+    id: "walk",
+    title: "Walk to the corners",
+    description: [
+      `Before meshing, the layer unwraps the corners. It starts at the image's center, which proj4 puts at x ${short(scene.center.position[0])}, and walks toward each corner. Each sample proj4 returns (red, in the world above) moves to the copy of the world nearest the sample before it (green, up close). The west corners come out at x ${short(scene.corners.nw.unwrapped[0])} and ${short(scene.corners.sw.unwrapped[0])}, past the world's west edge, instead of ${Math.round(scene.corners.nw.raw[0])}.`,
+    ],
+    durationMs: SPLIT_MS + CORNER_IDS.length * WALK_MS + 600,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushImage(frame, 1);
+      const { strip, closeup } = pushSplit(frame, {
+        split: progress(t, 0, SPLIT_MS),
+        opacity: progress(t, SPLIT_MS, 400),
+      });
+      frame.hud.caption = "Each step moves to the copy nearest the step before";
+      if (!closeup) {
+        return frame;
+      }
+      const centerSlide = uvToSlide(scene.center.uv);
+      const paths: [number, number][][] = [];
+      const imagePoints: [number, number][] = [];
+      const rawPoints: [number, number][] = [];
+      const movedPoints: [number, number][] = [];
+      const leaders: [number, number][][] = [];
+      CORNER_IDS.forEach((id, i) => {
+        const along = progress(t, SPLIT_MS + i * WALK_MS, 0.8 * WALK_MS);
+        if (along <= 0) {
+          return;
+        }
+        const cornerSlide = uvToSlide(scene.corners[id].uv);
+        paths.push([
+          centerSlide,
+          [
+            lerp(centerSlide[0], cornerSlide[0], along),
+            lerp(centerSlide[1], cornerSlide[1], along),
+          ],
+        ]);
+        for (const sample of scene.walks[id].samples) {
+          if (along < sample.t) {
+            continue;
+          }
+          imagePoints.push(uvToSlide(sample.uv));
+          rawPoints.push([sample.raw, sample.y]);
+          movedPoints.push([sample.x, sample.y]);
+          leaders.push([
+            commonToSlide(strip, [sample.raw, sample.y]),
+            commonToSlide(closeup, [sample.x, sample.y]),
+          ]);
+        }
+      });
+      frame.lines.push(
+        { id: "walk-paths", view: "slide", paths, color: WHITE, width: 2 },
+        {
+          id: "leaders",
+          view: "slide",
+          paths: leaders,
+          color: withAlpha(WHITE, 0.35),
+          width: 1,
+        },
+      );
+      frame.dots.push(
+        {
+          id: "center",
+          view: "slide",
+          points: [centerSlide],
+          color: WHITE,
+          radius: 5,
+        },
+        {
+          id: "center",
+          view: "closeup",
+          points: [scene.center.position],
+          color: WHITE,
+          radius: 5,
+        },
+        {
+          id: "walk-image",
+          view: "slide",
+          points: imagePoints,
+          color: WHITE,
+          radius: 4,
+        },
+        {
+          id: "walk-raw",
+          view: "strip",
+          points: rawPoints,
+          color: RAW,
+          radius: 4,
+        },
+        {
+          id: "walk-moved",
+          view: "closeup",
+          points: movedPoints,
+          color: SNAPPED,
+          radius: 6,
+        },
+      );
+      return frame;
+    },
+  };
+
+  return [imageStep, seedStep, cornersStep, plainStep, walkStep];
 }

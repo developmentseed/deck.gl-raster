@@ -47,6 +47,17 @@ describe("buildMeshScene: the walks", () => {
     expect(end!.x).toBeCloseTo(-8.82, 2);
   });
 
+  it("records each sample's y, where the projection puts it", () => {
+    const { fns } = projection;
+    for (const sample of scene.walks.sw.samples) {
+      const [u, v] = sample.uv;
+      const [, y] = fns.forwardReproject(
+        ...fns.forwardTransform(u * 42, v * 42),
+      );
+      expect(sample.y).toBeCloseTo(y, 9);
+    }
+  });
+
   it("ends each walk where the wrapped functions put its corner", () => {
     const { fns } = projection;
     const wrapped = makeUnwrappedReprojectionFns(fns, {

@@ -101,3 +101,39 @@ describe("step 4: refining can't fix it", () => {
     expect(texts.join(" ")).toContain("123 px");
   });
 });
+
+describe("step 5: walk to the corners", () => {
+  it("splits the map into the world strip and the close-up", () => {
+    const { cameras } = end(4);
+    expect(cameras.world).toBeUndefined();
+    expect(cameras.strip).toBeDefined();
+    expect(cameras.closeup).toBeDefined();
+  });
+
+  it("shows each sample raw in the strip and moved in the close-up, linked", () => {
+    const frame = end(4);
+    const raw = frame.dots.find((d) => d.id === "walk-raw");
+    const moved = frame.dots.find((d) => d.id === "walk-moved");
+    expect(raw?.view).toBe("strip");
+    expect(moved?.view).toBe("closeup");
+    expect(raw?.points).toHaveLength(8);
+    expect(moved?.points).toHaveLength(8);
+    expect(raw!.points[1]![0]).toBeCloseTo(503.18, 2);
+    expect(moved!.points[1]![0]).toBeCloseTo(-8.82, 2);
+    const leaders = frame.lines.find((l) => l.id === "leaders");
+    expect(leaders?.view).toBe("slide");
+    expect(leaders?.paths).toHaveLength(8);
+  });
+});
+
+describe("frames", () => {
+  it("depend only on the step and the time", () => {
+    const before = story[4]!.frame(1500);
+    for (const step of story) {
+      step.frame(0);
+      step.frame(step.durationMs / 2);
+      step.frame(step.durationMs);
+    }
+    expect(story[4]!.frame(1500)).toEqual(before);
+  });
+});
