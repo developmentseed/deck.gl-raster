@@ -137,3 +137,25 @@ describe("frames", () => {
     expect(story[4]!.frame(1500)).toEqual(before);
   });
 });
+
+describe("step 6: snap every point", () => {
+  /** The probe's raw and snapped x at `time` into step 6. */
+  function probeAt(time: number) {
+    const frame = story[5]!.frame(time);
+    const raw = frame.dots.find((d) => d.id === "probe-raw");
+    const snapped = frame.dots.find((d) => d.id === "probe-snapped");
+    expect(raw?.view).toBe("strip");
+    expect(snapped?.view).toBe("closeup");
+    return [raw!.points[0]![0], snapped!.points[0]![0]];
+  }
+
+  it("west of 180°, finds proj4's answer a whole world from the snapped point", () => {
+    const [raw, snapped] = probeAt(0);
+    expect(raw - snapped).toBeCloseTo(512, 0);
+  });
+
+  it("east of 180°, finds them in the same place", () => {
+    const [raw, snapped] = probeAt(story[5]!.durationMs / 2);
+    expect(raw).toBeCloseTo(snapped, 6);
+  });
+});

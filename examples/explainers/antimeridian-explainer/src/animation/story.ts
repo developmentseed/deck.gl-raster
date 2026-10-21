@@ -74,6 +74,9 @@ const SPLIT_MS = 700;
 /** How long each corner's walk takes, in ms. */
 const WALK_MS = 800;
 
+/** How long the probe takes to sweep the image one way, in ms. */
+const SWEEP_MS = 3200;
+
 /** The bounds `[minX, minY, maxX, maxY]` of flat `[x, y, ...]` positions. */
 function boundsOf(
   positions: ArrayLike<number>,
@@ -650,5 +653,126 @@ export function createStory(
     },
   };
 
-  return [imageStep, seedStep, cornersStep, plainStep, walkStep];
+  /** The four unwrapped corners, and the quad through them, up close. */
+  const pushUnwrappedCorners = (frame: Frame, opacity: number) => {
+    const points = CORNER_IDS.map((id) => scene.corners[id].unwrapped);
+    const [nw, ne, sw, se] = points;
+    frame.lines.push({
+      id: "corner-quad",
+      view: "closeup",
+      paths: [[nw!, ne!, se!, sw!, nw!]],
+      color: withAlpha(SNAPPED, 0.5 * opacity),
+      width: 1.5,
+      dashed: true,
+    });
+    frame.dots.push({
+      id: "corners-unwrapped",
+      view: "closeup",
+      points,
+      color: withAlpha(SNAPPED, opacity),
+      radius: 5,
+    });
+  };
+
+  /** Step 6: a probe sweeps the image; its raw x jumps, its snapped x doesn't. */
+  const probe = scene.probe;
+  const probeIndex = (t: number) => {
+    const phase = (t / SWEEP_MS) % 2;
+    const along = phase <= 1 ? phase : 2 - phase;
+    return Math.round(along * (probe.length - 1));
+  };
+  const probeStep: StoryStep = {
+    id: "snap",
+    title: "Snap every point",
+    description: [
+      "The reprojector projects many more points than the corners. So the layer wraps the projection itself: every x proj4 returns moves to the copy of the world nearest the blend of the four unwrapped corners at that pixel. As the probe crosses 180°, proj4's answer (red) jumps a whole world; the snapped point (green) moves smoothly. This holds unless the image contains a pole.",
+    ],
+    durationMs: 2 * SWEEP_MS,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushImage(frame, 1);
+      const { strip, closeup } = pushSplit(frame, { split: 1, opacity: 1 });
+      pushUnwrappedCorners(frame, 1);
+      const index = probeIndex(t);
+      const sample = probe[index]!;
+      const [from, to] =
+        t % (2 * SWEEP_MS) < SWEEP_MS ? [0, index] : [index, probe.length - 1];
+      const trail = probe.slice(from, to + 1);
+      frame.lines.push(
+        {
+          id: "probe-trail",
+          view: "closeup",
+          paths: [trail.map((s) => s.snapped)],
+          color: withAlpha(SNAPPED, 0.7),
+          width: 2,
+        },
+        {
+          id: "probe-leader",
+          view: "slide",
+          paths: [
+            [
+              commonToSlide(strip, sample.raw),
+              commonToSlide(closeup!, sample.snapped),
+            ],
+          ],
+          color: withAlpha(WHITE, 0.45),
+          width: 1,
+        },
+      );
+      frame.dots.push(
+        {
+          id: "probe-trail-raw",
+          view: "strip",
+          points: trail.map((s) => s.raw),
+          color: withAlpha(RAW, 0.5),
+          radius: 2,
+        },
+        {
+          id: "probe-image",
+          view: "slide",
+          points: [uvToSlide(sample.uv)],
+          color: WHITE,
+          radius: 7,
+        },
+        {
+          id: "probe-raw",
+          view: "strip",
+          points: [sample.raw],
+          color: RAW,
+          radius: 6,
+        },
+        {
+          id: "probe-snapped",
+          view: "closeup",
+          points: [sample.snapped],
+          color: SNAPPED,
+          radius: 7,
+        },
+      );
+      const [rawX, rawY] = commonToSlide(strip, sample.raw);
+      const [snappedX, snappedY] = commonToSlide(closeup!, sample.snapped);
+      frame.hud.labels.push(
+        label(
+          "probe-raw",
+          `proj4: x ${short(sample.raw[0])}`,
+          [rawX, rawY + 22],
+          {
+            color: css(RAW),
+            size: 18,
+          },
+        ),
+        label(
+          "probe-snapped",
+          `snapped: x ${short(sample.snapped[0])}`,
+          [snappedX, snappedY + 26],
+          { color: css(SNAPPED), size: 18 },
+        ),
+      );
+      frame.hud.caption =
+        "Every point moves to the copy nearest the corners' blend";
+      return frame;
+    },
+  };
+
+  return [imageStep, seedStep, cornersStep, plainStep, walkStep, probeStep];
 }
