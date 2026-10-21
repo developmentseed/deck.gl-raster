@@ -110,11 +110,8 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     bbox: GeoBoundingBox;
   } {
     const { id, bbox } = tileIndex as unknown as ResolvedSource<MosaicT>;
-    const [west, south, east, north] = bbox;
-    return {
-      id,
-      bbox: { west, south, east: west > east ? east + 360 : east, north },
-    };
+    const [west, south, east, north] = unwrapBbox(bbox);
+    return { id, bbox: { west, south, east, north } };
   }
 
   override getParentIndex(tileIndex: TileIndex): TileIndex {
@@ -157,7 +154,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     const extent = this.opts.extent as Bounds | null;
     if (extent) {
       indices = indices.filter((i) =>
-        splitAtAntimeridian(sources[i]!.bbox).some((box) =>
+        splitAtAntimeridian(unwrapBbox(sources[i]!.bbox)).some((box) =>
           overlaps(box, extent),
         ),
       );
@@ -186,7 +183,9 @@ export function buildSourceIndex(sources: MosaicSource[]): SourceIndex | null {
     return null;
   }
 
-  const splitBboxes = sources.map((source) => splitAtAntimeridian(source.bbox));
+  const splitBboxes = sources.map((source) =>
+    splitAtAntimeridian(unwrapBbox(source.bbox)),
+  );
   const numBoxes = splitBboxes.reduce((sum, split) => sum + split.length, 0);
   const boxes = new Flatbush(numBoxes);
   const boxToSource = new Uint32Array(numBoxes);
@@ -201,17 +200,27 @@ export function buildSourceIndex(sources: MosaicSource[]): SourceIndex | null {
 }
 
 /**
- * Split a bbox across the antimeridian, written with `minX > maxX`, into one
- * box on each side. Any other bbox is returned as it is.
+ * Move the east edge of a bbox across the antimeridian, written with
+ * `minX > maxX`, one world east: then `minX < maxX`, and `maxX` runs past
+ * 180°. Any other bbox keeps its edges.
  */
-function splitAtAntimeridian(bbox: Bounds): Bounds[] {
+export function unwrapBbox(bbox: Readonly<Bounds>): Bounds {
   const [minX, minY, maxX, maxY] = bbox;
-  if (minX <= maxX) {
-    return [bbox];
+  return [minX, minY, minX > maxX ? maxX + 360 : maxX, maxY];
+}
+
+/**
+ * Split bounds whose east edge may run past 180° into bounds within
+ * [-180, 180]: two, if they cross the antimeridian.
+ */
+function splitAtAntimeridian(bounds: Bounds): Bounds[] {
+  const [minX, minY, maxX, maxY] = bounds;
+  if (maxX <= 180) {
+    return [bounds];
   }
   return [
     [minX, minY, 180, maxY],
-    [-180, minY, maxX, maxY],
+    [-180, minY, maxX - 360, maxY],
   ];
 }
 
@@ -235,14 +244,7 @@ function searchBounds(viewport: Viewport): Bounds[] {
     return [[-180, minY, 180, maxY]];
   }
   const west = nearestCopy(minX, 0, 360);
-  const east = west + (maxX - minX);
-  if (east <= 180) {
-    return [[west, minY, east, maxY]];
-  }
-  return [
-    [west, minY, 180, maxY],
-    [-180, minY, east - 360, maxY],
-  ];
+  return splitAtAntimeridian([west, minY, west + (maxX - minX), maxY]);
 }
 
 /**

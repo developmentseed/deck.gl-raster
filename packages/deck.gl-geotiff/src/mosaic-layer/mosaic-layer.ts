@@ -17,7 +17,11 @@ import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
 import { nearestCopy } from "@developmentseed/proj";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
 import type { MosaicSource, SourceIndex } from "./mosaic-tileset-2d.js";
-import { buildSourceIndex, MosaicTileset2D } from "./mosaic-tileset-2d.js";
+import {
+  buildSourceIndex,
+  MosaicTileset2D,
+  unwrapBbox,
+} from "./mosaic-tileset-2d.js";
 
 export type MosaicLayerProps<
   MosaicT extends MosaicSource = MosaicSource,
@@ -160,10 +164,8 @@ function createGetPriorityCallback(
     return undefined;
   }
 
-  const [minX, minY, maxX, maxY] = bbox;
-  // A bbox across the antimeridian has minX > maxX: its east edge is one
-  // world east.
-  const sourceCx = (minX + (minX > maxX ? maxX + 360 : maxX)) / 2;
+  const [minX, minY, maxX, maxY] = unwrapBbox(bbox);
+  const sourceCx = (minX + maxX) / 2;
   const sourceCy = (minY + maxY) / 2;
 
   return (): number => {
