@@ -297,9 +297,14 @@ export class RasterTileset2D extends Tileset2D {
     const decimationX = parentFootprintX / currentFootprintX;
     const decimationY = parentFootprintY / currentFootprintY;
 
+    // Footprints derived from rounded scale denominators can give a decimation
+    // a hair above a whole number (e.g. 2.000000000000004), which would floor
+    // an exact multiple like 2 / 2.000000000000004 down to the wrong parent.
+    // Add a small tolerance before flooring.
+    const epsilon = 1e-6;
     return {
-      x: Math.floor(index.x / decimationX),
-      y: Math.floor(index.y / decimationY),
+      x: Math.floor(index.x / decimationX + epsilon),
+      y: Math.floor(index.y / decimationY + epsilon),
       z: index.z - 1,
     };
   }
