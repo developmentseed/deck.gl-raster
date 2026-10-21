@@ -91,26 +91,25 @@ Differences:
 - We cache the offset-0 OBB per `(zRange)` and translate from the cache
   rather than recomputing per offset.
 
-## A second, independent layer: MosaicTileset2D source selection
+## Mosaic sources
 
-This file focusses primarily on how *pixel tiles* are selected within an already-open COG, inside
-`RasterTileLayer`. A separate concern sits one level up: `MosaicLayer`'s
+`MosaicLayer` picks the sources to draw before any of them has a
+`RasterTileLayer`, so the traversal above never sees a source it didn't pick.
 [`MosaicTileset2D`](../packages/deck.gl-geotiff/src/mosaic-layer/mosaic-tileset-2d.ts)
-decides which `sources` (each `{ id?, bbox }`, see
-`MosaicSource`) are visible at all via a Flatbush spatial query over source
-bboxes *before* any `RasterTileLayer` for that source exists. `viewport.getBounds()`
-returns unwrapped longitudes once the camera pans past ±180°, so a single,
-un-repeated query misses sources whose bbox sits on the far side of the seam.
-A source that's never selected here never gets a `RasterTileLayer`, so the
-fix above can't help it.
+picks them by searching a Flatbush index of source bboxes with
+`viewport.getBounds()`.
 
-The fix mirrors this doc's model: `subViewports.length > 1` gate and same
-`MAX_MAPS` walk-until-empty pattern but shifts the *query bounds* by
-`worldOffset * 360°` of longitude instead of translating a bounding volume by
-`worldOffset * 512` in common space, since Flatbush operates on WGS84
-degrees, not deck.gl common space. Matches are deduplicated across offsets
-(a `Set`) since the same source can satisfy more than one offset's query at
-once (e.g. a source near the prime meridian at extreme zoom-out).
+The bboxes lie within [-180, 180] longitude, but near the antimeridian the
+viewport's bounds run past ±180°. Past ±180°, Web Mercator with `repeat` shows
+another copy of the world, and a globe shows the other side of the
+antimeridian. (A globe has no `subViewports`, but its `getBounds()` runs past
+±180° too.) So the search moves the bounds back within [-180, 180], and splits
+them in two at ±180° if they cross it. Web Mercator without `repeat` draws
+nothing past ±180°, so its bounds are searched as they are.
+
+The search doesn't walk world offsets like the traversal does. Every source
+lies in the primary world, so the moved bounds cover every copy the viewport
+shows.
 
 ## Out of scope
 
@@ -118,4 +117,6 @@ once (e.g. a source near the prime meridian at extreme zoom-out).
   world-copy intersections. For typical OGC pyramids this doesn't matter
   (root tiles are enumerated unconditionally). If a zarr dataset hits the
   same symptom, generalize that path.
-- Antimeridian issues such as COGs whose bbox crosses ±180° in WGS84 longitude will be handled separately.
+- A mosaic source whose bbox crosses the antimeridian, written with
+  `minX > maxX` as in GeoJSON and STAC, is only selected when nearly the whole
+  world is in view.

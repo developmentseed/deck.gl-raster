@@ -1,19 +1,13 @@
 import type { Viewport } from "@deck.gl/core";
+import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import type {
   GeoBoundingBox,
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import type { Bounds } from "@developmentseed/deck.gl-raster";
+import { nearestCopy } from "@developmentseed/proj";
 import type Flatbush from "flatbush";
-
-/**
- * Maximum number of world copies to test on each side of the primary world
- * so max 7 (primary + 3 either side if visible). Mirrors
- * `raster-tile-traversal.ts`'s `MAX_MAPS`, which in turn matches upstream
- * `@deck.gl/geo-layers/tile-2d-traversal.ts`.
- */
-const MAX_MAPS = 3;
 
 /** Tile index.
  *
@@ -128,21 +122,11 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       return [];
     }
 
-    const viewportBounds = viewport.getBounds();
-    const matched = new Set<number>(index.search(...viewportBounds));
-
-    // World-copy passes: see "MosaicTileset2D source selection" in
-    // dev-docs/world-copies.md.
-    if ((viewport.subViewports?.length ?? 0) > 1) {
-      for (let worldOffset = -1; worldOffset >= -MAX_MAPS; worldOffset--) {
-        if (!searchAtOffset(index, viewportBounds, worldOffset, matched)) {
-          break;
-        }
-      }
-      for (let worldOffset = 1; worldOffset <= MAX_MAPS; worldOffset++) {
-        if (!searchAtOffset(index, viewportBounds, worldOffset, matched)) {
-          break;
-        }
+    // A source can match both halves of bounds split at the antimeridian.
+    const matched = new Set<number>();
+    for (const bounds of searchBounds(viewport)) {
+      for (const i of index.search(...bounds)) {
+        matched.add(i);
       }
     }
     let indices = [...matched];
@@ -170,29 +154,34 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
 }
 
 /**
- * Query `index` with `bounds` shifted by `worldOffset * 360°` of longitude,
- * adding any matched source indices into `matched`. Returns `true` if this
- * offset matched anything, signaling the caller to keep walking further from
- * the primary world; `false` stops that direction's walk (the offset has
- * moved past the visible range).
+ * The boxes to search the spatial index with for `viewport`.
+ *
+ * Source bboxes lie within [-180, 180] longitude, but near the antimeridian
+ * `viewport.getBounds()` runs past ±180°. There, a globe shows the other side
+ * of the antimeridian, and Web Mercator with `repeat` shows another copy of
+ * the world. So the bounds are moved back within [-180, 180], and split in two
+ * at ±180° if they cross it. Web Mercator without `repeat` draws nothing past
+ * ±180°, so its bounds are searched as they are.
  */
-function searchAtOffset(
-  index: Flatbush,
-  bounds: [number, number, number, number],
-  worldOffset: number,
-  matched: Set<number>,
-): boolean {
-  const shift = worldOffset * 360;
-  const found = index.search(
-    bounds[0] - shift,
-    bounds[1],
-    bounds[2] - shift,
-    bounds[3],
-  );
-  for (const i of found) {
-    matched.add(i);
+function searchBounds(viewport: Viewport): Bounds[] {
+  const bounds = viewport.getBounds();
+  if (!viewport.subViewports && !(viewport instanceof GlobeViewport)) {
+    return [bounds];
   }
-  return found.length > 0;
+
+  const [minX, minY, maxX, maxY] = bounds;
+  if (maxX - minX >= 360) {
+    return [[-180, minY, 180, maxY]];
+  }
+  const west = nearestCopy(minX, 0, 360);
+  const east = west + (maxX - minX);
+  if (east <= 180) {
+    return [[west, minY, east, maxY]];
+  }
+  return [
+    [west, minY, 180, maxY],
+    [-180, minY, east - 360, maxY],
+  ];
 }
 
 /**
