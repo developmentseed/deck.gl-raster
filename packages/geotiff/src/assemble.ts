@@ -5,13 +5,19 @@ import type { Tile } from "./tile.js";
  * Options for {@link assembleTiles}.
  */
 export interface AssembleTilesOptions {
-  /** Total output width in pixels. */
+  /**
+   * Total output width in pixels. Need not be a multiple of `tileWidth`: the
+   * last column of tiles is then clipped to fit.
+   */
   width: number;
-  /** Total output height in pixels. */
+  /**
+   * Total output height in pixels. Need not be a multiple of `tileHeight`:
+   * the last row of tiles is then clipped to fit.
+   */
   height: number;
-  /** Tile width in pixels (all tiles must share this). */
+  /** Tile width in pixels, shared by every tile outside the last column. */
   tileWidth: number;
-  /** Tile height in pixels (all tiles must share this). */
+  /** Tile height in pixels, shared by every tile outside the last row. */
   tileHeight: number;
   /** Column index of the leftmost tile in the grid. */
   minCol: number;
@@ -31,6 +37,10 @@ export interface AssembleTilesOptions {
  *
  * @param tiles - Fetched tiles to assemble. Must form a contiguous rectangular
  *   grid and all share the same layout, band count, and typed array type.
+ *   Each tile must exactly fill its place in the grid: `tileWidth` x
+ *   `tileHeight`, or smaller in the last column or row when the output size
+ *   isn't a multiple of the tile size. These are the edge tiles that
+ *   {@link GeoTIFF.fetchTiles} returns with `boundless: false`.
  * @param opts - Describes the output grid dimensions and tile positions.
  * @returns A single {@link RasterArray} containing the assembled data.
  *
@@ -271,8 +281,8 @@ function copyRows(
 
 /**
  * Validate that the tiles form a contiguous rectangular grid matching the
- * expected dimensions. Throws if tiles are missing, duplicated, or outside
- * the expected range.
+ * expected dimensions. Throws if tiles are missing, duplicated, outside the
+ * expected range, or don't exactly fill their place in the grid.
  */
 function validateContiguousGrid(
   tiles: Tile[],
@@ -283,8 +293,9 @@ function validateContiguousGrid(
   }
 
   const { width, height, tileWidth, tileHeight, minCol, minRow } = opts;
-  const numCols = width / tileWidth;
-  const numRows = height / tileHeight;
+  // Round up: the last column and row may hold clipped edge tiles.
+  const numCols = Math.ceil(width / tileWidth);
+  const numRows = Math.ceil(height / tileHeight);
   const expectedCount = numCols * numRows;
 
   if (tiles.length !== expectedCount) {
@@ -301,6 +312,14 @@ function validateContiguousGrid(
       throw new Error(
         `Tile (${tile.x}, ${tile.y}) is outside the expected grid range ` +
           `[${minCol}..${minCol + numCols - 1}] x [${minRow}..${minRow + numRows - 1}]`,
+      );
+    }
+    const slotWidth = Math.min(tileWidth, width - col * tileWidth);
+    const slotHeight = Math.min(tileHeight, height - row * tileHeight);
+    if (tile.array.width !== slotWidth || tile.array.height !== slotHeight) {
+      throw new Error(
+        `Tile (${tile.x}, ${tile.y}) is ${tile.array.width}x${tile.array.height}, ` +
+          `expected ${slotWidth}x${slotHeight}`,
       );
     }
     const key = `${tile.x},${tile.y}`;
