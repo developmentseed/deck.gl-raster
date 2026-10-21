@@ -8,6 +8,8 @@ import type { StoryStep } from "./animation/story.js";
 import { createPlaceholderStory } from "./animation/story.js";
 import type { SlideFit } from "./scene/layout.js";
 import { fitSlide, SLIDE_HEIGHT, SLIDE_WIDTH } from "./scene/layout.js";
+import type { SceneData } from "./scene/load.js";
+import { loadScene } from "./scene/load.js";
 import { ControlBar } from "./ui/control-bar.js";
 import { Hud } from "./ui/hud.js";
 import { SidePanel } from "./ui/side-panel.js";
@@ -27,13 +29,15 @@ const EMPTY_HUD: HudState = { caption: null, labels: [], bars: null };
 
 /** What the app needs before the first step can draw. */
 type Ready = {
+  scene: SceneData;
   story: StoryStep[];
   layers: (frame: Frame) => Layer[];
 };
 
 /** Load everything the story draws. */
 async function startup(_device: Device): Promise<Ready> {
-  return { story: createPlaceholderStory(), layers: () => [] };
+  const scene = await loadScene();
+  return { scene, story: createPlaceholderStory(), layers: () => [] };
 }
 
 /** Whether descriptions were left on (the default) in this browser. */
@@ -164,6 +168,7 @@ export default function App() {
         deck,
         player: () => playerRef.current,
         ready: () => readyRef.current,
+        scene: () => readyRef.current?.scene,
       };
     }
     return () => {
