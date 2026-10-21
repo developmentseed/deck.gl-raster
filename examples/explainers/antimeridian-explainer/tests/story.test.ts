@@ -48,3 +48,56 @@ describe("step 2: two triangles", () => {
     expect(seed?.soup.vertexCount).toBe(6);
   });
 });
+
+/** Each triangle's width along x, from a mesh's soup (3 corners per triangle). */
+function triangleWidths(positions: Float32Array): number[] {
+  const widths: number[] = [];
+  for (let i = 0; i < positions.length; i += 6) {
+    const xs = [positions[i]!, positions[i + 2]!, positions[i + 4]!];
+    widths.push(Math.max(...xs) - Math.min(...xs));
+  }
+  return widths;
+}
+
+describe("step 3: project the corners", () => {
+  it("lands the corners where proj4 puts them, in one world", () => {
+    const corners = end(2).dots.find((d) => d.id === "corners");
+    expect(corners?.view).toBe("world");
+    const xs = corners!.points.map(([x]) => x);
+    expect(xs[0]).toBeCloseTo(503.18, 2);
+    expect(xs[1]).toBeCloseTo(10.18, 2);
+    expect(xs[2]).toBeCloseTo(503.89, 2);
+    expect(xs[3]).toBeCloseTo(7.96, 2);
+  });
+
+  it("stretches both triangles across the world", () => {
+    const seed = end(2).meshes.find((m) => m.id === "plain");
+    expect(seed?.view).toBe("world");
+    const widths = triangleWidths(seed!.soup.positions);
+    expect(widths).toHaveLength(2);
+    for (const width of widths) {
+      expect(width).toBeGreaterThan(256);
+    }
+  });
+});
+
+describe("step 4: refining can't fix it", () => {
+  it("ends on the mesh where refinement gives up", () => {
+    const mesh = end(3).meshes.find((m) => m.id === "plain");
+    expect(mesh?.soup.vertexCount).toBe(3 * 20001);
+  });
+
+  it("counts triangles and error from the scene, not from fixed numbers", () => {
+    const last = scene.plain.length - 1;
+    const changed = {
+      ...scene,
+      plain: scene.plain.map((snapshot, i) =>
+        i === last ? { ...snapshot, maxError: 123.4 } : snapshot,
+      ),
+    };
+    const step = createStory(changed, fakeImage())[3]!;
+    const texts = step.frame(step.durationMs).hud.labels.map((l) => l.text);
+    expect(texts.join(" ")).toContain("20,001 triangles");
+    expect(texts.join(" ")).toContain("123 px");
+  });
+});

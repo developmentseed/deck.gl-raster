@@ -10,9 +10,10 @@ import {
 } from "../scene/layout.js";
 import type { SourceImage } from "../scene/load.js";
 import type { MeshScene } from "../scene/mesh.js";
+import { CORNER_IDS } from "../scene/mesh.js";
 import type { Frame, Label, LineDraw, Rgba, ViewId } from "./frame.js";
 import { emptyFrame } from "./frame.js";
-import { progress } from "./math.js";
+import { easeInOutCubic, lerp, progress } from "./math.js";
 import { createSoup } from "./soup.js";
 
 /** A run of description text: plain, emphasised, or a link. */
@@ -40,8 +41,31 @@ const MUTED = "#8b949e";
 const WHITE: Rgba = [230, 237, 243, 255];
 /** Graticule lines. */
 const GRID: Rgba = [139, 148, 158, 70];
+/** proj4's raw answers, a world away. */
+const RAW: Rgba = [240, 100, 85, 255];
 /** The 180° meridian. */
 const MERIDIAN: Rgba = [255, 166, 87, 255];
+
+/** How long a corner takes to fly from the image to the map, in ms. */
+const FLIGHT_MS = 900;
+
+/** How long the time-lapse holds each snapshot of the refinement, in ms. */
+const SNAPSHOT_MS = 550;
+
+/** A point partway from `from` to `to`, eased. */
+function flyPoint(
+  from: [number, number],
+  to: [number, number],
+  t: number,
+): [number, number] {
+  const e = easeInOutCubic(t);
+  return [lerp(from[0], to[0], e), lerp(from[1], to[1], e)];
+}
+
+/** A count with thousands separators, as the HUD writes it. */
+function count(n: number): string {
+  return n.toLocaleString("en-US");
+}
 
 /** How far past each world edge the whole-world framing shows, in common units. */
 const WORLD_MARGIN = 16;
@@ -323,5 +347,108 @@ export function createStory(
     },
   };
 
-  return [imageStep, seedStep];
+  /** The plain projection's mesh in the whole-world view. */
+  const plainMesh = (
+    snapshot: Snapshot,
+    options: { edges: number; opacity: number },
+  ) => ({
+    id: "plain",
+    view: "world" as const,
+    soup: mapSoup(snapshot),
+    edgeColor: withAlpha(WHITE, options.edges),
+    edgeWidth: 1,
+    opacity: options.opacity,
+  });
+
+  /** The triangle count and error of a mesh, under the map. */
+  const counter = (snapshot: Snapshot, opacity: number): Label =>
+    label(
+      "counter",
+      `${count(snapshot.triangles.length / 3)} triangles · ${count(Math.round(snapshot.maxError))} px off`,
+      [MAP_BOX.x + MAP_BOX.width / 2, MAP_BOX.y + MAP_BOX.height - 24],
+      { color: css(WHITE), opacity, size: 24 },
+    );
+
+  /** Step 3: proj4 puts each corner in one world, so the triangles span it. */
+  const seedPlain = scene.plain[0]!;
+  const cornersStep: StoryStep = {
+    id: "corners",
+    title: "Project the corners",
+    description: [
+      "The reprojector places each corner exactly, with proj4. But proj4 returns every point in one copy of the world, from -180° to 180°. The image's west corners land at the map's east edge, and its east corners at the west edge, so both triangles stretch across the whole world.",
+    ],
+    durationMs: 2600,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushImage(frame, 1);
+      pushWorld(frame, 1);
+      frame.meshes.push({
+        id: "seed",
+        view: "slide",
+        soup: seedSoup,
+        edgeColor: WHITE,
+        edgeWidth: 1.5,
+        opacity: 1,
+      });
+      const landed = progress(t, 0, FLIGHT_MS + 3 * 150) >= 1;
+      if (landed) {
+        frame.dots.push({
+          id: "corners",
+          view: "world",
+          points: CORNER_IDS.map((id) => scene.corners[id].raw),
+          color: RAW,
+          radius: 6,
+        });
+      } else {
+        frame.dots.push({
+          id: "corners-flying",
+          view: "slide",
+          points: CORNER_IDS.map((id, i) =>
+            flyPoint(
+              uvToSlide(scene.corners[id].uv),
+              commonToSlide(worldCamera, scene.corners[id].raw),
+              progress(t, 150 * i, FLIGHT_MS),
+            ),
+          ),
+          color: RAW,
+          radius: 6,
+        });
+      }
+      const stretch = progress(t, FLIGHT_MS + 600, 700);
+      if (stretch > 0) {
+        frame.meshes.push(
+          plainMesh(seedPlain, { edges: stretch, opacity: stretch }),
+        );
+      }
+      frame.hud.caption = "proj4 puts each corner in one world";
+      return frame;
+    },
+  };
+
+  /** Step 4: a time-lapse of refining the plain projection. */
+  const plain = scene.plain;
+  const plainStep: StoryStep = {
+    id: "plain",
+    title: "Refining can't fix it",
+    description: [
+      `Refining adds triangles where the mesh is furthest off. Here it never gets close: after ${count(plain[plain.length - 1]!.triangles.length / 3)} triangles it gives up, still ${count(Math.round(plain[plain.length - 1]!.maxError))} output pixels off. The triangles along 180° still span the world, because the jump is in the projection, not in the mesh.`,
+    ],
+    durationMs: plain.length * SNAPSHOT_MS + 600,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushImage(frame, 1);
+      pushWorld(frame, 1);
+      const index = Math.min(plain.length - 1, Math.floor(t / SNAPSHOT_MS));
+      const snapshot = plain[index]!;
+      const triangles = snapshot.triangles.length / 3;
+      // Fade the edges as the mesh gets denser, so it stays legible.
+      const edges = Math.max(0.12, Math.min(0.8, 8 / Math.sqrt(triangles)));
+      frame.meshes.push(plainMesh(snapshot, { edges, opacity: 1 }));
+      frame.hud.labels.push(counter(snapshot, 1));
+      frame.hud.caption = "More triangles, the same jump";
+      return frame;
+    },
+  };
+
+  return [imageStep, seedStep, cornersStep, plainStep];
 }
