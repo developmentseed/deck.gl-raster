@@ -16,6 +16,7 @@
     "@deck.gl/geo-layers": "^9.4.0",
     "@deck.gl/layers": "^9.4.0",
     "@deck.gl/mesh-layers": "^9.4.0",
+    "@developmentseed/affine": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/geotiff": "workspace:^",
     "@developmentseed/morecantile": "workspace:^",
