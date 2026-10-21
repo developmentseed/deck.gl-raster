@@ -84,10 +84,9 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
     const th = this.tileHeight;
     const af = this._affine;
 
-    // Clip the tile to the array. Tiles in the last column and row extend past
-    // it, and that overhang has no data: layers draw only the part with data,
-    // and points past the array can fall outside the projection's domain
-    // (e.g. Mollweide), which breaks tile culling.
+    // Clip the tile to the array.
+    //
+    // Tiles in the last column and row can extend past the edge of valid data.
     const x0 = Math.min(col * tw, this._arrayWidth);
     const x1 = Math.min((col + 1) * tw, this._arrayWidth);
     const y0 = Math.min(row * th, this._arrayHeight);
