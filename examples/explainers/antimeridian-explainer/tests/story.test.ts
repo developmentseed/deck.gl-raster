@@ -2,7 +2,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Frame } from "../src/animation/frame.js";
 import type { StoryStep } from "../src/animation/story.js";
 import { createStory } from "../src/animation/story.js";
+import { IMAGE_BOX } from "../src/scene/layout.js";
 import type { MeshScene } from "../src/scene/mesh.js";
+import { makeProjection } from "../src/scene/projection.js";
 import { fakeImage } from "./fake-image.js";
 import { fakeMeshScene } from "./fake-scene.js";
 
@@ -167,5 +169,48 @@ describe("step 7: mesh as usual", () => {
     for (const mesh of meshes) {
       expect(mesh.soup.vertexCount).toBe(3 * 40);
     }
+  });
+});
+
+/** Every x of a soup's corners. */
+function soupXs(positions: Float32Array): number[] {
+  return Array.from(positions).filter((_, i) => i % 2 === 0);
+}
+
+describe("step 8: cut at the world's edge", () => {
+  it("ends with the cut mesh, its overhang moved one world over", () => {
+    const clipped = end(7).meshes.find(
+      (m) => m.id === "clipped" && m.view === "strip",
+    );
+    expect(clipped?.soup.vertexCount).toBe(3 * 60);
+    const xs = soupXs(clipped!.soup.positions);
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(-1e-3);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(512 + 1e-3);
+    expect(Math.max(...xs)).toBeGreaterThan(503);
+  });
+
+  it("draws the cut in the image along the 180° meridian", async () => {
+    const { fns, toLngLat } = await makeProjection(fakeImage());
+    const cut = end(7).lines.find((l) => l.id === "cut");
+    expect(cut?.view).toBe("slide");
+    const points = cut!.paths.flat();
+    expect(points.length).toBeGreaterThan(4);
+    for (const [x, y] of points) {
+      const u = (x - IMAGE_BOX.x) / IMAGE_BOX.width;
+      const v = (y - IMAGE_BOX.y) / IMAGE_BOX.height;
+      const [lng] = toLngLat(...fns.forwardTransform(u * 42, v * 42));
+      expect(180 - Math.abs(lng)).toBeLessThan(0.5);
+    }
+  });
+});
+
+describe("step 9: on the map", () => {
+  it("draws the west copy beside the seam, so the moved part meets it", () => {
+    const copy = end(8).meshes.find(
+      (m) => m.id === "copy-west" && m.view === "closeup",
+    );
+    const xs = soupXs(copy!.soup.positions);
+    expect(Math.min(...xs)).toBeCloseTo(-512, 3);
+    expect(xs.some((x) => Math.abs(x - -8.82) < 0.01)).toBe(true);
   });
 });

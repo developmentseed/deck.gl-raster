@@ -20,6 +20,7 @@ import { emptyFrame } from "./frame.js";
 import { easeInOutCubic, lerp, progress } from "./math.js";
 import type { ScheduleOptions } from "./refine-schedule.js";
 import { scheduleRefinement } from "./refine-schedule.js";
+import type { UnitColor } from "./soup.js";
 import { createSoup } from "./soup.js";
 
 /** A run of description text: plain, emphasised, or a link. */
@@ -90,6 +91,65 @@ const REFINE_SCHEDULE: ScheduleOptions = {
 /** An error in output pixels, as the counter writes it. */
 function errorText(error: number): string {
   return `${error < 10 ? error.toFixed(2) : count(Math.round(error))} px`;
+}
+
+/** When step 8 cuts the crossing triangles, in ms. */
+const CUT_MS = 900;
+
+/** When step 8 starts moving the overhang one world over, in ms. */
+const SWAP_MS = 1500;
+
+/** How long the overhang takes to move one world over, in ms. */
+const MOVE_MS = 1600;
+
+/** The reprojection explainer, for how refinement chooses its splits. */
+const REPROJECTION_EXPLAINER_URL =
+  "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/";
+
+/** The x of a triangle's centroid. */
+function centroidX(mesh: Mesh2D, t: number): number {
+  let sum = 0;
+  for (let k = 0; k < 3; k++) {
+    sum += mesh.positions[2 * mesh.triangles[3 * t + k]!]!;
+  }
+  return sum / 3;
+}
+
+/** The mesh with only the triangles `keep` accepts. */
+function subMesh(mesh: Mesh2D, keep: (t: number) => boolean): Mesh2D {
+  const triangles: number[] = [];
+  for (let t = 0; t < mesh.triangles.length / 3; t++) {
+    if (keep(t)) {
+      triangles.push(...mesh.triangles.slice(3 * t, 3 * t + 3));
+    }
+  }
+  return { ...mesh, triangles };
+}
+
+/**
+ * The cut, in texture coordinates: the edges of the cut mesh that lie on the
+ * world's edge (x 0 or 512) at both ends.
+ */
+function cutSegments(mesh: Mesh2D): [[number, number], [number, number]][] {
+  const onCut = (v: number) => {
+    const x = mesh.positions[2 * v]!;
+    return Math.abs(x) < 1e-6 || Math.abs(x - PERIOD) < 1e-6;
+  };
+  const uv = (v: number): [number, number] => [
+    mesh.uvs[2 * v]!,
+    mesh.uvs[2 * v + 1]!,
+  ];
+  const segments: [[number, number], [number, number]][] = [];
+  for (let t = 0; t < mesh.triangles.length / 3; t++) {
+    for (let k = 0; k < 3; k++) {
+      const a = mesh.triangles[3 * t + k]!;
+      const b = mesh.triangles[3 * t + ((k + 1) % 3)]!;
+      if (onCut(a) && onCut(b)) {
+        segments.push([uv(a), uv(b)]);
+      }
+    }
+  }
+  return segments;
 }
 
 /** How long the probe takes to sweep the image one way, in ms. */
@@ -201,12 +261,18 @@ function label(
 function imageSoup(mesh: {
   triangles: ArrayLike<number>;
   uvs: ArrayLike<number>;
+  tintOf?: (triangle: number) => UnitColor | null;
 }): TriangleSoup {
   const positions: number[] = [];
   for (let i = 0; i < mesh.uvs.length; i += 2) {
     positions.push(...uvToSlide([mesh.uvs[i]!, mesh.uvs[i + 1]!]));
   }
-  return createSoup({ triangles: mesh.triangles, positions, uvs: mesh.uvs });
+  return createSoup({
+    triangles: mesh.triangles,
+    positions,
+    uvs: mesh.uvs,
+    tintOf: mesh.tintOf,
+  });
 }
 
 /** A mesh's triangles at their positions in common space, moved `dx` along x. */
@@ -871,6 +937,166 @@ export function createStory(
     },
   };
 
+  /** Step 8: cut the mesh at the world's edge, and move the overhang over. */
+  const crossing = new Set(scene.crossing);
+  const clipped = scene.clipped;
+  const movedPart = subMesh(clipped, (t) => centroidX(clipped, t) > PERIOD / 2);
+  const stayPart = subMesh(clipped, (t) => centroidX(clipped, t) <= PERIOD / 2);
+  const cutPaths = cutSegments(clipped).map(([a, b]): [number, number][] => [
+    uvToSlide(a),
+    uvToSlide(b),
+  ]);
+  const crossingTint = (t: number): UnitColor | null =>
+    crossing.has(t) ? [0.94, 0.39, 0.33, 0.55] : null;
+  const cutStep: StoryStep = {
+    id: "cut",
+    title: "Cut at the world's edge",
+    description: [
+      `The mesh hangs past the world's west edge, which the map can't draw. So the layer cuts the ${scene.crossing.length} triangles that cross it along -180°, leaving ${count(clipped.triangles.length / 3)} triangles, and moves the part past the edge one world over, to the map's east edge. In the image, the cut runs along the 180° meridian.`,
+    ],
+    durationMs: SWAP_MS + MOVE_MS + 700,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushImage(frame, 1);
+      pushSplit(frame, { split: 1, opacity: 1 });
+      if (t < CUT_MS) {
+        frame.meshes.push(
+          {
+            id: "image-mesh",
+            view: "slide",
+            soup: imageSoup({ ...scene.mesh, tintOf: crossingTint }),
+            edgeColor: withAlpha(WHITE, 0.8),
+            edgeWidth: 1,
+            opacity: 1,
+          },
+          {
+            id: "mesh",
+            view: "strip",
+            soup: mapSoup(scene.mesh),
+            edgeColor: [0, 0, 0, 0],
+            edgeWidth: 1,
+            opacity: 1,
+          },
+          {
+            id: "mesh",
+            view: "closeup",
+            soup: createSoup({ ...scene.mesh, tintOf: crossingTint }),
+            edgeColor: withAlpha(WHITE, 0.85),
+            edgeWidth: 1,
+            opacity: 1,
+          },
+        );
+        frame.hud.caption = `${scene.crossing.length} triangles cross the world's edge`;
+        return frame;
+      }
+      const move = easeInOutCubic(progress(t, SWAP_MS, MOVE_MS));
+      frame.meshes.push(
+        {
+          id: "image-clipped",
+          view: "slide",
+          soup: imageSoup(clipped),
+          edgeColor: withAlpha(WHITE, 0.8),
+          edgeWidth: 1,
+          opacity: 1,
+        },
+        {
+          id: "clipped-stay",
+          view: "closeup",
+          soup: mapSoup(stayPart),
+          edgeColor: withAlpha(WHITE, 0.85),
+          edgeWidth: 1,
+          opacity: 1,
+        },
+        {
+          id: "clipped-leaving",
+          view: "closeup",
+          soup: mapSoup(movedPart, -PERIOD),
+          edgeColor: withAlpha(WHITE, 0.85 * (1 - move)),
+          edgeWidth: 1,
+          opacity: 1 - move,
+        },
+      );
+      if (move < 1) {
+        frame.meshes.push(
+          {
+            id: "clipped-stay",
+            view: "strip",
+            soup: mapSoup(stayPart),
+            edgeColor: [0, 0, 0, 0],
+            edgeWidth: 1,
+            opacity: 1,
+          },
+          {
+            id: "clipped-moving",
+            view: "strip",
+            soup: mapSoup(movedPart, -PERIOD * (1 - move)),
+            edgeColor: [0, 0, 0, 0],
+            edgeWidth: 1,
+            opacity: 1,
+          },
+        );
+      } else {
+        frame.meshes.push({
+          id: "clipped",
+          view: "strip",
+          soup: mapSoup(clipped),
+          edgeColor: [0, 0, 0, 0],
+          edgeWidth: 1,
+          opacity: 1,
+        });
+      }
+      frame.lines.push({
+        id: "cut",
+        view: "slide",
+        paths: cutPaths,
+        color: RAW,
+        width: 3,
+      });
+      frame.hud.caption = "Cut at -180°, and move the overhang one world over";
+      return frame;
+    },
+  };
+
+  /** Step 9: every copy of the world is drawn, so the parts meet at the seam. */
+  const onMapStep: StoryStep = {
+    id: "on-the-map",
+    title: "On the map",
+    description: [
+      "The map draws a copy of every world side by side, so the part moved to the east edge also appears just west of the seam, in the next world over, beside the rest of the image. The two parts meet along 180°, and the image is continuous. To see how the reprojector chooses where to split, see the ",
+      { text: "reprojection explainer", href: REPROJECTION_EXPLAINER_URL },
+      ".",
+    ],
+    durationMs: 2400,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushImage(frame, 1);
+      pushSplit(frame, { split: 1, opacity: 1 });
+      const edges = 0.8 * (1 - progress(t, 600, 1400));
+      for (const [id, dx] of [
+        ["clipped", 0],
+        ["copy-west", -PERIOD],
+        ["copy-east", PERIOD],
+      ] as const) {
+        for (const view of ["strip", "closeup"] as const) {
+          if (view === "closeup" && id === "copy-east") {
+            continue;
+          }
+          frame.meshes.push({
+            id,
+            view,
+            soup: mapSoup(clipped, dx),
+            edgeColor: withAlpha(WHITE, view === "closeup" ? edges : 0),
+            edgeWidth: 1,
+            opacity: 1,
+          });
+        }
+      }
+      frame.hud.caption =
+        "Every world is drawn, so the two parts meet at the seam";
+      return frame;
+    },
+  };
+
   return [
     imageStep,
     seedStep,
@@ -879,5 +1105,7 @@ export function createStory(
     walkStep,
     probeStep,
     meshStep,
+    cutStep,
+    onMapStep,
   ];
 }
