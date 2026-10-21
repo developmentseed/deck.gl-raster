@@ -153,11 +153,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     // Read `extent` on every call: TileLayer updates it through `setOptions`.
     const extent = this.opts.extent as Bounds | null;
     if (extent) {
-      indices = indices.filter((i) =>
-        splitAtAntimeridian(unwrapBbox(sources[i]!.bbox)).some((box) =>
-          overlaps(box, extent),
-        ),
-      );
+      indices = indices.filter((i) => overlapsExtent(sources[i]!.bbox, extent));
     }
 
     return indices.map((sourceIndex) => {
@@ -245,6 +241,20 @@ function searchBounds(viewport: Viewport): Bounds[] {
   }
   const west = nearestCopy(minX, 0, 360);
   return splitAtAntimeridian([west, minY, west + (maxX - minX), maxY]);
+}
+
+/**
+ * Whether a source's bbox overlaps `extent`. A bbox across the antimeridian is
+ * split first, so each side is tested on its own; any other bbox is tested
+ * without allocating, since this runs for each matched source on every call.
+ */
+function overlapsExtent(bbox: Bounds, extent: Bounds): boolean {
+  if (bbox[0] <= bbox[2]) {
+    return overlaps(bbox, extent);
+  }
+  return splitAtAntimeridian(unwrapBbox(bbox)).some((box) =>
+    overlaps(box, extent),
+  );
 }
 
 /**
