@@ -3,7 +3,13 @@ import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
 import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
-import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
+import {
+  Compression,
+  Photometric,
+  SubFileType,
+  Tiff,
+  TiffTag,
+} from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { apply } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
@@ -199,6 +205,19 @@ export class GeoTIFF {
     // Force loading of important tags in sub-images
     // https://github.com/blacha/cogeotiff/blob/4781a6375adf419da9f0319d15c8a67284dfb0c4/packages/core/src/tiff.image.ts#L72-L88
     await Promise.all(images.map((image) => image.init(true, { signal })));
+
+    // Every JPEG tile read prepends its image's JPEG tables, and
+    // `getJpegHeader` throws if they aren't loaded. cogeotiff only reads a tag
+    // with its IFD when the tag's bytes were in that first read; otherwise the
+    // tag stays lazy until fetched. So load the tables for each JPEG image
+    // now.
+    await Promise.all(
+      images.map((image) =>
+        image.value(TiffTag.Compression) === Compression.Jpeg
+          ? image.fetch(TiffTag.JpegTables, { signal })
+          : null,
+      ),
+    );
 
     const primaryImage = images[0]!;
     const gkd = extractGeoKeyDirectory(primaryImage);
