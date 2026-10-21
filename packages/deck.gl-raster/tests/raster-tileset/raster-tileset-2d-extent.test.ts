@@ -65,10 +65,9 @@ function makeViewport(): WebMercatorViewport {
   });
 }
 
-// The traversal can return the same tile more than once, so compare the
-// unique `z/x/y` keys.
+/** Sorted `z/x/y` keys of `indices`. */
 function tileKeys(indices: TileIndex[]): string[] {
-  return [...new Set(indices.map(({ x, y, z }) => `${z}/${x}/${y}`))].sort();
+  return indices.map(({ x, y, z }) => `${z}/${x}/${y}`).sort();
 }
 
 /**
