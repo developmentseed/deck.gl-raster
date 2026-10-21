@@ -43,6 +43,7 @@ import type {
   TileIndex,
   ZRange,
 } from "./types.js";
+import { visibleWorldBounds } from "./visible-world-bounds.js";
 
 /**
  * The size of the entire world in deck.gl's common coordinate space.
@@ -846,17 +847,18 @@ const MAX_ROOT_TILES_NO_CULL = 100;
  * traversal.
  *
  * Large root matrices are culled to the intersection of the dataset extent
- * (`datasetWgs84Bounds`) and the viewport's WGS84 bounds, projected into
- * the source CRS via `transformBounds` (which densifies the edges so a
- * curving projection doesn't escape the 4-corner hull). If the viewport
- * and dataset don't overlap, an empty array is returned and the rest of
- * the traversal short-circuits.
+ * (`datasetWgs84Bounds`) and each part of the world the viewport shows
+ * ({@link visibleWorldBounds}), projected into the source CRS via
+ * `transformBounds` (which densifies the edges so a curving projection
+ * doesn't escape the 4-corner hull). A view across the antimeridian shows
+ * two parts. If the viewport and dataset don't overlap, an empty array is
+ * returned and the rest of the traversal short-circuits.
  *
  * Exported for unit testing.
  */
 export function createRootTiles(opts: {
   descriptor: RasterTilesetDescriptor;
-  viewport: Pick<Viewport, "getBounds">;
+  viewport: Pick<Viewport, "getBounds" | "subViewports">;
   datasetWgs84Bounds: Bounds;
 }): RasterTileNode[] {
   const { descriptor, viewport, datasetWgs84Bounds } = opts;
@@ -876,26 +878,65 @@ export function createRootTiles(opts: {
     return roots;
   }
 
-  // Large root matrix → intersect dataset extent with viewport, project
-  // to source CRS, use the root level's tile-range helper.
-  const cullBounds = intersectBounds(datasetWgs84Bounds, viewport.getBounds());
-  if (cullBounds[0] > cullBounds[2] || cullBounds[1] > cullBounds[3]) {
-    return roots;
+  // Large root matrix → intersect dataset extent with each part of the world
+  // in view, project to source CRS, use the root level's tile-range helper.
+  // A dataset can be stored past ±180° (e.g. from 0° to 360°), so each part
+  // is also tried one world to either side.
+  const ranges: TileRange[] = [];
+  for (const viewBounds of visibleWorldBounds(viewport)) {
+    for (const shift of [-360, 0, 360]) {
+      const cullBounds = intersectBounds(datasetWgs84Bounds, [
+        viewBounds[0] + shift,
+        viewBounds[1],
+        viewBounds[2] + shift,
+        viewBounds[3],
+      ]);
+      if (cullBounds[0] >= cullBounds[2] || cullBounds[1] >= cullBounds[3]) {
+        continue;
+      }
+      const [minX, minY, maxX, maxY] = transformBounds(
+        descriptor.projectFrom4326,
+        cullBounds[0],
+        cullBounds[1],
+        cullBounds[2],
+        cullBounds[3],
+      );
+      ranges.push(rootLevel.crsBoundsToTileRange(minX, minY, maxX, maxY));
+    }
   }
-  const [minX, minY, maxX, maxY] = transformBounds(
-    descriptor.projectFrom4326,
-    cullBounds[0],
-    cullBounds[1],
-    cullBounds[2],
-    cullBounds[3],
-  );
-  const rootRange = rootLevel.crsBoundsToTileRange(minX, minY, maxX, maxY);
-  for (let y = rootRange.minRow; y <= rootRange.maxRow; y++) {
-    for (let x = rootRange.minCol; x <= rootRange.maxCol; x++) {
-      roots.push(new RasterTileNode(x, y, 0, { descriptor }));
+
+  // Both parts of a view across the antimeridian can fall in one root tile,
+  // so a tile an earlier range covers is skipped.
+  for (let i = 0; i < ranges.length; i++) {
+    const range = ranges[i]!;
+    const earlier = ranges.slice(0, i);
+    for (let y = range.minRow; y <= range.maxRow; y++) {
+      for (let x = range.minCol; x <= range.maxCol; x++) {
+        if (!coversTile(earlier, x, y)) {
+          roots.push(new RasterTileNode(x, y, 0, { descriptor }));
+        }
+      }
     }
   }
   return roots;
+}
+
+/** A range of tiles in one level, as `crsBoundsToTileRange` returns it. */
+type TileRange = ReturnType<RasterTilesetLevel["crsBoundsToTileRange"]>;
+
+/** Whether one of `ranges` covers tile `x`, `y`. */
+function coversTile(ranges: TileRange[], x: number, y: number): boolean {
+  for (const range of ranges) {
+    if (
+      x >= range.minCol &&
+      x <= range.maxCol &&
+      y >= range.minRow &&
+      y <= range.maxRow
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

@@ -1,10 +1,15 @@
-import { WebMercatorViewport } from "@deck.gl/core";
+import {
+  _GlobeViewport as GlobeViewport,
+  WebMercatorViewport,
+} from "@deck.gl/core";
+import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { describe, expect, it } from "vitest";
 import { BoundingVolumeCache } from "../../src/raster-tileset/bounding-volume-cache.js";
 import {
   getTileIndices,
   RasterTileNode,
 } from "../../src/raster-tileset/raster-tile-traversal.js";
+import { TileMatrixSetAdaptor } from "../../src/raster-tileset/tile-matrix-set.js";
 import type { RasterTilesetDescriptor } from "../../src/raster-tileset/tileset-interface.js";
 import type { Bounds } from "../../src/raster-tileset/types.js";
 
@@ -221,4 +226,66 @@ describe("tile selection around a pole", () => {
       }
     });
   }
+});
+
+describe("root tiles across the antimeridian", () => {
+  /** EPSG:3857 metres to longitude/latitude. */
+  function lngLatFrom3857(x: number, y: number): [number, number] {
+    const lat = 2 * Math.atan(Math.exp((y / HALF_WORLD_METRES) * Math.PI));
+    return [
+      (x / HALF_WORLD_METRES) * 180,
+      ((lat - Math.PI / 2) * 180) / Math.PI,
+    ];
+  }
+
+  // A global longitude/latitude grid of 360 x 180 one-degree root tiles: more
+  // than 100, so `createRootTiles` creates only the ones in view.
+  const tms: TileMatrixSet = {
+    crs: "http://www.opengis.net/def/crs/OGC/1.3/CRS84",
+    boundingBox: { lowerLeft: [-180, -90], upperRight: [180, 90] },
+    tileMatrices: [
+      {
+        id: "0",
+        scaleDenominator: 397569609.9759771,
+        cellSize: 1 / 256,
+        cornerOfOrigin: "topLeft",
+        pointOfOrigin: [-180, 90],
+        tileWidth: 256,
+        tileHeight: 256,
+        matrixWidth: 360,
+        matrixHeight: 180,
+      },
+    ],
+  };
+  const grid = new TileMatrixSetAdaptor(tms, {
+    projectTo3857: lngLatTo3857,
+    projectFrom3857: lngLatFrom3857,
+    projectTo4326: identity,
+    projectFrom4326: identity,
+  });
+  // About 17.6° of longitude wide, so it shows 171.1° to 188.7°.
+  const view = {
+    longitude: 179.9,
+    latitude: 0,
+    zoom: 5,
+    width: 800,
+    height: 600,
+  };
+
+  it.each([
+    [
+      "Web Mercator with repeat",
+      new WebMercatorViewport({ ...view, repeat: true }),
+    ],
+    ["a globe", new GlobeViewport(view)],
+  ])("selects tiles past 180° in %s", (_name, viewport) => {
+    const tiles = getTileIndices(grid, {
+      viewport,
+      maxZ: 0,
+      zRange: null,
+      wgs84Bounds: [-180, -85, 180, 85],
+    });
+    // Columns 0-8 cover -180° to -171°, the part of the view past 180°.
+    expect(tiles.filter(({ x }) => x < 9).length).toBeGreaterThan(0);
+  });
 });

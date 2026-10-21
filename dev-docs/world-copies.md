@@ -104,8 +104,10 @@ viewport's bounds run past ±180°. Past ±180°, Web Mercator with `repeat` sho
 another copy of the world, and a globe shows the other side of the
 antimeridian. (A globe has no `subViewports`, but its `getBounds()` runs past
 ±180° too.) So the search moves the bounds back within [-180, 180], and splits
-them in two at ±180° if they cross it. Web Mercator without `repeat` draws
-nothing past ±180°, so its bounds are searched as they are.
+them in two at ±180° if they cross it
+([`visibleWorldBounds`](../packages/deck.gl-raster/src/raster-tileset/visible-world-bounds.ts)).
+Web Mercator without `repeat` draws nothing past ±180°, so its bounds are cut
+off there.
 
 The search doesn't walk world offsets like the traversal does. Every source
 lies in the primary world, so the moved bounds cover every copy the viewport
@@ -114,9 +116,11 @@ shows.
 A source whose bbox crosses the antimeridian, written with `minX > maxX` as in
 GeoJSON and STAC, is indexed as two boxes, one on each side of it.
 
-## Out of scope
+## Root tiles
 
-- The large-zarr-root cull path in `createRootTiles` does not yet consider
-  world-copy intersections. For typical OGC pyramids this doesn't matter
-  (root tiles are enumerated unconditionally). If a zarr dataset hits the
-  same symptom, generalize that path.
+The traversal starts from the coarsest level's tiles. When there are more than
+100 of them, as in a single-level Zarr, `createRootTiles` creates only the ones
+in view, before any pass runs, so the world-copy passes can't reach a tile
+whose root it left out. It finds them with the same `visibleWorldBounds` boxes
+as the mosaic search. Each box is also tried one world to either side, since a
+dataset can be stored past ±180°, e.g. from 0° to 360°.

@@ -76,10 +76,11 @@ describe("visibleWorldBounds", () => {
     expect(boxes[1]![0]).toBe(-180);
   });
 
-  it("returns Web Mercator bounds without repeat as they are", () => {
+  it("cuts Web Mercator bounds without repeat off at 180°", () => {
+    // Nothing is drawn past 180°.
     const viewport = new WebMercatorViewport({ ...view, longitude: 179.9 });
     expect(longitudes(visibleWorldBounds(viewport))).toEqual([
-      [175.505469, 184.294531],
+      [175.505469, 180],
     ]);
   });
 });
