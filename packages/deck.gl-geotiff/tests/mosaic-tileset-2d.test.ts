@@ -31,7 +31,7 @@ function buildIndex(sources: MosaicSource[]): Flatbush | null {
 
 function makeTileset<T extends MosaicSource>(
   sources: T[],
-  opts: { maxRequests?: number } = {},
+  opts: { maxRequests?: number; extent?: number[] } = {},
 ): MosaicTileset2D<T> {
   const index = buildIndex(sources);
   return new MosaicTileset2D<T>(
@@ -42,6 +42,8 @@ function makeTileset<T extends MosaicSource>(
       ...(opts.maxRequests !== undefined
         ? { maxRequests: opts.maxRequests }
         : {}),
+      // deck.gl's TileLayer always passes `extent`, `null` by default.
+      extent: opts.extent ?? null,
     } as unknown as Tileset2DProps,
   );
 }
@@ -123,5 +125,68 @@ describe("MosaicTileset2D tile ids", () => {
     });
     expect(result[0]).toMatchObject({ name: "explicit", id: "stable-id" });
     expect(tileset.getTileId(result[0]!)).toBe("stable-id");
+  });
+});
+
+describe("MosaicTileset2D extent", () => {
+  // Shows all of A, B and C.
+  const viewport = makeViewport([-1, -1, 51, 11]);
+  const names = (sources: Item[]) => sources.map((s) => s.name).sort();
+
+  it("selects only the sources that overlap the extent", () => {
+    // Covers part of A and part of B. Asymmetric, so reading it with swapped
+    // axes would select only A.
+    const tileset = makeTileset([A, B, C], { extent: [5, 2, 25, 8] });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual(["A", "B"]);
+  });
+
+  it("keeps array-position ids when the extent skips an earlier source", () => {
+    // Skips A. B and C still get ids from their positions in `sources`.
+    const tileset = makeTileset([A, B, C], { extent: [25, 2, 45, 8] });
+    const result = tileset.getTileIndices({ viewport });
+    const ids = Object.fromEntries(
+      result.map((s) => [s.name, tileset.getTileId(s)]),
+    );
+    expect(ids).toEqual({ B: "1", C: "2" });
+  });
+
+  it("skips sources that only touch the extent", () => {
+    // Shares A's east edge and B's west edge. deck.gl's TileLayer likewise
+    // skips tiles that only touch its extent.
+    const sideBySide = makeTileset([A, B, C], { extent: [10, 0, 20, 10] });
+    expect(names(sideBySide.getTileIndices({ viewport }))).toEqual([]);
+
+    // Shares the north edges of A, B and C.
+    const above = makeTileset([A, B, C], { extent: [0, 10, 50, 20] });
+    expect(names(above.getTileIndices({ viewport }))).toEqual([]);
+  });
+
+  it("keeps a visible source whose overlap with the extent is off-screen", () => {
+    // `wide` reaches the extent off-screen to the east, and a source is drawn
+    // in full, so its west end stays on screen. `near` is on screen but
+    // misses the extent.
+    const wide: Item = { name: "wide", bbox: [0, 0, 100, 10] };
+    const near: Item = { name: "near", bbox: [0, 20, 10, 30] };
+    const tileset = makeTileset([wide, near], { extent: [80, 0, 90, 10] });
+    const result = tileset.getTileIndices({
+      viewport: makeViewport([-1, -1, 11, 31]),
+    });
+    expect(names(result)).toEqual(["wide"]);
+  });
+
+  it("applies an extent changed through setOptions on the next call", () => {
+    const tileset = makeTileset([A, B, C]);
+    const getTileData = () => new Promise(() => {});
+
+    // deck.gl's TileLayer calls `setOptions` when its props change.
+    tileset.setOptions({ getTileData, extent: [5, 2, 25, 8] });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual(["A", "B"]);
+
+    tileset.setOptions({ getTileData, extent: null });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual([
+      "A",
+      "B",
+      "C",
+    ]);
   });
 });

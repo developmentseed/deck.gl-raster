@@ -1,7 +1,9 @@
 import Link from "@docusaurus/Link";
 import Heading from "@theme/Heading";
 import Layout from "@theme/Layout";
+import clsx from "clsx";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { FaGithub } from "react-icons/fa";
 
 import styles from "./styles.module.css";
@@ -10,9 +12,13 @@ type Example = {
   title: string;
   description: ReactNode;
   href: string;
-  image: string;
+  /** One image, or several screenshots for the card to cycle through. */
+  image: string | string[];
   source: string;
 };
+
+/** How long a multi-image card shows each screenshot before the next. */
+const SLIDESHOW_INTERVAL_MS = 2000;
 
 const cogExamples: Example[] = [
   {
@@ -91,7 +97,13 @@ const cogExamples: Example[] = [
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/sentinel-2/",
-    image: "/deck.gl-raster/img/sentinel-2-examples-card.jpg",
+    image: [
+      "/deck.gl-raster/img/sentinel-2-examples-card.jpg",
+      "/deck.gl-raster/img/sentinel-2-kamchatka.jpg",
+      "/deck.gl-raster/img/sentinel-2-mt-etna.jpg",
+      "/deck.gl-raster/img/sentinel-2-nile-delta.jpg",
+      "/deck.gl-raster/img/sentinel-2-sossusvlei.jpg",
+    ],
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/sentinel-2",
   },
@@ -163,6 +175,138 @@ const zarrExamples: Example[] = [
   },
 ];
 
+/**
+ * Examples published to show what deck.gl-raster makes possible, before their
+ * architecture has been reviewed and endorsed.
+ *
+ * Their sources live under `examples/experimental/`, but their `href` omits
+ * that segment — the published URL must not change when an example graduates,
+ * so promotion is a pure `git mv`.
+ */
+const experimentalExamples: Example[] = [
+  {
+    title: "Preview: Custom Projections",
+    description: (
+      <>
+        Render COGs in polar stereographic, Equal Earth, and other map
+        projections. A preview of deck.gl v10's custom projection support.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/custom-projection/",
+    image: "/deck.gl-raster/img/custom-projection-antarctica-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/custom-projection",
+  },
+  {
+    title: "GeoArrow Overlay",
+    description: (
+      <>
+        3.4 million GeoArrow points, streamed from Parquet with parquet-wasm,
+        over a global imagery COG.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/geoarrow-overlay/",
+    image: "/deck.gl-raster/img/geoarrow-overlay-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/geoarrow-overlay",
+  },
+  {
+    title: "Titiler Tiles",
+    description: (
+      <>
+        Render NumPy array tiles from a{" "}
+        <Link to="https://developmentseed.org/titiler/">titiler</Link> server
+        with{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-raster/classes/RasterTileLayer/">
+          RasterTileLayer
+        </Link>
+        .
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/titiler-cog/",
+    image: "/deck.gl-raster/img/titiler-cog-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/titiler-cog",
+  },
+  {
+    title: "COG on Terrain",
+    description: (
+      <>
+        Drape COGs in their own projections over Web Mercator 3D terrain tiles
+        with deck.gl's experimental TerrainExtension.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/cog-terrain/",
+    image: "/deck.gl-raster/img/cog-terrain-naip-pikes-peak.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/cog-terrain",
+  },
+];
+
+/**
+ * Animated explanations of how deck.gl-raster works internally. Their code is
+ * unreviewed and not meant as a pattern to copy.
+ *
+ * Their sources live under `examples/explainers/`, but their `href` omits that
+ * segment, like the experimental examples.
+ */
+const explainerExamples: Example[] = [
+  {
+    title: "Reprojection Explainer",
+    description: (
+      <>
+        A step-by-step animation of how deck.gl-raster reprojects a raster on
+        the GPU.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/",
+    image: "/deck.gl-raster/img/reprojection-explainer-examples-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/explainers/reprojection-explainer",
+  },
+];
+
+/**
+ * Crossfade through several screenshots of one example, holding each for
+ * {@link SLIDESHOW_INTERVAL_MS}. Stays on the first when the viewer prefers
+ * reduced motion.
+ */
+function CardSlideshow({
+  images,
+  title,
+}: {
+  images: string[];
+  title: string;
+}): ReactNode {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    const id = setInterval(() => {
+      setActive((i) => (i + 1) % images.length);
+    }, SLIDESHOW_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [images.length]);
+
+  return (
+    <div className={styles.cardSlideshow}>
+      {images.map((src, i) => (
+        <img
+          key={src}
+          src={src}
+          alt={i === 0 ? title : ""}
+          className={clsx(
+            styles.cardImage,
+            i !== active && styles.cardImageHidden,
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
 function ExampleCard({
   title,
   description,
@@ -173,7 +317,11 @@ function ExampleCard({
   return (
     <div className={styles.card}>
       <Link href={href} target="_blank" rel="noopener noreferrer">
-        <img src={image} alt={title} className={styles.cardImage} />
+        {typeof image === "string" ? (
+          <img src={image} alt={title} className={styles.cardImage} />
+        ) : (
+          <CardSlideshow images={image} title={title} />
+        )}
       </Link>
       <div className={styles.cardBody}>
         <Heading as="h3">{title}</Heading>
@@ -229,6 +377,26 @@ export default function Examples(): ReactNode {
           <Heading as="h2">Zarr Examples</Heading>
           <div className={styles.grid}>
             {zarrExamples.map((ex) => (
+              <ExampleCard key={ex.title} {...ex} />
+            ))}
+          </div>
+          <Heading as="h2">Experimental Examples</Heading>
+          <p className={styles.intro}>
+            These demonstrate what deck.gl-raster makes possible, but their
+            architecture has not been reviewed and endorsed. Treat them as
+            demonstrations rather than patterns to copy.
+          </p>
+          <div className={styles.grid}>
+            {experimentalExamples.map((ex) => (
+              <ExampleCard key={ex.title} {...ex} />
+            ))}
+          </div>
+          <Heading as="h2">Explainers</Heading>
+          <p className={styles.intro}>
+            Animated explanations of how deck.gl-raster works under the hood.
+          </p>
+          <div className={styles.grid}>
+            {explainerExamples.map((ex) => (
               <ExampleCard key={ex.title} {...ex} />
             ))}
           </div>

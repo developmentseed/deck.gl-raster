@@ -2,6 +2,8 @@ export {
   BlackIsZero,
   CMYKToRGB,
   cieLabToRGB,
+  GrayAlpha,
+  Opaque,
   WhiteIsZero,
   YCbCrToRGB,
 } from "./color/index.js";

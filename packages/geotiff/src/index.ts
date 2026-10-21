@@ -7,6 +7,7 @@ export type {
 } from "./array.js";
 export type { AssembleTilesOptions } from "./assemble.js";
 export { assembleTiles } from "./assemble.js";
+export { ColorInterp } from "./colorinterp.js";
 export { parseColormap } from "./colormap.js";
 export type {
   DecodedBandSeparate,

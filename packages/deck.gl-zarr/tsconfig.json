@@ -8,10 +8,10 @@
   "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"],
   "references": [
-    { "path": "../affine" },
-    { "path": "../deck.gl-raster" },
-    { "path": "../geozarr" },
-    { "path": "../proj" },
-    { "path": "../raster-reproject" }
+    { "path": "../affine/tsconfig.build.json" },
+    { "path": "../deck.gl-raster/tsconfig.build.json" },
+    { "path": "../geozarr/tsconfig.build.json" },
+    { "path": "../proj/tsconfig.build.json" },
+    { "path": "../raster-reproject/tsconfig.build.json" }
   ]
 }

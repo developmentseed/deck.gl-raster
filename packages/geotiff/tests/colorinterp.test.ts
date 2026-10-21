@@ -102,6 +102,21 @@ describe("inferColorInterpretation", () => {
     ]);
   });
 
+  it("maps associated (premultiplied) alpha to ALPHA, as GDAL does", () => {
+    expect(
+      inferColorInterpretation({
+        count: 4,
+        photometric: Photometric.Rgb,
+        extraSamples: [ExtraSample.AssociatedAlpha],
+      }),
+    ).toEqual([
+      ColorInterp.RED,
+      ColorInterp.GREEN,
+      ColorInterp.BLUE,
+      ColorInterp.ALPHA,
+    ]);
+  });
+
   it("pads RGB with a trailing non-alpha band to one entry per band", () => {
     expect(
       inferColorInterpretation({

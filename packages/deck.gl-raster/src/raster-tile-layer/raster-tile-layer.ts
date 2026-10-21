@@ -19,6 +19,7 @@ import type { RenderTileResult } from "../raster-layer.js";
 import { RasterLayer } from "../raster-layer.js";
 import type { RasterTilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
+import { TILE_SIZE } from "../raster-tileset/raster-tile-traversal.js";
 import type { RasterTileMetadata } from "../raster-tileset/raster-tileset-2d.js";
 
 /**
@@ -111,7 +112,10 @@ export type RasterTileLayerProps<
     renderTile?: (data: DataT) => RenderTileResult | null;
 
     /**
-     * Maximum reprojection error in pixels for mesh refinement.
+     * Maximum reprojection error for mesh refinement: how far a tile's mesh
+     * may draw a point from where it belongs on the map, in output pixels
+     * (one input pixel's size on the map, normally at the center of the
+     * meshed area).
      * Lower values create denser meshes.
      * @default 0.125
      */
@@ -134,6 +138,25 @@ export type RasterTileLayerProps<
      * per-tile signal.
      */
     signal?: AbortSignal;
+
+    /**
+     * Lowest and highest elevation, in meters, of the surface the raster is
+     * drawn on, such as the terrain under a COG draped with deck.gl's
+     * `TerrainExtension`.
+     *
+     * Tiles are selected for the volume between these heights instead of for
+     * the ground at sea level, so tiles the terrain lifts into view still
+     * load. This only changes which tiles load; it doesn't move the raster.
+     * Ignored in `GlobeView`.
+     *
+     * A deck.gl `TerrainLayer`'s tiles report their elevations: in its
+     * `onTileLoad`, each tile's mesh has a `header.boundingBox`, which is
+     * also how `TerrainLayer` sets its own `zRange`. The `cog-terrain`
+     * example widens this range as terrain tiles load.
+     *
+     * @default null
+     */
+    zRange?: [number, number] | null;
   };
 
 const defaultProps: DefaultProps<RasterTileLayerProps> = {
@@ -141,6 +164,9 @@ const defaultProps: DefaultProps<RasterTileLayerProps> = {
   maxError: 0.125,
   debug: false,
   debugOpacity: 0.5,
+  // Compared by value, so an inline array doesn't re-render the layer on
+  // every update.
+  zRange: { type: "array", value: null, optional: true, compare: true },
 };
 
 /**
@@ -344,6 +370,7 @@ export class RasterTileLayer<
       maxCacheByteSize,
       maxRequests,
       refinementStrategy,
+      zRange,
       updateTriggers,
       onTileError,
       onTileLoad,
@@ -378,6 +405,7 @@ export class RasterTileLayer<
       maxCacheByteSize,
       maxRequests,
       refinementStrategy,
+      zRange,
       onTileError,
       onTileLoad,
       onTileUnload: this._onTileUnloadCallback(),
@@ -436,6 +464,8 @@ export class RasterTileLayer<
     const isGlobe = this.context.viewport.resolution !== undefined;
     let reprojectionFns: ReprojectionFns;
     let coordinateSystem: CoordinateSystem;
+    // The period of the mesh's x axis, if it wraps around.
+    let wrapX: number | undefined;
     if (isGlobe) {
       // Globe view
       reprojectionFns = {
@@ -462,6 +492,9 @@ export class RasterTileLayer<
         inverseReproject: _unprojectPosition,
       };
       coordinateSystem = "cartesian";
+      // Common space wraps every world: RasterLayer meshes a tile that
+      // crosses the antimeridian in one piece, cut at the world's edge.
+      wrapX = TILE_SIZE;
     }
 
     const rasterLayer = new RasterLayer(
@@ -480,6 +513,7 @@ export class RasterTileLayer<
         initialTriangulation: isGlobe
           ? undefined
           : tile._webMercatorInitialTriangulation,
+        _wrapX: wrapX,
         debug,
         debugOpacity,
         coordinateSystem,

@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/geotiff",
-  "version": "0.8.1",
+  "version": "0.9.0-beta.1",
   "description": "High-level GeoTIFF reading library.",
   "type": "module",
   "main": "./dist/index.js",
@@ -43,7 +43,7 @@
     "@developmentseed/geotiff": "workspace:^",
     "@types/node": "^26.6.3",
     "geotiff": "^3.0.5",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^5.0.2"
   },
   "volta": {
@@ -60,7 +60,7 @@
     "@developmentseed/lzw-tiff-decoder": "^0.2.2",
     "@developmentseed/morecantile": "workspace:^",
     "fzstd": "^0.1.1",
-    "lerc": "^4.1.2",
-    "uuid": "^14.0.1"
+    "lerc": "^4.2.0",
+    "uuid": "^14.0.2"
   }
 }

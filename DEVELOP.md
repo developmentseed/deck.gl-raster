@@ -47,4 +47,4 @@ Publishing happens automatically when a new tag is pushed to the `main` branch w
 
 You must be part of the "release" environment in the repository settings to publish a new version.
 
-Generally, you shouldn't have to manually publish tags — we use [release-please](./.github/workflows/release-please.yml) to create release PRs, which create Github Releases (with tags) when they're merged.
+To make a release, open a PR that bumps `version` in the root `package.json` and in every `packages/*/package.json`, and adds the release to `CHANGELOG.md` (for example [#666](https://github.com/developmentseed/deck.gl-raster/pull/666)). Once it's merged, tag the merge commit `vX.Y.Z` and push the tag.
