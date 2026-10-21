@@ -2,7 +2,11 @@ import type { Tile } from "@developmentseed/geotiff";
 import { describe, expect, it } from "vitest";
 import type { BandId } from "../src/scene/constants.js";
 import { BANDS } from "../src/scene/constants.js";
-import type { GeoTIFFLike, ImageLike } from "../src/scene/load.js";
+import type {
+  GeoTIFFLike,
+  ImageLike,
+  LoadProgress,
+} from "../src/scene/load.js";
 import { checkBand, loadScene } from "../src/scene/load.js";
 
 type FetchCall = { xy: [number, number][]; boundless: boolean | undefined };
@@ -112,5 +116,14 @@ describe("loadScene", () => {
   it("names the band whose fetch failed", async () => {
     const { open } = fakeScene("b11");
     await expect(loadScene({ open })).rejects.toThrow(/Couldn't load B11/);
+  });
+
+  it("reports each band's header, tiles and overview as they arrive", async () => {
+    const { open } = fakeScene();
+    const reports: LoadProgress[] = [];
+    await loadScene({ open, onProgress: (progress) => reports.push(progress) });
+    expect(reports).toEqual(
+      [1, 2, 3, 4, 5, 6, 7, 8, 9].map((done) => ({ done, total: 9 })),
+    );
   });
 });

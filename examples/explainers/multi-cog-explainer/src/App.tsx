@@ -11,10 +11,11 @@ import { frameToLayers } from "./render/frame-to-layers.js";
 import { checkTextureSupport } from "./render/textures.js";
 import type { SlideFit } from "./scene/layout.js";
 import { fitSlide, SLIDE_HEIGHT, SLIDE_WIDTH } from "./scene/layout.js";
-import type { SceneData } from "./scene/load.js";
+import type { LoadProgress, SceneData } from "./scene/load.js";
 import { loadScene } from "./scene/load.js";
 import { ControlBar } from "./ui/control-bar.js";
 import { Hud } from "./ui/hud.js";
+import { Loading } from "./ui/loading.js";
 import { SidePanel } from "./ui/side-panel.js";
 
 /** How long the controls stay up after the pointer last moved, in ms. */
@@ -38,9 +39,12 @@ type Ready = {
 };
 
 /** Load everything the story draws. */
-async function startup(device: Device): Promise<Ready> {
+async function startup(
+  device: Device,
+  onProgress: (progress: LoadProgress) => void,
+): Promise<Ready> {
   checkTextureSupport(device);
-  const scene = await loadScene();
+  const scene = await loadScene({ onProgress });
   const assets = buildAssets(device, scene);
   return {
     scene,
@@ -133,6 +137,7 @@ export default function App() {
 
   const [device, setDevice] = useState<Device | null>(null);
   const [ready, setReady] = useState<Ready | null>(null);
+  const [progress, setProgress] = useState<LoadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [fit, setFit] = useState(windowFit);
@@ -192,7 +197,12 @@ export default function App() {
       return;
     }
     let cancelled = false;
-    startup(device).then(
+    const onProgress = (progress: LoadProgress) => {
+      if (!cancelled) {
+        setProgress(progress);
+      }
+    };
+    startup(device, onProgress).then(
       (loaded) => {
         if (!cancelled) {
           readyRef.current = loaded;
@@ -441,7 +451,7 @@ export default function App() {
               fontSize: 20,
             }}
           >
-            {error ?? "Loading the Sentinel-2 bands..."}
+            {error ?? <Loading progress={progress} />}
           </div>
         ) : null}
       </div>

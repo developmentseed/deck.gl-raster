@@ -105,6 +105,14 @@ async function fetchWhole(
   });
 }
 
+/** How far {@link loadScene} has got. */
+export type LoadProgress = {
+  /** Reads finished so far. */
+  done: number;
+  /** All the reads: each band's header, covering tiles and overview. */
+  total: number;
+};
+
 /**
  * Open the three bands' COGs, check them, resolve the story tile with the
  * real functions, and fetch and stitch everything the story draws.
@@ -113,14 +121,27 @@ export async function loadScene(
   options: {
     open?: (url: string) => Promise<GeoTIFFLike>;
     signal?: AbortSignal;
+    /** Called as each read finishes. */
+    onProgress?: (progress: LoadProgress) => void;
   } = {},
 ): Promise<SceneData> {
-  const { signal } = options;
+  const { signal, onProgress } = options;
   const open =
     options.open ?? ((url: string) => GeoTIFF.fromUrl(url, { signal }));
+  const progress: LoadProgress = { done: 0, total: 3 * BAND_IDS.length };
+  const advance = () => {
+    progress.done += 1;
+    onProgress?.({ ...progress });
+  };
 
   const opened = await Promise.all(
-    BAND_IDS.map((band) => forBand(band, () => open(bandUrl(band)))),
+    BAND_IDS.map((band) =>
+      forBand(band, async () => {
+        const image = await open(bandUrl(band));
+        advance();
+        return image;
+      }),
+    ),
   );
   const images = {} as Record<BandId, GeoTIFFLike>;
   BAND_IDS.forEach((band, i) => {
@@ -157,6 +178,7 @@ export async function loadScene(
           cover.tiles.map(({ x, y }): [number, number] => [x, y]),
           { boundless: false, signal },
         );
+        advance();
         fetched[band] = tiles;
         stitched[band] = assembleTiles(tiles, {
           width: cover.stitchedWidth,
@@ -170,6 +192,7 @@ export async function loadScene(
           image.overviews[image.overviews.length - 1]!,
           signal,
         );
+        advance();
       }),
     ),
   );
