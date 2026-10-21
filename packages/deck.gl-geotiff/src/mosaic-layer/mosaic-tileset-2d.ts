@@ -157,9 +157,8 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
  * The boxes to search the spatial index with for `viewport`.
  *
  * Source bboxes lie within [-180, 180] longitude, but near the antimeridian
- * `viewport.getBounds()` runs past ±180°. There, a globe shows the other side
- * of the antimeridian, and Web Mercator with `repeat` shows another copy of
- * the world. So the bounds are moved back within [-180, 180], and split in two
+ * `viewport.getBounds()` runs past ±180°.
+ * So the bounds are moved back within [-180, 180], and split in two
  * at ±180° if they cross it. Web Mercator without `repeat` draws nothing past
  * ±180°, so its bounds are searched as they are.
  */
