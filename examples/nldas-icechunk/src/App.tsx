@@ -1,4 +1,5 @@
 import { NativeSelect, Text } from "@chakra-ui/react";
+import { LoadingWidget } from "@deck.gl/widgets";
 import {
   COLORMAP_INDEX,
   createColormapTexture,
@@ -13,8 +14,10 @@ import {
   DeckGlOverlay,
   ExternalLink,
   Field,
+  loadingWidgetProps,
   RangeSlider,
 } from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -45,11 +48,8 @@ import { openSurfaceTemp } from "./nldas/store.js";
 const BASEMAP_STYLE =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
-// [[Min longitude, min latitude], [max longitude, max latitude]]
-const DATA_BOUNDS: [[number, number], [number, number]] = [
-  [-180, -20],
-  [-20, 80],
-];
+// [min longitude, min latitude, max longitude, max latitude]
+const DATA_BOUNDS: [number, number, number, number] = [-180, -20, -20, 80];
 
 /** Total number of rows in the shipped colormap sprite. */
 const COLORMAP_ROW_COUNT = Object.keys(COLORMAP_INDEX).length;
@@ -59,7 +59,7 @@ const COLORMAP_ROW_COUNT = Object.keys(COLORMAP_INDEX).length;
  * Kelvin (the data's native unit, which the rescale shader expects); only the
  * label is shown in the friendlier °C, with Kelvin in parentheses.
  */
-const kelvinToCelsius = (k: number) => Math.round(k - 273.15);
+const kelvinToCelsius = (k: number) => (k - 273.15).toFixed(1);
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -152,6 +152,7 @@ export default function App() {
       >
         <DeckGlOverlay
           layers={layers}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
           interleaved
           onDeviceInitialized={setDevice}
         />
@@ -180,7 +181,7 @@ export default function App() {
           </ExternalLink>{" "}
           and{" "}
           <ExternalLink href="https://zarrita.dev/">
-            <code>zarrita</code>
+            <code>zarrita.js</code>
           </ExternalLink>{" "}
           to fetch data directly in the browser, without a server in between.
           The store is{" "}
@@ -216,7 +217,7 @@ export default function App() {
         <Field
           label={
             <Text as="span">
-              Rescale range: {kelvinToCelsius(rescaleMin)}°C ({rescaleMin} K) –{" "}
+              Rescale range: {kelvinToCelsius(rescaleMin)}°C ({rescaleMin} K) -{" "}
               {kelvinToCelsius(rescaleMax)}°C ({rescaleMax} K)
             </Text>
           }

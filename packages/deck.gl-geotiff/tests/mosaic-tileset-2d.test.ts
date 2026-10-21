@@ -33,7 +33,7 @@ function buildIndex(sources: MosaicSource[]): Flatbush | null {
 
 function makeTileset<T extends MosaicSource>(
   sources: T[],
-  opts: { maxRequests?: number } = {},
+  opts: { maxRequests?: number; extent?: number[] } = {},
 ): MosaicTileset2D<T> {
   const index = buildIndex(sources);
   return new MosaicTileset2D<T>(
@@ -44,6 +44,8 @@ function makeTileset<T extends MosaicSource>(
       ...(opts.maxRequests !== undefined
         ? { maxRequests: opts.maxRequests }
         : {}),
+      // deck.gl's TileLayer always passes `extent`, `null` by default.
+      extent: opts.extent ?? null,
     } as unknown as Tileset2DProps,
   );
 }
@@ -86,44 +88,18 @@ describe("MosaicTileset2D viewport filtering", () => {
   });
 });
 
-describe("MosaicTileset2D center-out ordering", () => {
-  it("places the source nearest the viewport center first", () => {
-    const sources: MosaicSource[] = [
-      { bbox: [4, 4, 5, 5] },
-      { bbox: [-4, -4, -3, -3] },
-      { bbox: [0.4, 0.4, 0.6, 0.6] },
-    ];
-    const tileset = makeTileset(sources, { maxRequests: 1 });
-    const viewport = makeViewport([-10, -10, 10, 10]);
-    const result = tileset.getTileIndices({ viewport });
-    expect(result).toHaveLength(3);
-    expect(result[0]!.bbox).toEqual([0.4, 0.4, 0.6, 0.6]);
-  });
-
-  it("short-circuits when source count <= maxRequests", () => {
-    const sources: MosaicSource[] = [
-      { bbox: [4, 4, 5, 5] },
-      { bbox: [0.4, 0.4, 0.6, 0.6] },
-    ];
-    const tileset = makeTileset(sources, { maxRequests: 6 });
-    const viewport = makeViewport([-10, -10, 10, 10]);
-    const result = tileset.getTileIndices({ viewport });
-    expect(result.map((s) => s.bbox)).toEqual([
-      [4, 4, 5, 5],
-      [0.4, 0.4, 0.6, 0.6],
-    ]);
-  });
-
-  it("still sorts when count > maxRequests", () => {
-    const sources: MosaicSource[] = [
-      { bbox: [4, 4, 5, 5] },
-      { bbox: [-4, -4, -3, -3] },
-      { bbox: [0.4, 0.4, 0.6, 0.6] },
-    ];
-    const tileset = makeTileset(sources, { maxRequests: 2 });
-    const viewport = makeViewport([-10, -10, 10, 10]);
-    const result = tileset.getTileIndices({ viewport });
-    expect(result[0]!.bbox).toEqual([0.4, 0.4, 0.6, 0.6]);
+describe("MosaicTileset2D tile metadata", () => {
+  it("gives each tile a geographic bbox object that deck.gl can read", () => {
+    // deck.gl's request priority and cull-rect visibility check only
+    // understand `{west, south, east, north}` bboxes, not arrays.
+    const tileset = makeTileset([A]);
+    const [tileIndex] = tileset.getTileIndices({
+      viewport: makeViewport([-1, -1, 11, 11]),
+    });
+    expect(tileset.getTileMetadata(tileIndex!)).toEqual({
+      id: "0",
+      bbox: { west: 0, south: 0, east: 10, north: 10 },
+    });
   });
 });
 
@@ -196,5 +172,68 @@ describe("MosaicTileset2D world-copy passes", () => {
     const result = tileset.getTileIndices({ viewport });
     expect(result).toHaveLength(1);
     expect(result[0]!.name).toBe("center");
+  });
+});
+
+describe("MosaicTileset2D extent", () => {
+  // Shows all of A, B and C.
+  const viewport = makeViewport([-1, -1, 51, 11]);
+  const names = (sources: Item[]) => sources.map((s) => s.name).sort();
+
+  it("selects only the sources that overlap the extent", () => {
+    // Covers part of A and part of B. Asymmetric, so reading it with swapped
+    // axes would select only A.
+    const tileset = makeTileset([A, B, C], { extent: [5, 2, 25, 8] });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual(["A", "B"]);
+  });
+
+  it("keeps array-position ids when the extent skips an earlier source", () => {
+    // Skips A. B and C still get ids from their positions in `sources`.
+    const tileset = makeTileset([A, B, C], { extent: [25, 2, 45, 8] });
+    const result = tileset.getTileIndices({ viewport });
+    const ids = Object.fromEntries(
+      result.map((s) => [s.name, tileset.getTileId(s)]),
+    );
+    expect(ids).toEqual({ B: "1", C: "2" });
+  });
+
+  it("skips sources that only touch the extent", () => {
+    // Shares A's east edge and B's west edge. deck.gl's TileLayer likewise
+    // skips tiles that only touch its extent.
+    const sideBySide = makeTileset([A, B, C], { extent: [10, 0, 20, 10] });
+    expect(names(sideBySide.getTileIndices({ viewport }))).toEqual([]);
+
+    // Shares the north edges of A, B and C.
+    const above = makeTileset([A, B, C], { extent: [0, 10, 50, 20] });
+    expect(names(above.getTileIndices({ viewport }))).toEqual([]);
+  });
+
+  it("keeps a visible source whose overlap with the extent is off-screen", () => {
+    // `wide` reaches the extent off-screen to the east, and a source is drawn
+    // in full, so its west end stays on screen. `near` is on screen but
+    // misses the extent.
+    const wide: Item = { name: "wide", bbox: [0, 0, 100, 10] };
+    const near: Item = { name: "near", bbox: [0, 20, 10, 30] };
+    const tileset = makeTileset([wide, near], { extent: [80, 0, 90, 10] });
+    const result = tileset.getTileIndices({
+      viewport: makeViewport([-1, -1, 11, 31]),
+    });
+    expect(names(result)).toEqual(["wide"]);
+  });
+
+  it("applies an extent changed through setOptions on the next call", () => {
+    const tileset = makeTileset([A, B, C]);
+    const getTileData = () => new Promise(() => {});
+
+    // deck.gl's TileLayer calls `setOptions` when its props change.
+    tileset.setOptions({ getTileData, extent: [5, 2, 25, 8] });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual(["A", "B"]);
+
+    tileset.setOptions({ getTileData, extent: null });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual([
+      "A",
+      "B",
+      "C",
+    ]);
   });
 });

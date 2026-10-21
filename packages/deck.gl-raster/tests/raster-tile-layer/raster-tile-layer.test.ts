@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { CompositeLayer } from "@deck.gl/core";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RasterTileLayerProps } from "../../src/raster-tile-layer/index.js";
 import { RasterTileLayer } from "../../src/raster-tile-layer/index.js";
 
@@ -45,5 +46,132 @@ describe("RasterTileLayer", () => {
     }
     const layer = new ProbeLayer({ id: "probe", onTileUnload });
     expect(layer.callUnload()).toBe(onTileUnload);
+  });
+});
+
+describe("RasterTileLayer.isLoaded", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Stub deck.gl's sublayer check (`CompositeLayer.isLoaded`). */
+  function stubSublayersLoaded(loaded: boolean) {
+    vi.spyOn(CompositeLayer.prototype, "isLoaded", "get").mockReturnValue(
+      loaded,
+    );
+  }
+
+  class LoadingMetadataLayer extends RasterTileLayer {
+    protected override _isLoadingMetadata(): boolean {
+      return true;
+    }
+  }
+
+  it("is not loaded while metadata is loading, even with no sublayers pending", () => {
+    stubSublayersLoaded(true);
+    const layer = new LoadingMetadataLayer({ id: "test" });
+    expect(layer.isLoaded).toBe(false);
+  });
+
+  it("is not loaded while sublayers are loading", () => {
+    stubSublayersLoaded(false);
+    const layer = new RasterTileLayer({ id: "test" });
+    expect(layer.isLoaded).toBe(false);
+  });
+
+  it("is loaded when no metadata is pending and sublayers are loaded", () => {
+    stubSublayersLoaded(true);
+    const layer = new RasterTileLayer({ id: "test" });
+    expect(layer.isLoaded).toBe(true);
+  });
+});
+
+describe("RasterTileLayer zRange", () => {
+  /** The props of the inner TileLayer that `renderLayers` returns. */
+  function innerTileLayerProps(
+    props: Partial<RasterTileLayerProps>,
+  ): Record<string, unknown> | undefined {
+    const layer = new RasterTileLayer({
+      id: "t",
+      tilesetDescriptor: {} as RasterTileLayerProps["tilesetDescriptor"],
+      getTileData: vi.fn(),
+      renderTile: vi.fn(),
+      ...props,
+    });
+    Object.assign(layer as object, { context: { device: {} } });
+    const tileLayer = layer.renderLayers() as {
+      props: Record<string, unknown>;
+    } | null;
+    return tileLayer?.props;
+  }
+
+  it("passes zRange to its inner TileLayer", () => {
+    expect(innerTileLayerProps({ zRange: [500, 2500] })?.zRange).toEqual([
+      500, 2500,
+    ]);
+  });
+
+  it("passes null when zRange is unset", () => {
+    expect(innerTileLayerProps({})?.zRange).toBeNull();
+  });
+
+  it("treats a new zRange array with the same heights as unchanged", () => {
+    // deck.gl diffs each prop with its prop type's `equal`, which it keeps on
+    // the props under this symbol.
+    type PropType = {
+      equal: (a: unknown, b: unknown, propType: PropType) => boolean;
+    };
+    const layer = new RasterTileLayer({ id: "t" });
+    const propTypes = (
+      layer.props as unknown as Record<symbol, Record<string, PropType>>
+    )[Symbol.for("propTypes")]!;
+    const zRange = propTypes.zRange!;
+    expect(zRange.equal([500, 2100], [500, 2100], zRange)).toBe(true);
+    expect(zRange.equal([500, 2100], [500, 2600], zRange)).toBe(false);
+  });
+});
+
+describe("RasterTileLayer world wrap", () => {
+  /** The props of one tile's RasterLayer, rendered in the given view. */
+  function rasterLayerProps(
+    props: Partial<RasterTileLayerProps>,
+    { globe = false } = {},
+  ): Record<string, unknown> {
+    const layer = new RasterTileLayer({
+      id: "t",
+      ...props,
+    } as RasterTileLayerProps);
+    Object.assign(layer as object, {
+      context: { viewport: { resolution: globe ? 1 : undefined } },
+      getSubLayerProps: <T>(p: T) => p,
+    });
+    const identity = (x: number, y: number): [number, number] => [x, y];
+    const tile = {
+      forwardTransform: identity,
+      inverseTransform: identity,
+      _projectPosition: identity,
+      _unprojectPosition: identity,
+      _webMercatorInitialTriangulation: undefined,
+    };
+    const layers = (
+      layer as unknown as {
+        _renderSubLayers: (
+          ...args: unknown[]
+        ) => { props: Record<string, unknown> }[];
+      }
+    )._renderSubLayers(
+      { id: "t-0-0-0", data: { width: 4, height: 4 }, tile, _offset: 0 },
+      {},
+      () => ({ image: {} }),
+    );
+    return layers[0]!.props;
+  }
+
+  it("wraps Web Mercator meshes at one world", () => {
+    expect(rasterLayerProps({})._wrapX).toBe(512);
+  });
+
+  it("doesn't wrap on the globe, which has no world edge", () => {
+    expect(rasterLayerProps({}, { globe: true })._wrapX).toBeUndefined();
   });
 });

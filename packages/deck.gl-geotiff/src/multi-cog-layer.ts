@@ -202,7 +202,10 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     pool?: DecoderPool;
 
     /**
-     * Maximum reprojection error in pixels for mesh refinement.
+     * Maximum reprojection error for mesh refinement: how far a tile's mesh
+     * may draw a point from where it belongs on the map, in output pixels
+     * (one input pixel's size on the map, normally at the center of the
+     * meshed area).
      * Lower values create denser meshes with higher accuracy.
      *
      * @default 0.125
@@ -329,6 +332,11 @@ async function openCogSources(
  * (COGs) in parallel, builds a {@link RasterTilesetDescriptor} for each, and groups
  * them into a single {@link MultiRasterTilesetDescriptor}.
  *
+ * Use this layer when the COGs are separate files of **one** composite image:
+ * the same scene with the same spatial extent, such as the per-band files of
+ * one Sentinel-2 scene. To render multiple images as a mosaic, use
+ * {@link MosaicLayer}.
+ *
  * The finest-resolution source is automatically selected as the primary
  * tileset, which drives the tile grid. Secondary sources are sampled at the
  * closest matching resolution.
@@ -354,6 +362,8 @@ export class MultiCOGLayer extends RasterTileLayer<
     /** Aborts the in-flight header reads when the layer is removed, freeing
      *  their limiter slots for fresh work. */
     abortController?: AbortController;
+    /** True while `_parseAllSources` is in flight. */
+    loadingMetadata?: boolean;
   };
 
   override initializeState(): void {
@@ -383,8 +393,11 @@ export class MultiCOGLayer extends RasterTileLayer<
       this.setState({
         sources: null,
         multiDescriptor: null,
+        loadingMetadata: true,
       });
-      this._parseAllSources();
+      this._parseAllSources()
+        .catch((error: Error) => this.raiseError(error, "loading COG sources"))
+        .finally(() => this.setState({ loadingMetadata: false }));
     }
   }
 
@@ -603,6 +616,10 @@ export class MultiCOGLayer extends RasterTileLayer<
 
   protected override _tilesetDescriptor(): RasterTilesetDescriptor | undefined {
     return this.state.multiDescriptor?.primary;
+  }
+
+  protected override _isLoadingMetadata(): boolean {
+    return this.state.loadingMetadata === true;
   }
 
   protected override _getTileDataCallback() {

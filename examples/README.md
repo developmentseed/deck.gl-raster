@@ -8,6 +8,25 @@ These examples are intended to show **how to use deck.gl-raster, specifically**.
 
 The **UI design** is entirely LLM generated and should not be learned from.
 
+## Experimental examples
+
+[`experimental/`](experimental/) holds examples published to show what
+`deck.gl-raster` makes possible, before their architecture has been reviewed and
+endorsed. Unlike the examples above, they are **not** intended for learning or
+reuse — they may change substantially or be withdrawn.
+
+Each one is badged as experimental in the app and listed in its own section on
+the docs examples page.
+
+## Explainers
+
+[`explainers/`](explainers/) holds animated explanations of how
+`deck.gl-raster` works internally, such as how it reprojects rasters with a
+triangle mesh. Their code is LLM-generated and unreviewed: like the
+experimental examples, they are **not** intended for learning or reuse.
+
+They are listed in their own section on the docs examples page.
+
 ## Running an example
 
 ```sh

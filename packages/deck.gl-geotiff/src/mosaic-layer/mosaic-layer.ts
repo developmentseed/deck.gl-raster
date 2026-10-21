@@ -27,12 +27,7 @@ export type MosaicLayerProps<
     TileLayerProps,
     // NOTE: `debounceTime` is intentionally not exposed.
     // See https://github.com/developmentseed/deck.gl-raster/issues/562
-    | "extent"
-    | "maxCacheByteSize"
-    | "maxCacheSize"
-    | "maxRequests"
-    | "maxZoom"
-    | "minZoom"
+    "maxCacheByteSize" | "maxCacheSize" | "maxRequests" | "maxZoom" | "minZoom"
   > & {
     /**
      * List of mosaic sources to render.
@@ -54,6 +49,17 @@ export type MosaicLayerProps<
      * arbitrary mutations of `sources`.
      */
     sources: MosaicT[];
+
+    /**
+     * Only load and render sources whose `bbox` overlaps this bounding box,
+     * given as `[minLng, minLat, maxLng, maxLat]` in WGS84 degrees.
+     *
+     * A source that overlaps it is drawn in full, not clipped to it. To limit
+     * what a source loads as well, pass the same `extent` to the layers
+     * `renderSource` returns. Unlike in deck.gl's TileLayer, it does not keep
+     * sources loading below `minZoom`.
+     */
+    extent?: number[] | null;
 
     /**
      * Caps concurrent HTTP requests for this layer's source fetches.
@@ -181,6 +187,8 @@ export class MosaicLayer<
   declare state: {
     // The index can be null if sources are empty
     index: Flatbush | null;
+    // The sources the index was built from
+    sources: MosaicT[];
   };
 
   override initializeState(context: LayerContext): void {
@@ -201,7 +209,7 @@ export class MosaicLayer<
   private _buildSpatialIndex(): void {
     const { sources } = this.props;
     if (sources.length === 0) {
-      this.setState({ index: null });
+      this.setState({ index: null, sources });
       return;
     }
 
@@ -211,7 +219,7 @@ export class MosaicLayer<
     }
     index.finish();
 
-    this.setState({ index });
+    this.setState({ index, sources });
   }
 
   renderTileLayer(
@@ -232,10 +240,12 @@ export class MosaicLayer<
       onViewportLoad,
     } = this.props;
 
-    // Arrow functions bind to the MosaicLayer instance, which deck.gl reuses
-    // across prop updates — so `this.props` and `this.state` always reflect
-    // the latest values when the tileset reads them.
-    const getSources = () => this.props.sources;
+    // TileLayer creates the tileset only once, so these closures stay bound to
+    // the first MosaicLayer instance. Apps create a new MosaicLayer on every
+    // render, and deck.gl hands it the same `state` object, but `this.props`
+    // here stays the first instance's props. So both closures read
+    // `this.state`.
+    const getSources = () => this.state.sources;
     const getIndex = () => this.state.index;
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
       constructor(opts: any) {

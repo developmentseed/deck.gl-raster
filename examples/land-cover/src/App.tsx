@@ -1,10 +1,16 @@
+import { LoadingWidget } from "@deck.gl/widgets";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import loadEpsg from "@developmentseed/epsg/all";
 import epsgCsvUrl from "@developmentseed/epsg/all.csv.gz?url";
 import type { GeoTIFF } from "@developmentseed/geotiff";
 import { parseWkt } from "@developmentseed/proj";
 import type { Device } from "@luma.gl/core";
-import { DeckGlOverlay, UIOverlay } from "deck.gl-raster-examples-shared";
+import {
+  DeckGlOverlay,
+  loadingWidgetProps,
+  UIOverlay,
+} from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -133,6 +139,7 @@ export default function App() {
       >
         <DeckGlOverlay
           layers={[cog_layer]}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
           interleaved
           onDeviceInitialized={setDevice}
         />

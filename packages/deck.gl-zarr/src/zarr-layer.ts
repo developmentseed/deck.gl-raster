@@ -169,6 +169,8 @@ export class ZarrLayer<
     /** One opened array per level, finest-first (matches meta.levels order). */
     arrays?: zarr.Array<zarr.DataType, zarr.Readable>[];
     tilesetDescriptor?: RasterTilesetDescriptor;
+    /** True while `_parseZarr` is in flight. */
+    loadingMetadata?: boolean;
   };
 
   override initializeState(): void {
@@ -188,7 +190,12 @@ export class ZarrLayer<
     if (needsUpdate) {
       // Clear stale state so renderLayers returns null until the new Zarr is ready
       this._clearState();
-      void this._parseZarr();
+      this.setState({ loadingMetadata: true });
+      this._parseZarr()
+        .catch((error: Error) =>
+          this.raiseError(error, "loading Zarr metadata"),
+        )
+        .finally(() => this.setState({ loadingMetadata: false }));
     }
   }
 
@@ -339,6 +346,10 @@ export class ZarrLayer<
 
   protected override _tilesetDescriptor() {
     return this.state.tilesetDescriptor;
+  }
+
+  protected override _isLoadingMetadata(): boolean {
+    return this.state.loadingMetadata === true;
   }
 
   /**

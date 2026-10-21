@@ -1,7 +1,10 @@
 import type { Viewport } from "@deck.gl/core";
-import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
+import type {
+  GeoBoundingBox,
+  _Tileset2DProps as Tileset2DProps,
+} from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
-import { _sortItemsByDistanceFromViewportCenter as sortItemsByDistanceFromViewportCenter } from "@developmentseed/deck.gl-raster";
+import type { Bounds } from "@developmentseed/deck.gl-raster";
 import type Flatbush from "flatbush";
 
 /**
@@ -85,10 +88,19 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     return 0;
   }
 
-  /** Must override because our tileIndex does not have x, y, z */
-  override getTileMetadata(tileIndex: TileIndex): Record<string, any> {
+  /**
+   * Must override because our tileIndex does not have x, y, z.
+   *
+   * The bbox is returned as a {@link GeoBoundingBox} object to satisfy deck.gl
+   * requirements for center-first tile loading.
+   */
+  override getTileMetadata(tileIndex: TileIndex): {
+    id: string;
+    bbox: GeoBoundingBox;
+  } {
     const { id, bbox } = tileIndex as unknown as ResolvedSource<MosaicT>;
-    return { id, bbox };
+    const [west, south, east, north] = bbox;
+    return { id, bbox: { west, south, east, north } };
   }
 
   override getParentIndex(tileIndex: TileIndex): TileIndex {
@@ -133,9 +145,16 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
         }
       }
     }
+    let indices = [...matched];
 
     const sources = this.getSources();
-    const selectedSources = [...matched].map((sourceIndex) => {
+    // Read `extent` on every call: TileLayer updates it through `setOptions`.
+    const extent = this.opts.extent as Bounds | null;
+    if (extent) {
+      indices = indices.filter((i) => overlaps(sources[i]!.bbox, extent));
+    }
+
+    return indices.map((sourceIndex) => {
       const source = sources[sourceIndex]!;
       return {
         // Remove once https://github.com/visgl/deck.gl/pull/10299
@@ -147,20 +166,6 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
         id: source.id ?? String(sourceIndex),
       };
     });
-
-    const { maxRequests } = this.opts;
-    if (selectedSources.length <= maxRequests) {
-      return selectedSources;
-    }
-
-    return sortItemsByDistanceFromViewportCenter(
-      selectedSources,
-      viewport,
-      (source) => {
-        const [minX, minY, maxX, maxY] = source.bbox;
-        return [(minX + maxX) * 0.5, (minY + maxY) * 0.5] as const;
-      },
-    );
   }
 }
 
@@ -188,4 +193,12 @@ function searchAtOffset(
     matched.add(i);
   }
   return found.length > 0;
+}
+
+/**
+ * Whether two `[minX, minY, maxX, maxY]` boxes overlap. Boxes that only share
+ * an edge or a corner don't, as with tiles and `extent` in deck.gl's TileLayer.
+ */
+function overlaps(a: Bounds, b: Bounds): boolean {
+  return a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 }

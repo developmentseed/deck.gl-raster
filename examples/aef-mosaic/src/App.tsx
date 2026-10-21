@@ -1,5 +1,10 @@
+import { LoadingWidget } from "@deck.gl/widgets";
 import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
-import { DeckGlOverlay } from "deck.gl-raster-examples-shared";
+import {
+  DeckGlOverlay,
+  loadingWidgetProps,
+} from "deck.gl-raster-examples-shared";
+import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
@@ -14,6 +19,7 @@ import { LOCATIONS } from "./aef/locations.js";
 import { makeRenderTile } from "./aef/render-tile.js";
 import { buildSelection } from "./aef/selection.js";
 import { ControlPanel } from "./ui/control-panel.js";
+import { ZoomNotice } from "./ui/zoom-notice.js";
 
 const DEFAULT_LOCATION = LOCATIONS[0]!;
 const DEFAULT_YEAR_IDX = 8; // 2025
@@ -38,6 +44,9 @@ export default function App() {
   const [bBandIdx, setBBandIdx] = useState(DEFAULT_B_BAND);
   const [rescaleMin, setRescaleMin] = useState(DEFAULT_RESCALE_MIN);
   const [rescaleMax, setRescaleMax] = useState(DEFAULT_RESCALE_MAX);
+  const [belowMinZoom, setBelowMinZoom] = useState(
+    DEFAULT_LOCATION.zoom < MIN_ZOOM,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -126,9 +135,15 @@ export default function App() {
           zoom: DEFAULT_LOCATION.zoom,
         }}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+        onZoom={(e) => setBelowMinZoom(e.viewState.zoom < MIN_ZOOM)}
       >
-        <DeckGlOverlay layers={layers} interleaved />
+        <DeckGlOverlay
+          layers={layers}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
+          interleaved
+        />
       </MaplibreMap>
+      {belowMinZoom && <ZoomNotice />}
       <ControlPanel
         locationId={locationId}
         yearIdx={yearIdx}

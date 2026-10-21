@@ -1,7 +1,7 @@
 # Center-out tile loading
 
-**Date:** 2026-04-24
-**Status:** Implemented in [#477](https://github.com/developmentseed/deck.gl-raster/pull/477)
+- **Date:** 2026-04-24
+- **Status:** Implemented in [#477](https://github.com/developmentseed/deck.gl-raster/pull/477). Superseded: since deck.gl 9.4, `Tileset2D` loads the requests nearest the viewport center first, so both sorts were removed. Mosaic tiles now store their bbox as `{west, south, east, north}`, the shape deck.gl reads.
 
 ## Problem
 
