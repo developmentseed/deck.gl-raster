@@ -21,6 +21,26 @@ function plain(description: TextRun[]): string {
     .join("");
 }
 
+describe("descriptions", () => {
+  it("say the COGs are the AWS archive's, not how Sentinel-2 ships", () => {
+    expect(plain(story[0]!.description)).toMatch(
+      /^The Sentinel-2 archive on AWS stores each band/,
+    );
+  });
+
+  it("present the band colors as this explainer's choice", () => {
+    expect(plain(story[1]!.description)).toContain(
+      "Here we map shortwave infrared to red, red to green, and coastal aerosol to blue",
+    );
+  });
+
+  it("say the shader runs for every screen pixel the tile covers", () => {
+    expect(plain(story[7]!.description)).toMatch(
+      /^For every screen pixel the tile covers, the shader/,
+    );
+  });
+});
+
 describe("titles", () => {
   it("name the nine steps, in order", () => {
     expect(story.map((step) => step.title)).toEqual([

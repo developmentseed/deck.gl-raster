@@ -20,10 +20,11 @@ of the layer, it calls the same public building blocks the layer calls
 1. **Three files, one scene**: three bands of one scene as grayscale images,
    side by side. They cover the same ground with different numbers of pixels;
    the insets show the same 600 m square in each.
-2. **One image**: the whole scene as `MultiCOGLayer` composites it, with
-   shortwave infrared as red, red as green and coastal aerosol as blue. This
-   picture is drawn by the same shader from each band's smallest overview; it
-   shows the result, not the layer's tiling at this size.
+2. **One image**: the whole scene as `MultiCOGLayer` composites it, here with
+   shortwave infrared as red, red as green and coastal aerosol as blue (the
+   app chooses the mapping). This picture is drawn by the same shader from each
+   band's smallest overview; it shows the result, not the layer's tiling at
+   this size.
 3. **The primary grid**: the finest band's tile grid decides what gets drawn:
    11 x 11 tiles of 1024 px. The story follows tile (4, 4).
 4. **Every band has its own tiles**: the 20 m and 60 m grids, and the tiles of

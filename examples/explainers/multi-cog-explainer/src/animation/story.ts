@@ -179,7 +179,7 @@ export function createStory(scene: SceneData): StoryStep[] {
     id: "three-files",
     title: "Three files, one scene",
     description: [
-      "Sentinel-2 stores each band as its own Cloud-Optimized GeoTIFF, at its own resolution. Here are three bands of one scene over Torres del Paine, Chile: ",
+      "The Sentinel-2 archive on AWS stores each band as its own Cloud-Optimized GeoTIFF, at its own resolution. Here are three bands of one scene over Torres del Paine, Chile: ",
       { text: bandName("b04"), emphasis: true },
       `, ${BANDS.b04.size} x ${BANDS.b04.size} pixels; `,
       { text: bandName("b11"), emphasis: true },
@@ -253,7 +253,7 @@ export function createStory(scene: SceneData): StoryStep[] {
     id: "one-image",
     title: "One image",
     description: [
-      "MultiCOGLayer draws the three as one picture: shortwave infrared as red, red as green, and coastal aerosol as blue. Every pixel mixes values from files at three different resolutions. How do they line up? ",
+      "MultiCOGLayer draws the three as one picture. Here we map shortwave infrared to red, red to green, and coastal aerosol to blue, so every pixel mixes values from files at three different resolutions. How do they line up? ",
       {
         text: "(This whole-scene picture is drawn by the same shader, from each band's smallest overview.)",
         emphasis: true,
@@ -702,7 +702,7 @@ export function createStory(scene: SceneData): StoryStep[] {
     id: "sample",
     title: "Sample",
     description: [
-      `For every pixel of the tile, the shader applies each band's UV transform and samples that band's texture there. The three values become red, green and blue. One sweep across the tile crosses ${span("b04")} texels of the 10 m texture, ${span("b11")} of the 20 m one and about ${span("b01")} of the 60 m one; the GPU interpolates between them.`,
+      `For every screen pixel the tile covers, the shader applies each band's UV transform and samples that band's texture there. The three values become red, green and blue. One sweep across the tile crosses ${span("b04")} texels of the 10 m texture, ${span("b11")} of the 20 m one and about ${span("b01")} of the 60 m one; the GPU interpolates between them.`,
     ],
     durationMs: PROBE_LOOP_MS,
     frame: (t) => {
