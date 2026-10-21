@@ -6,8 +6,10 @@ import {
   SCENE_ORIGIN,
   STORY_TILE,
 } from "../scene/constants.js";
+import { levelFor } from "../scene/geometry.js";
+import { gridRings, tileRing } from "../scene/grids.js";
 import type { Rect } from "../scene/layout.js";
-import { INTRO_SLOTS, SCENE_BOX } from "../scene/layout.js";
+import { INTRO_SLOTS, SCENE_BOX, utmToScene } from "../scene/layout.js";
 import type { SceneData } from "../scene/load.js";
 import { flyRect } from "./flight.js";
 import type { Frame, Label, Rgba } from "./frame.js";
@@ -36,6 +38,12 @@ export type StoryStep = {
 
 const MUTED = "#8b949e";
 const WHITE: Rgba = [230, 237, 243, 255];
+
+/** Left edge of the legends beside the scene, in slide units. */
+const LEGEND_X = 800;
+
+/** Top line of the legends beside the scene, in slide units. */
+const LEGEND_Y = 220;
 
 const REPROJECTION_EXPLAINER_URL =
   "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/";
@@ -79,6 +87,21 @@ export function rectRing(rect: Rect): [number, number][] {
     [x + width, y + height],
     [x, y + height],
   ];
+}
+
+/** A colour with its alpha scaled to `opacity` (0-1). */
+function withAlpha([r, g, b, a]: Rgba, opacity: number): Rgba {
+  return [r, g, b, Math.round(a * opacity)];
+}
+
+/** A small count as a word: "one", "four". */
+function countWord(n: number): string {
+  return ["zero", "one", "two", "three", "four", "five", "six"][n] ?? String(n);
+}
+
+/** The whole-scene composite, in the scene box. */
+function sceneComposite(): Frame["composites"][number] {
+  return { id: "scene", source: "overview", rect: SCENE_BOX, opacity: 1 };
 }
 
 /** "B04 · Red · 10 m": a band's name, as the labels show it. */
@@ -230,32 +253,163 @@ export function createStory(scene: SceneData): StoryStep[] {
     },
   };
 
+  // The tile grids, in scene-box units.
+  const levels = {
+    b04: levelFor("b04"),
+    b11: levelFor("b11"),
+    b01: levelFor("b01"),
+  };
+  const toScene = (ring: [number, number][]) =>
+    ring.map(([x, y]) => utmToScene(x, y));
+  const grids = {
+    b04: gridRings(levels.b04).map(toScene),
+    b11: gridRings(levels.b11).map(toScene),
+    b01: gridRings(levels.b01).map(toScene),
+  };
+  const storyRing = toScene(tileRing(levels.b04, STORY_TILE.x, STORY_TILE.y));
+  const covers = {
+    b11: tile.bands.b11.tiles.map(({ x, y }) =>
+      toScene(tileRing(levels.b11, x, y)),
+    ),
+    b01: tile.bands.b01.tiles.map(({ x, y }) =>
+      toScene(tileRing(levels.b01, x, y)),
+    ),
+  };
+  /** A legend line beside the scene, for one band's grid. */
+  const gridLegend = (band: BandId, y: number, opacity: number): Label =>
+    label(
+      `${band}-grid-legend`,
+      `${BANDS[band].file} · ${BANDS[band].pixelSize} m: ${levels[band].matrixWidth} x ${levels[band].matrixHeight} tiles of ${BANDS[band].block} px, ${km(tileMeters(band))} each`,
+      LEGEND_X,
+      y,
+      { color: css(BANDS[band].color), opacity, align: "left", size: 26 },
+    );
+
+  /** Step 3: the primary grid over the scene, and the story tile. */
+  const primaryGridStep: StoryStep = {
+    id: "primary-grid",
+    title: "The primary grid",
+    description: [
+      `The finest band is the primary: its tile grid decides what gets drawn. At full resolution it has ${primaryGrid} x ${primaryGrid} tiles of ${BANDS.b04.block} x ${BANDS.b04.block} pixels, each ${km(tileMeters("b04"))} across. We'll follow one tile, (${STORY_TILE.x}, ${STORY_TILE.y}).`,
+    ],
+    durationMs: 1200,
+    frame: (t) => {
+      const frame = emptyFrame();
+      frame.composites.push(sceneComposite());
+      const gridIn = progress(t, 0, 600);
+      const tileIn = progress(t, 600, 600);
+      frame.polygons.push(
+        {
+          id: "grid-b04",
+          rings: grids.b04,
+          line: withAlpha(BANDS.b04.color, 0.85 * gridIn),
+          lineWidth: 1.5,
+        },
+        {
+          id: "story-tile",
+          rings: [storyRing],
+          fill: withAlpha(WHITE, 0.25 * tileIn),
+          line: withAlpha(WHITE, tileIn),
+          lineWidth: 3,
+        },
+      );
+      frame.hud.labels.push(
+        gridLegend("b04", LEGEND_Y, gridIn),
+        label(
+          "story-tile-legend",
+          `Tile (${STORY_TILE.x}, ${STORY_TILE.y})`,
+          LEGEND_X,
+          LEGEND_Y + 50,
+          { opacity: tileIn, align: "left", size: 26 },
+        ),
+      );
+      frame.hud.caption = "The finest band's tiles drive the layer";
+      return frame;
+    },
+  };
+
+  /** Step 4: every band's own grid, and the tiles covering the story tile. */
+  const bandGridsStep: StoryStep = {
+    id: "band-grids",
+    title: "Every band has its own tiles",
+    description: [
+      `The other bands have their own grids. A 20 m tile is ${BANDS.b11.block} pixels too, so it covers ${km(tileMeters("b11"))}: one 20 m tile covers the whole primary tile. The 60 m band uses ${BANDS.b01.block}-pixel tiles, ${km(tileMeters("b01"))} across, which don't line up with the 10 m grid, so the primary tile needs ${countWord(b01Count)} of them.`,
+    ],
+    durationMs: 2400,
+    frame: (t) => {
+      const frame = emptyFrame();
+      frame.composites.push(sceneComposite());
+      const b11In = progress(t, 0, 700);
+      const b01In = progress(t, 700, 700);
+      const coverIn = progress(t, 1500, 700);
+      frame.polygons.push(
+        {
+          id: "grid-b04",
+          rings: grids.b04,
+          line: withAlpha(BANDS.b04.color, 0.35),
+          lineWidth: 1,
+        },
+        {
+          id: "grid-b11",
+          rings: grids.b11,
+          line: withAlpha(BANDS.b11.color, 0.85 * b11In),
+          lineWidth: 1.5,
+        },
+        {
+          id: "grid-b01",
+          rings: grids.b01,
+          line: withAlpha(BANDS.b01.color, 0.85 * b01In),
+          lineWidth: 1.5,
+        },
+        // The 20 m tile shares two edges with the 60 m block: draw the block
+        // wide underneath and the 20 m tile narrow on top, so both show.
+        {
+          id: "cover-b01",
+          rings: covers.b01,
+          line: withAlpha(BANDS.b01.color, coverIn),
+          lineWidth: 7,
+        },
+        {
+          id: "cover-b11",
+          rings: covers.b11,
+          line: withAlpha(BANDS.b11.color, coverIn),
+          lineWidth: 3,
+        },
+        {
+          id: "story-tile",
+          rings: [storyRing],
+          fill: withAlpha(WHITE, 0.25),
+          line: WHITE,
+          lineWidth: 3,
+        },
+      );
+      frame.hud.labels.push(
+        gridLegend("b04", LEGEND_Y, 1),
+        gridLegend("b11", LEGEND_Y + 50, b11In),
+        gridLegend("b01", LEGEND_Y + 100, b01In),
+        label(
+          "cover-legend",
+          `Tile (${STORY_TILE.x}, ${STORY_TILE.y}) is covered by ${countWord(tile.bands.b11.tiles.length)} 20 m tile and ${countWord(b01Count)} 60 m tiles`,
+          LEGEND_X,
+          LEGEND_Y + 180,
+          { opacity: coverIn, align: "left", size: 26 },
+        ),
+      );
+      frame.hud.caption = "Each band has its own tile grid";
+      return frame;
+    },
+  };
+
   const steps: StoryStep[] = [
     threeFiles,
     oneImage,
-    {
-      id: "primary-grid",
-      title: "The primary grid",
-      description: [
-        `The finest band is the primary: its tile grid decides what gets drawn. At full resolution it has ${primaryGrid} x ${primaryGrid} tiles of ${BANDS.b04.block} x ${BANDS.b04.block} pixels, each ${km(tileMeters("b04"))} across. We'll follow one tile, (${STORY_TILE.x}, ${STORY_TILE.y}).`,
-      ],
-      durationMs: 0,
-      frame: () => emptyFrame(),
-    },
-    {
-      id: "band-grids",
-      title: "Every band has its own tiles",
-      description: [
-        `The other bands have their own grids. A 20 m tile is ${BANDS.b11.block} pixels too, so it covers ${km(tileMeters("b11"))}: one 20 m tile covers the whole primary tile. The 60 m band uses ${BANDS.b01.block}-pixel tiles, ${km(tileMeters("b01"))} across, which don't line up with the 10 m grid, so the primary tile needs ${b01Count} of them.`,
-      ],
-      durationMs: 0,
-      frame: () => emptyFrame(),
-    },
+    primaryGridStep,
+    bandGridsStep,
     {
       id: "fetch",
       title: "Fetch",
       description: [
-        `For each band, the layer fetches the tiles that cover the primary tile: one 10 m tile, one 20 m tile and ${b01Count} 60 m tiles. Each is ${BANDS.b04.block} or ${BANDS.b01.block} pixels on a side, but they cover very different ground.`,
+        `For each band, the layer fetches the tiles that cover the primary tile: one 10 m tile, one 20 m tile and ${countWord(b01Count)} 60 m tiles. Each is ${BANDS.b04.block} or ${BANDS.b01.block} pixels on a side, but they cover very different ground.`,
       ],
       durationMs: 0,
       frame: () => emptyFrame(),
@@ -264,7 +418,7 @@ export function createStory(scene: SceneData): StoryStep[] {
       id: "stitch",
       title: "Stitch",
       description: [
-        `The ${b01Count} 60 m tiles are stitched into one ${tile.bands.b01.stitchedWidth} x ${tile.bands.b01.stitchedHeight} texture, so every band has exactly one texture to sample.`,
+        `The ${countWord(b01Count)} 60 m tiles are stitched into one ${tile.bands.b01.stitchedWidth} x ${tile.bands.b01.stitchedHeight} texture, so every band has exactly one texture to sample.`,
       ],
       durationMs: 0,
       frame: () => emptyFrame(),

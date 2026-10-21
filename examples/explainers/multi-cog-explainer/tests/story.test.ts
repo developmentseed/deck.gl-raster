@@ -48,3 +48,13 @@ describe("step 2: one image", () => {
     expect(frame.bitmaps).toEqual([]);
   });
 });
+
+describe("step 4: every band has its own tiles", () => {
+  it("ends with the covering tiles outlined: one 20 m tile, four 60 m tiles", () => {
+    const frame = end(3);
+    const rings = (id: string) =>
+      frame.polygons.find((p) => p.id === id)?.rings.length;
+    expect(rings("cover-b11")).toBe(1);
+    expect(rings("cover-b01")).toBe(4);
+  });
+});
