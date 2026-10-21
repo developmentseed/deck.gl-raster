@@ -80,3 +80,10 @@ export const SCENE_EXTENT = 109800;
 
 /** The 10 m tile the story follows. */
 export const STORY_TILE = { x: 4, y: 4 } as const;
+
+/**
+ * Where step 1's insets look, as a UV point of the story tile. Chosen for
+ * contrast: of 225 points tried, the 600 m square here varies most in all
+ * three bands, so their different pixel sizes show.
+ */
+export const INSET_UV: [number, number] = [0.0625, 0.75];

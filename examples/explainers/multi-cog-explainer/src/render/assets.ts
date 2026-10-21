@@ -2,7 +2,7 @@ import type { RasterArray } from "@developmentseed/geotiff";
 import type { Device } from "@luma.gl/core";
 import type { ImageId } from "../animation/frame.js";
 import type { BandId } from "../scene/constants.js";
-import { BAND_IDS } from "../scene/constants.js";
+import { BAND_IDS, INSET_UV } from "../scene/constants.js";
 import { insetRect } from "../scene/geometry.js";
 import type { SceneData } from "../scene/load.js";
 import type { CompositeInputs } from "./composite-layer.js";
@@ -21,7 +21,7 @@ export function buildAssets(device: Device, scene: SceneData): Assets {
     images[`${band}-overview`] = grayscaleCanvas(scene.overview[band], range);
     images[`${band}-inset`] = cropCanvas(
       scene.stitched[band],
-      insetRect(band, scene.tile),
+      insetRect(band, scene.tile, { uv: INSET_UV }),
       range,
     );
   }

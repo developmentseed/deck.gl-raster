@@ -120,18 +120,20 @@ export function resolveStoryTile(
 export type PixelRect = { x: number; y: number; width: number; height: number };
 
 /**
- * A square of `meters` around the middle of the story tile, in pixels of one
- * band's stitched texture: the middle mapped through the band's UV transform.
+ * A square of `meters` around a point of the story tile (its middle unless
+ * `uv` says otherwise), in pixels of one band's stitched texture: the point
+ * mapped through the band's UV transform.
  */
 export function insetRect(
   band: BandId,
   tile: StoryTile,
-  meters = 600,
+  options: { uv?: [number, number]; meters?: number } = {},
 ): PixelRect {
+  const { uv = [0.5, 0.5], meters = 600 } = options;
   const cover = tile.bands[band];
   const [offsetX, offsetY, scaleX, scaleY] = cover.uvTransform;
-  const centerX = (0.5 * scaleX + offsetX) * cover.stitchedWidth;
-  const centerY = (0.5 * scaleY + offsetY) * cover.stitchedHeight;
+  const centerX = (uv[0] * scaleX + offsetX) * cover.stitchedWidth;
+  const centerY = (uv[1] * scaleY + offsetY) * cover.stitchedHeight;
   const side = meters / BANDS[band].pixelSize;
   return {
     x: Math.round(centerX - side / 2),

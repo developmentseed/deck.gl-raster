@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Frame, Hud as HudState } from "./animation/frame.js";
 import { Player } from "./animation/player.js";
 import type { StoryStep } from "./animation/story.js";
-import { createPlaceholderStory } from "./animation/story.js";
+import { createStory } from "./animation/story.js";
 import { buildAssets } from "./render/assets.js";
 import { frameToLayers } from "./render/frame-to-layers.js";
 import { checkTextureSupport } from "./render/textures.js";
@@ -44,7 +44,7 @@ async function startup(device: Device): Promise<Ready> {
   const assets = buildAssets(device, scene);
   return {
     scene,
-    story: createPlaceholderStory(),
+    story: createStory(scene),
     layers: (frame) => frameToLayers(frame, assets),
   };
 }

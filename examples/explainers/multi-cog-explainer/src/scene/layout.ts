@@ -1,4 +1,5 @@
 import type { BandId } from "./constants.js";
+import { SCENE_EXTENT, SCENE_ORIGIN } from "./constants.js";
 
 /** An axis-aligned rectangle in slide units. */
 export type Rect = { x: number; y: number; width: number; height: number };
@@ -53,4 +54,13 @@ export function fitSlide(width: number, height: number): SlideFit {
     offsetY: (height - SLIDE_HEIGHT * scale) / 2,
     zoom: Math.log2(scale),
   };
+}
+
+/** Map a point in the scene's UTM metres onto the scene box. */
+export function utmToScene(x: number, y: number): [number, number] {
+  const scale = SCENE_BOX.width / SCENE_EXTENT;
+  return [
+    SCENE_BOX.x + (x - SCENE_ORIGIN[0]) * scale,
+    SCENE_BOX.y + (SCENE_ORIGIN[1] - y) * scale,
+  ];
 }
