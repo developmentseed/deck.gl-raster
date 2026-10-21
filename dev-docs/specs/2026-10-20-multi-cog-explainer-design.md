@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-20 (revised 2026-10-21)
 - **Issues:** #757 (background: #411, #580, #651, #755)
-- **Status:** Draft
+- **Status:** Implemented in [#761](https://github.com/developmentseed/deck.gl-raster/pull/761)
 
 ## Problem
 
@@ -281,7 +281,7 @@ the descriptions setting in `localStorage` (under its own key).
 
 ### Where it lives
 
-`examples/explainers/multi-cog-explainer`, on branch `kyle/multi-cog-explainer`:
+`examples/explainers/multi-cog-explainer`:
 
 - **Scaffold:** package name `deck.gl-multi-cog-explainer-example`, Vite
   `base` `/deck.gl-raster/examples/multi-cog-explainer/`, and the standard
