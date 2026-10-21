@@ -1,58 +1,68 @@
-import { BUILTIN_PROJJSON } from "./builtin-projjson.js";
+import proj4 from "proj4";
 import type { ProjectionDefinition } from "./parse-wkt.js";
 import { parseWkt } from "./parse-wkt.js";
 import type { ProjJson } from "./projjson.js";
 
 /**
- * A global registry holding parsed projection definitions.
+ * Projection definitions by `EPSG:<code>`, as promises, so that callers
+ * resolving the same code at the same time (every source of a mosaic, every
+ * band of a MultiCOGLayer) share one request. {@link epsgResolver} fills it
+ * from proj4's own definitions or from epsg.io; {@link registerProjection}
+ * fills it from the application.
  */
-export const PROJECTION_REGISTRY = new Map<string, ProjectionDefinition>();
-
-/**
- * Resolutions in flight, by EPSG code, so that layers resolving the same code
- * at the same time (every source of a mosaic, every band of a MultiCOGLayer)
- * share one request. An entry is removed once it settles, so a failed request
- * is retried by the next caller.
- */
-const IN_FLIGHT = new Map<number, Promise<ProjectionDefinition>>();
+export const PROJECTION_REGISTRY = new Map<
+  string,
+  Promise<ProjectionDefinition>
+>();
 
 export type EpsgResolver = (epsg: number) => Promise<ProjectionDefinition>;
 
 /**
+ * Register a projection for an EPSG code, so the default resolver never has to
+ * fetch it: for example a WKT or PROJJSON definition bundled with the
+ * application.
+ */
+export function registerProjection(
+  epsg: number,
+  definition: string | ProjJson,
+): void {
+  PROJECTION_REGISTRY.set(
+    `EPSG:${epsg}`,
+    Promise.resolve(parseWkt(definition)),
+  );
+}
+
+/**
  * Resolve an EPSG code to a projection definition.
  *
- * Codes that proj4 ships definitions for (4326, 3857, 4269) come from a
- * built-in table; others are fetched from epsg.io once and cached in
- * {@link PROJECTION_REGISTRY}.
+ * Codes that proj4 ships definitions for (4326, 4269, 3857 and the UTM zones)
+ * are resolved without a request; others are fetched from epsg.io once. A
+ * failed request is not kept, so the next caller retries.
  */
-export async function epsgResolver(epsg: number) {
+export function epsgResolver(epsg: number): Promise<ProjectionDefinition> {
   const key = `EPSG:${epsg}`;
-  const cachedProj = PROJECTION_REGISTRY.get(key);
-  if (cachedProj !== undefined) {
-    return cachedProj;
-  }
-
-  const builtin = BUILTIN_PROJJSON.get(epsg);
-  if (builtin !== undefined) {
-    const proj = parseWkt(builtin);
-    PROJECTION_REGISTRY.set(key, proj);
-    return proj;
-  }
-
-  let pending = IN_FLIGHT.get(epsg);
+  let pending = PROJECTION_REGISTRY.get(key);
   if (pending === undefined) {
-    pending = getProjjson(epsg)
-      .then((projjson) => {
-        const proj = parseWkt(projjson);
-        PROJECTION_REGISTRY.set(key, proj);
-        return proj;
-      })
-      .finally(() => {
-        IN_FLIGHT.delete(epsg);
-      });
-    IN_FLIGHT.set(epsg, pending);
+    pending = resolve(key, epsg).catch((error: unknown) => {
+      PROJECTION_REGISTRY.delete(key);
+      throw error;
+    });
+    PROJECTION_REGISTRY.set(key, pending);
   }
   return pending;
+}
+
+async function resolve(
+  key: string,
+  epsg: number,
+): Promise<ProjectionDefinition> {
+  if (proj4.defs(key) !== undefined) {
+    // `Proj` fills in what the parsed proj string leaves out, such as the
+    // ellipsoid's axes, which layers read as `a` to size degree units.
+    const proj = new proj4.Proj(key);
+    return { ...proj, title: proj.title ?? key } as ProjectionDefinition;
+  }
+  return parseWkt(await getProjjson(epsg));
 }
 
 /** Query epsg.io for the PROJJSON corresponding to the given EPSG code. */

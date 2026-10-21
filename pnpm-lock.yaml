@@ -1510,6 +1510,9 @@ importers:
 
   packages/proj:
     dependencies:
+      proj4:
+        specifier: ^2.22.0
+        version: 2.22.0(geotiff@3.0.5)
       wkt-parser:
         specifier: 1.5.6
         version: 1.5.6
@@ -1517,9 +1520,6 @@ importers:
       '@types/node':
         specifier: ^26.6.3
         version: 26.6.3
-      proj4:
-        specifier: ^2.22.0
-        version: 2.22.0(geotiff@3.0.5)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

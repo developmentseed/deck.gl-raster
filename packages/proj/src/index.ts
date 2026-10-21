@@ -13,7 +13,11 @@ export type {
   ProjJsonUnit,
 } from "./projjson.js";
 export type { EpsgResolver } from "./registry.js";
-export { epsgResolver, PROJECTION_REGISTRY } from "./registry.js";
+export {
+  epsgResolver,
+  PROJECTION_REGISTRY,
+  registerProjection,
+} from "./registry.js";
 export type { Bounds, Point, ProjectionFunction } from "./transform-bounds.js";
 export { transformBounds } from "./transform-bounds.js";
 export { nearestCopy, unwrapAlong } from "./unwrap.js";
