@@ -2,9 +2,10 @@
 
 A step-by-step animation of how deck.gl-raster meshes an image that crosses
 the antimeridian (±180°). It follows one image through the steps `RasterLayer`
-runs in Web Mercator: unwrap the image's corners, snap every projected point to
-the right copy of the world, mesh it as usual, and cut the mesh at the world's
-edge. It works both as a talk prop and on its own.
+runs when its `_wrapX` prop is set, which `RasterTileLayer` (and so COGLayer)
+does for every tile in Web Mercator: unwrap the image's corners, snap every
+projected point to the right copy of the world, mesh it as usual, and cut the
+mesh at the world's edge. It works both as a talk prop and on its own.
 
 This is an [explainer](../../README.md#explainers): its code was generated with
 an LLM and hasn't been reviewed, so don't treat it as a pattern to copy.
@@ -12,17 +13,20 @@ an LLM and hasn't been reviewed, so don't treat it as a pattern to copy.
 Every corner, sample, snapped point, split and cut on screen comes from the
 library's own functions, called the way `RasterLayer` calls them:
 `makeUnwrappedReprojectionFns` (with `unwrapAlong` and `nearestCopy` from
-`@developmentseed/proj`), `RasterReprojector`, and `clipMeshToWorld`. Two of
-those aren't exported from `@developmentseed/deck.gl-raster`, so this app
-reaches them through a private alias in its own `vite.config.ts` and
-`tsconfig.json`, pointing at the package's built `dist/`. The package's exports
+`@developmentseed/proj`), `RasterReprojector`, and `clipMeshToWorld`, with the
+image projected into common space by `rescaleEPSG3857ToCommonSpace`, as
+`RasterTileset2D` projects a tile. `makeUnwrappedReprojectionFns`,
+`clipMeshToWorld` and the common-space rescale functions aren't exported from
+`@developmentseed/deck.gl-raster`, so this app reaches them through a private
+alias in its own `vite.config.ts` and `tsconfig.json`, pointing at the
+package's built `dist/`. The package's exports
 don't change. Like the reprojection explainer, `src/scene/refinement.ts` reads
 `RasterReprojector`'s private refinement queue to record each split.
 
 ## Steps
 
 1. **An image across 180°**: the image as stored, with the 180° meridian
-   curving through it, and where it belongs on the map: at both edges.
+   crossing it at a slant, and where it belongs on the map: at both edges.
 2. **Two triangles**: the reprojector starts from two triangles.
 3. **Project the corners**: proj4 returns every point in one copy of the world,
    so the west corners land at the map's east edge and the east corners at its

@@ -418,7 +418,7 @@ export function createStory(
     id: "image",
     title: "An image across 180°",
     description: [
-      "An image in UTM zone 60N, 42 x 42 pixels of 20 km, over the Aleutian Islands. The 180° meridian curves through it. On a Web Mercator map, 180° is both edges of the world, so the image belongs at both: its west part at the map's east edge, its east part at the west edge.",
+      "An image in UTM zone 60N, 42 x 42 pixels of 20 km, over the Aleutian Islands. The 180° meridian crosses it at a slant. On a Web Mercator map, 180° is both edges of the world, so the image belongs at both: its west part at the map's east edge, its east part at the west edge.",
     ],
     durationMs: 1600,
     frame: (t) => {
@@ -468,6 +468,11 @@ export function createStory(
     },
   };
 
+  /** Each snapshot's triangles, built once: the last has 20,001. */
+  const plainSoups = new Map(
+    scene.plain.map((snapshot) => [snapshot, mapSoup(snapshot)]),
+  );
+
   /** The plain projection's mesh in the whole-world view. */
   const plainMesh = (
     snapshot: Snapshot,
@@ -475,7 +480,7 @@ export function createStory(
   ) => ({
     id: "plain",
     view: "world" as const,
-    soup: mapSoup(snapshot),
+    soup: plainSoups.get(snapshot) ?? mapSoup(snapshot),
     edgeColor: withAlpha(WHITE, options.edges),
     edgeWidth: 1,
     opacity: options.opacity,
@@ -640,7 +645,7 @@ export function createStory(
     id: "walk",
     title: "Walk to the corners",
     description: [
-      `Before meshing, the layer unwraps the corners. It starts at the image's center, which proj4 puts at x ${short(scene.center.position[0])}, and walks toward each corner. Each sample proj4 returns (red, in the world above) moves to the copy of the world nearest the sample before it (green, up close). The west corners come out at x ${short(scene.corners.nw.unwrapped[0])} and ${short(scene.corners.sw.unwrapped[0])}, past the world's west edge, instead of ${Math.round(scene.corners.nw.raw[0])}.`,
+      `Before meshing, the layer unwraps the corners. It starts at the image's center, which proj4 puts at x ${short(scene.center.position[0])}, and walks toward each corner. Each sample proj4 returns (red, in the world above) moves to the copy of the world nearest the sample before it (green, up close). The west corners come out at x ${short(scene.corners.nw.unwrapped[0])} and ${short(scene.corners.sw.unwrapped[0])}, past the world's west edge, instead of ${Math.round(scene.corners.nw.raw[0])} and ${Math.round(scene.corners.sw.raw[0])}.`,
     ],
     durationMs: SPLIT_MS + CORNER_IDS.length * WALK_MS + 600,
     frame: (t) => {
@@ -779,8 +784,7 @@ export function createStory(
       pushUnwrappedCorners(frame, 1);
       const index = probeIndex(t);
       const sample = probe[index]!;
-      const [from, to] =
-        t % (2 * SWEEP_MS) < SWEEP_MS ? [0, index] : [index, probe.length - 1];
+      const [from, to] = t < SWEEP_MS ? [0, index] : [index, probe.length - 1];
       const trail = probe.slice(from, to + 1);
       frame.lines.push(
         {
@@ -875,7 +879,7 @@ export function createStory(
     id: "mesh",
     title: "Mesh as usual",
     description: [
-      `With every point snapped, the projection is continuous. The reprojector, which knows nothing about copies of the world, meshes it like any other image: it splits the triangle that is furthest off, until every triangle is within ${MAX_ERROR} output pixels. It needs ${count(scene.mesh.triangles.length / 3)} triangles. It measures the error on the map because the inverse projection is still wrapped.`,
+      `With every point snapped, the projection is continuous. The reprojector, which knows nothing about copies of the world, meshes it like any other image: it splits the triangle that is furthest off, until every triangle is within ${MAX_ERROR} output pixels. It needs ${count(scene.mesh.triangles.length / 3)} triangles. It measures the error on the map, as every layer now does; here it must, because the inverse projection is still wrapped.`,
     ],
     durationMs: lastEnd + 800,
     frame: (t) => {
@@ -952,7 +956,7 @@ export function createStory(
     id: "cut",
     title: "Cut at the world's edge",
     description: [
-      `The mesh hangs past the world's west edge, which the map can't draw. So the layer cuts the ${scene.crossing.length} triangles that cross it along -180°, leaving ${count(clipped.triangles.length / 3)} triangles, and moves the part past the edge one world over, to the map's east edge. In the image, the cut runs along the 180° meridian.`,
+      `The mesh runs past the world's west edge, but the layer draws every tile inside one world, from -180° to 180°, and lets the map's copies of the world do the rest. So it cuts the ${scene.crossing.length} triangles that cross the edge along -180°, leaving ${count(clipped.triangles.length / 3)} triangles, and moves the part past the edge one world over, to the map's east edge. In the image, the cut runs along the 180° meridian.`,
     ],
     durationMs: SWAP_MS + MOVE_MS + 700,
     frame: (t) => {

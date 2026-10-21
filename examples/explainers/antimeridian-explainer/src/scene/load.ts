@@ -61,16 +61,28 @@ export function checkImage(image: GeoTIFFLike): void {
   }
 }
 
-/** Run a read, naming the file if it fails. */
-async function read<T>(work: () => Promise<T>): Promise<T> {
+/** How long a read may take before loading gives up, in ms. */
+const READ_TIMEOUT_MS = 20_000;
+
+/** Run a read, naming the file if it fails or takes longer than `timeoutMs`. */
+async function read<T>(work: () => Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`timed out after ${timeoutMs / 1000} s`)),
+      timeoutMs,
+    );
+  });
   try {
-    return await work();
+    return await Promise.race([work(), timeout]);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     throw Object.assign(
       new Error(`Couldn't load ${FIXTURE_FILE}: ${message}`),
       { cause },
     );
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -84,9 +96,11 @@ export async function loadImage(
     signal?: AbortSignal;
     /** Called as each read finishes. */
     onProgress?: (progress: LoadProgress) => void;
+    /** How long a read may take before loading gives up, in ms. */
+    timeoutMs?: number;
   } = {},
 ): Promise<SourceImage> {
-  const { signal, onProgress } = options;
+  const { signal, onProgress, timeoutMs = READ_TIMEOUT_MS } = options;
   const open =
     options.open ?? ((url: string) => GeoTIFF.fromUrl(url, { signal }));
   const progress: LoadProgress = { done: 0, total: 2 };
@@ -95,11 +109,12 @@ export async function loadImage(
     onProgress?.({ ...progress });
   };
 
-  const geotiff = await read(() => open(FIXTURE_URL));
+  const geotiff = await read(() => open(FIXTURE_URL), timeoutMs);
   advance();
   checkImage(geotiff);
-  const [tile] = await read(() =>
-    geotiff.fetchTiles([[0, 0]], { boundless: false, signal }),
+  const [tile] = await read(
+    () => geotiff.fetchTiles([[0, 0]], { boundless: false, signal }),
+    timeoutMs,
   );
   advance();
   const array = tile?.array;

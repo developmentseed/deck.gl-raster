@@ -279,3 +279,35 @@ describe("descriptions", () => {
     }
   });
 });
+
+describe("final review fixes", () => {
+  it("step 8 says the layer keeps each tile inside one world, not that the map can't draw it", () => {
+    const text = plainText(story[7]!);
+    expect(text).not.toContain("can't draw");
+    expect(text).toContain("inside one world");
+  });
+
+  it("step 6 ends with the probe's whole trail", () => {
+    const trail = end(5).lines.find((l) => l.id === "probe-trail");
+    expect(trail?.paths[0]).toHaveLength(scene.probe.length);
+  });
+
+  it("step 1 says the meridian slants across the image, as it looks", () => {
+    expect(plainText(story[0]!)).not.toContain("curves");
+    expect(plainText(story[0]!)).toContain("slant");
+  });
+
+  it("step 5 gives both west corners' raw x", () => {
+    expect(plainText(story[4]!)).toContain("instead of 503 and 504");
+  });
+
+  it("step 7 says every layer measures on the map, and why it must here", () => {
+    expect(plainText(story[6]!)).toContain("as every layer now does");
+  });
+
+  it("step 4 builds each snapshot's triangles once, not every frame", () => {
+    const soupAt = (time: number) =>
+      story[3]!.frame(time).meshes.find((m) => m.id === "plain")!.soup;
+    expect(soupAt(10)).toBe(soupAt(20));
+  });
+});

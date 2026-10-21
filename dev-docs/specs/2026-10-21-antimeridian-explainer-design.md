@@ -97,8 +97,9 @@ read it from the browser.
 | Corners | NW 173.80°E 55.90°N, NE 172.84°W 55.52°N, SW 174.30°E 48.36°N, SE 174.41°W 48.07°N |
 | Center | 179.79°W 52.13°N |
 
-The 180° meridian runs through the image as a curve, because UTM's grid
-north isn't true north this far from zone 60's central meridian (177°E).
+The 180° meridian crosses the image at a slant of about 2.4°, from UTM's grid
+convergence this far from zone 60's central meridian (177°E). Within the image
+it is straight to 0.02 px.
 
 ### The mesh, measured with the real functions
 
@@ -134,7 +135,7 @@ Steps are numbered from 1 on screen, as in the multi-cog explainer, so the
 digit keys match.
 
 1. **An image across 180°.** The image as stored (42 x 42 px of 20 km, UTM
-   60N), with the 180° meridian curving through it. Beside it, the whole
+   60N), with the 180° meridian crossing it at a slant. Beside it, the whole
    Web Mercator world, with the image's footprint astride the map's edges.
 2. **Two triangles.** The reprojector starts from two triangles over the
    image, as for any image.

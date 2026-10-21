@@ -1,7 +1,7 @@
 import type { Mesh2D } from "@developmentseed/deck.gl-raster/internal/clip-mesh-to-world.js";
 import { clipMeshToWorld } from "@developmentseed/deck.gl-raster/internal/clip-mesh-to-world.js";
 import { makeUnwrappedReprojectionFns } from "@developmentseed/deck.gl-raster/internal/make-unwrapped-reprojection-fns.js";
-import { nearestCopy, unwrapAlong } from "@developmentseed/proj";
+import { nearestCopy } from "@developmentseed/proj";
 import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { MAX_ERROR, PERIOD } from "./constants.js";
@@ -24,12 +24,10 @@ export function cornerPixels(
 }
 
 /**
- * How far `makeUnwrappedReprojectionFns` walks toward each corner: just short
- * of it, because a corner can be a pole. Copied from
- * `packages/deck.gl-raster/src/make-unwrapped-reprojection-fns.ts`; a test
- * checks that each walk ends where the real wrapped functions put its corner.
+ * How close a walk's last point comes to its corner, in pixels: the library
+ * stops just short of each corner, because a corner can be a pole.
  */
-const INSIDE_CORNER = 1 - 1e-6;
+const CORNER_TOLERANCE = 1e-3;
 
 /**
  * The refines `RasterReprojector.run` makes before it gives up: its loop
@@ -48,7 +46,7 @@ const MERIDIAN_STEP = 0.05;
 
 /** One point a walk samples, on its way to a corner. */
 export type WalkSample = {
-  /** How far along the walk, from 0 (the center) to 1 (the corner). */
+  /** How far along the walk, as a fraction of the way to the corner. */
   t: number;
   /** Where in the image, 0-1 with v down. */
   uv: [number, number];
@@ -64,7 +62,7 @@ export type WalkSample = {
 export type Walk = {
   /** The samples, in order along the walk. */
   samples: WalkSample[];
-  /** `unwrapAlong`'s answer: the corner's unwrapped x. */
+  /** The corner's unwrapped x: the last sample's. */
   end: number;
 };
 
@@ -124,15 +122,32 @@ export type MeshScene = {
  */
 export function buildMeshScene(
   projection: Projection,
-  options: { width: number; height: number },
+  options: {
+    width: number;
+    height: number;
+    /** The unwrap to call: the library's, unless a test stands one in. */
+    unwrap?: typeof makeUnwrappedReprojectionFns;
+  },
 ): MeshScene {
   const { fns } = projection;
-  const { width, height } = options;
-  const wrapped = makeUnwrappedReprojectionFns(fns, {
-    width,
-    height,
-    period: PERIOD,
-  });
+  const { width, height, unwrap = makeUnwrappedReprojectionFns } = options;
+  // Record every pixel the unwrap projects while it walks to the corners:
+  // those are the walks step 5 draws, as the library takes them.
+  const requested: [number, number][] = [];
+  let recording = true;
+  const wrapped = unwrap(
+    {
+      ...fns,
+      forwardTransform: (px, py) => {
+        if (recording) {
+          requested.push([px, py]);
+        }
+        return fns.forwardTransform(px, py);
+      },
+    },
+    { width, height, period: PERIOD },
+  );
+  recording = false;
   const at = (f: ReprojectionFns, px: number, py: number) =>
     f.forwardReproject(...f.forwardTransform(px, py));
   const uvOf = (px: number, py: number): [number, number] => [
@@ -140,13 +155,10 @@ export function buildMeshScene(
     py / height,
   ];
 
-  const centerPixel: [number, number] = [width / 2, height / 2];
-  const center = {
-    uv: uvOf(...centerPixel),
-    position: at(fns, ...centerPixel),
-  };
-
   const pixels = cornerPixels(width, height);
+  const { start, walks: walkPixels } = splitWalks(requested, pixels);
+  const center = { uv: uvOf(...start), position: at(fns, ...start) };
+
   const corners = {} as MeshScene["corners"];
   const walks = {} as MeshScene["walks"];
   for (const id of CORNER_IDS) {
@@ -156,11 +168,12 @@ export function buildMeshScene(
       raw: at(fns, px, py),
       unwrapped: at(wrapped, px, py),
     };
-    walks[id] = recordWalk({
+    walks[id] = walkFrom({
+      pixels: walkPixels[id],
+      start,
+      corner: [px, py],
+      startX: center.position[0],
       positionAt: (x, y) => at(fns, x, y),
-      from: centerPixel,
-      to: [px, py],
-      start: center.position[0],
       size: [width, height],
     });
   }
@@ -204,38 +217,75 @@ export function buildMeshScene(
 }
 
 /**
- * Walk from `from` toward `to` (in pixels) with `unwrapAlong`, along the path
- * `makeUnwrappedReprojectionFns` takes, recording every sample it asks for.
+ * Split the pixels an unwrap projected into its start and one walk per corner.
+ * Each walk ends where it reaches its corner; a walk that halves its steps can
+ * reach the corner more than once, so those pieces join.
  */
-function recordWalk(options: {
+function splitWalks(
+  requested: [number, number][],
+  corners: Record<CornerId, [number, number]>,
+): { start: [number, number]; walks: Record<CornerId, [number, number][]> } {
+  const [start, ...rest] = requested;
+  if (!start) {
+    throw new Error("The unwrap projected no points.");
+  }
+  const walks = {} as Record<CornerId, [number, number][]>;
+  let current: [number, number][] = [];
+  for (const pixel of rest) {
+    current.push(pixel);
+    const reached = CORNER_IDS.find(
+      (id) =>
+        Math.hypot(pixel[0] - corners[id][0], pixel[1] - corners[id][1]) <
+        CORNER_TOLERANCE,
+    );
+    if (reached) {
+      walks[reached] = [...(walks[reached] ?? []), ...current];
+      current = [];
+    }
+  }
+  const missing = CORNER_IDS.filter((id) => !walks[id]);
+  if (missing.length > 0 || current.length > 0) {
+    throw new Error(
+      `The unwrap's walks didn't each end at a corner (missing: ${missing.join(", ") || "none"}).`,
+    );
+  }
+  return { start, walks };
+}
+
+/**
+ * One walk's samples, in order along it, each moved to the copy nearest the
+ * one before it, as `unwrapAlong` moves them.
+ */
+function walkFrom(options: {
+  pixels: [number, number][];
+  start: [number, number];
+  corner: [number, number];
+  startX: number;
   positionAt: (px: number, py: number) => [number, number];
-  from: [number, number];
-  to: [number, number];
-  start: number;
   size: [number, number];
 }): Walk {
-  const { positionAt, from, to, start, size } = options;
-  const calls: Omit<WalkSample, "x">[] = [];
-  const end = unwrapAlong(
-    (t) => {
-      const px = from[0] + t * INSIDE_CORNER * (to[0] - from[0]);
-      const py = from[1] + t * INSIDE_CORNER * (to[1] - from[1]);
-      const [raw, y] = positionAt(px, py);
-      calls.push({ t, uv: [px / size[0], py / size[1]], raw, y });
-      return raw;
-    },
-    { start, period: PERIOD },
-  );
-  // In path order, each sample moves to the copy nearest the one before it,
-  // as `unwrapAlong` moves it.
-  let previous = start;
-  const samples = [...calls]
-    .sort((a, b) => a.t - b.t)
-    .map((sample) => {
-      previous = nearestCopy(sample.raw, previous, PERIOD);
-      return { ...sample, x: previous };
+  const { pixels, start, corner, startX, positionAt, size } = options;
+  const length = Math.hypot(corner[0] - start[0], corner[1] - start[1]);
+  const distance = ([px, py]: [number, number]) =>
+    Math.hypot(px - start[0], py - start[1]);
+  const unique = [
+    ...new Map(pixels.map((p) => [`${p[0]},${p[1]}`, p])).values(),
+  ];
+  let previous = startX;
+  const samples = unique
+    .sort((a, b) => distance(a) - distance(b))
+    .map((pixel): WalkSample => {
+      const [raw, y] = positionAt(...pixel);
+      previous = nearestCopy(raw, previous, PERIOD);
+      return {
+        t: distance(pixel) / length,
+        uv: [pixel[0] / size[0], pixel[1] / size[1]],
+        raw,
+        y,
+        x: previous,
+      };
     });
-  return { samples, end };
+  return { samples, end: previous };
 }
 
 /**

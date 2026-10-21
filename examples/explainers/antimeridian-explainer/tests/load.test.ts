@@ -43,3 +43,13 @@ describe("loadImage", () => {
     );
   });
 });
+
+describe("loadImage at a slow venue", () => {
+  it("gives up after a while, naming the file", async () => {
+    await expect(
+      loadImage({ open: () => new Promise(() => {}), timeoutMs: 20 }),
+    ).rejects.toThrow(
+      /Couldn't load antimeridian_UTM_60N\.tif: timed out after 0\.02 s/,
+    );
+  });
+});

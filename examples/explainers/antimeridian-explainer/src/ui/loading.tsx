@@ -1,4 +1,8 @@
+import { FIXTURE_FILE, FIXTURE_URL } from "../scene/constants.js";
 import type { LoadProgress } from "../scene/load.js";
+
+/** What is loading, from where, for a presenter on a slow network. */
+const LOADING_TEXT = `Loading ${FIXTURE_FILE} from ${new URL(FIXTURE_URL).host}...`;
 
 // GitHub's dark palette, like the side panel.
 const TRACK = "#30363d";
@@ -25,7 +29,7 @@ export function Loading({ progress }: LoadingProps) {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <Spinner />
-        Loading the image...
+        {LOADING_TEXT}
       </div>
       <div
         role="progressbar"

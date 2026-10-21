@@ -1,4 +1,5 @@
 import { makeUnwrappedReprojectionFns } from "@developmentseed/deck.gl-raster/internal/make-unwrapped-reprojection-fns.js";
+import { nearestCopy } from "@developmentseed/proj";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { MeshScene } from "../src/scene/mesh.js";
 import { buildMeshScene, CORNER_IDS, cornerPixels } from "../src/scene/mesh.js";
@@ -38,7 +39,10 @@ describe("buildMeshScene: the corners", () => {
 describe("buildMeshScene: the walks", () => {
   it("samples each walk at its midpoint and its corner", () => {
     for (const id of CORNER_IDS) {
-      expect(scene.walks[id].samples.map((s) => s.t)).toEqual([0.5, 1]);
+      const ts = scene.walks[id].samples.map((s) => s.t);
+      expect(ts).toHaveLength(2);
+      expect(ts[0]).toBeCloseTo(0.5, 5);
+      expect(ts[1]).toBeCloseTo(1, 5);
     }
     const [mid, end] = scene.walks.nw.samples;
     expect(mid!.raw).toBeCloseTo(507.95, 2);
@@ -71,6 +75,48 @@ describe("buildMeshScene: the walks", () => {
         ...fns.forwardTransform(...pixels[id]),
       );
       expect(scene.walks[id].end).toBeCloseTo(x, 4);
+    }
+  });
+});
+
+describe("buildMeshScene: where the walks come from", () => {
+  it("records the walks the library takes, whatever path it walks", async () => {
+    // A stand-in library that strays off the straight path to each corner.
+    const fakeUnwrap: typeof makeUnwrappedReprojectionFns = (fns, options) => {
+      const xAt = (px: number, py: number) =>
+        fns.forwardReproject(...fns.forwardTransform(px, py))[0];
+      const center: [number, number] = [options.width / 2, options.height / 2];
+      xAt(...center);
+      for (const [px, py] of Object.values(cornerPixels(42, 42))) {
+        xAt((px + center[0]) / 2 + 3, (py + center[1]) / 2);
+        xAt(px, py);
+      }
+      return {
+        ...fns,
+        forwardReproject: (x, y) => {
+          const [outX, outY] = fns.forwardReproject(x, y);
+          return [nearestCopy(outX, 0, 512), outY];
+        },
+      };
+    };
+    const strayed = buildMeshScene(projection, {
+      width: 42,
+      height: 42,
+      unwrap: fakeUnwrap,
+    });
+    const [u, v] = strayed.walks.nw.samples[0]!.uv;
+    expect(u).toBeCloseTo((10.5 + 3) / 42, 9);
+    expect(v).toBeCloseTo(10.5 / 42, 9);
+  });
+
+  it("walks from the image's center along a straight line, as step 5 shows", () => {
+    // If the library changes its walk, step 5 goes stale and this fails.
+    for (const id of CORNER_IDS) {
+      const [cu, cv] = scene.corners[id].uv;
+      for (const { uv } of scene.walks[id].samples) {
+        const cross = (uv[0] - 0.5) * (cv - 0.5) - (uv[1] - 0.5) * (cu - 0.5);
+        expect(Math.abs(cross)).toBeLessThan(1e-9);
+      }
     }
   });
 });
