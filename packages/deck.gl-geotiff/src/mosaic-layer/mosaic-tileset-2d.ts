@@ -41,13 +41,13 @@ export type MosaicSource = {
  * The spatial index of a mosaic's sources.
  *
  * A source whose bbox crosses the antimeridian is indexed as two boxes, one on
- * each side, so `sourceOfBox` maps each box back to its source.
+ * each side, so `boxToSource` maps each box back to its source.
  */
 export type SourceIndex = {
   /** Flatbush index of the sources' boxes. */
   boxes: Flatbush;
   /** For each box in `boxes`, the position of its source in `sources`. */
-  sourceOfBox: Uint32Array;
+  boxToSource: Uint32Array;
 };
 
 /**
@@ -147,7 +147,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     const matched = new Set<number>();
     for (const bounds of searchBounds(viewport)) {
       for (const box of index.boxes.search(...bounds)) {
-        matched.add(index.sourceOfBox[box]!);
+        matched.add(index.boxToSource[box]!);
       }
     }
     let indices = [...matched];
@@ -189,15 +189,15 @@ export function buildSourceIndex(sources: MosaicSource[]): SourceIndex | null {
   const splitBboxes = sources.map((source) => splitAtAntimeridian(source.bbox));
   const numBoxes = splitBboxes.reduce((sum, split) => sum + split.length, 0);
   const boxes = new Flatbush(numBoxes);
-  const sourceOfBox = new Uint32Array(numBoxes);
+  const boxToSource = new Uint32Array(numBoxes);
   splitBboxes.forEach((split, sourceIndex) => {
     for (const box of split) {
       const boxIndex = boxes.add(...box);
-      sourceOfBox[boxIndex] = sourceIndex;
+      boxToSource[boxIndex] = sourceIndex;
     }
   });
   boxes.finish();
-  return { boxes, sourceOfBox };
+  return { boxes, boxToSource };
 }
 
 /**
