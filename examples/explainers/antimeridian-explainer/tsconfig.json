@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The explainer's private view of deck.gl-raster's built modules; see
+    // the alias in vite.config.ts.
+    "paths": {
+      "@developmentseed/deck.gl-raster/internal/*": [
+        "../../../packages/deck.gl-raster/dist/*"
+      ]
+    }
+  },
+  "include": ["src", "tests"]
+}
