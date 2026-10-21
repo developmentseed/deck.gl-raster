@@ -200,6 +200,19 @@ export class RasterReprojector {
 
   private _queueIndices: number[];
 
+  /**
+   * Memo of each edge's midpoint sample, keyed by the edge's vertex pair: the
+   * exact output position in `output` mode, or the inverse-mapped pixel
+   * position in `input` mode.
+   *
+   * Vertices are never removed, so an edge's midpoint sample never changes.
+   * The two triangles on an edge, and every rebuild of them after a legalize
+   * flip, would otherwise each project the same point again: about half of
+   * all projections. Cleared when {@link run} finishes, since the mesh is kept
+   * for the tile's lifetime but is rarely refined further.
+   */
+  private _edgeSamples: Map<number, [number, number]>;
+
   private _queue: number[];
   private _errors: number[];
   private _pending: number[];
@@ -244,6 +257,7 @@ export class RasterReprojector {
     this._candidatesUV = [];
     this._candidatesXY = [];
     this._queueIndices = [];
+    this._edgeSamples = new Map();
 
     this._queue = []; // queue of added triangles
     this._errors = [];
@@ -311,6 +325,8 @@ export class RasterReprojector {
         break;
       }
     }
+    // The memo is only worth its memory while refining.
+    this._edgeSamples.clear();
   }
 
   // refine the mesh with a single point
@@ -376,7 +392,15 @@ export class RasterReprojector {
     let maxErrorY = 0;
 
     // Recall that the sample point is in barycentric coordinates
-    for (const samplePoint of SAMPLE_POINTS) {
+    for (let s = 0; s < SAMPLE_POINTS.length; s++) {
+      const samplePoint = SAMPLE_POINTS[s]!;
+      // Edge samples (s = 1..3) are memoized by their vertex pair.
+      let edgeKey = -1;
+      if (s > 0) {
+        const i0 = s === 3 ? b : a;
+        const i1 = s === 1 ? b : c;
+        edgeKey = edgeSampleKey(i0 >> 1, i1 >> 1);
+      }
       // Get the UV coordinates of the sample point
       const uvSampleU = barycentricMix(
         p0u,
@@ -424,7 +448,15 @@ export class RasterReprojector {
       if (this._errorSpace === "output") {
         // Where the sample point belongs on the map vs. where the GPU draws
         // it, in output pixels: one input pixel's size on the map.
-        [exactX, exactY] = this._projectPixel(pixelExactX, pixelExactY);
+        const memo = edgeKey >= 0 ? this._edgeSamples.get(edgeKey) : undefined;
+        if (memo !== undefined) {
+          [exactX, exactY] = memo;
+        } else {
+          [exactX, exactY] = this._projectPixel(pixelExactX, pixelExactY);
+          if (edgeKey >= 0) {
+            this._edgeSamples.set(edgeKey, [exactX, exactY]);
+          }
+        }
         err =
           Math.hypot(exactX - outSampleX, exactY - outSampleY) /
           this._pixelSize;
@@ -432,17 +464,24 @@ export class RasterReprojector {
         // Reproject these linearly-interpolated coordinates **from output CRS
         // to input CRS**. This gives us the **exact position in input space**
         // of the linearly interpolated sample point in output space.
-        const inputCRSSampled = this.reprojectors.inverseReproject(
-          outSampleX,
-          outSampleY,
-        );
+        let pixelSampled =
+          edgeKey >= 0 ? this._edgeSamples.get(edgeKey) : undefined;
+        if (pixelSampled === undefined) {
+          const inputCRSSampled = this.reprojectors.inverseReproject(
+            outSampleX,
+            outSampleY,
+          );
 
-        // Find the pixel coordinates of the sampled point by using the
-        // inverse geotransform.
-        const pixelSampled = this.reprojectors.inverseTransform(
-          inputCRSSampled[0],
-          inputCRSSampled[1],
-        );
+          // Find the pixel coordinates of the sampled point by using the
+          // inverse geotransform.
+          pixelSampled = this.reprojectors.inverseTransform(
+            inputCRSSampled[0],
+            inputCRSSampled[1],
+          );
+          if (edgeKey >= 0) {
+            this._edgeSamples.set(edgeKey, pixelSampled);
+          }
+        }
 
         // 4. error in pixel space
         const dx = pixelExactX - pixelSampled[0];
@@ -895,6 +934,16 @@ export class RasterReprojector {
     }
     return i > i0;
   }
+}
+
+/**
+ * Key an undirected edge by its two vertex indices.
+ *
+ * Packs the smaller index into the high bits, so the key is the same from both
+ * triangles on the edge. 2^26 vertices per axis keeps the key an exact integer.
+ */
+function edgeSampleKey(i0: number, i1: number): number {
+  return i0 < i1 ? i0 * 67108864 + i1 : i1 * 67108864 + i0;
 }
 
 function orient(
