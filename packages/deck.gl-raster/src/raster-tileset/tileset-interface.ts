@@ -46,6 +46,11 @@ export interface RasterTilesetLevel {
    * The returned range is **inclusive** on both ends: a consumer should
    * iterate `for (let col = minCol; col <= maxCol; col++)`.
    *
+   * Tiles that only touch the bounding box along an edge, within a small
+   * floating-point tolerance, are not included. Otherwise, in an aligned
+   * pyramid, every parent tile would also claim its neighbors' children, and
+   * the traversal would visit and select those children once per parent.
+   *
    * Used by the traversal algorithm to find child tiles from a parent tile's
    * projected bounds.
    */

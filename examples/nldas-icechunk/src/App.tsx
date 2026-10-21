@@ -48,11 +48,8 @@ import { openSurfaceTemp } from "./nldas/store.js";
 const BASEMAP_STYLE =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
-// [[Min longitude, min latitude], [max longitude, max latitude]]
-const DATA_BOUNDS: [[number, number], [number, number]] = [
-  [-180, -20],
-  [-20, 80],
-];
+// [min longitude, min latitude, max longitude, max latitude]
+const DATA_BOUNDS: [number, number, number, number] = [-180, -20, -20, 80];
 
 /** Total number of rows in the shipped colormap sprite. */
 const COLORMAP_ROW_COUNT = Object.keys(COLORMAP_INDEX).length;

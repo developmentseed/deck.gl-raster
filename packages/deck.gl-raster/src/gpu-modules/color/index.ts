@@ -1,3 +1,4 @@
+export { GrayAlpha, Opaque } from "./alpha.js";
 export { BlackIsZero } from "./black-is-zero.js";
 export { cieLabToRGB } from "./cielab.js";
 export { CMYKToRGB } from "./cmyk.js";

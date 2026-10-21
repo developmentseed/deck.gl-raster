@@ -29,11 +29,6 @@ import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 
-type DefaultDataT = MinimalTileData & {
-  texture: Texture;
-  byteLength: number;
-};
-
 /** Options passed to `getTileData`. */
 export type GetTileDataOptions = RasterTileGetTileDataOptions & {
   /** The x coordinate of the tile within the IFD. */
@@ -77,7 +72,7 @@ type COGLayerDataProps<DataT extends MinimalTileData> =
 /**
  * Props that can be passed into the {@link COGLayer}.
  */
-export type COGLayerProps<DataT extends MinimalTileData = DefaultDataT> = Omit<
+export type COGLayerProps<DataT extends MinimalTileData = TextureDataT> = Omit<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
 > &
@@ -156,7 +151,7 @@ export type COGLayerProps<DataT extends MinimalTileData = DefaultDataT> = Omit<
  * COGLayer renders a COG using a tiled approach with reprojection.
  */
 export class COGLayer<
-  DataT extends MinimalTileData = DefaultDataT,
+  DataT extends MinimalTileData = TextureDataT,
 > extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
   static override layerName = "COGLayer";
   // COGLayer's getTileData signature differs from the base class's, so

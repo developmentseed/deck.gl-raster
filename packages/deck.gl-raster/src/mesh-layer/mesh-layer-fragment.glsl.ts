@@ -27,7 +27,7 @@ void main(void) {
   geometry.uv = vTexCoord;
 
   // We initialize color here before passing into DECKGL_FILTER_COLOR
-  vec4 color;
+  vec4 color = vec4(0.0);
   DECKGL_FILTER_COLOR(color, geometry);
 
   fragColor = vec4(color.rgb, color.a * layer.opacity);

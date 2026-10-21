@@ -10,6 +10,12 @@ export interface BoundingVolumeCacheEntry {
   zRange: ZRange;
   boundingVolume: OrientedBoundingBox;
   commonSpaceBounds: Bounds;
+  /**
+   * The tile's reprojected reference points in common space, without
+   * elevation. Present for Web Mercator volumes, so a volume for a new
+   * `zRange` can be refit from them without reprojecting.
+   */
+  commonSpacePositions?: [number, number][];
 }
 
 /**

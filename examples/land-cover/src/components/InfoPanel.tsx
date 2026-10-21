@@ -22,7 +22,7 @@ const debugOverlayTooltip = `Red squares depict the underlying COG tile structur
 
 Triangles depict the GPU-based reprojection. Instead of per-pixel reprojection, we generate an adaptive triangular mesh. Each triangle locally approximates the non-linear reprojection function, ensuring minimal distortion.`;
 
-const meshMaxErrorTooltip = `Controls the maximum allowed reprojection error (in source pixels) for the adaptive triangular mesh.
+const meshMaxErrorTooltip = `Controls the maximum allowed reprojection error (in output pixels: one source pixel's size on the map) for the adaptive triangular mesh.
 
 Lower values produce more triangles and higher accuracy at the cost of performance. Higher values use fewer triangles and render faster but with less precise reprojection.`;
 

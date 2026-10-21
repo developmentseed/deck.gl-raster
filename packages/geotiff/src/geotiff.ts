@@ -1,11 +1,13 @@
-import { SourceCache, SourceChunk } from "@chunkd/middleware";
+import { SourceChunk } from "@chunkd/middleware";
 import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
 import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
+import { apply } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
+import { LRUCacheMiddleware } from "./cache.js";
 import type { ColorInterp } from "./colorinterp.js";
 import { inferColorInterpretation } from "./colorinterp.js";
 import { crsFromGeoKeys } from "./crs.js";
@@ -331,7 +333,7 @@ export class GeoTIFF {
 
     // When a limiter is supplied, slot a LimiterMiddleware into both
     // sources' middleware stacks. On the header source, it sits *after*
-    // SourceChunk + SourceCache so a cache hit short-circuits and never
+    // SourceChunk + LRUCacheMiddleware so a cache hit short-circuits and never
     // consumes a slot — only network reads that escape the cache are gated.
     // On the data source (no caching), every fetch is gated. Both stacks
     // share one LimiterMiddleware instance, so they share one per-origin pool.
@@ -345,7 +347,7 @@ export class GeoTIFF {
 
     const view = new SourceView(source, [
       new SourceChunk({ size: chunkSize }),
-      new SourceCache({ size: cacheSize }),
+      new LRUCacheMiddleware({ size: cacheSize }),
       ...(limiter ? [limiter] : []),
     ]);
 
@@ -458,9 +460,23 @@ export class GeoTIFF {
     });
   }
 
-  /** Bounding box [minX, minY, maxX, maxY] in the CRS. */
+  /**
+   * Bounding box [minX, minY, maxX, maxY] in the CRS.
+   *
+   * The box around the image's four corners, so it holds the whole image when
+   * {@link GeoTIFF.transform} is rotated or skewed.
+   */
   get bbox(): [number, number, number, number] {
-    return this.image.bbox;
+    const { transform, width, height } = this;
+    const corners = [
+      apply(transform, 0, 0),
+      apply(transform, width, 0),
+      apply(transform, 0, height),
+      apply(transform, width, height),
+    ];
+    const xs = corners.map(([x]) => x);
+    const ys = corners.map(([, y]) => y);
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
   }
 
   /**
