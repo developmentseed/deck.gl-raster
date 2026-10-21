@@ -1,3 +1,4 @@
+import { COMPOSITE_RESCALE } from "../render/composite-layer.js";
 import type { BandId } from "../scene/constants.js";
 import {
   BAND_IDS,
@@ -16,6 +17,7 @@ import {
   utmToScene,
 } from "../scene/layout.js";
 import type { SceneData } from "../scene/load.js";
+import { sampleBilinear, textureTexel } from "../scene/sampling.js";
 import { uvLabel, uvRect } from "../scene/uv.js";
 import { flyRect } from "./flight.js";
 import type { Frame, ImageId, Label, Rgba } from "./frame.js";
@@ -44,6 +46,12 @@ export type StoryStep = {
 
 const MUTED = "#8b949e";
 const WHITE: Rgba = [230, 237, 243, 255];
+
+/** How long the probe takes to loop around the tile, in ms. */
+const PROBE_LOOP_MS = 6000;
+
+/** Centre of step 8's pixel swatch, right of the bars, in slide units. */
+const SWATCH_CENTER: [number, number] = [1862, 690];
 
 /** Gap between the 60 m tiles before they are stitched, in slide units. */
 const PIECE_GAP = 12;
@@ -621,25 +629,18 @@ export function createStory(scene: SceneData): StoryStep[] {
   };
 
   /** The three textures in their slots, the 60 m one stitched. */
-  const pushTextures = (frame: Frame) => {
+  const pushTextures = (frame: Frame, opacity = 1) => {
+    if (opacity <= 0) {
+      return;
+    }
     frame.bitmaps.push(
-      {
-        id: "b04-tile",
-        image: "b04-tile",
-        rect: TEXTURE_SLOTS.b04,
-        opacity: 1,
-      },
-      {
-        id: "b11-tile",
-        image: "b11-tile",
-        rect: TEXTURE_SLOTS.b11,
-        opacity: 1,
-      },
+      { id: "b04-tile", image: "b04-tile", rect: TEXTURE_SLOTS.b04, opacity },
+      { id: "b11-tile", image: "b11-tile", rect: TEXTURE_SLOTS.b11, opacity },
       ...covers.b01.map((_, i) => ({
         id: `b01-piece-${i}`,
         image: `b01-piece-${i}` as ImageId,
         rect: pieceRect(i, 0),
-        opacity: 1,
+        opacity,
       })),
     );
   };
@@ -680,6 +681,162 @@ export function createStory(scene: SceneData): StoryStep[] {
     },
   };
 
+  /** Where the probe is at time `t`: a loop around the tile's middle. */
+  const probeUv = (t: number): [number, number] => {
+    const angle = (2 * Math.PI * t) / PROBE_LOOP_MS;
+    return [0.5 + 0.32 * Math.cos(angle), 0.5 + 0.32 * Math.sin(angle)];
+  };
+  const storyRect = ringRect(storyRing);
+  /** How many texels of each band's texture one sweep across the tile spans. */
+  const span = (band: BandId) =>
+    Math.round(
+      tile.bands[band].uvTransform[2] * tile.bands[band].stitchedWidth,
+    );
+
+  /** Step 8: sample every band at the same point of the tile. */
+  const sampleStep: StoryStep = {
+    id: "sample",
+    title: "Sample",
+    description: [
+      `For every pixel of the tile, the shader applies each band's UV transform and samples that band's texture there. The three values become red, green and blue. One sweep across the tile crosses ${span("b04")} texels of the 10 m texture, ${span("b11")} of the 20 m one and about ${span("b01")} of the 60 m one; the GPU interpolates between them.`,
+    ],
+    durationMs: PROBE_LOOP_MS,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushCoverage(frame);
+      pushTextures(frame);
+      const uv = probeUv(t);
+      const values = {} as Record<BandId, number>;
+      for (const band of BAND_IDS) {
+        const cover = tile.bands[band];
+        const rect = uvRect(TEXTURE_SLOTS[band], cover.uvTransform);
+        frame.polygons.push({
+          id: `uv-${band}`,
+          rings: [rectRing(rect)],
+          line: withAlpha(WHITE, 0.6),
+          lineWidth: 2,
+        });
+        const point: [number, number] = [
+          rect.x + uv[0] * rect.width,
+          rect.y + uv[1] * rect.height,
+        ];
+        frame.dots.push(
+          {
+            id: `probe-${band}-ring`,
+            points: [point],
+            color: WHITE,
+            radius: 9,
+          },
+          {
+            id: `probe-${band}`,
+            points: [point],
+            color: BANDS[band].color,
+            radius: 6,
+          },
+        );
+        const texel = textureTexel(uv, cover.uvTransform, [
+          cover.stitchedWidth,
+          cover.stitchedHeight,
+        ]);
+        values[band] = sampleBilinear(scene.stitched[band], texel);
+        slotLabels(
+          frame,
+          band,
+          `texel (${texel[0].toFixed(1)}, ${texel[1].toFixed(1)})`,
+          1,
+        );
+      }
+      const scenePoint: [number, number] = [
+        storyRect.x + uv[0] * storyRect.width,
+        storyRect.y + uv[1] * storyRect.height,
+      ];
+      frame.dots.push(
+        {
+          id: "probe-scene-ring",
+          points: [scenePoint],
+          color: WHITE,
+          radius: 6,
+        },
+        {
+          id: "probe-scene",
+          points: [scenePoint],
+          color: [13, 17, 23, 255],
+          radius: 3,
+        },
+      );
+      // Rescale like the shader: the texture holds value / 65535, and
+      // LinearRescale maps rescaleMin-rescaleMax onto 0-1.
+      const rescale = (value: number) =>
+        (value / 65535 - COMPOSITE_RESCALE.rescaleMin) /
+        (COMPOSITE_RESCALE.rescaleMax - COMPOSITE_RESCALE.rescaleMin);
+      const bars = {
+        r: rescale(values.b11),
+        g: rescale(values.b04),
+        b: rescale(values.b01),
+      };
+      frame.hud.bars = bars;
+      const channel = (value: number) =>
+        Math.round(255 * Math.min(1, Math.max(0, value)));
+      frame.dots.push({
+        id: "pixel",
+        points: [SWATCH_CENTER],
+        color: [channel(bars.r), channel(bars.g), channel(bars.b), 255],
+        radius: 34,
+      });
+      frame.hud.labels.push(
+        label("pixel-label", "Pixel", SWATCH_CENTER[0], SWATCH_CENTER[1] + 56, {
+          color: MUTED,
+          size: 20,
+        }),
+      );
+      frame.hud.caption = "Sample every band at the same spot";
+      return frame;
+    },
+  };
+
+  /** Step 9: the composited tile, back in its place in the scene. */
+  const onTheMapStep: StoryStep = {
+    id: "on-the-map",
+    title: "The tile on the map",
+    description: [
+      "That shader output is the tile, drawn in its place. Every tile on screen is composited the same way. To see how each tile is then reprojected onto the map, see the ",
+      { text: "reprojection explainer", href: REPROJECTION_EXPLAINER_URL },
+      ".",
+    ],
+    durationMs: 2600,
+    frame: (t) => {
+      const frame = emptyFrame();
+      frame.composites.push(sceneComposite());
+      const appear = progress(t, 0, 400);
+      const fly = progress(t, 1000, 1200);
+      const settle = progress(t, 2200, 400);
+      pushTextures(frame, 1 - fly);
+      frame.polygons.push({
+        id: "story-tile",
+        rings: [storyRing],
+        line: withAlpha(WHITE, 1 - settle),
+        lineWidth: 2.5,
+      });
+      frame.composites.push({
+        id: "story-tile-composite",
+        source: "tile",
+        rect: flyRect(TEXTURE_SLOTS.b04, storyRect, fly),
+        opacity: appear,
+      });
+      frame.hud.labels.push(
+        label(
+          "composite-label",
+          "The composited tile",
+          TEXTURE_SLOTS.b04.x + TEXTURE_SLOTS.b04.width / 2,
+          TEXTURE_SLOTS.b04.y + TEXTURE_SLOTS.b04.height + 30,
+          { opacity: appear * (1 - fly) },
+        ),
+      );
+      frame.hud.caption = "The composited tile, in its place";
+      return frame;
+    },
+  };
+
   const steps: StoryStep[] = [
     threeFiles,
     oneImage,
@@ -688,26 +845,8 @@ export function createStory(scene: SceneData): StoryStep[] {
     fetchStep,
     stitchStep,
     uvStep,
-    {
-      id: "sample",
-      title: "Sample",
-      description: [
-        "For every pixel of the tile, the shader applies each band's UV transform and samples that band's texture there. The three values become red, green and blue.",
-      ],
-      durationMs: 0,
-      frame: () => emptyFrame(),
-    },
-    {
-      id: "on-the-map",
-      title: "The tile on the map",
-      description: [
-        "That shader output is the tile, drawn in its place. Every tile on screen is composited the same way. To see how each tile is then reprojected onto the map, see the ",
-        { text: "reprojection explainer", href: REPROJECTION_EXPLAINER_URL },
-        ".",
-      ],
-      durationMs: 0,
-      frame: () => emptyFrame(),
-    },
+    sampleStep,
+    onTheMapStep,
   ];
   return steps;
 }

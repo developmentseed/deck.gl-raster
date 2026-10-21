@@ -99,3 +99,26 @@ describe("step 7: where the tile lands", () => {
     expect(Math.max(...ys)).toBeCloseTo(410, 6);
   });
 });
+
+describe("step 9: the tile on the map", () => {
+  it("ends with the composited tile on the story tile's place in the scene", () => {
+    const tile = end(8).composites.find((c) => c.source === "tile");
+    // Tile (4, 4) is 10.24 km of the scene's 109.8 km, 4 tiles in each way.
+    const size = (10240 / 109800) * SCENE_BOX.width;
+    expect(tile?.rect.x).toBeCloseTo(SCENE_BOX.x + 4 * size, 6);
+    expect(tile?.rect.y).toBeCloseTo(SCENE_BOX.y + 4 * size, 6);
+    expect(tile?.rect.width).toBeCloseTo(size, 6);
+    expect(tile?.opacity).toBe(1);
+  });
+});
+
+describe("frames", () => {
+  it("depend only on the step and the time, not on frames drawn before", () => {
+    const before = story[4]!.frame(500);
+    for (const step of story) {
+      step.frame(0);
+      step.frame(step.durationMs);
+    }
+    expect(story[4]!.frame(500)).toEqual(before);
+  });
+});
