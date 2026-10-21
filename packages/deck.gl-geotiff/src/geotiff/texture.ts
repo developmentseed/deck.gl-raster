@@ -10,7 +10,8 @@ export function createTextureProps(
   data: TypedArray,
   options: { width: number; height: number },
 ): TextureProps {
-  const { samplesPerPixel, bitsPerSample, sampleFormat } = geotiff.cachedTags;
+  const { samplesPerPixel, bitsPerSample, sampleFormat } =
+    geotiff.cachedPrimaryImageTags;
 
   const textureFormat = inferTextureFormat(
     samplesPerPixel,

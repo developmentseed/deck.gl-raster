@@ -14,11 +14,15 @@ import { crsFromGeoKeys } from "./crs.js";
 import { fetchTile, fetchTiles } from "./fetch.js";
 import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";
 import { parseGDALMetadata } from "./gdal-metadata.js";
-import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
+import type {
+  CachedPrimaryImageTags,
+  CachedSubImageTags,
+  GeoKeyDirectory,
+} from "./ifd.js";
 import {
   extractGeoKeyDirectory,
+  prefetchPrimaryImageTags,
   prefetchSubImageTags,
-  prefetchTags,
 } from "./ifd.js";
 import type { ConcurrencyLimiter, Priority } from "./limiter.js";
 import { LimiterMiddleware } from "./limiter.js";
@@ -83,8 +87,15 @@ export class GeoTIFF {
   /** A cached CRS value. */
   private _crs?: number | ProjJson | string;
 
-  /** Cached TIFF tags that are pre-fetched when opening the GeoTIFF. */
-  readonly cachedTags: CachedTags;
+  /**
+   * Cached TIFF tags of the primary image, pre-fetched when opening the
+   * GeoTIFF. The overviews use these too, except for their own
+   * {@link CachedSubImageTags}.
+   */
+  readonly cachedPrimaryImageTags: CachedPrimaryImageTags;
+
+  /** Cached TIFF tags of {@link maskImage}, or `null` if there's no mask. */
+  readonly cachedMaskImageTags: CachedSubImageTags | null;
 
   /** The data source used for fetching tile data.
    *
@@ -126,7 +137,8 @@ export class GeoTIFF {
     maskImage: TiffImage | null,
     gkd: GeoKeyDirectory,
     overviews: Overview[],
-    cachedTags: CachedTags,
+    cachedPrimaryImageTags: CachedPrimaryImageTags,
+    cachedMaskImageTags: CachedSubImageTags | null,
     dataSource: Pick<Source, "fetch">,
     gdalMetadata: GDALMetadata | null,
     debug: boolean,
@@ -136,7 +148,8 @@ export class GeoTIFF {
     this.maskImage = maskImage;
     this.gkd = gkd;
     this.overviews = overviews;
-    this.cachedTags = cachedTags;
+    this.cachedPrimaryImageTags = cachedPrimaryImageTags;
+    this.cachedMaskImageTags = cachedMaskImageTags;
     this.dataSource = dataSource;
     this.gdalMetadata = gdalMetadata;
     this._debug = debug;
@@ -237,15 +250,20 @@ export class GeoTIFF {
       return sb.width * sb.height - sa.width * sa.height;
     });
 
-    const [cachedTags] = await Promise.all([
-      prefetchTags(primaryImage, { signal }),
-      ...images
-        .slice(1)
-        .map((image) => prefetchSubImageTags(image, { signal })),
+    const subImages = images.slice(1);
+    const [cachedPrimaryImageTags, ...subImageTags] = await Promise.all([
+      prefetchPrimaryImageTags(primaryImage, { signal }),
+      ...subImages.map((image) => prefetchSubImageTags(image, { signal })),
     ]);
-    const gdalMetadata = parseGDALMetadata(cachedTags.gdalMetadata, {
-      count: cachedTags.samplesPerPixel,
-    });
+    const tagsBySubImage = new Map(
+      subImages.map((image, i) => [image, subImageTags[i]!] as const),
+    );
+    const gdalMetadata = parseGDALMetadata(
+      cachedPrimaryImageTags.gdalMetadata,
+      {
+        count: cachedPrimaryImageTags.samplesPerPixel,
+      },
+    );
 
     // Two-phase construction: create the GeoTIFF first (with empty overviews),
     // then build Overviews that reference back to it.
@@ -255,7 +273,8 @@ export class GeoTIFF {
       primaryMask,
       gkd,
       [],
-      cachedTags,
+      cachedPrimaryImageTags,
+      primaryMask === null ? null : tagsBySubImage.get(primaryMask)!,
       dataSource,
       gdalMetadata,
       debug,
@@ -268,7 +287,9 @@ export class GeoTIFF {
         gkd,
         dataImage,
         maskImage,
-        cachedTags,
+        cachedPrimaryImageTags,
+        tagsBySubImage.get(dataImage)!,
+        maskImage === null ? null : tagsBySubImage.get(maskImage)!,
         dataSource,
       );
     });
@@ -464,8 +485,8 @@ export class GeoTIFF {
   get colorInterp(): ColorInterp[] {
     return inferColorInterpretation({
       count: this.count,
-      photometric: this.cachedTags.photometric,
-      extraSamples: this.cachedTags.extraSamples,
+      photometric: this.cachedPrimaryImageTags.photometric,
+      extraSamples: this.cachedPrimaryImageTags.extraSamples,
     });
   }
 
@@ -493,7 +514,7 @@ export class GeoTIFF {
    */
   get transform(): Affine {
     const { modelPixelScale, modelTiepoint, modelTransformation } =
-      this.cachedTags;
+      this.cachedPrimaryImageTags;
     return createTransform({
       modelTiepoint,
       modelPixelScale,
@@ -522,7 +543,13 @@ export class GeoTIFF {
       signal?: AbortSignal;
     } = {},
   ): Promise<Tile> {
-    return await fetchTile(this, x, y, options);
+    return await fetchTile(
+      this,
+      { image: this.cachedPrimaryImageTags, mask: this.cachedMaskImageTags },
+      x,
+      y,
+      options,
+    );
   }
 
   /**
@@ -545,7 +572,12 @@ export class GeoTIFF {
       signal?: AbortSignal;
     } = {},
   ): Promise<Tile[]> {
-    return await fetchTiles(this, xy, options);
+    return await fetchTiles(
+      this,
+      { image: this.cachedPrimaryImageTags, mask: this.cachedMaskImageTags },
+      xy,
+      options,
+    );
   }
 
   // Transform mixin

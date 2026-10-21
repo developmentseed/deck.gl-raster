@@ -66,7 +66,7 @@ export function inferRenderPipeline(
   ) => Promise<TextureDataT>;
   renderTile: (data: TextureDataT) => RenderTileResult;
 } {
-  const { sampleFormat } = geotiff.cachedTags;
+  const { sampleFormat } = geotiff.cachedPrimaryImageTags;
   if (sampleFormat === null) {
     throw new Error("SampleFormat tag is required to infer render pipeline");
   }
@@ -102,7 +102,7 @@ function createUnormPipeline(
     sampleFormat,
     samplesPerPixel,
     nodata,
-  } = geotiff.cachedTags;
+  } = geotiff.cachedPrimaryImageTags;
 
   const renderPipeline: UnresolvedRasterModule<TextureDataT>[] = [
     {
@@ -245,7 +245,7 @@ function createUnormPipeline(
  * `color.g`, which the gray-to-RGB module overwrites.
  */
 function alphaModule(geotiff: GeoTIFF): RasterModule | null {
-  const { photometric, samplesPerPixel } = geotiff.cachedTags;
+  const { photometric, samplesPerPixel } = geotiff.cachedPrimaryImageTags;
   switch (photometric) {
     case Photometric.Rgb:
       if (

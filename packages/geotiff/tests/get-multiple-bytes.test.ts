@@ -2,6 +2,10 @@ import type { TiffImage } from "@cogeotiff/core";
 import { Compression, TiffTag } from "@cogeotiff/core";
 import { describe, expect, it } from "vitest";
 import { getMultipleBytes, getTiles } from "../src/fetch.js";
+import type { CachedSubImageTags } from "../src/ifd.js";
+
+/** Tags of an image without JPEG tables. */
+const NO_JPEG_TABLES: CachedSubImageTags = { jpegTables: null };
 
 /** Build a buffer where each byte equals `index % 256`. */
 function makeBuffer(size: number): Uint8Array {
@@ -32,9 +36,7 @@ function recordingDataSource(buffer: Uint8Array) {
 
 /**
  * Minimal `TiffImage` stand-in exposing only what `getMultipleBytes` / `getTiles`
- * touch: `size`, `tileSize`, `value(Compression)`, `getTileSize(idx)`,
- * `getJpegHeader(bytes)`. `getJpegHeader` here prepends a `0xff` marker byte so
- * tests can detect that the JPEG path ran.
+ * touch: `size`, `tileSize`, `value(Compression)`, `getTileSize(idx)`.
  */
 function mockImage(opts: {
   tileCount: { x: number; y: number };
@@ -54,12 +56,6 @@ function mockImage(opts: {
         : undefined,
     getTileSize: (idx: number) =>
       Promise.resolve(opts.tiles.get(idx) ?? { offset: 0, imageSize: 0 }),
-    getJpegHeader: (bytes: ArrayBuffer) => {
-      const out = new Uint8Array(bytes.byteLength + 1);
-      out[0] = 0xff;
-      out.set(new Uint8Array(bytes), 1);
-      return out.buffer;
-    },
   } as unknown as TiffImage;
 }
 
@@ -71,7 +67,7 @@ describe("getMultipleBytes", () => {
       tileSize: { width: 16, height: 16 },
       tiles: new Map(),
     });
-    expect(await getMultipleBytes(image, [], ds)).toEqual([]);
+    expect(await getMultipleBytes(image, NO_JPEG_TABLES, [], ds)).toEqual([]);
     expect(ds.fetches.length).toBe(0);
   });
 
@@ -85,6 +81,7 @@ describe("getMultipleBytes", () => {
 
     const result = await getMultipleBytes(
       image,
+      NO_JPEG_TABLES,
       [
         { offset: 120, byteCount: 10 },
         { offset: 100, byteCount: 10 },
@@ -113,6 +110,7 @@ describe("getMultipleBytes", () => {
 
     const result = await getMultipleBytes(
       image,
+      NO_JPEG_TABLES,
       [
         { offset: 0, byteCount: 10 },
         { offset: 10, byteCount: 0 },
@@ -128,7 +126,7 @@ describe("getMultipleBytes", () => {
     );
   });
 
-  it("prepends the JPEG header for JPEG-compressed tiles", async () => {
+  it("prepends the image's JPEG tables to JPEG-compressed tiles", async () => {
     const ds = recordingDataSource(makeBuffer(64));
     const image = mockImage({
       tileCount: { x: 1, y: 1 },
@@ -136,18 +134,22 @@ describe("getMultipleBytes", () => {
       tiles: new Map(),
       compression: Compression.Jpeg,
     });
+    // Start-of-image marker, the tables, end-of-image marker.
+    const jpegTables = new Uint8Array([0xff, 0xd8, 0xaa, 0xff, 0xd9]);
 
     const [tile] = await getMultipleBytes(
       image,
+      { jpegTables },
       [{ offset: 5, byteCount: 4 }],
       ds,
     );
 
     expect(tile!.compression).toBe(Compression.Jpeg);
-    const out = new Uint8Array(tile!.bytes);
-    expect(out.length).toBe(5);
-    expect(out[0]).toBe(0xff);
-    expect(Array.from(out.slice(1))).toEqual([5, 6, 7, 8]);
+    // The tables without their end-of-image marker, then the tile's bytes
+    // (5, 6, 7, 8) without the two where its start-of-image marker would be.
+    expect(Array.from(new Uint8Array(tile!.bytes))).toEqual([
+      0xff, 0xd8, 0xaa, 7, 8,
+    ]);
   });
 });
 
@@ -159,7 +161,7 @@ describe("getTiles", () => {
       tileSize: { width: 16, height: 16 },
       tiles: new Map(),
     });
-    expect(await getTiles(image, [], ds)).toEqual([]);
+    expect(await getTiles(image, NO_JPEG_TABLES, [], ds)).toEqual([]);
   });
 
   it("resolves tile offsets and returns bytes in input order", async () => {
@@ -175,6 +177,7 @@ describe("getTiles", () => {
 
     const result = await getTiles(
       image,
+      NO_JPEG_TABLES,
       [
         [1, 0],
         [0, 0],
@@ -204,6 +207,7 @@ describe("getTiles", () => {
 
     const result = await getTiles(
       image,
+      NO_JPEG_TABLES,
       [
         [0, 0],
         [1, 0],
@@ -221,10 +225,10 @@ describe("getTiles", () => {
       tiles: new Map(),
     });
 
-    await expect(getTiles(image, [[2, 0]], ds)).rejects.toThrow(
+    await expect(getTiles(image, NO_JPEG_TABLES, [[2, 0]], ds)).rejects.toThrow(
       /Tile index is outside of range/,
     );
-    await expect(getTiles(image, [[0, 2]], ds)).rejects.toThrow(
+    await expect(getTiles(image, NO_JPEG_TABLES, [[0, 2]], ds)).rejects.toThrow(
       /Tile index is outside of range/,
     );
   });
@@ -236,8 +240,8 @@ describe("getTiles", () => {
       tileSize: null,
     } as unknown as TiffImage;
 
-    await expect(getTiles(untiled, [[0, 0]], ds)).rejects.toThrow(
-      /Tiff is not tiled/,
-    );
+    await expect(
+      getTiles(untiled, NO_JPEG_TABLES, [[0, 0]], ds),
+    ).rejects.toThrow(/Tiff is not tiled/);
   });
 });

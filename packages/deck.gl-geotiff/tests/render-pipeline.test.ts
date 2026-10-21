@@ -1,5 +1,5 @@
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
-import type { CachedTags, GeoTIFF } from "@developmentseed/geotiff";
+import type { CachedPrimaryImageTags, GeoTIFF } from "@developmentseed/geotiff";
 import { describe, expect, it } from "vitest";
 import { inferRenderPipeline } from "../src/geotiff/render-pipeline.js";
 import { loadGeoTIFF } from "./helpers.js";
@@ -27,10 +27,12 @@ function moduleNames(renderPipeline: RasterModule[]): string[] {
 /** The same GeoTIFF, with its ExtraSamples tag replaced. */
 function withExtraSamples(
   geotiff: GeoTIFF,
-  extraSamples: CachedTags["extraSamples"],
+  extraSamples: CachedPrimaryImageTags["extraSamples"],
 ): GeoTIFF {
   return Object.create(geotiff, {
-    cachedTags: { value: { ...geotiff.cachedTags, extraSamples } },
+    cachedPrimaryImageTags: {
+      value: { ...geotiff.cachedPrimaryImageTags, extraSamples },
+    },
   });
 }
 
