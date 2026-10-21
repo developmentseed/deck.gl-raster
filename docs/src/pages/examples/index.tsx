@@ -281,6 +281,19 @@ const explainerExamples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/explainers/reprojection-explainer",
   },
+  {
+    title: "MultiCOGLayer Explainer",
+    description: (
+      <>
+        A step-by-step animation of how MultiCOGLayer draws bands stored at
+        different resolutions as one image.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/multi-cog-explainer/",
+    image: "/deck.gl-raster/img/multi-cog-explainer-examples-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/explainers/multi-cog-explainer",
+  },
 ];
 
 /**
