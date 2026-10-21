@@ -104,8 +104,7 @@ export async function loadImage(
   advance();
   const array = tile?.array;
   if (
-    !array ||
-    array.layout !== "pixel-interleaved" ||
+    array?.layout !== "pixel-interleaved" ||
     array.width !== IMAGE.width ||
     array.height !== IMAGE.height
   ) {
