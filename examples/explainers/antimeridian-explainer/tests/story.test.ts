@@ -311,3 +311,65 @@ describe("final review fixes", () => {
     expect(soupAt(10)).toBe(soupAt(20));
   });
 });
+
+describe("beats", () => {
+  /** Step `index`'s frame at its `beat`th stop. */
+  function atStop(index: number, beat: number) {
+    const step = story[index]!;
+    return step.frame(step.stops![beat]!);
+  }
+  const points = (frame: Frame, id: string) =>
+    frame.dots.find((d) => d.id === id)?.points.length ?? 0;
+
+  it("step 5 stops after the split and after each sample but the last", () => {
+    expect(story[4]!.stops).toHaveLength(8);
+    expect(points(atStop(4, 0), "walk-moved")).toBe(0);
+    expect(points(atStop(4, 1), "walk-moved")).toBe(1);
+    expect(points(atStop(4, 2), "walk-moved")).toBe(2);
+  });
+
+  it("step 5 shows a sample in the image before the map", () => {
+    const step = story[4]!;
+    const early = step.frame(step.stops![0]! + 200);
+    expect(points(early, "walk-image")).toBe(1);
+    expect(points(early, "walk-raw")).toBe(0);
+    expect(points(early, "walk-moved")).toBe(0);
+  });
+
+  it("step 3 stops once the corners land, before the triangles stretch", () => {
+    const frame = atStop(2, 0);
+    expect(frame.dots.find((d) => d.id === "corners")?.view).toBe("world");
+    expect(frame.meshes.find((m) => m.id === "plain")).toBeUndefined();
+  });
+
+  it("step 6 stops on each side of 180°", () => {
+    const xs = (frame: Frame) =>
+      ["probe-raw", "probe-snapped"].map(
+        (id) => frame.dots.find((d) => d.id === id)!.points[0]![0],
+      );
+    const [westRaw, westSnapped] = xs(atStop(5, 0));
+    expect(westRaw - westSnapped).toBeCloseTo(512, 0);
+    const [eastRaw, eastSnapped] = xs(atStop(5, 1));
+    expect(eastRaw).toBeCloseTo(eastSnapped, 6);
+  });
+
+  it("step 8 stops before the cut, and again before the move", () => {
+    expect(atStop(7, 0).lines.find((l) => l.id === "cut")).toBeUndefined();
+    const cut = atStop(7, 1);
+    expect(cut.lines.find((l) => l.id === "cut")).toBeDefined();
+    const moving = cut.meshes.find((m) => m.id === "clipped-moving");
+    const xs = Array.from(moving!.soup.positions).filter((_, i) => i % 2 === 0);
+    expect(Math.min(...xs)).toBeLessThan(0);
+  });
+});
+
+describe("beats hold on finished frames", () => {
+  it("step 5's close-up has fully faded in at its first stop", () => {
+    const step = story[4]!;
+    const frame = step.frame(step.stops![0]!);
+    const edges = frame.lines.find(
+      (l) => l.id === "world-edges" && l.view === "closeup",
+    );
+    expect(edges?.color[3]).toBe(Math.round(255 * 0.8));
+  });
+});

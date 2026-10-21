@@ -169,3 +169,64 @@ describe("Player.seek", () => {
     expect(player.timeInStep()).toBe(400);
   });
 });
+
+describe("Player with stops", () => {
+  const steps = [{ durationMs: 1000, stops: [300, 600] }, { durationMs: 500 }];
+
+  it("holds at each stop until next is pressed", () => {
+    let now = 0;
+    const player = new Player(steps, () => now);
+    now = 1000;
+    expect(player.timeInStep()).toBe(300);
+    expect(player.isAnimating()).toBe(false);
+    player.next();
+    now = 2000;
+    expect(player.stepIndex).toBe(0);
+    expect(player.timeInStep()).toBe(600);
+    player.next();
+    now = 3000;
+    expect(player.timeInStep()).toBe(1000);
+    player.next();
+    expect(player.stepIndex).toBe(1);
+  });
+
+  it("plays on from the stop, not from when next was pressed", () => {
+    let now = 0;
+    const player = new Player(steps, () => now);
+    now = 5000;
+    player.next();
+    now = 5100;
+    expect(player.timeInStep()).toBe(400);
+  });
+
+  it("finishes a running segment at its stop", () => {
+    let now = 0;
+    const player = new Player(steps, () => now);
+    now = 100;
+    player.next();
+    expect(player.stepIndex).toBe(0);
+    expect(player.timeInStep()).toBe(300);
+  });
+
+  it("goes back one stop, then to the previous step's end", () => {
+    const now = 0;
+    const player = new Player(steps, () => now);
+    player.jumpTo(1);
+    player.previous();
+    expect(player.stepIndex).toBe(0);
+    expect(player.timeInStep()).toBe(1000);
+    player.previous();
+    expect(player.timeInStep()).toBe(600);
+    player.previous();
+    expect(player.timeInStep()).toBe(300);
+  });
+
+  it("says which beat of the step is showing", () => {
+    let now = 0;
+    const player = new Player(steps, () => now);
+    expect(player.beat).toEqual({ index: 0, count: 3 });
+    now = 1000;
+    player.next();
+    expect(player.beat).toEqual({ index: 1, count: 3 });
+  });
+});

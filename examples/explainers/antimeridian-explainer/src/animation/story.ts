@@ -39,6 +39,11 @@ export type StoryStep = {
   description: TextRun[];
   /** How long the step animates, in ms; 0 for a still step. */
   durationMs: number;
+  /**
+   * Times into the step, in ms, where it holds until the presenter presses
+   * next: its beats. Without stops, the step plays through.
+   */
+  stops?: number[];
   /** What to draw `timeMs` into the step. */
   frame(timeMs: number): Frame;
 };
@@ -74,8 +79,11 @@ function flyPoint(
 /** How long the map takes to split into the strip and the close-up, in ms. */
 const SPLIT_MS = 700;
 
-/** How long each corner's walk takes, in ms. */
-const WALK_MS = 800;
+/** How long the close-up takes to fade in after the split, in ms. */
+const FADE_MS = 400;
+
+/** How long each walk sample's beat takes: the image, the strip, up close. */
+const SAMPLE_MS = 1500;
 
 /** The refinement replay's pacing: quicker than the reprojection explainer's. */
 const REFINE_SCHEDULE: ScheduleOptions = {
@@ -504,6 +512,7 @@ export function createStory(
       `The reprojector places each corner exactly, with proj4. But proj4 returns every point in one copy of the world, from -180° to 180°, which is x 0 to ${PERIOD} on the map. The image's west corners land at x ${Math.round(scene.corners.nw.raw[0])} and ${Math.round(scene.corners.sw.raw[0])}, at the map's east edge, and its east corners at x ${Math.round(scene.corners.ne.raw[0])} and ${Math.round(scene.corners.se.raw[0])}, at the west edge, so both triangles stretch across the whole world.`,
     ],
     durationMs: 2600,
+    stops: [FLIGHT_MS + 500],
     frame: (t) => {
       const frame = emptyFrame();
       pushImage(frame, 1);
@@ -640,20 +649,30 @@ export function createStory(
     return { strip, closeup };
   };
 
-  /** Step 5: walk from the center to each corner, keeping x continuous. */
+  /** Step 5: walk from the center to each corner, one sample per beat. */
+  const walkSamples = CORNER_IDS.flatMap((id) =>
+    scene.walks[id].samples.map((sample, k) => ({
+      sample,
+      from: k === 0 ? scene.center.uv : scene.walks[id].samples[k - 1]!.uv,
+    })),
+  );
+  // The first sample starts once the close-up has faded in, so the step's
+  // first stop holds on a finished frame.
+  const sampleStart = (k: number) => SPLIT_MS + FADE_MS + k * SAMPLE_MS;
   const walkStep: StoryStep = {
     id: "walk",
     title: "Walk to the corners",
     description: [
       `Before meshing, the layer unwraps the corners. It starts at the image's center, which proj4 puts at x ${short(scene.center.position[0])}, and walks toward each corner. Each sample proj4 returns (red, in the world above) moves to the copy of the world nearest the sample before it (green, up close). The west corners come out at x ${short(scene.corners.nw.unwrapped[0])} and ${short(scene.corners.sw.unwrapped[0])}, past the world's west edge, instead of ${Math.round(scene.corners.nw.raw[0])} and ${Math.round(scene.corners.sw.raw[0])}.`,
     ],
-    durationMs: SPLIT_MS + CORNER_IDS.length * WALK_MS + 600,
+    durationMs: sampleStart(walkSamples.length) + 400,
+    stops: walkSamples.map((_, k) => sampleStart(k)),
     frame: (t) => {
       const frame = emptyFrame();
       pushImage(frame, 1);
       const { strip, closeup } = pushSplit(frame, {
         split: progress(t, 0, SPLIT_MS),
-        opacity: progress(t, SPLIT_MS, 400),
+        opacity: progress(t, SPLIT_MS, FADE_MS),
       });
       frame.hud.caption = "Each step moves to the copy nearest the step before";
       if (!closeup) {
@@ -665,31 +684,56 @@ export function createStory(
       const rawPoints: [number, number][] = [];
       const movedPoints: [number, number][] = [];
       const leaders: [number, number][][] = [];
-      CORNER_IDS.forEach((id, i) => {
-        const along = progress(t, SPLIT_MS + i * WALK_MS, 0.8 * WALK_MS);
-        if (along <= 0) {
+      const flyingRaw: [number, number][] = [];
+      const flyingMoved: [number, number][] = [];
+      walkSamples.forEach(({ sample, from }, k) => {
+        const local = t - sampleStart(k);
+        if (local <= 0) {
           return;
         }
-        const cornerSlide = uvToSlide(scene.corners[id].uv);
+        // First the image: the walk reaches the sample.
+        const reach = progress(local, 0, 200);
+        const fromSlide = uvToSlide(from);
+        const atSlide = uvToSlide(sample.uv);
         paths.push([
-          centerSlide,
+          fromSlide,
           [
-            lerp(centerSlide[0], cornerSlide[0], along),
-            lerp(centerSlide[1], cornerSlide[1], along),
+            lerp(fromSlide[0], atSlide[0], reach),
+            lerp(fromSlide[1], atSlide[1], reach),
           ],
         ]);
-        for (const sample of scene.walks[id].samples) {
-          if (along < sample.t) {
-            continue;
-          }
-          imagePoints.push(uvToSlide(sample.uv));
-          rawPoints.push([sample.raw, sample.y]);
-          movedPoints.push([sample.x, sample.y]);
-          leaders.push([
-            commonToSlide(strip, [sample.raw, sample.y]),
-            commonToSlide(closeup, [sample.x, sample.y]),
-          ]);
+        if (reach < 1) {
+          return;
         }
+        imagePoints.push(atSlide);
+        // Then the strip: where proj4 puts it.
+        const raw: [number, number] = [sample.raw, sample.y];
+        const moved: [number, number] = [sample.x, sample.y];
+        const toStrip = progress(local, 350, 500);
+        if (toStrip > 0 && toStrip < 1) {
+          flyingRaw.push(flyPoint(atSlide, commonToSlide(strip, raw), toStrip));
+        }
+        if (toStrip < 1) {
+          return;
+        }
+        rawPoints.push(raw);
+        // Then up close: the copy nearest the step before.
+        const toCloseup = progress(local, 1000, 400);
+        if (toCloseup < 1) {
+          flyingMoved.push(
+            flyPoint(
+              commonToSlide(strip, raw),
+              commonToSlide(closeup, moved),
+              toCloseup,
+            ),
+          );
+          return;
+        }
+        movedPoints.push(moved);
+        leaders.push([
+          commonToSlide(strip, raw),
+          commonToSlide(closeup, moved),
+        ]);
       });
       frame.lines.push(
         { id: "walk-paths", view: "slide", paths, color: WHITE, width: 2 },
@@ -737,6 +781,20 @@ export function createStory(
           color: SNAPPED,
           radius: 6,
         },
+        {
+          id: "flying-raw",
+          view: "slide",
+          points: flyingRaw,
+          color: RAW,
+          radius: 5,
+        },
+        {
+          id: "flying-moved",
+          view: "slide",
+          points: flyingMoved,
+          color: SNAPPED,
+          radius: 6,
+        },
       );
       return frame;
     },
@@ -765,18 +823,21 @@ export function createStory(
 
   /** Step 6: a probe sweeps the image; its raw x jumps, its snapped x doesn't. */
   const probe = scene.probe;
-  const probeIndex = (t: number) => {
-    const phase = (t / SWEEP_MS) % 2;
-    const along = phase <= 1 ? phase : 2 - phase;
-    return Math.round(along * (probe.length - 1));
-  };
+  const probeIndex = (t: number) =>
+    Math.round(Math.min(1, t / SWEEP_MS) * (probe.length - 1));
+  const probeTime = (index: number) => (index / (probe.length - 1)) * SWEEP_MS;
+  // The first sample east of 180°, where proj4's answer is already right.
+  const firstEast = probe.findIndex(
+    (sample) => Math.abs(sample.raw[0] - sample.snapped[0]) < 1,
+  );
   const probeStep: StoryStep = {
     id: "snap",
     title: "Snap every point",
     description: [
       `The reprojector projects many more points than the corners. So the layer wraps the projection itself: every x proj4 returns moves to the copy of the world nearest the blend of the four unwrapped corners at that pixel. At the image's west edge, proj4 says x ${short(scene.probe[0]!.raw[0])} and the snapped point is at ${short(scene.probe[0]!.snapped[0])}. As the probe crosses 180°, proj4's answer (red) jumps a whole world, but the snapped point (green) moves smoothly. This holds unless the image contains a pole.`,
     ],
-    durationMs: 2 * SWEEP_MS,
+    durationMs: SWEEP_MS + 600,
+    stops: [probeTime(firstEast - 1), probeTime(firstEast)],
     frame: (t) => {
       const frame = emptyFrame();
       pushImage(frame, 1);
@@ -784,8 +845,7 @@ export function createStory(
       pushUnwrappedCorners(frame, 1);
       const index = probeIndex(t);
       const sample = probe[index]!;
-      const [from, to] = t < SWEEP_MS ? [0, index] : [index, probe.length - 1];
-      const trail = probe.slice(from, to + 1);
+      const trail = probe.slice(0, index + 1);
       frame.lines.push(
         {
           id: "probe-trail",
@@ -959,6 +1019,7 @@ export function createStory(
       `The mesh runs past the world's west edge, but the layer draws every tile inside one world, from -180° to 180°, and lets the map's copies of the world do the rest. So it cuts the ${scene.crossing.length} triangles that cross the edge along -180°, leaving ${count(clipped.triangles.length / 3)} triangles, and moves the part past the edge one world over, to the map's east edge. In the image, the cut runs along the 180° meridian.`,
     ],
     durationMs: SWAP_MS + MOVE_MS + 700,
+    stops: [CUT_MS - 100, SWAP_MS],
     frame: (t) => {
       const frame = emptyFrame();
       pushImage(frame, 1);

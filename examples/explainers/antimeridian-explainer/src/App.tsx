@@ -182,6 +182,7 @@ export default function App() {
   const [fit, setFit] = useState(windowFit);
   const [hud, setHud] = useState<HudState>(EMPTY_HUD);
   const [stepIndex, setStepIndex] = useState(0);
+  const [beat, setBeat] = useState({ index: 0, count: 1 });
   const [descriptions, setDescriptions] = useState(readDescriptions);
   const [controlsVisible, setControlsVisible] = useState(true);
   const hoveringControlsRef = useRef(false);
@@ -361,6 +362,12 @@ export default function App() {
         setHud(frame.hud);
       }
       setStepIndex(index);
+      const playing = player.beat;
+      setBeat((shown) =>
+        shown.index === playing.index && shown.count === playing.count
+          ? shown
+          : playing,
+      );
     };
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
@@ -457,6 +464,7 @@ export default function App() {
             fit={fit}
             hud={hud}
             stepNumber={stepIndex + 1}
+            beat={beat}
             title={currentStep.title}
             description={descriptions ? currentStep.description : null}
           >

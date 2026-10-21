@@ -12,6 +12,8 @@ export type HudProps = {
   hud: HudState;
   /** 1-based number of the step showing. */
   stepNumber: number;
+  /** Which beat of the step is showing, of how many; shown when there are several. */
+  beat?: { index: number; count: number };
   /** Title of the step showing. */
   title: string;
   /** Description of the step, or null when descriptions are hidden. */
@@ -38,6 +40,7 @@ export function Hud({
   fit,
   hud,
   stepNumber,
+  beat,
   title,
   description,
   children,
@@ -69,6 +72,12 @@ export function Hud({
       >
         <span style={{ color: MUTED_COLOR }}>{stepNumber} · </span>
         {title}
+        {beat && beat.count > 1 ? (
+          <span style={{ color: MUTED_COLOR, fontSize: 24, fontWeight: 500 }}>
+            {"  "}
+            {beat.index + 1}/{beat.count}
+          </span>
+        ) : null}
       </div>
       {hud.labels.map((label) => (
         <div key={label.id} style={labelStyle(label)}>
