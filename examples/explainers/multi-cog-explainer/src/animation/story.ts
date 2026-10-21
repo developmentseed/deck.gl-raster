@@ -565,6 +565,7 @@ export function createStory(scene: SceneData): StoryStep[] {
           image: flight.image,
           rect: flyRect(flight.from, flight.to, p),
           opacity: Math.min(1, p * 4),
+          above: true,
         });
       }
       slotLabels(

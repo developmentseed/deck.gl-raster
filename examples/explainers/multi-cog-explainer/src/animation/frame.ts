@@ -54,6 +54,8 @@ export type Frame = {
     rect: Rect;
     opacity: number;
     nearest?: boolean;
+    /** Draw over the composites, as tiles lifting off the scene do. */
+    above?: boolean;
   }[];
   /** Outlines and fills, in slide units. */
   polygons: {

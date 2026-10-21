@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Frame, ImageId } from "../src/animation/frame.js";
 import { emptyFrame } from "../src/animation/frame.js";
+import { createStory } from "../src/animation/story.js";
 import type { Assets } from "../src/render/frame-to-layers.js";
 import { frameToLayers } from "../src/render/frame-to-layers.js";
+import { fakeScene } from "./fake-scene.js";
 
 const rect = { x: 10, y: 20, width: 30, height: 40 };
 
@@ -53,5 +55,26 @@ describe("frameToLayers", () => {
     };
     const ids = frameToLayers(frame, fakeAssets()).map((layer) => layer.id);
     expect(ids).toEqual(["b04", "scene", "grid", "probe"]);
+  });
+
+  it("draws images marked above over the composites", () => {
+    const frame: Frame = {
+      ...emptyFrame(),
+      composites: [{ id: "scene", source: "overview", rect, opacity: 1 }],
+      bitmaps: [
+        { id: "under", image: "b04-overview", rect, opacity: 1 },
+        { id: "over", image: "b04-tile", rect, opacity: 1, above: true },
+      ],
+    };
+    const ids = frameToLayers(frame, fakeAssets()).map((layer) => layer.id);
+    expect(ids).toEqual(["under", "scene", "over"]);
+  });
+
+  it("draws step 5's flying tiles over the scene picture", () => {
+    const fetchStep = createStory(fakeScene())[4]!;
+    const ids = frameToLayers(fetchStep.frame(300), fakeAssets()).map(
+      (layer) => layer.id,
+    );
+    expect(ids.indexOf("b04-tile")).toBeGreaterThan(ids.indexOf("scene"));
   });
 });

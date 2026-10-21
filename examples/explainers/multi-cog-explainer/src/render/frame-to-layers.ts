@@ -14,27 +14,15 @@ export type Assets = {
 
 /**
  * Turn a frame into deck.gl layers, in drawing order: images, composites,
- * outlines, then dots. Each item's id becomes its layer's id, so deck.gl keeps
- * the same layer from frame to frame.
+ * images marked `above`, outlines, then dots. Each item's id becomes its
+ * layer's id, so deck.gl keeps the same layer from frame to frame.
  */
 export function frameToLayers(frame: Frame, assets: Assets): Layer[] {
   const layers: Layer[] = [];
   for (const bitmap of frame.bitmaps) {
-    const { rect } = bitmap;
-    layers.push(
-      new BitmapLayer({
-        id: bitmap.id,
-        image: assets.images[bitmap.image],
-        // The slide's y grows downward, so the image's bottom is the larger y.
-        bounds: [rect.x, rect.y + rect.height, rect.x + rect.width, rect.y],
-        opacity: bitmap.opacity,
-        coordinateSystem: "cartesian",
-        textureParameters: bitmap.nearest
-          ? { minFilter: "nearest", magFilter: "nearest" }
-          : { minFilter: "linear", magFilter: "linear" },
-        parameters: ON_TOP,
-      }),
-    );
+    if (!bitmap.above) {
+      layers.push(bitmapLayer(bitmap, assets));
+    }
   }
   for (const composite of frame.composites) {
     layers.push(
@@ -45,6 +33,11 @@ export function frameToLayers(frame: Frame, assets: Assets): Layer[] {
         opacity: composite.opacity,
       }),
     );
+  }
+  for (const bitmap of frame.bitmaps) {
+    if (bitmap.above) {
+      layers.push(bitmapLayer(bitmap, assets));
+    }
   }
   for (const polygon of frame.polygons) {
     layers.push(
@@ -78,4 +71,21 @@ export function frameToLayers(frame: Frame, assets: Assets): Layer[] {
     );
   }
   return layers;
+}
+
+/** A band image as a `BitmapLayer`. */
+function bitmapLayer(bitmap: Frame["bitmaps"][number], assets: Assets): Layer {
+  const { rect } = bitmap;
+  return new BitmapLayer({
+    id: bitmap.id,
+    image: assets.images[bitmap.image],
+    // The slide's y grows downward, so the image's bottom is the larger y.
+    bounds: [rect.x, rect.y + rect.height, rect.x + rect.width, rect.y],
+    opacity: bitmap.opacity,
+    coordinateSystem: "cartesian",
+    textureParameters: bitmap.nearest
+      ? { minFilter: "nearest", magFilter: "nearest" }
+      : { minFilter: "linear", magFilter: "linear" },
+    parameters: ON_TOP,
+  });
 }
