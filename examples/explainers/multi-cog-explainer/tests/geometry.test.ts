@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { BandId } from "../src/scene/constants.js";
-import { levelFor, resolveStoryTile } from "../src/scene/geometry.js";
+import {
+  insetRect,
+  levelFor,
+  resolveStoryTile,
+} from "../src/scene/geometry.js";
 
 const levels = {
   b04: levelFor("b04"),
@@ -52,6 +56,31 @@ describe("resolveStoryTile", () => {
       uvTransform: [0, 0, 1, 1],
       minCol: 4,
       minRow: 4,
+    });
+  });
+});
+
+describe("insetRect", () => {
+  const tile = resolveStoryTile(levels);
+
+  it("centres a 600 m square on the story tile in each band's texture", () => {
+    expect(insetRect("b04", tile)).toEqual({
+      x: 482,
+      y: 482,
+      width: 60,
+      height: 60,
+    });
+    expect(insetRect("b11", tile)).toEqual({
+      x: 241,
+      y: 241,
+      width: 30,
+      height: 30,
+    });
+    expect(insetRect("b01", tile)).toEqual({
+      x: 251,
+      y: 251,
+      width: 10,
+      height: 10,
     });
   });
 });

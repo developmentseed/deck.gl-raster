@@ -23,6 +23,9 @@ export type CompositeInputs = {
 /** The rescale after compositing: 16-bit values 0-4000 onto 0-1. */
 export const COMPOSITE_RESCALE = { rescaleMin: 0, rescaleMax: 4000 / 65535 };
 
+/** Every layer is flat on the slide, so layers draw in list order. */
+export const ON_TOP = { depthCompare: "always" } as const;
+
 /** Which band fills which channel, as in the spec. */
 const MAPPING = { r: "b11", g: "b04", b: "b01" };
 
@@ -105,5 +108,6 @@ export function compositeLayer(options: {
       1,
     ],
     opacity,
+    parameters: ON_TOP,
   });
 }

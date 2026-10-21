@@ -6,9 +6,9 @@ import type { Frame, Hud as HudState } from "./animation/frame.js";
 import { Player } from "./animation/player.js";
 import type { StoryStep } from "./animation/story.js";
 import { createPlaceholderStory } from "./animation/story.js";
-import type { CompositeInputs } from "./render/composite-layer.js";
-import { compositeLayer } from "./render/composite-layer.js";
-import { checkTextureSupport, createBandTexture } from "./render/textures.js";
+import { buildAssets } from "./render/assets.js";
+import { frameToLayers } from "./render/frame-to-layers.js";
+import { checkTextureSupport } from "./render/textures.js";
 import type { SlideFit } from "./scene/layout.js";
 import { fitSlide, SLIDE_HEIGHT, SLIDE_WIDTH } from "./scene/layout.js";
 import type { SceneData } from "./scene/load.js";
@@ -41,37 +41,12 @@ type Ready = {
 async function startup(device: Device): Promise<Ready> {
   checkTextureSupport(device);
   const scene = await loadScene();
-  // Each coarsest overview covers the whole scene, so no band is offset.
-  const whole = [0, 0, 1, 1] as const;
-  const overview: CompositeInputs = {
-    bands: {
-      b04: {
-        texture: createBandTexture(device, scene.overview.b04),
-        uvTransform: whole,
-      },
-      b11: {
-        texture: createBandTexture(device, scene.overview.b11),
-        uvTransform: whole,
-      },
-      b01: {
-        texture: createBandTexture(device, scene.overview.b01),
-        uvTransform: whole,
-      },
-    },
-    size: [scene.overview.b04.width, scene.overview.b04.height],
+  const assets = buildAssets(device, scene);
+  return {
+    scene,
+    story: createPlaceholderStory(),
+    layers: (frame) => frameToLayers(frame, assets),
   };
-  const layers = (frame: Frame): Layer[] =>
-    frame.composites
-      .filter((composite) => composite.source === "overview")
-      .map((composite) =>
-        compositeLayer({
-          id: composite.id,
-          inputs: overview,
-          rect: composite.rect,
-          opacity: composite.opacity,
-        }),
-      );
-  return { scene, story: createPlaceholderStory(), layers };
 }
 
 /** Whether descriptions were left on (the default) in this browser. */

@@ -115,3 +115,28 @@ export function resolveStoryTile(
     },
   };
 }
+
+/** A rectangle in texture pixels. */
+export type PixelRect = { x: number; y: number; width: number; height: number };
+
+/**
+ * A square of `meters` around the middle of the story tile, in pixels of one
+ * band's stitched texture: the middle mapped through the band's UV transform.
+ */
+export function insetRect(
+  band: BandId,
+  tile: StoryTile,
+  meters = 600,
+): PixelRect {
+  const cover = tile.bands[band];
+  const [offsetX, offsetY, scaleX, scaleY] = cover.uvTransform;
+  const centerX = (0.5 * scaleX + offsetX) * cover.stitchedWidth;
+  const centerY = (0.5 * scaleY + offsetY) * cover.stitchedHeight;
+  const side = meters / BANDS[band].pixelSize;
+  return {
+    x: Math.round(centerX - side / 2),
+    y: Math.round(centerY - side / 2),
+    width: side,
+    height: side,
+  };
+}
