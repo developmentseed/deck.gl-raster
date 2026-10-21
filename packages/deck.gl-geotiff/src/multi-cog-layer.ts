@@ -48,7 +48,7 @@ import {
   metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
-import type { Device, TextureFormat } from "@luma.gl/core";
+import type { Device, SamplerProps, TextureFormat } from "@luma.gl/core";
 import { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
@@ -187,6 +187,25 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     renderPipeline?: RasterModule[];
 
     /**
+     * How band textures are resampled when drawn.
+     *
+     * - `"linear"` blends the four nearest pixels, for a smooth image.
+     * - `"nearest"` uses the single nearest pixel, so pixel edges stay sharp
+     *   and every value drawn is a value in the data.
+     *
+     * Use `"nearest"` with an exact-match nodata filter such as
+     * {@link FilterNoDataVal}: linear blending mixes the nodata value into
+     * the pixels around it, so those pixels no longer match it and are drawn
+     * as a rim around the nodata area.
+     *
+     * Changing this prop updates tiles that are already loaded, without
+     * fetching them again.
+     *
+     * @default "linear"
+     */
+    resampling?: "linear" | "nearest";
+
+    /**
      * EPSG code resolver used to look up projection definitions for numeric
      * CRS codes found in GeoTIFF metadata.
      *
@@ -284,6 +303,15 @@ const defaultProps = {
   debugLevel: { type: "number" as const, value: 1 },
   concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
 };
+
+/** Band texture samplers, by {@link MultiCOGLayerProps.resampling} mode. */
+const RESAMPLING_SAMPLERS = {
+  linear: { minFilter: "linear", magFilter: "linear" },
+  nearest: { minFilter: "nearest", magFilter: "nearest" },
+} as const satisfies Record<
+  NonNullable<MultiCOGLayerProps["resampling"]>,
+  SamplerProps
+>;
 
 /** A source's opened GeoTIFF paired with its resolved projection. */
 type OpenedCogSource = {
@@ -710,6 +738,17 @@ export class MultiCOGLayer extends RasterTileLayer<
     ].filter((n): n is string => n != null);
     if (requiredBands.some((name) => !bands.has(name))) {
       return null;
+    }
+
+    // Set each band's sampler here rather than when its texture is created:
+    // this runs for every loaded tile whenever the layer's props change, so a
+    // new `resampling` applies without fetching the tiles again.
+    const sampler = RESAMPLING_SAMPLERS[this.props.resampling ?? "linear"];
+    for (const { texture } of bands.values()) {
+      const { minFilter, magFilter } = texture.sampler.props;
+      if (minFilter !== sampler.minFilter || magFilter !== sampler.magFilter) {
+        texture.setSampler(sampler);
+      }
     }
 
     const compositeBandsProps = buildCompositeBandsProps(composite, bands);

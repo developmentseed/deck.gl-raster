@@ -384,3 +384,76 @@ describe("MultiCOGLayer._getTileData", () => {
     expect(result.bands.get("a")!.byteLength).toEqual(4 * 4 * 4);
   });
 });
+
+/**
+ * A band texture whose sampler filters with `filter`, as luma.gl reports it,
+ * with a spy on `setSampler`.
+ */
+function fakeSampledTexture(filter: "linear" | "nearest"): {
+  texture: Texture;
+  setSampler: ReturnType<typeof vi.fn>;
+} {
+  const setSampler = vi.fn();
+  const texture = Object.create(Texture.prototype) as Texture;
+  Object.defineProperties(texture, {
+    sampler: { value: { props: { minFilter: filter, magFilter: filter } } },
+    setSampler: { value: setSampler },
+  });
+  return { texture, setSampler };
+}
+
+/**
+ * Render a loaded one-band tile whose texture filters with `filter`, as
+ * `RasterTileLayer` does whenever the layer's props change, and return the
+ * texture's `setSampler` spy.
+ */
+function renderLoadedTile(
+  props: Record<string, unknown>,
+  filter: "linear" | "nearest",
+): ReturnType<typeof vi.fn> {
+  const layer = makeBareLayer(props);
+  layer.setState({ multiDescriptor: {} } as never);
+  const { texture, setSampler } = fakeSampledTexture(filter);
+  const bands = new Map([
+    [
+      "a",
+      {
+        texture,
+        uvTransform: [0, 0, 1, 1],
+        width: 4,
+        height: 4,
+        byteLength: 16,
+      },
+    ],
+  ]);
+  const renderTile = (
+    layer as unknown as {
+      _renderTileCallback: () => ((data: unknown) => unknown) | undefined;
+    }
+  )._renderTileCallback();
+  renderTile?.({ bands });
+  return setSampler;
+}
+
+describe("MultiCOGLayer resampling", () => {
+  it("switches a loaded tile to nearest filtering", () => {
+    const setSampler = renderLoadedTile({ resampling: "nearest" }, "linear");
+    expect(setSampler).toHaveBeenCalledWith({
+      minFilter: "nearest",
+      magFilter: "nearest",
+    });
+  });
+
+  it("switches a loaded tile back to linear filtering by default", () => {
+    const setSampler = renderLoadedTile({}, "nearest");
+    expect(setSampler).toHaveBeenCalledWith({
+      minFilter: "linear",
+      magFilter: "linear",
+    });
+  });
+
+  it("leaves a texture alone when it already filters as requested", () => {
+    const setSampler = renderLoadedTile({}, "linear");
+    expect(setSampler).not.toHaveBeenCalled();
+  });
+});
