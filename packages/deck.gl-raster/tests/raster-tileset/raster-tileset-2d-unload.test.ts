@@ -48,33 +48,14 @@ function settle(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/**
- * A close view of one finest-level tile: the one whose center is `[x, y]`
- * meters from the origin.
- */
-function tileViewport(x: number, y: number): WebMercatorViewport {
-  const degreesPerMeter = 360 / 40075016.686;
-  return new WebMercatorViewport({
-    longitude: x * degreesPerMeter,
-    latitude: y * degreesPerMeter,
-    zoom: 21,
-    width: 100,
-    height: 100,
-  });
-}
-
-/** A tileset with spied tile callbacks and no request throttling. */
-function makeTileset(
-  getTileData: Tileset2DProps["getTileData"],
-  opts: Partial<Tileset2DProps> = {},
-) {
-  const onTileLoad = vi.fn();
+/** A tileset with a spied `onTileUnload` and no request throttling. */
+function makeTileset(getTileData: Tileset2DProps["getTileData"]) {
   const onTileUnload = vi.fn();
   const tileset = new RasterTileset2D(
-    { getTileData, onTileLoad, onTileUnload, maxRequests: 0, ...opts },
+    { getTileData, onTileUnload, maxRequests: 0 },
     descriptor,
   );
-  return { tileset, onTileLoad, onTileUnload };
+  return { tileset, onTileUnload };
 }
 
 /** `getTileData` that returns data only when the test resolves it. */
@@ -111,60 +92,43 @@ describe("RasterTileset2D tile unloading", () => {
     expect(unloadedTiles(onTileUnload)).toEqual(tiles);
   });
 
-  it("unloads a tile whose data arrives after finalize", async () => {
+  it("unloads a tile still loading at finalize once its data arrives", async () => {
     const { getTileData, pending, resolveAll } = deferredTileData();
-    const { tileset, onTileLoad, onTileUnload } = makeTileset(getTileData);
+    const { tileset, onTileUnload } = makeTileset(getTileData);
     tileset.update(viewport);
     await settle();
-    expect(pending.length).toBeGreaterThan(0);
+    const tiles = [...tileset.tiles];
+    expect(pending).toHaveLength(tiles.length);
 
     tileset.finalize();
-    onTileUnload.mockClear();
+    expect(onTileUnload).not.toHaveBeenCalled();
     // getTileData ignores the abort and returns data anyway.
     resolveAll();
     await settle();
 
-    expect(onTileLoad).not.toHaveBeenCalled();
-    expect(onTileUnload).toHaveBeenCalledTimes(pending.length);
-    expect(
-      unloadedTiles(onTileUnload).every((tile) => tile.content !== null),
-    ).toBe(true);
+    const unloaded = unloadedTiles(onTileUnload);
+    expect(unloaded).toHaveLength(tiles.length);
+    expect(tiles.every((tile) => unloaded.includes(tile))).toBe(true);
+    expect(unloaded.every((tile) => tile.content !== null)).toBe(true);
   });
 
-  it("unloads a tile evicted while loading, once its data arrives", async () => {
-    const { getTileData, pending, resolveAll } = deferredTileData();
-    const { tileset, onTileLoad, onTileUnload } = makeTileset(getTileData, {
-      maxCacheSize: 0,
-    });
-    tileset.update(tileViewport(-8, 8));
-    await settle();
-    const [evicted] = tileset.tiles;
-    expect(tileset.tiles).toHaveLength(1);
-
-    // Selecting another tile evicts the first, which is still loading.
-    tileset.update(tileViewport(8, -8));
-    const [kept] = tileset.tiles;
-    expect(tileset.tiles).toHaveLength(1);
-    expect(kept).not.toBe(evicted);
-    await settle();
-    expect(pending).toHaveLength(2);
-    onTileUnload.mockClear();
-    resolveAll();
-    await settle();
-
-    expect(unloadedTiles(onTileUnload)).toEqual([evicted]);
-    expect(evicted!.content).not.toBeNull();
-    expect(onTileLoad.mock.calls.map(([tile]) => tile)).toEqual([kept]);
-  });
-
-  it("reports a tile that loads while it's cached", async () => {
-    const { tileset, onTileLoad, onTileUnload } = makeTileset(async () => ({
-      byteLength: 1,
-    }));
+  it("unloads a tile whose load stops at the abort", async () => {
+    const { tileset, onTileUnload } = makeTileset(
+      ({ signal }) =>
+        new Promise((_, reject) => {
+          signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
     tileset.update(viewport);
     await settle();
+    const tiles = [...tileset.tiles];
+    expect(tiles.length).toBeGreaterThan(0);
 
-    expect(onTileLoad).toHaveBeenCalledTimes(tileset.tiles.length);
-    expect(onTileUnload).not.toHaveBeenCalled();
+    tileset.finalize();
+    await settle();
+
+    const unloaded = unloadedTiles(onTileUnload);
+    expect(unloaded).toHaveLength(tiles.length);
+    expect(tiles.every((tile) => unloaded.includes(tile))).toBe(true);
   });
 });

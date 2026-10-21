@@ -205,43 +205,23 @@ export class RasterTileset2D extends Tileset2D {
   }
 
   /**
-   * Unloads a tile whose data arrives after it has left the cache, instead of
-   * reporting it as loaded. deck.gl keeps the data that `getTileData` returns
-   * for a tile it has aborted or evicted, and nothing else would unload it.
-   */
-  override setOptions(opts: Tileset2DProps): void {
-    const { onTileLoad } = opts;
-    super.setOptions(
-      onTileLoad
-        ? {
-            ...opts,
-            onTileLoad: (tile) => {
-              // `tiles` is rebuilt from the cache whenever an update or an
-              // eviction changes it, and a tile loads only after the update
-              // that created it.
-              if (this.tiles.includes(tile)) {
-                onTileLoad(tile);
-              } else {
-                this.opts.onTileUnload(tile);
-              }
-            },
-          }
-        : opts,
-    );
-  }
-
-  /**
    * Unloads every cached tile. deck.gl's `Tileset2D.finalize` clears its cache
    * without calling `onTileUnload`, so GPU resources that `getTileData` made
    * for those tiles, like textures, would be freed only by garbage collection.
-   * A tile still loading is unloaded again when its data arrives.
+   * A tile still loading is unloaded once its load finishes, since deck.gl
+   * keeps the data that `getTileData` returns after an abort.
    */
   override finalize(): void {
-    const tiles = this.tiles;
-    super.finalize();
-    for (const tile of tiles) {
-      this.opts.onTileUnload(tile);
+    const { onTileUnload } = this.opts;
+    for (const tile of this.tiles) {
+      if (tile.isLoading) {
+        // `data` is a promise until the load finishes.
+        void Promise.resolve(tile.data).then(() => onTileUnload(tile));
+      } else {
+        onTileUnload(tile);
+      }
     }
+    super.finalize();
   }
 
   /**
