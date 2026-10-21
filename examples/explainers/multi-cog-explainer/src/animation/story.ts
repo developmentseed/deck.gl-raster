@@ -168,6 +168,9 @@ export function createStory(scene: SceneData): StoryStep[] {
   ];
   const tileMeters = (band: BandId) =>
     BANDS[band].block * BANDS[band].pixelSize;
+  /** How many times the ground of a primary tile one of `band`'s tiles covers. */
+  const areaRatio = (band: BandId) =>
+    Number(((tileMeters(band) / tileMeters("b04")) ** 2).toFixed(2));
   const primaryGrid = Math.ceil(BANDS.b04.size / BANDS.b04.block);
   const b01Count = tile.bands.b01.tiles.length;
 
@@ -520,7 +523,7 @@ export function createStory(scene: SceneData): StoryStep[] {
     id: "fetch",
     title: "Fetch",
     description: [
-      `For each band, the layer fetches the tiles that cover the primary tile: one 10 m tile, one 20 m tile and ${countWord(b01Count)} 60 m tiles. Each is ${BANDS.b04.block} or ${BANDS.b01.block} pixels on a side, but they cover very different ground.`,
+      `For each band, the layer fetches the tiles that cover the primary tile: one 10 m tile, one 20 m tile and ${countWord(b01Count)} 60 m tiles. Each is ${BANDS.b04.block} or ${BANDS.b01.block} pixels on a side, but they cover very different ground. A 20 m tile covers ${areaRatio("b11")} times the ground of a 10 m tile, and a 60 m tile ${areaRatio("b01")} times.`,
     ],
     durationMs: 2400,
     frame: (t) => {
@@ -799,7 +802,7 @@ export function createStory(scene: SceneData): StoryStep[] {
     id: "on-the-map",
     title: "The tile on the map",
     description: [
-      "That shader output is the tile, drawn in its place. Every tile on screen is composited the same way. To see how each tile is then reprojected onto the map, see the ",
+      "That shader output is the tile, drawn in its place over step 2's whole-scene picture. Only this tile is loaded at full resolution here: its eight neighbors would add about 12 MB for the 10 m band alone. On the map, every tile on screen is composited the same way. To see how each tile is then reprojected onto the map, see the ",
       { text: "reprojection explainer", href: REPROJECTION_EXPLAINER_URL },
       ".",
     ],

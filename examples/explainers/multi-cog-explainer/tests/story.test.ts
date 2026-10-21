@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { TextRun } from "../src/animation/story.js";
 import { createStory } from "../src/animation/story.js";
+import { BAND_IDS } from "../src/scene/constants.js";
 import { INTRO_SLOTS, SCENE_BOX, utmToScene } from "../src/scene/layout.js";
+import { uvLabel } from "../src/scene/uv.js";
 import { fakeScene } from "./fake-scene.js";
 
 const story = createStory(fakeScene());
@@ -10,6 +13,29 @@ function end(index: number) {
   const step = story[index]!;
   return step.frame(step.durationMs);
 }
+
+/** A description's text, without its emphasis and links. */
+function plain(description: TextRun[]): string {
+  return description
+    .map((run) => (typeof run === "string" ? run : run.text))
+    .join("");
+}
+
+describe("titles", () => {
+  it("name the nine steps, in order", () => {
+    expect(story.map((step) => step.title)).toEqual([
+      "Three files, one scene",
+      "One image",
+      "The primary grid",
+      "Every band has its own tiles",
+      "Fetch",
+      "Stitch",
+      "Where the tile lands",
+      "Sample",
+      "The tile on the map",
+    ]);
+  });
+});
 
 describe("utmToScene", () => {
   it("maps the scene's top-left corner to the scene box's", () => {
@@ -67,6 +93,13 @@ function pieces(frame: ReturnType<typeof end>) {
 }
 
 describe("step 5: fetch", () => {
+  it("compares each band's tile area with the primary tile's", () => {
+    // 20.48 km and 15.36 km tiles against 10.24 km ones.
+    const text = plain(story[4]!.description);
+    expect(text).toContain("A 20 m tile covers 4 times the ground");
+    expect(text).toContain("and a 60 m tile 2.25 times");
+  });
+
   it("ends with the 60 m tiles in the slot's quadrants, 12 px apart", () => {
     expect(pieces(end(4))).toEqual([
       { x: 1520, y: 210, width: 144, height: 144 },
@@ -97,6 +130,16 @@ describe("step 7: where the tile lands", () => {
     expect(Math.max(...xs)).toBeCloseTo(1720, 6);
     expect(Math.min(...ys)).toBeCloseTo(310, 6);
     expect(Math.max(...ys)).toBeCloseTo(410, 6);
+  });
+
+  it("states the story tile's own UV transforms, not fixed numbers", () => {
+    const scene = fakeScene();
+    // Not the real 60 m transform, so numbers written into the text fail.
+    scene.tile.bands.b01.uvTransform = [0.25, 0.25, 0.5, 0.5];
+    const text = plain(createStory(scene)[6]!.description);
+    for (const band of BAND_IDS) {
+      expect(text).toContain(uvLabel(scene.tile.bands[band].uvTransform));
+    }
   });
 });
 

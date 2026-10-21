@@ -16,6 +16,7 @@ const LAYER_DOCS_URL =
 const REPROJECTION_EXPLAINER_URL =
   "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/";
 const DEVSEED_URL = "https://developmentseed.org/";
+const SENTINEL_COGS_URL = "https://registry.opendata.aws/sentinel-2-l2a-cogs/";
 
 // GitHub's dark palette, like the slide.
 const BACKGROUND = "#161b22";
@@ -104,6 +105,16 @@ export function SidePanel({ open, onOpenChange }: SidePanelProps) {
                 <FooterLink href={REPROJECTION_EXPLAINER_URL}>
                   Reprojection explainer ↗
                 </FooterLink>
+              </p>
+            </Section>
+            <Section title="Data">
+              <p style={{ margin: 0, lineHeight: 1.5, color: MUTED }}>
+                Sentinel-2 L2A scene 18FXJ over Torres del Paine, Chile,
+                2026-04-06, read live from the{" "}
+                <FooterLink href={SENTINEL_COGS_URL}>
+                  Sentinel-2 COGs on AWS ↗
+                </FooterLink>
+                . Contains modified Copernicus Sentinel data 2026.
               </p>
             </Section>
           </div>

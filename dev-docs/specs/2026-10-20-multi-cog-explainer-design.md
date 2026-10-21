@@ -158,9 +158,9 @@ The right arrow key advances one step; the left arrow key goes back.
    of the 60 m one, and the GPU interpolates between them.
 8. **The tile on the map.** The composited tile, drawn by the GPU with
    `CompositeBands` from the three textures, settles back into its place over
-   step 1's whole-scene picture. Full-resolution neighbors would cost about
-   7 MB more for the 10 m band alone. A caption points to the reprojection
-   explainer for how the tile is then meshed onto the map.
+   step 1's whole-scene picture. Its eight full-resolution neighbors would
+   cost about 12 MB more for the 10 m band alone. A caption points to the
+   reprojection explainer for how the tile is then meshed onto the map.
 
 ## Design
 
