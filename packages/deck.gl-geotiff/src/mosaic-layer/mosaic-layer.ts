@@ -14,14 +14,10 @@ import {
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
-import { nearestCopy } from "@developmentseed/proj";
+import { nearestCopy, unwrapBbox } from "@developmentseed/proj";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
 import type { MosaicSource, SourceIndex } from "./mosaic-tileset-2d.js";
-import {
-  buildSourceIndex,
-  MosaicTileset2D,
-  unwrapBbox,
-} from "./mosaic-tileset-2d.js";
+import { buildSourceIndex, MosaicTileset2D } from "./mosaic-tileset-2d.js";
 
 export type MosaicLayerProps<
   MosaicT extends MosaicSource = MosaicSource,

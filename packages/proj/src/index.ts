@@ -1,3 +1,8 @@
+export {
+  normalizeLongitudes,
+  splitAtAntimeridian,
+  unwrapBbox,
+} from "./antimeridian.js";
 export { metersPerUnit } from "./meters-per-unit.js";
 export type { DatumDefinition, ProjectionDefinition } from "./parse-wkt.js";
 export { parseWkt } from "./parse-wkt.js";

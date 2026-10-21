@@ -6,7 +6,7 @@ import type {
   RasterArray,
 } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
-import { nearestCopy, unwrapAlong } from "@developmentseed/proj";
+import { normalizeLongitudes, unwrapAlong } from "@developmentseed/proj";
 import type { Converter } from "proj4";
 
 /**
@@ -113,22 +113,14 @@ export function getGeographicBounds(
   }
   const lats = corners.map((c) => c[1]);
 
-  let west = Math.min(...lons);
-  const south = Math.min(...lats);
-  let east = Math.max(...lons);
-  const north = Math.max(...lats);
-
-  if (east - west >= 360) {
-    // All the way around the world, or around a pole.
-    west = -180;
-    east = 180;
-  } else {
-    // Move west into [-180°, 180°), and east with it: east may then run past
-    // 180°.
-    const shift = west - nearestCopy(west, 0, 360);
-    west -= shift;
-    east -= shift;
-  }
+  // Move west into [-180°, 180°), and east with it: east may then run past
+  // 180°. All the way around the world, or around a pole, gives -180° to 180°.
+  const [west, south, east, north] = normalizeLongitudes([
+    Math.min(...lons),
+    Math.min(...lats),
+    Math.max(...lons),
+    Math.max(...lats),
+  ]);
 
   // Return bounds in MapLibre format: [[west, south], [east, north]]
   return { west, south, east, north };

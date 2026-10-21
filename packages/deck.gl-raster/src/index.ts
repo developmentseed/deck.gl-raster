@@ -38,3 +38,5 @@ export {
   RasterTileset2D,
   TileMatrixSetAdaptor,
 } from "./raster-tileset/index.js";
+// Not a public API; exported for use in MosaicLayer
+export { visibleWorldBounds as _visibleWorldBounds } from "./raster-tileset/visible-world-bounds.js";
