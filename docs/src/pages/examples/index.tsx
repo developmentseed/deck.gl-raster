@@ -294,6 +294,19 @@ const explainerExamples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/explainers/multi-cog-explainer",
   },
+  {
+    title: "Antimeridian Explainer",
+    description: (
+      <>
+        A step-by-step animation of how deck.gl-raster meshes an image that
+        crosses the antimeridian.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/antimeridian-explainer/",
+    image: "/deck.gl-raster/img/antimeridian-explainer-examples-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/explainers/antimeridian-explainer",
+  },
 ];
 
 /**
