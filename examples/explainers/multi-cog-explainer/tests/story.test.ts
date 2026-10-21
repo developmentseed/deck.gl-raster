@@ -87,3 +87,15 @@ describe("step 6: stitch", () => {
     ]);
   });
 });
+
+describe("step 7: where the tile lands", () => {
+  it("ends with the 60 m texture's middle ninth outlined", () => {
+    const ring = end(6).polygons.find((p) => p.id === "uv-b01")?.rings[0];
+    const xs = ring?.map(([x]) => x) ?? [];
+    const ys = ring?.map(([, y]) => y) ?? [];
+    expect(Math.min(...xs)).toBeCloseTo(1620, 6);
+    expect(Math.max(...xs)).toBeCloseTo(1720, 6);
+    expect(Math.min(...ys)).toBeCloseTo(310, 6);
+    expect(Math.max(...ys)).toBeCloseTo(410, 6);
+  });
+});

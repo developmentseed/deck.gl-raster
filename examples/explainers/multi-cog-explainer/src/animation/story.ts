@@ -16,6 +16,7 @@ import {
   utmToScene,
 } from "../scene/layout.js";
 import type { SceneData } from "../scene/load.js";
+import { uvLabel, uvRect } from "../scene/uv.js";
 import { flyRect } from "./flight.js";
 import type { Frame, ImageId, Label, Rgba } from "./frame.js";
 import { emptyFrame } from "./frame.js";
@@ -619,6 +620,66 @@ export function createStory(scene: SceneData): StoryStep[] {
     },
   };
 
+  /** The three textures in their slots, the 60 m one stitched. */
+  const pushTextures = (frame: Frame) => {
+    frame.bitmaps.push(
+      {
+        id: "b04-tile",
+        image: "b04-tile",
+        rect: TEXTURE_SLOTS.b04,
+        opacity: 1,
+      },
+      {
+        id: "b11-tile",
+        image: "b11-tile",
+        rect: TEXTURE_SLOTS.b11,
+        opacity: 1,
+      },
+      ...covers.b01.map((_, i) => ({
+        id: `b01-piece-${i}`,
+        image: `b01-piece-${i}` as ImageId,
+        rect: pieceRect(i, 0),
+        opacity: 1,
+      })),
+    );
+  };
+
+  /** Step 7: each band's UV transform, as a rectangle on its texture. */
+  const uvStep: StoryStep = {
+    id: "uv",
+    title: "Where the tile lands",
+    description: [
+      "Each band gets a UV transform: where the primary tile sits inside that band's texture, as an offset and a scale. The 10 m texture is the tile itself, ",
+      { text: uvLabel(tile.bands.b04.uvTransform), emphasis: true },
+      ". The tile is the top-left quarter of the 20 m texture, ",
+      { text: uvLabel(tile.bands.b11.uvTransform), emphasis: true },
+      ", and the middle ninth of the 60 m one, ",
+      { text: uvLabel(tile.bands.b01.uvTransform), emphasis: true },
+      ".",
+    ],
+    durationMs: 1400,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushCoverage(frame);
+      pushTextures(frame);
+      BAND_IDS.forEach((band, i) => {
+        const shown = progress(t, 300 * i, 400);
+        const rect = uvRect(TEXTURE_SLOTS[band], tile.bands[band].uvTransform);
+        frame.polygons.push({
+          id: `uv-${band}`,
+          rings: [rectRing(rect)],
+          fill: withAlpha(WHITE, 0.2 * shown),
+          line: withAlpha(WHITE, shown),
+          lineWidth: 3,
+        });
+        slotLabels(frame, band, uvLabel(tile.bands[band].uvTransform), 1);
+      });
+      frame.hud.caption =
+        "The UV transform: where the tile sits in each texture";
+      return frame;
+    },
+  };
+
   const steps: StoryStep[] = [
     threeFiles,
     oneImage,
@@ -626,15 +687,7 @@ export function createStory(scene: SceneData): StoryStep[] {
     bandGridsStep,
     fetchStep,
     stitchStep,
-    {
-      id: "uv",
-      title: "Where the tile lands",
-      description: [
-        "Each band gets a UV transform: where the primary tile sits inside that band's texture, as an offset and a scale.",
-      ],
-      durationMs: 0,
-      frame: () => emptyFrame(),
-    },
+    uvStep,
     {
       id: "sample",
       title: "Sample",
