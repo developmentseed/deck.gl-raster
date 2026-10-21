@@ -1,3 +1,4 @@
+import { SCENE_BOX } from "../scene/layout.js";
 import type { Frame } from "./frame.js";
 import { emptyFrame } from "./frame.js";
 
@@ -40,6 +41,17 @@ export function createPlaceholderStory(): StoryStep[] {
     title,
     description: [],
     durationMs: 0,
-    frame: () => emptyFrame(),
+    frame: () => {
+      const frame = emptyFrame();
+      if (i === 1) {
+        frame.composites.push({
+          id: "overview",
+          source: "overview",
+          rect: SCENE_BOX,
+          opacity: 1,
+        });
+      }
+      return frame;
+    },
   }));
 }
