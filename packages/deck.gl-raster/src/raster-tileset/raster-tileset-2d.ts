@@ -17,6 +17,7 @@ import { transformBounds } from "@developmentseed/proj";
 import type { InitialTriangulation } from "@developmentseed/raster-reproject";
 import type { Matrix4 } from "@math.gl/core";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
+import { intersectBounds } from "./bounds.js";
 import {
   getTileIndices,
   rescaleCommonSpaceToEPSG3857,
@@ -221,10 +222,8 @@ export class RasterTileset2D extends Tileset2D {
    * generalize to descriptors with sparse or single overviews. See
    * `dev-docs/zoom-terminology.md` for the rationale.
    *
-   * `extent` (`[minX, minY, maxX, maxY]`, in WGS84 longitude/latitude) limits
-   * selection to tiles that overlap both it and the descriptor's bounds.
-   * Unlike in deck.gl's default tileset, it does not keep tiles loading below
-   * `minZoom`.
+   * Unlike in deck.gl's default tileset, `extent` does not keep tiles loading
+   * below `minZoom`.
    */
   override getTileIndices(opts: {
     viewport: Viewport;
@@ -256,17 +255,11 @@ export class RasterTileset2D extends Tileset2D {
       return [];
     }
 
-    // Read `extent` on every call: TileLayer updates it through `setOptions`.
+    // Limit tile selection to those within WGS84 extent bbox
     let wgs84Bounds = this.wgs84Bounds;
     const { extent } = this.opts;
     if (extent) {
-      const [minX, minY, maxX, maxY] = extent as Bounds;
-      wgs84Bounds = [
-        Math.max(wgs84Bounds[0], minX),
-        Math.max(wgs84Bounds[1], minY),
-        Math.min(wgs84Bounds[2], maxX),
-        Math.min(wgs84Bounds[3], maxY),
-      ];
+      wgs84Bounds = intersectBounds(wgs84Bounds, extent as Bounds);
       // An extent that misses (or only touches) the data selects nothing.
       if (
         wgs84Bounds[0] >= wgs84Bounds[2] ||

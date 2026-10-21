@@ -194,10 +194,8 @@ export class TileMatrixSetAdaptor implements RasterTilesetDescriptor {
   /**
    * Bounding box of the TileMatrixSet in its CRS, as `[minX, minY, maxX, maxY]`.
    *
-   * Uses the TileMatrixSet's `boundingBox` when present. It is optional in OGC
-   * TMS 2.0 (none of morecantile's registry TileMatrixSets set it), so
-   * otherwise this is inferred from the extent of the coarsest tile matrix,
-   * like morecantile's `TileMatrixSet.xy_bbox`.
+   * Uses the TileMatrixSet's `boundingBox` when present; otherwise it is
+   * computed from the extent of the coarsest tile matrix.
    */
   get projectedBounds(): Bounds {
     const { boundingBox } = this.tms;
