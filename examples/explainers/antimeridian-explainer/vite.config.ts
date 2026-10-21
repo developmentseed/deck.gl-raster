@@ -21,7 +21,8 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@developmentseed\/deck\.gl-raster\/internal\/(.*)$/,
+        // Biome adds `.js` to the specifier, as to every import; accept both.
+        find: /^@developmentseed\/deck\.gl-raster\/internal\/(.*?)(?:\.js)?$/,
         replacement: `${DECK_GL_RASTER_DIST}$1.js`,
       },
     ],
