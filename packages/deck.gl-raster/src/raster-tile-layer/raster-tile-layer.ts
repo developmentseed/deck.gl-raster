@@ -91,7 +91,7 @@ export type RasterTileLayerProps<
      * `[minLng, minLat, maxLng, maxLat]` in WGS84 degrees.
      *
      * Tiles are always limited to the tileset descriptor's bounds; this narrows
-     * them further, e.g. to load part of a global TileMatrixSet such as
+     * them further, e.g. to load only part of a global TileMatrixSet such as
      * WebMercatorQuad.
      */
     extent?: number[] | null;
