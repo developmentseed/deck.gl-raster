@@ -115,6 +115,23 @@ const cogExamples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/vermont-cog-comparison",
   },
+  {
+    title: "USGS Historical Topo Maps",
+    description: (
+      <>
+        Render scanned USGS topographic maps, cutting away each sheet's printed
+        collar with deck.gl's{" "}
+        <Link to="https://deck.gl/docs/api-reference/extensions/clip-extension">
+          ClipExtension
+        </Link>
+        .
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/usgs-topo/",
+    image: "/deck.gl-raster/img/usgs-topo-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/usgs-topo",
+  },
 ];
 
 const zarrExamples: Example[] = [
