@@ -1,51 +1,30 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
-import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
+import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { describe, expect, it } from "vitest";
 import { RasterTileset2D } from "../../src/raster-tileset/raster-tileset-2d.js";
 import { TileMatrixSetAdaptor } from "../../src/raster-tileset/tile-matrix-set.js";
 
+// The OGC TMS 2.0 example WebMercatorQuad. Its scale denominators are rounded
+// decimals, so the ratio between some consecutive levels comes out slightly
+// above 2, e.g. z7 / z8 = 2.0000000000000044.
+const WEB_MERCATOR_QUAD: TileMatrixSet = JSON.parse(
+  readFileSync(
+    resolve(
+      import.meta.dirname,
+      "../../../morecantile/spec/schemas/tms/2.0/json/examples/tilematrixset/WebMercatorQuad.json",
+    ),
+    "utf8",
+  ),
+);
+
 const identity = (x: number, y: number): [number, number] => [x, y];
 
-const ORIGIN = 20037508.3427892;
-
-// Rounded scale denominators from the OGC example WebMercatorQuad. The ratio
-// between consecutive levels comes out slightly above 2 for some pairs, e.g.
-// z8 / z9 = 2.000000000000009 and z7 / z8 = 2.0000000000000044.
-const SCALE_DENOMINATORS: Record<number, number> = {
-  6: 8735660.37544871,
-  7: 4367830.18772435,
-  8: 2183915.09386217,
-  9: 1091957.54693108,
-};
-
-function tileMatrix(z: number): TileMatrix {
-  const scaleDenominator = SCALE_DENOMINATORS[z]!;
-  return {
-    id: String(z),
-    scaleDenominator,
-    cellSize: scaleDenominator * 0.00028,
-    cornerOfOrigin: "topLeft",
-    pointOfOrigin: [-ORIGIN, ORIGIN],
-    tileWidth: 256,
-    tileHeight: 256,
-    matrixWidth: 2 ** z,
-    matrixHeight: 2 ** z,
-  };
-}
-
-function makeTileset(zooms: number[]): RasterTileset2D {
-  const tms: TileMatrixSet = {
-    id: "WebMercatorQuad",
-    crs: { uri: "http://www.opengis.net/def/crs/EPSG/0/3857" },
-    boundingBox: {
-      lowerLeft: [-ORIGIN, -ORIGIN],
-      upperRight: [ORIGIN, ORIGIN],
-    },
-    tileMatrices: zooms.map(tileMatrix),
-  };
+function makeTileset(): RasterTileset2D {
   return new RasterTileset2D(
     { getTileData: () => new Promise(() => {}) } as Tileset2DProps,
-    new TileMatrixSetAdaptor(tms, {
+    new TileMatrixSetAdaptor(WEB_MERCATOR_QUAD, {
       projectTo4326: identity,
       projectFrom4326: identity,
       projectTo3857: identity,
@@ -54,26 +33,36 @@ function makeTileset(zooms: number[]): RasterTileset2D {
   );
 }
 
+/**
+ * The first and last few tile indices along one axis of a level `size` tiles
+ * across. The float error in `getParentIndex`'s quotient grows with the index,
+ * so the last tiles are where a tolerance runs out first. Checking every tile
+ * of all 25 levels takes most of a second.
+ */
+function edgeIndices(size: number): number[] {
+  const count = Math.min(size, 8);
+  const first = Array.from({ length: count }, (_, i) => i);
+  const last = first.map((i) => size - count + i);
+  return [...first, ...last];
+}
+
 describe("RasterTileset2D.getParentIndex with rounded scale denominators", () => {
   it("maps 9/2/1 to 8/1/0", () => {
-    const tileset = makeTileset([8, 9]);
-    expect(tileset.getParentIndex({ x: 2, y: 1, z: 1 })).toEqual({
+    const tileset = makeTileset();
+    expect(tileset.getParentIndex({ x: 2, y: 1, z: 9 })).toEqual({
       x: 1,
       y: 0,
-      z: 0,
+      z: 8,
     });
   });
 
-  it("maps every tile to the parent that contains it", () => {
-    const zooms = [6, 7, 8, 9];
-    const tileset = makeTileset(zooms);
-    for (let z = 1; z < zooms.length; z++) {
-      const size = 2 ** zooms[z]!;
-      for (let i = 0; i < size; i++) {
-        const parent = tileset.getParentIndex({ x: i, y: size - 1 - i, z });
-        expect(parent).toEqual({
+  it("maps the first and last tiles of every level to the parents that contain them", () => {
+    const tileset = makeTileset();
+    for (let z = 1; z < WEB_MERCATOR_QUAD.tileMatrices.length; z++) {
+      for (const i of edgeIndices(2 ** z)) {
+        expect(tileset.getParentIndex({ x: i, y: i, z })).toEqual({
           x: Math.floor(i / 2),
-          y: Math.floor((size - 1 - i) / 2),
+          y: Math.floor(i / 2),
           z: z - 1,
         });
       }

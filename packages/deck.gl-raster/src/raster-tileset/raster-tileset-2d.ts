@@ -23,6 +23,7 @@ import {
   rescaleCommonSpaceToEPSG3857,
   rescaleEPSG3857ToCommonSpace,
 } from "./raster-tile-traversal.js";
+import { TILE_EDGE_TOLERANCE } from "./tile-span.js";
 import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -338,11 +339,10 @@ export class RasterTileset2D extends Tileset2D {
     // Footprints derived from rounded scale denominators can give a decimation
     // a hair above a whole number (e.g. 2.000000000000004), which would floor
     // an exact multiple like 2 / 2.000000000000004 down to the wrong parent.
-    // Add a small tolerance before flooring.
-    const epsilon = 1e-6;
+    // Add the same tolerance the traversal uses at tile edges before flooring.
     return {
-      x: Math.floor(index.x / decimationX + epsilon),
-      y: Math.floor(index.y / decimationY + epsilon),
+      x: Math.floor(index.x / decimationX + TILE_EDGE_TOLERANCE),
+      y: Math.floor(index.y / decimationY + TILE_EDGE_TOLERANCE),
       z: index.z - 1,
     };
   }

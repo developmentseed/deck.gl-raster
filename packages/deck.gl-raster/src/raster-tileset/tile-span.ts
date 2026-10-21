@@ -13,7 +13,7 @@
  * so far enough from the origin a parent again overlaps its neighbor's
  * children.
  */
-const TILE_EDGE_TOLERANCE = 1e-6;
+export const TILE_EDGE_TOLERANCE = 1e-6;
 
 /**
  * Find the tiles that a span overlaps along one axis of a tile grid.
