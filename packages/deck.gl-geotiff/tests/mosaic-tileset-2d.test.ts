@@ -4,10 +4,12 @@ import {
   WebMercatorViewport,
 } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
-import Flatbush from "flatbush";
 import { describe, expect, it } from "vitest";
 import type { MosaicSource } from "../src/mosaic-layer/mosaic-tileset-2d.js";
-import { MosaicTileset2D } from "../src/mosaic-layer/mosaic-tileset-2d.js";
+import {
+  buildSourceIndex,
+  MosaicTileset2D,
+} from "../src/mosaic-layer/mosaic-tileset-2d.js";
 
 function makeViewport(
   bounds: [number, number, number, number],
@@ -21,23 +23,11 @@ function makeViewport(
   } as unknown as Viewport;
 }
 
-function buildIndex(sources: MosaicSource[]): Flatbush | null {
-  if (sources.length === 0) {
-    return null;
-  }
-  const index = new Flatbush(sources.length);
-  for (const source of sources) {
-    index.add(...source.bbox);
-  }
-  index.finish();
-  return index;
-}
-
 function makeTileset<T extends MosaicSource>(
   sources: T[],
   opts: { maxRequests?: number; extent?: number[] } = {},
 ): MosaicTileset2D<T> {
-  const index = buildIndex(sources);
+  const index = buildSourceIndex(sources);
   return new MosaicTileset2D<T>(
     () => sources,
     () => index,
@@ -217,6 +207,89 @@ describe("MosaicTileset2D across the antimeridian", () => {
       repeat: true,
     });
     expect(names(tileset.getTileIndices({ viewport }))).toEqual(["across"]);
+  });
+});
+
+describe("MosaicTileset2D with a bbox across the antimeridian", () => {
+  // Written with minX > maxX, as GeoJSON and STAC do.
+  const across: Item = { name: "across", bbox: [179, -20, -179, -17] };
+  const names = (sources: Item[]) => sources.map((s) => s.name).sort();
+  // About 9° of longitude wide.
+  const view = { latitude: -18.5, zoom: 6, width: 800, height: 600 };
+
+  it.each([179.9, -179.9])(
+    "selects the source in Web Mercator with repeat, centered at %s°",
+    (longitude) => {
+      const tileset = makeTileset([across]);
+      const viewport = new WebMercatorViewport({
+        ...view,
+        longitude,
+        repeat: true,
+      });
+      expect(names(tileset.getTileIndices({ viewport }))).toEqual(["across"]);
+    },
+  );
+
+  it.each([179.9, -179.9])(
+    "selects the source in Web Mercator without repeat, centered at %s°",
+    (longitude) => {
+      // Only the half on the center's side of the antimeridian is in view.
+      const tileset = makeTileset([across]);
+      const viewport = new WebMercatorViewport({ ...view, longitude });
+      expect(names(tileset.getTileIndices({ viewport }))).toEqual(["across"]);
+    },
+  );
+
+  it.each([179.9, -179.9])(
+    "selects the source on a globe centered at %s°",
+    (longitude) => {
+      const tileset = makeTileset([across]);
+      const viewport = new GlobeViewport({ ...view, longitude });
+      expect(names(tileset.getTileIndices({ viewport }))).toEqual(["across"]);
+    },
+  );
+
+  it("doesn't select the source far from the antimeridian", () => {
+    const tileset = makeTileset([across]);
+    const viewport = new WebMercatorViewport({
+      ...view,
+      longitude: 0,
+      repeat: true,
+    });
+    expect(tileset.getTileIndices({ viewport })).toEqual([]);
+  });
+
+  it.each([
+    ["west", [178, -25, 179.5, -10]],
+    ["east", [-179.5, -25, -178, -10]],
+  ])("keeps the source for an extent over its %s half", (_half, extent) => {
+    const tileset = makeTileset([across], { extent });
+    const viewport = new WebMercatorViewport({
+      ...view,
+      longitude: 179.9,
+      repeat: true,
+    });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual(["across"]);
+  });
+
+  it("drops the source for an extent elsewhere", () => {
+    const tileset = makeTileset([across], { extent: [0, -25, 10, -10] });
+    const viewport = new WebMercatorViewport({
+      ...view,
+      longitude: 179.9,
+      repeat: true,
+    });
+    expect(tileset.getTileIndices({ viewport })).toEqual([]);
+  });
+
+  it("gives deck.gl a bbox that runs one world east", () => {
+    // deck.gl's request priority and cull-rect check need west < east.
+    const tileset = makeTileset([across]);
+    const tileIndex = { x: 0, y: 0, z: 0, ...across, id: "0" };
+    expect(tileset.getTileMetadata(tileIndex)).toEqual({
+      id: "0",
+      bbox: { west: 179, south: -20, east: 181, north: -17 },
+    });
   });
 });
 

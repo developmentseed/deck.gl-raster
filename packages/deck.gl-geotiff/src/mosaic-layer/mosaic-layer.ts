@@ -15,10 +15,9 @@ import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
 import { nearestCopy } from "@developmentseed/proj";
-import Flatbush from "flatbush";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
-import type { MosaicSource } from "./mosaic-tileset-2d.js";
-import { MosaicTileset2D } from "./mosaic-tileset-2d.js";
+import type { MosaicSource, SourceIndex } from "./mosaic-tileset-2d.js";
+import { buildSourceIndex, MosaicTileset2D } from "./mosaic-tileset-2d.js";
 
 export type MosaicLayerProps<
   MosaicT extends MosaicSource = MosaicSource,
@@ -162,7 +161,9 @@ function createGetPriorityCallback(
   }
 
   const [minX, minY, maxX, maxY] = bbox;
-  const sourceCx = (minX + maxX) / 2;
+  // A bbox across the antimeridian has minX > maxX: its east edge is one
+  // world east.
+  const sourceCx = (minX + (minX > maxX ? maxX + 360 : maxX)) / 2;
   const sourceCy = (minY + maxY) / 2;
 
   return (): number => {
@@ -189,7 +190,7 @@ export class MosaicLayer<
 
   declare state: {
     // The index can be null if sources are empty
-    index: Flatbush | null;
+    index: SourceIndex | null;
     // The sources the index was built from
     sources: MosaicT[];
   };
@@ -211,18 +212,7 @@ export class MosaicLayer<
 
   private _buildSpatialIndex(): void {
     const { sources } = this.props;
-    if (sources.length === 0) {
-      this.setState({ index: null, sources });
-      return;
-    }
-
-    const index = new Flatbush(sources.length);
-    for (const source of sources) {
-      index.add(...source.bbox);
-    }
-    index.finish();
-
-    this.setState({ index, sources });
+    this.setState({ index: buildSourceIndex(sources), sources });
   }
 
   renderTileLayer(

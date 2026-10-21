@@ -111,12 +111,12 @@ The search doesn't walk world offsets like the traversal does. Every source
 lies in the primary world, so the moved bounds cover every copy the viewport
 shows.
 
+A source whose bbox crosses the antimeridian, written with `minX > maxX` as in
+GeoJSON and STAC, is indexed as two boxes, one on each side of it.
+
 ## Out of scope
 
 - The large-zarr-root cull path in `createRootTiles` does not yet consider
   world-copy intersections. For typical OGC pyramids this doesn't matter
   (root tiles are enumerated unconditionally). If a zarr dataset hits the
   same symptom, generalize that path.
-- A mosaic source whose bbox crosses the antimeridian, written with
-  `minX > maxX` as in GeoJSON and STAC, is only selected when nearly the whole
-  world is in view.
