@@ -65,7 +65,6 @@ export type RasterTileLayerProps<
   Pick<
     TileLayerProps<DataT>,
     | "debounceTime"
-    | "extent"
     | "maxCacheByteSize"
     | "maxCacheSize"
     | "maxRequests"
@@ -86,6 +85,16 @@ export type RasterTileLayerProps<
      * `_tilesetDescriptor()` method.
      */
     tilesetDescriptor?: RasterTilesetDescriptor;
+
+    /**
+     * Only load tiles that overlap this bounding box, given as
+     * `[minLng, minLat, maxLng, maxLat]` in WGS84 degrees.
+     *
+     * Tiles are always limited to the tileset descriptor's bounds; this narrows
+     * them further, e.g. to load only part of a global TileMatrixSet such as
+     * WebMercatorQuad.
+     */
+    extent?: number[] | null;
 
     /**
      * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
@@ -346,6 +355,10 @@ export class RasterTileLayer<
     // `Deck.useDevicePixels`). The drawing-buffer ratio is the
     // *effective* DPR Deck is rendering at.
     const device = this.context.device;
+    // It's important for `TilesetFactory` to be a new class on every call
+    // because deck.gl compares `TilesetClass` by identity: the new class makes
+    // the inner `TileLayer` re-render loaded tiles with the current props.
+    // See #710.
     class TilesetFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
         super(opts, descriptor, {

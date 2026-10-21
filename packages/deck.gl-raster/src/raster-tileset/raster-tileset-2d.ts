@@ -17,6 +17,7 @@ import { transformBounds } from "@developmentseed/proj";
 import type { InitialTriangulation } from "@developmentseed/raster-reproject";
 import type { Matrix4 } from "@math.gl/core";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
+import { intersectBounds } from "./bounds.js";
 import {
   getTileIndices,
   rescaleCommonSpaceToEPSG3857,
@@ -205,6 +206,26 @@ export class RasterTileset2D extends Tileset2D {
   }
 
   /**
+   * Unloads every cached tile. deck.gl's `Tileset2D.finalize` clears its cache
+   * without calling `onTileUnload`, so GPU resources that `getTileData` made
+   * for those tiles, like textures, would be freed only by garbage collection.
+   * A tile still loading is unloaded once its load finishes, since deck.gl
+   * keeps the data that `getTileData` returns after an abort.
+   */
+  override finalize(): void {
+    const { onTileUnload } = this.opts;
+    for (const tile of this.tiles) {
+      if (tile.isLoading) {
+        // `data` is a promise until the load finishes.
+        void Promise.resolve(tile.data).then(() => onTileUnload(tile));
+      } else {
+        onTileUnload(tile);
+      }
+    }
+    super.finalize();
+  }
+
+  /**
    * Get tile indices visible in viewport
    * Uses frustum culling similar to OSM implementation
    *
@@ -220,6 +241,9 @@ export class RasterTileset2D extends Tileset2D {
    * requires a notion of clamping to a coarser z, which doesn't
    * generalize to descriptors with sparse or single overviews. See
    * `dev-docs/zoom-terminology.md` for the rationale.
+   *
+   * Unlike in deck.gl's default tileset, `extent` does not keep tiles loading
+   * below `minZoom`.
    */
   override getTileIndices(opts: {
     viewport: Viewport;
@@ -251,6 +275,20 @@ export class RasterTileset2D extends Tileset2D {
       return [];
     }
 
+    // Limit tile selection to those within WGS84 extent bbox
+    let wgs84Bounds = this.wgs84Bounds;
+    const { extent } = this.opts;
+    if (extent) {
+      wgs84Bounds = intersectBounds(wgs84Bounds, extent as Bounds);
+      // An extent that misses (or only touches) the data selects nothing.
+      if (
+        wgs84Bounds[0] >= wgs84Bounds[2] ||
+        wgs84Bounds[1] >= wgs84Bounds[3]
+      ) {
+        return [];
+      }
+    }
+
     const maxAvailableZ = this.descriptor.levels.length - 1;
     const maxZ =
       typeof opts.maxZoom === "number"
@@ -261,7 +299,7 @@ export class RasterTileset2D extends Tileset2D {
       viewport,
       maxZ,
       zRange: opts.zRange ?? null,
-      wgs84Bounds: this.wgs84Bounds,
+      wgs84Bounds,
       pixelRatio: this.getPixelRatio(),
       boundingVolumeCache: this.boundingVolumeCache,
     });

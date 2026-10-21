@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.9.0-beta.2 - 2026-10-20
+
+### What's Changed
+
+* fix(deck.gl-raster): Select each tile once in raster tile traversal by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/689
+* refactor(deck.gl-raster)!: remove CutlineBbox in favor of deck.gl's ClipExtension by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/739
+* refactor(examples): rename usgs-topo-cutline to usgs-topo and use the default pipeline by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/741
+* docs: add the USGS topo example to the examples page by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/743
+* refactor(examples): drop the custom-projection child bounds inset by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/744
+* fix(deck.gl-raster): Infer missing TileMatrixSet bounds and honor `extent` by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/684
+* fix(deck.gl-raster): destroy tile textures when a raster layer is removed by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/728
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.9.0-beta.1...v0.9.0-beta.2
+
 ## v0.9.0-beta.1 - 2026-10-20
 
 ### What's Changed

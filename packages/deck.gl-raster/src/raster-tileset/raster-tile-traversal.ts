@@ -30,6 +30,7 @@ import {
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
+import { intersectBounds } from "./bounds.js";
 import type {
   RasterTilesetDescriptor,
   RasterTilesetLevel,
@@ -877,13 +878,7 @@ export function createRootTiles(opts: {
 
   // Large root matrix → intersect dataset extent with viewport, project
   // to source CRS, use the root level's tile-range helper.
-  const vpBounds = viewport.getBounds();
-  const cullBounds: Bounds = [
-    Math.max(datasetWgs84Bounds[0], vpBounds[0]),
-    Math.max(datasetWgs84Bounds[1], vpBounds[1]),
-    Math.min(datasetWgs84Bounds[2], vpBounds[2]),
-    Math.min(datasetWgs84Bounds[3], vpBounds[3]),
-  ];
+  const cullBounds = intersectBounds(datasetWgs84Bounds, viewport.getBounds());
   if (cullBounds[0] > cullBounds[2] || cullBounds[1] > cullBounds[3]) {
     return roots;
   }
@@ -1049,7 +1044,28 @@ export function getTileIndices(
     root.getSelected(selectedNodes);
   }
 
-  return selectedNodes;
+  return uniqueTiles(selectedNodes);
+}
+
+/**
+ * Drop repeated tile indices, keeping the first node for each `z/x/y`.
+ *
+ * Each parent creates its own child nodes, so a tile that is a child of two
+ * parents can be selected once through each. That happens when pyramid levels
+ * are not aligned (e.g. COG overviews with odd sizes), where a child tile can
+ * straddle two parents, and in TileMatrixSets whose rounded cellSizes push a
+ * parent's edge past a child's edge.
+ */
+function uniqueTiles(nodes: RasterTileNode[]): RasterTileNode[] {
+  const seen = new Set<string>();
+  return nodes.filter((node) => {
+    const key = `${node.z}/${node.x}/${node.y}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 /**

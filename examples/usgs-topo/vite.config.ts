@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/deck.gl-raster/examples/usgs-topo-cutline/",
+  base: "/deck.gl-raster/examples/usgs-topo/",
   worker: { format: "es" },
   server: {
     port: 3000,

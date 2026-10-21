@@ -1,10 +1,12 @@
 import type { Viewport } from "@deck.gl/core";
+import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import type {
   GeoBoundingBox,
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import type { Bounds } from "@developmentseed/deck.gl-raster";
+import { nearestCopy } from "@developmentseed/proj";
 import type Flatbush from "flatbush";
 
 /** Tile index.
@@ -120,8 +122,14 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       return [];
     }
 
-    const viewportBounds = viewport.getBounds();
-    let indices = index.search(...viewportBounds);
+    // A source can match both halves of bounds split at the antimeridian.
+    const matched = new Set<number>();
+    for (const bounds of searchBounds(viewport)) {
+      for (const i of index.search(...bounds)) {
+        matched.add(i);
+      }
+    }
+    let indices = [...matched];
 
     const sources = this.getSources();
     // Read `extent` on every call: TileLayer updates it through `setOptions`.
@@ -143,6 +151,36 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       };
     });
   }
+}
+
+/**
+ * The boxes to search the spatial index with for `viewport`.
+ *
+ * Source bboxes lie within [-180, 180] longitude, but near the antimeridian
+ * `viewport.getBounds()` runs past ±180°.
+ * So the bounds are moved back within [-180, 180], and split in two
+ * at ±180° if they cross it. Web Mercator without `repeat` draws nothing past
+ * ±180°, so its bounds are searched as they are.
+ */
+function searchBounds(viewport: Viewport): Bounds[] {
+  const bounds = viewport.getBounds();
+  if (!viewport.subViewports && !(viewport instanceof GlobeViewport)) {
+    return [bounds];
+  }
+
+  const [minX, minY, maxX, maxY] = bounds;
+  if (maxX - minX >= 360) {
+    return [[-180, minY, 180, maxY]];
+  }
+  const west = nearestCopy(minX, 0, 360);
+  const east = west + (maxX - minX);
+  if (east <= 180) {
+    return [[west, minY, east, maxY]];
+  }
+  return [
+    [west, minY, 180, maxY],
+    [-180, minY, east - 360, maxY],
+  ];
 }
 
 /**

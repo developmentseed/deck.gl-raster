@@ -1004,7 +1004,7 @@ importers:
         specifier: ^8.3.1
         version: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0)
 
-  examples/usgs-topo-cutline:
+  examples/usgs-topo:
     dependencies:
       '@chakra-ui/react':
         specifier: ^3.37.0
@@ -1012,6 +1012,9 @@ importers:
       '@deck.gl/core':
         specifier: ^9.4.0
         version: 9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
+      '@deck.gl/extensions':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
       '@deck.gl/geo-layers':
         specifier: ^9.4.0
         version: 9.4.0(1911ea764947fb8f33e4dca0f8034ddd)
@@ -1027,12 +1030,6 @@ importers:
       '@developmentseed/deck.gl-geotiff':
         specifier: workspace:^
         version: link:../../packages/deck.gl-geotiff
-      '@developmentseed/deck.gl-raster':
-        specifier: workspace:^
-        version: link:../../packages/deck.gl-raster
-      '@developmentseed/geotiff':
-        specifier: workspace:^
-        version: link:../../packages/geotiff
       '@luma.gl/core':
         specifier: ^9.4.2
         version: 9.4.2

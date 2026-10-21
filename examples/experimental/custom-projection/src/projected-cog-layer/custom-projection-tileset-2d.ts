@@ -88,9 +88,6 @@ const SAMPLES_PER_EDGE = 16;
 /** Interior grid (per side) probed when testing a tile against the domain. */
 const INTERIOR_GRID_SIZE = 8;
 
-/** Relative inset applied to a parent's bounds when finding its children. */
-const CHILD_BOUNDS_INSET = 1e-9;
-
 /**
  * deck.gl-raster's LOD measures screen pixels with the 256-px OSM zoom
  * convention, while deck.gl's zoom 0 is 512 px wide: one OSM pixel is two
@@ -426,16 +423,11 @@ export class CustomProjectionTileset2D extends Tileset2D {
       level.projectedTileCorners(index.x, index.y);
     const xs = [topLeft[0], topRight[0], bottomLeft[0], bottomRight[0]];
     const ys = [topLeft[1], topRight[1], bottomLeft[1], bottomRight[1]];
-    // Shrink the bounds a hair: `crsBoundsToTileRange` is inclusive, so a
-    // parent edge that lands exactly on a child-tile boundary would otherwise
-    // pull in the neighboring parent's children too.
-    const insetX = (Math.max(...xs) - Math.min(...xs)) * CHILD_BOUNDS_INSET;
-    const insetY = (Math.max(...ys) - Math.min(...ys)) * CHILD_BOUNDS_INSET;
     const { minCol, maxCol, minRow, maxRow } = childLevel.crsBoundsToTileRange(
-      Math.min(...xs) + insetX,
-      Math.min(...ys) + insetY,
-      Math.max(...xs) - insetX,
-      Math.max(...ys) - insetY,
+      Math.min(...xs),
+      Math.min(...ys),
+      Math.max(...xs),
+      Math.max(...ys),
     );
     const children: TileIndex[] = [];
     for (let y = minRow; y <= maxRow; y++) {

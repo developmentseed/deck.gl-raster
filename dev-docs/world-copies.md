@@ -91,9 +91,32 @@ Differences:
 - We cache the offset-0 OBB per `(zRange)` and translate from the cache
   rather than recomputing per offset.
 
+## Mosaic sources
+
+`MosaicLayer` picks the sources to draw before any of them has a
+`RasterTileLayer`, so the traversal above never sees a source it didn't pick.
+[`MosaicTileset2D`](../packages/deck.gl-geotiff/src/mosaic-layer/mosaic-tileset-2d.ts)
+picks them by searching a Flatbush index of source bboxes with
+`viewport.getBounds()`.
+
+The bboxes lie within [-180, 180] longitude, but near the antimeridian the
+viewport's bounds run past ±180°. Past ±180°, Web Mercator with `repeat` shows
+another copy of the world, and a globe shows the other side of the
+antimeridian. (A globe has no `subViewports`, but its `getBounds()` runs past
+±180° too.) So the search moves the bounds back within [-180, 180], and splits
+them in two at ±180° if they cross it. Web Mercator without `repeat` draws
+nothing past ±180°, so its bounds are searched as they are.
+
+The search doesn't walk world offsets like the traversal does. Every source
+lies in the primary world, so the moved bounds cover every copy the viewport
+shows.
+
 ## Out of scope
 
 - The large-zarr-root cull path in `createRootTiles` does not yet consider
   world-copy intersections. For typical OGC pyramids this doesn't matter
   (root tiles are enumerated unconditionally). If a zarr dataset hits the
   same symptom, generalize that path.
+- A mosaic source whose bbox crosses the antimeridian, written with
+  `minX > maxX` as in GeoJSON and STAC, is only selected when nearly the whole
+  world is in view.

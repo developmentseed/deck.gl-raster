@@ -14,6 +14,7 @@ import {
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
+import { nearestCopy } from "@developmentseed/proj";
 import Flatbush from "flatbush";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
 import type { MosaicSource } from "./mosaic-tileset-2d.js";
@@ -137,6 +138,8 @@ const defaultProps: Partial<MosaicLayerProps> = {
  * Build the limiter `getPriority` callback for one mosaic source: euclidean
  * distance from the source's bbox center to the current viewport center, in
  * lon/lat degree-space (just an ordering key — great-circle isn't needed).
+ * Longitude is measured the short way around, so a source just across the
+ * antimeridian counts as near.
  *
  * `getViewport` is read on every call, so the limiter re-sorts its queue as
  * the viewport pans, pulling newly-central sources ahead of edge sources.
@@ -165,7 +168,7 @@ function createGetPriorityCallback(
   return (): number => {
     // Geographic viewport (checked above); both types expose lon/lat.
     const v = getViewport() as WebMercatorViewport | _GlobeViewport;
-    const dx = sourceCx - v.longitude;
+    const dx = nearestCopy(sourceCx, v.longitude, 360) - v.longitude;
     const dy = sourceCy - v.latitude;
     return Math.hypot(dx, dy);
   };

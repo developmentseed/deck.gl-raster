@@ -162,14 +162,14 @@ async function settle(layerManager: LayerManager): Promise<void> {
 /**
  * Render {@link MosaicLayer} through deck.gl's `LayerManager`. Each call of the
  * returned function renders a new layer instance, as apps do on every render,
- * and returns the sources that update fetched, the sources `onViewportLoad`
- * last reported, and the errors deck.gl raised.
+ * and returns the sources that update fetched, the priority each fetch got,
+ * the sources `onViewportLoad` last reported, and the errors deck.gl raised.
  */
-function makeMosaicRenderer() {
+function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
   // deck.gl ignores errors thrown in `updateState` when there is no device.
   // `renderSource` returns no layers, so nothing draws with this stub.
   const device = {} as Device;
-  const layerManager = new LayerManager(device, { viewport: VIEWPORT });
+  const layerManager = new LayerManager(device, { viewport });
   let errors: string[] = [];
   layerManager.setProps({
     onError: (error: Error) => {
@@ -180,13 +180,15 @@ function makeMosaicRenderer() {
   return async (sources: Item[]) => {
     errors = [];
     const fetched: string[] = [];
+    const priorities: Record<string, number> = {};
     const viewportLoads: string[][] = [];
     layerManager.setLayers([
       new MosaicLayer<Item>({
         id: "mosaic",
         sources,
-        getSource: async (source) => {
+        getSource: async (source, { getPriority }) => {
           fetched.push(source.id);
+          priorities[source.id] = getPriority?.() as number;
         },
         renderSource: () => null,
         onViewportLoad: (entries) => {
@@ -195,7 +197,12 @@ function makeMosaicRenderer() {
       }),
     ]);
     await settle(layerManager);
-    return { fetched: fetched.sort(), loaded: viewportLoads.at(-1), errors };
+    return {
+      fetched: fetched.sort(),
+      priorities,
+      loaded: viewportLoads.at(-1),
+      errors,
+    };
   };
 }
 
@@ -240,5 +247,29 @@ describe("MosaicLayer sources across layer instances", () => {
     expect(errors).toEqual([]);
     expect(fetched).toEqual(["P", "Q"]);
     expect(loaded).toEqual(["P", "Q"]);
+  });
+});
+
+describe("MosaicLayer fetch priority", () => {
+  it("measures longitude the short way around the antimeridian", async () => {
+    // Centered just west of the antimeridian. `east` is 1.6° away across it,
+    // and `west` is 9.4° away on the same side.
+    const east: Item = { id: "east", bbox: [-179, -20, -178, -17] };
+    const west: Item = { id: "west", bbox: [170, -20, 171, -17] };
+    const render = makeMosaicRenderer(
+      new WebMercatorViewport({
+        width: 800,
+        height: 600,
+        longitude: 179.9,
+        latitude: -18.5,
+        zoom: 4,
+        repeat: true,
+      }),
+    );
+
+    const { priorities, errors } = await render([east, west]);
+    expect(errors).toEqual([]);
+    expect(priorities.east).toBeCloseTo(1.6);
+    expect(priorities.west).toBeCloseTo(9.4);
   });
 });

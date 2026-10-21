@@ -1,4 +1,8 @@
 import type { Viewport } from "@deck.gl/core";
+import {
+  _GlobeViewport as GlobeViewport,
+  WebMercatorViewport,
+} from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import Flatbush from "flatbush";
 import { describe, expect, it } from "vitest";
@@ -125,6 +129,94 @@ describe("MosaicTileset2D tile ids", () => {
     });
     expect(result[0]).toMatchObject({ name: "explicit", id: "stable-id" });
     expect(tileset.getTileId(result[0]!)).toBe("stable-id");
+  });
+});
+
+describe("MosaicTileset2D across the antimeridian", () => {
+  // One source on each side of the antimeridian, like scenes over Fiji.
+  const west: Item = { name: "west", bbox: [176, -20, 179, -17] };
+  const east: Item = { name: "east", bbox: [-179, -20, -176, -17] };
+  const names = (sources: Item[]) => sources.map((s) => s.name).sort();
+  // About 9° of longitude wide.
+  const view = { latitude: -18.5, zoom: 6, width: 800, height: 600 };
+
+  it.each([179.9, -179.9])(
+    "selects both sides in Web Mercator with repeat, centered at %s°",
+    (longitude) => {
+      const tileset = makeTileset([west, east]);
+      const viewport = new WebMercatorViewport({
+        ...view,
+        longitude,
+        repeat: true,
+      });
+      expect(names(tileset.getTileIndices({ viewport }))).toEqual([
+        "east",
+        "west",
+      ]);
+    },
+  );
+
+  it("selects only the side drawn in Web Mercator without repeat", () => {
+    // Nothing is drawn past 180°.
+    const tileset = makeTileset([west, east]);
+    const viewport = new WebMercatorViewport({ ...view, longitude: 179.9 });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual(["west"]);
+  });
+
+  it.each([179.9, -179.9])(
+    "selects both sides on a globe centered at %s°",
+    (longitude) => {
+      const tileset = makeTileset([west, east]);
+      const viewport = new GlobeViewport({ ...view, longitude });
+      expect(names(tileset.getTileIndices({ viewport }))).toEqual([
+        "east",
+        "west",
+      ]);
+    },
+  );
+
+  it("selects both sides when the center longitude isn't wrapped", () => {
+    // Controllers wrap the center into [-180, 180], but a view state set
+    // directly can be anywhere. 899.9° is 179.9°, two worlds east.
+    const tileset = makeTileset([west, east]);
+    const viewport = new WebMercatorViewport({
+      ...view,
+      longitude: 899.9,
+      repeat: true,
+    });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual([
+      "east",
+      "west",
+    ]);
+  });
+
+  it("selects every source when the viewport shows more than one world", () => {
+    const tileset = makeTileset([west, east, A]);
+    const viewport = new WebMercatorViewport({
+      longitude: 0,
+      latitude: 0,
+      zoom: 0,
+      width: 3000,
+      height: 800,
+      repeat: true,
+    });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual([
+      "A",
+      "east",
+      "west",
+    ]);
+  });
+
+  it("selects a source on both sides of the antimeridian once", () => {
+    // A scene across the antimeridian, with a bbox spanning every longitude.
+    const across: Item = { name: "across", bbox: [-180, -20, 180, -17] };
+    const tileset = makeTileset([across]);
+    const viewport = new WebMercatorViewport({
+      ...view,
+      longitude: 179.9,
+      repeat: true,
+    });
+    expect(names(tileset.getTileIndices({ viewport }))).toEqual(["across"]);
   });
 });
 

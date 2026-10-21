@@ -1,6 +1,7 @@
 import * as affine from "@developmentseed/affine";
 import type { TileMatrix, TileMatrixSet } from "@developmentseed/morecantile";
 import { tileTransform, xy_bounds } from "@developmentseed/morecantile";
+import { overlappingTileSpan } from "./tile-span.js";
 import type {
   RasterTilesetDescriptor,
   RasterTilesetLevel,
@@ -70,7 +71,9 @@ class TileMatrixAdaptor implements RasterTilesetLevel {
    * 1. Treating each TileMatrix as an independent, axis-aligned grid in CRS space
    * 2. Mapping the parent tile's CRS bounding box into the child grid
    * 3. Returning the inclusive range of child tile indices whose spatial extent
-   *    intersects the parent tile
+   *    overlaps the parent tile. A child that only shares an edge with the
+   *    parent is excluded, so in an aligned pyramid such as WebMercatorQuad
+   *    each parent has exactly its 2×2 children.
    *
    * The returned indices are clamped to the valid extents of the child matrix
    * (`[0, matrixWidth)` and `[0, matrixHeight)`).
@@ -111,11 +114,14 @@ class TileMatrixAdaptor implements RasterTilesetLevel {
     const originY = pointOfOrigin[1];
 
     // Convert CRS bounds → tile indices
-    let minCol = Math.floor((projectedMinX - originX) / childTileWidthCRS);
-    let maxCol = Math.floor((projectedMaxX - originX) / childTileWidthCRS);
-
-    let minRow = Math.floor((originY - projectedMaxY) / childTileHeightCRS);
-    let maxRow = Math.floor((originY - projectedMinY) / childTileHeightCRS);
+    let [minCol, maxCol] = overlappingTileSpan(
+      (projectedMinX - originX) / childTileWidthCRS,
+      (projectedMaxX - originX) / childTileWidthCRS,
+    );
+    let [minRow, maxRow] = overlappingTileSpan(
+      (originY - projectedMaxY) / childTileHeightCRS,
+      (originY - projectedMinY) / childTileHeightCRS,
+    );
 
     // Clamp to matrix bounds
     minCol = Math.max(0, Math.min(matrixWidth - 1, minCol));
@@ -185,15 +191,32 @@ export class TileMatrixSetAdaptor implements RasterTilesetDescriptor {
     return this._levels;
   }
 
+  /**
+   * Bounding box of the TileMatrixSet in its CRS, as `[minX, minY, maxX, maxY]`.
+   *
+   * Uses the TileMatrixSet's `boundingBox` when present; otherwise it is
+   * computed from the extent of the coarsest tile matrix.
+   */
   get projectedBounds(): Bounds {
     const { boundingBox } = this.tms;
-    if (!boundingBox) {
-      throw new Error(
-        "Bounding Box inference not yet implemented; should be provided on TileMatrixSet",
-      );
+    if (boundingBox) {
+      const { lowerLeft, upperRight } = boundingBox;
+      return [lowerLeft[0], lowerLeft[1], upperRight[0], upperRight[1]];
     }
 
-    const { lowerLeft, upperRight } = boundingBox;
-    return [lowerLeft[0], lowerLeft[1], upperRight[0], upperRight[1]];
+    // The first and last tiles sit in opposite corners of the matrix, so
+    // together they span it for either `cornerOfOrigin`.
+    const matrix = this.tms.tileMatrices[0]!;
+    const first = xy_bounds(matrix, { x: 0, y: 0 });
+    const last = xy_bounds(matrix, {
+      x: matrix.matrixWidth - 1,
+      y: matrix.matrixHeight - 1,
+    });
+    return [
+      Math.min(first.lowerLeft[0], last.lowerLeft[0]),
+      Math.min(first.lowerLeft[1], last.lowerLeft[1]),
+      Math.max(first.upperRight[0], last.upperRight[0]),
+      Math.max(first.upperRight[1], last.upperRight[1]),
+    ];
   }
 }
