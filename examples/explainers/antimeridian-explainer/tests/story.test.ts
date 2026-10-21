@@ -159,3 +159,13 @@ describe("step 6: snap every point", () => {
     expect(raw).toBeCloseTo(snapped, 6);
   });
 });
+
+describe("step 7: mesh as usual", () => {
+  it("ends on the 40-triangle mesh, in the strip and up close", () => {
+    const meshes = end(6).meshes.filter((m) => m.id === "mesh");
+    expect(meshes.map((m) => m.view).sort()).toEqual(["closeup", "strip"]);
+    for (const mesh of meshes) {
+      expect(mesh.soup.vertexCount).toBe(3 * 40);
+    }
+  });
+});

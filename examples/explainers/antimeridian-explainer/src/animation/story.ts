@@ -1,6 +1,6 @@
 import type { Mesh2D } from "@developmentseed/deck.gl-raster/internal/clip-mesh-to-world.js";
 import type { TriangleSoup } from "../layers/triangle-soup.js";
-import { PERIOD } from "../scene/constants.js";
+import { MAX_ERROR, PERIOD } from "../scene/constants.js";
 import type { Camera } from "../scene/layout.js";
 import {
   CLOSEUP_BOX,
@@ -18,6 +18,8 @@ import { CORNER_IDS } from "../scene/mesh.js";
 import type { Frame, Label, LineDraw, Rgba, ViewId } from "./frame.js";
 import { emptyFrame } from "./frame.js";
 import { easeInOutCubic, lerp, progress } from "./math.js";
+import type { ScheduleOptions } from "./refine-schedule.js";
+import { scheduleRefinement } from "./refine-schedule.js";
 import { createSoup } from "./soup.js";
 
 /** A run of description text: plain, emphasised, or a link. */
@@ -73,6 +75,22 @@ const SPLIT_MS = 700;
 
 /** How long each corner's walk takes, in ms. */
 const WALK_MS = 800;
+
+/** The refinement replay's pacing: quicker than the reprojection explainer's. */
+const REFINE_SCHEDULE: ScheduleOptions = {
+  slowSteps: 2,
+  highlightMs: 350,
+  cutMs: 150,
+  snapMs: 300,
+  holdMs: 150,
+  speedup: 0.8,
+  minStepMs: 80,
+};
+
+/** An error in output pixels, as the counter writes it. */
+function errorText(error: number): string {
+  return `${error < 10 ? error.toFixed(2) : count(Math.round(error))} px`;
+}
 
 /** How long the probe takes to sweep the image one way, in ms. */
 const SWEEP_MS = 3200;
@@ -774,5 +792,92 @@ export function createStory(
     },
   };
 
-  return [imageStep, seedStep, cornersStep, plainStep, walkStep, probeStep];
+  /** Step 7: the reprojector meshes the snapped projection, split by split. */
+  const record = scene.refinement;
+  const timings = scheduleRefinement(record.steps.length, REFINE_SCHEDULE);
+  const lastEnd = timings[timings.length - 1]?.end ?? 0;
+  /** The mesh after `done` splits, and its largest error. */
+  const meshAfter = (done: number) => ({
+    triangles:
+      done === 0 ? record.seedTriangles : record.steps[done - 1]!.triangles,
+    positions: record.positions,
+    uvs: record.uvs,
+    maxError:
+      done === 0 ? record.seedMaxError : record.steps[done - 1]!.maxError,
+  });
+  const meshStep: StoryStep = {
+    id: "mesh",
+    title: "Mesh as usual",
+    description: [
+      `With every point snapped, the projection is continuous. The reprojector, which knows nothing about copies of the world, meshes it like any other image: it splits the triangle that is furthest off, until every triangle is within ${MAX_ERROR} output pixels. It needs ${count(scene.mesh.triangles.length / 3)} triangles. It measures the error on the map because the inverse projection is still wrapped.`,
+    ],
+    durationMs: lastEnd + 800,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushImage(frame, 1);
+      pushSplit(frame, { split: 1, opacity: 1 });
+      const done = timings.filter((timing) => timing.end <= t).length;
+      const mesh = meshAfter(done);
+      frame.meshes.push(
+        {
+          id: "image-mesh",
+          view: "slide",
+          soup: imageSoup(mesh),
+          edgeColor: withAlpha(WHITE, 0.8),
+          edgeWidth: 1,
+          opacity: 1,
+        },
+        {
+          id: "mesh",
+          view: "strip",
+          soup: mapSoup(mesh),
+          edgeColor: [0, 0, 0, 0],
+          edgeWidth: 1,
+          opacity: 1,
+        },
+        {
+          id: "mesh",
+          view: "closeup",
+          soup: mapSoup(mesh),
+          edgeColor: withAlpha(WHITE, 0.85),
+          edgeWidth: 1,
+          opacity: 1,
+        },
+      );
+      // The split now playing: its new corner, where it lands.
+      const playing = record.steps[done];
+      if (playing && t >= timings[done]!.start) {
+        const vertex = playing.vertex;
+        frame.dots.push({
+          id: "new-vertex",
+          view: "closeup",
+          points: [
+            [record.positions[2 * vertex]!, record.positions[2 * vertex + 1]!],
+          ],
+          color: RAW,
+          radius: 5,
+        });
+      }
+      frame.hud.labels.push(
+        label(
+          "counter",
+          `${count(mesh.triangles.length / 3)} triangles · ${errorText(mesh.maxError)} off`,
+          [MAP_BOX.x + MAP_BOX.width / 2, MAP_BOX.y + MAP_BOX.height - 24],
+          { color: css(WHITE), size: 24 },
+        ),
+      );
+      frame.hud.caption = "Now the image meshes like any other";
+      return frame;
+    },
+  };
+
+  return [
+    imageStep,
+    seedStep,
+    cornersStep,
+    plainStep,
+    walkStep,
+    probeStep,
+    meshStep,
+  ];
 }
