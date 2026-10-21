@@ -4,11 +4,11 @@ import { parseWkt } from "./parse-wkt.js";
 import type { ProjJson } from "./projjson.js";
 
 /**
- * Projection definitions by `EPSG:<code>`, as promises, so that callers
- * resolving the same code at the same time (every source of a mosaic, every
- * band of a MultiCOGLayer) share one request. {@link epsgResolver} fills it
- * from proj4's own definitions or from epsg.io; {@link registerProjection}
- * fills it from the application.
+ * Projection definitions stored by EPSG code.
+ *
+ * We store promises so that callers resolving the same code at the same time
+ * share one request. {@link epsgResolver} fills the registry as needed, or the
+ * user can register projections manually with {@link registerProjection}.
  */
 export const PROJECTION_REGISTRY = new Map<
   string,
@@ -18,9 +18,9 @@ export const PROJECTION_REGISTRY = new Map<
 export type EpsgResolver = (epsg: number) => Promise<ProjectionDefinition>;
 
 /**
- * Register a projection for an EPSG code, so the default resolver never has to
- * fetch it: for example a WKT or PROJJSON definition bundled with the
- * application.
+ * Manually register a projection definition for an EPSG code.
+ *
+ * Pre-registered definitions will never pass through {@link EpsgResolver}.
  */
 export function registerProjection(
   epsg: number,
