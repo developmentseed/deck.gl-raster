@@ -85,6 +85,10 @@ export async function prefetchTags(
     image.fetch(TiffTag.Predictor, { signal }),
     image.fetch(TiffTag.SampleFormat, { signal }),
     image.fetch(TiffTag.SamplesPerPixel, { signal }),
+    // Loaded but not returned. Each image has its own JPEG tables, which can
+    // differ between a file's images, and tile reads take them from the image
+    // itself. See `prefetchSubImageTags`.
+    image.fetch(TiffTag.JpegTables, { signal }),
   ]);
 
   const missingTag: (tagName: string) => never = (tagName: string) => {
@@ -131,6 +135,24 @@ export async function prefetchTags(
     sampleFormat: sampleFormat ?? [SampleFormat.Uint],
     samplesPerPixel,
   };
+}
+
+/**
+ * Pre-fetch the tags a sub-image (an overview or a mask) needs for its own tile
+ * reads. Its other tags come from the primary image's {@link CachedTags}.
+ *
+ * For now that's only the JPEG tables. Every JPEG tile read prepends its
+ * image's tables, and `getJpegHeader` throws if they aren't loaded. cogeotiff
+ * reads a tag with its IFD only when the tag's bytes were in that first read;
+ * otherwise the tag stays lazy until fetched. Fetching a tag the image doesn't
+ * have is a no-op.
+ */
+export async function prefetchSubImageTags(
+  image: TiffImage,
+  options: { signal?: AbortSignal } = {},
+): Promise<void> {
+  const { signal } = options;
+  await image.fetch(TiffTag.JpegTables, { signal });
 }
 
 /**

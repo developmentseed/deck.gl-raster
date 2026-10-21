@@ -3,13 +3,7 @@ import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
 import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
-import {
-  Compression,
-  Photometric,
-  SubFileType,
-  Tiff,
-  TiffTag,
-} from "@cogeotiff/core";
+import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { apply } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
@@ -21,7 +15,11 @@ import { fetchTile, fetchTiles } from "./fetch.js";
 import type { BandStatistics, GDALMetadata } from "./gdal-metadata.js";
 import { parseGDALMetadata } from "./gdal-metadata.js";
 import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
-import { extractGeoKeyDirectory, prefetchTags } from "./ifd.js";
+import {
+  extractGeoKeyDirectory,
+  prefetchSubImageTags,
+  prefetchTags,
+} from "./ifd.js";
 import type { ConcurrencyLimiter, Priority } from "./limiter.js";
 import { LimiterMiddleware } from "./limiter.js";
 import { Overview } from "./overview.js";
@@ -206,19 +204,6 @@ export class GeoTIFF {
     // https://github.com/blacha/cogeotiff/blob/4781a6375adf419da9f0319d15c8a67284dfb0c4/packages/core/src/tiff.image.ts#L72-L88
     await Promise.all(images.map((image) => image.init(true, { signal })));
 
-    // Every JPEG tile read prepends its image's JPEG tables, and
-    // `getJpegHeader` throws if they aren't loaded. cogeotiff only reads a tag
-    // with its IFD when the tag's bytes were in that first read; otherwise the
-    // tag stays lazy until fetched. So load the tables for each JPEG image
-    // now.
-    await Promise.all(
-      images.map((image) =>
-        image.value(TiffTag.Compression) === Compression.Jpeg
-          ? image.fetch(TiffTag.JpegTables, { signal })
-          : null,
-      ),
-    );
-
     const primaryImage = images[0]!;
     const gkd = extractGeoKeyDirectory(primaryImage);
 
@@ -252,7 +237,12 @@ export class GeoTIFF {
       return sb.width * sb.height - sa.width * sa.height;
     });
 
-    const cachedTags = await prefetchTags(primaryImage, { signal });
+    const [cachedTags] = await Promise.all([
+      prefetchTags(primaryImage, { signal }),
+      ...images
+        .slice(1)
+        .map((image) => prefetchSubImageTags(image, { signal })),
+    ]);
     const gdalMetadata = parseGDALMetadata(cachedTags.gdalMetadata, {
       count: cachedTags.samplesPerPixel,
     });
