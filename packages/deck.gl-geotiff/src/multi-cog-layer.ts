@@ -118,9 +118,9 @@ interface MultiTileResult {
   forwardTransform: ProjectionFunction;
   /** Inverse transform from CRS coordinates to pixel coordinates. */
   inverseTransform: ProjectionFunction;
-  /** Width of the primary tile in pixels. */
+  /** Width of the primary tile in pixels, clipped to the image at its edge. */
   width: number;
-  /** Height of the primary tile in pixels. */
+  /** Height of the primary tile in pixels, clipped to the image at its edge. */
   height: number;
   /** Byte length of all band textures, required for deck.gl TileLayer cache management. */
   byteLength: number;
@@ -603,12 +603,15 @@ export class MultiCOGLayer extends RasterTileLayer<
       0,
     );
 
+    // Mesh only the primary texture: edge tiles are clipped to the image.
+    const primaryBand = bands.get(primaryKey)!;
+
     return {
       bands,
       forwardTransform,
       inverseTransform,
-      width: primaryLevel.tileWidth,
-      height: primaryLevel.tileHeight,
+      width: primaryBand.width,
+      height: primaryBand.height,
       byteLength,
       debugInfo,
     };
@@ -737,7 +740,7 @@ export class MultiCOGLayer extends RasterTileLayer<
     const image = selectImage(sourceState.geotiff, z);
 
     const tile = await image.fetchTile(x, y, {
-      boundless: true,
+      boundless: false,
       pool,
       signal,
     });
@@ -834,7 +837,7 @@ export class MultiCOGLayer extends RasterTileLayer<
       idx.y,
     ]);
     const tiles = await image.fetchTiles(xy, {
-      boundless: true,
+      boundless: false,
       pool,
       signal,
     });

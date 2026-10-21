@@ -45,10 +45,14 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
 
   private readonly _affine: Affine;
   private readonly _invAffine: Affine;
+  private readonly _arrayWidth: number;
+  private readonly _arrayHeight: number;
 
   constructor(options: AffineTilesetLevelOptions) {
     this._affine = options.affine;
     this._invAffine = affine.invert(options.affine);
+    this._arrayWidth = options.arrayWidth;
+    this._arrayHeight = options.arrayHeight;
     this.tileWidth = options.tileWidth;
     this.tileHeight = options.tileHeight;
     this.matrixWidth = Math.ceil(options.arrayWidth / options.tileWidth);
@@ -80,11 +84,20 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
     const th = this.tileHeight;
     const af = this._affine;
 
+    // Clip the tile to the array. Tiles in the last column and row extend past
+    // it, and that overhang has no data: layers draw only the part with data,
+    // and points past the array can fall outside the projection's domain
+    // (e.g. Mollweide), which breaks tile culling.
+    const x0 = Math.min(col * tw, this._arrayWidth);
+    const x1 = Math.min((col + 1) * tw, this._arrayWidth);
+    const y0 = Math.min(row * th, this._arrayHeight);
+    const y1 = Math.min((row + 1) * th, this._arrayHeight);
+
     return {
-      topLeft: affine.apply(af, col * tw, row * th),
-      topRight: affine.apply(af, (col + 1) * tw, row * th),
-      bottomLeft: affine.apply(af, col * tw, (row + 1) * th),
-      bottomRight: affine.apply(af, (col + 1) * tw, (row + 1) * th),
+      topLeft: affine.apply(af, x0, y0),
+      topRight: affine.apply(af, x1, y0),
+      bottomLeft: affine.apply(af, x0, y1),
+      bottomRight: affine.apply(af, x1, y1),
     };
   }
 

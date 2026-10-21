@@ -102,6 +102,24 @@ describe("AffineTilesetLevel", () => {
       expect(corners.topRight[0]).toBeCloseTo(100 + 4 * 10 * Math.cos(rad), 10);
       expect(corners.topRight[1]).toBeCloseTo(200 + 4 * 10 * Math.sin(rad), 10);
     });
+
+    it("clips an edge tile's corners to the array", () => {
+      // A 5x3 array on 4x4 tiles: tile (1, 0) nominally covers pixels
+      // [4, 8] x [0, 4], but the array ends at pixel 5 across and 3 down.
+      const level = new AffineTilesetLevel({
+        affine: SQUARE_AFFINE,
+        arrayWidth: 5,
+        arrayHeight: 3,
+        tileWidth: 4,
+        tileHeight: 4,
+        mpu: 1,
+      });
+      const corners = level.projectedTileCorners(1, 0);
+      expect(corners.topLeft).toEqual([140, 200]);
+      expect(corners.topRight).toEqual([150, 200]);
+      expect(corners.bottomLeft).toEqual([140, 170]);
+      expect(corners.bottomRight).toEqual([150, 170]);
+    });
   });
 
   describe("tileTransform", () => {

@@ -30,17 +30,26 @@ function gridLevel(opts: {
   } = opts;
   const tileCrsWidth = tileWidth * cellSize;
   const tileCrsHeight = tileHeight * cellSize;
-  const identityTransform = (x: number, y: number): [number, number] => [x, y];
   return {
     matrixWidth,
     matrixHeight,
     tileWidth,
     tileHeight,
     metersPerPixel: cellSize,
-    tileTransform: () => ({
-      forwardTransform: identityTransform,
-      inverseTransform: identityTransform,
-    }),
+    tileTransform: (col: number, row: number) => {
+      const tileX = originX + col * tileCrsWidth;
+      const tileY = originY - row * tileCrsHeight;
+      return {
+        forwardTransform: (px: number, py: number): [number, number] => [
+          tileX + px * cellSize,
+          tileY - py * cellSize,
+        ],
+        inverseTransform: (x: number, y: number): [number, number] => [
+          (x - tileX) / cellSize,
+          (tileY - y) / cellSize,
+        ],
+      };
+    },
     projectedTileCorners: (col: number, row: number): Corners => {
       const minX = originX + col * tileCrsWidth;
       const maxX = minX + tileCrsWidth;
@@ -155,6 +164,9 @@ describe("resolveSecondaryTiles", () => {
     // scaleX = 2560 / 10240 = 0.25, offsetX = (602560-598720)/10240 = 0.375
     expect(result.uvTransform[2]).toBeCloseTo(0.25);
     expect(result.uvTransform[0]).toBeCloseTo(0.375);
+    // Two whole 256 px tiles side by side
+    expect(result.stitchedWidth).toBe(512);
+    expect(result.stitchedHeight).toBe(256);
   });
 
   it("fetches one 20 m tile for a 10 m tile whose edges lie on its edges", () => {
@@ -180,6 +192,47 @@ describe("resolveSecondaryTiles", () => {
     });
     const result = resolveSecondaryTiles(primary, 1, 1, secondary, 0);
     expect(result.tileIndices).toEqual([{ x: 0, y: 0 }]);
+  });
+
+  it("maps an edge tile onto secondary tiles clipped to their array", () => {
+    // 1 CRS unit per primary pixel, 2 per secondary pixel; both arrays cover
+    // x in [0, 10] and y in [90, 100]. Primary tile (1, 1) holds pixels
+    // [6, 10] x [6, 10]: x in [6, 10], y in [90, 94]. It overlaps all four
+    // secondary tiles, whose last column and row hold one pixel each.
+    const origin = affine.translation(0, 100);
+    const primary = new AffineTilesetLevel({
+      affine: affine.compose(origin, affine.scale(1, -1)),
+      arrayWidth: 10,
+      arrayHeight: 10,
+      tileWidth: 6,
+      tileHeight: 6,
+      mpu: 1,
+    });
+    const secondary = new AffineTilesetLevel({
+      affine: affine.compose(origin, affine.scale(2, -2)),
+      arrayWidth: 5,
+      arrayHeight: 5,
+      tileWidth: 4,
+      tileHeight: 4,
+      mpu: 1,
+    });
+
+    const result = resolveSecondaryTiles(primary, 1, 1, secondary, 0);
+
+    expect(result.tileIndices).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+    ]);
+    // The stitched texture is 4 + 1 pixels each way: x in [0, 10] and y in
+    // [90, 100]. The primary tile starts 6 of those 10 units in and spans 4.
+    expect(result.stitchedWidth).toBe(5);
+    expect(result.stitchedHeight).toBe(5);
+    expect(result.uvTransform[0]).toBeCloseTo(0.6);
+    expect(result.uvTransform[1]).toBeCloseTo(0.6);
+    expect(result.uvTransform[2]).toBeCloseTo(0.4);
+    expect(result.uvTransform[3]).toBeCloseTo(0.4);
   });
 
   it("returns identity-like transform when grids align exactly", () => {

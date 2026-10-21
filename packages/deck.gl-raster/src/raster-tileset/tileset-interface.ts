@@ -37,6 +37,10 @@ export interface RasterTilesetLevel {
    * For TMS this delegates to `xy_bounds()`; for Zarr it uses affine math
    * directly. Using a function (rather than a stored affine) lets TMS handle
    * variable tile widths (coalesced rows) and bottomLeft origins cleanly.
+   *
+   * Tiles in the last column and row may extend past the data. A level that
+   * knows its array size clips them to it, so the corners cover only the part
+   * of the tile that has data.
    */
   projectedTileCorners: (col: number, row: number) => Corners;
 

@@ -68,18 +68,18 @@ export interface SecondaryTileResolution {
   /**
    * The total stitched texture width in pixels.
    *
-   * Equals the number of tile columns in the covering range times the
-   * secondary tile width. For example, if 2 tiles of 256px wide are
-   * fetched, `stitchedWidth` is 512.
+   * The covering tiles' widths added up. For example, if 2 tiles of 256px
+   * wide are fetched, `stitchedWidth` is 512. A tile in the level's last
+   * column may be narrower, since it is clipped to the array.
    */
   stitchedWidth: number;
 
   /**
    * The total stitched texture height in pixels.
    *
-   * Equals the number of tile rows in the covering range times the
-   * secondary tile height. For example, if 2 tiles of 256px tall are
-   * fetched, `stitchedHeight` is 512.
+   * The covering tiles' heights added up. For example, if 2 tiles of 256px
+   * tall are fetched, `stitchedHeight` is 512. A tile in the level's last
+   * row may be shorter, since it is clipped to the array.
    */
   stitchedHeight: number;
 
@@ -227,11 +227,19 @@ export function resolveSecondaryTiles(
       ? (stitchedMaxY - primaryMaxY) / stitchedCrsHeight
       : 0;
 
-  // Step 5: Stitched pixel dimensions
-  const numCols = range.maxCol - range.minCol + 1;
-  const numRows = range.maxRow - range.minRow + 1;
-  const stitchedWidth = numCols * secondaryLevel.tileWidth;
-  const stitchedHeight = numRows * secondaryLevel.tileHeight;
+  // Step 5: Stitched pixel dimensions: the far corner of the last tile, in
+  // pixels from the first tile's top-left. Tile corners are clipped to the
+  // level's array, so the last column and row may be narrower than a tile.
+  const { inverseTransform } = secondaryLevel.tileTransform(
+    range.minCol,
+    range.minRow,
+  );
+  const [farX, farY] = inverseTransform(
+    maxCorners.bottomRight[0],
+    maxCorners.bottomRight[1],
+  );
+  const stitchedWidth = Math.round(farX);
+  const stitchedHeight = Math.round(farY);
 
   return {
     tileIndices,
