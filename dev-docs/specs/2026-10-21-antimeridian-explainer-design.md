@@ -103,7 +103,7 @@ north isn't true north this far from zone 60's central meridian (177°E).
 ### The mesh, measured with the real functions
 
 These numbers come from running the functions built on `main`, in Web
-Mercator common space (one world is 512 units wide, and x 0 is −180°), with
+Mercator common space (one world is 512 units wide, and x 0 is -180°), with
 `period` 512 and `maxError` 0.125, as `RasterLayer` runs them:
 
 - **Center:** x 0.30, just east of the world's west edge.
@@ -111,13 +111,13 @@ Mercator common space (one world is 512 units wide, and x 0 is −180°), with
   west corners land at the map's east edge, a world away from the east ones.
 - **The walk:** each corner's walk takes two samples, the midpoint and the
   corner, since no step moves a quarter of a world. NW's midpoint comes back
-  at 508.0, nearest copy −4.0, and its corner at 503.2, nearest copy −8.8.
-- **Corners unwrapped:** NW −8.82, NE 10.18, SW −8.11, SE 7.96. The wrapped
+  at 508.0, nearest copy -4.0, and its corner at 503.2, nearest copy -8.8.
+- **Corners unwrapped:** NW -8.82, NE 10.18, SW -8.11, SE 7.96. The wrapped
   functions return the same values at the corners.
 - **Without the unwrap:** refinement stops at its iteration cap: 20,001
   triangles, 616 output pixels of error, one triangle 511.97 units wide. The
   library warns "mesh refinement did not converge".
-- **With the unwrap:** 40 triangles, x from −8.82 to 10.18, the widest 4.78
+- **With the unwrap:** 40 triangles, x from -8.82 to 10.18, the widest 4.78
   units.
 - **The cut:** 10 of the 40 triangles cross x 0. `clipMeshToWorld` leaves 60
   triangles, all with x in [0, 512].
@@ -147,7 +147,7 @@ digit keys match.
 5. **Walk to the corners.** From the image's center (x 0.30), a walk toward
    each corner. Each sample comes back from proj4 in one copy (red), and
    `unwrapAlong` moves it to the copy nearest the step before (green). The
-   west corners come out at x −8.8 and −8.1, past the world's west edge,
+   west corners come out at x -8.8 and -8.1, past the world's west edge,
    instead of 503.
 6. **Snap every point.** A probe sweeps across the image, west to east and
    back. proj4's answer (red) jumps a whole world as the probe crosses 180°.
@@ -190,13 +190,13 @@ Two panels:
   x 0 and 512 marked, a few graticule lines, and the triangles at their
   output positions.
   - **Steps 1-4:** the whole panel shows the whole world, framed a little past
-    both edges (about x −16 to 528), so the world-spanning triangles are the
+    both edges (about x -16 to 528), so the world-spanning triangles are the
     subject.
   - **From step 5:** the panel splits.
     - On top, a **world strip** keeps that whole-world framing, about a
       quarter of the panel's height. It is where proj4's raw answers (red)
       appear, a world away.
-    - Below, a **seam close-up** (about x −12 to 14) shows the image's mesh
+    - Below, a **seam close-up** (about x -12 to 14) shows the image's mesh
       in detail, with the region past the world's edge (x < 0) marked.
     - A thin leader line links each raw point in the strip to its snapped
       point (green) in the close-up.
