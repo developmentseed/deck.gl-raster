@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-21
 - **Issues:** background: [#703](https://github.com/developmentseed/deck.gl-raster/pull/703) (the first antimeridian explainer, for [#673](https://github.com/developmentseed/deck.gl-raster/pull/673)'s design), [#716](https://github.com/developmentseed/deck.gl-raster/pull/716) (the mechanism this explains), [#721](https://github.com/developmentseed/deck.gl-raster/pull/721) (output-pixel error in every layer)
-- **Status:** Draft
+- **Status:** Implemented in [#767](https://github.com/developmentseed/deck.gl-raster/pull/767)
 
 ## Problem
 
