@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TextRun } from "../src/animation/story.js";
 import { createStory } from "../src/animation/story.js";
-import { BAND_IDS } from "../src/scene/constants.js";
+import { BAND_IDS, BANDS } from "../src/scene/constants.js";
 import { INTRO_SLOTS, SCENE_BOX, utmToScene } from "../src/scene/layout.js";
 import { uvLabel } from "../src/scene/uv.js";
 import { fakeScene } from "./fake-scene.js";
@@ -82,6 +82,19 @@ describe("step 1: three files, one scene", () => {
       "b11-inset",
       "b01-inset",
     ]);
+  });
+
+  it("outlines each inset and its spot in the band's color, over a dark halo", () => {
+    const { polygons } = end(0);
+    const ids = polygons.map((p) => p.id);
+    for (const band of BAND_IDS) {
+      const outline = polygons.find((p) => p.id === `${band}-inset-outline`);
+      expect(outline?.line).toEqual(BANDS[band].color);
+      expect(ids.indexOf(`${band}-inset-halo`)).toBeGreaterThanOrEqual(0);
+      expect(ids.indexOf(`${band}-inset-halo`)).toBeLessThan(
+        ids.indexOf(`${band}-inset-outline`),
+      );
+    }
   });
 });
 

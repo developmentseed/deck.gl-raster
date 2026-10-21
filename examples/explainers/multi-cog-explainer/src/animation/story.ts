@@ -46,6 +46,8 @@ export type StoryStep = {
 
 const MUTED = "#8b949e";
 const WHITE: Rgba = [230, 237, 243, 255];
+/** The slide's background, for halos behind thin lines. */
+const HALO: Rgba = [13, 17, 23, 255];
 
 /** How long the probe takes to loop around the tile, in ms. */
 const PROBE_LOOP_MS = 6000;
@@ -213,15 +215,25 @@ export function createStory(scene: SceneData): StoryStep[] {
         const scale = slot.width / (BANDS[band].size * BANDS[band].pixelSize);
         const markerX = slot.x + (insetPoint[0] - SCENE_ORIGIN[0]) * scale;
         const markerY = slot.y + (SCENE_ORIGIN[1] - insetPoint[1]) * scale;
-        frame.polygons.push({
-          id: `${band}-inset-outline`,
-          rings: [
-            rectRing(inset),
-            rectRing({ x: markerX - 6, y: markerY - 6, width: 12, height: 12 }),
-          ],
-          line: [...WHITE.slice(0, 3), Math.round(255 * insetIn)] as Rgba,
-          lineWidth: 2,
-        });
+        const rings = [
+          rectRing(inset),
+          rectRing({ x: markerX - 6, y: markerY - 6, width: 12, height: 12 }),
+        ];
+        // The band's color, over a dark halo so it shows on snow too.
+        frame.polygons.push(
+          {
+            id: `${band}-inset-halo`,
+            rings,
+            line: withAlpha(HALO, insetIn),
+            lineWidth: 6,
+          },
+          {
+            id: `${band}-inset-outline`,
+            rings,
+            line: withAlpha(BANDS[band].color, insetIn),
+            lineWidth: 2.5,
+          },
+        );
         frame.hud.labels.push(
           label(
             `${band}-name`,
