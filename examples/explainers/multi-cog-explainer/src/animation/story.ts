@@ -9,10 +9,15 @@ import {
 import { levelFor } from "../scene/geometry.js";
 import { gridRings, tileRing } from "../scene/grids.js";
 import type { Rect } from "../scene/layout.js";
-import { INTRO_SLOTS, SCENE_BOX, utmToScene } from "../scene/layout.js";
+import {
+  INTRO_SLOTS,
+  SCENE_BOX,
+  TEXTURE_SLOTS,
+  utmToScene,
+} from "../scene/layout.js";
 import type { SceneData } from "../scene/load.js";
 import { flyRect } from "./flight.js";
-import type { Frame, Label, Rgba } from "./frame.js";
+import type { Frame, ImageId, Label, Rgba } from "./frame.js";
 import { emptyFrame } from "./frame.js";
 import { progress } from "./math.js";
 
@@ -38,6 +43,12 @@ export type StoryStep = {
 
 const MUTED = "#8b949e";
 const WHITE: Rgba = [230, 237, 243, 255];
+
+/** Gap between the 60 m tiles before they are stitched, in slide units. */
+const PIECE_GAP = 12;
+
+/** How long one tile takes to fly into the texture panel, in ms. */
+const FLIGHT_MS = 1000;
 
 /** Left edge of the legends beside the scene, in slide units. */
 const LEGEND_X = 800;
@@ -92,6 +103,15 @@ export function rectRing(rect: Rect): [number, number][] {
 /** A colour with its alpha scaled to `opacity` (0-1). */
 function withAlpha([r, g, b, a]: Rgba, opacity: number): Rgba {
   return [r, g, b, Math.round(a * opacity)];
+}
+
+/** The bounding rect of a ring. */
+function ringRect(ring: [number, number][]): Rect {
+  const xs = ring.map(([x]) => x);
+  const ys = ring.map(([, y]) => y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
 }
 
 /** A small count as a word: "one", "four". */
@@ -400,29 +420,212 @@ export function createStory(scene: SceneData): StoryStep[] {
     },
   };
 
+  /** The scene with the story tile and its covering tiles outlined. */
+  const pushCoverage = (frame: Frame) => {
+    frame.composites.push(sceneComposite());
+    frame.polygons.push(
+      {
+        id: "cover-b01",
+        rings: covers.b01,
+        line: BANDS.b01.color,
+        lineWidth: 5,
+      },
+      {
+        id: "cover-b11",
+        rings: covers.b11,
+        line: BANDS.b11.color,
+        lineWidth: 2.5,
+      },
+      {
+        id: "story-tile",
+        rings: [storyRing],
+        fill: withAlpha(WHITE, 0.25),
+        line: WHITE,
+        lineWidth: 2.5,
+      },
+    );
+  };
+
+  /**
+   * Where 60 m piece `i` sits in its slot: its share of the stitched
+   * texture, with `gap` slide units between pieces.
+   */
+  const b01 = tile.bands.b01;
+  const pieceRect = (i: number, gap: number): Rect => {
+    const piece = scene.fetched.b01[i]!;
+    const slot = TEXTURE_SLOTS.b01;
+    const cols = new Set(b01.tiles.map(({ x }) => x)).size;
+    const rows = new Set(b01.tiles.map(({ y }) => y)).size;
+    const col = piece.x - b01.minCol;
+    const row = piece.y - b01.minRow;
+    const perTexelX = (slot.width - gap * (cols - 1)) / b01.stitchedWidth;
+    const perTexelY = (slot.height - gap * (rows - 1)) / b01.stitchedHeight;
+    return {
+      x: slot.x + col * (gap + BANDS.b01.block * perTexelX),
+      y: slot.y + row * (gap + BANDS.b01.block * perTexelY),
+      width: piece.array.width * perTexelX,
+      height: piece.array.height * perTexelY,
+    };
+  };
+
+  /** The two label lines under a band's slot. */
+  const slotLabels = (
+    frame: Frame,
+    band: BandId,
+    detail: string,
+    opacity: number,
+  ) => {
+    const slot = TEXTURE_SLOTS[band];
+    frame.hud.labels.push(
+      label(
+        `${band}-slot-name`,
+        bandName(band),
+        slot.x + slot.width / 2,
+        slot.y + slot.height + 30,
+        {
+          color: css(BANDS[band].color),
+          opacity,
+        },
+      ),
+      label(
+        `${band}-slot-detail`,
+        detail,
+        slot.x + slot.width / 2,
+        slot.y + slot.height + 60,
+        {
+          color: MUTED,
+          opacity,
+          size: 20,
+        },
+      ),
+    );
+  };
+
+  const tileDetail = (band: "b04" | "b11") =>
+    `${BANDS[band].block} x ${BANDS[band].block} px · ${km(tileMeters(band))}`;
+  const piecesDetail = `${countWord(b01Count)} tiles of ${BANDS.b01.block} x ${BANDS.b01.block} px · ${km(tileMeters("b01"))} each`;
+  const stitchedDetail = `stitched: ${b01.stitchedWidth} x ${b01.stitchedHeight} px`;
+
+  /** Step 5: the covering tiles fly from the scene into the texture panel. */
+  const fetchStep: StoryStep = {
+    id: "fetch",
+    title: "Fetch",
+    description: [
+      `For each band, the layer fetches the tiles that cover the primary tile: one 10 m tile, one 20 m tile and ${countWord(b01Count)} 60 m tiles. Each is ${BANDS.b04.block} or ${BANDS.b01.block} pixels on a side, but they cover very different ground.`,
+    ],
+    durationMs: 2400,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushCoverage(frame);
+      const flights: {
+        id: string;
+        image: ImageId;
+        from: Rect;
+        to: Rect;
+        start: number;
+      }[] = [
+        {
+          id: "b04-tile",
+          image: "b04-tile",
+          from: ringRect(storyRing),
+          to: TEXTURE_SLOTS.b04,
+          start: 0,
+        },
+        {
+          id: "b11-tile",
+          image: "b11-tile",
+          from: ringRect(covers.b11[0]!),
+          to: TEXTURE_SLOTS.b11,
+          start: 350,
+        },
+        ...covers.b01.map((ring, i) => ({
+          id: `b01-piece-${i}`,
+          image: `b01-piece-${i}` as ImageId,
+          from: ringRect(ring),
+          to: pieceRect(i, PIECE_GAP),
+          start: 700 + 120 * i,
+        })),
+      ];
+      for (const flight of flights) {
+        const p = progress(t, flight.start, FLIGHT_MS);
+        frame.bitmaps.push({
+          id: flight.id,
+          image: flight.image,
+          rect: flyRect(flight.from, flight.to, p),
+          opacity: Math.min(1, p * 4),
+        });
+      }
+      slotLabels(
+        frame,
+        "b04",
+        tileDetail("b04"),
+        progress(t, FLIGHT_MS - 200, 300),
+      );
+      slotLabels(
+        frame,
+        "b11",
+        tileDetail("b11"),
+        progress(t, 350 + FLIGHT_MS - 200, 300),
+      );
+      slotLabels(
+        frame,
+        "b01",
+        piecesDetail,
+        progress(t, 1060 + FLIGHT_MS - 200, 300),
+      );
+      frame.hud.caption = "Fetch the covering tiles";
+      return frame;
+    },
+  };
+
+  /** Step 6: the four 60 m tiles close up into one texture. */
+  const stitchStep: StoryStep = {
+    id: "stitch",
+    title: "Stitch",
+    description: [
+      `The ${countWord(b01Count)} 60 m tiles are stitched into one ${b01.stitchedWidth} x ${b01.stitchedHeight} texture, so every band has exactly one texture to sample.`,
+    ],
+    durationMs: 1400,
+    frame: (t) => {
+      const frame = emptyFrame();
+      pushCoverage(frame);
+      const p = progress(t, 200, 900);
+      frame.bitmaps.push(
+        {
+          id: "b04-tile",
+          image: "b04-tile",
+          rect: TEXTURE_SLOTS.b04,
+          opacity: 1,
+        },
+        {
+          id: "b11-tile",
+          image: "b11-tile",
+          rect: TEXTURE_SLOTS.b11,
+          opacity: 1,
+        },
+        ...covers.b01.map((_, i) => ({
+          id: `b01-piece-${i}`,
+          image: `b01-piece-${i}` as ImageId,
+          rect: flyRect(pieceRect(i, PIECE_GAP), pieceRect(i, 0), p),
+          opacity: 1,
+        })),
+      );
+      slotLabels(frame, "b04", tileDetail("b04"), 1);
+      slotLabels(frame, "b11", tileDetail("b11"), 1);
+      const stitched = progress(t, 1100, 300);
+      slotLabels(frame, "b01", stitched < 1 ? piecesDetail : stitchedDetail, 1);
+      frame.hud.caption = "Stitch them into one texture per band";
+      return frame;
+    },
+  };
+
   const steps: StoryStep[] = [
     threeFiles,
     oneImage,
     primaryGridStep,
     bandGridsStep,
-    {
-      id: "fetch",
-      title: "Fetch",
-      description: [
-        `For each band, the layer fetches the tiles that cover the primary tile: one 10 m tile, one 20 m tile and ${countWord(b01Count)} 60 m tiles. Each is ${BANDS.b04.block} or ${BANDS.b01.block} pixels on a side, but they cover very different ground.`,
-      ],
-      durationMs: 0,
-      frame: () => emptyFrame(),
-    },
-    {
-      id: "stitch",
-      title: "Stitch",
-      description: [
-        `The ${countWord(b01Count)} 60 m tiles are stitched into one ${tile.bands.b01.stitchedWidth} x ${tile.bands.b01.stitchedHeight} texture, so every band has exactly one texture to sample.`,
-      ],
-      durationMs: 0,
-      frame: () => emptyFrame(),
-    },
+    fetchStep,
+    stitchStep,
     {
       id: "uv",
       title: "Where the tile lands",

@@ -58,3 +58,32 @@ describe("step 4: every band has its own tiles", () => {
     expect(rings("cover-b01")).toBe(4);
   });
 });
+
+/** The four 60 m pieces' rects in a frame, in tile order. */
+function pieces(frame: ReturnType<typeof end>) {
+  return [0, 1, 2, 3].map(
+    (i) => frame.bitmaps.find((b) => b.image === `b01-piece-${i}`)?.rect,
+  );
+}
+
+describe("step 5: fetch", () => {
+  it("ends with the 60 m tiles in the slot's quadrants, 12 px apart", () => {
+    expect(pieces(end(4))).toEqual([
+      { x: 1520, y: 210, width: 144, height: 144 },
+      { x: 1676, y: 210, width: 144, height: 144 },
+      { x: 1520, y: 366, width: 144, height: 144 },
+      { x: 1676, y: 366, width: 144, height: 144 },
+    ]);
+  });
+});
+
+describe("step 6: stitch", () => {
+  it("ends with the 60 m tiles tiling the slot exactly", () => {
+    expect(pieces(end(5))).toEqual([
+      { x: 1520, y: 210, width: 150, height: 150 },
+      { x: 1670, y: 210, width: 150, height: 150 },
+      { x: 1520, y: 360, width: 150, height: 150 },
+      { x: 1670, y: 360, width: 150, height: 150 },
+    ]);
+  });
+});
