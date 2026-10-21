@@ -214,3 +214,68 @@ describe("step 9: on the map", () => {
     expect(xs.some((x) => Math.abs(x - -8.82) < 0.01)).toBe(true);
   });
 });
+
+/** A description's text, without its emphasis and links. */
+function plainText(step: StoryStep): string {
+  return step.description
+    .map((run) => (typeof run === "string" ? run : run.text))
+    .join("");
+}
+
+describe("titles", () => {
+  it("name the nine steps, in order", () => {
+    expect(story.map((step) => step.title)).toEqual([
+      "An image across 180°",
+      "Two triangles",
+      "Project the corners",
+      "Refining can't fix it",
+      "Walk to the corners",
+      "Snap every point",
+      "Mesh as usual",
+      "Cut at the world's edge",
+      "On the map",
+    ]);
+  });
+});
+
+describe("descriptions", () => {
+  it("describe steps 3-8 with the scene's own numbers", () => {
+    const shift = (p: [number, number], dx: number): [number, number] => [
+      p[0] + dx,
+      p[1],
+    ];
+    const corners = Object.fromEntries(
+      Object.entries(scene.corners).map(([id, c]) => [
+        id,
+        { ...c, raw: shift(c.raw, 2), unwrapped: shift(c.unwrapped, -2) },
+      ]),
+    ) as MeshScene["corners"];
+    const last = scene.plain[scene.plain.length - 1]!;
+    const changed: MeshScene = {
+      ...scene,
+      center: { ...scene.center, position: shift(scene.center.position, 1) },
+      corners,
+      plain: [
+        ...scene.plain.slice(0, -1),
+        { ...last, triangles: last.triangles.slice(0, 300), maxError: 999 },
+      ],
+      probe: scene.probe.map((s) => ({
+        ...s,
+        raw: shift(s.raw, 2),
+        snapped: shift(s.snapped, -2),
+      })),
+      mesh: { ...scene.mesh, triangles: scene.mesh.triangles.slice(0, 90) },
+      crossing: scene.crossing.slice(0, 5),
+      clipped: {
+        ...scene.clipped,
+        triangles: scene.clipped.triangles.slice(0, 150),
+      },
+    };
+    const other = createStory(changed, fakeImage());
+    for (let i = 2; i <= 7; i++) {
+      expect(plainText(other[i]!), `step ${i + 1}`).not.toBe(
+        plainText(story[i]!),
+      );
+    }
+  });
+});

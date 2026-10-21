@@ -418,7 +418,7 @@ export function createStory(
     id: "image",
     title: "An image across 180°",
     description: [
-      "An image in UTM zone 60N, 42 x 42 pixels of 20 km, over the Bering Sea. The 180° meridian curves through it. On a Web Mercator map, 180° is both edges of the world, so the image belongs at both: its west part at the map's east edge, its east part at the west edge.",
+      "An image in UTM zone 60N, 42 x 42 pixels of 20 km, over the Aleutian Islands. The 180° meridian curves through it. On a Web Mercator map, 180° is both edges of the world, so the image belongs at both: its west part at the map's east edge, its east part at the west edge.",
     ],
     durationMs: 1600,
     frame: (t) => {
@@ -496,7 +496,7 @@ export function createStory(
     id: "corners",
     title: "Project the corners",
     description: [
-      "The reprojector places each corner exactly, with proj4. But proj4 returns every point in one copy of the world, from -180° to 180°. The image's west corners land at the map's east edge, and its east corners at the west edge, so both triangles stretch across the whole world.",
+      `The reprojector places each corner exactly, with proj4. But proj4 returns every point in one copy of the world, from -180° to 180°, which is x 0 to ${PERIOD} on the map. The image's west corners land at x ${Math.round(scene.corners.nw.raw[0])} and ${Math.round(scene.corners.sw.raw[0])}, at the map's east edge, and its east corners at x ${Math.round(scene.corners.ne.raw[0])} and ${Math.round(scene.corners.se.raw[0])}, at the west edge, so both triangles stretch across the whole world.`,
     ],
     durationMs: 2600,
     frame: (t) => {
@@ -769,7 +769,7 @@ export function createStory(
     id: "snap",
     title: "Snap every point",
     description: [
-      "The reprojector projects many more points than the corners. So the layer wraps the projection itself: every x proj4 returns moves to the copy of the world nearest the blend of the four unwrapped corners at that pixel. As the probe crosses 180°, proj4's answer (red) jumps a whole world; the snapped point (green) moves smoothly. This holds unless the image contains a pole.",
+      `The reprojector projects many more points than the corners. So the layer wraps the projection itself: every x proj4 returns moves to the copy of the world nearest the blend of the four unwrapped corners at that pixel. At the image's west edge, proj4 says x ${short(scene.probe[0]!.raw[0])} and the snapped point is at ${short(scene.probe[0]!.snapped[0])}. As the probe crosses 180°, proj4's answer (red) jumps a whole world, but the snapped point (green) moves smoothly. This holds unless the image contains a pole.`,
     ],
     durationMs: 2 * SWEEP_MS,
     frame: (t) => {

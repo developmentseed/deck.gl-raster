@@ -9,14 +9,14 @@ const RAIL_WIDTH = 44;
 const NARROW_QUERY = "(max-width: 700px)";
 
 const REPO_URL = "https://github.com/developmentseed/deck.gl-raster";
-const SOURCE_URL = `${REPO_URL}/tree/main/examples/explainers/multi-cog-explainer`;
+const SOURCE_URL = `${REPO_URL}/tree/main/examples/explainers/antimeridian-explainer`;
 const DOCS_URL = "https://developmentseed.org/deck.gl-raster/";
-const LAYER_DOCS_URL =
-  "https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGLayer/";
+/** The pull request that built the mechanism this explains. */
+const MECHANISM_PR_URL = `${REPO_URL}/pull/716`;
 const REPROJECTION_EXPLAINER_URL =
   "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/";
 const DEVSEED_URL = "https://developmentseed.org/";
-const SENTINEL_COGS_URL = "https://registry.opendata.aws/sentinel-2-l2a-cogs/";
+const FIXTURE_REPO_URL = "https://github.com/developmentseed/geotiff-test-data";
 
 // GitHub's dark palette, like the slide.
 const BACKGROUND = "#161b22";
@@ -97,8 +97,8 @@ export function SidePanel({ open, onOpenChange }: SidePanelProps) {
             </Section>
             <Section title="See also">
               <p style={{ margin: "0 0 8px", lineHeight: 1.5 }}>
-                <FooterLink href={LAYER_DOCS_URL}>
-                  MultiCOGLayer docs ↗
+                <FooterLink href={MECHANISM_PR_URL}>
+                  The pull request (#716) ↗
                 </FooterLink>
               </p>
               <p style={{ margin: 0, lineHeight: 1.5 }}>
@@ -109,12 +109,13 @@ export function SidePanel({ open, onOpenChange }: SidePanelProps) {
             </Section>
             <Section title="Data">
               <p style={{ margin: 0, lineHeight: 1.5, color: MUTED }}>
-                Sentinel-2 L2A scene 18FXJ over Torres del Paine, Chile,
-                2026-04-06, read live from the{" "}
-                <FooterLink href={SENTINEL_COGS_URL}>
-                  Sentinel-2 COGs on AWS ↗
-                </FooterLink>
-                . Contains modified Copernicus Sentinel data 2026.
+                A 42 x 42 test image in UTM zone 60N, 20 km per pixel, over the
+                Aleutian Islands: one value per column, from west to east. It is
+                read live from{" "}
+                <FooterLink href={FIXTURE_REPO_URL}>
+                  geotiff-test-data ↗
+                </FooterLink>{" "}
+                (antimeridian_UTM_60N.tif).
               </p>
             </Section>
           </div>
