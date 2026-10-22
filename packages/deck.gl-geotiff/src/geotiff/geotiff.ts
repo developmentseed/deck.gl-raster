@@ -4,6 +4,8 @@ import type {
   ConcurrencyLimiter,
   Priority,
   RasterArray,
+  RasterArrayBandSeparate,
+  RasterArrayPixelInterleaved,
 } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import { normalizeLongitudes, unwrapAlong } from "@developmentseed/proj";
@@ -13,17 +15,40 @@ import type { Converter } from "proj4";
  * Add an alpha channel to an RGB image array.
  *
  * Only supports input arrays with 3 (RGB) or 4 (RGBA) channels. If the input is
- * already RGBA, it is returned unchanged.
+ * already RGBA, it is returned unchanged. The result keeps the input's layout:
+ * a band-separate image gets a fourth, opaque band.
  */
+export function addAlphaChannel(
+  rgbImage: RasterArrayPixelInterleaved,
+): RasterArrayPixelInterleaved;
+export function addAlphaChannel(
+  rgbImage: RasterArrayBandSeparate,
+): RasterArrayBandSeparate;
+export function addAlphaChannel(rgbImage: RasterArray): RasterArray;
 export function addAlphaChannel(rgbImage: RasterArray): RasterArray {
   const { height, width } = rgbImage;
 
   if (rgbImage.layout === "band-separate") {
-    // This should be pretty easy to do by just returning an additional array of
-    // 255s
-    // But not sure if we'll want to do that, because it's fine to upload 3
-    // separate textures.
-    throw new Error("Band-separate images not yet implemented.");
+    const { bands } = rgbImage;
+    if (bands.length === 4) {
+      // Already has alpha channel
+      return rgbImage;
+    } else if (bands.length === 3) {
+      // Need to add alpha channel, as a fourth band
+      const isUint16 = bands[0] instanceof Uint16Array;
+      const alpha = isUint16
+        ? new Uint16Array(height * width).fill(65535)
+        : new Uint8ClampedArray(height * width).fill(255);
+      return {
+        ...rgbImage,
+        count: 4,
+        bands: [...bands, alpha],
+      };
+    } else {
+      throw new Error(
+        `Unexpected number of channels in raster data: ${bands.length}`,
+      );
+    }
   }
 
   if (rgbImage.data.length === height * width * 4) {

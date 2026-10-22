@@ -1,11 +1,13 @@
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
-import type { CachedTags, GeoTIFF } from "@developmentseed/geotiff";
+import type { CachedPrimaryImageTags, GeoTIFF } from "@developmentseed/geotiff";
 import { describe, expect, it } from "vitest";
 import { inferRenderPipeline } from "../src/geotiff/render-pipeline.js";
 import { loadGeoTIFF } from "./helpers.js";
 
 const MOCK_DEVICE = {
   createTexture: (x: any) => x,
+  isTextureFormatSupported: () => true,
+  isTextureFormatFilterable: () => true,
 };
 const MOCK_RENDER_TILE_DATA = {
   texture: {},
@@ -27,10 +29,12 @@ function moduleNames(renderPipeline: RasterModule[]): string[] {
 /** The same GeoTIFF, with its ExtraSamples tag replaced. */
 function withExtraSamples(
   geotiff: GeoTIFF,
-  extraSamples: CachedTags["extraSamples"],
+  extraSamples: CachedPrimaryImageTags["extraSamples"],
 ): GeoTIFF {
   return Object.create(geotiff, {
-    cachedTags: { value: { ...geotiff.cachedTags, extraSamples } },
+    cachedPrimaryImageTags: {
+      value: { ...geotiff.cachedPrimaryImageTags, extraSamples },
+    },
   });
 }
 
@@ -91,6 +95,47 @@ describe("gray plus a second band that isn't alpha", async () => {
   });
 });
 
+describe("uint16 on a device without 16-bit normalized textures", async () => {
+  // Firefox's WebGL2 has no EXT_texture_norm16, so it can't create r16unorm.
+  const geotiff = await loadGeoTIFF(
+    "uint16_1band_lzw_block128_predictor2",
+    "rasterio",
+  );
+
+  /** Load tile (0, 0) as a device without r16unorm would. */
+  async function loadTile(float32Filterable: boolean) {
+    const device = {
+      createTexture: (x: any) => x,
+      isTextureFormatSupported: (format: string) => format !== "r16unorm",
+      isTextureFormatFilterable: () => true,
+      features: new Set(float32Filterable ? ["float32-filterable"] : []),
+    };
+    const { getTileData } = inferRenderPipeline(geotiff, device as any);
+    return getTileData(geotiff, { device, x: 0, y: 0 } as any);
+  }
+
+  it("uploads the samples as float32 between 0 and 1", async () => {
+    const { array } = await geotiff.fetchTile(0, 0, { boundless: false });
+    const expected = Float32Array.from(
+      (array as any).data as Uint16Array,
+      (value) => value / 65535,
+    );
+    const tile = await loadTile(true);
+    const texture = tile.texture as any;
+    expect(texture.format).toEqual("r32float");
+    expect(texture.data).toEqual(expected);
+    expect(tile.byteLength).toEqual(expected.byteLength);
+  });
+
+  it("samples nearest when the device can't filter float32", async () => {
+    const tile = await loadTile(false);
+    expect((tile.texture as any).sampler).toEqual({
+      minFilter: "nearest",
+      magFilter: "nearest",
+    });
+  });
+});
+
 describe("land cover, single-band uint8", async () => {
   const geotiff = await loadGeoTIFF("nlcd_landcover", "nlcd");
 
@@ -123,5 +168,80 @@ describe("RGB with mask", async () => {
 
     expect(renderPipeline[0]?.module.name).toEqual("create-texture-unorm");
     expect(renderPipeline[1]?.module.name).toEqual("mask-texture");
+  });
+});
+
+describe("band-separate tiles", () => {
+  /**
+   * A PlanarConfiguration=2 tile, as `fetchTile` decodes one: a separate array
+   * per band. Handed to `getTileData` directly rather than read from a fixture,
+   * because the test data has no band-separate RGBA image.
+   */
+  function bandSeparateTile(bandCount: number) {
+    return {
+      array: {
+        layout: "band-separate" as const,
+        count: bandCount,
+        width: 2,
+        height: 1,
+        mask: null,
+        // Band b holds [b, b + bandCount], so an interleaved result reads
+        // 0, 1, .., bandCount - 1, bandCount, ..
+        bands: Array.from(
+          { length: bandCount },
+          (_, b) => new Uint8Array([b, b + bandCount]),
+        ),
+      },
+    };
+  }
+
+  async function _getTileData(geotiff: GeoTIFF, bandCount: number) {
+    const { getTileData } = inferRenderPipeline(geotiff, MOCK_DEVICE as any);
+    const image = { fetchTile: async () => bandSeparateTile(bandCount) };
+    return await getTileData(
+      image as any,
+      {
+        device: MOCK_DEVICE,
+        x: 0,
+        y: 0,
+      } as any,
+    );
+  }
+
+  it("interleaves an RGBA tile into a single texture", async () => {
+    const geotiff = await loadGeoTIFF("cog_uint8_rgba", "rasterio");
+
+    const { texture, width, height } = await _getTileData(geotiff, 4);
+
+    expect((texture as any).format).toEqual("rgba8unorm");
+    expect(Array.from((texture as any).data)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(width).toEqual(2);
+    expect(height).toEqual(1);
+  });
+
+  // WebGL2 has no RGB-only texture format, so a 3-band tile is interleaved and
+  // then padded to RGBA, same as a pixel-interleaved one
+  it("interleaves and pads an RGB tile", async () => {
+    // Written with INTERLEAVE=BAND, so each tile decodes to one array per band
+    const geotiff = await loadGeoTIFF("eox_cloudless", "eox");
+    const { array } = await geotiff.fetchTile(0, 0, { boundless: false });
+    if (array.layout !== "band-separate") {
+      throw new Error("Expected eox_cloudless to decode band-separate");
+    }
+    // Each pixel's band values, then opaque alpha
+    const expected = Array.from(
+      { length: array.width * array.height },
+      (_, i) => [...array.bands.map((band) => band[i]!), 255],
+    ).flat();
+
+    const { getTileData } = inferRenderPipeline(geotiff, MOCK_DEVICE as any);
+    const { texture } = await getTileData(geotiff, {
+      device: MOCK_DEVICE,
+      x: 0,
+      y: 0,
+    } as any);
+
+    expect((texture as any).format).toEqual("rgba8unorm");
+    expect(Array.from((texture as any).data)).toEqual(expected);
   });
 });

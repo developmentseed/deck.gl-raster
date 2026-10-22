@@ -1,6 +1,11 @@
 import { SampleFormat } from "@cogeotiff/core";
 import type { GeoTIFF } from "@developmentseed/geotiff";
-import type { TextureFormat, TextureProps, TypedArray } from "@luma.gl/core";
+import type {
+  Device,
+  TextureFormat,
+  TextureProps,
+  TypedArray,
+} from "@luma.gl/core";
 
 /**
  * Infers texture properties from a GeoTIFF image and its associated data.
@@ -10,7 +15,8 @@ export function createTextureProps(
   data: TypedArray,
   options: { width: number; height: number },
 ): TextureProps {
-  const { samplesPerPixel, bitsPerSample, sampleFormat } = geotiff.cachedTags;
+  const { samplesPerPixel, bitsPerSample, sampleFormat } =
+    geotiff.cachedPrimaryImageTags;
 
   const textureFormat = inferTextureFormat(
     samplesPerPixel,
@@ -190,3 +196,52 @@ const FORMAT_TABLE: Partial<Record<TextureFormatKey, TextureFormat>> = {
   "4:sint:32": "rgba32sint",
   "4:uint:32": "rgba32uint",
 };
+
+/**
+ * The 32-bit float format that stands in for each 16-bit normalized format on
+ * devices that can't create it.
+ */
+const NORM16_FALLBACK_FORMATS: Partial<Record<TextureFormat, TextureFormat>> = {
+  r16unorm: "r32float",
+  rg16unorm: "rg32float",
+  "rgb16unorm-webgl": "rgb32float-webgl",
+  rgba16unorm: "rgba32float",
+};
+
+/**
+ * Swap a 16-bit normalized format the device can't create for its 32-bit
+ * float counterpart.
+ *
+ * WebGL2 needs the `EXT_texture_norm16` extension for 16-bit normalized
+ * textures. The fallback divides each sample by
+ * 65535, so shaders read the same 0-1 values from either format.
+ */
+export function resolveTextureFormat(
+  device: Device,
+  format: TextureFormat,
+  data: TypedArray,
+): { format: TextureFormat; data: TypedArray } {
+  const fallbackFormat = NORM16_FALLBACK_FORMATS[format];
+  if (!fallbackFormat || device.isTextureFormatSupported(format)) {
+    return { format, data };
+  }
+
+  const normalized = new Float32Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    normalized[i] = data[i]! / 65535;
+  }
+  return { format: fallbackFormat, data: normalized };
+}
+
+/**
+ * Whether the device can linearly filter textures of this format.
+ *
+ * luma.gl reports 32-bit float formats as filterable on every WebGL2 device,
+ * so check the `float32-filterable` feature for those instead.
+ */
+export function isFilterable(device: Device, format: TextureFormat): boolean {
+  if (format.includes("32float")) {
+    return device.features.has("float32-filterable");
+  }
+  return device.isTextureFormatFilterable(format);
+}

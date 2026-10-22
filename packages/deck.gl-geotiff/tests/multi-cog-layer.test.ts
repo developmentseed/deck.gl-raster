@@ -1,12 +1,15 @@
+import { readFile } from "node:fs/promises";
 import { CompositeLayer } from "@deck.gl/core";
 import {
   AffineTileset,
   AffineTilesetLevel,
   createMultiRasterTilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
+import { epsgResolver } from "@developmentseed/proj";
 import { Texture } from "@luma.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MultiCOGLayer } from "../src/multi-cog-layer.js";
+import { fixturePath } from "./helpers.js";
 
 /**
  * Build a {@link MultiCOGLayer} ready for direct lifecycle calls: bypasses
@@ -35,6 +38,33 @@ function runInitialUpdate(layer: MultiCOGLayer): void {
     oldProps: layer.props,
     changeFlags: { dataChanged: true },
   } as never);
+}
+
+/**
+ * Render a new {@link MultiCOGLayer} with `props`, as apps do on every render:
+ * deck.gl hands the new instance the old one's `state`, then runs
+ * `updateState`.
+ */
+function rerender(
+  layer: MultiCOGLayer,
+  props: Record<string, unknown>,
+): MultiCOGLayer {
+  const next = new MultiCOGLayer({ id: "multi", ...props } as never);
+  Object.assign(next as object, {
+    state: layer.state,
+    setState: layer.setState,
+  });
+  next.updateState({
+    props: next.props,
+    oldProps: layer.props,
+    changeFlags: {},
+  } as never);
+  return next;
+}
+
+/** A test fixture's bytes, to pass as a source's `url`. */
+async function fixtureBytes(name: string): Promise<ArrayBuffer> {
+  return new Uint8Array(await readFile(fixturePath(name, "rasterio"))).buffer;
 }
 
 function fakeTexture(): {
@@ -93,24 +123,49 @@ describe("MultiCOGLayer._onTileUnloadCallback", () => {
 describe("MultiCOGLayer.updateState", () => {
   it("raises a COG open failure through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
-    const layer = new MultiCOGLayer({
-      id: "multi",
-      sources: { a: { url: "https://example.com/a.tif" } },
-      onError,
-    } as never);
-    vi.spyOn(layer, "setState").mockImplementation(() => {});
+    const layer = makeBareLayer({ onError });
     vi.spyOn(layer, "_parseAllSources").mockRejectedValue(new Error("boom"));
 
-    layer.updateState({
-      props: layer.props,
-      oldProps: layer.props,
-      changeFlags: { dataChanged: true },
-    } as never);
+    runInitialUpdate(layer);
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
     const error = onError.mock.calls[0]?.[0];
     expect(error?.message).toBe("loading COG sources: boom");
     expect(error?.cause).toBeInstanceOf(Error);
+  });
+
+  it("keeps the new sources when the old ones finish opening last", async () => {
+    // The old source is in EPSG:4326 and the new one in EPSG:3857.
+    const oldSources = { old: { url: await fixtureBytes("cog_uint8_rgba") } };
+    const newSources = {
+      new: { url: await fixtureBytes("cog_uint8_rgba_3857") },
+    };
+    // Hold each CRS lookup until the test releases it.
+    const lookups = new Map<number, () => void>();
+    const onGeoTIFFLoad = vi.fn();
+    const props = {
+      epsgResolver: (epsg: number) =>
+        new Promise((resolve) =>
+          lookups.set(epsg, () => resolve(epsgResolver(epsg))),
+        ),
+      onGeoTIFFLoad,
+    };
+
+    const layer = makeBareLayer({ ...props, sources: oldSources });
+    const oldParse = vi.spyOn(layer, "_parseAllSources");
+    runInitialUpdate(layer);
+    const next = rerender(layer, { ...props, sources: newSources });
+    await vi.waitFor(() => expect(lookups.size).toBe(2));
+
+    lookups.get(3857)!();
+    await vi.waitFor(() => expect(next.state.sources).not.toBeNull());
+    lookups.get(4326)!();
+    await oldParse.mock.results[0]!.value;
+
+    expect([...next.state.sources!.keys()]).toEqual(["new"]);
+    expect(
+      onGeoTIFFLoad.mock.calls.map(([sources]) => [...sources.keys()]),
+    ).toEqual([["new"]]);
   });
 });
 
@@ -150,6 +205,27 @@ describe("MultiCOGLayer.isLoaded", () => {
 
     await vi.waitFor(() => expect(layer.isLoaded).toBe(true));
   });
+
+  it("is not loaded when the old sources finish opening first", async () => {
+    let finishOld!: () => void;
+    vi.spyOn(MultiCOGLayer.prototype, "_parseAllSources")
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishOld = resolve;
+        }),
+      )
+      .mockReturnValue(new Promise(() => {}));
+
+    const layer = makeBareLayer();
+    runInitialUpdate(layer);
+    const next = rerender(layer, {
+      sources: { b: { url: "https://example.com/b.tif" } },
+    });
+    finishOld();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(next.isLoaded).toBe(false);
+  });
 });
 
 /**
@@ -162,8 +238,10 @@ function fakeSource(opts: {
   size: number;
   tileSize: number;
   cellSize: number;
+  /** Bits per sample: 8 (the default) or 16. */
+  bits?: 8 | 16;
 }) {
-  const { size, tileSize, cellSize } = opts;
+  const { size, tileSize, cellSize, bits = 8 } = opts;
   const tile = (x: number, y: number, boundless = true) => {
     const width = boundless
       ? tileSize
@@ -176,7 +254,10 @@ function fakeSource(opts: {
       y,
       array: {
         layout: "pixel-interleaved",
-        data: new Uint8Array(width * height),
+        data:
+          bits === 16
+            ? new Uint16Array(width * height)
+            : new Uint8Array(width * height),
         count: 1,
         width,
         height,
@@ -218,11 +299,19 @@ function fakeSource(opts: {
   return { geotiff, tileset };
 }
 
-/** Fetch tile `(x, y)` at the only level, from sources already opened. */
+/**
+ * Fetch tile `(x, y)` at the only level, from sources already opened. The
+ * default device can create and filter every texture format.
+ */
 function getTileData(
   sources: Record<string, ReturnType<typeof fakeSource>>,
   x: number,
   y: number,
+  device: object = {
+    createTexture: () => fakeTexture().texture,
+    isTextureFormatSupported: () => true,
+    isTextureFormatFilterable: () => true,
+  },
 ) {
   const layer = makeBareLayer({ pool: {} });
   const entries = Object.entries(sources);
@@ -234,7 +323,6 @@ function getTileData(
       new Map(entries.map(([name, s]) => [name, s.tileset])),
     ),
   } as never);
-  const device = { createTexture: () => fakeTexture().texture };
   return layer._getTileData(
     { index: { x, y, z: 0 } } as never,
     { device } as never,
@@ -272,5 +360,27 @@ describe("MultiCOGLayer._getTileData", () => {
     expect(band.uvTransform[1]).toBeCloseTo(2 / 3);
     expect(band.uvTransform[2]).toBeCloseTo(1 / 3);
     expect(band.uvTransform[3]).toBeCloseTo(1 / 3);
+  });
+
+  it("counts a 16-bit band's float32 bytes on a device without r16unorm", async () => {
+    const formats: string[] = [];
+    const device = {
+      createTexture: (props: { format: string }) => {
+        formats.push(props.format);
+        return fakeTexture().texture;
+      },
+      isTextureFormatSupported: (format: string) => format !== "r16unorm",
+      isTextureFormatFilterable: () => true,
+      features: new Set(["float32-filterable"]),
+    };
+    const result = await getTileData(
+      { a: fakeSource({ size: 4, tileSize: 4, cellSize: 1, bits: 16 }) },
+      0,
+      0,
+      device,
+    );
+    expect(formats).toEqual(["r32float"]);
+    // 4x4 pixels of 4-byte floats, not the source's 2-byte integers.
+    expect(result.bands.get("a")!.byteLength).toEqual(4 * 4 * 4);
   });
 });

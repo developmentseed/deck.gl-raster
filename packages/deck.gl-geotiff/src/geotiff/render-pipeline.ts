@@ -14,11 +14,19 @@ import {
   WhiteIsZero,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
-import { ColorInterp, parseColormap } from "@developmentseed/geotiff";
+import {
+  ColorInterp,
+  parseColormap,
+  toPixelInterleaved,
+} from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GetTileDataOptions } from "../cog-layer.js";
 import { addAlphaChannel } from "./geotiff.js";
-import { inferTextureFormat } from "./texture.js";
+import {
+  inferTextureFormat,
+  isFilterable,
+  resolveTextureFormat,
+} from "./texture.js";
 
 /**
  * The tile data returned by the default `getTileData` of {@link COGLayer}, and
@@ -66,7 +74,7 @@ export function inferRenderPipeline(
   ) => Promise<TextureDataT>;
   renderTile: (data: TextureDataT) => RenderTileResult;
 } {
-  const { sampleFormat } = geotiff.cachedTags;
+  const { sampleFormat } = geotiff.cachedPrimaryImageTags;
   if (sampleFormat === null) {
     throw new Error("SampleFormat tag is required to infer render pipeline");
   }
@@ -102,7 +110,7 @@ function createUnormPipeline(
     sampleFormat,
     samplesPerPixel,
     nodata,
-  } = geotiff.cachedTags;
+  } = geotiff.cachedPrimaryImageTags;
 
   const renderPipeline: UnresolvedRasterModule<TextureDataT>[] = [
     {
@@ -177,14 +185,15 @@ function createUnormPipeline(
 
     let numSamples = samplesPerPixel;
 
+    // TODO: in the future, upload per-band textures directly to the GPU. See #772.
+    if (array.layout === "band-separate") {
+      array = toPixelInterleaved(array);
+    }
+
     if (samplesPerPixel === 3) {
       // WebGL2 doesn't have an RGB-only texture format; it requires RGBA.
       array = addAlphaChannel(array);
       numSamples = 4;
-    }
-
-    if (array.layout === "band-separate") {
-      throw new Error("Band-separate images not yet implemented.");
     }
 
     const textureFormat = inferTextureFormat(
@@ -193,13 +202,16 @@ function createUnormPipeline(
       bitsPerSample,
       sampleFormat,
     );
-    let byteLength = array.data.byteLength;
+    const upload = resolveTextureFormat(device, textureFormat, array.data);
+    let byteLength = upload.data.byteLength;
     const texture = device.createTexture({
-      data: array.data,
-      format: textureFormat,
+      data: upload.data,
+      format: upload.format,
       width,
       height,
-      sampler: samplerOptions,
+      sampler: isFilterable(device, upload.format)
+        ? samplerOptions
+        : { magFilter: "nearest", minFilter: "nearest" },
     });
 
     let maskTexture: Texture | undefined;
@@ -245,7 +257,7 @@ function createUnormPipeline(
  * `color.g`, which the gray-to-RGB module overwrites.
  */
 function alphaModule(geotiff: GeoTIFF): RasterModule | null {
-  const { photometric, samplesPerPixel } = geotiff.cachedTags;
+  const { photometric, samplesPerPixel } = geotiff.cachedPrimaryImageTags;
   switch (photometric) {
     case Photometric.Rgb:
       if (

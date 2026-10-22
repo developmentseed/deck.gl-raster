@@ -21,7 +21,7 @@ describe("decode", () => {
       samplesPerPixel,
       predictor,
       planarConfiguration,
-    } = tiff.cachedTags;
+    } = tiff.cachedPrimaryImageTags;
     const { width, height } = image.tileSize;
 
     const result = await decode(tile!.bytes, tile!.compression, {
@@ -52,14 +52,14 @@ describe("decode", () => {
     expect(tile).not.toBeNull();
 
     const { bitsPerSample, sampleFormat, predictor, planarConfiguration } =
-      tiff.cachedTags;
+      tiff.cachedPrimaryImageTags;
     const { width, height } = image.tileSize;
 
     // This fixture is band-separate, so each raw tile contains a single band.
     const tileSamplesPerPixel =
       planarConfiguration === PlanarConfiguration.Separate
         ? 1
-        : tiff.cachedTags.samplesPerPixel;
+        : tiff.cachedPrimaryImageTags.samplesPerPixel;
 
     const result = await decode(tile!.bytes, tile!.compression, {
       sampleFormat: sampleFormat[0]!,
@@ -94,7 +94,7 @@ describe("decode", () => {
       samplesPerPixel,
       predictor,
       planarConfiguration,
-    } = tiff.cachedTags;
+    } = tiff.cachedPrimaryImageTags;
     const { width, height } = image.tileSize;
 
     const result = await decode(tile!.bytes, tile!.compression, {
@@ -228,7 +228,7 @@ describe("decode big endian tiles", () => {
       height,
       predictor: Predictor.None,
       planarConfiguration: PlanarConfiguration.Contig,
-      lercParameters: tiff.cachedTags.lercParameters,
+      lercParameters: tiff.cachedPrimaryImageTags.lercParameters,
     };
 
     const bandBytes = async (littleEndian: boolean) => {
