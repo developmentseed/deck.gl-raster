@@ -68,6 +68,10 @@ export class DecoderPool {
    *
    * When no workers are available, decoding runs on the main thread via the
    * normal `decode()` path.
+   *
+   * If a worker fails to load or throws an uncaught error, its pending decodes
+   * reject and it gets no new ones. Once every worker has failed, `decode`
+   * rejects.
    */
   async decode(
     bytes: ArrayBuffer,
