@@ -67,7 +67,9 @@ describe("getMultipleBytes", () => {
       tileSize: { width: 16, height: 16 },
       tiles: new Map(),
     });
-    expect(await getMultipleBytes(image, NO_JPEG_TABLES, [], ds)).toEqual([]);
+    expect(
+      await getMultipleBytes(image, [], ds, { imageTags: NO_JPEG_TABLES }),
+    ).toEqual([]);
     expect(ds.fetches.length).toBe(0);
   });
 
@@ -81,12 +83,12 @@ describe("getMultipleBytes", () => {
 
     const result = await getMultipleBytes(
       image,
-      NO_JPEG_TABLES,
       [
         { offset: 120, byteCount: 10 },
         { offset: 100, byteCount: 10 },
       ],
       ds,
+      { imageTags: NO_JPEG_TABLES },
     );
 
     // gap (120 - 110 = 10) is well under the 1 MiB default → one fetch.
@@ -110,13 +112,13 @@ describe("getMultipleBytes", () => {
 
     const result = await getMultipleBytes(
       image,
-      NO_JPEG_TABLES,
       [
         { offset: 0, byteCount: 10 },
         { offset: 10, byteCount: 0 },
         { offset: 5, byteCount: 4 },
       ],
       ds,
+      { imageTags: NO_JPEG_TABLES },
     );
 
     expect(result[0]).toBeNull();
@@ -139,9 +141,9 @@ describe("getMultipleBytes", () => {
 
     const [tile] = await getMultipleBytes(
       image,
-      { jpegTables },
       [{ offset: 5, byteCount: 4 }],
       ds,
+      { imageTags: { jpegTables } },
     );
 
     expect(tile!.compression).toBe(Compression.Jpeg);
@@ -161,7 +163,9 @@ describe("getTiles", () => {
       tileSize: { width: 16, height: 16 },
       tiles: new Map(),
     });
-    expect(await getTiles(image, NO_JPEG_TABLES, [], ds)).toEqual([]);
+    expect(
+      await getTiles(image, [], ds, { imageTags: NO_JPEG_TABLES }),
+    ).toEqual([]);
   });
 
   it("resolves tile offsets and returns bytes in input order", async () => {
@@ -177,12 +181,12 @@ describe("getTiles", () => {
 
     const result = await getTiles(
       image,
-      NO_JPEG_TABLES,
       [
         [1, 0],
         [0, 0],
       ],
       ds,
+      { imageTags: NO_JPEG_TABLES },
     );
 
     expect(result.length).toBe(2);
@@ -207,12 +211,12 @@ describe("getTiles", () => {
 
     const result = await getTiles(
       image,
-      NO_JPEG_TABLES,
       [
         [0, 0],
         [1, 0],
       ],
       ds,
+      { imageTags: NO_JPEG_TABLES },
     );
     expect(result).toEqual([null, null]);
   });
@@ -225,12 +229,12 @@ describe("getTiles", () => {
       tiles: new Map(),
     });
 
-    await expect(getTiles(image, NO_JPEG_TABLES, [[2, 0]], ds)).rejects.toThrow(
-      /Tile index is outside of range/,
-    );
-    await expect(getTiles(image, NO_JPEG_TABLES, [[0, 2]], ds)).rejects.toThrow(
-      /Tile index is outside of range/,
-    );
+    await expect(
+      getTiles(image, [[2, 0]], ds, { imageTags: NO_JPEG_TABLES }),
+    ).rejects.toThrow(/Tile index is outside of range/);
+    await expect(
+      getTiles(image, [[0, 2]], ds, { imageTags: NO_JPEG_TABLES }),
+    ).rejects.toThrow(/Tile index is outside of range/);
   });
 
   it("throws when called on an untiled image", async () => {
@@ -241,7 +245,7 @@ describe("getTiles", () => {
     } as unknown as TiffImage;
 
     await expect(
-      getTiles(untiled, NO_JPEG_TABLES, [[0, 0]], ds),
+      getTiles(untiled, [[0, 0]], ds, { imageTags: NO_JPEG_TABLES }),
     ).rejects.toThrow(/Tiff is not tiled/);
   });
 });

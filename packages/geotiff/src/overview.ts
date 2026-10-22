@@ -141,13 +141,11 @@ export class Overview {
       signal?: AbortSignal;
     } = {},
   ): Promise<Tile> {
-    return await fetchTile(
-      this,
-      { image: this.cachedSubImageTags, mask: this.cachedMaskImageTags },
-      x,
-      y,
-      options,
-    );
+    return await fetchTile(this, x, y, {
+      ...options,
+      imageTags: this.cachedSubImageTags,
+      maskImageTags: this.cachedMaskImageTags,
+    });
   }
 
   /**
@@ -170,12 +168,11 @@ export class Overview {
       signal?: AbortSignal;
     } = {},
   ): Promise<Tile[]> {
-    return await fetchTiles(
-      this,
-      { image: this.cachedSubImageTags, mask: this.cachedMaskImageTags },
-      xy,
-      options,
-    );
+    return await fetchTiles(this, xy, {
+      ...options,
+      imageTags: this.cachedSubImageTags,
+      maskImageTags: this.cachedMaskImageTags,
+    });
   }
 
   // TiledMixin

@@ -13,7 +13,7 @@ import type { HasTransform } from "./transform.js";
 
 /** Protocol for objects that hold a TIFF reference and can request tiles. */
 interface HasTiffReference extends HasTransform {
-  /** Tags of the file's primary image, which apply to every overview too. */
+  /** Tags of the file's primary image, which generally apply to every overview too. */
   readonly cachedPrimaryImageTags: CachedPrimaryImageTags;
 
   /** The data source used for fetching tile data. */
@@ -45,35 +45,40 @@ interface HasTiffReference extends HasTransform {
   readonly _debug?: boolean;
 }
 
-/** The {@link CachedSubImageTags} of the images that a tile read uses. */
+/** The {@link CachedSubImageTags} that a tile read uses. */
 type TileReadTags = {
-  /** Tags of the data image, `self.image`. */
-  image: CachedSubImageTags;
-  /** Tags of the mask, `self.maskImage`, or `null` if there's no mask. */
-  mask: CachedSubImageTags | null;
+  /**
+   * Tags of `self.image`. For their fields, a tile read uses these rather than
+   * `self.cachedPrimaryImageTags`.
+   */
+  imageTags: CachedSubImageTags;
+  /** Tags of `self.maskImage`, or `null` if there's no mask. */
+  maskImageTags: CachedSubImageTags | null;
 };
 
 export async function fetchTile(
   self: HasTiffReference,
-  tags: TileReadTags,
   x: number,
   y: number,
   {
     boundless = true,
     pool,
     signal,
+    imageTags,
+    maskImageTags,
   }: {
     boundless?: boolean;
     pool?: DecoderPool;
     signal?: AbortSignal;
-  } = {},
+  } & TileReadTags,
 ): Promise<Tile> {
-  const tileFetch = fetchCogBytes(self, tags.image, x, y, { signal });
+  const tileFetch = fetchCogBytes(self, x, y, { signal, imageTags });
   const maskFetch =
     self.maskImage != null
-      ? getTile(self.maskImage, tags.mask!, x, y, self.dataSource, {
+      ? getTile(self.maskImage, x, y, self.dataSource, {
           signal,
           debug: self._debug ? { label: "mask" } : undefined,
+          imageTags: maskImageTags!,
         })
       : Promise.resolve(null);
 
@@ -173,28 +178,30 @@ async function assembleTile(
  */
 export async function fetchTiles(
   self: HasTiffReference,
-  tags: TileReadTags,
   xy: Array<[number, number]>,
   {
     boundless = true,
     pool,
     signal,
+    imageTags,
+    maskImageTags,
   }: {
     boundless?: boolean;
     pool?: DecoderPool;
     signal?: AbortSignal;
-  } = {},
+  } & TileReadTags,
 ): Promise<Tile[]> {
   if (xy.length === 0) {
     return [];
   }
 
-  const dataFetch = fetchCogBytesMultiple(self, tags.image, xy, { signal });
+  const dataFetch = fetchCogBytesMultiple(self, xy, { signal, imageTags });
   const maskFetch: Promise<Array<GetBytesResponse | null>> =
     self.maskImage != null
-      ? getTiles(self.maskImage, tags.mask!, xy, self.dataSource, {
+      ? getTiles(self.maskImage, xy, self.dataSource, {
           signal,
           debug: self._debug ? { label: "mask" } : undefined,
+          imageTags: maskImageTags!,
         })
       : Promise.resolve(xy.map(() => null));
 
@@ -304,23 +311,25 @@ async function decodeTile(
 /** Fetch bytes from a COG, handling whether pixel/band interleaving. */
 async function fetchCogBytes(
   self: HasTiffReference,
-  imageTags: CachedSubImageTags,
   x: number,
   y: number,
   {
     signal,
+    imageTags,
   }: {
     signal?: AbortSignal;
-  } = {},
+    imageTags: CachedSubImageTags;
+  },
 ): Promise<GetBytesResponse | GetBytesResponse[]> {
   const debug: DebugTag | undefined = self._debug
     ? { label: "data" }
     : undefined;
   switch (self.cachedPrimaryImageTags.planarConfiguration) {
     case PlanarConfiguration.Contig: {
-      const tile = await getTile(self.image, imageTags, x, y, self.dataSource, {
+      const tile = await getTile(self.image, x, y, self.dataSource, {
         signal,
         debug,
+        imageTags,
       });
       if (tile === null) {
         throw new Error(`Tile at (${x}, ${y}) not found`);
@@ -328,8 +337,9 @@ async function fetchCogBytes(
       return tile;
     }
     case PlanarConfiguration.Separate:
-      return await fetchBandSeparateTileBytes(self, imageTags, x, y, {
+      return await fetchBandSeparateTileBytes(self, x, y, {
         signal,
+        imageTags,
       });
     default:
       throw new Error(
@@ -357,14 +367,14 @@ async function findBandSeparateTileByteRanges(
 
 async function fetchBandSeparateTileBytes(
   self: HasTiffReference,
-  imageTags: CachedSubImageTags,
   x: number,
   y: number,
   options: {
     signal?: AbortSignal;
-  } = {},
+    imageTags: CachedSubImageTags;
+  },
 ): Promise<GetBytesResponse[]> {
-  const { signal } = options;
+  const { signal, imageTags } = options;
   const debug: DebugTag | undefined = self._debug
     ? { label: "data" }
     : undefined;
@@ -372,11 +382,10 @@ async function fetchBandSeparateTileBytes(
   const buffers = byteRanges.map(async ({ offset, imageSize }) => {
     const tile = await getBytes(
       self.image,
-      imageTags,
       offset,
       imageSize,
       self.dataSource,
-      { signal, debug },
+      { signal, debug, imageTags },
     );
     if (tile === null) {
       throw new Error(`Tile at (${x}, ${y}) not found`);
@@ -394,22 +403,24 @@ async function fetchBandSeparateTileBytes(
  */
 async function fetchCogBytesMultiple(
   self: HasTiffReference,
-  imageTags: CachedSubImageTags,
   xy: Array<[number, number]>,
   {
     signal,
+    imageTags,
   }: {
     signal?: AbortSignal;
-  } = {},
+    imageTags: CachedSubImageTags;
+  },
 ): Promise<Array<GetBytesResponse | GetBytesResponse[]>> {
   const debug: DebugTag | undefined = self._debug
     ? { label: "data" }
     : undefined;
   switch (self.cachedPrimaryImageTags.planarConfiguration) {
     case PlanarConfiguration.Contig: {
-      const tiles = await getTiles(self.image, imageTags, xy, self.dataSource, {
+      const tiles = await getTiles(self.image, xy, self.dataSource, {
         signal,
         debug,
+        imageTags,
       });
       return tiles.map((tile, i) => {
         if (tile === null) {
@@ -420,8 +431,9 @@ async function fetchCogBytesMultiple(
       });
     }
     case PlanarConfiguration.Separate:
-      return fetchBandSeparateTileBytesMultiple(self, imageTags, xy, {
+      return fetchBandSeparateTileBytesMultiple(self, xy, {
         signal,
+        imageTags,
       });
     default:
       throw new Error(
@@ -438,13 +450,13 @@ async function fetchCogBytesMultiple(
  */
 async function fetchBandSeparateTileBytesMultiple(
   self: HasTiffReference,
-  imageTags: CachedSubImageTags,
   xy: Array<[number, number]>,
   options: {
     signal?: AbortSignal;
-  } = {},
+    imageTags: CachedSubImageTags;
+  },
 ): Promise<GetBytesResponse[][]> {
-  const { signal } = options;
+  const { signal, imageTags } = options;
   const debug: DebugTag | undefined = self._debug
     ? { label: "data" }
     : undefined;
@@ -460,10 +472,9 @@ async function fetchBandSeparateTileBytesMultiple(
   );
   const flatResults = await getMultipleBytes(
     self.image,
-    imageTags,
     flatRanges,
     self.dataSource,
-    { signal, debug },
+    { signal, debug, imageTags },
   );
 
   return xy.map(([x, y], t) =>
@@ -480,7 +491,8 @@ async function fetchBandSeparateTileBytesMultiple(
  * Load a tile into an ArrayBuffer.
  *
  * If the tile compression is JPEG, this also prepends the image's JPEG tables,
- * from `tags`, to the resulting ArrayBuffer (see {@link prependJpegTables}).
+ * from `options.imageTags`, to the resulting ArrayBuffer (see
+ * {@link prependJpegTables}).
  *
  * Though this function lives upstream in @cogeotiff/core, we vendor it here
  * so we can route the *tile data* read through a separate source. The tile's
@@ -492,11 +504,14 @@ async function fetchBandSeparateTileBytesMultiple(
  */
 async function getTile(
   image: TiffImage,
-  tags: CachedSubImageTags,
   x: number,
   y: number,
   dataSource: Pick<Source, "fetch">,
-  options?: { signal?: AbortSignal; debug?: DebugTag },
+  options: {
+    signal?: AbortSignal;
+    debug?: DebugTag;
+    imageTags: CachedSubImageTags;
+  },
 ): Promise<{
   bytes: ArrayBuffer;
   compression: Compression;
@@ -532,7 +547,7 @@ async function getTile(
   });
 
   // The actual tile bytes go through dataSource (uncached HTTP).
-  return getBytes(image, tags, offset, imageSize, dataSource, options);
+  return getBytes(image, offset, imageSize, dataSource, options);
 }
 
 /**
@@ -595,11 +610,14 @@ function getTileByteRange(
  */
 async function getBytes(
   image: TiffImage,
-  tags: CachedSubImageTags,
   offset: number,
   byteCount: number,
   dataSource: Pick<Source, "fetch">,
-  options?: { signal?: AbortSignal; debug?: DebugTag },
+  options: {
+    signal?: AbortSignal;
+    debug?: DebugTag;
+    imageTags: CachedSubImageTags;
+  },
 ): Promise<{
   bytes: ArrayBuffer;
   compression: Compression;
@@ -614,7 +632,9 @@ async function getBytes(
     );
   }
 
-  const bytes = await dataSource.fetch(offset, byteCount, options);
+  const bytes = await dataSource.fetch(offset, byteCount, {
+    signal: options.signal,
+  });
   if (bytes.byteLength < byteCount) {
     throw new Error(
       `Failed to fetch bytes from offset:${offset} wanted:${byteCount} got:${bytes.byteLength}`,
@@ -624,7 +644,7 @@ async function getBytes(
   const compression = image.value(TiffTag.Compression) ?? Compression.None;
   if (compression === Compression.Jpeg) {
     return {
-      bytes: prependJpegTables(bytes, tags.jpegTables),
+      bytes: prependJpegTables(bytes, options.imageTags.jpegTables),
       compression,
     };
   }
@@ -679,14 +699,14 @@ export function prependJpegTables(
  */
 export async function getMultipleBytes(
   image: TiffImage,
-  tags: CachedSubImageTags,
   ranges: { offset: number; byteCount: number }[],
   dataSource: Pick<Source, "fetch">,
-  options?: {
+  options: {
     signal?: AbortSignal;
     debug?: DebugTag;
     coalesce?: number;
     maxRangeSize?: number;
+    imageTags: CachedSubImageTags;
   },
 ): Promise<Array<{ bytes: ArrayBuffer; compression: Compression } | null>> {
   if (ranges.length === 0) {
@@ -733,7 +753,7 @@ export async function getMultipleBytes(
     const raw = fetched[k]!;
     const bytes =
       compression === Compression.Jpeg
-        ? prependJpegTables(raw, tags.jpegTables)
+        ? prependJpegTables(raw, options.imageTags.jpegTables)
         : raw;
     results[i] = { bytes, compression };
   }
@@ -755,14 +775,14 @@ export async function getMultipleBytes(
  */
 export async function getTiles(
   image: TiffImage,
-  tags: CachedSubImageTags,
   xy: Array<[number, number]>,
   dataSource: Pick<Source, "fetch">,
-  options?: {
+  options: {
     signal?: AbortSignal;
     debug?: DebugTag;
     coalesce?: number;
     maxRangeSize?: number;
+    imageTags: CachedSubImageTags;
   },
 ): Promise<Array<{ bytes: ArrayBuffer; compression: Compression } | null>> {
   if (xy.length === 0) {
@@ -799,7 +819,6 @@ export async function getTiles(
   );
   return getMultipleBytes(
     image,
-    tags,
     sizes.map((s) => ({ offset: s.offset, byteCount: s.imageSize })),
     dataSource,
     options,

@@ -543,13 +543,11 @@ export class GeoTIFF {
       signal?: AbortSignal;
     } = {},
   ): Promise<Tile> {
-    return await fetchTile(
-      this,
-      { image: this.cachedPrimaryImageTags, mask: this.cachedMaskImageTags },
-      x,
-      y,
-      options,
-    );
+    return await fetchTile(this, x, y, {
+      ...options,
+      imageTags: this.cachedPrimaryImageTags,
+      maskImageTags: this.cachedMaskImageTags,
+    });
   }
 
   /**
@@ -572,12 +570,11 @@ export class GeoTIFF {
       signal?: AbortSignal;
     } = {},
   ): Promise<Tile[]> {
-    return await fetchTiles(
-      this,
-      { image: this.cachedPrimaryImageTags, mask: this.cachedMaskImageTags },
-      xy,
-      options,
-    );
+    return await fetchTiles(this, xy, {
+      ...options,
+      imageTags: this.cachedPrimaryImageTags,
+      maskImageTags: this.cachedMaskImageTags,
+    });
   }
 
   // Transform mixin
