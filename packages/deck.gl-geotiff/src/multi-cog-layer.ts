@@ -1091,10 +1091,14 @@ function selectImage(geotiff: GeoTIFF, z: number): GeoTIFF | Overview {
  * Infers the texture format from the typed array type:
  *
  * - `Uint8Array` uploads as `r8unorm` and `Uint16Array` as `r16unorm`, so
- *   shaders read samples normalized to 0-1. Devices without `r16unorm` get
- *   the same 0-1 values in `r32float` (see {@link resolveTextureFormat}).
- * - Every other typed array uploads as `r32float`, so shaders read raw
- *   sample values. This is experimental (see `renderPipeline`). Integers
+ *   shaders read samples normalized to 0-1.
+ *
+ *   Devices not supporting `r16unorm` get the same 0-1 values in `r32float`
+ *   (see {@link resolveTextureFormat}).
+ * - Every other typed array uploads as `r32float`, where shaders read raw
+ *   sample values.
+ *
+ *   This is **experimental** (see `renderPipeline`). Integers
  *   past 2^24 and `Float64Array` samples round to float32. Integer texture
  *   formats aren't used because {@link CompositeBands} samples with
  *   `sampler2D`, which can't read them.
