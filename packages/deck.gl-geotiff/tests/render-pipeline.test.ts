@@ -6,6 +6,8 @@ import { loadGeoTIFF } from "./helpers.js";
 
 const MOCK_DEVICE = {
   createTexture: (x: any) => x,
+  isTextureFormatSupported: () => true,
+  isTextureFormatFilterable: () => true,
 };
 const MOCK_RENDER_TILE_DATA = {
   texture: {},
@@ -90,6 +92,47 @@ describe("gray plus a second band that isn't alpha", async () => {
       "nodata",
       "black-is-zero",
     ]);
+  });
+});
+
+describe("uint16 on a device without 16-bit normalized textures", async () => {
+  // Firefox's WebGL2 has no EXT_texture_norm16, so it can't create r16unorm.
+  const geotiff = await loadGeoTIFF(
+    "uint16_1band_lzw_block128_predictor2",
+    "rasterio",
+  );
+
+  /** Load tile (0, 0) as a device without r16unorm would. */
+  async function loadTile(float32Filterable: boolean) {
+    const device = {
+      createTexture: (x: any) => x,
+      isTextureFormatSupported: (format: string) => format !== "r16unorm",
+      isTextureFormatFilterable: () => true,
+      features: new Set(float32Filterable ? ["float32-filterable"] : []),
+    };
+    const { getTileData } = inferRenderPipeline(geotiff, device as any);
+    return getTileData(geotiff, { device, x: 0, y: 0 } as any);
+  }
+
+  it("uploads the samples as float32 between 0 and 1", async () => {
+    const { array } = await geotiff.fetchTile(0, 0, { boundless: false });
+    const expected = Float32Array.from(
+      (array as any).data as Uint16Array,
+      (value) => value / 65535,
+    );
+    const tile = await loadTile(true);
+    const texture = tile.texture as any;
+    expect(texture.format).toEqual("r32float");
+    expect(texture.data).toEqual(expected);
+    expect(tile.byteLength).toEqual(expected.byteLength);
+  });
+
+  it("samples nearest when the device can't filter float32", async () => {
+    const tile = await loadTile(false);
+    expect((tile.texture as any).sampler).toEqual({
+      minFilter: "nearest",
+      magFilter: "nearest",
+    });
   });
 });
 

@@ -22,7 +22,11 @@ import {
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GetTileDataOptions } from "../cog-layer.js";
 import { addAlphaChannel } from "./geotiff.js";
-import { inferTextureFormat } from "./texture.js";
+import {
+  inferTextureFormat,
+  isFilterable,
+  resolveTextureFormat,
+} from "./texture.js";
 
 /**
  * The tile data returned by the default `getTileData` of {@link COGLayer}, and
@@ -198,13 +202,16 @@ function createUnormPipeline(
       bitsPerSample,
       sampleFormat,
     );
-    let byteLength = array.data.byteLength;
+    const upload = resolveTextureFormat(device, textureFormat, array.data);
+    let byteLength = upload.data.byteLength;
     const texture = device.createTexture({
-      data: array.data,
-      format: textureFormat,
+      data: upload.data,
+      format: upload.format,
       width,
       height,
-      sampler: samplerOptions,
+      sampler: isFilterable(device, upload.format)
+        ? samplerOptions
+        : { magFilter: "nearest", minFilter: "nearest" },
     });
 
     let maskTexture: Texture | undefined;

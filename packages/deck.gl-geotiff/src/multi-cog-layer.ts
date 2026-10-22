@@ -53,6 +53,7 @@ import { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
+import { isFilterable, resolveTextureFormat } from "./geotiff/texture.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 
 /**
@@ -745,12 +746,8 @@ export class MultiCOGLayer extends RasterTileLayer<
       signal,
     });
 
-    const texture = createBandTexture(device, tile.array);
+    const { texture, byteLength } = createBandTexture(device, tile.array);
     const arr = tile.array;
-    const byteLength =
-      arr.layout === "pixel-interleaved"
-        ? arr.data.byteLength
-        : arr.bands.reduce((sum, b) => sum + b.byteLength, 0);
 
     return [
       name,
@@ -852,11 +849,7 @@ export class MultiCOGLayer extends RasterTileLayer<
       minRow: resolution.minRow,
     });
 
-    const texture = createBandTexture(device, assembled);
-    const assembledByteLength =
-      assembled.layout === "pixel-interleaved"
-        ? assembled.data.byteLength
-        : assembled.bands.reduce((sum, b) => sum + b.byteLength, 0);
+    const { texture, byteLength } = createBandTexture(device, assembled);
 
     return [
       name,
@@ -865,7 +858,7 @@ export class MultiCOGLayer extends RasterTileLayer<
         uvTransform: resolution.uvTransform,
         width: assembled.width,
         height: assembled.height,
-        byteLength: assembledByteLength,
+        byteLength,
       },
       debugInfo,
     ];
@@ -1037,14 +1030,19 @@ function selectImage(geotiff: GeoTIFF, z: number): GeoTIFF | Overview {
 }
 
 /**
- * Create a GPU texture from a {@link RasterArray}.
+ * Create a GPU texture from a {@link RasterArray}, and return it with the
+ * byte length of the uploaded data.
  *
  * Infers the texture format from the typed array type. Currently supports
- * single-band `Uint8Array` (`r8unorm`) and `Uint16Array` (`r16unorm`).
+ * single-band `Uint8Array` (`r8unorm`) and `Uint16Array` (`r16unorm`, or
+ * `r32float` on devices without it; see {@link resolveTextureFormat}).
  *
  * TODO: use `inferTextureFormat` from `texture.ts` for full format support.
  */
-function createBandTexture(device: Device, array: RasterArray): Texture {
+function createBandTexture(
+  device: Device,
+  array: RasterArray,
+): { texture: Texture; byteLength: number } {
   if (array.layout !== "pixel-interleaved") {
     throw new Error("Band-separate layout not yet supported in MultiCOGLayer");
   }
@@ -1063,13 +1061,16 @@ function createBandTexture(device: Device, array: RasterArray): Texture {
     );
   }
 
-  return device.createTexture({
-    data,
-    format,
+  const upload = resolveTextureFormat(device, format, data);
+  const filter = isFilterable(device, upload.format) ? "linear" : "nearest";
+  const texture = device.createTexture({
+    data: upload.data,
+    format: upload.format,
     width,
     height,
-    sampler: { minFilter: "linear", magFilter: "linear" },
+    sampler: { minFilter: filter, magFilter: filter },
   });
+  return { texture, byteLength: upload.data.byteLength };
 }
 
 /**
