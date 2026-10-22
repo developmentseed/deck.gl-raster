@@ -1,7 +1,9 @@
 import { CompositeLayer } from "@deck.gl/core";
+import { epsgResolver } from "@developmentseed/proj";
 import { Texture } from "@luma.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { COGLayer } from "../src/cog-layer.js";
+import { loadGeoTIFF } from "./helpers.js";
 
 /**
  * Build a {@link COGLayer} ready for direct lifecycle calls: bypasses deck.gl's
@@ -30,6 +32,25 @@ function runInitialUpdate(layer: COGLayer): void {
     oldProps: layer.props,
     changeFlags: { dataChanged: true },
   } as never);
+}
+
+/**
+ * Render a new {@link COGLayer} with `props`, as apps do on every render:
+ * deck.gl hands the new instance the old one's `state`, then runs
+ * `updateState`.
+ */
+function rerender(layer: COGLayer, props: Record<string, unknown>): COGLayer {
+  const next = new COGLayer({ id: "cog", ...props } as never);
+  Object.assign(next as object, {
+    state: layer.state,
+    setState: layer.setState,
+  });
+  next.updateState({
+    props: next.props,
+    oldProps: layer.props,
+    changeFlags: {},
+  } as never);
+  return next;
 }
 
 function fakeTexture(): {
@@ -119,6 +140,41 @@ describe("COGLayer.updateState", () => {
     await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
     expect(onError.mock.calls[0]?.[0]?.message).toBe("loading GeoTIFF: boom");
   });
+
+  it("keeps the new GeoTIFF when the old one finishes opening last", async () => {
+    // The old GeoTIFF is in EPSG:4326 and the new one in EPSG:3857.
+    const oldGeoTIFF = await loadGeoTIFF("cog_uint8_rgba", "rasterio");
+    const newGeoTIFF = await loadGeoTIFF("cog_uint8_rgba_3857", "rasterio");
+    // Hold each CRS lookup until the test releases it.
+    const lookups = new Map<number, () => void>();
+    const onGeoTIFFLoad = vi.fn();
+    const props = {
+      epsgResolver: (epsg: number) =>
+        new Promise((resolve) =>
+          lookups.set(epsg, () => resolve(epsgResolver(epsg))),
+        ),
+      onGeoTIFFLoad,
+      // Skip the default pipeline, which needs a device.
+      getTileData: async () => ({}),
+      renderTile: () => null,
+    };
+
+    const layer = makeBareLayer({ ...props, geotiff: oldGeoTIFF });
+    const oldParse = vi.spyOn(layer, "_parseGeoTIFF");
+    runInitialUpdate(layer);
+    const next = rerender(layer, { ...props, geotiff: newGeoTIFF });
+    await vi.waitFor(() => expect(lookups.size).toBe(2));
+
+    lookups.get(3857)!();
+    await vi.waitFor(() => expect(next.state.geotiff?.crs).toBe(3857));
+    lookups.get(4326)!();
+    await oldParse.mock.results[0]!.value;
+
+    expect(next.state.geotiff?.crs).toBe(3857);
+    expect(onGeoTIFFLoad.mock.calls.map(([geotiff]) => geotiff.crs)).toEqual([
+      3857,
+    ]);
+  });
 });
 
 describe("COGLayer.isLoaded", () => {
@@ -156,5 +212,24 @@ describe("COGLayer.isLoaded", () => {
     runInitialUpdate(layer);
 
     await vi.waitFor(() => expect(layer.isLoaded).toBe(true));
+  });
+
+  it("is not loaded when the old GeoTIFF finishes opening first", async () => {
+    let finishOld!: () => void;
+    vi.spyOn(COGLayer.prototype, "_parseGeoTIFF")
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishOld = resolve;
+        }),
+      )
+      .mockReturnValue(new Promise(() => {}));
+
+    const layer = makeBareLayer();
+    runInitialUpdate(layer);
+    const next = rerender(layer, { geotiff: "https://example.com/y.tif" });
+    finishOld();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(next.isLoaded).toBe(false);
   });
 });
