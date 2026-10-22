@@ -243,6 +243,23 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
     throw new Error("User-defined projected CRS requires projMethod");
   }
 
+  // Writers disagree on which of several equivalent keys a method stores its
+  // origin in: GDAL writes ProjNatOrigin* for Oblique Stereographic but
+  // ProjCenter* for Stereographic, for example. Like libgeotiff, take each
+  // parameter from the first of its equivalent keys that is present.
+  // https://github.com/OSGeo/libgeotiff/blob/75cfca539667c6483e796b24b78ecef72e311a1a/libgeotiff/geo_normalize.c#L1649
+  const originLat =
+    gkd.projNatOriginLat ?? gkd.projFalseOriginLat ?? gkd.projCenterLat;
+  const originLong =
+    gkd.projNatOriginLong ?? gkd.projFalseOriginLong ?? gkd.projCenterLong;
+  const originScale = gkd.projScaleAtNatOrigin ?? gkd.projScaleAtCenter;
+  const falseEasting =
+    gkd.projFalseEasting ?? gkd.projCenterEasting ?? gkd.projFalseOriginEasting;
+  const falseNorthing =
+    gkd.projFalseNorthing ??
+    gkd.projCenterNorthing ??
+    gkd.projFalseOriginNorthing;
+
   const angular = (
     name: string,
     value: number | null,
@@ -285,11 +302,11 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projNatOriginLat),
-          angular("Longitude of natural origin", gkd.projNatOriginLong),
-          scale("Scale factor at natural origin", gkd.projScaleAtNatOrigin),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          scale("Scale factor at natural origin", originScale),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -303,13 +320,13 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of projection centre", gkd.projCenterLat),
-          angular("Longitude of projection centre", gkd.projCenterLong),
+          angular("Latitude of projection centre", originLat),
+          angular("Longitude of projection centre", originLong),
           angular("Azimuth of initial line", gkd.projAzimuthAngle),
           angular("Angle from Rectified to Skew Grid", gkd.projAzimuthAngle),
-          scale("Scale factor on initial line", gkd.projScaleAtCenter),
-          linear("Easting at projection centre", gkd.projCenterEasting),
-          linear("Northing at projection centre", gkd.projCenterNorthing),
+          scale("Scale factor on initial line", originScale),
+          linear("Easting at projection centre", falseEasting),
+          linear("Northing at projection centre", falseNorthing),
         ],
       };
     }
@@ -320,11 +337,11 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projNatOriginLat),
-          angular("Longitude of natural origin", gkd.projNatOriginLong),
-          scale("Scale factor at natural origin", gkd.projScaleAtNatOrigin),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          scale("Scale factor at natural origin", originScale),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -337,21 +354,21 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         parameters: [
           angular(
             "Latitude of false origin",
-            gkd.projFalseOriginLat ?? gkd.projNatOriginLat,
+            gkd.projFalseOriginLat ?? originLat,
           ),
           angular(
             "Longitude of false origin",
-            gkd.projFalseOriginLong ?? gkd.projNatOriginLong,
+            gkd.projFalseOriginLong ?? originLong,
           ),
           angular("Latitude of 1st standard parallel", gkd.projStdParallel1),
           angular("Latitude of 2nd standard parallel", gkd.projStdParallel2),
           linear(
             "Easting at false origin",
-            gkd.projFalseOriginEasting ?? gkd.projFalseEasting,
+            gkd.projFalseOriginEasting ?? falseEasting,
           ),
           linear(
             "Northing at false origin",
-            gkd.projFalseOriginNorthing ?? gkd.projFalseNorthing,
+            gkd.projFalseOriginNorthing ?? falseNorthing,
           ),
         ],
       };
@@ -363,11 +380,11 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projNatOriginLat),
-          angular("Longitude of natural origin", gkd.projNatOriginLong),
-          scale("Scale factor at natural origin", gkd.projScaleAtNatOrigin),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          scale("Scale factor at natural origin", originScale),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -378,10 +395,10 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projCenterLat),
-          angular("Longitude of natural origin", gkd.projCenterLong),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -394,21 +411,21 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         parameters: [
           angular(
             "Latitude of false origin",
-            gkd.projFalseOriginLat ?? gkd.projNatOriginLat,
+            gkd.projFalseOriginLat ?? originLat,
           ),
           angular(
             "Longitude of false origin",
-            gkd.projFalseOriginLong ?? gkd.projNatOriginLong,
+            gkd.projFalseOriginLong ?? originLong,
           ),
           angular("Latitude of 1st standard parallel", gkd.projStdParallel1),
           angular("Latitude of 2nd standard parallel", gkd.projStdParallel2),
           linear(
             "Easting at false origin",
-            gkd.projFalseOriginEasting ?? gkd.projFalseEasting,
+            gkd.projFalseOriginEasting ?? falseEasting,
           ),
           linear(
             "Northing at false origin",
-            gkd.projFalseOriginNorthing ?? gkd.projFalseNorthing,
+            gkd.projFalseOriginNorthing ?? falseNorthing,
           ),
         ],
       };
@@ -420,10 +437,10 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projCenterLat),
-          angular("Longitude of natural origin", gkd.projCenterLong),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -434,11 +451,11 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projCenterLat),
-          angular("Longitude of natural origin", gkd.projCenterLong),
-          scale("Scale factor at natural origin", gkd.projScaleAtCenter),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          scale("Scale factor at natural origin", originScale),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -451,14 +468,14 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         parameters: [
           angular(
             "Latitude of standard parallel",
-            gkd.projNatOriginLat ?? gkd.projStdParallel1,
+            originLat ?? gkd.projStdParallel1,
           ),
           angular(
             "Longitude of origin",
-            gkd.projStraightVertPoleLong ?? gkd.projNatOriginLong,
+            gkd.projStraightVertPoleLong ?? originLong,
           ),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -469,11 +486,11 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projCenterLat),
-          angular("Longitude of natural origin", gkd.projCenterLong),
-          scale("Scale factor at natural origin", gkd.projScaleAtCenter),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          scale("Scale factor at natural origin", originScale),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -486,11 +503,11 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         parameters: [
           angular(
             "Latitude of 1st standard parallel",
-            gkd.projStdParallel1 ?? gkd.projCenterLat,
+            gkd.projStdParallel1 ?? originLat,
           ),
-          angular("Longitude of natural origin", gkd.projCenterLong),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Longitude of natural origin", originLong),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -501,10 +518,10 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projNatOriginLat),
-          angular("Longitude of natural origin", gkd.projNatOriginLong),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -515,10 +532,10 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projNatOriginLat),
-          angular("Longitude of natural origin", gkd.projNatOriginLong),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -529,9 +546,9 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Longitude of natural origin", gkd.projCenterLong),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Longitude of natural origin", originLong),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -542,10 +559,10 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projCenterLat),
-          angular("Longitude of natural origin", gkd.projCenterLong),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }
@@ -556,10 +573,10 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         name,
         method: { name },
         parameters: [
-          angular("Latitude of natural origin", gkd.projNatOriginLat),
-          angular("Longitude of natural origin", gkd.projNatOriginLong),
-          linear("False easting", gkd.projFalseEasting),
-          linear("False northing", gkd.projFalseNorthing),
+          angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
         ],
       };
     }

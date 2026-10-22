@@ -145,11 +145,10 @@ width 65, 289, 145, 329 — none of which are divisible by 4.
   — explicit `UNPACK_ALIGNMENT = this.byteAlignment` in `writeData`.
 - [`@luma.gl/core` `texture.ts:585`](https://github.com/visgl/luma.gl/blob/v9.3.0/modules/core/src/adapter/resources/texture.ts#L585)
   — default `bytesPerRow = layout.bytesPerRow`.
-- [`boundless-tiles.md`](./boundless-tiles.md) — per-layer guidance on
-  `boundless: true` vs `boundless: false`. `MultiCOGLayer` keeps nominal
-  tiles for `CompositeBands` UV stitching; `COGLayer` uses CPU-clipped edge
-  tiles, which is safe on luma.gl 9.3 because of the fix described in this
-  doc.
+- [`boundless-tiles.md`](./boundless-tiles.md) — guidance on
+  `boundless: true` vs `boundless: false`. `COGLayer` and `MultiCOGLayer`
+  both use CPU-clipped edge tiles, which is safe on luma.gl 9.3 because of
+  the fix described in this doc.
 - [developmentseed/deck.gl-raster#411](https://github.com/developmentseed/deck.gl-raster/pull/411)
   — earlier `MultiCOGLayer` edge-tile fix that switched that layer to
   `boundless: true`.

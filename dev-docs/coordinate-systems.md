@@ -314,14 +314,14 @@ cartesian/common space rather than converting to lng/lat.
 ### Why delatin's triangulation is unaffected by the common-space move
 
 We apply the `× scale + offset` by wrapping the `forwardReproject` /
-`inverseReproject` functions, *not* inside the reprojector. Delatin
-measures refinement error in **pixel space** (it inverse-projects the
-interpolated output back to pixels and compares). Barycentric
-interpolation commutes with an affine transform
-(`interp(f(a),f(b),f(c)) = f(interp(a,b,c))` when weights sum to 1), and
-`inverseReproject` undoes the affine before going to pixels — so as long
-as *both* fns are wrapped consistently, the pixel-space error, and thus
-the triangulation, is identical to 3857-meter output.
+`inverseReproject` functions, *not* inside the reprojector. `RasterLayer`
+has delatin measure refinement error in **output pixels**: the distance
+between a point's exact and interpolated output positions, divided by one
+input pixel's size in the output. Barycentric interpolation commutes with
+an affine transform (`interp(f(a),f(b),f(c)) = f(interp(a,b,c))` when
+weights sum to 1), so a uniform scale and offset multiplies both that
+distance and the pixel size by `scale`: the error, and thus the
+triangulation, is identical to 3857-meter output.
 
 ## Performance: fp64 cost is vertex-only
 
@@ -395,18 +395,27 @@ metric would be more accurate; deferred.
 
 In interleaved mode the raster mesh is coplanar with MapLibre's globe basemap
 sphere and z-fights in the shared depth buffer. A depth bias / polygon offset
-does **not** help with maplibre's globe depth encoding. The fix
-(`MeshTextureLayer` `parameters`, set by `RasterLayer` only for globe):
+does **not** help with maplibre's globe depth encoding. The fix is two GPU
+draw parameters, neither of which the library sets itself:
 
 - `depthCompare: 'always'` — skip the depth comparison so the raster never
-  z-fights the basemap.
+  z-fights the basemap. The app passes it in the layer's `parameters` prop (see
+  `examples/cog-globe`); `CompositeLayer` forwards `parameters` down to the
+  `MeshTextureLayer` sublayers.
 - `cullMode: 'back'` — without depth occlusion the far hemisphere would bleed
-  through, so back-face culling hides it. MapLibre globe uses a flipped
-  handedness; `'back'` is correct for *our* grid winding (`'front'` culls the
-  near, visible side). See
-  [visgl/deck.gl#9592](https://github.com/visgl/deck.gl/issues/9592). This is
-  tied to the maplibre-interleaved setup; a standalone `_GlobeView` may need the
-  opposite cull mode.
+  through, so back-face culling hides it. Since deck.gl 9.4, `GlobeView` sets
+  this by default through its view-level `parameters`, and both
+  `@deck.gl/mapbox` and `@deck.gl/maplibre` create a `GlobeView` when MapLibre
+  is in globe projection, so apps no longer set it. MapLibre globe uses a
+  flipped handedness; `'back'` is correct for *our* grid winding there
+  (`'front'` culls the near, visible side). See
+  [visgl/deck.gl#9592](https://github.com/visgl/deck.gl/issues/9592).
+
+A standalone deck.gl `GlobeView` (no MapLibre) is untested. If our winding is
+flipped there, the default `'back'` would cull the visible side and the raster
+would disappear. deck.gl merges draw parameters as deck, then view, then layer,
+so a layer's `parameters: {cullMode: 'front'}` would override the view
+default.
 
 ### Anti-faceting mesh scaffold (throwaway)
 

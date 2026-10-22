@@ -4,7 +4,11 @@ import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
 import { fetchTile, fetchTiles } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
-import type { CachedTags, GeoKeyDirectory } from "./ifd.js";
+import type {
+  CachedPrimaryImageTags,
+  CachedSubImageTags,
+  GeoKeyDirectory,
+} from "./ifd.js";
 import type { DecoderPool } from "./pool/pool.js";
 import type { Tile } from "./tile.js";
 import { index, xy } from "./transform.js";
@@ -15,7 +19,17 @@ import { index, xy } from "./transform.js";
  * corresponding mask IFD (if any).
  */
 export class Overview {
-  readonly cachedTags: CachedTags;
+  /**
+   * Cached TIFF tags of the primary image, which apply to this overview too,
+   * except for its own {@link cachedSubImageTags}.
+   */
+  readonly cachedPrimaryImageTags: CachedPrimaryImageTags;
+
+  /** Cached TIFF tags of this overview's {@link image}. */
+  readonly cachedSubImageTags: CachedSubImageTags;
+
+  /** Cached TIFF tags of {@link maskImage}, or `null` if there's no mask. */
+  readonly cachedMaskImageTags: CachedSubImageTags | null;
 
   /** The data source used for fetching tile data. */
   readonly dataSource: Pick<Source, "fetch">;
@@ -37,14 +51,18 @@ export class Overview {
     gkd: GeoKeyDirectory,
     image: TiffImage,
     maskImage: TiffImage | null,
-    cachedTags: CachedTags,
+    cachedPrimaryImageTags: CachedPrimaryImageTags,
+    cachedSubImageTags: CachedSubImageTags,
+    cachedMaskImageTags: CachedSubImageTags | null,
     dataSource: Pick<Source, "fetch">,
   ) {
     this.geotiff = geotiff;
     this.gkd = gkd;
     this.image = image;
     this.maskImage = maskImage;
-    this.cachedTags = cachedTags;
+    this.cachedPrimaryImageTags = cachedPrimaryImageTags;
+    this.cachedSubImageTags = cachedSubImageTags;
+    this.cachedMaskImageTags = cachedMaskImageTags;
     this.dataSource = dataSource;
   }
 
@@ -123,7 +141,11 @@ export class Overview {
       signal?: AbortSignal;
     } = {},
   ): Promise<Tile> {
-    return await fetchTile(this, x, y, options);
+    return await fetchTile(this, x, y, {
+      ...options,
+      imageTags: this.cachedSubImageTags,
+      maskImageTags: this.cachedMaskImageTags,
+    });
   }
 
   /**
@@ -146,7 +168,11 @@ export class Overview {
       signal?: AbortSignal;
     } = {},
   ): Promise<Tile[]> {
-    return await fetchTiles(this, xy, options);
+    return await fetchTiles(this, xy, {
+      ...options,
+      imageTags: this.cachedSubImageTags,
+      maskImageTags: this.cachedMaskImageTags,
+    });
   }
 
   // TiledMixin

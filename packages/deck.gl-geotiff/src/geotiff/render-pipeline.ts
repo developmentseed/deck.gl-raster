@@ -8,21 +8,36 @@ import {
   CreateTexture,
   cieLabToRGB,
   FilterNoDataVal,
+  GrayAlpha,
   MaskTexture,
+  Opaque,
   WhiteIsZero,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
-import { parseColormap, toPixelInterleaved } from "@developmentseed/geotiff";
+import {
+  ColorInterp,
+  parseColormap,
+  toPixelInterleaved,
+} from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GetTileDataOptions } from "../cog-layer.js";
 import { addAlphaChannel } from "./geotiff.js";
 import { inferTextureFormat } from "./texture.js";
 
+/**
+ * The tile data returned by the default `getTileData` of {@link COGLayer}, and
+ * the layer's default `DataT`.
+ */
 export type TextureDataT = {
+  /** Tile height in pixels. */
   height: number;
+  /** Tile width in pixels. */
   width: number;
+  /** Byte length of the tile's pixel data plus its mask, if any. */
   byteLength: number;
+  /** The tile's pixel data, uploaded as a GPU texture. */
   texture: Texture;
+  /** The tile's mask as a single-channel texture, when the tile has a mask. */
   mask?: Texture;
 };
 
@@ -55,7 +70,7 @@ export function inferRenderPipeline(
   ) => Promise<TextureDataT>;
   renderTile: (data: TextureDataT) => RenderTileResult;
 } {
-  const { sampleFormat } = geotiff.cachedTags;
+  const { sampleFormat } = geotiff.cachedPrimaryImageTags;
   if (sampleFormat === null) {
     throw new Error("SampleFormat tag is required to infer render pipeline");
   }
@@ -91,7 +106,7 @@ function createUnormPipeline(
     sampleFormat,
     samplesPerPixel,
     nodata,
-  } = geotiff.cachedTags;
+  } = geotiff.cachedPrimaryImageTags;
 
   const renderPipeline: UnresolvedRasterModule<TextureDataT>[] = [
     {
@@ -101,6 +116,11 @@ function createUnormPipeline(
       },
     },
   ];
+
+  const alpha = alphaModule(geotiff);
+  if (alpha) {
+    renderPipeline.push(alpha);
+  }
 
   if (nodata !== null) {
     // Since values are 0-1 for unorm textures, scale nodata to [0, 1]
@@ -224,6 +244,39 @@ function createUnormPipeline(
   };
 
   return { getTileData, renderTile };
+}
+
+/**
+ * The module that sets alpha from the image's bands, or `null` when the
+ * texture's alpha channel is already right.
+ *
+ * A four-band RGB texture draws its fourth band as alpha, which is wrong when
+ * that band isn't alpha. A two-band gray texture samples its alpha band into
+ * `color.g`, which the gray-to-RGB module overwrites.
+ */
+function alphaModule(geotiff: GeoTIFF): RasterModule | null {
+  const { photometric, samplesPerPixel } = geotiff.cachedPrimaryImageTags;
+  switch (photometric) {
+    case Photometric.Rgb:
+      if (
+        samplesPerPixel === 4 &&
+        geotiff.colorInterp[3] !== ColorInterp.ALPHA
+      ) {
+        return { module: Opaque };
+      }
+      return null;
+    case Photometric.MinIsBlack:
+    case Photometric.MinIsWhite:
+      if (
+        samplesPerPixel === 2 &&
+        geotiff.colorInterp[1] === ColorInterp.ALPHA
+      ) {
+        return { module: GrayAlpha };
+      }
+      return null;
+    default:
+      return null;
+  }
 }
 
 function photometricInterpretationToRGB({

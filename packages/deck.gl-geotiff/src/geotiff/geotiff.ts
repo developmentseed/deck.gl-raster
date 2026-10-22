@@ -7,6 +7,7 @@ import type {
   RasterArrayPixelInterleaved,
 } from "@developmentseed/geotiff";
 import { GeoTIFF, toPixelInterleaved } from "@developmentseed/geotiff";
+import { nearestCopy, unwrapAlong } from "@developmentseed/proj";
 import type { Converter } from "proj4";
 
 /**
@@ -77,6 +78,10 @@ export async function fetchGeoTIFF(
 
 /**
  * Calculate the WGS84 bounding box of a GeoTIFF image
+ *
+ * An image across the antimeridian is bounded the short way: `west` is in
+ * [-180°, 180°), and `east` can run past 180°, as MapLibre's `fitBounds`
+ * accepts. An image that goes all the way around gets -180° to 180°.
  */
 export function getGeographicBounds(
   geotiff: GeoTIFF,
@@ -85,21 +90,45 @@ export function getGeographicBounds(
   const [minX, minY, maxX, maxY] = geotiff.bbox;
 
   // Reproject all four corners to handle rotation/skew
-  const corners: [number, number][] = [
-    converter.forward([minX, minY]), // bottom-left
-    converter.forward([maxX, minY]), // bottom-right
-    converter.forward([maxX, maxY]), // top-right
-    converter.forward([minX, maxY]), // top-left
+  const outline: [number, number][] = [
+    [minX, minY], // bottom-left
+    [maxX, minY], // bottom-right
+    [maxX, maxY], // top-right
+    [minX, maxY], // top-left
   ];
+  const corners = outline.map((corner) => converter.forward(corner));
 
-  // Find the bounding box that encompasses all reprojected corners
-  const lons = corners.map((c) => c[0]);
+  // Unwrap each corner's longitude by walking the outline to it from the
+  // previous corner, so an image across the antimeridian goes the short way.
+  const lons = [corners[0]![0]];
+  for (let i = 1; i < outline.length; i++) {
+    const [x0, y0] = outline[i - 1]!;
+    const [x1, y1] = outline[i]!;
+    lons.push(
+      unwrapAlong(
+        (t) => converter.forward([x0 + t * (x1 - x0), y0 + t * (y1 - y0)])[0]!,
+        { start: lons[i - 1]!, period: 360 },
+      ),
+    );
+  }
   const lats = corners.map((c) => c[1]);
 
-  const west = Math.min(...lons);
+  let west = Math.min(...lons);
   const south = Math.min(...lats);
-  const east = Math.max(...lons);
+  let east = Math.max(...lons);
   const north = Math.max(...lats);
+
+  if (east - west >= 360) {
+    // All the way around the world, or around a pole.
+    west = -180;
+    east = 180;
+  } else {
+    // Move west into [-180°, 180°), and east with it: east may then run past
+    // 180°.
+    const shift = west - nearestCopy(west, 0, 360);
+    west -= shift;
+    east -= shift;
+  }
 
   // Return bounds in MapLibre format: [[west, south], [east, north]]
   return { west, south, east, north };

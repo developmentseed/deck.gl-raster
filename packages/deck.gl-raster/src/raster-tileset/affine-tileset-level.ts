@@ -1,5 +1,6 @@
 import type { Affine } from "@developmentseed/affine";
 import * as affine from "@developmentseed/affine";
+import { overlappingTileSpan } from "./tile-span.js";
 import type { RasterTilesetLevel } from "./tileset-interface.js";
 import type { Bounds, Corners, ProjectionFunction } from "./types.js";
 
@@ -44,10 +45,14 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
 
   private readonly _affine: Affine;
   private readonly _invAffine: Affine;
+  private readonly _arrayWidth: number;
+  private readonly _arrayHeight: number;
 
   constructor(options: AffineTilesetLevelOptions) {
     this._affine = options.affine;
     this._invAffine = affine.invert(options.affine);
+    this._arrayWidth = options.arrayWidth;
+    this._arrayHeight = options.arrayHeight;
     this.tileWidth = options.tileWidth;
     this.tileHeight = options.tileHeight;
     this.matrixWidth = Math.ceil(options.arrayWidth / options.tileWidth);
@@ -79,11 +84,19 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
     const th = this.tileHeight;
     const af = this._affine;
 
+    // Clip the tile to the array.
+    //
+    // Tiles in the last column and row can extend past the edge of valid data.
+    const x0 = Math.min(col * tw, this._arrayWidth);
+    const x1 = Math.min((col + 1) * tw, this._arrayWidth);
+    const y0 = Math.min(row * th, this._arrayHeight);
+    const y1 = Math.min((row + 1) * th, this._arrayHeight);
+
     return {
-      topLeft: affine.apply(af, col * tw, row * th),
-      topRight: affine.apply(af, (col + 1) * tw, row * th),
-      bottomLeft: affine.apply(af, col * tw, (row + 1) * th),
-      bottomRight: affine.apply(af, (col + 1) * tw, (row + 1) * th),
+      topLeft: affine.apply(af, x0, y0),
+      topRight: affine.apply(af, x1, y0),
+      bottomLeft: affine.apply(af, x0, y1),
+      bottomRight: affine.apply(af, x1, y1),
     };
   }
 
@@ -135,14 +148,17 @@ export class AffineTilesetLevel implements RasterTilesetLevel {
     const maxColIdx = this.matrixWidth - 1;
     const maxRowIdx = this.matrixHeight - 1;
 
+    const [firstCol, lastCol] = overlappingTileSpan(pixMinX / tw, pixMaxX / tw);
+    const [firstRow, lastRow] = overlappingTileSpan(pixMinY / th, pixMaxY / th);
+
     // Asymmetric clamping: only clamp minCol/minRow up from below and
     // maxCol/maxRow down from above. If the bbox lies entirely outside the
     // array, this produces an empty range (min > max) so the consumer's
     // `for (i = min; i <= max; i++)` loop does nothing.
-    const minCol = Math.max(0, Math.floor(pixMinX / tw));
-    const maxCol = Math.min(maxColIdx, Math.floor(pixMaxX / tw));
-    const minRow = Math.max(0, Math.floor(pixMinY / th));
-    const maxRow = Math.min(maxRowIdx, Math.floor(pixMaxY / th));
+    const minCol = Math.max(0, firstCol);
+    const maxCol = Math.min(maxColIdx, lastCol);
+    const minRow = Math.max(0, firstRow);
+    const maxRow = Math.min(maxRowIdx, lastRow);
 
     return { minCol, maxCol, minRow, maxRow };
   }

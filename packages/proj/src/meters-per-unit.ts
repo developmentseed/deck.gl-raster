@@ -21,7 +21,8 @@ export function metersPerUnit(
     | "meters"
     | "foot"
     | "us survey foot"
-    | "degree",
+    | "degree"
+    | "degrees",
   { semiMajorAxis }: { semiMajorAxis?: number } = {},
 ): number {
   unit = unit.toLowerCase() as typeof unit;
@@ -37,7 +38,7 @@ export function metersPerUnit(
       return 1200 / 3937;
   }
 
-  if (unit === "degree") {
+  if (unit === "degree" || unit === "degrees") {
     // 2 * π * ellipsoid semi-major-axis / 360
     if (semiMajorAxis === undefined) {
       throw new Error(

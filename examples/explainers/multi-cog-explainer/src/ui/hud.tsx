@@ -1,0 +1,226 @@
+import type { CSSProperties, ReactNode } from "react";
+import type { Bars, Hud as HudState, Label } from "../animation/frame.js";
+import type { TextRun } from "../animation/story.js";
+import type { SlideFit } from "../scene/layout.js";
+import {
+  BARS_BOX,
+  DESCRIPTION_TOP,
+  SLIDE_HEIGHT,
+  SLIDE_WIDTH,
+} from "../scene/layout.js";
+
+/** Props of {@link Hud}. */
+export type HudProps = {
+  /** How the slide sits in the window. */
+  fit: SlideFit;
+  /** Text for the current frame. */
+  hud: HudState;
+  /** 1-based number of the step showing. */
+  stepNumber: number;
+  /** Title of the step showing. */
+  title: string;
+  /** Description of the step, or null when descriptions are hidden. */
+  description: TextRun[] | null;
+  /** Extra content laid out in slide units, such as the control bar. */
+  children?: ReactNode;
+};
+
+const TEXT_COLOR = "#e6edf3";
+const MUTED_COLOR = "#8b949e";
+const LINK_COLOR = "#58a6ff";
+
+/** Bar colours, matching each band's channel in the composite. */
+const BAR_COLORS: Record<keyof Bars, string> = {
+  r: "#f06455",
+  g: "#5adc82",
+  b: "#64a0ff",
+};
+
+/** Bar labels: the band behind each channel. */
+const BAR_LABELS: Record<keyof Bars, string> = {
+  r: "Red · B11 · 20 m",
+  g: "Green · B04 · 10 m",
+  b: "Blue · B01 · 60 m",
+};
+
+/**
+ * The HTML over the slide: the step title, labels, the sample bars, and the
+ * description (or, when descriptions are hidden, the caption). It is laid out
+ * in slide units and scaled with the same transform as the deck.gl view, so
+ * it lines up with the canvas.
+ */
+export function Hud({
+  fit,
+  hud,
+  stepNumber,
+  title,
+  description,
+  children,
+}: HudProps) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: SLIDE_WIDTH,
+        height: SLIDE_HEIGHT,
+        transform: `translate(${fit.offsetX}px, ${fit.offsetY}px) scale(${fit.scale})`,
+        transformOrigin: "0 0",
+        pointerEvents: "none",
+        color: TEXT_COLOR,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 24,
+          width: SLIDE_WIDTH,
+          textAlign: "center",
+          fontSize: 40,
+          fontWeight: 650,
+        }}
+      >
+        <span style={{ color: MUTED_COLOR }}>{stepNumber} · </span>
+        {title}
+      </div>
+      {hud.labels.map((label) => (
+        <div key={label.id} style={labelStyle(label)}>
+          {label.text}
+        </div>
+      ))}
+      {hud.bars ? <SampleBars bars={hud.bars} /> : null}
+      {description ? (
+        <Description runs={description} />
+      ) : (
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: DESCRIPTION_TOP + 40,
+            width: SLIDE_WIDTH,
+            textAlign: "center",
+            fontSize: 30,
+            opacity: hud.caption ? 1 : 0,
+            transition: "opacity 400ms",
+          }}
+        >
+          {hud.caption ?? " "}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+/** Step 7's bars: the value sampled from each band, as the pixel's channels. */
+function SampleBars({ bars }: { bars: Bars }) {
+  const rowHeight = BARS_BOX.height / 3;
+  const labelWidth = 260;
+  const barWidth = BARS_BOX.width - labelWidth - 90;
+  return (
+    <>
+      {(["r", "g", "b"] as const).map((channel, i) => (
+        <div
+          key={channel}
+          style={{
+            position: "absolute",
+            left: BARS_BOX.x,
+            top: BARS_BOX.y + i * rowHeight,
+            height: rowHeight,
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            fontSize: 22,
+          }}
+        >
+          <span style={{ width: labelWidth, color: BAR_COLORS[channel] }}>
+            {BAR_LABELS[channel]}
+          </span>
+          <span
+            style={{
+              width: barWidth,
+              height: rowHeight * 0.5,
+              background: "#21262d",
+              borderRadius: 4,
+              overflow: "hidden",
+            }}
+          >
+            <span
+              style={{
+                display: "block",
+                width: `${Math.round(clamp01(bars[channel]) * 100)}%`,
+                height: "100%",
+                background: BAR_COLORS[channel],
+              }}
+            />
+          </span>
+          <span style={{ width: 60, fontVariantNumeric: "tabular-nums" }}>
+            {clamp01(bars[channel]).toFixed(2)}
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function Description({ runs }: { runs: TextRun[] }) {
+  return (
+    <p
+      style={{
+        position: "absolute",
+        left: 140,
+        top: DESCRIPTION_TOP,
+        width: SLIDE_WIDTH - 280,
+        margin: 0,
+        fontSize: 24,
+        lineHeight: 1.45,
+        color: "#c9d1d9",
+        pointerEvents: "auto",
+      }}
+    >
+      {runs.map((run, i) => {
+        // Runs are static per step, so their index is a stable key.
+        const key = `run-${i}`;
+        if (typeof run === "string") {
+          return <span key={key}>{run}</span>;
+        }
+        if ("href" in run) {
+          return (
+            <a
+              key={key}
+              href={run.href}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: LINK_COLOR }}
+            >
+              {run.text}
+            </a>
+          );
+        }
+        return <em key={key}>{run.text}</em>;
+      })}
+    </p>
+  );
+}
+
+function labelStyle(label: Label): CSSProperties {
+  const shift = { left: "0", right: "-100%", center: "-50%" }[label.align];
+  return {
+    position: "absolute",
+    left: label.x,
+    top: label.y,
+    transform: `translate(${shift}, -50%)`,
+    color: label.color,
+    opacity: label.opacity,
+    fontSize: label.size ?? 22,
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+    textShadow: "0 1px 3px rgba(0, 0, 0, 0.8)",
+  };
+}

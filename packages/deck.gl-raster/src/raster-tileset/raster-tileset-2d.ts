@@ -17,12 +17,13 @@ import { transformBounds } from "@developmentseed/proj";
 import type { InitialTriangulation } from "@developmentseed/raster-reproject";
 import type { Matrix4 } from "@math.gl/core";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
+import { intersectBounds } from "./bounds.js";
 import {
   getTileIndices,
   rescaleCommonSpaceToEPSG3857,
   rescaleEPSG3857ToCommonSpace,
 } from "./raster-tile-traversal.js";
-import { sortItemsByDistanceFromViewportCenter } from "./sort-by-distance.js";
+import { TILE_EDGE_TOLERANCE } from "./tile-span.js";
 import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -206,6 +207,26 @@ export class RasterTileset2D extends Tileset2D {
   }
 
   /**
+   * Unloads every cached tile. deck.gl's `Tileset2D.finalize` clears its cache
+   * without calling `onTileUnload`, so GPU resources that `getTileData` made
+   * for those tiles, like textures, would be freed only by garbage collection.
+   * A tile still loading is unloaded once its load finishes, since deck.gl
+   * keeps the data that `getTileData` returns after an abort.
+   */
+  override finalize(): void {
+    const { onTileUnload } = this.opts;
+    for (const tile of this.tiles) {
+      if (tile.isLoading) {
+        // `data` is a promise until the load finishes.
+        void Promise.resolve(tile.data).then(() => onTileUnload(tile));
+      } else {
+        onTileUnload(tile);
+      }
+    }
+    super.finalize();
+  }
+
+  /**
    * Get tile indices visible in viewport
    * Uses frustum culling similar to OSM implementation
    *
@@ -221,6 +242,9 @@ export class RasterTileset2D extends Tileset2D {
    * requires a notion of clamping to a coarser z, which doesn't
    * generalize to descriptors with sparse or single overviews. See
    * `dev-docs/zoom-terminology.md` for the rationale.
+   *
+   * Unlike in deck.gl's default tileset, `extent` does not keep tiles loading
+   * below `minZoom`.
    */
   override getTileIndices(opts: {
     viewport: Viewport;
@@ -252,58 +276,34 @@ export class RasterTileset2D extends Tileset2D {
       return [];
     }
 
+    // Limit tile selection to those within WGS84 extent bbox
+    let wgs84Bounds = this.wgs84Bounds;
+    const { extent } = this.opts;
+    if (extent) {
+      wgs84Bounds = intersectBounds(wgs84Bounds, extent as Bounds);
+      // An extent that misses (or only touches) the data selects nothing.
+      if (
+        wgs84Bounds[0] >= wgs84Bounds[2] ||
+        wgs84Bounds[1] >= wgs84Bounds[3]
+      ) {
+        return [];
+      }
+    }
+
     const maxAvailableZ = this.descriptor.levels.length - 1;
     const maxZ =
       typeof opts.maxZoom === "number"
         ? Math.min(opts.maxZoom, maxAvailableZ)
         : maxAvailableZ;
 
-    const tileIndices = getTileIndices(this.descriptor, {
+    return getTileIndices(this.descriptor, {
       viewport,
       maxZ,
       zRange: opts.zRange ?? null,
-      wgs84Bounds: this.wgs84Bounds,
+      wgs84Bounds,
       pixelRatio: this.getPixelRatio(),
       boundingVolumeCache: this.boundingVolumeCache,
     });
-
-    return this.sortTileIndicesByDistance(tileIndices, viewport);
-  }
-
-  /**
-   * Sort tile indices by ascending distance from the viewport center in
-   * projected (common/world) space so loads initiate center-out.
-   *
-   * Short-circuits when `tileIndices.length <= maxRequests` — all fetches
-   * would start concurrently regardless of order in that case. Mutates and
-   * returns `tileIndices`.
-   */
-  private sortTileIndicesByDistance(
-    tileIndices: TileIndex[],
-    viewport: Viewport,
-  ): TileIndex[] {
-    const { maxRequests } = this.opts;
-    if (tileIndices.length <= maxRequests) {
-      return tileIndices;
-    }
-
-    const descriptor = this.descriptor;
-    return sortItemsByDistanceFromViewportCenter(
-      tileIndices,
-      viewport,
-      (tileIndex) => {
-        const { x, y, z } = tileIndex;
-
-        const { topLeft, bottomRight } = descriptor.levels[
-          z
-        ]!.projectedTileCorners(x, y);
-        const projectedCenter = [
-          (topLeft[0] + bottomRight[0]) / 2,
-          (topLeft[1] + bottomRight[1]) / 2,
-        ] as const;
-        return descriptor.projectTo4326(projectedCenter[0], projectedCenter[1]);
-      },
-    );
   }
 
   override getTileId(index: TileIndex): string {
@@ -336,9 +336,13 @@ export class RasterTileset2D extends Tileset2D {
     const decimationX = parentFootprintX / currentFootprintX;
     const decimationY = parentFootprintY / currentFootprintY;
 
+    // Footprints derived from rounded scale denominators can give a decimation
+    // a hair above a whole number (e.g. 2.000000000000004), which would floor
+    // an exact multiple like 2 / 2.000000000000004 down to the wrong parent.
+    // Add the same tolerance the traversal uses at tile edges before flooring.
     return {
-      x: Math.floor(index.x / decimationX),
-      y: Math.floor(index.y / decimationY),
+      x: Math.floor(index.x / decimationX + TILE_EDGE_TOLERANCE),
+      y: Math.floor(index.y / decimationY + TILE_EDGE_TOLERANCE),
       z: index.z - 1,
     };
   }

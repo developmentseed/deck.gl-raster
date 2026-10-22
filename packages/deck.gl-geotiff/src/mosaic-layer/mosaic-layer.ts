@@ -14,10 +14,14 @@ import {
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
-import Flatbush from "flatbush";
+import { nearestCopy } from "@developmentseed/proj";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
-import type { MosaicSource } from "./mosaic-tileset-2d.js";
-import { MosaicTileset2D } from "./mosaic-tileset-2d.js";
+import type { MosaicSource, SourceIndex } from "./mosaic-tileset-2d.js";
+import {
+  buildSourceIndex,
+  MosaicTileset2D,
+  unwrapBbox,
+} from "./mosaic-tileset-2d.js";
 
 export type MosaicLayerProps<
   MosaicT extends MosaicSource = MosaicSource,
@@ -27,12 +31,7 @@ export type MosaicLayerProps<
     TileLayerProps,
     // NOTE: `debounceTime` is intentionally not exposed.
     // See https://github.com/developmentseed/deck.gl-raster/issues/562
-    | "extent"
-    | "maxCacheByteSize"
-    | "maxCacheSize"
-    | "maxRequests"
-    | "maxZoom"
-    | "minZoom"
+    "maxCacheByteSize" | "maxCacheSize" | "maxRequests" | "maxZoom" | "minZoom"
   > & {
     /**
      * List of mosaic sources to render.
@@ -54,6 +53,17 @@ export type MosaicLayerProps<
      * arbitrary mutations of `sources`.
      */
     sources: MosaicT[];
+
+    /**
+     * Only load and render sources whose `bbox` overlaps this bounding box,
+     * given as `[minLng, minLat, maxLng, maxLat]` in WGS84 degrees.
+     *
+     * A source that overlaps it is drawn in full, not clipped to it. To limit
+     * what a source loads as well, pass the same `extent` to the layers
+     * `renderSource` returns. Unlike in deck.gl's TileLayer, it does not keep
+     * sources loading below `minZoom`.
+     */
+    extent?: number[] | null;
 
     /**
      * Caps concurrent HTTP requests for this layer's source fetches.
@@ -131,6 +141,8 @@ const defaultProps: Partial<MosaicLayerProps> = {
  * Build the limiter `getPriority` callback for one mosaic source: euclidean
  * distance from the source's bbox center to the current viewport center, in
  * lon/lat degree-space (just an ordering key — great-circle isn't needed).
+ * Longitude is measured the short way around, so a source just across the
+ * antimeridian counts as near.
  *
  * `getViewport` is read on every call, so the limiter re-sorts its queue as
  * the viewport pans, pulling newly-central sources ahead of edge sources.
@@ -152,14 +164,14 @@ function createGetPriorityCallback(
     return undefined;
   }
 
-  const [minX, minY, maxX, maxY] = bbox;
+  const [minX, minY, maxX, maxY] = unwrapBbox(bbox);
   const sourceCx = (minX + maxX) / 2;
   const sourceCy = (minY + maxY) / 2;
 
   return (): number => {
     // Geographic viewport (checked above); both types expose lon/lat.
     const v = getViewport() as WebMercatorViewport | _GlobeViewport;
-    const dx = sourceCx - v.longitude;
+    const dx = nearestCopy(sourceCx, v.longitude, 360) - v.longitude;
     const dy = sourceCy - v.latitude;
     return Math.hypot(dx, dy);
   };
@@ -180,7 +192,9 @@ export class MosaicLayer<
 
   declare state: {
     // The index can be null if sources are empty
-    index: Flatbush | null;
+    index: SourceIndex | null;
+    // The sources the index was built from
+    sources: MosaicT[];
   };
 
   override initializeState(context: LayerContext): void {
@@ -200,18 +214,7 @@ export class MosaicLayer<
 
   private _buildSpatialIndex(): void {
     const { sources } = this.props;
-    if (sources.length === 0) {
-      this.setState({ index: null });
-      return;
-    }
-
-    const index = new Flatbush(sources.length);
-    for (const source of sources) {
-      index.add(...source.bbox);
-    }
-    index.finish();
-
-    this.setState({ index });
+    this.setState({ index: buildSourceIndex(sources), sources });
   }
 
   renderTileLayer(
@@ -232,10 +235,12 @@ export class MosaicLayer<
       onViewportLoad,
     } = this.props;
 
-    // Arrow functions bind to the MosaicLayer instance, which deck.gl reuses
-    // across prop updates — so `this.props` and `this.state` always reflect
-    // the latest values when the tileset reads them.
-    const getSources = () => this.props.sources;
+    // TileLayer creates the tileset only once, so these closures stay bound to
+    // the first MosaicLayer instance. Apps create a new MosaicLayer on every
+    // render, and deck.gl hands it the same `state` object, but `this.props`
+    // here stays the first instance's props. So both closures read
+    // `this.state`.
+    const getSources = () => this.state.sources;
     const getIndex = () => this.state.index;
     class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
       constructor(opts: any) {

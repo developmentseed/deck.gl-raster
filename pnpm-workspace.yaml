@@ -2,4 +2,6 @@ verifyDepsBeforeRun: install
 packages:
   - "packages/*"
   - "examples/*"
+  - "examples/experimental/*"
+  - "examples/explainers/*"
   - "docs"

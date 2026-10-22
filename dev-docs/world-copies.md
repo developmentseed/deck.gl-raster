@@ -57,6 +57,18 @@ it's drawn in. The dataset's `bounds` parameter (passed to
 check always compares against the **untranslated** tile AABB — only the
 frustum test sees the translated bounding volume.
 
+The check does allow a one-world shift, though. A tile's box is unwrapped from
+the tile's center, while the dataset's bounds come from `transformBounds`, so
+for a tile across the antimeridian the two can land a world apart.
+
+## Tiles across the antimeridian
+
+A tile that crosses the antimeridian has a box that runs past the world's edge,
+and `RasterLayer` draws the part past the edge one world over. So every pass
+also tests that part of the box one world over, even when the viewport doesn't
+repeat. See
+[`specs/2026-10-14-antimeridian-unwrap-design.md`](specs/2026-10-14-antimeridian-unwrap-design.md).
+
 ## Termination
 
 The traversal walks offset = ±1, ±2, ... until either:
@@ -78,6 +90,29 @@ Differences:
   than mutating an axis-aligned box.
 - We cache the offset-0 OBB per `(zRange)` and translate from the cache
   rather than recomputing per offset.
+
+## Mosaic sources
+
+`MosaicLayer` picks the sources to draw before any of them has a
+`RasterTileLayer`, so the traversal above never sees a source it didn't pick.
+[`MosaicTileset2D`](../packages/deck.gl-geotiff/src/mosaic-layer/mosaic-tileset-2d.ts)
+picks them by searching a Flatbush index of source bboxes with
+`viewport.getBounds()`.
+
+The bboxes lie within [-180, 180] longitude, but near the antimeridian the
+viewport's bounds run past ±180°. Past ±180°, Web Mercator with `repeat` shows
+another copy of the world, and a globe shows the other side of the
+antimeridian. (A globe has no `subViewports`, but its `getBounds()` runs past
+±180° too.) So the search moves the bounds back within [-180, 180], and splits
+them in two at ±180° if they cross it. Web Mercator without `repeat` draws
+nothing past ±180°, so its bounds are searched as they are.
+
+The search doesn't walk world offsets like the traversal does. Every source
+lies in the primary world, so the moved bounds cover every copy the viewport
+shows.
+
+A source whose bbox crosses the antimeridian, written with `minX > maxX` as in
+GeoJSON and STAC, is indexed as two boxes, one on each side of it.
 
 ## Out of scope
 

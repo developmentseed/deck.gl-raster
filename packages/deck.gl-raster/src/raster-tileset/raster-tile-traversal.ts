@@ -19,7 +19,7 @@
 
 import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
-import { transformBounds } from "@developmentseed/proj";
+import { transformBounds, unwrapAlong } from "@developmentseed/proj";
 import { Vector3 } from "@math.gl/core";
 import {
   CullingVolume,
@@ -30,6 +30,7 @@ import {
 import { lngLatToWorld, worldToLngLat } from "@math.gl/web-mercator";
 
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
+import { intersectBounds } from "./bounds.js";
 import type {
   RasterTilesetDescriptor,
   RasterTilesetLevel,
@@ -54,7 +55,7 @@ import type {
  * The origin (0,0) is at the top-left corner, and (512,512) is at the
  * bottom-right.
  */
-const TILE_SIZE = 512;
+export const TILE_SIZE = 512;
 
 /**
  * Maximum number of world copies to test on each side of the primary world
@@ -332,7 +333,19 @@ export class RasterTileNode {
     // Frustum culling
     // Test if tile's bounding volume intersects the camera frustum
     // Returns: <0 if outside, 0 if intersecting, >0 if fully inside
-    const isInside = cullingVolume.computeVisibility(boundingVolume);
+    let isInside = cullingVolume.computeVisibility(boundingVolume);
+
+    // In Web Mercator, a tile across the antimeridian runs past the world's
+    // edge, and RasterLayer draws the part past the edge one world over. Test
+    // that part there too.
+    const shift = project ? 0 : otherPartShift(commonSpaceBounds, worldOffset);
+    if (isInside < 0 && shift !== 0) {
+      const otherPart = translateBoundingVolume(
+        { boundingVolume, commonSpaceBounds },
+        shift,
+      );
+      isInside = cullingVolume.computeVisibility(otherPart.boundingVolume);
+    }
     if (isInside < 0) {
       return false;
     }
@@ -426,8 +439,12 @@ export class RasterTileNode {
     const [minX, minY, maxX, maxY] = bounds;
     const [tileMinX, tileMinY, tileMaxX, tileMaxY] = commonSpaceBounds;
 
-    const inside =
-      tileMinX < maxX && tileMaxX > minX && tileMinY < maxY && tileMaxY > minY;
+    // Across the antimeridian, the tile's box and the dataset's bounds can be
+    // unwrapped from different starting points, a world apart.
+    const overlapsX = [0, -TILE_SIZE, TILE_SIZE].some(
+      (shift) => tileMinX + shift < maxX && tileMaxX + shift > minX,
+    );
+    const inside = overlapsX && tileMinY < maxY && tileMaxY > minY;
 
     return inside;
   }
@@ -439,7 +456,8 @@ export class RasterTileNode {
    * Memoized in `boundingVolumeCache` (keyed by `z/x/y`): a tile's bounding
    * volume depends only on `(z, x, y, zRange)` for a given descriptor, so on a
    * cache hit it is returned without rerunning {@link computeBoundingVolume}'s
-   * proj4 reprojections + oriented-bounding-box fit.
+   * proj4 reprojections + oriented-bounding-box fit. If only `zRange` differs,
+   * the box is refit from the cached reference points, without reprojecting.
    *
    * For non-zero `worldOffset`, returns a translated copy (center shifted by
    * `worldOffset * TILE_SIZE` along common-space X) without polluting the
@@ -476,9 +494,25 @@ export class RasterTileNode {
       cacheHit.zRange[1] === zRange[1]
     ) {
       base = cacheHit;
+    } else if (cacheHit?.commonSpacePositions) {
+      // Only the elevation changed. A zRange in meters converts to a
+      // different common-space range whenever the viewport's latitude
+      // changes, so refit the box from the cached reference points instead
+      // of reprojecting them.
+      const entry = {
+        ...cacheHit,
+        zRange,
+        boundingVolume: fitBoundingVolume(
+          cacheHit.commonSpacePositions,
+          zRange,
+        ),
+      };
+      boundingVolumeCache.set(this.z, this.x, this.y, entry);
+      base = entry;
     } else {
-      base = this.computeBoundingVolume(zRange, project);
-      boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...base });
+      const computed = this.computeBoundingVolume(zRange, project);
+      boundingVolumeCache.set(this.z, this.x, this.y, { zRange, ...computed });
+      base = computed;
     }
     if (worldOffset === 0) {
       return base;
@@ -496,7 +530,11 @@ export class RasterTileNode {
   private computeBoundingVolume(
     zRange: ZRange,
     project: ((xyz: number[]) => number[]) | null,
-  ): { boundingVolume: OrientedBoundingBox; commonSpaceBounds: Bounds } {
+  ): {
+    boundingVolume: OrientedBoundingBox;
+    commonSpaceBounds: Bounds;
+    commonSpacePositions?: [number, number][];
+  } {
     // Case 1: Globe view — reproject sample points to WGS84 and project them
     // onto the globe sphere with the viewport's `project` function.
     if (project) {
@@ -523,9 +561,8 @@ export class RasterTileNode {
   private _getGenericBoundingVolume(zRange: ZRange): {
     boundingVolume: OrientedBoundingBox;
     commonSpaceBounds: Bounds;
+    commonSpacePositions: [number, number][];
   } {
-    const [minZ, maxZ] = zRange;
-
     const tileCorners = this.level.projectedTileCorners(this.x, this.y);
 
     const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(
@@ -535,19 +572,9 @@ export class RasterTileNode {
       this.descriptor.projectTo4326,
     );
 
-    const commonSpacePositions = refPointsEPSG3857.map((xy) =>
-      rescaleEPSG3857ToCommonSpace(xy),
+    const commonSpacePositions = coverWorldIfWide(
+      refPointsEPSG3857.map((xy) => rescaleEPSG3857ToCommonSpace(xy)),
     );
-
-    const refPointPositions: [number, number, number][] = [];
-    for (const p of commonSpacePositions) {
-      refPointPositions.push([p[0], p[1], minZ]);
-
-      if (minZ !== maxZ) {
-        // Also sample at maximum elevation to capture the full 3D volume
-        refPointPositions.push([p[0], p[1], maxZ]);
-      }
-    }
 
     // Compute [minx, miny, maxx, maxy] in common space for quick bounds check
     // TODO: this doesn't densify edges
@@ -573,8 +600,9 @@ export class RasterTileNode {
 
     const commonSpaceBounds: Bounds = [minX, minY, maxX, maxY];
     return {
-      boundingVolume: makeOrientedBoundingBoxFromPoints(refPointPositions),
+      boundingVolume: fitBoundingVolume(commonSpacePositions, zRange),
       commonSpaceBounds,
+      commonSpacePositions,
     };
   }
 
@@ -682,10 +710,16 @@ function makeClampedForwardTo3857(
  * tiles this is equivalent to the old AABB lerp; for rotated tiles it correctly
  * samples the actual quadrilateral rather than its bounding box.
  *
+ * proj4 returns x inside one world, so the points of a tile across the
+ * antimeridian would land at both edges of it. Instead, each point's x is
+ * unwrapped by walking to it from the first point, the tile's center: the
+ * points stay together, and may run past the world's edge.
+ *
  * Note that EPSG:3857 is **not** the same as deck.gl's common space — deck.gl's
  * common space is 512 units wide, while EPSG:3857 uses meters.
  *
- * @param refPoints  Reference points as `[relX, relY]` fractions in `[0, 1]`.
+ * @param refPoints  Reference points as `[relX, relY]` fractions in `[0, 1]`,
+ *                   the tile's center first.
  * @param tileCorners  The four CRS corners of the tile.
  */
 function sampleReferencePointsInEPSG3857(
@@ -699,21 +733,27 @@ function sampleReferencePointsInEPSG3857(
     projectTo3857,
     projectTo4326,
   );
-  const refPointPositions: [number, number][] = [];
-
-  for (const [relX, relY] of refPoints) {
-    const [geoX, geoY] = bilerpPoint(
-      topLeft,
-      topRight,
-      bottomLeft,
-      bottomRight,
-      relX,
-      relY,
+  const projectAt = (relX: number, relY: number) =>
+    clampedProjectTo3857(
+      ...bilerpPoint(topLeft, topRight, bottomLeft, bottomRight, relX, relY),
     );
-    refPointPositions.push(clampedProjectTo3857(geoX, geoY));
-  }
 
-  return refPointPositions;
+  const [centerX, centerY] = refPoints[0]!;
+  const start = projectAt(centerX, centerY)[0];
+  return refPoints.map(([relX, relY]) => {
+    const [x, y] = projectAt(relX, relY);
+    const unwrappedX = unwrapAlong(
+      (t) =>
+        projectAt(
+          centerX + t * (relX - centerX),
+          centerY + t * (relY - centerY),
+        )[0],
+      { start, period: EPSG_3857_CIRCUMFERENCE },
+    );
+
+    // Keep proj4's x where the walk can't place the point.
+    return [Number.isFinite(unwrappedX) ? unwrappedX : x, y];
+  });
 }
 
 /**
@@ -741,7 +781,9 @@ function sampleReferencePointsInWGS84(
       relX,
       relY,
     );
-    refPointPositions.push(projectTo4326(geoX, geoY));
+    const [lng, lat] = projectTo4326(geoX, geoY);
+    // Clamp latitudes to [-90, 90]
+    refPointPositions.push([lng, Math.max(-90, Math.min(90, lat))]);
   }
   return refPointPositions;
 }
@@ -836,13 +878,7 @@ export function createRootTiles(opts: {
 
   // Large root matrix → intersect dataset extent with viewport, project
   // to source CRS, use the root level's tile-range helper.
-  const vpBounds = viewport.getBounds();
-  const cullBounds: Bounds = [
-    Math.max(datasetWgs84Bounds[0], vpBounds[0]),
-    Math.max(datasetWgs84Bounds[1], vpBounds[1]),
-    Math.min(datasetWgs84Bounds[2], vpBounds[2]),
-    Math.min(datasetWgs84Bounds[3], vpBounds[3]),
-  ];
+  const cullBounds = intersectBounds(datasetWgs84Bounds, viewport.getBounds());
   if (cullBounds[0] > cullBounds[2] || cullBounds[1] > cullBounds[3]) {
     return roots;
   }
@@ -1008,7 +1044,28 @@ export function getTileIndices(
     root.getSelected(selectedNodes);
   }
 
-  return selectedNodes;
+  return uniqueTiles(selectedNodes);
+}
+
+/**
+ * Drop repeated tile indices, keeping the first node for each `z/x/y`.
+ *
+ * Each parent creates its own child nodes, so a tile that is a child of two
+ * parents can be selected once through each. That happens when pyramid levels
+ * are not aligned (e.g. COG overviews with odd sizes), where a child tile can
+ * straddle two parents, and in TileMatrixSets whose rounded cellSizes push a
+ * parent's edge past a child's edge.
+ */
+function uniqueTiles(nodes: RasterTileNode[]): RasterTileNode[] {
+  const seen = new Set<string>();
+  return nodes.filter((node) => {
+    const key = `${node.z}/${node.x}/${node.y}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 /**
@@ -1067,6 +1124,73 @@ function getMetersPerPixelAtCommonSpaceBounds(
 }
 
 /**
+ * Reference points that span half a world or more may wind around a pole,
+ * where longitude has no continuous unwrap. Replace them with the corners of
+ * a box across the whole world, at their latitudes.
+ */
+function coverWorldIfWide(positions: [number, number][]): [number, number][] {
+  const xs = positions.map(([x]) => x);
+  if (!(Math.max(...xs) - Math.min(...xs) >= TILE_SIZE / 2)) {
+    return positions;
+  }
+  const ys = positions.map(([, y]) => y);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return [
+    [0, minY],
+    [TILE_SIZE, minY],
+    [0, maxY],
+    [TILE_SIZE, maxY],
+  ];
+}
+
+/**
+ * How far to move a tile's bounding volume to test the part of it that
+ * `RasterLayer` draws one world over: `-TILE_SIZE` if the tile's box runs past
+ * the world's east edge, `TILE_SIZE` if it runs past the west edge, else `0`.
+ *
+ * @param commonSpaceBounds The tile's box, at `worldOffset`.
+ * @param worldOffset The world copy the box was moved to.
+ */
+function otherPartShift(
+  commonSpaceBounds: Bounds,
+  worldOffset: number,
+): number {
+  const minX = commonSpaceBounds[0] - worldOffset * TILE_SIZE;
+  const maxX = commonSpaceBounds[2] - worldOffset * TILE_SIZE;
+  if (maxX > TILE_SIZE) {
+    return -TILE_SIZE;
+  }
+  if (minX < 0) {
+    return TILE_SIZE;
+  }
+  return 0;
+}
+
+/**
+ * Fit an oriented bounding box around a tile's reference points, extended
+ * from `zRange[0]` to `zRange[1]`.
+ *
+ * @param commonSpacePositions The tile's reference points in common space.
+ * @param zRange Elevation `[min, max]` in common-space units.
+ */
+function fitBoundingVolume(
+  commonSpacePositions: [number, number][],
+  [minZ, maxZ]: ZRange,
+): OrientedBoundingBox {
+  const refPointPositions: [number, number, number][] = [];
+  for (const [x, y] of commonSpacePositions) {
+    refPointPositions.push([x, y, minZ]);
+
+    if (minZ !== maxZ) {
+      // Also sample at maximum elevation to capture the full 3D volume
+      refPointPositions.push([x, y, maxZ]);
+    }
+  }
+  return makeOrientedBoundingBoxFromPoints(refPointPositions);
+}
+
+/**
  * Translate a tile's bounding volume by `dx` units along common-space X.
  *
  * Returns a fresh OBB and AABB; does not mutate the input. Used by the
@@ -1088,9 +1212,9 @@ function translateBoundingVolume(
     translatedCenter,
     boundingVolume.halfAxes,
   );
-  // `update()`'s bounds check always re-reads the offset-0 `commonSpaceBounds`,
-  // so this translated AABB isn't consumed in production — it's kept for API
-  // symmetry with `boundingVolume` and is asserted directly by unit tests.
+  // `update()`'s bounds check always re-reads the offset-0 `commonSpaceBounds`.
+  // `otherPartShift` reads this translated AABB, moved back by the offset, to
+  // find the part of a tile past the world's edge.
   const translatedBounds: Bounds = [
     commonSpaceBounds[0] + dx,
     commonSpaceBounds[1],

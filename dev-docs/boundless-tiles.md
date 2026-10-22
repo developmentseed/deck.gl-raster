@@ -2,89 +2,73 @@
 
 ## The `boundless` option
 
-`@developmentseed/geotiff`'s `GeoTIFF.fetchTile` / `Overview.fetchTile` accept a
-`boundless` option:
+`@developmentseed/geotiff`'s `GeoTIFF.fetchTile` / `Overview.fetchTile` (and
+`fetchTiles`) accept a `boundless` option:
 
-- `boundless: true` (default) — all tiles, including edge tiles, are returned
-  at the full nominal tile size (e.g. `512×512`). The out-of-bounds region is
-  zero-padded, typically alongside a declared nodata value or an internal mask
-  IFD.
-- `boundless: false` — edge tiles are clipped on the CPU to the valid pixel
-  region (e.g. `302×387` for an image that fits inside a single `512×512`
-  block). The `clipToImageBounds` helper does the clipping.
+- `boundless: true` (default): all tiles, including edge tiles, are returned
+  at the full nominal tile size (e.g. `512x512`). Past the image, an edge tile
+  holds whatever the file's writer stored there: often zeros, and not
+  necessarily the nodata value.
+- `boundless: false`: edge tiles are clipped on the CPU to the image (e.g.
+  `302x387` for an image that fits inside a single `512x512` block). The
+  `clipToImageBounds` helper does the clipping.
 
-## The two deck.gl layers take different defaults
+## Both deck.gl layers use `boundless: false`
 
-**`COGLayer` uses `boundless: false`.** Edge tiles arrive pre-clipped to the
-valid pixel region, and the clipped dimensions are passed straight through to
-`RasterLayer` as `width` / `height`. The reprojection mesh then covers only
-the valid portion of the tile and no padding is ever rendered.
+**`COGLayer`** passes the clipped tile's dimensions straight through to
+`RasterLayer` as `width` / `height`, so the reprojection mesh covers only the
+image and no padding is ever uploaded or drawn.
 
-**`MultiCOGLayer` uses `boundless: true`.** Edge tiles are fetched at nominal
-size and rely on `FilterNoDataVal` / a mask IFD to hide padded pixels during
-shader compositing.
+**`MultiCOGLayer`** does the same for the bands on the primary tile grid: the
+mesh takes the primary texture's clipped size. Coarser (secondary) bands are
+stitched from several tiles, and their per-band `uvTransform` (applied by
+[`CompositeBands`](../packages/deck.gl-raster/src/gpu-modules/composite-bands.ts))
+maps the primary tile onto the stitched texture. That works with clipped tiles
+because every step uses the same clipped geometry:
 
-## Why they differ
+- [`AffineTilesetLevel.projectedTileCorners`](../packages/deck.gl-raster/src/raster-tileset/affine-tileset-level.ts)
+  clips the tiles in the last column and row to the array.
+- [`resolveSecondaryTiles`](../packages/deck.gl-raster/src/multi-raster-tileset/secondary-tile-resolver.ts)
+  computes the `uvTransform` from those clipped extents, and the stitched
+  texture's size from the far clipped corner.
+- [`assembleTiles`](../packages/geotiff/src/assemble.ts) stitches the clipped
+  tiles, and throws if a tile doesn't exactly fill its place in the grid.
 
-`MultiCOGLayer` composites multiple bands from different resolution groups in
-a single shader pass. Its [`CompositeBands`](../packages/deck.gl-raster/src/gpu-modules/composite-bands.ts)
-module uses per-band `uvTransform` uniforms to map the primary tile's UV
-space onto sub-rects of lower-resolution secondary textures. That stitching
-math assumes every band texture has uniform nominal tile dimensions — a
-variable-width edge tile would require per-tile UV transforms that account for
-both the resolution mismatch and the clipping. Keeping tiles at nominal size
-sidesteps that entirely.
+The same clipped corners also drive the traversal's bounding volumes, deck.gl's
+culling `bbox`, the Web Mercator pole clamp, and the debug outlines, so all of
+them describe the part of the tile that is drawn. (`ZarrLayer` clips edge
+chunks the same way.)
 
-`COGLayer` has no analogous constraint. It renders a single source at a time,
-the mesh is generated per-tile, and the tile affine from
-[`tileTransform`](../packages/geotiff/src/tile-matrix-set.ts) is per-pixel —
-so passing a clipped `validW × validH` through to `RasterLayer` produces a
-mesh that naturally covers the valid geographic extent, with no extra math
-required.
+## Why not draw the padding and hide it?
 
-### Why not `boundless: true` + shader discard for `COGLayer` too?
+From [#411](https://github.com/developmentseed/deck.gl-raster/pull/411) until
+it switched to `boundless: false`, `MultiCOGLayer` fetched full-size tiles,
+meshed the whole tile, and left hiding the padding to `FilterNoDataVal`. That
+can't work in general, because the padding is not nodata. Digital Earth
+Australia's Sentinel-2 files, for example, are Int16 with nodata -999, but
+their padding is 0 at every level, so it drew as a black band past the scene's
+right and bottom edges, up to ~54 km wide at the coarsest overview.
 
-Considered and rejected for now. A `UvCrop`-style shader module that
-`discard`s fragments outside the valid sub-rect would keep every tile at
-uniform nominal size — attractive for symmetry with `MultiCOGLayer` — but:
+Hiding the padding in the shader, by rewriting it to the nodata value
+([#651](https://github.com/developmentseed/deck.gl-raster/pull/651)) or by
+discarding fragments outside the image with a `UvCrop`-style module, was also
+rejected:
 
-- The axis-aligned rectangular crop is cheap to handle on the CPU already, so
-  the shader work is pure overhead.
-- `COGLayer` would allocate and upload ~2× the pixels per edge tile vs. the
-  CPU-crop approach.
-- Future polygon cutline support (e.g. for USGS historical topo neatlines) is
-  a meaningfully different problem: per-image rather than per-tile, requiring
-  per-tile projection of image-space polygon vertices and either a
-  point-in-polygon shader or a pre-rasterized mask texture. Building a
-  rectangular `UvCrop` now wouldn't share much with that design.
-
-If `MultiCOGLayer` ever grows polygon cutline support, we'll revisit whether
-a unified shader-discard path makes sense for both layers. Until then, the
-simpler CPU crop wins for `COGLayer`.
+- Rewriting to nodata only helps files that have a nodata value, and only when
+  the user's pipeline filters it. Linear sampling still blends a fringe of
+  nodata into the edge.
+- Either way, the padding is still uploaded and rasterized (more than half of
+  the coarsest DEA tile), while the axis-aligned crop is cheap on the CPU.
+- Future polygon cutline support (e.g. for USGS historical topo neatlines) is a
+  different, per-image problem, so a rectangular crop module wouldn't share
+  much with it.
 
 ## Texture row alignment
 
 Variable-width edge tiles previously triggered a WebGL row-alignment bug when
-`width × bytesPerPixel` wasn't a multiple of 4. See
+`width x bytesPerPixel` wasn't a multiple of 4. See
 [`texture-alignment.md`](./texture-alignment.md) for the full story. That
 class of bug is now handled inside luma.gl 9.3: `@luma.gl/webgl` sets
 `UNPACK_ALIGNMENT = 1` and an explicit `UNPACK_ROW_LENGTH` on every write, so
 tightly packed row data uploads correctly at any width. This is what makes
-`COGLayer`'s `boundless: false` safe again on deck.gl/luma.gl 9.3.
-
-## Nodata masking
-
-`boundless: true` tiles need their padding pixels masked during rendering so
-they don't appear as visible borders. Two mechanisms:
-
-1. **Nodata value filtering** — [`FilterNoDataVal`](../packages/deck.gl-raster/src/gpu-modules/filter-nodata.ts)
-   discards pixels matching a scalar nodata value. Used when the GeoTIFF
-   declares a nodata value in its metadata.
-2. **Internal mask (alpha band)** — some GeoTIFFs include a separate mask
-   IFD. The mask band is sampled alongside the data and used to set pixel
-   alpha to 0 for invalid regions.
-
-`COGLayer` implements both in its render pipeline (for nodata interior to the
-valid region, not for edge padding — its edge tiles are CPU-clipped before
-rendering). `MultiCOGLayer` does not yet have nodata masking, so its edge
-tiles currently render with a visible black border.
+`boundless: false` safe on deck.gl/luma.gl 9.3 and later.

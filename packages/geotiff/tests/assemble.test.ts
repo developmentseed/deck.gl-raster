@@ -277,6 +277,108 @@ describe("assembleTiles", () => {
     });
   });
 
+  describe("clipped edge tiles", () => {
+    it("stitches a last column and row clipped to the output size", () => {
+      // A 5x3 output on 3x2 tiles: the last column is 2 pixels wide and the
+      // last row 1 pixel high, as `boundless: false` returns edge tiles.
+      const tl = makeInterleavedTile({
+        x: 0,
+        y: 0,
+        width: 3,
+        height: 2,
+        count: 1,
+        startValue: 10,
+      });
+      const tr = makeInterleavedTile({
+        x: 1,
+        y: 0,
+        width: 2,
+        height: 2,
+        count: 1,
+        startValue: 20,
+      });
+      const bl = makeInterleavedTile({
+        x: 0,
+        y: 1,
+        width: 3,
+        height: 1,
+        count: 1,
+        startValue: 30,
+      });
+      const br = makeInterleavedTile({
+        x: 1,
+        y: 1,
+        width: 2,
+        height: 1,
+        count: 1,
+        startValue: 40,
+      });
+
+      const result = assembleTiles([tl, tr, bl, br], {
+        width: 5,
+        height: 3,
+        tileWidth: 3,
+        tileHeight: 2,
+        minCol: 0,
+        minRow: 0,
+      });
+
+      expect(result.width).toBe(5);
+      expect(result.height).toBe(3);
+      if (result.layout === "pixel-interleaved") {
+        expect(Array.from(result.data)).toEqual([
+          ...[10, 11, 12, 20, 21],
+          ...[13, 14, 15, 22, 23],
+          ...[30, 31, 32, 40, 41],
+        ]);
+      }
+    });
+
+    it.each([
+      {
+        name: "a full-size tile in a clipped last column",
+        tiles: [
+          makeInterleavedTile({ x: 0, y: 0, width: 2, height: 2, count: 1 }),
+          makeInterleavedTile({ x: 1, y: 0, width: 2, height: 2, count: 1 }),
+        ],
+        width: 3,
+        height: 2,
+        error: "Tile (1, 0) is 2x2, expected 1x2",
+      },
+      {
+        name: "a full-size tile in a clipped last row",
+        tiles: [
+          makeInterleavedTile({ x: 0, y: 0, width: 2, height: 2, count: 1 }),
+          makeInterleavedTile({ x: 0, y: 1, width: 2, height: 2, count: 1 }),
+        ],
+        width: 2,
+        height: 3,
+        error: "Tile (0, 1) is 2x2, expected 2x1",
+      },
+      {
+        name: "an interior tile smaller than the tile size",
+        tiles: [
+          makeInterleavedTile({ x: 0, y: 0, width: 1, height: 2, count: 1 }),
+          makeInterleavedTile({ x: 1, y: 0, width: 2, height: 2, count: 1 }),
+        ],
+        width: 4,
+        height: 2,
+        error: "Tile (0, 0) is 1x2, expected 2x2",
+      },
+    ])("rejects $name", ({ tiles, width, height, error }) => {
+      expect(() =>
+        assembleTiles(tiles, {
+          width,
+          height,
+          tileWidth: 2,
+          tileHeight: 2,
+          minCol: 0,
+          minRow: 0,
+        }),
+      ).toThrow(error);
+    });
+  });
+
   describe("band-separate stitching", () => {
     it("stitches two tiles horizontally", () => {
       const left = makeBandSeparateTile({

@@ -1,8 +1,13 @@
 import type { Viewport } from "@deck.gl/core";
-import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
+import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
+import type {
+  GeoBoundingBox,
+  _Tileset2DProps as Tileset2DProps,
+} from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
-import { _sortItemsByDistanceFromViewportCenter as sortItemsByDistanceFromViewportCenter } from "@developmentseed/deck.gl-raster";
-import type Flatbush from "flatbush";
+import type { Bounds } from "@developmentseed/deck.gl-raster";
+import { nearestCopy } from "@developmentseed/proj";
+import Flatbush from "flatbush";
 
 /** Tile index.
  *
@@ -24,9 +29,25 @@ export type MosaicSource = {
    */
   id?: string;
   /**
-   * Geographic bounds (WGS84) of the source in [minX, minY, maxX, maxY] format
+   * Geographic bounds (WGS84) of the source in [minX, minY, maxX, maxY] format.
+   *
+   * A bbox across the antimeridian may be written with `minX > maxX`, as
+   * GeoJSON (RFC 7946 section 5.2) and STAC do.
    */
   bbox: [number, number, number, number];
+};
+
+/**
+ * The spatial index of a mosaic's sources.
+ *
+ * A source whose bbox crosses the antimeridian is indexed as two boxes, one on
+ * each side, so `boxToSource` maps each box back to its source.
+ */
+export type SourceIndex = {
+  /** Flatbush index of the sources' boxes. */
+  boxes: Flatbush;
+  /** For each box in `boxes`, the position of its source in `sources`. */
+  boxToSource: Uint32Array;
 };
 
 /**
@@ -53,11 +74,11 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
   private getSources: () => MosaicT[];
 
   /** Access the spatial index on the MosaicLayer instance. */
-  private getIndex: () => Flatbush | null;
+  private getIndex: () => SourceIndex | null;
 
   constructor(
     getSources: () => MosaicT[],
-    getIndex: () => Flatbush | null,
+    getIndex: () => SourceIndex | null,
     opts: Tileset2DProps,
   ) {
     super(opts);
@@ -77,10 +98,20 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     return 0;
   }
 
-  /** Must override because our tileIndex does not have x, y, z */
-  override getTileMetadata(tileIndex: TileIndex): Record<string, any> {
+  /**
+   * Must override because our tileIndex does not have x, y, z.
+   *
+   * The bbox is returned as a {@link GeoBoundingBox} object to satisfy deck.gl
+   * requirements for center-first tile loading. deck.gl expects west < east,
+   * so a bbox across the antimeridian gets its east edge one world east.
+   */
+  override getTileMetadata(tileIndex: TileIndex): {
+    id: string;
+    bbox: GeoBoundingBox;
+  } {
     const { id, bbox } = tileIndex as unknown as ResolvedSource<MosaicT>;
-    return { id, bbox };
+    const [west, south, east, north] = unwrapBbox(bbox);
+    return { id, bbox: { west, south, east, north } };
   }
 
   override getParentIndex(tileIndex: TileIndex): TileIndex {
@@ -108,11 +139,24 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       return [];
     }
 
-    const viewportBounds = viewport.getBounds();
-    const indices = index.search(...viewportBounds);
+    // A source can match more than once, since bounds and bboxes across the
+    // antimeridian are both split in two.
+    const matched = new Set<number>();
+    for (const bounds of searchBounds(viewport)) {
+      for (const box of index.boxes.search(...bounds)) {
+        matched.add(index.boxToSource[box]!);
+      }
+    }
+    let indices = [...matched];
 
     const sources = this.getSources();
-    const selectedSources = indices.map((sourceIndex) => {
+    // Read `extent` on every call: TileLayer updates it through `setOptions`.
+    const extent = this.opts.extent as Bounds | null;
+    if (extent) {
+      indices = indices.filter((i) => overlapsExtent(sources[i]!.bbox, extent));
+    }
+
+    return indices.map((sourceIndex) => {
       const source = sources[sourceIndex]!;
       return {
         // Remove once https://github.com/visgl/deck.gl/pull/10299
@@ -124,19 +168,99 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
         id: source.id ?? String(sourceIndex),
       };
     });
-
-    const { maxRequests } = this.opts;
-    if (selectedSources.length <= maxRequests) {
-      return selectedSources;
-    }
-
-    return sortItemsByDistanceFromViewportCenter(
-      selectedSources,
-      viewport,
-      (source) => {
-        const [minX, minY, maxX, maxY] = source.bbox;
-        return [(minX + maxX) * 0.5, (minY + maxY) * 0.5] as const;
-      },
-    );
   }
+}
+
+/**
+ * Index the bboxes of `sources`, or return `null` when there are none.
+ */
+export function buildSourceIndex(sources: MosaicSource[]): SourceIndex | null {
+  if (sources.length === 0) {
+    return null;
+  }
+
+  const splitBboxes = sources.map((source) =>
+    splitAtAntimeridian(unwrapBbox(source.bbox)),
+  );
+  const numBoxes = splitBboxes.reduce((sum, split) => sum + split.length, 0);
+  const boxes = new Flatbush(numBoxes);
+  const boxToSource = new Uint32Array(numBoxes);
+  splitBboxes.forEach((split, sourceIndex) => {
+    for (const box of split) {
+      const boxIndex = boxes.add(...box);
+      boxToSource[boxIndex] = sourceIndex;
+    }
+  });
+  boxes.finish();
+  return { boxes, boxToSource };
+}
+
+/**
+ * Move the east edge of a bbox across the antimeridian, written with
+ * `minX > maxX`, one world east: then `minX < maxX`, and `maxX` runs past
+ * 180°. Any other bbox keeps its edges.
+ */
+export function unwrapBbox(bbox: Readonly<Bounds>): Bounds {
+  const [minX, minY, maxX, maxY] = bbox;
+  return [minX, minY, minX > maxX ? maxX + 360 : maxX, maxY];
+}
+
+/**
+ * Split bounds whose east edge may run past 180° into bounds within
+ * [-180, 180]: two, if they cross the antimeridian.
+ */
+function splitAtAntimeridian(bounds: Bounds): Bounds[] {
+  const [minX, minY, maxX, maxY] = bounds;
+  if (maxX <= 180) {
+    return [bounds];
+  }
+  return [
+    [minX, minY, 180, maxY],
+    [-180, minY, maxX - 360, maxY],
+  ];
+}
+
+/**
+ * The boxes to search the spatial index with for `viewport`.
+ *
+ * Source bboxes lie within [-180, 180] longitude, but near the antimeridian
+ * `viewport.getBounds()` runs past ±180°.
+ * So the bounds are moved back within [-180, 180], and split in two
+ * at ±180° if they cross it. Web Mercator without `repeat` draws nothing past
+ * ±180°, so its bounds are searched as they are.
+ */
+function searchBounds(viewport: Viewport): Bounds[] {
+  const bounds = viewport.getBounds();
+  if (!viewport.subViewports && !(viewport instanceof GlobeViewport)) {
+    return [bounds];
+  }
+
+  const [minX, minY, maxX, maxY] = bounds;
+  if (maxX - minX >= 360) {
+    return [[-180, minY, 180, maxY]];
+  }
+  const west = nearestCopy(minX, 0, 360);
+  return splitAtAntimeridian([west, minY, west + (maxX - minX), maxY]);
+}
+
+/**
+ * Whether a source's bbox overlaps `extent`. A bbox across the antimeridian is
+ * split first, so each side is tested on its own; any other bbox is tested
+ * without allocating, since this runs for each matched source on every call.
+ */
+function overlapsExtent(bbox: Bounds, extent: Bounds): boolean {
+  if (bbox[0] <= bbox[2]) {
+    return overlaps(bbox, extent);
+  }
+  return splitAtAntimeridian(unwrapBbox(bbox)).some((box) =>
+    overlaps(box, extent),
+  );
+}
+
+/**
+ * Whether two `[minX, minY, maxX, maxY]` boxes overlap. Boxes that only share
+ * an edge or a corner don't, as with tiles and `extent` in deck.gl's TileLayer.
+ */
+function overlaps(a: Bounds, b: Bounds): boolean {
+  return a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 }

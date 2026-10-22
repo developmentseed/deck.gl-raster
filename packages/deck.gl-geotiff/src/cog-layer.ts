@@ -29,11 +29,6 @@ import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 
-type DefaultDataT = MinimalTileData & {
-  texture: Texture;
-  byteLength: number;
-};
-
 /** Options passed to `getTileData`. */
 export type GetTileDataOptions = RasterTileGetTileDataOptions & {
   /** The x coordinate of the tile within the IFD. */
@@ -77,7 +72,7 @@ type COGLayerDataProps<DataT extends MinimalTileData> =
 /**
  * Props that can be passed into the {@link COGLayer}.
  */
-export type COGLayerProps<DataT extends MinimalTileData = DefaultDataT> = Omit<
+export type COGLayerProps<DataT extends MinimalTileData = TextureDataT> = Omit<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
 > &
@@ -156,7 +151,7 @@ export type COGLayerProps<DataT extends MinimalTileData = DefaultDataT> = Omit<
  * COGLayer renders a COG using a tiled approach with reprojection.
  */
 export class COGLayer<
-  DataT extends MinimalTileData = DefaultDataT,
+  DataT extends MinimalTileData = TextureDataT,
 > extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
   static override layerName = "COGLayer";
   // COGLayer's getTileData signature differs from the base class's, so
@@ -179,6 +174,8 @@ export class COGLayer<
      *  layer is removed
      */
     abortController?: AbortController;
+    /** True while `_parseGeoTIFF` is in flight. */
+    loadingMetadata?: boolean;
   };
 
   override initializeState(): void {
@@ -202,7 +199,10 @@ export class COGLayer<
       // Clear stale state so renderLayers returns null until the new GeoTIFF is
       // ready
       this.clearState();
-      this._parseGeoTIFF();
+      this.setState({ loadingMetadata: true });
+      this._parseGeoTIFF()
+        .catch((error: Error) => this.raiseError(error, "loading GeoTIFF"))
+        .finally(() => this.setState({ loadingMetadata: false }));
     }
   }
 
@@ -219,11 +219,17 @@ export class COGLayer<
     const signal = this.state.abortController?.signal;
 
     let geotiff: GeoTIFF;
+    let sourceProjection: ProjectionDefinition;
     try {
       geotiff = await fetchGeoTIFF(this.props.geotiff, {
         concurrencyLimiter: this.props.concurrencyLimiter,
         signal,
       });
+      const crs = geotiff.crs;
+      sourceProjection =
+        typeof crs === "number"
+          ? await this.props.epsgResolver!(crs)
+          : parseWkt(crs);
     } catch (err) {
       // Layer removed mid-open (finalizeState aborted the signal); drop it.
       if (signal?.aborted) {
@@ -231,11 +237,6 @@ export class COGLayer<
       }
       throw err;
     }
-    const crs = geotiff.crs;
-    const sourceProjection =
-      typeof crs === "number"
-        ? await this.props.epsgResolver!(crs)
-        : parseWkt(crs);
 
     if (signal?.aborted) {
       return;
@@ -303,6 +304,10 @@ export class COGLayer<
 
   protected override _tilesetDescriptor() {
     return this.state.tilesetDescriptor;
+  }
+
+  protected override _isLoadingMetadata(): boolean {
+    return this.state.loadingMetadata === true;
   }
 
   /**

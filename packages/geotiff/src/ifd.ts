@@ -23,8 +23,26 @@ export enum ExtraSample {
   UnassociatedAlpha = 2,
 }
 
-/** Subset of TIFF tags that we pre-fetch for easier visualization. */
-export interface CachedTags {
+/**
+ * TIFF tags that we pre-fetch for every image in a file: the primary image (as
+ * part of its {@link CachedPrimaryImageTags}), each overview, and each mask.
+ * Unlike the rest of the primary image's tags, which the overviews share,
+ * these can differ between images.
+ */
+export interface CachedSubImageTags {
+  /**
+   * The image's JPEG tables (TIFF tag 347), or `null` if it has none. A tile
+   * read prepends them to each of the image's JPEG tiles.
+   */
+  jpegTables: Uint8Array | null;
+}
+
+/**
+ * Subset of the primary image's TIFF tags that we pre-fetch for easier
+ * visualization. The overviews use these too, except for their own
+ * {@link CachedSubImageTags}.
+ */
+export interface CachedPrimaryImageTags extends CachedSubImageTags {
   bitsPerSample: Uint16Array;
   colorMap?: Uint16Array; // TiffTagType[TiffTag.ColorMap];
   compression: TiffTagType[TiffTag.Compression];
@@ -43,11 +61,11 @@ export interface CachedTags {
   samplesPerPixel: TiffTagType[TiffTag.SamplesPerPixel];
 }
 
-/** Pre-fetch TIFF tags for easier visualization. */
-export async function prefetchTags(
+/** Pre-fetch the primary image's TIFF tags for easier visualization. */
+export async function prefetchPrimaryImageTags(
   image: TiffImage,
   options: { signal?: AbortSignal } = {},
-): Promise<CachedTags> {
+): Promise<CachedPrimaryImageTags> {
   const { signal } = options;
   // Compression is pre-fetched in init
   const compression = image.value(TiffTag.Compression);
@@ -70,6 +88,7 @@ export async function prefetchTags(
     predictor,
     sampleFormat,
     samplesPerPixel,
+    subImageTags,
   ] = await Promise.all([
     image.fetch(TiffTag.BitsPerSample, { signal }),
     image.fetch(TiffTag.ColorMap, { signal }),
@@ -85,6 +104,7 @@ export async function prefetchTags(
     image.fetch(TiffTag.Predictor, { signal }),
     image.fetch(TiffTag.SampleFormat, { signal }),
     image.fetch(TiffTag.SamplesPerPixel, { signal }),
+    prefetchSubImageTags(image, { signal }),
   ]);
 
   const missingTag: (tagName: string) => never = (tagName: string) => {
@@ -104,6 +124,7 @@ export async function prefetchTags(
   }
 
   return {
+    ...subImageTags,
     bitsPerSample: new Uint16Array(bitsPerSample),
     colorMap: colorMap ? new Uint16Array(colorMap as number[]) : undefined,
     compression,
@@ -130,6 +151,26 @@ export async function prefetchTags(
     // https://web.archive.org/web/20240329145340/https://www.awaresystems.be/imaging/tiff/tifftags/sampleformat.html
     sampleFormat: sampleFormat ?? [SampleFormat.Uint],
     samplesPerPixel,
+  };
+}
+
+/**
+ * Pre-fetch an image's {@link CachedSubImageTags}, the tags that can differ
+ * between a file's images. {@link prefetchPrimaryImageTags} includes them for
+ * the primary image.
+ *
+ * cogeotiff reads a tag with its IFD only when the tag's bytes were in that
+ * first read, so a tag can still need a fetch here. Fetching a tag the image
+ * doesn't have returns `null` without reading anything.
+ */
+export async function prefetchSubImageTags(
+  image: TiffImage,
+  options: { signal?: AbortSignal } = {},
+): Promise<CachedSubImageTags> {
+  const { signal } = options;
+  const jpegTables = await image.fetch(TiffTag.JpegTables, { signal });
+  return {
+    jpegTables: jpegTables == null ? null : new Uint8Array(jpegTables),
   };
 }
 

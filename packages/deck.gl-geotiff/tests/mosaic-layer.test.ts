@@ -1,15 +1,21 @@
-import type Flatbush from "flatbush";
+import { LayerManager, WebMercatorViewport } from "@deck.gl/core";
+import type { Device } from "@luma.gl/core";
 import { describe, expect, it } from "vitest";
 import type { MosaicLayerProps } from "../src/mosaic-layer/mosaic-layer.js";
 import { MosaicLayer } from "../src/mosaic-layer/mosaic-layer.js";
-import type { MosaicSource } from "../src/mosaic-layer/mosaic-tileset-2d.js";
+import type {
+  MosaicSource,
+  SourceIndex,
+} from "../src/mosaic-layer/mosaic-tileset-2d.js";
 
 type Item = MosaicSource & { id: string };
 const A: Item = { id: "A", bbox: [0, 0, 10, 10] };
 const B: Item = { id: "B", bbox: [20, 0, 30, 10] };
 const C: Item = { id: "C", bbox: [40, 0, 50, 10] };
+const P: Item = { id: "P", bbox: [5, -10, 15, 0] };
+const Q: Item = { id: "Q", bbox: [30, -10, 40, 0] };
 
-type LayerState = { index: Flatbush | null };
+type LayerState = { index: SourceIndex | null };
 
 type LayerInternals = {
   initializeState: () => void;
@@ -60,7 +66,7 @@ describe("MosaicLayer spatial index lifecycle", () => {
     const { state, internals } = makeBareLayer([A, B]);
     internals.initializeState();
     expect(state.index).not.toBeNull();
-    expect(state.index?.numItems).toBe(2);
+    expect(state.index?.boxes.numItems).toBe(2);
   });
 
   it("leaves the index null when sources start empty", () => {
@@ -78,7 +84,7 @@ describe("MosaicLayer spatial index lifecycle", () => {
     internals.updateState({ props: newProps, oldProps, ...NOOP_PARAMS });
 
     expect(state.index).not.toBe(initialIndex);
-    expect(state.index?.numItems).toBe(3);
+    expect(state.index?.boxes.numItems).toBe(3);
   });
 
   it("does not rebuild when the sources reference is unchanged", () => {
@@ -111,7 +117,7 @@ describe("MosaicLayer spatial index lifecycle", () => {
     });
 
     expect(state.index).toBe(initialIndex);
-    expect(state.index?.numItems).toBe(2);
+    expect(state.index?.boxes.numItems).toBe(2);
   });
 
   it("clears the index when sources become empty", () => {
@@ -131,6 +137,161 @@ describe("MosaicLayer spatial index lifecycle", () => {
 
     const { oldProps, newProps } = setSources(layer, [A, B]);
     internals.updateState({ props: newProps, oldProps, ...NOOP_PARAMS });
-    expect(state.index?.numItems).toBe(2);
+    expect(state.index?.boxes.numItems).toBe(2);
+  });
+});
+
+// A viewport that shows A, B, C, P and Q.
+const VIEWPORT = new WebMercatorViewport({
+  width: 512,
+  height: 512,
+  longitude: 25,
+  latitude: 0,
+  zoom: 3,
+});
+
+/**
+ * Let started fetches finish, then run the layer updates they request, as
+ * deck.gl's render loop would.
+ */
+async function settle(layerManager: LayerManager): Promise<void> {
+  for (let i = 0; i < 3; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    layerManager.updateLayers();
+  }
+}
+
+/**
+ * Render {@link MosaicLayer} through deck.gl's `LayerManager`. Each call of the
+ * returned function renders a new layer instance, as apps do on every render,
+ * and returns the sources that update fetched, the priority each fetch got,
+ * the sources `onViewportLoad` last reported, and the errors deck.gl raised.
+ */
+function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
+  // deck.gl ignores errors thrown in `updateState` when there is no device.
+  // `renderSource` returns no layers, so nothing draws with this stub.
+  const device = {} as Device;
+  const layerManager = new LayerManager(device, { viewport });
+  let errors: string[] = [];
+  layerManager.setProps({
+    onError: (error: Error) => {
+      errors.push(error.message);
+    },
+  });
+
+  return async (sources: Item[]) => {
+    errors = [];
+    const fetched: string[] = [];
+    const priorities: Record<string, number> = {};
+    const viewportLoads: string[][] = [];
+    layerManager.setLayers([
+      new MosaicLayer<Item>({
+        id: "mosaic",
+        sources,
+        getSource: async (source, { getPriority }) => {
+          fetched.push(source.id);
+          priorities[source.id] = getPriority?.() as number;
+        },
+        renderSource: () => null,
+        onViewportLoad: (entries) => {
+          viewportLoads.push(entries.map(({ source }) => source.id).sort());
+        },
+      }),
+    ]);
+    await settle(layerManager);
+    return {
+      fetched: fetched.sort(),
+      priorities,
+      loaded: viewportLoads.at(-1),
+      errors,
+    };
+  };
+}
+
+// The tests above reuse one layer instance. Apps create a new MosaicLayer on
+// every render instead, and deck.gl hands each new instance the old one's
+// `state`, not its `props`.
+describe("MosaicLayer sources across layer instances", () => {
+  it("loads sources added after the first render", async () => {
+    const render = makeMosaicRenderer();
+    await render([A]);
+
+    const { fetched, loaded, errors } = await render([A, B, C]);
+    expect(errors).toEqual([]);
+    expect(fetched).toEqual(["B", "C"]);
+    expect(loaded).toEqual(["A", "B", "C"]);
+  });
+
+  it("loads sources passed after an empty first render", async () => {
+    const render = makeMosaicRenderer();
+    await render([]);
+
+    const { fetched, loaded, errors } = await render([A, B]);
+    expect(errors).toEqual([]);
+    expect(fetched).toEqual(["A", "B"]);
+    expect(loaded).toEqual(["A", "B"]);
+  });
+
+  it("drops sources removed after the first render", async () => {
+    const render = makeMosaicRenderer();
+    await render([A, B, C]);
+
+    const { loaded, errors } = await render([C]);
+    expect(errors).toEqual([]);
+    expect(loaded).toEqual(["C"]);
+  });
+
+  it("loads the new sources when every source is replaced", async () => {
+    const render = makeMosaicRenderer();
+    await render([A, B]);
+
+    const { fetched, loaded, errors } = await render([P, Q]);
+    expect(errors).toEqual([]);
+    expect(fetched).toEqual(["P", "Q"]);
+    expect(loaded).toEqual(["P", "Q"]);
+  });
+});
+
+describe("MosaicLayer fetch priority", () => {
+  it("measures longitude the short way around the antimeridian", async () => {
+    // Centered just west of the antimeridian. `east` is 1.6° away across it,
+    // and `west` is 9.4° away on the same side.
+    const east: Item = { id: "east", bbox: [-179, -20, -178, -17] };
+    const west: Item = { id: "west", bbox: [170, -20, 171, -17] };
+    const render = makeMosaicRenderer(
+      new WebMercatorViewport({
+        width: 800,
+        height: 600,
+        longitude: 179.9,
+        latitude: -18.5,
+        zoom: 4,
+        repeat: true,
+      }),
+    );
+
+    const { priorities, errors } = await render([east, west]);
+    expect(errors).toEqual([]);
+    expect(priorities.east).toBeCloseTo(1.6);
+    expect(priorities.west).toBeCloseTo(9.4);
+  });
+
+  it("centers a bbox across the antimeridian on it", async () => {
+    // Written with minX > maxX, so its center is at 180°, 0.1° from the
+    // viewport's center.
+    const across: Item = { id: "across", bbox: [179, -20, -179, -17] };
+    const render = makeMosaicRenderer(
+      new WebMercatorViewport({
+        width: 800,
+        height: 600,
+        longitude: 179.9,
+        latitude: -18.5,
+        zoom: 4,
+        repeat: true,
+      }),
+    );
+
+    const { priorities, errors } = await render([across]);
+    expect(errors).toEqual([]);
+    expect(priorities.across).toBeCloseTo(0.1);
   });
 });

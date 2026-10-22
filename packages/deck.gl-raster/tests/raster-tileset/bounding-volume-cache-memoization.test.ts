@@ -121,6 +121,36 @@ describe("getTileIndices: bounding-volume cache", () => {
     expect(tileKeys(second)).toEqual(tileKeys(first)); // identical selection
   });
 
+  it("refits cached volumes without reprojecting when only the elevation changes", () => {
+    // A zRange in meters is a different common-space range at every viewport
+    // latitude, so panning north or south changes the elevation the cache
+    // sees. Changing the meters zRange takes the same path.
+    const { descriptor, projectCallCount } = makeCountingDescriptor([
+      1.0, 0.4, 0.1,
+    ]);
+    const cache = new BoundingVolumeCache();
+    const viewport = makeViewport();
+    getTileIndices(descriptor, {
+      ...indicesOpts(viewport),
+      zRange: [500, 2100],
+      boundingVolumeCache: cache,
+    });
+    const afterFirst = projectCallCount();
+    const refit = getTileIndices(descriptor, {
+      ...indicesOpts(viewport),
+      zRange: [500, 2600],
+      boundingVolumeCache: cache,
+    });
+    expect(projectCallCount()).toBe(afterFirst);
+
+    const fresh = makeCountingDescriptor([1.0, 0.4, 0.1]);
+    const uncached = getTileIndices(fresh.descriptor, {
+      ...indicesOpts(viewport),
+      zRange: [500, 2600],
+    });
+    expect(tileKeys(refit)).toEqual(tileKeys(uncached));
+  });
+
   it("selects the same tiles whether or not a cache is used", () => {
     const a = makeCountingDescriptor([1.0, 0.4, 0.1]);
     const b = makeCountingDescriptor([1.0, 0.4, 0.1]);

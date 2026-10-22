@@ -1,5 +1,5 @@
 import type { RasterModule } from "@developmentseed/deck.gl-raster";
-import type { GeoTIFF } from "@developmentseed/geotiff";
+import type { CachedPrimaryImageTags, GeoTIFF } from "@developmentseed/geotiff";
 import { describe, expect, it } from "vitest";
 import { inferRenderPipeline } from "../src/geotiff/render-pipeline.js";
 import { loadGeoTIFF } from "./helpers.js";
@@ -18,6 +18,80 @@ function _createRenderPipeline(geotiff: GeoTIFF): RasterModule[] {
   );
   return renderTile(MOCK_RENDER_TILE_DATA as any).renderPipeline!;
 }
+
+/** The modules' names, in pipeline order. */
+function moduleNames(renderPipeline: RasterModule[]): string[] {
+  return renderPipeline.map((m) => m.module.name);
+}
+
+/** The same GeoTIFF, with its ExtraSamples tag replaced. */
+function withExtraSamples(
+  geotiff: GeoTIFF,
+  extraSamples: CachedPrimaryImageTags["extraSamples"],
+): GeoTIFF {
+  return Object.create(geotiff, {
+    cachedPrimaryImageTags: {
+      value: { ...geotiff.cachedPrimaryImageTags, extraSamples },
+    },
+  });
+}
+
+describe("RGB plus an alpha band", async () => {
+  const geotiff = await loadGeoTIFF("cog_uint8_rgba", "rasterio");
+
+  it("takes alpha from the fourth band", () => {
+    expect(moduleNames(_createRenderPipeline(geotiff))).toEqual([
+      "create-texture-unorm",
+    ]);
+  });
+});
+
+describe("RGB plus a fourth band that isn't alpha", async () => {
+  // NAIP's layout: red, green, blue and near-infrared, where ExtraSamples is
+  // 0 (unspecified) rather than alpha.
+  const geotiff = withExtraSamples(
+    await loadGeoTIFF("cog_uint8_rgba", "rasterio"),
+    [0],
+  );
+
+  it("draws the image opaque", () => {
+    expect(moduleNames(_createRenderPipeline(geotiff))).toEqual([
+      "create-texture-unorm",
+      "opaque",
+    ]);
+  });
+});
+
+describe("gray plus an alpha band", async () => {
+  const geotiff = await loadGeoTIFF(
+    "uint8_1band_and_alpha_deflate_block64_cog",
+    "rasterio",
+  );
+
+  it("moves the alpha band into alpha before converting gray to RGB", () => {
+    expect(moduleNames(_createRenderPipeline(geotiff))).toEqual([
+      "create-texture-unorm",
+      "gray-alpha",
+      "nodata",
+      "black-is-zero",
+    ]);
+  });
+});
+
+describe("gray plus a second band that isn't alpha", async () => {
+  const geotiff = withExtraSamples(
+    await loadGeoTIFF("uint8_1band_and_alpha_deflate_block64_cog", "rasterio"),
+    [0],
+  );
+
+  it("draws the gray band without taking alpha from the second band", () => {
+    expect(moduleNames(_createRenderPipeline(geotiff))).toEqual([
+      "create-texture-unorm",
+      "nodata",
+      "black-is-zero",
+    ]);
+  });
+});
 
 describe("land cover, single-band uint8", async () => {
   const geotiff = await loadGeoTIFF("nlcd_landcover", "nlcd");
