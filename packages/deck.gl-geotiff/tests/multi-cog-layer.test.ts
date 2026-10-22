@@ -385,17 +385,35 @@ describe("MultiCOGLayer._getTileData", () => {
   });
 });
 
+/** A fake band texture's format, current filter, and device support. */
+type FakeTextureOptions = {
+  /** The filter its sampler uses now. */
+  filter: "linear" | "nearest";
+  /** @default "r8unorm" */
+  format?: string;
+  /** Whether its device can filter 32-bit float textures. @default true */
+  float32Filterable?: boolean;
+};
+
 /**
- * A band texture whose sampler filters with `filter`, as luma.gl reports it,
- * with a spy on `setSampler`.
+ * A band texture as luma.gl reports it, with a spy on `setSampler`. Like
+ * luma.gl's, its device claims every format is filterable; only the
+ * `float32-filterable` feature tells the truth about float formats.
  */
-function fakeSampledTexture(filter: "linear" | "nearest"): {
+function fakeSampledTexture(opts: FakeTextureOptions): {
   texture: Texture;
   setSampler: ReturnType<typeof vi.fn>;
 } {
+  const { filter, format = "r8unorm", float32Filterable = true } = opts;
   const setSampler = vi.fn();
+  const device = {
+    isTextureFormatFilterable: () => true,
+    features: new Set(float32Filterable ? ["float32-filterable"] : []),
+  };
   const texture = Object.create(Texture.prototype) as Texture;
   Object.defineProperties(texture, {
+    device: { value: device },
+    format: { value: format },
     sampler: { value: { props: { minFilter: filter, magFilter: filter } } },
     setSampler: { value: setSampler },
   });
@@ -403,17 +421,17 @@ function fakeSampledTexture(filter: "linear" | "nearest"): {
 }
 
 /**
- * Render a loaded one-band tile whose texture filters with `filter`, as
+ * Render a loaded one-band tile with a texture made from `textureOptions`, as
  * `RasterTileLayer` does whenever the layer's props change, and return the
  * texture's `setSampler` spy.
  */
 function renderLoadedTile(
   props: Record<string, unknown>,
-  filter: "linear" | "nearest",
+  textureOptions: FakeTextureOptions,
 ): ReturnType<typeof vi.fn> {
   const layer = makeBareLayer(props);
   layer.setState({ multiDescriptor: {} } as never);
-  const { texture, setSampler } = fakeSampledTexture(filter);
+  const { texture, setSampler } = fakeSampledTexture(textureOptions);
   const bands = new Map([
     [
       "a",
@@ -437,7 +455,10 @@ function renderLoadedTile(
 
 describe("MultiCOGLayer resampling", () => {
   it("switches a loaded tile to nearest filtering", () => {
-    const setSampler = renderLoadedTile({ resampling: "nearest" }, "linear");
+    const setSampler = renderLoadedTile(
+      { resampling: "nearest" },
+      { filter: "linear" },
+    );
     expect(setSampler).toHaveBeenCalledWith({
       minFilter: "nearest",
       magFilter: "nearest",
@@ -445,7 +466,7 @@ describe("MultiCOGLayer resampling", () => {
   });
 
   it("switches a loaded tile back to linear filtering by default", () => {
-    const setSampler = renderLoadedTile({}, "nearest");
+    const setSampler = renderLoadedTile({}, { filter: "nearest" });
     expect(setSampler).toHaveBeenCalledWith({
       minFilter: "linear",
       magFilter: "linear",
@@ -453,7 +474,16 @@ describe("MultiCOGLayer resampling", () => {
   });
 
   it("leaves a texture alone when it already filters as requested", () => {
-    const setSampler = renderLoadedTile({}, "linear");
+    const setSampler = renderLoadedTile({}, { filter: "linear" });
+    expect(setSampler).not.toHaveBeenCalled();
+  });
+
+  it("keeps a float band nearest when the device can't filter floats", () => {
+    // Linear filtering would leave the texture incomplete, so it reads as 0.
+    const setSampler = renderLoadedTile(
+      {},
+      { filter: "nearest", format: "r32float", float32Filterable: false },
+    );
     expect(setSampler).not.toHaveBeenCalled();
   });
 });

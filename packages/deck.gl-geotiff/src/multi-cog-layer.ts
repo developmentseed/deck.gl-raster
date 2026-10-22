@@ -48,7 +48,7 @@ import {
   metersPerUnit,
   parseWkt,
 } from "@developmentseed/proj";
-import type { Device, SamplerProps, TextureFormat } from "@luma.gl/core";
+import type { Device, TextureFormat } from "@luma.gl/core";
 import { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
@@ -201,6 +201,10 @@ export type MultiCOGLayerProps = CompositeLayerProps &
      * Changing this prop updates tiles that are already loaded, without
      * fetching them again.
      *
+     * A band whose texture format the device can't filter is always drawn
+     * with `"nearest"`, such as a 16-bit band stored as 32-bit floats on a
+     * device without float filtering.
+     *
      * @default "linear"
      */
     resampling?: "linear" | "nearest";
@@ -303,15 +307,6 @@ const defaultProps = {
   debugLevel: { type: "number" as const, value: 1 },
   concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
 };
-
-/** Band texture samplers, by {@link MultiCOGLayerProps.resampling} mode. */
-const RESAMPLING_SAMPLERS = {
-  linear: { minFilter: "linear", magFilter: "linear" },
-  nearest: { minFilter: "nearest", magFilter: "nearest" },
-} as const satisfies Record<
-  NonNullable<MultiCOGLayerProps["resampling"]>,
-  SamplerProps
->;
 
 /** A source's opened GeoTIFF paired with its resolved projection. */
 type OpenedCogSource = {
@@ -740,14 +735,19 @@ export class MultiCOGLayer extends RasterTileLayer<
       return null;
     }
 
-    // Set each band's sampler here rather than when its texture is created:
+    // Set each band's filter here rather than when its texture is created:
     // this runs for every loaded tile whenever the layer's props change, so a
-    // new `resampling` applies without fetching the tiles again.
-    const sampler = RESAMPLING_SAMPLERS[this.props.resampling ?? "linear"];
+    // new `resampling` applies without fetching the tiles again. A format the
+    // device can't filter stays nearest, as `createBandTexture` made it.
+    const resampling = this.props.resampling ?? "linear";
     for (const { texture } of bands.values()) {
+      const filter =
+        resampling === "linear" && isFilterable(texture.device, texture.format)
+          ? "linear"
+          : "nearest";
       const { minFilter, magFilter } = texture.sampler.props;
-      if (minFilter !== sampler.minFilter || magFilter !== sampler.magFilter) {
-        texture.setSampler(sampler);
+      if (minFilter !== filter || magFilter !== filter) {
+        texture.setSampler({ minFilter: filter, magFilter: filter });
       }
     }
 
