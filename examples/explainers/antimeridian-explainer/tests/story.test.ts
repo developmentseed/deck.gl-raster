@@ -123,9 +123,57 @@ describe("step 5: walk to the corners", () => {
     expect(moved?.points).toHaveLength(8);
     expect(raw!.points[1]![0]).toBeCloseTo(503.18, 2);
     expect(moved!.points[1]![0]).toBeCloseTo(-8.82, 2);
-    const leaders = frame.lines.find((l) => l.id === "leaders");
-    expect(leaders?.view).toBe("slide");
-    expect(leaders?.paths).toHaveLength(8);
+  });
+
+  it("numbers each sample in the image and up close", () => {
+    const { labels } = end(4).hud;
+    for (const place of ["image", "moved"]) {
+      const numbers = labels
+        .filter((l) => l.id.startsWith(`walk-${place}-`))
+        .map((l) => l.text);
+      expect(numbers, place).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
+    }
+  });
+
+  it("lists the samples at each edge of the strip in one label, as they crowd there", () => {
+    const { labels } = end(4).hud;
+    const strip = labels.filter((l) => l.id.startsWith("walk-raw-"));
+    // The image's west half lands at the map's east edge, and vice versa.
+    expect(strip.map((l) => [l.id, l.text])).toEqual([
+      ["walk-raw-east-edge", "1, 2, 5, 6"],
+      ["walk-raw-west-edge", "3, 4, 7, 8"],
+    ]);
+  });
+
+  it("labels the center, where every walk starts", () => {
+    const { labels } = end(4).hud;
+    const center = labels.filter((l) => l.id.startsWith("walk-center"));
+    expect(center.map((l) => l.text)).toEqual(["center", "center"]);
+  });
+
+  it("links only the latest sample to where it moved, once the walk is done", () => {
+    const leaders = end(4).lines.filter((l) => l.id.startsWith("leader-"));
+    expect(leaders.map((l) => l.id)).toEqual(["leader-8"]);
+    expect(leaders[0]?.view).toBe("slide");
+  });
+
+  it("fades a sample's link out as the next sample starts", () => {
+    const step = story[4]!;
+    // Each stop is where a sample starts: the second sample's is stops[1].
+    const second = step.stops![1]!;
+    const alphaOfFirst = (t: number) =>
+      step.frame(t).lines.find((l) => l.id === "leader-1")?.color[3] ?? 0;
+    expect(alphaOfFirst(second - 1)).toBeGreaterThan(0);
+    expect(alphaOfFirst(second + 150)).toBeLessThan(alphaOfFirst(second - 1));
+    expect(alphaOfFirst(second + 1000)).toBe(0);
+  });
+
+  it("draws each move dashed, unlike the walk's solid paths in the image", () => {
+    const frame = end(4);
+    const leader = frame.lines.find((l) => l.id === "leader-8");
+    const paths = frame.lines.find((l) => l.id === "walk-paths");
+    expect(leader?.dashed).toBe(true);
+    expect(paths?.dashed).toBeFalsy();
   });
 });
 
@@ -151,6 +199,33 @@ describe("step 6: snap every point", () => {
     expect(snapped?.view).toBe("closeup");
     return [raw!.points[0]![0], snapped!.points[0]![0]];
   }
+
+  it("draws the probe's move dashed, unlike its solid trail", () => {
+    const frame = end(5);
+    const leader = frame.lines.find((l) => l.id === "probe-leader");
+    const trail = frame.lines.find((l) => l.id === "probe-trail");
+    expect(leader?.dashed).toBe(true);
+    expect(trail?.dashed).toBeFalsy();
+  });
+
+  it("says what the reprojector projects, with the scene's own count", () => {
+    const text = plainText(story[5]!);
+    expect(text).toContain("four check points in each triangle");
+    expect(text).toContain("320 times");
+    const other = createStory(
+      { ...scene, refinement: { ...scene.refinement, projections: 999 } },
+      fakeImage(),
+    );
+    expect(plainText(other[5]!)).toContain("999 times");
+  });
+
+  it("says the sweeping probe is the explainer's, not the reprojector's", () => {
+    expect(plainText(story[5]!)).toContain(
+      "The probe here is the explainer's, not the reprojector's",
+    );
+    const name = end(5).hud.labels.find((l) => l.id === "probe-name");
+    expect(name?.text).toBe("probe");
+  });
 
   it("west of 180°, finds proj4's answer a whole world from the snapped point", () => {
     const [raw, snapped] = probeAt(0);
@@ -265,6 +340,7 @@ describe("descriptions", () => {
         raw: shift(s.raw, 2),
         snapped: shift(s.snapped, -2),
       })),
+      refinement: { ...scene.refinement, projections: 999 },
       mesh: { ...scene.mesh, triangles: scene.mesh.triangles.slice(0, 90) },
       crossing: scene.crossing.slice(0, 5),
       clipped: {

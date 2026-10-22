@@ -100,6 +100,22 @@ const FADE_MS = 400;
 /** How long each walk sample's beat takes: the image, the strip, up close. */
 const SAMPLE_MS = 1500;
 
+/** How long a walk sample's leader takes to fade once the next one starts, in ms. */
+const LEADER_FADE_MS = 300;
+
+/** A point `distance` from `at`, square to the line from `from` to `at`. */
+function beside(
+  from: [number, number],
+  at: [number, number],
+  distance: number,
+): [number, number] {
+  const length = Math.hypot(at[0] - from[0], at[1] - from[1]) || 1;
+  return [
+    at[0] - ((at[1] - from[1]) / length) * distance,
+    at[1] + ((at[0] - from[0]) / length) * distance,
+  ];
+}
+
 /** The refinement replay's pacing: quicker than the reprojection explainer's. */
 const REFINE_SCHEDULE: ScheduleOptions = {
   slowSteps: 2,
@@ -740,13 +756,34 @@ export function createStory(
         return frame;
       }
       const centerSlide = uvToSlide(scene.center.uv);
+      const centerCloseup = commonToSlide(closeup, scene.center.position);
+      // Right of the center: between the walks, clear of the meridian.
+      frame.hud.labels.push(
+        label(
+          "walk-center-image",
+          "center",
+          [centerSlide[0] + 10, centerSlide[1]],
+          { align: "left", color: css(WHITE), size: 15 },
+        ),
+        label(
+          "walk-center-closeup",
+          "center",
+          [centerCloseup[0] + 10, centerCloseup[1]],
+          { align: "left", color: css(WHITE), size: 15 },
+        ),
+      );
       const paths: [number, number][][] = [];
       const imagePoints: [number, number][] = [];
       const rawPoints: [number, number][] = [];
       const movedPoints: [number, number][] = [];
-      const leaders: [number, number][][] = [];
       const flyingRaw: [number, number][] = [];
       const flyingMoved: [number, number][] = [];
+      /** The samples in the strip, and at which edge of the world. */
+      const rawLanded: {
+        number: string;
+        at: [number, number];
+        east: boolean;
+      }[] = [];
       walkSamples.forEach(({ sample, from }, k) => {
         const local = t - sampleStart(k);
         if (local <= 0) {
@@ -767,45 +804,91 @@ export function createStory(
           return;
         }
         imagePoints.push(atSlide);
+        // Each sample is numbered in all three places, in walk order.
+        const number = String(k + 1);
+        frame.hud.labels.push(
+          label(
+            `walk-image-${number}`,
+            number,
+            beside(centerSlide, atSlide, 16),
+            {
+              color: css(WHITE),
+              size: 16,
+            },
+          ),
+        );
         // Then the strip: where proj4 puts it.
         const raw: [number, number] = [sample.raw, sample.y];
         const moved: [number, number] = [sample.x, sample.y];
+        const rawSlide = commonToSlide(strip, raw);
         const toStrip = progress(local, 350, 500);
         if (toStrip > 0 && toStrip < 1) {
-          flyingRaw.push(flyPoint(atSlide, commonToSlide(strip, raw), toStrip));
+          flyingRaw.push(flyPoint(atSlide, rawSlide, toStrip));
         }
         if (toStrip < 1) {
           return;
         }
         rawPoints.push(raw);
+        rawLanded.push({ number, at: rawSlide, east: raw[0] > PERIOD / 2 });
         // Then up close: the copy nearest the step before.
+        const movedSlide = commonToSlide(closeup, moved);
         const toCloseup = progress(local, 1000, 400);
         if (toCloseup < 1) {
-          flyingMoved.push(
-            flyPoint(
-              commonToSlide(strip, raw),
-              commonToSlide(closeup, moved),
-              toCloseup,
-            ),
-          );
+          flyingMoved.push(flyPoint(rawSlide, movedSlide, toCloseup));
           return;
         }
         movedPoints.push(moved);
-        leaders.push([
-          commonToSlide(strip, raw),
-          commonToSlide(closeup, moved),
-        ]);
+        frame.hud.labels.push(
+          label(
+            `walk-moved-${number}`,
+            number,
+            beside(centerCloseup, movedSlide, 18),
+            { color: css(SNAPPED), size: 16 },
+          ),
+        );
+        // Only the latest sample keeps its leader; the numbers link the rest.
+        const fade =
+          k < walkSamples.length - 1
+            ? progress(t, sampleStart(k + 1), LEADER_FADE_MS)
+            : 0;
+        if (fade < 1) {
+          // Dashed: a move to another copy of the world, not a path.
+          frame.lines.push({
+            id: `leader-${number}`,
+            view: "slide",
+            paths: [[rawSlide, movedSlide]],
+            color: withAlpha(WHITE, 0.35 * (1 - fade)),
+            width: 1,
+            dashed: true,
+          });
+        }
       });
-      frame.lines.push(
-        { id: "walk-paths", view: "slide", paths, color: WHITE, width: 2 },
-        {
-          id: "leaders",
-          view: "slide",
-          paths: leaders,
-          color: withAlpha(WHITE, 0.35),
-          width: 1,
-        },
-      );
+      // The strip's dots crowd at the world's two edges, so each edge gets one
+      // label listing its samples, beside them on the map's side.
+      for (const east of [true, false]) {
+        const group = rawLanded.filter((landed) => landed.east === east);
+        if (group.length === 0) {
+          continue;
+        }
+        const xs = group.map((landed) => landed.at[0]);
+        const y =
+          group.reduce((sum, landed) => sum + landed.at[1], 0) / group.length;
+        frame.hud.labels.push(
+          label(
+            east ? "walk-raw-east-edge" : "walk-raw-west-edge",
+            group.map((landed) => landed.number).join(", "),
+            east ? [Math.min(...xs) - 10, y] : [Math.max(...xs) + 10, y],
+            { align: east ? "right" : "left", color: css(RAW), size: 16 },
+          ),
+        );
+      }
+      frame.lines.push({
+        id: "walk-paths",
+        view: "slide",
+        paths,
+        color: WHITE,
+        width: 2,
+      });
       frame.dots.push(
         {
           id: "center",
@@ -895,7 +978,7 @@ export function createStory(
     id: "snap",
     title: "Snap every point",
     description: [
-      `The reprojector projects many more points than the corners. So the layer wraps the projection itself: every x proj4 returns moves to the copy of the world nearest the blend of the four unwrapped corners at that pixel. At the image's west edge, proj4 says x ${short(scene.probe[0]!.raw[0])} and the snapped point is at ${short(scene.probe[0]!.snapped[0])}. As the probe crosses 180°, proj4's answer (red) jumps a whole world, but the snapped point (green) moves smoothly. This holds unless the image contains a pole.`,
+      `To find where the mesh is furthest off, the reprojector projects four check points in each triangle: its center and the middle of each edge. For this image, it projects ${count(scene.refinement.projections)} times in all. So the layer wraps the projection itself: each x proj4 returns moves to the copy of the world nearest the blend of the four unwrapped corners at that pixel. The probe here is the explainer's, not the reprojector's: as it sweeps the middle row across 180°, proj4's answer (red) jumps a whole world, but the snapped point (green) moves smoothly. This holds unless the image contains a pole.`,
     ],
     durationMs: SWEEP_MS + 600,
     stops: [probeTime(firstEast - 1), probeTime(firstEast)],
@@ -926,6 +1009,7 @@ export function createStory(
           ],
           color: withAlpha(WHITE, 0.45),
           width: 1,
+          dashed: true,
         },
       );
       frame.dots.push(
@@ -960,7 +1044,12 @@ export function createStory(
       );
       const [rawX, rawY] = commonToSlide(strip, sample.raw);
       const [snappedX, snappedY] = commonToSlide(closeup!, sample.snapped);
+      const [probeX, probeY] = uvToSlide(sample.uv);
       frame.hud.labels.push(
+        label("probe-name", "probe", [probeX, probeY - 22], {
+          color: css(WHITE),
+          size: 16,
+        }),
         label(
           "probe-raw",
           `proj4: x ${short(sample.raw[0])}`,

@@ -1,6 +1,8 @@
 import { makeUnwrappedReprojectionFns } from "@developmentseed/deck.gl-raster/internal/make-unwrapped-reprojection-fns.js";
 import { nearestCopy } from "@developmentseed/proj";
+import { RasterReprojector } from "@developmentseed/raster-reproject";
 import { beforeAll, describe, expect, it } from "vitest";
+import { MAX_ERROR } from "../src/scene/constants.js";
 import type { MeshScene } from "../src/scene/mesh.js";
 import { buildMeshScene, CORNER_IDS, cornerPixels } from "../src/scene/mesh.js";
 import type { Projection } from "../src/scene/projection.js";
@@ -138,6 +140,28 @@ describe("buildMeshScene: the meshes", () => {
 
   it("meshes the snapped projection in 40 triangles", () => {
     expect(scene.mesh.triangles.length / 3).toBe(40);
+  });
+
+  it("counts the points the reprojector itself projects, not the recorder's", () => {
+    // The library's own run, as RasterLayer makes it, with its calls counted.
+    const wrapped = makeUnwrappedReprojectionFns(projection.fns, {
+      width: 42,
+      height: 42,
+      period: 512,
+    });
+    let calls = 0;
+    const counted = {
+      ...wrapped,
+      forwardReproject: (x: number, y: number) => {
+        calls += 1;
+        return wrapped.forwardReproject(x, y);
+      },
+    };
+    new RasterReprojector(counted, 43, 43, { _errorSpace: "output" }).run(
+      MAX_ERROR,
+    );
+    expect(calls).toBe(320);
+    expect(scene.refinement.projections).toBe(calls);
   });
 
   it("cuts the 10 triangles that cross x 0, leaving 60 inside one world", () => {

@@ -94,6 +94,11 @@ export type RefinementRecord = {
   seedSamples: ErrorSample[][];
   /** One entry per `refine()` call, in order. Vertex ids are stable. */
   steps: RefinementStep[];
+  /**
+   * How many points the reprojector projected (its `forwardReproject` calls),
+   * not counting the recorder's own measuring.
+   */
+  projections: number;
 };
 
 /** Options for {@link recordRefinement}. */
@@ -137,9 +142,28 @@ export function recordRefinement(
   options: RecordRefinementOptions,
 ): RefinementRecord {
   const { width, height, maxError, errorSpace, maxSteps = 10_000 } = options;
-  const reprojector = new RasterReprojector(fns, width + 1, height + 1, {
+  // Count the reprojector's projections. The recorder's measuring projects
+  // through the same functions, so it pauses the count.
+  let projections = 0;
+  let counting = true;
+  const counted: ReprojectionFns = {
+    ...fns,
+    forwardReproject: (x, y) => {
+      if (counting) {
+        projections += 1;
+      }
+      return fns.forwardReproject(x, y);
+    },
+  };
+  const reprojector = new RasterReprojector(counted, width + 1, height + 1, {
     _errorSpace: errorSpace,
   });
+  const measure = (triangle: [number, number, number]) => {
+    counting = false;
+    const samples = measureTriangle(reprojector, triangle);
+    counting = true;
+    return samples;
+  };
   const internals = reprojector as unknown as ReprojectorInternals;
   const seedTriangles = Uint32Array.from(reprojector.triangles);
   const seedMaxError = reprojector.getMaxError();
@@ -151,7 +175,7 @@ export function recordRefinement(
     );
   const seedScores = scores();
   const seedSamples = Array.from({ length: seedTriangles.length / 3 }, (_, t) =>
-    measureTriangle(reprojector, [
+    measure([
       seedTriangles[3 * t]!,
       seedTriangles[3 * t + 1]!,
       seedTriangles[3 * t + 2]!,
@@ -184,7 +208,7 @@ export function recordRefinement(
         uv,
         guess,
         error,
-        samples: measureTriangle(reprojector, triangle),
+        samples: measure(triangle),
       },
       vertex,
       triangles: Uint32Array.from(reprojector.triangles),
@@ -201,6 +225,7 @@ export function recordRefinement(
     seedScores,
     seedSamples,
     steps,
+    projections,
   };
 }
 
