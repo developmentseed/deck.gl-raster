@@ -1,12 +1,15 @@
+import { readFile } from "node:fs/promises";
 import { CompositeLayer } from "@deck.gl/core";
 import {
   AffineTileset,
   AffineTilesetLevel,
   createMultiRasterTilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
+import { epsgResolver } from "@developmentseed/proj";
 import { Texture } from "@luma.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MultiCOGLayer } from "../src/multi-cog-layer.js";
+import { fixturePath } from "./helpers.js";
 
 /**
  * Build a {@link MultiCOGLayer} ready for direct lifecycle calls: bypasses
@@ -35,6 +38,33 @@ function runInitialUpdate(layer: MultiCOGLayer): void {
     oldProps: layer.props,
     changeFlags: { dataChanged: true },
   } as never);
+}
+
+/**
+ * Render a new {@link MultiCOGLayer} with `props`, as apps do on every render:
+ * deck.gl hands the new instance the old one's `state`, then runs
+ * `updateState`.
+ */
+function rerender(
+  layer: MultiCOGLayer,
+  props: Record<string, unknown>,
+): MultiCOGLayer {
+  const next = new MultiCOGLayer({ id: "multi", ...props } as never);
+  Object.assign(next as object, {
+    state: layer.state,
+    setState: layer.setState,
+  });
+  next.updateState({
+    props: next.props,
+    oldProps: layer.props,
+    changeFlags: {},
+  } as never);
+  return next;
+}
+
+/** A test fixture's bytes, to pass as a source's `url`. */
+async function fixtureBytes(name: string): Promise<ArrayBuffer> {
+  return new Uint8Array(await readFile(fixturePath(name, "rasterio"))).buffer;
 }
 
 function fakeTexture(): {
@@ -93,24 +123,49 @@ describe("MultiCOGLayer._onTileUnloadCallback", () => {
 describe("MultiCOGLayer.updateState", () => {
   it("raises a COG open failure through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
-    const layer = new MultiCOGLayer({
-      id: "multi",
-      sources: { a: { url: "https://example.com/a.tif" } },
-      onError,
-    } as never);
-    vi.spyOn(layer, "setState").mockImplementation(() => {});
+    const layer = makeBareLayer({ onError });
     vi.spyOn(layer, "_parseAllSources").mockRejectedValue(new Error("boom"));
 
-    layer.updateState({
-      props: layer.props,
-      oldProps: layer.props,
-      changeFlags: { dataChanged: true },
-    } as never);
+    runInitialUpdate(layer);
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
     const error = onError.mock.calls[0]?.[0];
     expect(error?.message).toBe("loading COG sources: boom");
     expect(error?.cause).toBeInstanceOf(Error);
+  });
+
+  it("keeps the new sources when the old ones finish opening last", async () => {
+    // The old source is in EPSG:4326 and the new one in EPSG:3857.
+    const oldSources = { old: { url: await fixtureBytes("cog_uint8_rgba") } };
+    const newSources = {
+      new: { url: await fixtureBytes("cog_uint8_rgba_3857") },
+    };
+    // Hold each CRS lookup until the test releases it.
+    const lookups = new Map<number, () => void>();
+    const onGeoTIFFLoad = vi.fn();
+    const props = {
+      epsgResolver: (epsg: number) =>
+        new Promise((resolve) =>
+          lookups.set(epsg, () => resolve(epsgResolver(epsg))),
+        ),
+      onGeoTIFFLoad,
+    };
+
+    const layer = makeBareLayer({ ...props, sources: oldSources });
+    const oldParse = vi.spyOn(layer, "_parseAllSources");
+    runInitialUpdate(layer);
+    const next = rerender(layer, { ...props, sources: newSources });
+    await vi.waitFor(() => expect(lookups.size).toBe(2));
+
+    lookups.get(3857)!();
+    await vi.waitFor(() => expect(next.state.sources).not.toBeNull());
+    lookups.get(4326)!();
+    await oldParse.mock.results[0]!.value;
+
+    expect([...next.state.sources!.keys()]).toEqual(["new"]);
+    expect(
+      onGeoTIFFLoad.mock.calls.map(([sources]) => [...sources.keys()]),
+    ).toEqual([["new"]]);
   });
 });
 
@@ -149,6 +204,27 @@ describe("MultiCOGLayer.isLoaded", () => {
     runInitialUpdate(layer);
 
     await vi.waitFor(() => expect(layer.isLoaded).toBe(true));
+  });
+
+  it("is not loaded when the old sources finish opening first", async () => {
+    let finishOld!: () => void;
+    vi.spyOn(MultiCOGLayer.prototype, "_parseAllSources")
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishOld = resolve;
+        }),
+      )
+      .mockReturnValue(new Promise(() => {}));
+
+    const layer = makeBareLayer();
+    runInitialUpdate(layer);
+    const next = rerender(layer, {
+      sources: { b: { url: "https://example.com/b.tif" } },
+    });
+    finishOld();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(next.isLoaded).toBe(false);
   });
 });
 
