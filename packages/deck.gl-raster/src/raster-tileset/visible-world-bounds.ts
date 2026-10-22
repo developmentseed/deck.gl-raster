@@ -18,7 +18,7 @@ import type { Bounds } from "./types.js";
  */
 export function visibleWorldBounds(
   viewport: Pick<Viewport, "getBounds" | "subViewports">,
-): Bounds[] {
+): [Bounds] | [Bounds, Bounds] {
   const bounds = viewport.getBounds();
   if (!viewport.subViewports && !(viewport instanceof GlobeViewport)) {
     const [minX, minY, maxX, maxY] = bounds;
