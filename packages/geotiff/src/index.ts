@@ -19,7 +19,11 @@ export type {
 export { DECODER_REGISTRY } from "./decode.js";
 export type { GeoTIFFFromUrlOptions } from "./geotiff.js";
 export { GeoTIFF } from "./geotiff.js";
-export type { CachedTags, GeoKeyDirectory } from "./ifd.js";
+export type {
+  CachedPrimaryImageTags,
+  CachedSubImageTags,
+  GeoKeyDirectory,
+} from "./ifd.js";
 export type { ConcurrencyLimiter, Priority } from "./limiter.js";
 export { PerOriginSemaphore } from "./limiter.js";
 export { Overview } from "./overview.js";
