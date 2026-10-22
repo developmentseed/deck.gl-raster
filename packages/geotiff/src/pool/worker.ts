@@ -5,11 +5,11 @@
  * `defaultDecoderPool()` instead, which creates a pool backed by this worker.
  *
  * To override codecs (e.g. swap in a WASM zstd decoder), create your own
- * worker file that mutates `registry` before importing this handler:
+ * worker file that mutates `DECODER_REGISTRY` before importing this handler:
  *
- *   import { registry } from "@developmentseed/geotiff";
+ *   import { DECODER_REGISTRY } from "@developmentseed/geotiff";
  *   import { Compression } from "@cogeotiff/core";
- *   registry.set(Compression.Zstd, () => import("./my-wasm-zstd.js").then(m => m.decode));
+ *   DECODER_REGISTRY.set(Compression.Zstd, () => import("./my-wasm-zstd.js").then(m => m.decode));
  *   import "@developmentseed/geotiff/pool/worker";
  *
  * Then pass a custom `createWorker` factory to `DecoderPool`:
