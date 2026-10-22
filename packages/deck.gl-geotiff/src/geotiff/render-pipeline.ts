@@ -181,11 +181,7 @@ function createUnormPipeline(
 
     let numSamples = samplesPerPixel;
 
-    // A PlanarConfiguration=2 image decodes to one array per band, which can't be
-    // uploaded as a single texture. Interleave it so the rest of this function -
-    // and the shader pipeline built above - sees the same thing it would for a
-    // pixel-interleaved image. Uploading one texture per band would avoid this
-    // copy; see #772.
+    // TODO: in the future, upload per-band textures directly to the GPU. See #772.
     if (array.layout === "band-separate") {
       array = toPixelInterleaved(array);
     }
