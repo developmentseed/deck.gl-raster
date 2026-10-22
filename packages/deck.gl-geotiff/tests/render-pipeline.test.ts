@@ -132,8 +132,7 @@ describe("band-separate tiles", () => {
   /**
    * A PlanarConfiguration=2 tile, as `fetchTile` decodes one: a separate array
    * per band. Handed to `getTileData` directly rather than read from a fixture,
-   * because the only band-separate fixture is int8, which
-   * `inferRenderPipeline` does not build a pipeline for.
+   * because the test data has no band-separate RGBA image.
    */
   function bandSeparateTile(bandCount: number) {
     return {
@@ -180,16 +179,26 @@ describe("band-separate tiles", () => {
   // WebGL2 has no RGB-only texture format, so a 3-band tile is interleaved and
   // then padded to RGBA, same as a pixel-interleaved one
   it("interleaves and pads an RGB tile", async () => {
-    const geotiff = await loadGeoTIFF(
-      "uint8_rgb_deflate_block64_cog",
-      "rasterio",
-    );
+    // Written with INTERLEAVE=BAND, so each tile decodes to one array per band
+    const geotiff = await loadGeoTIFF("eox_cloudless", "eox");
+    const { array } = await geotiff.fetchTile(0, 0, { boundless: false });
+    if (array.layout !== "band-separate") {
+      throw new Error("Expected eox_cloudless to decode band-separate");
+    }
+    // Each pixel's band values, then opaque alpha
+    const expected = Array.from(
+      { length: array.width * array.height },
+      (_, i) => [...array.bands.map((band) => band[i]!), 255],
+    ).flat();
 
-    const { texture } = await _getTileData(geotiff, 3);
+    const { getTileData } = inferRenderPipeline(geotiff, MOCK_DEVICE as any);
+    const { texture } = await getTileData(geotiff, {
+      device: MOCK_DEVICE,
+      x: 0,
+      y: 0,
+    } as any);
 
     expect((texture as any).format).toEqual("rgba8unorm");
-    expect(Array.from((texture as any).data)).toEqual([
-      0, 1, 2, 255, 3, 4, 5, 255,
-    ]);
+    expect(Array.from((texture as any).data)).toEqual(expected);
   });
 });
