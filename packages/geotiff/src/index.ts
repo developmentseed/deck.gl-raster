@@ -1,17 +1,11 @@
 export type {
-  PackBandsToRGBAOptions,
   RasterArray,
   RasterArrayBandSeparate,
   RasterArrayBase,
   RasterArrayPixelInterleaved,
   RasterTypedArray,
 } from "./array.js";
-export {
-  packBandsToRGBA,
-  reorderBands,
-  toBandSeparate,
-  toPixelInterleaved,
-} from "./array.js";
+export { toPixelInterleaved } from "./array.js";
 export type { AssembleTilesOptions } from "./assemble.js";
 export { assembleTiles } from "./assemble.js";
 export { ColorInterp } from "./colorinterp.js";
