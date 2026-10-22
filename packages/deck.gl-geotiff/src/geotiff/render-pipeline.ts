@@ -184,9 +184,8 @@ function createUnormPipeline(
     // A PlanarConfiguration=2 image decodes to one array per band, which can't be
     // uploaded as a single texture. Interleave it so the rest of this function -
     // and the shader pipeline built above - sees the same thing it would for a
-    // pixel-interleaved image. Uploading one texture per band and sampling a
-    // sampler2DArray would avoid this copy, but needs the render pipeline to know
-    // how many textures a tile has; see #159.
+    // pixel-interleaved image. Uploading one texture per band would avoid this
+    // copy; see #772.
     if (array.layout === "band-separate") {
       array = toPixelInterleaved(array);
     }
