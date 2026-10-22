@@ -1,6 +1,7 @@
 import type { GetTileDataOptions } from "@developmentseed/deck.gl-geotiff";
 import { addAlphaChannel } from "@developmentseed/deck.gl-geotiff";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
+import { toPixelInterleaved } from "@developmentseed/geotiff";
 import type { Texture } from "@luma.gl/core";
 
 /**
@@ -14,9 +15,9 @@ export type TileTextureData = {
 };
 
 /**
- * Tile loader for 3- or 4-band pixel-interleaved COGs.
+ * Tile loader for 3- or 4-band COGs.
  *
- * Fetches the source tile, asserts pixel-interleaved layout, expands
+ * Fetches the source tile, interleaves it if it is band-separate, expands
  * 3-band data to RGBA via `addAlphaChannel` (WebGL2 has no rgb-only 8-bit
  * texture format), and uploads as `rgba8unorm`. For 4-band data the
  * source-side alpha (NIR) is overridden by the shader pipeline (see
@@ -28,11 +29,8 @@ export async function getTileDataRGBA(
 ): Promise<TileTextureData> {
   const { device, x, y, signal } = options;
   const tile = await image.fetchTile(x, y, { signal, boundless: false });
-  const array = addAlphaChannel(tile.array);
-  if (array.layout === "band-separate") {
-    throw new Error("Vermont COGs are expected to be pixel-interleaved");
-  }
-  const { width, height, data } = array;
+  const interleaved = toPixelInterleaved(tile.array);
+  const { width, height, data } = addAlphaChannel(interleaved);
   const texture = device.createTexture({
     data,
     format: "rgba8unorm",

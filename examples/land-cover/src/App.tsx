@@ -59,7 +59,7 @@ export default function App() {
     if (!device || !geotiff) {
       return null;
     }
-    const { colorMap, nodata } = geotiff.cachedTags;
+    const { colorMap, nodata } = geotiff.cachedPrimaryImageTags;
     if (!colorMap) {
       return null;
     }

@@ -53,6 +53,7 @@ import { Texture } from "@luma.gl/core";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
+import { isFilterable, resolveTextureFormat } from "./geotiff/texture.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 
 /**
@@ -319,7 +320,7 @@ async function openCogSources(
       }),
     );
   } catch (err) {
-    // Layer removed mid-open (finalizeState aborted the signal); bail.
+    // `sources` changed or the layer was removed mid-open; bail.
     if (signal?.aborted) {
       return null;
     }
@@ -359,8 +360,8 @@ export class MultiCOGLayer extends RasterTileLayer<
   declare state: {
     sources: Map<string, SourceState> | null;
     multiDescriptor: MultiRasterTilesetDescriptor | null;
-    /** Aborts the in-flight header reads when the layer is removed, freeing
-     *  their limiter slots for fresh work. */
+    /** Aborts the in-flight header reads when `sources` changes or the layer
+     *  is removed, freeing their limiter slots for fresh work. */
     abortController?: AbortController;
     /** True while `_parseAllSources` is in flight. */
     loadingMetadata?: boolean;
@@ -370,9 +371,6 @@ export class MultiCOGLayer extends RasterTileLayer<
     this.setState({
       sources: null,
       multiDescriptor: null,
-      // One controller for the layer's lifetime; aborted in finalizeState so
-      // header reads still in flight when the layer is removed are cancelled.
-      abortController: new AbortController(),
     });
   }
 
@@ -387,17 +385,26 @@ export class MultiCOGLayer extends RasterTileLayer<
     oldProps,
   }: UpdateParameters<this>): void {
     if (changeFlags.dataChanged || props.sources !== oldProps.sources) {
+      // Abort the previous sources' parse so it can't overwrite these
+      this.state.abortController?.abort();
+      const abortController = new AbortController();
       // Reset state so renderLayers() returns null while we re-open COGs.
       // Without this, the TileLayer renders with new props but stale state,
       // caching tiles with the wrong bands.
       this.setState({
         sources: null,
         multiDescriptor: null,
+        abortController,
         loadingMetadata: true,
       });
       this._parseAllSources()
         .catch((error: Error) => this.raiseError(error, "loading COG sources"))
-        .finally(() => this.setState({ loadingMetadata: false }));
+        .finally(() => {
+          // An aborted parse no longer owns `loadingMetadata`
+          if (!abortController.signal.aborted) {
+            this.setState({ loadingMetadata: false });
+          }
+        });
     }
   }
 
@@ -481,8 +488,8 @@ export class MultiCOGLayer extends RasterTileLayer<
 
     const multiDescriptor = createMultiRasterTilesetDescriptor(tilesetMap);
 
-    // Layer was removed while we resolved projections; don't setState on a
-    // finalized layer.
+    // `sources` changed or the layer was removed while we resolved
+    // projections; drop the result.
     if (signal?.aborted) {
       return;
     }
@@ -745,12 +752,8 @@ export class MultiCOGLayer extends RasterTileLayer<
       signal,
     });
 
-    const texture = createBandTexture(device, tile.array);
+    const { texture, byteLength } = createBandTexture(device, tile.array);
     const arr = tile.array;
-    const byteLength =
-      arr.layout === "pixel-interleaved"
-        ? arr.data.byteLength
-        : arr.bands.reduce((sum, b) => sum + b.byteLength, 0);
 
     return [
       name,
@@ -852,11 +855,7 @@ export class MultiCOGLayer extends RasterTileLayer<
       minRow: resolution.minRow,
     });
 
-    const texture = createBandTexture(device, assembled);
-    const assembledByteLength =
-      assembled.layout === "pixel-interleaved"
-        ? assembled.data.byteLength
-        : assembled.bands.reduce((sum, b) => sum + b.byteLength, 0);
+    const { texture, byteLength } = createBandTexture(device, assembled);
 
     return [
       name,
@@ -865,7 +864,7 @@ export class MultiCOGLayer extends RasterTileLayer<
         uvTransform: resolution.uvTransform,
         width: assembled.width,
         height: assembled.height,
-        byteLength: assembledByteLength,
+        byteLength,
       },
       debugInfo,
     ];
@@ -1037,16 +1036,25 @@ function selectImage(geotiff: GeoTIFF, z: number): GeoTIFF | Overview {
 }
 
 /**
- * Create a GPU texture from a {@link RasterArray}.
+ * Create a GPU texture from a {@link RasterArray}, and return it with the
+ * byte length of the uploaded data.
  *
- * Infers the texture format from the typed array type: `Uint8Array` as
- * `r8unorm`, `Uint16Array` as `r16unorm`, and any other as `r32float`.
+ * Infers the texture format from the typed array type:
+ *
+ * - `Uint8Array` uploads as `r8unorm` and `Uint16Array` as `r16unorm`, so
+ *   shaders read samples normalized to 0-1. Devices without `r16unorm` get
+ *   the same 0-1 values in `r32float` (see {@link resolveTextureFormat}).
+ * - Every other typed array uploads as `r32float`, so shaders read raw
+ *   sample values. Integers past 2^24 and `Float64Array` samples round to
+ *   float32. Integer texture formats aren't used because
+ *   {@link CompositeBands} samples with `sampler2D`, which can't read them.
  *
  * Uses nearest sampling when the device can't linearly filter the format.
- *
- * TODO: use `inferTextureFormat` from `texture.ts` for full format support.
  */
-export function createBandTexture(device: Device, array: RasterArray): Texture {
+export function createBandTexture(
+  device: Device,
+  array: RasterArray,
+): { texture: Texture; byteLength: number } {
   if (array.layout !== "pixel-interleaved") {
     throw new Error("Band-separate layout not yet supported in MultiCOGLayer");
   }
@@ -1076,15 +1084,16 @@ export function createBandTexture(device: Device, array: RasterArray): Texture {
     );
   }
 
-  return device.createTexture({
-    data: samples,
-    format,
+  const upload = resolveTextureFormat(device, format, samples);
+  const filter = isFilterable(device, upload.format) ? "linear" : "nearest";
+  const texture = device.createTexture({
+    data: upload.data,
+    format: upload.format,
     width,
     height,
-    sampler: device.isTextureFormatFilterable(format)
-      ? { minFilter: "linear", magFilter: "linear" }
-      : { minFilter: "nearest", magFilter: "nearest" },
+    sampler: { minFilter: filter, magFilter: filter },
   });
+  return { texture, byteLength: upload.data.byteLength };
 }
 
 /**
