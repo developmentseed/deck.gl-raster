@@ -40,9 +40,9 @@ When switching between band composite presets, the `TileLayer` doesn't re-fetch 
 
 ### 3. Texture format hardcoded
 
-**Status**: Works for every single-band type; multi-band textures are not handled.
+**Status**: Works for every single-band type, but types other than uint8 and uint16 are experimental. Multi-band textures are not handled.
 
-`createBandTexture` uploads `Uint8Array` as `r8unorm` and `Uint16Array` as `r16unorm` (or 0-1 `r32float` on devices without `EXT_texture_norm16`). Every other typed array uploads as `r32float` with raw values. `inferTextureFormat` from `texture.ts` doesn't fit: its integer formats need an integer sampler, which `CompositeBands` doesn't use.
+`createBandTexture` uploads `Uint8Array` as `r8unorm` and `Uint16Array` as `r16unorm` (or 0-1 `r32float` on devices without `EXT_texture_norm16`), so the render pipeline sees them normalized to 0-1. Every other typed array uploads as `r32float` with raw values. That split is likely to change so that every type reaches the pipeline in the same units, which is why the `renderPipeline` docs call the other types experimental. `inferTextureFormat` from `texture.ts` doesn't fit: its integer formats need an integer sampler, which `CompositeBands` doesn't use.
 
 ### 4. enforceAlignment for uint16
 
