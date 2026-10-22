@@ -17,7 +17,7 @@ Fast, high-level GeoTIFF reader written in TypeScript for the browser, wrapping 
 
 The entire project — both public APIs and internal code — is strongly and exhaustively typed in TypeScript.
 
-Image data fetches return a strongly typed object. With type narrowing we can infer whether data is pixel-interleaved, in a band-interleaved,
+Image data fetches return a strongly typed object. With type narrowing we can infer whether data is pixel-interleaved or band-separate:
 
 ```ts
 import { GeoTIFF } from "@developmentseed/geotiff";
@@ -63,7 +63,6 @@ const {
 
 // tile.array holds data & relevant metadata
 const {
-    data, // Uint8Array(3145728) [49,  51,  46,  42, ...]
     count, // 3 (RGB)
     height, // 1024
     width, // 1024
@@ -72,6 +71,11 @@ const {
     mask, // null
     nodata, // 0
 } = tile.array;
+
+// Pixel data is in `data` or `bands`, depending on the layout
+if (tile.array.layout === "pixel-interleaved") {
+    const { data } = tile.array; // Uint8Array(3145728) [49,  51,  46,  42, ...]
+}
 ```
 
 ### Convenient access to overviews
@@ -118,6 +122,19 @@ The `DecoderPool` allows for decoding image data off the main thread.
 
 By default workers are created up to `navigator.hardwareConcurrency`, but you can customize how large the web worker pool is by passing options to the `DecoderPool` constructor.
 
+If you bundle with Vite, set [`worker.format`][vite-worker-format] to `"es"`. The decoder worker uses top-level await and dynamic imports, which Vite's default `iife` worker format doesn't support, so `vite build` fails without it:
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  worker: { format: "es" },
+});
+```
+
+[vite-worker-format]: https://vite.dev/config/worker-options#worker-format
+
 ### Dynamically load compressions as needed
 
 Instead of bundling support for all compressions out of the box, dynamically load the decompressors as required.
@@ -126,18 +143,20 @@ Until you try to load an image compressed with, say, [LERC], you don't pay for t
 
 [LERC]: https://github.com/Esri/lerc
 
-You can also override the built-in decoders with your own by using `registry`. For example, to use a custom zstd decoder:
+You can also override the built-in decoders with your own by using `DECODER_REGISTRY`. For example, to use a custom zstd decoder:
 
 ```ts
 import { Compression } from "@cogeotiff/core";
-import { registry } from "@developmentseed/geotiff";
+import { DECODER_REGISTRY } from "@developmentseed/geotiff";
 
-registry.set(Compression.Zstd, () =>
+DECODER_REGISTRY.set(Compression.Zstd, () =>
   import("your-zstd-module").then((m) => m.decode),
 );
 ```
 
-A decoder is a function that takes an `ArrayBuffer` and a `DecoderMetadata` object and returns a `Promise<ArrayBuffer>`. See [decode.ts](./src/decode.ts) for the full type definitions.
+A decoder is a function that takes an `ArrayBuffer` and a `DecoderMetadata` object and returns a `Promise` of either the decompressed bytes as an `ArrayBuffer` or the decoded pixels. See [`Decoder`] for the full type definition.
+
+[`Decoder`]: https://developmentseed.org/deck.gl-raster/api/geotiff/type-aliases/Decoder/
 
 ### Full user control over caching and chunking
 
@@ -158,9 +177,11 @@ const chunk = new SourceChunk({ size: 16 * 1024 });
 // Raw source to HTTP file
 const httpSource = new SourceHttp('https://blayne.chard.com/world.webp.google.cog.tiff');
 
-// HTTP source with chunking and caching
-const tiffSource = new SourceView(httpSource, [chunk, cache]);
-const geotiff = await GeoTIFF.open(tiffSource);
+// HTTP source with chunking and caching, for reading the TIFF header
+const headerSource = new SourceView(httpSource, [chunk, cache]);
+
+// Tile data is fetched directly from the raw HTTP source
+const geotiff = await GeoTIFF.open({ headerSource, dataSource: httpSource });
 const tile = await geotiff.fetchTile(0, 0);
 ```
 
