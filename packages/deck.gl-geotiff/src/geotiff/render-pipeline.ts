@@ -14,7 +14,11 @@ import {
   WhiteIsZero,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
-import { ColorInterp, parseColormap } from "@developmentseed/geotiff";
+import {
+  ColorInterp,
+  parseColormap,
+  toPixelInterleaved,
+} from "@developmentseed/geotiff";
 import type { Device, SamplerProps, Texture } from "@luma.gl/core";
 import type { GetTileDataOptions } from "../cog-layer.js";
 import { addAlphaChannel } from "./geotiff.js";
@@ -177,14 +181,15 @@ function createUnormPipeline(
 
     let numSamples = samplesPerPixel;
 
+    // TODO: in the future, upload per-band textures directly to the GPU. See #772.
+    if (array.layout === "band-separate") {
+      array = toPixelInterleaved(array);
+    }
+
     if (samplesPerPixel === 3) {
       // WebGL2 doesn't have an RGB-only texture format; it requires RGBA.
       array = addAlphaChannel(array);
       numSamples = 4;
-    }
-
-    if (array.layout === "band-separate") {
-      throw new Error("Band-separate images not yet implemented.");
     }
 
     const textureFormat = inferTextureFormat(
