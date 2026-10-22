@@ -182,6 +182,15 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     /**
      * Post-processing render pipeline modules applied after compositing.
      *
+     * Modules see each band's samples in units that depend on its data type,
+     * so give values such as a nodata value or a rescale range in those
+     * units:
+     *
+     * - `uint8` and `uint16` bands are normalized to 0-1: a sample divided by
+     *   255 or 65535.
+     * - Every other type (signed integers, `uint32` and floats) keeps its raw
+     *   value.
+     *
      * @see {@link RasterModule}
      */
     renderPipeline?: RasterModule[];
