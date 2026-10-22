@@ -3,7 +3,7 @@ import type { Frame } from "../src/animation/frame.js";
 import type { StoryStep } from "../src/animation/story.js";
 import { createStory } from "../src/animation/story.js";
 import { landToCommon } from "../src/scene/land.js";
-import { IMAGE_BOX } from "../src/scene/layout.js";
+import { commonToSlide, IMAGE_BOX } from "../src/scene/layout.js";
 import type { MeshScene } from "../src/scene/mesh.js";
 import { makeProjection } from "../src/scene/projection.js";
 import { fakeImage } from "./fake-image.js";
@@ -149,6 +149,20 @@ describe("step 5: walk to the corners", () => {
     const { labels } = end(4).hud;
     const center = labels.filter((l) => l.id.startsWith("walk-center"));
     expect(center.map((l) => l.text)).toEqual(["center", "center"]);
+  });
+
+  it("names the seam on each side: 180° for the copy to its west, -180° for this one", () => {
+    const frame = end(4);
+    const [seamX] = commonToSlide(frame.cameras.closeup!, [0, 0]);
+    const west = frame.hud.labels.find((l) => l.id === "seam-west");
+    const east = frame.hud.labels.find((l) => l.id === "seam-east");
+    expect(west?.text).toBe("180°");
+    expect(west?.align).toBe("right");
+    expect(west!.x).toBeLessThan(seamX);
+    expect(east?.text).toBe("-180°");
+    expect(east?.align).toBe("left");
+    expect(east!.x).toBeGreaterThan(seamX);
+    expect(frame.hud.labels.some((l) => l.text.includes("="))).toBe(false);
   });
 
   it("links only the latest sample to where it moved, once the walk is done", () => {

@@ -704,8 +704,17 @@ export function createStory(
     }
     frame.lines.push(worldEdges("closeup", closeup, options.opacity));
     const [seamX] = commonToSlide(closeup, [0, 0]);
+    // The seam is both edges of the world: 180° for the copy to its west, and
+    // -180° for this one. Each name goes on its own side of the line.
     frame.hud.labels.push(
-      label("seam", "-180° = 180°", [seamX, CLOSEUP_BOX.y + 16], {
+      label("seam-west", "180°", [seamX - 8, CLOSEUP_BOX.y + 16], {
+        align: "right",
+        color: css(MERIDIAN),
+        opacity: options.opacity,
+        size: 18,
+      }),
+      label("seam-east", "-180°", [seamX + 8, CLOSEUP_BOX.y + 16], {
+        align: "left",
         color: css(MERIDIAN),
         opacity: options.opacity,
         size: 18,
