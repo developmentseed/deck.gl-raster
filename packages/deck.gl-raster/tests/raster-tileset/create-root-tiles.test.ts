@@ -1,3 +1,7 @@
+import {
+  _GlobeViewport as GlobeViewport,
+  WebMercatorViewport,
+} from "@deck.gl/core";
 import type { TileMatrixSet } from "@developmentseed/morecantile";
 import { describe, expect, it } from "vitest";
 import { createRootTiles } from "../../src/raster-tileset/raster-tile-traversal.js";
@@ -10,15 +14,17 @@ import type {
 import type { Bounds } from "../../src/raster-tileset/types.js";
 
 /**
- * Minimal fake `RasterTilesetLevel`: top-left-origin EPSG:4326 grid. Only methods
+ * Minimal fake `RasterTilesetLevel`: top-left-origin EPSG:4326 grid whose
+ * first column starts at longitude `west` (-180 by default). Only methods
  * `createRootTiles` touches are implemented.
  */
 function makeFakeLevel(opts: {
   matrixWidth: number;
   matrixHeight: number;
   tileDegrees: number;
+  west?: number;
 }): RasterTilesetLevel {
-  const { matrixWidth, matrixHeight, tileDegrees } = opts;
+  const { matrixWidth, matrixHeight, tileDegrees, west = -180 } = opts;
   return {
     matrixWidth,
     matrixHeight,
@@ -35,8 +41,8 @@ function makeFakeLevel(opts: {
       // Tiles that only share an edge with the box are left out, as the
       // `RasterTilesetLevel` contract requires.
       const [firstCol, lastCol] = overlappingTileSpan(
-        (minX + 180) / tileDegrees,
-        (maxX + 180) / tileDegrees,
+        (minX - west) / tileDegrees,
+        (maxX - west) / tileDegrees,
       );
       const [firstRow, lastRow] = overlappingTileSpan(
         (90 - maxY) / tileDegrees,
@@ -65,8 +71,9 @@ function makeDescriptor(level: RasterTilesetLevel): RasterTilesetDescriptor {
   };
 }
 
+/** A viewport without world copies, showing `bounds`. */
 function makeViewport(bounds: Bounds) {
-  return { getBounds: () => bounds };
+  return { getBounds: () => bounds, subViewports: null };
 }
 
 describe("createRootTiles", () => {
@@ -172,5 +179,117 @@ describe("createRootTiles", () => {
       "191/69",
       "192/69",
     ]);
+  });
+});
+
+describe("createRootTiles across the antimeridian", () => {
+  // 360 x 180 one-degree root tiles, so the culled path runs.
+  const globalGrid = makeDescriptor(
+    makeFakeLevel({ matrixWidth: 360, matrixHeight: 180, tileDegrees: 1 }),
+  );
+  const world: Bounds = [-180, -85, 180, 85];
+  // A pixel at zoom 6 is 360° / 32768, so this view reaches 4.39° to each side
+  // of its center: centered at 179.9°, it shows 175.51° to 184.29°.
+  const view = { latitude: 0, zoom: 6, width: 800, height: 600 };
+  const columns = (roots: { x: number }[]) =>
+    [...new Set(roots.map(({ x }) => x))].sort((a, b) => a - b);
+
+  it("creates root tiles past 180° in Web Mercator with repeat", () => {
+    const roots = createRootTiles({
+      descriptor: globalGrid,
+      viewport: new WebMercatorViewport({
+        ...view,
+        longitude: 179.9,
+        repeat: true,
+      }),
+      datasetWgs84Bounds: world,
+    });
+    // Columns 0-4 cover -180° to -175°, the part of the view past 180°.
+    expect(columns(roots)).toEqual([0, 1, 2, 3, 4, 355, 356, 357, 358, 359]);
+  });
+
+  it("creates root tiles past 180° on a globe", () => {
+    const roots = createRootTiles({
+      descriptor: globalGrid,
+      viewport: new GlobeViewport({ ...view, longitude: 179.9 }),
+      datasetWgs84Bounds: world,
+    });
+    expect(columns(roots)).toContain(0);
+    expect(columns(roots)).toContain(359);
+  });
+
+  it("creates root tiles only on the side Web Mercator without repeat draws", () => {
+    // Nothing is drawn past 180°, so -180° to -175° stays out.
+    const roots = createRootTiles({
+      descriptor: globalGrid,
+      viewport: new WebMercatorViewport({ ...view, longitude: 179.9 }),
+      datasetWgs84Bounds: world,
+    });
+    expect(columns(roots)).toEqual([355, 356, 357, 358, 359]);
+  });
+
+  // A grid from 0° to 360°, as many climate datasets are stored: its bounds
+  // run past 180°, so its root tiles past 180° are its own columns 180-359.
+  const grid0To360 = makeDescriptor(
+    makeFakeLevel({
+      matrixWidth: 360,
+      matrixHeight: 180,
+      tileDegrees: 1,
+      west: 0,
+    }),
+  );
+  const world0To360: Bounds = [0, -85, 360, 85];
+
+  it("creates root tiles across 180° for a dataset stored from 0° to 360°", () => {
+    const roots = createRootTiles({
+      descriptor: grid0To360,
+      viewport: new WebMercatorViewport({
+        ...view,
+        longitude: 179.9,
+        repeat: true,
+      }),
+      datasetWgs84Bounds: world0To360,
+    });
+    expect(columns(roots)).toEqual([
+      175, 176, 177, 178, 179, 180, 181, 182, 183, 184,
+    ]);
+  });
+
+  it("creates root tiles across 0° for a dataset stored from 0° to 360°", () => {
+    // Centered at 2°, the view shows -2.39° to 6.39°: the dataset's
+    // 357.61° to 360° and 0° to 6.39°.
+    const roots = createRootTiles({
+      descriptor: grid0To360,
+      viewport: new WebMercatorViewport({ ...view, longitude: 2 }),
+      datasetWgs84Bounds: world0To360,
+    });
+    expect(columns(roots)).toEqual([0, 1, 2, 3, 4, 5, 6, 357, 358, 359]);
+  });
+
+  it("creates a root tile once when both sides of 180° fall in it", () => {
+    // A CRS centered on 150°E, like EPSG:3832, is continuous across 180°:
+    // 179° and -179° are 29° and 31° east of its center, both in the
+    // 20°-wide root tile from 20° to 40°.
+    const descriptor = {
+      ...makeDescriptor(
+        makeFakeLevel({ matrixWidth: 18, matrixHeight: 9, tileDegrees: 20 }),
+      ),
+      projectFrom4326: (lng: number, lat: number): [number, number] => [
+        ((lng - 150 + 540) % 360) - 180,
+        lat,
+      ],
+    };
+    const roots = createRootTiles({
+      descriptor,
+      viewport: new WebMercatorViewport({
+        ...view,
+        longitude: 179.9,
+        repeat: true,
+      }),
+      datasetWgs84Bounds: world,
+    });
+    const keys = roots.map(({ x, y }) => `${x}/${y}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(columns(roots)).toEqual([10]);
   });
 });

@@ -1,12 +1,12 @@
 import type { Viewport } from "@deck.gl/core";
-import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import type {
   GeoBoundingBox,
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import type { Bounds } from "@developmentseed/deck.gl-raster";
-import { nearestCopy } from "@developmentseed/proj";
+import { _visibleWorldBounds as visibleWorldBounds } from "@developmentseed/deck.gl-raster";
+import { splitAtAntimeridian, unwrapBbox } from "@developmentseed/proj";
 import Flatbush from "flatbush";
 
 /** Tile index.
@@ -142,7 +142,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     // A source can match more than once, since bounds and bboxes across the
     // antimeridian are both split in two.
     const matched = new Set<number>();
-    for (const bounds of searchBounds(viewport)) {
+    for (const bounds of visibleWorldBounds(viewport)) {
       for (const box of index.boxes.search(...bounds)) {
         matched.add(index.boxToSource[box]!);
       }
@@ -193,54 +193,6 @@ export function buildSourceIndex(sources: MosaicSource[]): SourceIndex | null {
   });
   boxes.finish();
   return { boxes, boxToSource };
-}
-
-/**
- * Move the east edge of a bbox across the antimeridian, written with
- * `minX > maxX`, one world east: then `minX < maxX`, and `maxX` runs past
- * 180°. Any other bbox keeps its edges.
- */
-export function unwrapBbox(bbox: Readonly<Bounds>): Bounds {
-  const [minX, minY, maxX, maxY] = bbox;
-  return [minX, minY, minX > maxX ? maxX + 360 : maxX, maxY];
-}
-
-/**
- * Split bounds whose east edge may run past 180° into bounds within
- * [-180, 180]: two, if they cross the antimeridian.
- */
-function splitAtAntimeridian(bounds: Bounds): Bounds[] {
-  const [minX, minY, maxX, maxY] = bounds;
-  if (maxX <= 180) {
-    return [bounds];
-  }
-  return [
-    [minX, minY, 180, maxY],
-    [-180, minY, maxX - 360, maxY],
-  ];
-}
-
-/**
- * The boxes to search the spatial index with for `viewport`.
- *
- * Source bboxes lie within [-180, 180] longitude, but near the antimeridian
- * `viewport.getBounds()` runs past ±180°.
- * So the bounds are moved back within [-180, 180], and split in two
- * at ±180° if they cross it. Web Mercator without `repeat` draws nothing past
- * ±180°, so its bounds are searched as they are.
- */
-function searchBounds(viewport: Viewport): Bounds[] {
-  const bounds = viewport.getBounds();
-  if (!viewport.subViewports && !(viewport instanceof GlobeViewport)) {
-    return [bounds];
-  }
-
-  const [minX, minY, maxX, maxY] = bounds;
-  if (maxX - minX >= 360) {
-    return [[-180, minY, 180, maxY]];
-  }
-  const west = nearestCopy(minX, 0, 360);
-  return splitAtAntimeridian([west, minY, west + (maxX - minX), maxY]);
 }
 
 /**
