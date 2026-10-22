@@ -213,7 +213,7 @@ const NORM16_FALLBACK_FORMATS: Partial<Record<TextureFormat, TextureFormat>> = {
  * float counterpart.
  *
  * WebGL2 needs the `EXT_texture_norm16` extension for 16-bit normalized
- * textures, and Firefox doesn't have it. The fallback divides each sample by
+ * textures. The fallback divides each sample by
  * 65535, so shaders read the same 0-1 values from either format.
  */
 export function resolveTextureFormat(
