@@ -485,7 +485,7 @@ export function createStory(
     id: "image",
     title: "An image across 180°",
     description: [
-      "An image in UTM zone 60N, 42 x 42 pixels of 20 km, over the Aleutian Islands. The 180° meridian crosses it at a slant. On a Web Mercator map, 180° is both edges of the world, so the image belongs at both: its west part at the map's east edge, its east part at the west edge.",
+      "We start with an image in UTM zone 60N over the Aleutian islands. The antimeridian crosses it at a slant. On a Web Mercator map, the image should be drawn at both edges of the world.",
     ],
     durationMs: 1600,
     frame: (t) => {
@@ -515,7 +515,9 @@ export function createStory(
     id: "seed",
     title: "Two triangles",
     description: [
-      "To draw an image on the map, deck.gl-raster cuts it into triangles, places each corner exactly, and lets the GPU stretch the image in between. Like every image, this one starts as two triangles.",
+      "To draw an image on the map, deck.gl-raster cuts it into triangles, places each corner exactly, and lets the GPU stretch the image in between. Like every image, this one starts as two triangles. For how that works in general, see the ",
+      { text: "reprojection explainer", href: REPROJECTION_EXPLAINER_URL },
+      ".",
     ],
     durationMs: 1200,
     frame: (t) => {
@@ -568,7 +570,7 @@ export function createStory(
     id: "corners",
     title: "Project the corners",
     description: [
-      `The reprojector places each corner exactly, with proj4. But proj4 returns every point in one copy of the world, from -180° to 180°, which is x 0 to ${PERIOD} on the map. The image's west corners land at x ${Math.round(scene.corners.nw.raw[0])} and ${Math.round(scene.corners.sw.raw[0])}, at the map's east edge, and its east corners at x ${Math.round(scene.corners.ne.raw[0])} and ${Math.round(scene.corners.se.raw[0])}, at the west edge, so both triangles stretch across the whole world.`,
+      `The reprojector places each corner exactly, on CPU, with proj4.js. But proj4.js projects only to a single copy of the world. So every longitude value ranges from -180° to 180°. The image's west corners land at the map's east edge, and its east corners land at the map's west edge. The normal triangulation process would create triangles that stretch across the whole world, not across the antimeridian.`,
     ],
     durationMs: 2600,
     stops: [FLIGHT_MS + 500],
@@ -625,7 +627,7 @@ export function createStory(
     id: "plain",
     title: "Refining can't fix it",
     description: [
-      `Refining adds triangles where the mesh is furthest off. Here it never gets close: after ${count(plain[plain.length - 1]!.triangles.length / 3)} triangles it gives up, still ${count(Math.round(plain[plain.length - 1]!.maxError))} output pixels off. The triangles along 180° still span the world, because the jump is in the projection, not in the mesh.`,
+      `Our mesh refinement process adds triangles where the mesh is furthest off. Here it's never able to minimize mesh error: after ${count(plain[plain.length - 1]!.triangles.length / 3)} triangles it gives up, still ${count(Math.round(plain[plain.length - 1]!.maxError))} output pixels off. The triangles along 180° still span the world, because the jump is in the projection, not in the mesh.`,
     ],
     durationMs: plain.length * SNAPSHOT_MS + 600,
     frame: (t) => {
@@ -749,7 +751,7 @@ export function createStory(
     id: "walk",
     title: "Walk to the corners",
     description: [
-      `Before meshing, the layer unwraps the corners. It starts at the image's center, which proj4 puts at x ${short(scene.center.position[0])}, and walks toward each corner. Each sample proj4 returns (red, in the world above) moves to the copy of the world nearest the sample before it (green, up close). The west corners come out at x ${short(scene.corners.nw.unwrapped[0])} and ${short(scene.corners.sw.unwrapped[0])}, past the world's west edge, instead of ${Math.round(scene.corners.nw.raw[0])} and ${Math.round(scene.corners.sw.raw[0])}.`,
+      `Before meshing, the layer unwraps the corners. It starts at the image's center, which proj4.js puts at x ${short(scene.center.position[0])}, and walks toward each corner. Each sample proj4.js returns (red, in the world above) moves to the copy of the world nearest the sample before it (green, up close). The west corners come out at x ${short(scene.corners.nw.unwrapped[0])} and ${short(scene.corners.sw.unwrapped[0])}, past the world's west edge, instead of ${Math.round(scene.corners.nw.raw[0])} and ${Math.round(scene.corners.sw.raw[0])}.`,
     ],
     durationMs: sampleStart(walkSamples.length) + 400,
     stops: walkSamples.map((_, k) => sampleStart(k)),

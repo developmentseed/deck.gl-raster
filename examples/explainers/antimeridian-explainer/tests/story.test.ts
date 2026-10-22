@@ -329,7 +329,20 @@ describe("titles", () => {
 });
 
 describe("descriptions", () => {
-  it("describe steps 3-8 with the scene's own numbers", () => {
+  it("step 2 links the reprojection explainer, for how meshing works in general", () => {
+    const links = story[1]!.description.filter(
+      (run) => typeof run !== "string" && "href" in run,
+    );
+    expect(links).toEqual([
+      {
+        text: "reprojection explainer",
+        href: "https://developmentseed.org/deck.gl-raster/examples/reprojection-explainer/",
+      },
+    ]);
+  });
+
+  // Step 3 deliberately gives no numbers: it says where the corners land.
+  it("describe steps 4-8 with the scene's own numbers", () => {
     const shift = (p: [number, number], dx: number): [number, number] => [
       p[0] + dx,
       p[1],
@@ -363,7 +376,7 @@ describe("descriptions", () => {
       },
     };
     const other = createStory(changed, fakeImage());
-    for (let i = 2; i <= 7; i++) {
+    for (let i = 3; i <= 7; i++) {
       expect(plainText(other[i]!), `step ${i + 1}`).not.toBe(
         plainText(story[i]!),
       );
