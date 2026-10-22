@@ -162,8 +162,10 @@ function fakeSource(opts: {
   size: number;
   tileSize: number;
   cellSize: number;
+  /** Bits per sample: 8 (the default) or 16. */
+  bits?: 8 | 16;
 }) {
-  const { size, tileSize, cellSize } = opts;
+  const { size, tileSize, cellSize, bits = 8 } = opts;
   const tile = (x: number, y: number, boundless = true) => {
     const width = boundless
       ? tileSize
@@ -176,7 +178,10 @@ function fakeSource(opts: {
       y,
       array: {
         layout: "pixel-interleaved",
-        data: new Uint8Array(width * height),
+        data:
+          bits === 16
+            ? new Uint16Array(width * height)
+            : new Uint8Array(width * height),
         count: 1,
         width,
         height,
@@ -218,11 +223,19 @@ function fakeSource(opts: {
   return { geotiff, tileset };
 }
 
-/** Fetch tile `(x, y)` at the only level, from sources already opened. */
+/**
+ * Fetch tile `(x, y)` at the only level, from sources already opened. The
+ * default device can create and filter every texture format.
+ */
 function getTileData(
   sources: Record<string, ReturnType<typeof fakeSource>>,
   x: number,
   y: number,
+  device: object = {
+    createTexture: () => fakeTexture().texture,
+    isTextureFormatSupported: () => true,
+    isTextureFormatFilterable: () => true,
+  },
 ) {
   const layer = makeBareLayer({ pool: {} });
   const entries = Object.entries(sources);
@@ -234,7 +247,6 @@ function getTileData(
       new Map(entries.map(([name, s]) => [name, s.tileset])),
     ),
   } as never);
-  const device = { createTexture: () => fakeTexture().texture };
   return layer._getTileData(
     { index: { x, y, z: 0 } } as never,
     { device } as never,
@@ -272,5 +284,27 @@ describe("MultiCOGLayer._getTileData", () => {
     expect(band.uvTransform[1]).toBeCloseTo(2 / 3);
     expect(band.uvTransform[2]).toBeCloseTo(1 / 3);
     expect(band.uvTransform[3]).toBeCloseTo(1 / 3);
+  });
+
+  it("counts a 16-bit band's float32 bytes on a device without r16unorm", async () => {
+    const formats: string[] = [];
+    const device = {
+      createTexture: (props: { format: string }) => {
+        formats.push(props.format);
+        return fakeTexture().texture;
+      },
+      isTextureFormatSupported: (format: string) => format !== "r16unorm",
+      isTextureFormatFilterable: () => true,
+      features: new Set(["float32-filterable"]),
+    };
+    const result = await getTileData(
+      { a: fakeSource({ size: 4, tileSize: 4, cellSize: 1, bits: 16 }) },
+      0,
+      0,
+      device,
+    );
+    expect(formats).toEqual(["r32float"]);
+    // 4x4 pixels of 4-byte floats, not the source's 2-byte integers.
+    expect(result.bands.get("a")!.byteLength).toEqual(4 * 4 * 4);
   });
 });
