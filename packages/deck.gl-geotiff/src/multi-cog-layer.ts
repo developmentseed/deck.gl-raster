@@ -320,7 +320,7 @@ async function openCogSources(
       }),
     );
   } catch (err) {
-    // Layer removed mid-open (finalizeState aborted the signal); bail.
+    // `sources` changed or the layer was removed mid-open; bail.
     if (signal?.aborted) {
       return null;
     }
@@ -360,8 +360,8 @@ export class MultiCOGLayer extends RasterTileLayer<
   declare state: {
     sources: Map<string, SourceState> | null;
     multiDescriptor: MultiRasterTilesetDescriptor | null;
-    /** Aborts the in-flight header reads when the layer is removed, freeing
-     *  their limiter slots for fresh work. */
+    /** Aborts the in-flight header reads when `sources` changes or the layer
+     *  is removed, freeing their limiter slots for fresh work. */
     abortController?: AbortController;
     /** True while `_parseAllSources` is in flight. */
     loadingMetadata?: boolean;
@@ -371,9 +371,6 @@ export class MultiCOGLayer extends RasterTileLayer<
     this.setState({
       sources: null,
       multiDescriptor: null,
-      // One controller for the layer's lifetime; aborted in finalizeState so
-      // header reads still in flight when the layer is removed are cancelled.
-      abortController: new AbortController(),
     });
   }
 
@@ -388,17 +385,26 @@ export class MultiCOGLayer extends RasterTileLayer<
     oldProps,
   }: UpdateParameters<this>): void {
     if (changeFlags.dataChanged || props.sources !== oldProps.sources) {
+      // Abort the previous sources' parse so it can't overwrite these
+      this.state.abortController?.abort();
+      const abortController = new AbortController();
       // Reset state so renderLayers() returns null while we re-open COGs.
       // Without this, the TileLayer renders with new props but stale state,
       // caching tiles with the wrong bands.
       this.setState({
         sources: null,
         multiDescriptor: null,
+        abortController,
         loadingMetadata: true,
       });
       this._parseAllSources()
         .catch((error: Error) => this.raiseError(error, "loading COG sources"))
-        .finally(() => this.setState({ loadingMetadata: false }));
+        .finally(() => {
+          // An aborted parse no longer owns `loadingMetadata`
+          if (!abortController.signal.aborted) {
+            this.setState({ loadingMetadata: false });
+          }
+        });
     }
   }
 
@@ -482,8 +488,8 @@ export class MultiCOGLayer extends RasterTileLayer<
 
     const multiDescriptor = createMultiRasterTilesetDescriptor(tilesetMap);
 
-    // Layer was removed while we resolved projections; don't setState on a
-    // finalized layer.
+    // `sources` changed or the layer was removed while we resolved
+    // projections; drop the result.
     if (signal?.aborted) {
       return;
     }

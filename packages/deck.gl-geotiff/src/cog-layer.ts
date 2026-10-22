@@ -178,10 +178,6 @@ export class COGLayer<
     loadingMetadata?: boolean;
   };
 
-  override initializeState(): void {
-    this.setState({ abortController: new AbortController() });
-  }
-
   override finalizeState(context: LayerContext): void {
     this.state.abortController?.abort();
     super.finalizeState(context);
@@ -196,13 +192,21 @@ export class COGLayer<
       Boolean(changeFlags.dataChanged) || props.geotiff !== oldProps.geotiff;
 
     if (needsUpdate) {
+      // Abort the previous GeoTIFF's parse so it can't overwrite this one
+      this.state.abortController?.abort();
+      const abortController = new AbortController();
       // Clear stale state so renderLayers returns null until the new GeoTIFF is
       // ready
       this.clearState();
-      this.setState({ loadingMetadata: true });
+      this.setState({ abortController, loadingMetadata: true });
       this._parseGeoTIFF()
         .catch((error: Error) => this.raiseError(error, "loading GeoTIFF"))
-        .finally(() => this.setState({ loadingMetadata: false }));
+        .finally(() => {
+          // An aborted parse no longer owns `loadingMetadata`
+          if (!abortController.signal.aborted) {
+            this.setState({ loadingMetadata: false });
+          }
+        });
     }
   }
 
@@ -231,7 +235,7 @@ export class COGLayer<
           ? await this.props.epsgResolver!(crs)
           : parseWkt(crs);
     } catch (err) {
-      // Layer removed mid-open (finalizeState aborted the signal); drop it.
+      // `geotiff` changed or the layer was removed mid-open; drop it.
       if (signal?.aborted) {
         return;
       }
