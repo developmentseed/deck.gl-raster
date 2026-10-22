@@ -5,10 +5,15 @@ import {
   AffineTilesetLevel,
   createMultiRasterTilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
+import type {
+  DecodedPixelInterleaved,
+  RasterArray,
+} from "@developmentseed/geotiff";
 import { epsgResolver } from "@developmentseed/proj";
+import type { Device } from "@luma.gl/core";
 import { Texture } from "@luma.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MultiCOGLayer } from "../src/multi-cog-layer.js";
+import { createBandTexture, MultiCOGLayer } from "../src/multi-cog-layer.js";
 import { fixturePath } from "./helpers.js";
 
 /**
@@ -382,6 +387,80 @@ describe("MultiCOGLayer._getTileData", () => {
     expect(formats).toEqual(["r32float"]);
     // 4x4 pixels of 4-byte floats, not the source's 2-byte integers.
     expect(result.bands.get("a")!.byteLength).toEqual(4 * 4 * 4);
+  });
+});
+
+describe("createBandTexture", () => {
+  // Hands back the texture props so the test can see the format and samples.
+  const device = (floatFilterable = true) =>
+    ({
+      createTexture: (props: unknown) => props,
+      isTextureFormatSupported: () => true,
+      isTextureFormatFilterable: () => true,
+      features: new Set(floatFilterable ? ["float32-filterable"] : []),
+    }) as unknown as Device;
+  const create = (
+    data: DecodedPixelInterleaved["data"],
+    floatFilterable?: boolean,
+  ) =>
+    createBandTexture(device(floatFilterable), {
+      layout: "pixel-interleaved",
+      data,
+      width: 2,
+      height: 2,
+      count: 1,
+      nodata: null,
+      mask: null,
+      transform: [1, 0, 0, 0, -1, 0],
+      crs: 4326,
+    } satisfies RasterArray);
+  const upload = (
+    data: DecodedPixelInterleaved["data"],
+    floatFilterable?: boolean,
+  ) =>
+    create(data, floatFilterable).texture as unknown as {
+      data: unknown;
+      format: string;
+      sampler: { minFilter: string };
+    };
+
+  it("uploads unsigned 8- and 16-bit samples as normalised formats", () => {
+    const u8 = new Uint8Array(4);
+    expect(upload(u8)).toMatchObject({ data: u8, format: "r8unorm" });
+    const u16 = new Uint16Array(4);
+    expect(upload(u16)).toMatchObject({ data: u16, format: "r16unorm" });
+  });
+
+  it("uploads signed integers as exact float32 samples", () => {
+    const { data, format } = upload(new Int16Array([-999, -32768, 0, 32767]));
+    expect(format).toBe("r32float");
+    expect(data).toBeInstanceOf(Float32Array);
+    expect(Array.from(data as Float32Array)).toEqual([-999, -32768, 0, 32767]);
+  });
+
+  it("uploads float32 as is and narrows float64", () => {
+    const f32 = new Float32Array([0.5, -1, 2, 3]);
+    expect(upload(f32)).toMatchObject({ data: f32, format: "r32float" });
+    const { data } = upload(new Float64Array([0.5, -1, 2, 3]));
+    expect(data).toBeInstanceOf(Float32Array);
+    expect(Array.from(data as Float32Array)).toEqual([0.5, -1, 2, 3]);
+  });
+
+  it("samples nearest when the device cannot filter float textures", () => {
+    const f32 = new Float32Array(4);
+    expect(upload(f32).sampler.minFilter).toBe("linear");
+    expect(upload(f32, false).sampler.minFilter).toBe("nearest");
+  });
+
+  it("counts the float32 bytes it uploads for a signed 16-bit band", () => {
+    // 2x2 pixels of 4-byte floats, not the source's 2-byte integers.
+    expect(create(new Int16Array(4)).byteLength).toBe(2 * 2 * 4);
+  });
+
+  it("rejects sample types it cannot upload", () => {
+    expect(() => upload(new BigInt64Array(4) as never)).toThrow(
+      "Unsupported typed array type: BigInt64Array.",
+    );
   });
 });
 

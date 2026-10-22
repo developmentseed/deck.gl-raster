@@ -182,6 +182,18 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     /**
      * Post-processing render pipeline modules applied after compositing.
      *
+     * Modules see each band's samples in units that depend on its data type,
+     * so give values such as a nodata value or a rescale range in those
+     * units:
+     *
+     * - `uint8` and `uint16` bands are normalized to 0-1: a sample divided by
+     *   255 or 65535.
+     * - Every other type (signed integers, `uint32` and floats) keeps its raw
+     *   value.
+     *
+     *   Support for these types is **experimental**, and the units they
+     *   arrive in are likely to change.
+     *
      * @see {@link RasterModule}
      */
     renderPipeline?: RasterModule[];
@@ -1078,13 +1090,24 @@ function selectImage(geotiff: GeoTIFF, z: number): GeoTIFF | Overview {
  * Create a GPU texture from a {@link RasterArray}, and return it with the
  * byte length of the uploaded data.
  *
- * Infers the texture format from the typed array type. Currently supports
- * single-band `Uint8Array` (`r8unorm`) and `Uint16Array` (`r16unorm`, or
- * `r32float` on devices without it; see {@link resolveTextureFormat}).
+ * Infers the texture format from the typed array type:
  *
- * TODO: use `inferTextureFormat` from `texture.ts` for full format support.
+ * - `Uint8Array` uploads as `r8unorm` and `Uint16Array` as `r16unorm`, so
+ *   shaders read samples normalized to 0-1.
+ *
+ *   Devices not supporting `r16unorm` get the same 0-1 values in `r32float`
+ *   (see {@link resolveTextureFormat}).
+ * - Every other typed array uploads as `r32float`, where shaders read raw
+ *   sample values.
+ *
+ *   This is **experimental** (see `renderPipeline`). Integers
+ *   past 2^24 and `Float64Array` samples round to float32. Integer texture
+ *   formats aren't used because {@link CompositeBands} samples with
+ *   `sampler2D`, which can't read them.
+ *
+ * Uses nearest sampling when the device can't linearly filter the format.
  */
-function createBandTexture(
+export function createBandTexture(
   device: Device,
   array: RasterArray,
 ): { texture: Texture; byteLength: number } {
@@ -1094,19 +1117,30 @@ function createBandTexture(
 
   const { data, width, height } = array;
   let format: TextureFormat;
+  let samples = data;
 
   if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
     format = "r8unorm";
   } else if (data instanceof Uint16Array) {
     format = "r16unorm";
+  } else if (
+    data instanceof Int8Array ||
+    data instanceof Int16Array ||
+    data instanceof Int32Array ||
+    data instanceof Uint32Array ||
+    data instanceof Float32Array ||
+    data instanceof Float64Array
+  ) {
+    format = "r32float";
+    samples = data instanceof Float32Array ? data : new Float32Array(data);
   } else {
+    // Unreachable by type, kept as a runtime guard.
     throw new Error(
-      `Unsupported typed array type: ${data.constructor.name}. ` +
-        "Currently only Uint8Array and Uint16Array are supported.",
+      `Unsupported typed array type: ${(data as object).constructor.name}.`,
     );
   }
 
-  const upload = resolveTextureFormat(device, format, data);
+  const upload = resolveTextureFormat(device, format, samples);
   const filter = isFilterable(device, upload.format) ? "linear" : "nearest";
   const texture = device.createTexture({
     data: upload.data,
