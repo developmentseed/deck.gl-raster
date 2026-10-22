@@ -189,7 +189,9 @@ export type MultiCOGLayerProps = CompositeLayerProps &
      * - `uint8` and `uint16` bands are normalized to 0-1: a sample divided by
      *   255 or 65535.
      * - Every other type (signed integers, `uint32` and floats) keeps its raw
-     *   value. Support for these types is experimental, and the units they
+     *   value.
+     *
+     *   Support for these types is **experimental**, and the units they
      *   arrive in are likely to change.
      *
      * @see {@link RasterModule}
