@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.9.0-beta.3 - 2026-10-22
+
+### What's Changed
+
+* docs(deck.gl-raster): explain why TilesetFactory is a new class every render by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/734
+* fix(deck.gl-geotiff): Select MosaicLayer sources across the antimeridian by @willjnz in https://github.com/developmentseed/deck.gl-raster/pull/639
+* fix(deck.gl-raster): tolerate float error in RasterTileset2D.getParentIndex by @orshih6 in https://github.com/developmentseed/deck.gl-raster/pull/750
+* feat(geotiff): let assembleTiles stitch clipped edge tiles by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/753
+* fix(deck.gl-geotiff): Select MosaicLayer sources whose bbox crosses the antimeridian by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/752
+* fix: draw only the image part of MultiCOGLayer edge tiles by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/755
+* feat(examples): add a MultiCOGLayer explainer by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/761
+* perf(proj): resolve common EPSG codes without a request, share in-flight ones by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/760
+* fix(geotiff)!: keep each image's JPEG tables in its cached tags by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/769
+* feat(examples): add an antimeridian explainer by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/767
+* fix(deck.gl-geotiff): render band-separate (PlanarConfiguration=2) images by @thatbudakguy in https://github.com/developmentseed/deck.gl-raster/pull/635
+* fix(deck.gl-geotiff): draw 16-bit images in Firefox by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/773
+* fix(deck.gl-geotiff): abort a stale GeoTIFF parse when the source changes by @charlieforward9 in https://github.com/developmentseed/deck.gl-raster/pull/770
+* feat(deck.gl-geotiff): add a `resampling` prop to MultiCOGLayer by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/775
+* fix(geotiff): reject decodes when the decoder worker fails by @charlieforward9 in https://github.com/developmentseed/deck.gl-raster/pull/771
+* feat(deck.gl-geotiff): render signed integer and float bands in MultiCOGLayer (experimental) by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/777
+
+### New Contributors
+
+* @orshih6 made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/750
+* @thatbudakguy made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/635
+* @charlieforward9 made their first contribution in https://github.com/developmentseed/deck.gl-raster/pull/770
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.9.0-beta.2...v0.9.0-beta.3
+
 ## v0.9.0-beta.2 - 2026-10-20
 
 ### What's Changed
