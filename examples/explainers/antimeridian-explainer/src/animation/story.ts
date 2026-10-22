@@ -616,7 +616,7 @@ export function createStory(
           plainMesh(seedPlain, { edges: stretch, opacity: stretch }),
         );
       }
-      frame.hud.caption = "proj4 puts each corner in one world";
+      frame.hud.caption = "proj4.js puts each corner in one world";
       return frame;
     },
   };
@@ -989,7 +989,7 @@ export function createStory(
     id: "snap",
     title: "Snap every point",
     description: [
-      `To find where the mesh is furthest off, the reprojector projects four check points in each triangle: its center and the middle of each edge. For this image, it projects ${count(scene.refinement.projections)} times in all. So the layer wraps the projection itself: each x proj4 returns moves to the copy of the world nearest the blend of the four unwrapped corners at that pixel. The probe here is the explainer's, not the reprojector's: as it sweeps the middle row across 180°, proj4's answer (red) jumps a whole world, but the snapped point (green) moves smoothly. This holds unless the image contains a pole.`,
+      `To find where the mesh is furthest off, the reprojector projects four check points in each triangle: its center and the middle of each edge. For this image, it projects ${count(scene.refinement.projections)} times in all. So the layer wraps the projection itself: each x proj4.js returns moves to the copy of the world nearest the blend of the four unwrapped corners at that pixel. The probe here is the explainer's, not the reprojector's: as it sweeps the middle row across 180°, what proj4.js returns (red) jumps a whole world, but the snapped point (green) moves smoothly. This holds unless the image contains a pole.`,
     ],
     durationMs: SWEEP_MS + 600,
     stops: [probeTime(firstEast - 1), probeTime(firstEast)],
@@ -1063,7 +1063,7 @@ export function createStory(
         }),
         label(
           "probe-raw",
-          `proj4: x ${short(sample.raw[0])}`,
+          `proj4.js: x ${short(sample.raw[0])}`,
           [rawX, rawY + 22],
           {
             color: css(RAW),

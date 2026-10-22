@@ -28,18 +28,18 @@ don't change. Like the reprojection explainer, `src/scene/refinement.ts` reads
 1. **An image across 180°**: the image as stored, with the 180° meridian
    crossing it at a slant, and where it belongs on the map: at both edges.
 2. **Two triangles**: the reprojector starts from two triangles.
-3. **Project the corners**: proj4 returns every point in one copy of the world,
-   so the west corners land at the map's east edge and the east corners at its
-   west edge. Both triangles stretch across the world.
+3. **Project the corners**: proj4.js returns every point in one copy of the
+   world, so the west corners land at the map's east edge and the east corners
+   at its west edge. Both triangles stretch across the world.
 4. **Refining can't fix it**: a time-lapse of the reprojector refining that
    projection. It stops at its iteration cap, still hundreds of pixels off.
 5. **Walk to the corners**: from the image's center, a walk toward each corner.
    Each sample moves to the copy of the world nearest the one before it, so the
    west corners come out past the world's west edge. From here, the map shows
    the whole world in a strip and the seam up close.
-6. **Snap every point**: a probe sweeps the image. proj4's answer jumps a world
-   as it crosses 180°; the point snapped to the copy nearest the blend of the
-   unwrapped corners moves smoothly.
+6. **Snap every point**: a probe sweeps the image. What proj4.js returns jumps a
+   world as it crosses 180°; the point snapped to the copy nearest the blend of
+   the unwrapped corners moves smoothly.
 7. **Mesh as usual**: the library's refinement of the snapped projection,
    replayed one split at a time.
 8. **Cut at the world's edge**: the triangles that cross -180° are cut along it,
