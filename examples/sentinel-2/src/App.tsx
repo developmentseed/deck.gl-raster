@@ -137,6 +137,7 @@ export default function App() {
   const centeredSceneRef = useRef<number | null>(null);
   const [sceneIndex, setSceneIndex] = useState(0);
   const [presetIndex, setPresetIndex] = useState(0);
+  const [resampling, setResampling] = useState<"linear" | "nearest">("linear");
   const [debugState, setDebugState] = useState<DebugState>({
     debug: false,
     debugOpacity: 0.25,
@@ -161,6 +162,7 @@ export default function App() {
     id: `sentinel-2-multi-${sceneIndex}`,
     sources,
     composite: preset.composite,
+    resampling,
     debug: debugState.debug,
     debugOpacity: debugState.debugOpacity,
     debugLevel: debugState.debugLevel,
@@ -245,6 +247,20 @@ export default function App() {
                   {p.title}
                 </option>
               ))}
+            </NativeSelect.Field>
+            <NativeSelect.Indicator />
+          </NativeSelect.Root>
+        </Field>
+        <Field label="Resampling">
+          <NativeSelect.Root>
+            <NativeSelect.Field
+              value={resampling}
+              onChange={(e) =>
+                setResampling(e.target.value as "linear" | "nearest")
+              }
+            >
+              <option value="linear">Linear (smooth)</option>
+              <option value="nearest">Nearest (sharp pixels)</option>
             </NativeSelect.Field>
             <NativeSelect.Indicator />
           </NativeSelect.Root>

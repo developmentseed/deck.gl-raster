@@ -384,3 +384,106 @@ describe("MultiCOGLayer._getTileData", () => {
     expect(result.bands.get("a")!.byteLength).toEqual(4 * 4 * 4);
   });
 });
+
+/** A fake band texture's format, current filter, and device support. */
+type FakeTextureOptions = {
+  /** The filter its sampler uses now. */
+  filter: "linear" | "nearest";
+  /** @default "r8unorm" */
+  format?: string;
+  /** Whether its device can filter 32-bit float textures. @default true */
+  float32Filterable?: boolean;
+};
+
+/**
+ * A band texture as luma.gl reports it, with a spy on `setSampler`. Like
+ * luma.gl's, its device claims every format is filterable; only the
+ * `float32-filterable` feature tells the truth about float formats.
+ */
+function fakeSampledTexture(opts: FakeTextureOptions): {
+  texture: Texture;
+  setSampler: ReturnType<typeof vi.fn>;
+} {
+  const { filter, format = "r8unorm", float32Filterable = true } = opts;
+  const setSampler = vi.fn();
+  const device = {
+    isTextureFormatFilterable: () => true,
+    features: new Set(float32Filterable ? ["float32-filterable"] : []),
+  };
+  const texture = Object.create(Texture.prototype) as Texture;
+  Object.defineProperties(texture, {
+    device: { value: device },
+    format: { value: format },
+    sampler: { value: { props: { minFilter: filter, magFilter: filter } } },
+    setSampler: { value: setSampler },
+  });
+  return { texture, setSampler };
+}
+
+/**
+ * Render a loaded one-band tile with a texture made from `textureOptions`, as
+ * `RasterTileLayer` does whenever the layer's props change, and return the
+ * texture's `setSampler` spy.
+ */
+function renderLoadedTile(
+  props: Record<string, unknown>,
+  textureOptions: FakeTextureOptions,
+): ReturnType<typeof vi.fn> {
+  const layer = makeBareLayer(props);
+  layer.setState({ multiDescriptor: {} } as never);
+  const { texture, setSampler } = fakeSampledTexture(textureOptions);
+  const bands = new Map([
+    [
+      "a",
+      {
+        texture,
+        uvTransform: [0, 0, 1, 1],
+        width: 4,
+        height: 4,
+        byteLength: 16,
+      },
+    ],
+  ]);
+  const renderTile = (
+    layer as unknown as {
+      _renderTileCallback: () => ((data: unknown) => unknown) | undefined;
+    }
+  )._renderTileCallback();
+  renderTile?.({ bands });
+  return setSampler;
+}
+
+describe("MultiCOGLayer resampling", () => {
+  it("switches a loaded tile to nearest filtering", () => {
+    const setSampler = renderLoadedTile(
+      { resampling: "nearest" },
+      { filter: "linear" },
+    );
+    expect(setSampler).toHaveBeenCalledWith({
+      minFilter: "nearest",
+      magFilter: "nearest",
+    });
+  });
+
+  it("switches a loaded tile back to linear filtering by default", () => {
+    const setSampler = renderLoadedTile({}, { filter: "nearest" });
+    expect(setSampler).toHaveBeenCalledWith({
+      minFilter: "linear",
+      magFilter: "linear",
+    });
+  });
+
+  it("leaves a texture alone when it already filters as requested", () => {
+    const setSampler = renderLoadedTile({}, { filter: "linear" });
+    expect(setSampler).not.toHaveBeenCalled();
+  });
+
+  it("keeps a float band nearest when the device can't filter floats", () => {
+    // Linear filtering would leave the texture incomplete, so it reads as 0.
+    const setSampler = renderLoadedTile(
+      {},
+      { filter: "nearest", format: "r32float", float32Filterable: false },
+    );
+    expect(setSampler).not.toHaveBeenCalled();
+  });
+});

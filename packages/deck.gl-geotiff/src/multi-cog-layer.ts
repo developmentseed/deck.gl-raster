@@ -187,6 +187,29 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     renderPipeline?: RasterModule[];
 
     /**
+     * How band textures are resampled when drawn.
+     *
+     * - `"linear"` blends the four nearest pixels, for a smooth image.
+     * - `"nearest"` uses the single nearest pixel, so pixel edges stay sharp
+     *   and every value drawn is a value in the data.
+     *
+     * Use `"nearest"` with an exact-match nodata filter such as
+     * {@link FilterNoDataVal}: linear blending mixes the nodata value into
+     * the pixels around it, so those pixels no longer match it and are drawn
+     * as a rim around the nodata area.
+     *
+     * Changing this prop updates tiles that are already loaded, without
+     * fetching them again.
+     *
+     * A band whose texture format the device can't filter is always drawn
+     * with `"nearest"`, such as a 16-bit band stored as 32-bit floats on a
+     * device without float filtering.
+     *
+     * @default "linear"
+     */
+    resampling?: "linear" | "nearest";
+
+    /**
      * EPSG code resolver used to look up projection definitions for numeric
      * CRS codes found in GeoTIFF metadata.
      *
@@ -710,6 +733,22 @@ export class MultiCOGLayer extends RasterTileLayer<
     ].filter((n): n is string => n != null);
     if (requiredBands.some((name) => !bands.has(name))) {
       return null;
+    }
+
+    // Set each band's filter here rather than when its texture is created:
+    // this runs for every loaded tile whenever the layer's props change, so a
+    // new `resampling` applies without fetching the tiles again. A format the
+    // device can't filter stays nearest, as `createBandTexture` made it.
+    const resampling = this.props.resampling ?? "linear";
+    for (const { texture } of bands.values()) {
+      const filter =
+        resampling === "linear" && isFilterable(texture.device, texture.format)
+          ? "linear"
+          : "nearest";
+      const { minFilter, magFilter } = texture.sampler.props;
+      if (minFilter !== filter || magFilter !== filter) {
+        texture.setSampler({ minFilter: filter, magFilter: filter });
+      }
     }
 
     const compositeBandsProps = buildCompositeBandsProps(composite, bands);
