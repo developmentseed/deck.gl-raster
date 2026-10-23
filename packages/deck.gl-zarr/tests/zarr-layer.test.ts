@@ -1,5 +1,7 @@
+import { readFile } from "node:fs/promises";
 import { CompositeLayer } from "@deck.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as zarr from "zarrita";
 import type { ParsedZarr } from "../src/zarr-layer.js";
 import { ZarrLayer } from "../src/zarr-layer.js";
 
@@ -63,7 +65,44 @@ function rerender(layer: ZarrLayer, props: Record<string, unknown>): ZarrLayer {
 /** Let every settled promise run its handlers. */
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/**
+ * A store holding only a group `a`, with the attributes of the GeoZarr
+ * multiscales example. It records each read's key and abort signal. Its
+ * arrays are missing, so opening it fails after reading them.
+ */
+async function recordingStore() {
+  const example = JSON.parse(
+    await readFile(
+      new URL(
+        "../../geozarr/geo-proj/examples/multiscales.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  const groupJson = new TextEncoder().encode(
+    JSON.stringify({
+      zarr_format: 3,
+      node_type: "group",
+      attributes: example.attributes,
+    }),
+  );
+  const reads: { key: string; signal?: AbortSignal }[] = [];
+  const store = {
+    async get(key: string, options?: { signal?: AbortSignal }) {
+      reads.push({ key, signal: options?.signal });
+      return key === "/a/zarr.json" ? groupJson : undefined;
+    },
+  };
+  return { store, reads };
+}
+
 describe("ZarrLayer.updateState", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("raises a metadata load failure through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
     const layer = makeBareLayer({ onError });
@@ -105,6 +144,27 @@ describe("ZarrLayer.updateState", () => {
     await flush();
 
     expect(next.state.tilesetDescriptor).toBe(newDescriptor);
+  });
+
+  it("aborts a replaced load's Zarr reads", async () => {
+    // `_parseZarr` stores debug handles on `window`, which Node doesn't define
+    vi.stubGlobal("window", {});
+    const { store, reads } = await recordingStore();
+    const props = { node: zarr.root(store), onError: () => true };
+    const layer = makeBareLayer({ ...props, variable: "a" });
+    runInitialUpdate(layer);
+    // Wait for the reads of the group and of its first level's array.
+    await vi.waitFor(() =>
+      expect(reads.map((read) => read.key)).toContain("/a/r10m/zarr.json"),
+    );
+    const firstReads = [...reads];
+    const signal = firstReads[0]?.signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(firstReads.every((read) => read.signal === signal)).toBe(true);
+
+    rerender(layer, { ...props, variable: "b" });
+
+    expect(signal!.aborted).toBe(true);
   });
 });
 

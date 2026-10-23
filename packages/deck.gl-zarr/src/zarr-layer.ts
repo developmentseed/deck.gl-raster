@@ -197,10 +197,8 @@ export class ZarrLayer<
     if (needsUpdate) {
       // Clear stale state so renderLayers returns null until the new Zarr is ready
       this._clearState();
-      // zarrita's `open` takes no signal, so a replaced load runs to the end;
-      // `_loadMetadata` drops its result.
       this._loadMetadata({
-        load: () => this._parseZarr(),
+        load: (signal) => this._parseZarr(signal),
         apply: (layer, parsed) => layer.setState(parsed),
         errorContext: "loading Zarr metadata",
       });
@@ -221,10 +219,11 @@ export class ZarrLayer<
    * Open the Zarr store, parse GeoZarr metadata, validate dims, build
    * reprojection fns.
    *
-   * Runs through {@link RasterTileLayer._loadMetadata}, which drops the result
-   * if `node` or `variable` changes or the layer is removed first.
+   * Runs through {@link RasterTileLayer._loadMetadata}, which aborts `signal`
+   * and drops the result if `node` or `variable` changes or the layer is
+   * removed first.
    */
-  async _parseZarr(): Promise<ParsedZarr> {
+  async _parseZarr(signal: AbortSignal): Promise<ParsedZarr> {
     const { node, variable, metadata: metadataOverride } = this.props;
 
     // Callers own the store. We accept a pre-opened Array (rendered as a
@@ -246,7 +245,7 @@ export class ZarrLayer<
     window.root = root;
 
     const group = variable
-      ? await zarr.open(root.resolve(variable), { kind: "group" })
+      ? await zarr.open(root.resolve(variable), { kind: "group", signal })
       : root;
     // @ts-expect-error - for debugging
     window.group = group;
@@ -264,7 +263,7 @@ export class ZarrLayer<
         ? [preopenedArray]
         : await Promise.all(
             meta.levels.map((level) =>
-              zarr.open(group.resolve(level.path), { kind: "array" }),
+              zarr.open(group.resolve(level.path), { kind: "array", signal }),
             ),
           );
 
