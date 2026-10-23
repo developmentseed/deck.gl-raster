@@ -239,6 +239,8 @@ export class RasterTileLayer<
   static override defaultProps = defaultProps;
 
   declare state: {
+    // Subclasses declare their own fields
+    [key: string]: unknown;
     /** Aborts the metadata load in flight when a newer one starts or the
      *  layer is removed. */
     metadataAbortController?: AbortController;
