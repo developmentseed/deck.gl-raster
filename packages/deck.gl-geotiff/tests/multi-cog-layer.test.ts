@@ -139,6 +139,27 @@ describe("MultiCOGLayer.updateState", () => {
     expect(error?.cause).toBeInstanceOf(Error);
   });
 
+  it("raises sources in different CRSs through onError", async () => {
+    // Source a is in EPSG:4326 and b in EPSG:3857; a is finer, so it's the
+    // primary.
+    const onError = vi.fn((_error: Error) => true);
+    const layer = makeBareLayer({
+      onError,
+      sources: {
+        a: { url: await fixtureBytes("cog_uint8_rgba") },
+        b: { url: await fixtureBytes("cog_uint8_rgba_3857") },
+      },
+    });
+
+    runInitialUpdate(layer);
+
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
+    expect(onError.mock.calls[0]?.[0].message).toBe(
+      'loading COG sources: Source "b" has CRS EPSG:3857, but the primary source "a" has EPSG:4326. All MultiCOGLayer sources must share one CRS.',
+    );
+    expect(layer.state.sources).toBeNull();
+  });
+
   it("keeps the new sources when the old ones finish opening last", async () => {
     // The old source is in EPSG:4326 and the new one in EPSG:3857.
     const oldSources = { old: { url: await fixtureBytes("cog_uint8_rgba") } };

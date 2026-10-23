@@ -55,6 +55,7 @@ import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { isFilterable, resolveTextureFormat } from "./geotiff/texture.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
+import { validateSources } from "./multi-cog-validation.js";
 
 /**
  * Color palette for debug overlays.
@@ -375,7 +376,9 @@ async function openCogSources(
  *
  * The finest-resolution source is automatically selected as the primary
  * tileset, which drives the tile grid. Secondary sources are sampled at the
- * closest matching resolution.
+ * closest matching resolution. Each secondary source must have the primary's
+ * CRS and extent, to within one pixel of the coarser source at each edge, or
+ * the layer raises an error through `onError`.
  *
  * @see {@link MultiCOGLayerProps} for accepted props.
  * @see {@link createMultiRasterTilesetDescriptor} for the grouping logic.
@@ -522,6 +525,7 @@ export class MultiCOGLayer extends RasterTileLayer<
     }
 
     const multiDescriptor = createMultiRasterTilesetDescriptor(tilesetMap);
+    validateSources(cogSources, multiDescriptor.primaryKey);
 
     // `sources` changed or the layer was removed while we resolved
     // projections; drop the result.
