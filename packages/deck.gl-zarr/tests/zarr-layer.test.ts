@@ -1,33 +1,22 @@
 import { readFile } from "node:fs/promises";
 import { CompositeLayer } from "@deck.gl/core";
+import { epsgResolver } from "@developmentseed/proj";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as zarr from "zarrita";
-import type { ParsedZarr } from "../src/zarr-layer.js";
 import { ZarrLayer } from "../src/zarr-layer.js";
-
-/**
- * The newest instance of each bare layer, keyed by the `state` object that all
- * its instances share. deck.gl keeps this pointer in its internal layer state
- * and returns it from `getCurrentLayer()`.
- */
-const currentLayers = new WeakMap<object, { layer: ZarrLayer }>();
 
 /**
  * Build a {@link ZarrLayer} ready for direct lifecycle calls: bypasses deck.gl's
  * `LayerManager` by replacing `state` and `setState` with a plain object +
- * assign, and stubs `getCurrentLayer` to return the newest instance, mirroring
- * `makeBareLayer` in the deck.gl-raster tests.
+ * assign, mirroring `makeBareLayer` in the deck.gl-raster tests.
  */
 function makeBareLayer(props: Record<string, unknown> = {}): ZarrLayer {
   const layer = new ZarrLayer({ id: "zarr", node: {}, ...props } as never);
   const state: Record<string, unknown> = {};
-  const current = { layer };
-  currentLayers.set(state, current);
   Object.assign(layer as object, {
     state,
     setState: (updates: Record<string, unknown>) =>
       Object.assign(state, updates),
-    getCurrentLayer: () => current.layer,
   });
   return layer;
 }
@@ -43,17 +32,15 @@ function runInitialUpdate(layer: ZarrLayer): void {
 
 /**
  * Render a new {@link ZarrLayer} with `props`, as apps do on every render:
- * deck.gl hands the new instance the old one's `state`, makes it the current
- * layer, then runs `updateState`.
+ * deck.gl hands the new instance the old one's `state`, then runs
+ * `updateState`.
  */
 function rerender(layer: ZarrLayer, props: Record<string, unknown>): ZarrLayer {
   const next = new ZarrLayer({ id: "zarr", ...props } as never);
   Object.assign(next as object, {
     state: layer.state,
     setState: layer.setState,
-    getCurrentLayer: layer.getCurrentLayer,
   });
-  currentLayers.get(layer.state)!.layer = next;
   next.updateState({
     props: next.props,
     oldProps: layer.props,
@@ -62,16 +49,26 @@ function rerender(layer: ZarrLayer, props: Record<string, unknown>): ZarrLayer {
   return next;
 }
 
+/** Spy on the protected `_loadMetadata` of a layer or its prototype. */
+function spyOnLoad(target: ZarrLayer) {
+  return vi.spyOn(
+    target as unknown as {
+      _loadMetadata: (signal: AbortSignal) => Promise<void>;
+    },
+    "_loadMetadata",
+  );
+}
+
 /** Let every settled promise run its handlers. */
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /**
- * A store holding only a group `a`, with the attributes of the GeoZarr
- * multiscales example. It records each read's key and abort signal. Its
- * arrays are missing, so opening it fails after reading them.
+ * A store with groups `a` and `b`, each holding the GeoZarr multiscales
+ * example: the example's attributes, and an empty array for each level. It
+ * records each read's key and abort signal.
  */
-async function recordingStore() {
-  const example = JSON.parse(
+async function geoZarrStore() {
+  const { attributes } = JSON.parse(
     await readFile(
       new URL(
         "../../geozarr/geo-proj/examples/multiscales.json",
@@ -80,24 +77,67 @@ async function recordingStore() {
       "utf8",
     ),
   );
-  const groupJson = new TextEncoder().encode(
-    JSON.stringify({
-      zarr_format: 3,
-      node_type: "group",
-      attributes: example.attributes,
-    }),
-  );
+  const encode = (json: unknown) =>
+    new TextEncoder().encode(JSON.stringify(json));
+  const blobs = new Map<string, Uint8Array>();
+  for (const group of ["a", "b"]) {
+    blobs.set(
+      `/${group}/zarr.json`,
+      encode({ zarr_format: 3, node_type: "group", attributes }),
+    );
+    for (const level of attributes.multiscales.layout) {
+      blobs.set(
+        `/${group}/${level.asset}/zarr.json`,
+        encode({
+          zarr_format: 3,
+          node_type: "array",
+          shape: level["spatial:shape"],
+          data_type: "uint16",
+          chunk_grid: {
+            name: "regular",
+            configuration: { chunk_shape: [256, 256] },
+          },
+          chunk_key_encoding: {
+            name: "default",
+            configuration: { separator: "/" },
+          },
+          codecs: [{ name: "bytes", configuration: { endian: "little" } }],
+          fill_value: 0,
+          dimension_names: attributes["spatial:dimensions"],
+          attributes: {},
+        }),
+      );
+    }
+  }
   const reads: { key: string; signal?: AbortSignal }[] = [];
   const store = {
     async get(key: string, options?: { signal?: AbortSignal }) {
       reads.push({ key, signal: options?.signal });
-      return key === "/a/zarr.json" ? groupJson : undefined;
+      return blobs.get(key);
     },
   };
   return { store, reads };
 }
 
+/**
+ * An `epsgResolver` that holds each lookup until the test releases it. The
+ * lookup is a load's last `await`, so a held load has finished its reads.
+ */
+function heldResolver() {
+  const releases: (() => void)[] = [];
+  const resolver = (epsg: number) =>
+    new Promise((resolve) => {
+      releases.push(() => resolve(epsgResolver(epsg)));
+    });
+  return { resolver, releases };
+}
+
 describe("ZarrLayer.updateState", () => {
+  beforeEach(() => {
+    // `_loadMetadata` stores debug handles on `window`, which Node lacks
+    vi.stubGlobal("window", {});
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -106,7 +146,7 @@ describe("ZarrLayer.updateState", () => {
   it("raises a metadata load failure through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
     const layer = makeBareLayer({ onError });
-    vi.spyOn(layer, "_parseZarr").mockRejectedValue(new Error("boom"));
+    spyOnLoad(layer).mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
@@ -117,50 +157,45 @@ describe("ZarrLayer.updateState", () => {
   });
 
   it("keeps the new Zarr when the old one finishes loading last", async () => {
-    const oldDescriptor = {};
-    const newDescriptor = {};
-    let finishOld!: () => void;
-    let finishNew!: () => void;
-    vi.spyOn(ZarrLayer.prototype, "_parseZarr")
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          finishOld = () =>
-            resolve({ tilesetDescriptor: oldDescriptor } as ParsedZarr);
-        }),
-      )
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          finishNew = () =>
-            resolve({ tilesetDescriptor: newDescriptor } as ParsedZarr);
-        }),
-      );
-
-    const layer = makeBareLayer();
+    const { store } = await geoZarrStore();
+    const { resolver, releases } = heldResolver();
+    const props = {
+      node: zarr.root(store),
+      selection: {},
+      epsgResolver: resolver,
+    };
+    const layer = makeBareLayer({ ...props, variable: "a" });
     runInitialUpdate(layer);
-    const next = rerender(layer, { node: {} });
-    finishNew();
-    await flush();
-    finishOld();
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    const next = rerender(layer, { ...props, variable: "b" });
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+
+    releases[1]!();
+    await vi.waitFor(() =>
+      expect(next.state.arrays?.[0]?.path).toBe("/b/r10m"),
+    );
+    releases[0]!();
     await flush();
 
-    expect(next.state.tilesetDescriptor).toBe(newDescriptor);
+    expect(next.state.arrays?.[0]?.path).toBe("/b/r10m");
   });
 
   it("aborts a replaced load's Zarr reads", async () => {
-    // `_parseZarr` stores debug handles on `window`, which Node doesn't define
-    vi.stubGlobal("window", {});
-    const { store, reads } = await recordingStore();
-    const props = { node: zarr.root(store), onError: () => true };
+    const { store, reads } = await geoZarrStore();
+    const { resolver, releases } = heldResolver();
+    const props = {
+      node: zarr.root(store),
+      selection: {},
+      epsgResolver: resolver,
+    };
     const layer = makeBareLayer({ ...props, variable: "a" });
     runInitialUpdate(layer);
-    // Wait for the reads of the group and of its first level's array.
-    await vi.waitFor(() =>
-      expect(reads.map((read) => read.key)).toContain("/a/r10m/zarr.json"),
-    );
-    const firstReads = [...reads];
-    const signal = firstReads[0]?.signal;
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    const signal = reads[0]?.signal;
     expect(signal).toBeInstanceOf(AbortSignal);
-    expect(firstReads.every((read) => read.signal === signal)).toBe(true);
+    // Every read so far, down to the last level's array, carries the signal
+    expect(reads.map((read) => read.key)).toContain("/a/r60m/zarr.json");
+    expect(reads.every((read) => read.signal === signal)).toBe(true);
 
     rerender(layer, { ...props, variable: "b" });
 
@@ -180,7 +215,7 @@ describe("ZarrLayer.isLoaded", () => {
 
   it("is not loaded while the Zarr metadata is loading", () => {
     const layer = makeBareLayer();
-    vi.spyOn(layer, "_parseZarr").mockReturnValue(new Promise(() => {}));
+    spyOnLoad(layer).mockReturnValue(new Promise(() => {}));
 
     runInitialUpdate(layer);
 
@@ -189,7 +224,7 @@ describe("ZarrLayer.isLoaded", () => {
 
   it("is loaded once the Zarr metadata has loaded", async () => {
     const layer = makeBareLayer();
-    vi.spyOn(layer, "_parseZarr").mockResolvedValue({} as ParsedZarr);
+    spyOnLoad(layer).mockResolvedValue(undefined);
 
     runInitialUpdate(layer);
 
@@ -198,7 +233,7 @@ describe("ZarrLayer.isLoaded", () => {
 
   it("is loaded after the Zarr metadata fails to load", async () => {
     const layer = makeBareLayer({ onError: () => true });
-    vi.spyOn(layer, "_parseZarr").mockRejectedValue(new Error("boom"));
+    spyOnLoad(layer).mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
@@ -207,10 +242,10 @@ describe("ZarrLayer.isLoaded", () => {
 
   it("is not loaded when the old Zarr finishes loading first", async () => {
     let finishOld!: () => void;
-    vi.spyOn(ZarrLayer.prototype, "_parseZarr")
+    spyOnLoad(ZarrLayer.prototype)
       .mockReturnValueOnce(
         new Promise((resolve) => {
-          finishOld = () => resolve({} as ParsedZarr);
+          finishOld = resolve;
         }),
       )
       .mockReturnValue(new Promise(() => {}));

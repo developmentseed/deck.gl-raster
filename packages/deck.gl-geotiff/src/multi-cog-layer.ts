@@ -49,7 +49,6 @@ import {
 } from "@developmentseed/proj";
 import type { Device, TextureFormat } from "@luma.gl/core";
 import { Texture } from "@luma.gl/core";
-import type { Converter } from "proj4";
 import proj4 from "proj4";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
@@ -145,14 +144,6 @@ export interface MultiCOGSourceConfig {
 interface SourceState {
   geotiff: GeoTIFF;
 }
-
-/** COG sources opened by {@link MultiCOGLayer._parseAllSources}, ready to apply. */
-export type ParsedSources = {
-  sourceMap: Map<string, SourceState>;
-  multiDescriptor: MultiRasterTilesetDescriptor;
-  /** Converts between the sources' CRS and WGS84. */
-  converter4326: Converter;
-};
 
 /**
  * Props accepted by {@link MultiCOGLayer}.
@@ -337,8 +328,7 @@ type OpenedCogSource = {
 
 /**
  * Open every configured source's GeoTIFF in parallel and resolve each one's
- * projection. Returns `null` when `signal` aborts mid-open (the layer was
- * removed), so the caller can bail without applying stale state.
+ * projection.
  */
 async function openCogSources(
   entries: [string, MultiCOGSourceConfig][],
@@ -347,28 +337,20 @@ async function openCogSources(
     epsgResolver: EpsgResolver;
     signal?: AbortSignal;
   },
-): Promise<OpenedCogSource[] | null> {
+): Promise<OpenedCogSource[]> {
   const { concurrencyLimiter, epsgResolver, signal } = options;
-  try {
-    return await Promise.all(
-      entries.map(async ([name, config]) => {
-        const geotiff = await fetchGeoTIFF(config.url, {
-          concurrencyLimiter,
-          signal,
-        });
-        const crs = geotiff.crs;
-        const sourceProjection =
-          typeof crs === "number" ? await epsgResolver(crs) : parseWkt(crs);
-        return { name, geotiff, sourceProjection };
-      }),
-    );
-  } catch (err) {
-    // `sources` changed or the layer was removed mid-open; bail.
-    if (signal?.aborted) {
-      return null;
-    }
-    throw err;
-  }
+  return await Promise.all(
+    entries.map(async ([name, config]) => {
+      const geotiff = await fetchGeoTIFF(config.url, {
+        concurrencyLimiter,
+        signal,
+      });
+      const crs = geotiff.crs;
+      const sourceProjection =
+        typeof crs === "number" ? await epsgResolver(crs) : parseWkt(crs);
+      return { name, geotiff, sourceProjection };
+    }),
+  );
 }
 
 /**
@@ -425,11 +407,7 @@ export class MultiCOGLayer extends RasterTileLayer<
         sources: null,
         multiDescriptor: null,
       });
-      this._loadMetadata({
-        load: (signal) => this._parseAllSources(signal),
-        apply: (layer, parsed) => layer._applyAllSources(parsed),
-        errorContext: "loading COG sources",
-      });
+      this._reloadMetadata("loading COG sources");
     }
   }
 
@@ -439,18 +417,13 @@ export class MultiCOGLayer extends RasterTileLayer<
    *
    * All sources are assumed to share the same CRS; the projection of the
    * first source is used for the shared coordinate converters.
-   *
-   * Runs through {@link RasterTileLayer._loadMetadata}, which drops the result
-   * if `sources` changes or the layer is removed first.
-   *
-   * @returns The opened sources, or `null` when `sources` is empty.
    */
-  async _parseAllSources(signal: AbortSignal): Promise<ParsedSources | null> {
+  protected override async _loadMetadata(signal: AbortSignal): Promise<void> {
     const { sources } = this.props;
     const entries = Object.entries(sources);
 
     if (entries.length === 0) {
-      return null;
+      return;
     }
 
     const cogSources = await openCogSources(entries, {
@@ -458,9 +431,8 @@ export class MultiCOGLayer extends RasterTileLayer<
       epsgResolver: this.props.epsgResolver!,
       signal,
     });
-    if (cogSources === null) {
-      return null;
-    }
+    // `sources` changed or the layer was removed while we waited
+    signal.throwIfAborted();
 
     // Use the first source's projection for shared projection functions
     // (all sources must share the same CRS)
@@ -513,18 +485,6 @@ export class MultiCOGLayer extends RasterTileLayer<
     }
 
     const multiDescriptor = createMultiRasterTilesetDescriptor(tilesetMap);
-
-    return { sourceMap, multiDescriptor, converter4326 };
-  }
-
-  /**
-   * Store the opened sources in state, then call `onGeoTIFFLoad`.
-   */
-  _applyAllSources(parsed: ParsedSources | null): void {
-    if (parsed === null) {
-      return;
-    }
-    const { sourceMap, multiDescriptor, converter4326 } = parsed;
 
     this.setState({
       sources: sourceMap,

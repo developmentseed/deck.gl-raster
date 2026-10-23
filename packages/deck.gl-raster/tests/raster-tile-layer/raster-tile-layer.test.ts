@@ -176,66 +176,10 @@ describe("RasterTileLayer world wrap", () => {
   });
 });
 
-describe("RasterTileLayer._loadMetadata", () => {
+describe("RasterTileLayer._reloadMetadata", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  /** Exposes the protected `_loadMetadata` to the tests. */
-  class MetadataTestLayer extends RasterTileLayer {
-    start<T>(
-      load: (signal: AbortSignal) => Promise<T>,
-      apply: (layer: this, result: T) => void,
-    ): void {
-      this._loadMetadata({ load, apply, errorContext: "loading test" });
-    }
-  }
-
-  /**
-   * The newest instance of each bare layer, keyed by the `state` object that
-   * all its instances share. deck.gl keeps this pointer in its internal layer
-   * state and returns it from `getCurrentLayer()`.
-   */
-  const currentLayers = new WeakMap<object, { layer: MetadataTestLayer }>();
-
-  /**
-   * Build a {@link MetadataTestLayer} ready for direct lifecycle calls: replace
-   * `state` and `setState` with a plain object + assign, and stub
-   * `getCurrentLayer` to return the newest instance.
-   */
-  function makeBareLayer(
-    props: Record<string, unknown> = {},
-  ): MetadataTestLayer {
-    const layer = new MetadataTestLayer({ id: "test", ...props } as never);
-    const state: Record<string, unknown> = {};
-    const current = { layer };
-    currentLayers.set(state, current);
-    Object.assign(layer as object, {
-      state,
-      setState: (updates: Record<string, unknown>) =>
-        Object.assign(state, updates),
-      getCurrentLayer: () => current.layer,
-    });
-    return layer;
-  }
-
-  /**
-   * Render a new instance with `props`, as apps do on every render: deck.gl
-   * hands it the old instance's `state` and makes it the current layer.
-   */
-  function rerender(
-    layer: MetadataTestLayer,
-    props: Record<string, unknown> = {},
-  ): MetadataTestLayer {
-    const next = new MetadataTestLayer({ id: "test", ...props } as never);
-    Object.assign(next as object, {
-      state: layer.state,
-      setState: layer.setState,
-      getCurrentLayer: layer.getCurrentLayer,
-    });
-    currentLayers.get(layer.state)!.layer = next;
-    return next;
-  }
 
   /** A promise with its `resolve` and `reject` exposed. */
   function deferred<T>() {
@@ -248,137 +192,142 @@ describe("RasterTileLayer._loadMetadata", () => {
     return { promise, resolve, reject };
   }
 
+  /** A load started by {@link MetadataTestLayer}, settled by the test. */
+  type Load = { signal: AbortSignal } & ReturnType<typeof deferred<string>>;
+
+  /**
+   * Overrides `_loadMetadata` as subclasses must: wait for the load, check the
+   * signal after the last `await`, then `setState`. Each load is pushed to the
+   * `loads` prop for the test to settle.
+   */
+  class MetadataTestLayer extends RasterTileLayer {
+    start(): void {
+      this._reloadMetadata("loading test");
+    }
+
+    protected override async _loadMetadata(signal: AbortSignal): Promise<void> {
+      const load = { signal, ...deferred<string>() };
+      (this.props as unknown as { loads: Load[] }).loads.push(load);
+      const result = await load.promise;
+      signal.throwIfAborted();
+      this.setState({ result });
+    }
+  }
+
+  /**
+   * Build a {@link MetadataTestLayer} ready for direct lifecycle calls: replace
+   * `state` and `setState` with a plain object + assign.
+   */
+  function makeBareLayer(props: Record<string, unknown>): MetadataTestLayer {
+    const layer = new MetadataTestLayer({ id: "test", ...props } as never);
+    const state: Record<string, unknown> = {};
+    Object.assign(layer as object, {
+      state,
+      setState: (updates: Record<string, unknown>) =>
+        Object.assign(state, updates),
+    });
+    return layer;
+  }
+
+  /**
+   * Render a new instance with `props`, as apps do on every render: deck.gl
+   * hands it the old instance's `state`.
+   */
+  function rerender(
+    layer: MetadataTestLayer,
+    props: Record<string, unknown>,
+  ): MetadataTestLayer {
+    const next = new MetadataTestLayer({ id: "test", ...props } as never);
+    Object.assign(next as object, {
+      state: layer.state,
+      setState: layer.setState,
+    });
+    return next;
+  }
+
   /** Let every settled promise run its handlers. */
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-  it("applies the latest load's result to the current layer", async () => {
-    const layer = makeBareLayer();
-    const load = deferred<string>();
-    const apply = vi.fn();
-    layer.start(() => load.promise, apply);
-    const next = rerender(layer);
+  it("keeps the latest load's result when an older load finishes last", async () => {
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ loads });
+    layer.start();
+    const next = rerender(layer, { loads });
+    next.start();
 
-    load.resolve("a");
+    loads[1]!.resolve("b");
+    await flush();
+    loads[0]!.resolve("a");
     await flush();
 
-    expect(apply).toHaveBeenCalledExactlyOnceWith(next, "a");
-  });
-
-  it("drops a load that a newer load replaced", async () => {
-    const layer = makeBareLayer();
-    const a = deferred<string>();
-    const b = deferred<string>();
-    const apply = vi.fn();
-    layer.start(() => a.promise, apply);
-    const next = rerender(layer);
-    next.start(() => b.promise, apply);
-
-    b.resolve("b");
-    await flush();
-    a.resolve("a");
-    await flush();
-
-    expect(apply.mock.calls.map(([, result]) => result)).toEqual(["b"]);
+    expect(next.state.result).toBe("b");
   });
 
   it("stays loading until the latest load settles", async () => {
     vi.spyOn(CompositeLayer.prototype, "isLoaded", "get").mockReturnValue(true);
-    const layer = makeBareLayer();
-    const a = deferred<string>();
-    const b = deferred<string>();
-    layer.start(
-      () => a.promise,
-      () => {},
-    );
-    const next = rerender(layer);
-    next.start(
-      () => b.promise,
-      () => {},
-    );
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ loads });
+    layer.start();
+    const next = rerender(layer, { loads });
+    next.start();
 
-    a.resolve("a");
+    loads[0]!.resolve("a");
     await flush();
     expect(next.isLoaded).toBe(false);
 
-    b.resolve("b");
+    loads[1]!.resolve("b");
     await flush();
     expect(next.isLoaded).toBe(true);
   });
 
   it("raises only the latest load's error", async () => {
     const onError = vi.fn((_error: Error) => true);
-    const layer = makeBareLayer({ onError });
-    const a = deferred<string>();
-    const b = deferred<string>();
-    layer.start(
-      () => a.promise,
-      () => {},
-    );
-    const next = rerender(layer, { onError });
-    next.start(
-      () => b.promise,
-      () => {},
-    );
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ loads, onError });
+    layer.start();
+    const next = rerender(layer, { loads, onError });
+    next.start();
 
-    a.reject(new Error("a"));
+    loads[0]!.reject(new Error("a"));
     await flush();
     expect(onError).not.toHaveBeenCalled();
 
-    b.reject(new Error("boom"));
+    loads[1]!.reject(new Error("boom"));
     await flush();
     expect(onError.mock.calls.map(([error]) => error.message)).toEqual([
       "loading test: boom",
     ]);
   });
 
-  it("reports an error thrown by apply", async () => {
+  it("stops loading when the latest load fails", async () => {
     vi.spyOn(CompositeLayer.prototype, "isLoaded", "get").mockReturnValue(true);
-    const onError = vi.fn((_error: Error) => true);
-    const layer = makeBareLayer({ onError });
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ loads, onError: () => true });
+    layer.start();
 
-    layer.start(
-      async () => "a",
-      () => {
-        throw new Error("bad");
-      },
-    );
+    loads[0]!.reject(new Error("boom"));
     await flush();
 
-    expect(onError.mock.calls.map(([error]) => error.message)).toEqual([
-      "loading test: bad",
-    ]);
     expect(layer.isLoaded).toBe(true);
   });
 
-  it("aborts the load in flight when the layer is removed", async () => {
-    const layer = makeBareLayer();
-    const load = deferred<string>();
-    let signal!: AbortSignal;
-    const apply = vi.fn();
-    layer.start((s) => {
-      signal = s;
-      return load.promise;
-    }, apply);
+  it("aborts the load in flight when the layer is removed", () => {
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ loads });
+    layer.start();
 
     layer.finalizeState({} as never);
-    expect(signal.aborted).toBe(true);
 
-    load.resolve("a");
-    await flush();
-    expect(apply).not.toHaveBeenCalled();
+    expect(loads[0]!.signal.aborted).toBe(true);
   });
 
   it("aborts the previous load's signal when a new load starts", () => {
-    const layer = makeBareLayer();
-    const signals: AbortSignal[] = [];
-    const load = (signal: AbortSignal) => {
-      signals.push(signal);
-      return new Promise<string>(() => {});
-    };
-    layer.start(load, () => {});
-    const next = rerender(layer);
-    next.start(load, () => {});
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ loads });
+    layer.start();
+    const next = rerender(layer, { loads });
+    next.start();
 
-    expect(signals.map((signal) => signal.aborted)).toEqual([true, false]);
+    expect(loads.map((load) => load.signal.aborted)).toEqual([true, false]);
   });
 });

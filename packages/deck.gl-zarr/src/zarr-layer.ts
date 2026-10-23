@@ -139,15 +139,6 @@ export type ZarrLayerProps<
   epsgResolver?: EpsgResolver;
 };
 
-/** A Zarr store opened by {@link ZarrLayer._parseZarr}, ready to apply. */
-export type ParsedZarr = {
-  meta: GeoZarrMetadata;
-  spatialDims: [string, string];
-  /** One opened array per level, finest-first (matches meta.levels order). */
-  arrays: zarr.Array<zarr.DataType, zarr.Readable>[];
-  tilesetDescriptor: RasterTilesetDescriptor;
-};
-
 /**
  * ZarrLayer renders a GeoZarr dataset using a tiled approach with reprojection.
  *
@@ -197,11 +188,7 @@ export class ZarrLayer<
     if (needsUpdate) {
       // Clear stale state so renderLayers returns null until the new Zarr is ready
       this._clearState();
-      this._loadMetadata({
-        load: (signal) => this._parseZarr(signal),
-        apply: (layer, parsed) => layer.setState(parsed),
-        errorContext: "loading Zarr metadata",
-      });
+      this._reloadMetadata("loading Zarr metadata");
     }
   }
 
@@ -215,15 +202,8 @@ export class ZarrLayer<
     });
   }
 
-  /**
-   * Open the Zarr store, parse GeoZarr metadata, validate dims, build
-   * reprojection fns.
-   *
-   * Runs through {@link RasterTileLayer._loadMetadata}, which aborts `signal`
-   * and drops the result if `node` or `variable` changes or the layer is
-   * removed first.
-   */
-  async _parseZarr(signal: AbortSignal): Promise<ParsedZarr> {
+  /** Open the Zarr store, parse GeoZarr metadata, validate dims, build reprojection fns. */
+  protected override async _loadMetadata(signal: AbortSignal): Promise<void> {
     const { node, variable, metadata: metadataOverride } = this.props;
 
     // Callers own the store. We accept a pre-opened Array (rendered as a
@@ -303,6 +283,8 @@ export class ZarrLayer<
     });
 
     const sourceProjection = await parseCrs(meta.crs, this.props.epsgResolver!);
+    // `node` or `variable` changed, or the layer was removed, while we waited
+    signal.throwIfAborted();
 
     // Build proj4 converters
     // @ts-expect-error - proj4 typings don't cover wkt-parser output
@@ -349,7 +331,12 @@ export class ZarrLayer<
       mpu,
     });
 
-    return { meta, spatialDims, arrays, tilesetDescriptor };
+    this.setState({
+      meta,
+      spatialDims,
+      arrays,
+      tilesetDescriptor,
+    });
   }
 
   protected override _tilesetDescriptor() {

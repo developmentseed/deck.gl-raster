@@ -123,8 +123,6 @@ These were settled on 2026-10-23:
 - **Sharing tile data across layers.** Two layers on one source still fetch,
   decode and upload their own tiles, as in OpenLayers. Sharing at the tile level
   needs refcounted cancellation and is follow-up work.
-- **A generic `RasterSource` interface in deck.gl-raster.** Add one when a
-  second consumer needs it.
 - Changes to tile selection, traversal or `RasterTilesetDescriptor`.
 - New formats, a React hook, and the Sentinel-2 mosaic demo. The demo comes
   after stage 5.
@@ -361,20 +359,23 @@ new MosaicLayer({
 
 Each stage is one PR.
 
-1. **`_loadMetadata` in RasterTileLayer.** No API change, so it can ship in a
+1. **Metadata loading in RasterTileLayer.** No API change, so it can ship in a
    0.9.x patch.
-   - A protected
-     `_loadMetadata({ load: (signal) => Promise<T>, apply: (layer, result) => void, errorContext })`.
-     For each load it creates a controller and aborts the previous one, drops
-     outdated results and owns `loadingMetadata`. It reports errors only from
-     the latest load and aborts in `finalizeState`. It runs `apply` on
-     `this.getCurrentLayer()`, so callbacks such as `onGeoTIFFLoad` come from
-     the newest render's props.
+   - Subclasses override a protected `async _loadMetadata(signal)` that loads
+     and stores their metadata. After its last `await`, it calls
+     `signal.throwIfAborted()` before `setState` or callbacks. deck.gl hands
+     every instance the same `state` object, so `setState` from the instance
+     that started the load lands where the newest instance reads.
+   - Subclasses start a load from `updateState` with
+     `_reloadMetadata(errorContext)`. It aborts the previous load, owns
+     `loadingMetadata`, reports errors only from the latest load, and aborts in
+     `finalizeState`.
    - COGLayer, MultiCOGLayer and ZarrLayer move onto it. That fixes ZarrLayer's
-     race.
+     race. ZarrLayer also passes the signal to zarrita's `open`, so a replaced
+     load stops reading.
    - Tests: #770's tests still pass. ZarrLayer gets the same two race tests (old
-     load finishing last, old load finishing first). A layer re-rendered with a
-     new `onGeoTIFFLoad` while loading calls the new callback.
+     load finishing last, old load finishing first), against a real GeoZarr
+     store.
 2. **`COGSource`.**
    - Bare and record inputs, with the checks above.
    - A `source` prop on COGLayer and MultiCOGLayer. Until stage 5, COGLayer
@@ -407,6 +408,10 @@ Each stage is one PR.
 3. **Moved props.** Deprecate them with warnings for a release, or remove them
    outright, since we're before 1.0? *Decide at stage 2.*
 4. **Timing of stage 5** (COGLayer absorbing MultiCOGLayer): 0.10, or later?
+5. **A generic `RasterSource` base class** in deck.gl-raster, with a subclass
+   per format (`COGSource`, `ZarrSource`), instead of unrelated classes. The
+   base class would hold what every format shares, such as the tile grid, and
+   `RasterTileLayer` could store and read it itself. *To explore in stage 2.*
 
 ## Left to the implementer
 

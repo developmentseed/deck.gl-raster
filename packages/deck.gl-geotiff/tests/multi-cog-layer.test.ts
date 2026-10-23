@@ -17,17 +17,9 @@ import { createBandTexture, MultiCOGLayer } from "../src/multi-cog-layer.js";
 import { fixturePath } from "./helpers.js";
 
 /**
- * The newest instance of each bare layer, keyed by the `state` object that all
- * its instances share. deck.gl keeps this pointer in its internal layer state
- * and returns it from `getCurrentLayer()`.
- */
-const currentLayers = new WeakMap<object, { layer: MultiCOGLayer }>();
-
-/**
  * Build a {@link MultiCOGLayer} ready for direct lifecycle calls: bypasses
  * deck.gl's `LayerManager` by replacing `state` and `setState` with a plain
- * object + assign, and stubs `getCurrentLayer` to return the newest instance,
- * mirroring `makeBareLayer` in the deck.gl-raster tests.
+ * object + assign, mirroring `makeBareLayer` in the deck.gl-raster tests.
  */
 function makeBareLayer(props: Record<string, unknown> = {}): MultiCOGLayer {
   const layer = new MultiCOGLayer({
@@ -36,13 +28,10 @@ function makeBareLayer(props: Record<string, unknown> = {}): MultiCOGLayer {
     ...props,
   } as never);
   const state: Record<string, unknown> = {};
-  const current = { layer };
-  currentLayers.set(state, current);
   Object.assign(layer as object, {
     state,
     setState: (updates: Record<string, unknown>) =>
       Object.assign(state, updates),
-    getCurrentLayer: () => current.layer,
   });
   return layer;
 }
@@ -58,8 +47,8 @@ function runInitialUpdate(layer: MultiCOGLayer): void {
 
 /**
  * Render a new {@link MultiCOGLayer} with `props`, as apps do on every render:
- * deck.gl hands the new instance the old one's `state`, makes it the current
- * layer, then runs `updateState`.
+ * deck.gl hands the new instance the old one's `state`, then runs
+ * `updateState`.
  */
 function rerender(
   layer: MultiCOGLayer,
@@ -69,15 +58,23 @@ function rerender(
   Object.assign(next as object, {
     state: layer.state,
     setState: layer.setState,
-    getCurrentLayer: layer.getCurrentLayer,
   });
-  currentLayers.get(layer.state)!.layer = next;
   next.updateState({
     props: next.props,
     oldProps: layer.props,
     changeFlags: {},
   } as never);
   return next;
+}
+
+/** Spy on the protected `_loadMetadata` of a layer or its prototype. */
+function spyOnLoad(target: MultiCOGLayer) {
+  return vi.spyOn(
+    target as unknown as {
+      _loadMetadata: (signal: AbortSignal) => Promise<void>;
+    },
+    "_loadMetadata",
+  );
 }
 
 /** A test fixture's bytes, to pass as a source's `url`. */
@@ -142,7 +139,7 @@ describe("MultiCOGLayer.updateState", () => {
   it("raises a COG open failure through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
     const layer = makeBareLayer({ onError });
-    vi.spyOn(layer, "_parseAllSources").mockRejectedValue(new Error("boom"));
+    spyOnLoad(layer).mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
@@ -170,7 +167,7 @@ describe("MultiCOGLayer.updateState", () => {
     };
 
     const layer = makeBareLayer({ ...props, sources: oldSources });
-    const oldParse = vi.spyOn(layer, "_parseAllSources");
+    const oldLoad = spyOnLoad(layer);
     runInitialUpdate(layer);
     const next = rerender(layer, { ...props, sources: newSources });
     await vi.waitFor(() => expect(lookups.size).toBe(2));
@@ -178,37 +175,13 @@ describe("MultiCOGLayer.updateState", () => {
     lookups.get(3857)!();
     await vi.waitFor(() => expect(next.state.sources).not.toBeNull());
     lookups.get(4326)!();
-    await oldParse.mock.results[0]!.value;
+    // The old load is aborted
+    await expect(oldLoad.mock.results[0]!.value).rejects.toThrow();
 
     expect([...next.state.sources!.keys()]).toEqual(["new"]);
     expect(
       onGeoTIFFLoad.mock.calls.map(([sources]) => [...sources.keys()]),
     ).toEqual([["new"]]);
-  });
-
-  it("calls onGeoTIFFLoad from the latest render", async () => {
-    const sources = { a: { url: await fixtureBytes("cog_uint8_rgba") } };
-    // Hold the CRS lookup until the test releases it.
-    let releaseLookup: (() => void) | undefined;
-    const first = vi.fn();
-    const second = vi.fn();
-    const props = {
-      sources,
-      epsgResolver: (epsg: number) =>
-        new Promise((resolve) => {
-          releaseLookup = () => resolve(epsgResolver(epsg));
-        }),
-    };
-
-    const layer = makeBareLayer({ ...props, onGeoTIFFLoad: first });
-    runInitialUpdate(layer);
-    // Same `sources`, so no new load: only the callback changes.
-    rerender(layer, { ...props, onGeoTIFFLoad: second });
-    await vi.waitFor(() => expect(releaseLookup).toBeDefined());
-    releaseLookup!();
-
-    await vi.waitFor(() => expect(second).toHaveBeenCalledOnce());
-    expect(first).not.toHaveBeenCalled();
   });
 });
 
@@ -224,7 +197,7 @@ describe("MultiCOGLayer.isLoaded", () => {
 
   it("is not loaded while the COG sources are opening", () => {
     const layer = makeBareLayer();
-    vi.spyOn(layer, "_parseAllSources").mockReturnValue(new Promise(() => {}));
+    spyOnLoad(layer).mockReturnValue(new Promise(() => {}));
 
     runInitialUpdate(layer);
 
@@ -233,7 +206,7 @@ describe("MultiCOGLayer.isLoaded", () => {
 
   it("is loaded once the COG sources have opened", async () => {
     const layer = makeBareLayer();
-    vi.spyOn(layer, "_parseAllSources").mockResolvedValue(null);
+    spyOnLoad(layer).mockResolvedValue(undefined);
 
     runInitialUpdate(layer);
 
@@ -242,7 +215,7 @@ describe("MultiCOGLayer.isLoaded", () => {
 
   it("is loaded after a COG source fails to open", async () => {
     const layer = makeBareLayer({ onError: () => true });
-    vi.spyOn(layer, "_parseAllSources").mockRejectedValue(new Error("boom"));
+    spyOnLoad(layer).mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
@@ -251,10 +224,10 @@ describe("MultiCOGLayer.isLoaded", () => {
 
   it("is not loaded when the old sources finish opening first", async () => {
     let finishOld!: () => void;
-    vi.spyOn(MultiCOGLayer.prototype, "_parseAllSources")
+    spyOnLoad(MultiCOGLayer.prototype)
       .mockReturnValueOnce(
         new Promise((resolve) => {
-          finishOld = () => resolve(null);
+          finishOld = resolve;
         }),
       )
       .mockReturnValue(new Promise(() => {}));
