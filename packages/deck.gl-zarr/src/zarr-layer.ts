@@ -22,7 +22,7 @@ import {
 } from "@developmentseed/proj";
 import proj4 from "proj4";
 import * as zarr from "zarrita";
-import { validateSelection, validateSpatialDimOrder } from "./validation.js";
+import { findSpatialDimIndices, validateSelection } from "./validation.js";
 import { geoZarrToDescriptor } from "./zarr-tileset.js";
 
 /**
@@ -118,6 +118,10 @@ export type ZarrLayerProps<
    * and passes it along with a pre-built `sliceSpec` (one entry per array
    * dim). Call `zarr.get(arr, sliceSpec)` and convert the result to whatever
    * format your `renderTile` callback expects.
+   *
+   * The spatial dims may sit anywhere in the array's `dimension_names`, and
+   * `zarr.get` returns the chunk in the array's own dim order, such as
+   * `[y, x, band]` for a channel-last array.
    */
   getTileData: (
     arr: zarr.Array<Dtype, Store>,
@@ -282,7 +286,9 @@ export class ZarrLayer<
       );
     }
 
-    validateSpatialDimOrder({ dimensionNames, spatialDims });
+    // Check the spatial dims first, so that a misnamed one isn't reported as a
+    // non-spatial dim missing from the selection.
+    findSpatialDimIndices({ dimensionNames, spatialDims });
     validateSelection({
       dimensionNames,
       spatialDims,
@@ -322,10 +328,13 @@ export class ZarrLayer<
       semiMajorAxis,
     });
 
-    const chunkSizes = arrays.map((arr) => ({
-      width: arr.chunks[arr.chunks.length - 1]!,
-      height: arr.chunks[arr.chunks.length - 2]!,
-    }));
+    const chunkSizes = arrays.map((arr) => {
+      const [yIndex, xIndex] = findSpatialDimIndices({
+        dimensionNames: arr.dimensionNames ?? [],
+        spatialDims,
+      });
+      return { width: arr.chunks[xIndex]!, height: arr.chunks[yIndex]! };
+    });
 
     const tilesetDescriptor = geoZarrToDescriptor(meta, {
       projectTo4326,
@@ -388,8 +397,12 @@ export class ZarrLayer<
       // Use the zarr array's actual ordered dim names (includes non-spatial
       // dims like time/band), not meta.axes (spatial only).
       const arrDimNames = arr.dimensionNames ?? [];
-      const tileWidth = arr.chunks[arr.chunks.length - 1]!;
-      const tileHeight = arr.chunks[arr.chunks.length - 2]!;
+      const [yIndex, xIndex] = findSpatialDimIndices({
+        dimensionNames: arrDimNames,
+        spatialDims,
+      });
+      const tileWidth = arr.chunks[xIndex]!;
+      const tileHeight = arr.chunks[yIndex]!;
 
       const rowStart = y * tileHeight;
       const rowEnd = Math.min((y + 1) * tileHeight, level.arrayHeight);
