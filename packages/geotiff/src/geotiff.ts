@@ -7,6 +7,7 @@ import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { apply } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
+import type { RasterArray } from "./array.js";
 import { LRUCacheMiddleware } from "./cache.js";
 import type { ColorInterp } from "./colorinterp.js";
 import { inferColorInterpretation } from "./colorinterp.js";
@@ -28,8 +29,10 @@ import type { ConcurrencyLimiter, Priority } from "./limiter.js";
 import { LimiterMiddleware } from "./limiter.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
+import { read } from "./read.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
+import type { Window } from "./window.js";
 
 /** Options for {@link GeoTIFF.fromUrl}. */
 export interface GeoTIFFFromUrlOptions {
@@ -575,6 +578,25 @@ export class GeoTIFF {
       imageTags: this.cachedPrimaryImageTags,
       maskImageTags: this.cachedMaskImageTags,
     });
+  }
+
+  /**
+   * Read the pixels of a window of the full-resolution image.
+   *
+   * Fetches every tile that the window touches, stitches them together, and
+   * keeps only the pixels inside the window.
+   *
+   * @param options Optional parameters for reading.
+   * @param options.window The {@link Window} of pixels to read. Defaults to the whole image.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tile data. If not provided, a new decoder will be created for each tile.
+   * @param options.signal An optional {@link AbortSignal} to cancel the fetch requests.
+   * @returns A {@link RasterArray} of the window's pixels, with a mask if the image has a mask IFD.
+   * @throws A `WindowError` if the window is invalid or extends outside the image.
+   */
+  async read(
+    options: { window?: Window; pool?: DecoderPool; signal?: AbortSignal } = {},
+  ): Promise<RasterArray> {
+    return await read(this, options);
   }
 
   // Transform mixin
