@@ -1,4 +1,9 @@
-import { LayerManager, WebMercatorViewport } from "@deck.gl/core";
+import type { Layer } from "@deck.gl/core";
+import {
+  CompositeLayer,
+  LayerManager,
+  WebMercatorViewport,
+} from "@deck.gl/core";
 import type { Device } from "@luma.gl/core";
 import { describe, expect, it } from "vitest";
 import type { MosaicLayerProps } from "../src/mosaic-layer/mosaic-layer.js";
@@ -163,13 +168,15 @@ async function settle(layerManager: LayerManager): Promise<void> {
 
 /**
  * Render {@link MosaicLayer} through deck.gl's `LayerManager`. Each call of the
- * returned function renders a new layer instance, as apps do on every render,
- * and returns the sources that update fetched, the priority each fetch got,
- * the sources `onViewportLoad` last reported, and the errors deck.gl raised.
+ * returned function renders a new layer instance with `sources` and any other
+ * `props`, as apps do on every render, and returns the sources that update
+ * fetched, the priority each fetch got, the sources `onViewportLoad` last
+ * reported, the layers deck.gl rendered, and the errors deck.gl raised.
  */
 function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
   // deck.gl ignores errors thrown in `updateState` when there is no device.
-  // `renderSource` returns no layers, so nothing draws with this stub.
+  // The default `renderSource` returns no layers and {@link SourceLayer} draws
+  // nothing, so nothing draws with this stub.
   const device = {} as Device;
   const layerManager = new LayerManager(device, { viewport });
   let errors: string[] = [];
@@ -179,7 +186,10 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
     },
   });
 
-  return async (sources: Item[]) => {
+  return async (
+    sources: Item[],
+    props: Partial<MosaicLayerProps<Item>> = {},
+  ) => {
     errors = [];
     const fetched: string[] = [];
     const priorities: Record<string, number> = {};
@@ -196,6 +206,7 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
         onViewportLoad: (entries) => {
           viewportLoads.push(entries.map(({ source }) => source.id).sort());
         },
+        ...props,
       }),
     ]);
     await settle(layerManager);
@@ -203,6 +214,7 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
       fetched: fetched.sort(),
       priorities,
       loaded: viewportLoads.at(-1),
+      layers: layerManager.getLayers(),
       errors,
     };
   };
@@ -293,5 +305,76 @@ describe("MosaicLayer fetch priority", () => {
     const { priorities, errors } = await render([across]);
     expect(errors).toEqual([]);
     expect(priorities.across).toBeCloseTo(0.1);
+  });
+});
+
+/** Stands in for a layer that a source renders. It draws nothing. */
+class SourceLayer extends CompositeLayer {
+  static override layerName = "SourceLayer";
+
+  override renderLayers() {
+    return null;
+  }
+}
+
+/** The `opacity` of the rendered layer with this `id`. */
+function opacityOf(layers: Layer[], id: string): number | undefined {
+  return layers.find((layer) => layer.id === id)?.props.opacity;
+}
+
+describe("MosaicLayer inherited props", () => {
+  const renderSource = (source: Item) => new SourceLayer({ id: source.id });
+
+  it("hands its opacity to the layers its sources render", async () => {
+    const render = makeMosaicRenderer();
+
+    const { layers, errors } = await render([A], {
+      opacity: 0.5,
+      renderSource,
+    });
+    expect(errors).toEqual([]);
+    expect(opacityOf(layers, "A")).toBe(0.5);
+  });
+
+  it("keeps the opacity a source's layer sets itself", async () => {
+    const render = makeMosaicRenderer();
+
+    const { layers, errors } = await render([A], {
+      opacity: 0.5,
+      renderSource: (source) =>
+        new SourceLayer({ id: source.id, opacity: 0.25 }),
+    });
+    expect(errors).toEqual([]);
+    expect(opacityOf(layers, "A")).toBe(0.25);
+  });
+
+  it("hands a new opacity to sources that are already loaded", async () => {
+    const render = makeMosaicRenderer();
+    const sources = [A];
+    await render(sources, { opacity: 0.5, renderSource });
+
+    const { fetched, layers, errors } = await render(sources, {
+      opacity: 0.8,
+      renderSource,
+    });
+    expect(errors).toEqual([]);
+    expect(fetched).toEqual([]);
+    expect(opacityOf(layers, "A")).toBe(0.8);
+  });
+
+  it("hands its opacity to each layer in nested arrays a source returns", async () => {
+    const render = makeMosaicRenderer();
+
+    const { layers, errors } = await render([A], {
+      opacity: 0.5,
+      renderSource: (source) => [
+        [new SourceLayer({ id: `${source.id}-1` }), null],
+        false,
+        new SourceLayer({ id: `${source.id}-2` }),
+      ],
+    });
+    expect(errors).toEqual([]);
+    expect(opacityOf(layers, "A-1")).toBe(0.5);
+    expect(opacityOf(layers, "A-2")).toBe(0.5);
   });
 });
