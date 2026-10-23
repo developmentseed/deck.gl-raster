@@ -1,19 +1,31 @@
 import { CompositeLayer } from "@deck.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ParsedZarr } from "../src/zarr-layer.js";
 import { ZarrLayer } from "../src/zarr-layer.js";
+
+/**
+ * The newest instance of each bare layer, keyed by the `state` object that all
+ * its instances share. deck.gl keeps this pointer in its internal layer state
+ * and returns it from `getCurrentLayer()`.
+ */
+const currentLayers = new WeakMap<object, { layer: ZarrLayer }>();
 
 /**
  * Build a {@link ZarrLayer} ready for direct lifecycle calls: bypasses deck.gl's
  * `LayerManager` by replacing `state` and `setState` with a plain object +
- * assign, mirroring `makeBareLayer` in the deck.gl-raster tests.
+ * assign, and stubs `getCurrentLayer` to return the newest instance, mirroring
+ * `makeBareLayer` in the deck.gl-raster tests.
  */
 function makeBareLayer(props: Record<string, unknown> = {}): ZarrLayer {
   const layer = new ZarrLayer({ id: "zarr", node: {}, ...props } as never);
   const state: Record<string, unknown> = {};
+  const current = { layer };
+  currentLayers.set(state, current);
   Object.assign(layer as object, {
     state,
     setState: (updates: Record<string, unknown>) =>
       Object.assign(state, updates),
+    getCurrentLayer: () => current.layer,
   });
   return layer;
 }
@@ -27,6 +39,30 @@ function runInitialUpdate(layer: ZarrLayer): void {
   } as never);
 }
 
+/**
+ * Render a new {@link ZarrLayer} with `props`, as apps do on every render:
+ * deck.gl hands the new instance the old one's `state`, makes it the current
+ * layer, then runs `updateState`.
+ */
+function rerender(layer: ZarrLayer, props: Record<string, unknown>): ZarrLayer {
+  const next = new ZarrLayer({ id: "zarr", ...props } as never);
+  Object.assign(next as object, {
+    state: layer.state,
+    setState: layer.setState,
+    getCurrentLayer: layer.getCurrentLayer,
+  });
+  currentLayers.get(layer.state)!.layer = next;
+  next.updateState({
+    props: next.props,
+    oldProps: layer.props,
+    changeFlags: {},
+  } as never);
+  return next;
+}
+
+/** Let every settled promise run its handlers. */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 describe("ZarrLayer.updateState", () => {
   it("raises a metadata load failure through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
@@ -39,6 +75,36 @@ describe("ZarrLayer.updateState", () => {
     expect(onError.mock.calls[0]?.[0]?.message).toBe(
       "loading Zarr metadata: boom",
     );
+  });
+
+  it("keeps the new Zarr when the old one finishes loading last", async () => {
+    const oldDescriptor = {};
+    const newDescriptor = {};
+    let finishOld!: () => void;
+    let finishNew!: () => void;
+    vi.spyOn(ZarrLayer.prototype, "_parseZarr")
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishOld = () =>
+            resolve({ tilesetDescriptor: oldDescriptor } as ParsedZarr);
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishNew = () =>
+            resolve({ tilesetDescriptor: newDescriptor } as ParsedZarr);
+        }),
+      );
+
+    const layer = makeBareLayer();
+    runInitialUpdate(layer);
+    const next = rerender(layer, { node: {} });
+    finishNew();
+    await flush();
+    finishOld();
+    await flush();
+
+    expect(next.state.tilesetDescriptor).toBe(newDescriptor);
   });
 });
 
@@ -63,7 +129,7 @@ describe("ZarrLayer.isLoaded", () => {
 
   it("is loaded once the Zarr metadata has loaded", async () => {
     const layer = makeBareLayer();
-    vi.spyOn(layer, "_parseZarr").mockResolvedValue(undefined);
+    vi.spyOn(layer, "_parseZarr").mockResolvedValue({} as ParsedZarr);
 
     runInitialUpdate(layer);
 
@@ -77,5 +143,24 @@ describe("ZarrLayer.isLoaded", () => {
     runInitialUpdate(layer);
 
     await vi.waitFor(() => expect(layer.isLoaded).toBe(true));
+  });
+
+  it("is not loaded when the old Zarr finishes loading first", async () => {
+    let finishOld!: () => void;
+    vi.spyOn(ZarrLayer.prototype, "_parseZarr")
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishOld = () => resolve({} as ParsedZarr);
+        }),
+      )
+      .mockReturnValue(new Promise(() => {}));
+
+    const layer = makeBareLayer();
+    runInitialUpdate(layer);
+    const next = rerender(layer, { node: {} });
+    finishOld();
+    await flush();
+
+    expect(next.isLoaded).toBe(false);
   });
 });

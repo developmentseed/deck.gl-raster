@@ -139,6 +139,15 @@ export type ZarrLayerProps<
   epsgResolver?: EpsgResolver;
 };
 
+/** A Zarr store opened by {@link ZarrLayer._parseZarr}, ready to apply. */
+export type ParsedZarr = {
+  meta: GeoZarrMetadata;
+  spatialDims: [string, string];
+  /** One opened array per level, finest-first (matches meta.levels order). */
+  arrays: zarr.Array<zarr.DataType, zarr.Readable>[];
+  tilesetDescriptor: RasterTilesetDescriptor;
+};
+
 /**
  * ZarrLayer renders a GeoZarr dataset using a tiled approach with reprojection.
  *
@@ -169,8 +178,6 @@ export class ZarrLayer<
     /** One opened array per level, finest-first (matches meta.levels order). */
     arrays?: zarr.Array<zarr.DataType, zarr.Readable>[];
     tilesetDescriptor?: RasterTilesetDescriptor;
-    /** True while `_parseZarr` is in flight. */
-    loadingMetadata?: boolean;
   };
 
   override initializeState(): void {
@@ -190,12 +197,13 @@ export class ZarrLayer<
     if (needsUpdate) {
       // Clear stale state so renderLayers returns null until the new Zarr is ready
       this._clearState();
-      this.setState({ loadingMetadata: true });
-      this._parseZarr()
-        .catch((error: Error) =>
-          this.raiseError(error, "loading Zarr metadata"),
-        )
-        .finally(() => this.setState({ loadingMetadata: false }));
+      // zarrita's `open` takes no signal, so a replaced load runs to the end;
+      // `_loadMetadata` drops its result.
+      this._loadMetadata({
+        load: () => this._parseZarr(),
+        apply: (layer, parsed) => layer.setState(parsed),
+        errorContext: "loading Zarr metadata",
+      });
     }
   }
 
@@ -209,8 +217,14 @@ export class ZarrLayer<
     });
   }
 
-  /** Open the Zarr store, parse GeoZarr metadata, validate dims, build reprojection fns. */
-  async _parseZarr(): Promise<void> {
+  /**
+   * Open the Zarr store, parse GeoZarr metadata, validate dims, build
+   * reprojection fns.
+   *
+   * Runs through {@link RasterTileLayer._loadMetadata}, which drops the result
+   * if `node` or `variable` changes or the layer is removed first.
+   */
+  async _parseZarr(): Promise<ParsedZarr> {
     const { node, variable, metadata: metadataOverride } = this.props;
 
     // Callers own the store. We accept a pre-opened Array (rendered as a
@@ -336,20 +350,11 @@ export class ZarrLayer<
       mpu,
     });
 
-    this.setState({
-      meta,
-      spatialDims,
-      arrays,
-      tilesetDescriptor,
-    });
+    return { meta, spatialDims, arrays, tilesetDescriptor };
   }
 
   protected override _tilesetDescriptor() {
     return this.state.tilesetDescriptor;
-  }
-
-  protected override _isLoadingMetadata(): boolean {
-    return this.state.loadingMetadata === true;
   }
 
   /**
