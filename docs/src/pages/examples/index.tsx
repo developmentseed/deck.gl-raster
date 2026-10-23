@@ -246,7 +246,7 @@ const experimentalExamples: Example[] = [
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/titiler-cog",
   },
   {
-    title: "COG on Terrain",
+    title: "Rasters over Terrain",
     description: (
       <>
         Drape COGs in their own projections over Web Mercator 3D terrain tiles

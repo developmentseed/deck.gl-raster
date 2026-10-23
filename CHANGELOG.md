@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.9.0 - 2026-10-26
+
+### What's Changed
+
+* docs: document Vite's worker format and fix README snippets by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/780
+* fix(deck.gl-raster): Create root tiles past ±180° near the antimeridian by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/766
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.9.0-beta.3...v0.9.0
+
 ## v0.9.0-beta.3 - 2026-10-22
 
 ### What's Changed

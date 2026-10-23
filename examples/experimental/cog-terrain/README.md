@@ -1,4 +1,4 @@
-# COG on terrain (experimental)
+# Rasters over terrain (experimental)
 
 Cloud-Optimized GeoTIFFs draped over 3D terrain with deck.gl's experimental
 [`TerrainExtension`][terrain-extension].
