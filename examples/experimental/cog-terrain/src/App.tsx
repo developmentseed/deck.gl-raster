@@ -457,7 +457,7 @@ export default function App() {
       <ControlPanel
         title={
           <>
-            COG on Terrain{" "}
+            Rasters over Terrain{" "}
             <chakra.span
               fontSize="2xs"
               fontWeight="bold"
