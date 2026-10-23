@@ -138,11 +138,11 @@ export default function App() {
         sourcePath="examples/usgs-topo"
       >
         <Text mb="3" color="gray.600">
-          Uses the{" "}
+          Uses the deck.gl{" "}
           <ExternalLink href="https://deck.gl/docs/api-reference/extensions/clip-extension">
             <Code>ClipExtension</Code>
           </ExternalLink>{" "}
-          from deck.gl to avoid rendering pixels containing the map collar.
+          to avoid rendering the map collar.
         </Text>
         <Field label="Topographic map">
           <NativeSelect.Root>
