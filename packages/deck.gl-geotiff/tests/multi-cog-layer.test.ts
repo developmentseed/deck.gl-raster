@@ -17,9 +17,17 @@ import { createBandTexture, MultiCOGLayer } from "../src/multi-cog-layer.js";
 import { fixturePath } from "./helpers.js";
 
 /**
+ * The newest instance of each bare layer, keyed by the `state` object that all
+ * its instances share. deck.gl keeps this pointer in its internal layer state
+ * and returns it from `getCurrentLayer()`.
+ */
+const currentLayers = new WeakMap<object, { layer: MultiCOGLayer }>();
+
+/**
  * Build a {@link MultiCOGLayer} ready for direct lifecycle calls: bypasses
  * deck.gl's `LayerManager` by replacing `state` and `setState` with a plain
- * object + assign, mirroring `makeBareLayer` in the deck.gl-raster tests.
+ * object + assign, and stubs `getCurrentLayer` to return the newest instance,
+ * mirroring `makeBareLayer` in the deck.gl-raster tests.
  */
 function makeBareLayer(props: Record<string, unknown> = {}): MultiCOGLayer {
   const layer = new MultiCOGLayer({
@@ -28,10 +36,13 @@ function makeBareLayer(props: Record<string, unknown> = {}): MultiCOGLayer {
     ...props,
   } as never);
   const state: Record<string, unknown> = {};
+  const current = { layer };
+  currentLayers.set(state, current);
   Object.assign(layer as object, {
     state,
     setState: (updates: Record<string, unknown>) =>
       Object.assign(state, updates),
+    getCurrentLayer: () => current.layer,
   });
   return layer;
 }
@@ -47,8 +58,8 @@ function runInitialUpdate(layer: MultiCOGLayer): void {
 
 /**
  * Render a new {@link MultiCOGLayer} with `props`, as apps do on every render:
- * deck.gl hands the new instance the old one's `state`, then runs
- * `updateState`.
+ * deck.gl hands the new instance the old one's `state`, makes it the current
+ * layer, then runs `updateState`.
  */
 function rerender(
   layer: MultiCOGLayer,
@@ -58,7 +69,9 @@ function rerender(
   Object.assign(next as object, {
     state: layer.state,
     setState: layer.setState,
+    getCurrentLayer: layer.getCurrentLayer,
   });
+  currentLayers.get(layer.state)!.layer = next;
   next.updateState({
     props: next.props,
     oldProps: layer.props,
@@ -172,6 +185,31 @@ describe("MultiCOGLayer.updateState", () => {
       onGeoTIFFLoad.mock.calls.map(([sources]) => [...sources.keys()]),
     ).toEqual([["new"]]);
   });
+
+  it("calls onGeoTIFFLoad from the latest render", async () => {
+    const sources = { a: { url: await fixtureBytes("cog_uint8_rgba") } };
+    // Hold the CRS lookup until the test releases it.
+    let releaseLookup: (() => void) | undefined;
+    const first = vi.fn();
+    const second = vi.fn();
+    const props = {
+      sources,
+      epsgResolver: (epsg: number) =>
+        new Promise((resolve) => {
+          releaseLookup = () => resolve(epsgResolver(epsg));
+        }),
+    };
+
+    const layer = makeBareLayer({ ...props, onGeoTIFFLoad: first });
+    runInitialUpdate(layer);
+    // Same `sources`, so no new load: only the callback changes.
+    rerender(layer, { ...props, onGeoTIFFLoad: second });
+    await vi.waitFor(() => expect(releaseLookup).toBeDefined());
+    releaseLookup!();
+
+    await vi.waitFor(() => expect(second).toHaveBeenCalledOnce());
+    expect(first).not.toHaveBeenCalled();
+  });
 });
 
 describe("MultiCOGLayer.isLoaded", () => {
@@ -195,7 +233,7 @@ describe("MultiCOGLayer.isLoaded", () => {
 
   it("is loaded once the COG sources have opened", async () => {
     const layer = makeBareLayer();
-    vi.spyOn(layer, "_parseAllSources").mockResolvedValue(undefined);
+    vi.spyOn(layer, "_parseAllSources").mockResolvedValue(null);
 
     runInitialUpdate(layer);
 
@@ -216,7 +254,7 @@ describe("MultiCOGLayer.isLoaded", () => {
     vi.spyOn(MultiCOGLayer.prototype, "_parseAllSources")
       .mockReturnValueOnce(
         new Promise((resolve) => {
-          finishOld = resolve;
+          finishOld = () => resolve(null);
         }),
       )
       .mockReturnValue(new Promise(() => {}));
