@@ -53,6 +53,16 @@ function rerender(layer: COGLayer, props: Record<string, unknown>): COGLayer {
   return next;
 }
 
+/** Spy on the protected `_loadMetadata` of a layer or its prototype. */
+function spyOnLoad(target: COGLayer) {
+  return vi.spyOn(
+    target as unknown as {
+      _loadMetadata: (signal: AbortSignal) => Promise<void>;
+    },
+    "_loadMetadata",
+  );
+}
+
 function fakeTexture(): {
   texture: Texture;
   destroy: ReturnType<typeof vi.fn>;
@@ -133,7 +143,7 @@ describe("COGLayer.updateState", () => {
   it("raises a GeoTIFF open failure through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
     const layer = makeBareLayer({ onError });
-    vi.spyOn(layer, "_parseGeoTIFF").mockRejectedValue(new Error("boom"));
+    spyOnLoad(layer).mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
@@ -160,7 +170,7 @@ describe("COGLayer.updateState", () => {
     };
 
     const layer = makeBareLayer({ ...props, geotiff: oldGeoTIFF });
-    const oldParse = vi.spyOn(layer, "_parseGeoTIFF");
+    const oldLoad = spyOnLoad(layer);
     runInitialUpdate(layer);
     const next = rerender(layer, { ...props, geotiff: newGeoTIFF });
     await vi.waitFor(() => expect(lookups.size).toBe(2));
@@ -168,7 +178,8 @@ describe("COGLayer.updateState", () => {
     lookups.get(3857)!();
     await vi.waitFor(() => expect(next.state.geotiff?.crs).toBe(3857));
     lookups.get(4326)!();
-    await oldParse.mock.results[0]!.value;
+    // The old load is aborted
+    await expect(oldLoad.mock.results[0]!.value).rejects.toThrow();
 
     expect(next.state.geotiff?.crs).toBe(3857);
     expect(onGeoTIFFLoad.mock.calls.map(([geotiff]) => geotiff.crs)).toEqual([
@@ -189,7 +200,7 @@ describe("COGLayer.isLoaded", () => {
 
   it("is not loaded while the GeoTIFF is opening", () => {
     const layer = makeBareLayer();
-    vi.spyOn(layer, "_parseGeoTIFF").mockReturnValue(new Promise(() => {}));
+    spyOnLoad(layer).mockReturnValue(new Promise(() => {}));
 
     runInitialUpdate(layer);
 
@@ -198,7 +209,7 @@ describe("COGLayer.isLoaded", () => {
 
   it("is loaded once the GeoTIFF has opened", async () => {
     const layer = makeBareLayer();
-    vi.spyOn(layer, "_parseGeoTIFF").mockResolvedValue(undefined);
+    spyOnLoad(layer).mockResolvedValue(undefined);
 
     runInitialUpdate(layer);
 
@@ -207,7 +218,7 @@ describe("COGLayer.isLoaded", () => {
 
   it("is loaded after the GeoTIFF fails to open", async () => {
     const layer = makeBareLayer({ onError: () => true });
-    vi.spyOn(layer, "_parseGeoTIFF").mockRejectedValue(new Error("boom"));
+    spyOnLoad(layer).mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
@@ -216,7 +227,7 @@ describe("COGLayer.isLoaded", () => {
 
   it("is not loaded when the old GeoTIFF finishes opening first", async () => {
     let finishOld!: () => void;
-    vi.spyOn(COGLayer.prototype, "_parseGeoTIFF")
+    spyOnLoad(COGLayer.prototype)
       .mockReturnValueOnce(
         new Promise((resolve) => {
           finishOld = resolve;
