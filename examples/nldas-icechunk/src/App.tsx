@@ -138,6 +138,10 @@ export default function App() {
             updateTriggers: {
               renderTile: [colormapId, rescaleMin, rescaleMax],
             },
+            // Draw under the basemap's country borders and labels.
+            // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+            // doesn't know about it.
+            beforeId: "boundary_country_outline",
           }),
         ]
       : [];
