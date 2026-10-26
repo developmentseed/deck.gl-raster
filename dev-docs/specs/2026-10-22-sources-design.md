@@ -341,17 +341,17 @@ new ZarrLayer({ id: "zarr", source, selection: { time: t }, getTileData, renderT
 
 ### MosaicLayer
 
-The API doesn't change. `sources` stays a list of `{bbox, id}` items
+MosaicLayer still takes a list of `{bbox, id}` items, today called `sources`
 ([`mosaic-layer.ts#L51`](https://github.com/developmentseed/deck.gl-raster/blob/0636834044bd9049a1a79a4e33f25a5bdda3ce90/packages/deck.gl-geotiff/src/mosaic-layer/mosaic-layer.ts#L51)),
 and `getSource` ([L75](https://github.com/developmentseed/deck.gl-raster/blob/0636834044bd9049a1a79a4e33f25a5bdda3ce90/packages/deck.gl-geotiff/src/mosaic-layer/mosaic-layer.ts#L75))
-returns a source:
+returns a source. With the renames of question 7:
 
 ```ts
 new MosaicLayer({
-  sources: items, // {bbox, id}: nothing fetched
+  data: items, // {bbox, id}: nothing fetched
   getSource: (item, { signal, concurrencyLimiter, getPriority }) =>
     COGSource.open(item.url, { signal, concurrencyLimiter, getPriority }),
-  renderSource: (item, { data: source }) => new COGLayer({ id: item.id, source }),
+  renderSource: (item, { source }) => new COGLayer({ id: item.id, source }),
 });
 ```
 
@@ -456,6 +456,8 @@ Each stage is one PR.
        10/20/60 m bands pass.
 3. **MosaicLayer docs and examples.**
    - `getSource` returns a `COGSource`.
+   - The renames of question 7: `sources` becomes `data`, the callbacks'
+     `{ data }` becomes `{ source }`, and `MosaicSource` becomes `MosaicItem`.
    - Port naip-mosaic and vermont-cog-comparison, replacing their caches where
      a shared source is enough.
    - Use `source.geographicBounds` for `fitBounds`.
@@ -490,10 +492,18 @@ Each stage is one PR.
    props type for them is open until stage 4. *Open.*
 7. **MosaicLayer's naming.** MosaicLayer calls its items `sources`, and passes
    each to `getSource`, `renderSource` and `onSourceLoad(item, { data })`.
-   Once `getSource` returns a `COGSource` (stage 3), "source" names both the
-   item and what's opened for it. Either that's one meaning (an item says
-   where a source is, and `getSource` opens it), or MosaicLayer's items get
-   another name. *Under discussion; decide before stage 3.*
+   Once `getSource` returns a `COGSource` (stage 3), "source" would name both
+   an item, which only says where a source is, and the source opened for it.
+   *Decided (2026-10-26), for stage 3:*
+   - The items move to deck.gl's `data` prop. `getSource(item)` stays.
+   - The callbacks get the opened source as `{ source }` rather than
+     `{ data }`, so "source" always means a `RasterSource`.
+   - `MosaicSource` becomes `MosaicItem`.
+
+   COGLayer and ZarrLayer can't take their input as `data`, because deck.gl's
+   async `data` would fetch and parse a COG or Zarr URL before the layer saw
+   it. A list of items is what `data` is for: a URL plus `dataTransform` can
+   load a STAC search result, and `isLoaded` waits for it.
 8. **One class or two for files of one scene.** A separate `MultiCOGSource`
    would keep `COGSource.geotiff` a single `GeoTIFF`, rather than one class
    whose fields depend on its input. Leaning toward two classes; *decide at
