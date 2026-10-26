@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { CompositeLayer } from "@deck.gl/core";
 import {
   AffineTileset,
@@ -9,12 +8,22 @@ import type {
   DecodedPixelInterleaved,
   RasterArray,
 } from "@developmentseed/geotiff";
-import { epsgResolver } from "@developmentseed/proj";
+import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device } from "@luma.gl/core";
 import { Texture } from "@luma.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBandTexture, MultiCOGLayer } from "../src/multi-cog-layer.js";
-import { fixturePath } from "./helpers.js";
+import { MultiCOGSource } from "../src/multi-cog-source.js";
+import { loadGeoTIFF } from "./helpers.js";
+
+beforeEach(() => {
+  // Keep every test off the network: opening a URL never finishes
+  vi.spyOn(GeoTIFF, "fromUrl").mockReturnValue(new Promise(() => {}));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 /**
  * Build a {@link MultiCOGLayer} ready for direct lifecycle calls: bypasses
@@ -24,7 +33,7 @@ import { fixturePath } from "./helpers.js";
 function makeBareLayer(props: Record<string, unknown> = {}): MultiCOGLayer {
   const layer = new MultiCOGLayer({
     id: "multi",
-    sources: { a: { url: "https://example.com/a.tif" } },
+    source: { a: "https://example.com/a.tif" },
     ...props,
   } as never);
   const state: Record<string, unknown> = {};
@@ -32,6 +41,7 @@ function makeBareLayer(props: Record<string, unknown> = {}): MultiCOGLayer {
     state,
     setState: (updates: Record<string, unknown>) =>
       Object.assign(state, updates),
+    context: { device: {} },
   });
   return layer;
 }
@@ -64,6 +74,7 @@ function rerender(
   Object.assign(next as object, {
     state: layer.state,
     setState: layer.setState,
+    context: layer.context,
   });
   next.updateState({
     props: next.props,
@@ -73,9 +84,24 @@ function rerender(
   return next;
 }
 
-/** A test fixture's bytes, to pass as a source's `url`. */
-async function fixtureBytes(name: string): Promise<ArrayBuffer> {
-  return new Uint8Array(await readFile(fixturePath(name, "rasterio"))).buffer;
+/** A promise with its `resolve` exposed. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+/** Let every settled promise run its handlers. */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** `MultiCOGSource.open` itself, kept from before any test mocks it. */
+const openSource = MultiCOGSource.open.bind(MultiCOGSource);
+
+/** Open a rasterio test fixture as a {@link MultiCOGSource} of one file. */
+async function openFixture(name: string): Promise<MultiCOGSource> {
+  return openSource({ a: await loadGeoTIFF(name, "rasterio") });
 }
 
 function fakeTexture(): {
@@ -103,7 +129,7 @@ describe("MultiCOGLayer._onTileUnloadCallback", () => {
     const userCalls: unknown[] = [];
     const layer = new MultiCOGLayer({
       id: "multi",
-      sources: {},
+      source: {},
       onTileUnload: (tile: unknown) => userCalls.push(tile),
     } as never);
 
@@ -125,7 +151,7 @@ describe("MultiCOGLayer._onTileUnloadCallback", () => {
   });
 
   it("tolerates a tile with no data", () => {
-    const layer = new MultiCOGLayer({ id: "multi", sources: {} } as never);
+    const layer = new MultiCOGLayer({ id: "multi", source: {} } as never);
     const cb = unloadCallback(layer);
     expect(() => cb?.({ content: null })).not.toThrow();
   });
@@ -147,39 +173,112 @@ describe("MultiCOGLayer.updateState", () => {
     expect(error?.cause).toBeInstanceOf(Error);
   });
 
-  it("keeps the new sources when the old ones finish opening last", async () => {
-    // The old source is in EPSG:4326 and the new one in EPSG:3857.
-    const oldSources = { old: { url: await fixtureBytes("cog_uint8_rgba") } };
-    const newSources = {
-      new: { url: await fixtureBytes("cog_uint8_rgba_3857") },
-    };
-    // Hold each CRS lookup until the test releases it.
-    const lookups = new Map<number, () => void>();
-    const onGeoTIFFLoad = vi.fn();
-    const props = {
-      epsgResolver: (epsg: number) =>
-        new Promise((resolve) =>
-          lookups.set(epsg, () => resolve(epsgResolver(epsg))),
-        ),
-      onGeoTIFFLoad,
-    };
+  it("keeps the new source when the old one finishes opening last", async () => {
+    const oldSource = await openFixture("cog_uint8_rgba");
+    const newSource = await openFixture("cog_uint8_rgba_3857");
+    const opens = [deferred<MultiCOGSource>(), deferred<MultiCOGSource>()];
+    vi.spyOn(MultiCOGSource, "open")
+      .mockReturnValueOnce(opens[0]!.promise)
+      .mockReturnValueOnce(opens[1]!.promise);
+    const onSourceLoad = vi.fn();
 
-    const layer = makeBareLayer({ ...props, sources: oldSources });
-    const oldLoad = vi.spyOn(layer, "loadMetadata");
+    const layer = makeBareLayer({
+      onSourceLoad,
+      source: { old: "https://example.com/old.tif" },
+    });
     runInitialUpdate(layer);
-    const next = rerender(layer, { ...props, sources: newSources });
-    await vi.waitFor(() => expect(lookups.size).toBe(2));
+    const next = rerender(layer, {
+      onSourceLoad,
+      source: { new: "https://example.com/new.tif" },
+    });
+    opens[1]!.resolve(newSource);
+    await flush();
+    opens[0]!.resolve(oldSource);
+    await flush();
 
-    lookups.get(3857)!();
-    await vi.waitFor(() => expect(next.state.sources).not.toBeNull());
-    lookups.get(4326)!();
-    // The old load is aborted
-    await expect(oldLoad.mock.results[0]!.value).rejects.toThrow();
+    expect(next.state.source).toBe(newSource);
+    expect(onSourceLoad.mock.calls).toEqual([[newSource]]);
+  });
 
-    expect([...next.state.sources!.keys()]).toEqual(["new"]);
+  it("passes its load signal to MultiCOGSource.open", () => {
+    const open = vi
+      .spyOn(MultiCOGSource, "open")
+      .mockReturnValue(new Promise(() => {}));
+
+    const layer = makeBareLayer({
+      source: { old: "https://example.com/old.tif" },
+    });
+    runInitialUpdate(layer);
+    rerender(layer, { source: { new: "https://example.com/new.tif" } });
+
+    // The first open's signal aborts when the second starts
     expect(
-      onGeoTIFFLoad.mock.calls.map(([sources]) => [...sources.keys()]),
-    ).toEqual([["new"]]);
+      open.mock.calls.map(([, options]) => options?.signal?.aborted),
+    ).toEqual([true, false]);
+  });
+});
+
+describe("MultiCOGLayer source", () => {
+  it("draws an opened source without opening anything", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const open = vi.spyOn(MultiCOGSource, "open");
+    const layer = makeBareLayer({ source });
+
+    runInitialUpdate(layer);
+
+    expect(open).not.toHaveBeenCalled();
+    expect(layer.state.loadingMetadata).toBeUndefined();
+    expect(layer.state.source).toBe(source);
+  });
+
+  it("aborts an open in flight when an opened source replaces it", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const late = await openFixture("cog_uint8_rgba_3857");
+    const opening = deferred<MultiCOGSource>();
+    const open = vi
+      .spyOn(MultiCOGSource, "open")
+      .mockReturnValue(opening.promise);
+    const onSourceLoad = vi.fn();
+
+    const layer = makeBareLayer({ onSourceLoad });
+    runInitialUpdate(layer);
+    const next = rerender(layer, { source, onSourceLoad });
+
+    expect(open.mock.calls[0]![1]!.signal!.aborted).toBe(true);
+    expect(next.state.loadingMetadata).toBe(false);
+
+    opening.resolve(late);
+    await flush();
+
+    expect(onSourceLoad).not.toHaveBeenCalled();
+    expect(next.state.source).toBe(source);
+  });
+
+  it("opens a record that replaces an opened source", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const open = vi
+      .spyOn(MultiCOGSource, "open")
+      .mockReturnValue(new Promise(() => {}));
+    const record = { a: "https://example.com/a.tif" };
+
+    const layer = makeBareLayer({ source });
+    runInitialUpdate(layer);
+    rerender(layer, { source: record });
+
+    expect(open.mock.calls.map(([input]) => input)).toEqual([record]);
+  });
+
+  it("draws nothing for an empty record, without an error", async () => {
+    const open = vi.spyOn(MultiCOGSource, "open");
+    const onError = vi.fn();
+    const layer = makeBareLayer({ source: {}, onError });
+
+    runInitialUpdate(layer);
+    await flush();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(layer.renderLayers()).toBeNull();
   });
 });
 
@@ -233,7 +332,7 @@ describe("MultiCOGLayer.isLoaded", () => {
     const layer = makeBareLayer();
     runInitialUpdate(layer);
     const next = rerender(layer, {
-      sources: { b: { url: "https://example.com/b.tif" } },
+      source: { b: "https://example.com/b.tif" },
     });
     finishOld();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -329,13 +428,16 @@ function getTileData(
 ) {
   const layer = makeBareLayer({ pool: {} });
   const entries = Object.entries(sources);
+  const multiTilesetDescriptor = createMultiRasterTilesetDescriptor(
+    new Map(entries.map(([name, s]) => [name, s.tileset])),
+  );
+  // An opened MultiCOGSource, as far as `_getTileData` reads it
   layer.setState({
-    sources: new Map(
-      entries.map(([name, s]) => [name, { geotiff: s.geotiff }]),
-    ),
-    multiDescriptor: createMultiRasterTilesetDescriptor(
-      new Map(entries.map(([name, s]) => [name, s.tileset])),
-    ),
+    source: {
+      geotiffs: new Map(entries.map(([name, s]) => [name, s.geotiff])),
+      multiTilesetDescriptor,
+      tilesetDescriptor: multiTilesetDescriptor.primary,
+    },
   } as never);
   return layer._getTileData(
     { index: { x, y, z: 0 } } as never,
@@ -518,7 +620,7 @@ function renderLoadedTile(
   textureOptions: FakeTextureOptions,
 ): ReturnType<typeof vi.fn> {
   const layer = makeBareLayer(props);
-  layer.setState({ multiDescriptor: {} } as never);
+  layer.setState({ source: {} } as never);
   const { texture, setSampler } = fakeSampledTexture(textureOptions);
   const bands = new Map([
     [

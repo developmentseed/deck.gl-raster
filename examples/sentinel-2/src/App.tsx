@@ -147,12 +147,12 @@ export default function App() {
   const scene = SCENES[sceneIndex];
   const preset = PRESETS[presetIndex];
 
-  const sources = useMemo(
+  const source = useMemo(
     () =>
       Object.fromEntries(
         Object.entries(preset.sources).map(([slot, band]) => [
           slot,
-          { url: `${scene.baseUrl}/${band}.tif` },
+          `${scene.baseUrl}/${band}.tif`,
         ]),
       ),
     [scene, preset],
@@ -160,7 +160,7 @@ export default function App() {
 
   const layer = new MultiCOGLayer({
     id: `sentinel-2-multi-${sceneIndex}`,
-    sources,
+    source,
     composite: preset.composite,
     resampling,
     debug: debugState.debug,
@@ -170,7 +170,7 @@ export default function App() {
       { module: FilterNoDataVal, props: { value: 0 } },
       { module: LinearRescale, props: { rescaleMin: 0, rescaleMax: 0.05 } },
     ],
-    onGeoTIFFLoad: (_sources, { geographicBounds }) => {
+    onSourceLoad: ({ geographicBounds }) => {
       // Only fly to the scene on the initial load, not on subsequent band changes
       if (centeredSceneRef.current === sceneIndex) {
         return;
