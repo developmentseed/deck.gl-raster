@@ -4,6 +4,7 @@ import type {
   DefaultProps,
   Layer,
   LayerContext,
+  UpdateParameters,
 } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import type {
@@ -223,8 +224,6 @@ export class RasterTileLayer<
   static override defaultProps = defaultProps;
 
   declare state: {
-    // Subclasses declare their own fields
-    [key: string]: unknown;
     /** Aborts the metadata load in flight when a newer one starts or the
      *  layer is removed. */
     metadataAbortController?: AbortController;
@@ -232,35 +231,69 @@ export class RasterTileLayer<
     loadingMetadata?: boolean;
   };
 
+  /** Prefix for errors raised while loading metadata, such as `"loading GeoTIFF"`. */
+  protected readonly metadataErrorContext: string = "loading metadata";
+
+  override updateState(params: UpdateParameters<this>): void {
+    super.updateState(params);
+    if (this.shouldLoadMetadata(params)) {
+      this._loadMetadata();
+    }
+  }
+
   override finalizeState(context: LayerContext): void {
     this.state.metadataAbortController?.abort();
     super.finalizeState(context);
   }
 
   /**
-   * Start a {@link RasterTileLayer._loadMetadata}, replacing any load still in
+   * Whether `updateState` should load this layer's metadata again, like
+   * deck.gl's `shouldUpdateState`.
+   *
+   * Subclasses that load metadata return `true` when a prop it depends on has
+   * changed. The base layer takes its descriptor from props, so it returns
+   * `false`.
+   */
+  shouldLoadMetadata(_params: UpdateParameters<this>): boolean {
+    return false;
+  }
+
+  /**
+   * Load this layer's metadata and store it in state, like deck.gl's
+   * `updateState`.
+   *
+   * Called when {@link RasterTileLayer.shouldLoadMetadata} returns `true`.
+   * deck.gl hands every new instance of a layer the old instance's `state`, so
+   * a load started by an earlier render can finish after a newer one has
+   * begun. To drop such a load, pass `signal` to the requests it makes, and
+   * call `signal.throwIfAborted()` after the last `await`, before `setState` or
+   * callbacks.
+   *
+   * The base layer takes its descriptor from props, so it loads nothing.
+   */
+  async loadMetadata(_signal: AbortSignal): Promise<void> {}
+
+  /**
+   * Run {@link RasterTileLayer.loadMetadata}, replacing any load still in
    * flight.
    *
-   * Subclasses call this from `updateState` when their input changes. It
-   * aborts the previous load's signal, and makes
+   * It aborts the previous load's signal, and makes
    * {@link RasterTileLayer._isLoadingMetadata} return `true` until the latest
-   * load settles. Only the latest load's errors reach `onError`. Removing the
-   * layer aborts the load in flight.
-   *
-   * @param options.errorContext Prefix for errors raised from this load, such as
-   *   `"loading GeoTIFF"`.
+   * load settles. Only the latest load's errors reach `onError`, prefixed with
+   * {@link RasterTileLayer.metadataErrorContext}. Removing the layer aborts the
+   * load in flight.
    */
-  protected _reloadMetadata({ errorContext }: { errorContext: string }): void {
+  protected _loadMetadata(): void {
     this.state.metadataAbortController?.abort();
     const metadataAbortController = new AbortController();
     const { signal } = metadataAbortController;
     this.setState({ metadataAbortController, loadingMetadata: true });
 
-    this._loadMetadata(signal)
+    this.loadMetadata(signal)
       .catch((error: Error) => {
         // A replaced load's errors, including its AbortError, are moot
         if (!signal.aborted) {
-          this.raiseError(error, errorContext);
+          this.raiseError(error, this.metadataErrorContext);
         }
       })
       .finally(() => {
@@ -270,20 +303,6 @@ export class RasterTileLayer<
         }
       });
   }
-
-  /**
-   * Load this layer's metadata and store it in state.
-   *
-   * Called by {@link RasterTileLayer._reloadMetadata}. deck.gl hands every new
-   * instance of a layer the old instance's `state`, so a load started by an
-   * earlier render can finish after a newer one has begun. To drop such a
-   * load, pass `signal` to the requests it makes, and call
-   * `signal.throwIfAborted()` after the last `await`, before `setState` or
-   * callbacks.
-   *
-   * The base layer takes its descriptor from props, so it loads nothing.
-   */
-  protected async _loadMetadata(_signal: AbortSignal): Promise<void> {}
 
   /**
    * The currently effective {@link RasterTilesetDescriptor}.
@@ -306,7 +325,7 @@ export class RasterTileLayer<
   /**
    * Whether the layer is still fetching the metadata.
    *
-   * `true` while a load started with {@link RasterTileLayer._reloadMetadata}
+   * `true` while a {@link RasterTileLayer.loadMetadata} started by `updateState`
    * is in flight. Subclasses that load metadata some other way can override
    * this.
    *

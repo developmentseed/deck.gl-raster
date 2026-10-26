@@ -165,27 +165,23 @@ export class COGLayer<
     concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
   } as typeof RasterTileLayer.defaultProps;
 
-  declare state: {
+  declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
     geotiff?: GeoTIFF;
     tilesetDescriptor?: RasterTilesetDescriptor;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
   };
 
-  override updateState(params: UpdateParameters<this>) {
-    super.updateState(params);
+  protected override readonly metadataErrorContext = "loading GeoTIFF";
 
-    const { props, oldProps, changeFlags } = params;
-
-    const needsUpdate =
-      Boolean(changeFlags.dataChanged) || props.geotiff !== oldProps.geotiff;
-
-    if (needsUpdate) {
-      // Clear stale state so renderLayers returns null until the new GeoTIFF is
-      // ready
-      this.clearState();
-      this._reloadMetadata({ errorContext: "loading GeoTIFF" });
-    }
+  override shouldLoadMetadata({
+    props,
+    oldProps,
+    changeFlags,
+  }: UpdateParameters<this>): boolean {
+    return (
+      Boolean(changeFlags.dataChanged) || props.geotiff !== oldProps.geotiff
+    );
   }
 
   clearState() {
@@ -198,7 +194,11 @@ export class COGLayer<
   }
 
   /** Open the GeoTIFF, resolve its CRS, and store its tile grid in state. */
-  protected override async _loadMetadata(signal: AbortSignal): Promise<void> {
+  override async loadMetadata(signal: AbortSignal): Promise<void> {
+    // Clear stale state so renderLayers returns null until the new GeoTIFF is
+    // ready
+    this.clearState();
+
     const geotiff = await fetchGeoTIFF(this.props.geotiff, {
       concurrencyLimiter: this.props.concurrencyLimiter,
       signal,

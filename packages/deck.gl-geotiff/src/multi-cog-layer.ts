@@ -382,10 +382,15 @@ export class MultiCOGLayer extends RasterTileLayer<
   static override defaultProps =
     defaultProps as unknown as typeof RasterTileLayer.defaultProps;
 
-  declare state: {
+  declare state: RasterTileLayer<
+    MultiTileResult,
+    MultiCOGLayerProps
+  >["state"] & {
     sources: Map<string, SourceState> | null;
     multiDescriptor: MultiRasterTilesetDescriptor | null;
   };
+
+  protected override readonly metadataErrorContext = "loading COG sources";
 
   override initializeState(): void {
     this.setState({
@@ -394,21 +399,14 @@ export class MultiCOGLayer extends RasterTileLayer<
     });
   }
 
-  override updateState({
+  override shouldLoadMetadata({
     changeFlags,
     props,
     oldProps,
-  }: UpdateParameters<this>): void {
-    if (changeFlags.dataChanged || props.sources !== oldProps.sources) {
-      // Reset state so renderLayers() returns null while we re-open COGs.
-      // Without this, the TileLayer renders with new props but stale state,
-      // caching tiles with the wrong bands.
-      this.setState({
-        sources: null,
-        multiDescriptor: null,
-      });
-      this._reloadMetadata({ errorContext: "loading COG sources" });
-    }
+  }: UpdateParameters<this>): boolean {
+    return (
+      Boolean(changeFlags.dataChanged) || props.sources !== oldProps.sources
+    );
   }
 
   /**
@@ -418,7 +416,15 @@ export class MultiCOGLayer extends RasterTileLayer<
    * All sources are assumed to share the same CRS; the projection of the
    * first source is used for the shared coordinate converters.
    */
-  protected override async _loadMetadata(signal: AbortSignal): Promise<void> {
+  override async loadMetadata(signal: AbortSignal): Promise<void> {
+    // Reset state so renderLayers() returns null while we re-open COGs.
+    // Without this, the TileLayer renders with new props but stale state,
+    // caching tiles with the wrong bands.
+    this.setState({
+      sources: null,
+      multiDescriptor: null,
+    });
+
     const { sources } = this.props;
     const entries = Object.entries(sources);
 

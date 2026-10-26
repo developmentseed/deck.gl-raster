@@ -49,16 +49,6 @@ function rerender(layer: ZarrLayer, props: Record<string, unknown>): ZarrLayer {
   return next;
 }
 
-/** Spy on the protected `_loadMetadata` of a layer or its prototype. */
-function spyOnLoad(target: ZarrLayer) {
-  return vi.spyOn(
-    target as unknown as {
-      _loadMetadata: (signal: AbortSignal) => Promise<void>;
-    },
-    "_loadMetadata",
-  );
-}
-
 /** Let every settled promise run its handlers. */
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -134,7 +124,7 @@ function heldResolver() {
 
 describe("ZarrLayer.updateState", () => {
   beforeEach(() => {
-    // `_loadMetadata` stores debug handles on `window`, which Node lacks
+    // `loadMetadata` stores debug handles on `window`, which Node lacks
     vi.stubGlobal("window", {});
   });
 
@@ -146,7 +136,7 @@ describe("ZarrLayer.updateState", () => {
   it("raises a metadata load failure through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
     const layer = makeBareLayer({ onError });
-    spyOnLoad(layer).mockRejectedValue(new Error("boom"));
+    vi.spyOn(layer, "loadMetadata").mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
@@ -215,7 +205,7 @@ describe("ZarrLayer.isLoaded", () => {
 
   it("is not loaded while the Zarr metadata is loading", () => {
     const layer = makeBareLayer();
-    spyOnLoad(layer).mockReturnValue(new Promise(() => {}));
+    vi.spyOn(layer, "loadMetadata").mockReturnValue(new Promise(() => {}));
 
     runInitialUpdate(layer);
 
@@ -224,7 +214,7 @@ describe("ZarrLayer.isLoaded", () => {
 
   it("is loaded once the Zarr metadata has loaded", async () => {
     const layer = makeBareLayer();
-    spyOnLoad(layer).mockResolvedValue(undefined);
+    vi.spyOn(layer, "loadMetadata").mockResolvedValue(undefined);
 
     runInitialUpdate(layer);
 
@@ -233,7 +223,7 @@ describe("ZarrLayer.isLoaded", () => {
 
   it("is loaded after the Zarr metadata fails to load", async () => {
     const layer = makeBareLayer({ onError: () => true });
-    spyOnLoad(layer).mockRejectedValue(new Error("boom"));
+    vi.spyOn(layer, "loadMetadata").mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
@@ -242,7 +232,7 @@ describe("ZarrLayer.isLoaded", () => {
 
   it("is not loaded when the old Zarr finishes loading first", async () => {
     let finishOld!: () => void;
-    spyOnLoad(ZarrLayer.prototype)
+    vi.spyOn(ZarrLayer.prototype, "loadMetadata")
       .mockReturnValueOnce(
         new Promise((resolve) => {
           finishOld = resolve;

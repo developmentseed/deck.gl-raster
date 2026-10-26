@@ -266,7 +266,7 @@ Nothing is awaited, so nothing can arrive late, and `isLoaded` has no metadata
 step on this path.
 
 **Shorthand (decision 6).** `new COGLayer({ geotiff: url })` keeps working
-by opening a private source through `_loadMetadata` (stage 1). It calls the same
+by opening a private source in `loadMetadata` (stage 1). It calls the same
 `COGSource.open`, so the two paths can't drift apart. The layer's `signal` prop
 stays on the layer for tile loads, and the shorthand also passes it to the
 private open.
@@ -359,20 +359,30 @@ new MosaicLayer({
 
 Each stage is one PR.
 
-1. **Metadata loading in RasterTileLayer.** No API change, so it can ship in a
-   0.9.x patch.
-   - Subclasses override a protected `async _loadMetadata(signal)` that loads
-     and stores their metadata. After its last `await`, it calls
-     `signal.throwIfAborted()` before `setState` or callbacks. deck.gl hands
-     every instance the same `state` object, so `setState` from the instance
-     that started the load lands where the newest instance reads.
-   - Subclasses start a load from `updateState` with
-     `_reloadMetadata({ errorContext })`. It aborts the previous load, owns
-     `loadingMetadata`, reports errors only from the latest load, and aborts in
-     `finalizeState`.
-   - COGLayer, MultiCOGLayer and ZarrLayer move onto it. That fixes ZarrLayer's
-     race. ZarrLayer also passes the signal to zarrita's `open`, so a replaced
-     load stops reading.
+1. **Metadata loading in RasterTileLayer.** It only adds overridable methods,
+   so it can ship in a 0.9.x release.
+   - Subclasses override two public methods, mirroring deck.gl's
+     `shouldUpdateState` and `updateState`:
+     - `shouldLoadMetadata(params)` returns `true` when a prop the metadata
+       depends on has changed.
+     - `async loadMetadata(signal)` loads the metadata and stores it in state.
+       After its last `await`, it calls `signal.throwIfAborted()` before
+       `setState` or callbacks. deck.gl hands every instance the same `state`
+       object, so `setState` from the instance that started the load lands
+       where the newest instance reads.
+   - The base's `updateState` calls `shouldLoadMetadata`, and a protected
+     `_loadMetadata()` (like deck.gl's `_update()`) does the bookkeeping. It
+     aborts the previous load, owns `loadingMetadata`, reports only the latest
+     load's errors, prefixed with the layer's `metadataErrorContext`, and aborts
+     in `finalizeState`.
+   - Subclasses type their state as `RasterTileLayer<…>["state"] & {…}`, as
+     deck.gl's MVTLayer does with TileLayer's.
+   - COGLayer, MultiCOGLayer and ZarrLayer move onto it, and drop their own
+     `updateState`.
+     - That fixes ZarrLayer's race.
+     - MultiCOGLayer now runs `super.updateState`, which it skipped.
+     - ZarrLayer also passes the signal to zarrita's `open`, so a replaced load
+       stops reading.
    - Tests: #770's tests still pass. ZarrLayer gets the same two race tests (old
      load finishing last, old load finishing first), against a real GeoZarr
      store.

@@ -163,7 +163,10 @@ export class ZarrLayer<
     epsgResolver,
   } as typeof RasterTileLayer.defaultProps;
 
-  declare state: {
+  declare state: RasterTileLayer<
+    DataT,
+    ZarrLayerProps<Store, Dtype, DataT>
+  >["state"] & {
     meta?: GeoZarrMetadata;
     spatialDims?: [string, string];
     /** One opened array per level, finest-first (matches meta.levels order). */
@@ -171,25 +174,22 @@ export class ZarrLayer<
     tilesetDescriptor?: RasterTilesetDescriptor;
   };
 
+  protected override readonly metadataErrorContext = "loading Zarr metadata";
+
   override initializeState(): void {
     this.setState({});
   }
 
-  override updateState(params: UpdateParameters<this>) {
-    super.updateState(params);
-
-    const { props, oldProps, changeFlags } = params;
-
-    const needsUpdate =
+  override shouldLoadMetadata({
+    props,
+    oldProps,
+    changeFlags,
+  }: UpdateParameters<this>): boolean {
+    return (
       Boolean(changeFlags.dataChanged) ||
       props.node !== oldProps.node ||
-      props.variable !== oldProps.variable;
-
-    if (needsUpdate) {
-      // Clear stale state so renderLayers returns null until the new Zarr is ready
-      this._clearState();
-      this._reloadMetadata({ errorContext: "loading Zarr metadata" });
-    }
+      props.variable !== oldProps.variable
+    );
   }
 
   /** Reset all async-loaded state. */
@@ -203,7 +203,10 @@ export class ZarrLayer<
   }
 
   /** Open the Zarr store, parse GeoZarr metadata, validate dims, build reprojection fns. */
-  protected override async _loadMetadata(signal: AbortSignal): Promise<void> {
+  override async loadMetadata(signal: AbortSignal): Promise<void> {
+    // Clear stale state so renderLayers returns null until the new Zarr is ready
+    this._clearState();
+
     const { node, variable, metadata: metadataOverride } = this.props;
 
     // Callers own the store. We accept a pre-opened Array (rendered as a

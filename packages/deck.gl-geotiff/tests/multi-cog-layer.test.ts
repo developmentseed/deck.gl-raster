@@ -67,16 +67,6 @@ function rerender(
   return next;
 }
 
-/** Spy on the protected `_loadMetadata` of a layer or its prototype. */
-function spyOnLoad(target: MultiCOGLayer) {
-  return vi.spyOn(
-    target as unknown as {
-      _loadMetadata: (signal: AbortSignal) => Promise<void>;
-    },
-    "_loadMetadata",
-  );
-}
-
 /** A test fixture's bytes, to pass as a source's `url`. */
 async function fixtureBytes(name: string): Promise<ArrayBuffer> {
   return new Uint8Array(await readFile(fixturePath(name, "rasterio"))).buffer;
@@ -139,7 +129,7 @@ describe("MultiCOGLayer.updateState", () => {
   it("raises a COG open failure through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
     const layer = makeBareLayer({ onError });
-    spyOnLoad(layer).mockRejectedValue(new Error("boom"));
+    vi.spyOn(layer, "loadMetadata").mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
@@ -167,7 +157,7 @@ describe("MultiCOGLayer.updateState", () => {
     };
 
     const layer = makeBareLayer({ ...props, sources: oldSources });
-    const oldLoad = spyOnLoad(layer);
+    const oldLoad = vi.spyOn(layer, "loadMetadata");
     runInitialUpdate(layer);
     const next = rerender(layer, { ...props, sources: newSources });
     await vi.waitFor(() => expect(lookups.size).toBe(2));
@@ -197,7 +187,7 @@ describe("MultiCOGLayer.isLoaded", () => {
 
   it("is not loaded while the COG sources are opening", () => {
     const layer = makeBareLayer();
-    spyOnLoad(layer).mockReturnValue(new Promise(() => {}));
+    vi.spyOn(layer, "loadMetadata").mockReturnValue(new Promise(() => {}));
 
     runInitialUpdate(layer);
 
@@ -206,7 +196,7 @@ describe("MultiCOGLayer.isLoaded", () => {
 
   it("is loaded once the COG sources have opened", async () => {
     const layer = makeBareLayer();
-    spyOnLoad(layer).mockResolvedValue(undefined);
+    vi.spyOn(layer, "loadMetadata").mockResolvedValue(undefined);
 
     runInitialUpdate(layer);
 
@@ -215,7 +205,7 @@ describe("MultiCOGLayer.isLoaded", () => {
 
   it("is loaded after a COG source fails to open", async () => {
     const layer = makeBareLayer({ onError: () => true });
-    spyOnLoad(layer).mockRejectedValue(new Error("boom"));
+    vi.spyOn(layer, "loadMetadata").mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
@@ -224,7 +214,7 @@ describe("MultiCOGLayer.isLoaded", () => {
 
   it("is not loaded when the old sources finish opening first", async () => {
     let finishOld!: () => void;
-    spyOnLoad(MultiCOGLayer.prototype)
+    vi.spyOn(MultiCOGLayer.prototype, "loadMetadata")
       .mockReturnValueOnce(
         new Promise((resolve) => {
           finishOld = resolve;

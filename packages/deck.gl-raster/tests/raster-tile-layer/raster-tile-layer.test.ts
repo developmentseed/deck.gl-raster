@@ -1,3 +1,4 @@
+import type { UpdateParameters } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RasterTileLayerProps } from "../../src/raster-tile-layer/index.js";
@@ -176,7 +177,7 @@ describe("RasterTileLayer world wrap", () => {
   });
 });
 
-describe("RasterTileLayer._reloadMetadata", () => {
+describe("RasterTileLayer.loadMetadata", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -195,19 +196,32 @@ describe("RasterTileLayer._reloadMetadata", () => {
   /** A load started by {@link MetadataTestLayer}, settled by the test. */
   type Load = { signal: AbortSignal } & ReturnType<typeof deferred<string>>;
 
+  /** The test props {@link MetadataTestLayer} reads. */
+  type TestProps = { input: string; loads: Load[] };
+
   /**
-   * Overrides `_loadMetadata` as subclasses must: wait for the load, check the
-   * signal after the last `await`, then `setState`. Each load is pushed to the
-   * `loads` prop for the test to settle.
+   * Loads metadata as subclasses must. `shouldLoadMetadata` asks for a load
+   * when the `input` prop changes. `loadMetadata` pushes each load to the
+   * `loads` prop for the test to settle, then checks the signal after its last
+   * `await`, before `setState`.
    */
   class MetadataTestLayer extends RasterTileLayer {
-    start(): void {
-      this._reloadMetadata({ errorContext: "loading test" });
+    declare state: RasterTileLayer["state"] & { result?: string };
+    protected override readonly metadataErrorContext = "loading test";
+
+    override shouldLoadMetadata({
+      props,
+      oldProps,
+      changeFlags,
+    }: UpdateParameters<this>): boolean {
+      const { input } = props as unknown as TestProps;
+      const { input: oldInput } = oldProps as unknown as TestProps;
+      return Boolean(changeFlags.dataChanged) || input !== oldInput;
     }
 
-    protected override async _loadMetadata(signal: AbortSignal): Promise<void> {
+    override async loadMetadata(signal: AbortSignal): Promise<void> {
       const load = { signal, ...deferred<string>() };
-      (this.props as unknown as { loads: Load[] }).loads.push(load);
+      (this.props as unknown as TestProps).loads.push(load);
       const result = await load.promise;
       signal.throwIfAborted();
       this.setState({ result });
@@ -229,9 +243,18 @@ describe("RasterTileLayer._reloadMetadata", () => {
     return layer;
   }
 
+  /** Run `updateState` as deck.gl does when the layer is first added. */
+  function runInitialUpdate(layer: MetadataTestLayer): void {
+    layer.updateState({
+      props: layer.props,
+      oldProps: layer.props,
+      changeFlags: { dataChanged: true },
+    } as never);
+  }
+
   /**
    * Render a new instance with `props`, as apps do on every render: deck.gl
-   * hands it the old instance's `state`.
+   * hands it the old instance's `state`, then runs `updateState`.
    */
   function rerender(
     layer: MetadataTestLayer,
@@ -242,6 +265,11 @@ describe("RasterTileLayer._reloadMetadata", () => {
       state: layer.state,
       setState: layer.setState,
     });
+    next.updateState({
+      props: next.props,
+      oldProps: layer.props,
+      changeFlags: {},
+    } as never);
     return next;
   }
 
@@ -250,10 +278,9 @@ describe("RasterTileLayer._reloadMetadata", () => {
 
   it("keeps the latest load's result when an older load finishes last", async () => {
     const loads: Load[] = [];
-    const layer = makeBareLayer({ loads });
-    layer.start();
-    const next = rerender(layer, { loads });
-    next.start();
+    const layer = makeBareLayer({ input: "a", loads });
+    runInitialUpdate(layer);
+    const next = rerender(layer, { input: "b", loads });
 
     loads[1]!.resolve("b");
     await flush();
@@ -263,13 +290,21 @@ describe("RasterTileLayer._reloadMetadata", () => {
     expect(next.state.result).toBe("b");
   });
 
+  it("doesn't load again when the input is unchanged", () => {
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads });
+    runInitialUpdate(layer);
+    rerender(layer, { input: "a", loads });
+
+    expect(loads).toHaveLength(1);
+  });
+
   it("stays loading until the latest load settles", async () => {
     vi.spyOn(CompositeLayer.prototype, "isLoaded", "get").mockReturnValue(true);
     const loads: Load[] = [];
-    const layer = makeBareLayer({ loads });
-    layer.start();
-    const next = rerender(layer, { loads });
-    next.start();
+    const layer = makeBareLayer({ input: "a", loads });
+    runInitialUpdate(layer);
+    const next = rerender(layer, { input: "b", loads });
 
     loads[0]!.resolve("a");
     await flush();
@@ -283,10 +318,9 @@ describe("RasterTileLayer._reloadMetadata", () => {
   it("raises only the latest load's error", async () => {
     const onError = vi.fn((_error: Error) => true);
     const loads: Load[] = [];
-    const layer = makeBareLayer({ loads, onError });
-    layer.start();
-    const next = rerender(layer, { loads, onError });
-    next.start();
+    const layer = makeBareLayer({ input: "a", loads, onError });
+    runInitialUpdate(layer);
+    rerender(layer, { input: "b", loads, onError });
 
     loads[0]!.reject(new Error("a"));
     await flush();
@@ -302,8 +336,8 @@ describe("RasterTileLayer._reloadMetadata", () => {
   it("stops loading when the latest load fails", async () => {
     vi.spyOn(CompositeLayer.prototype, "isLoaded", "get").mockReturnValue(true);
     const loads: Load[] = [];
-    const layer = makeBareLayer({ loads, onError: () => true });
-    layer.start();
+    const layer = makeBareLayer({ input: "a", loads, onError: () => true });
+    runInitialUpdate(layer);
 
     loads[0]!.reject(new Error("boom"));
     await flush();
@@ -313,8 +347,8 @@ describe("RasterTileLayer._reloadMetadata", () => {
 
   it("aborts the load in flight when the layer is removed", () => {
     const loads: Load[] = [];
-    const layer = makeBareLayer({ loads });
-    layer.start();
+    const layer = makeBareLayer({ input: "a", loads });
+    runInitialUpdate(layer);
 
     layer.finalizeState({} as never);
 
@@ -323,10 +357,9 @@ describe("RasterTileLayer._reloadMetadata", () => {
 
   it("aborts the previous load's signal when a new load starts", () => {
     const loads: Load[] = [];
-    const layer = makeBareLayer({ loads });
-    layer.start();
-    const next = rerender(layer, { loads });
-    next.start();
+    const layer = makeBareLayer({ input: "a", loads });
+    runInitialUpdate(layer);
+    rerender(layer, { input: "b", loads });
 
     expect(loads.map((load) => load.signal.aborted)).toEqual([true, false]);
   });
