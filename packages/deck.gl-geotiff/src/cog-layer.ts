@@ -89,8 +89,8 @@ export type COGLayerProps<DataT extends MinimalTileData = TextureDataT> = Omit<
     /**
      * Worker pool for decoding image chunks.
      *
-     * If none is provided, a default Pool will be created and shared between all
-     * COGLayer and GeoTIFFLayer instances.
+     * If none is provided, the layer uses `defaultDecoderPool()`, a single pool
+     * shared by every COGLayer and MultiCOGLayer.
      */
     pool?: DecoderPool;
 

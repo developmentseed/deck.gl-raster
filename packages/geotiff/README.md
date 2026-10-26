@@ -118,9 +118,18 @@ If you have an image where the CRS fails to parse, please create an issue.
 
 ### Configurable Web Worker pool for image decoding
 
-The `DecoderPool` allows for decoding image data off the main thread.
+A `DecoderPool` decodes image data in Web Workers, off the main thread. Pass one to `fetchTile` or `fetchTiles`:
 
-By default workers are created up to `navigator.hardwareConcurrency`, but you can customize how large the web worker pool is by passing options to the `DecoderPool` constructor.
+```ts
+import { defaultDecoderPool, GeoTIFF } from "@developmentseed/geotiff";
+
+const geotiff = await GeoTIFF.fromUrl("https://example.com/image.tif");
+const tile = await geotiff.fetchTile(0, 0, { pool: defaultDecoderPool() });
+```
+
+Without a pool, tiles are decoded on the main thread.
+
+`defaultDecoderPool()` returns a single shared pool of `navigator.hardwareConcurrency` built-in workers. To set the number of workers or use your own worker script, pass `size` and `createWorker` to the `DecoderPool` constructor. A `DecoderPool` without `createWorker` has no workers, so it decodes on the main thread too.
 
 If you bundle with Vite, set [`worker.format`][vite-worker-format] to `"es"`. The decoder worker uses top-level await and dynamic imports, which Vite's default `iife` worker format doesn't support, so `vite build` fails without it:
 
