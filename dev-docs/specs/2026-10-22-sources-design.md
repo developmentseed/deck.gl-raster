@@ -100,6 +100,9 @@ These were settled on 2026-10-23:
 5. **The five stages below land as separate PRs, one at a time.**
 6. **The shorthand stays.** `new COGLayer({ geotiff: url })` keeps working and
    stays backwards compatible, so high-level users can pass a URL directly.
+   *Amended on 2026-10-26:* there's one prop, `source`, which takes an opened
+   source or the shorthand inputs (`new COGLayer({ source: url })`). `geotiff`
+   is removed.
 7. **The source holds texture format metadata** (see the table below).
    *Deferred on 2026-10-26; see decision 14.*
 8. **No library source cache for now.**
@@ -117,7 +120,7 @@ These were settled on 2026-10-26, for stage 2:
     `COGSource.open` and pass `source`.
 12. **`onSourceLoad(source)`** replaces the per-format load callbacks
     (`onGeoTIFFLoad`, and a future `onZarrLoad`). A layer calls it only when it
-    opens its own source from shorthand props.
+    opens its own source, from shorthand input.
 13. **Stage 2 lands as two PRs:** 2a for sources of one file, 2b for sources
     of several files (see Stages).
 14. **Texture formats are deferred** (amends decision 7):
@@ -196,7 +199,8 @@ These were settled on 2026-10-26, for stage 2:
 
 A sketch. Stage 2a built the one-file case with these names. 2b decides how a
 record's files are exposed, e.g. as `files: ReadonlyMap<string, GeoTIFF>`, and
-how its tile grid is grouped.
+how its tile grid is grouped, possibly in a separate `MultiCOGSource` class
+(question 8).
 
 ```ts
 /** One COG, or several COGs that are the bands of one scene (2b). */
@@ -275,16 +279,17 @@ new COGLayer({ id: "cog", source });
 new COGLayer({ id: "overview", source });    // e.g. an overview map's Deck: same opened data
 ```
 
-On the source path a layer derives its state synchronously. When `source`
-changes, `updateState` stores it in state with the default pipeline inferred
-from it, and aborts any shorthand open still in flight:
+When `source` is an opened source, the layer derives its state synchronously.
+`updateState` stores the source in state with the default pipeline inferred
+from it, and aborts any open still in flight:
 
 ```ts
 updateState(params) {
   super.updateState(params);
   const { props, oldProps } = params;
-  if (props.source && props.source !== oldProps.source) {
+  if (props.source instanceof COGSource && props.source !== oldProps.source) {
     this._abortMetadataLoad();
+    this.clearState(); // draw nothing if the pipeline can't draw the new source
     this.setState(this._sourceState(props.source)); // source, pipeline
   }
 }
@@ -296,22 +301,24 @@ protected _tilesetDescriptor() {
 Nothing is awaited, so nothing can arrive late, and `isLoaded` has no metadata
 step on this path.
 
-**A new source needs a new inner TileLayer.** deck.gl's TileLayer builds its
+**A new tile grid needs a new inner TileLayer.** deck.gl's TileLayer builds its
 tileset, and with it the tile grid, once, on its first update. A new
-`TilesetClass` doesn't replace it. Today's layers reload by rendering nothing
-for a frame, which removes the TileLayer. A `source` prop switches without that
-gap, so COGLayer gives each source its own inner TileLayer id
-(`_tileLayerId`). Without that, the layer would keep drawing the old source's
-tiles on the old grid.
+`TilesetClass` doesn't replace it, and its options can't carry our descriptor.
+Today's layers reload by rendering nothing for a frame, which removes the
+TileLayer. A new opened source switches without that gap. So `RasterTileLayer`
+names its inner TileLayer after the descriptor object, and a new descriptor
+gets a new TileLayer. Without that, the layer would keep drawing the old
+source's tiles on the old grid. Refetching tiles on the same grid, as #797
+proposes with `updateTriggers`, is a separate need.
 
-**Shorthand (decision 6).** `new COGLayer({ geotiff: url })` keeps working
-by opening a private source in `loadMetadata` (stage 1). It calls the same
-`COGSource.open`, so the two paths can't drift apart, and stores the result in
-the same `state.source`. The open uses the layer's own load signal, which
-aborts when `geotiff` changes or the layer is removed. The layer's `signal`
-prop stays for tile loads only: if it also aborted the open, the abort would
-reach `onError` while the layer is still alive. MosaicLayer removes a layer
-whose item leaves view, which aborts its open anyway.
+**Shorthand (decision 6).** `new COGLayer({ source: url })` opens a private
+source in `loadMetadata` (stage 1). It calls the same `COGSource.open`, so the
+two paths can't drift apart, and stores the result in the same `state.source`.
+The open uses the layer's own load signal, which aborts when `source` changes
+or the layer is removed. The layer's `signal` prop stays for tile loads only:
+if it also aborted the open, the abort would reach `onError` while the layer is
+still alive. MosaicLayer removes a layer whose item leaves view, which aborts
+its open anyway.
 
 ### `ZarrSource`
 
@@ -388,7 +395,7 @@ new MosaicLayer({
 
 | Today | With sources |
 | --- | --- |
-| `COGLayer({ geotiff })` | Still works as shorthand (decision 6). `COGLayer({ source })`, with `source` from `COGSource.open(geotiff)`, is the explicit form. |
+| `COGLayer({ geotiff })` | `COGLayer({ source })`: `source` takes the same inputs, or a `COGSource` from `COGSource.open(input)` (decision 6). |
 | `epsgResolver` on COGLayer, MultiCOGLayer, ZarrLayer | `open()` option. Removed from COGLayer in 2a. |
 | `concurrencyLimiter` on COGLayer, MultiCOGLayer | `open()` option, removed from COGLayer in 2a. MosaicLayer keeps its prop and forwards it to `getSource`. |
 | `onGeoTIFFLoad` | `onSourceLoad(source)` on the shorthand path (COGLayer in 2a). With a `source` prop, read `source.geographicBounds` before creating the layer. |
@@ -432,8 +439,9 @@ Each stage is one PR.
    - **2a: one file per source.**
      - `RasterSource` in deck.gl-raster, and `COGSource.open(input, options)`
        in deck.gl-geotiff.
-     - A `source` prop on COGLayer. `geotiff` becomes the shorthand path,
-       which opens a private source.
+     - COGLayer's `source` prop takes an opened `COGSource`, or what `geotiff`
+       took (the shorthand), which the layer opens as a private source.
+       `geotiff` is removed.
      - The clean break (decision 11), with the examples moved over.
      - Tests: each input type opens. Aborting mid-open rejects, and an
        already-aborted signal makes no request. A layer given a `source` never
@@ -473,24 +481,30 @@ Each stage is one PR.
    per format (`COGSource`, `ZarrSource`), instead of unrelated classes. The
    base class would hold what every format shares, such as the tile grid, and
    `RasterTileLayer` could store and read it itself. *Decided:* yes
-   (decision 10). In 2a, COGLayer stores and reads its source itself. Moving
-   that into `RasterTileLayer` can wait for a second layer that needs it.
-6. **Where `onSourceLoad` lives.** 2a defines it, with `source`, in
-   `RasterSourceLayerProps<SourceT>`, a deck.gl-raster props type that
-   COGLayer's props include, rather than on `RasterTileLayer`'s own props.
-   `RasterTileLayer` never opens a source itself, so the callback would never
-   fire there, and the generic gives each layer its own source type. *Open.*
-7. **MosaicLayer's `onSourceLoad`.** MosaicLayer already has
-   `onSourceLoad(item, { data })`, where a "source" is a mosaic item (its
-   `sources` prop lists the items), not a `RasterSource`. Rename one of them?
-   *Open.*
+   (decision 10). In 2a, COGLayer stores and reads its source itself, and
+   `RasterTileLayer` only gives each tile grid its own inner TileLayer. Moving
+   more into `RasterTileLayer` can wait for a second layer that needs it.
+6. **Where `onSourceLoad` lives.** 2a declares `source` and `onSourceLoad` on
+   COGLayer's props: each layer's `source` takes its own inputs, and
+   `RasterTileLayer` never opens a source itself. Whether ZarrLayer shares a
+   props type for them is open until stage 4. *Open.*
+7. **MosaicLayer's naming.** MosaicLayer calls its items `sources`, and passes
+   each to `getSource`, `renderSource` and `onSourceLoad(item, { data })`.
+   Once `getSource` returns a `COGSource` (stage 3), "source" names both the
+   item and what's opened for it. Either that's one meaning (an item says
+   where a source is, and `getSource` opens it), or MosaicLayer's items get
+   another name. *Under discussion; decide before stage 3.*
+8. **One class or two for files of one scene.** A separate `MultiCOGSource`
+   would keep `COGSource.geotiff` a single `GeoTIFF`, rather than one class
+   whose fields depend on its input. Leaning toward two classes; *decide at
+   2b.*
 
 ## Left to the implementer
 
 - **Names and types:**
-  - `files`, `tileset`, and how a bare input is keyed in `files`.
-  - Whether `tileset` becomes a discriminated union, e.g. on
-    `kind: "file" | "bands"`.
+  - `tilesetDescriptor` and `geotiff` are settled for one file (2a). For
+    several files, the class split and how a record's files are exposed
+    (question 8).
 - **Code organization:** file layout, error wording, and sharing helpers
   between the COG and Zarr `open()` code.
 - **Input normalization:** where it happens. Today's `fetchGeoTIFF` already
