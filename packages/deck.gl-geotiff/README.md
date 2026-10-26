@@ -24,7 +24,7 @@ new Deck({
   layers: [
     new COGLayer({
       id: 'cog-layer',
-      geotiff: 'https://example.com/my-cog.tif'
+      source: 'https://example.com/my-cog.tif'
     })
   ]
 });

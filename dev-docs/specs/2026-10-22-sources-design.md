@@ -121,8 +121,10 @@ These were settled on 2026-10-26, for stage 2:
 12. **`onSourceLoad(source)`** replaces the per-format load callbacks
     (`onGeoTIFFLoad`, and a future `onZarrLoad`). A layer calls it only when it
     opens its own source, from shorthand input.
-13. **Stage 2 lands as two PRs:** 2a for sources of one file, 2b for sources
-    of several files (see Stages).
+13. **Stage 2 lands as two PRs:** 2a for sources of one file (`COGSource`),
+    and 2b for sources of several files (`MultiCOGSource`, question 8). In
+    both, the layer takes a single `source` prop: COGLayer in 2a, MultiCOGLayer
+    in 2b (see Stages).
 14. **Texture formats are deferred** (amends decision 7):
     - A COG's own tags give no texture format for 3-band files or for files
       with more than 4 bands, which render today: the default pipeline adds
@@ -137,9 +139,10 @@ These were settled on 2026-10-26, for stage 2:
 
 ## Goals
 
-- `COGSource` (one file, or several files of one scene) and `ZarrSource`. Each
-  holds the dataset state that costs I/O or async work to get: opened handles,
-  the projection, the tile grid, geographic bounds and band metadata.
+- `COGSource` (one file), `MultiCOGSource` (several files of one scene) and
+  `ZarrSource`. Each holds the dataset state that costs I/O or async work to
+  get: opened handles, the projection, the tile grid, geographic bounds and
+  band metadata.
 - Layers take a `source` prop, and nothing on that path awaits anything.
 - One source can back several layers, several `Deck`s and successive lifetimes
   of a layer, without reading headers or resolving the CRS again.
@@ -232,7 +235,7 @@ class COGSource extends RasterSource {
 class MultiCOGSource extends RasterSource {
   static open(inputs: Record<string, COGInput>, options?: COGSourceOptions): Promise<MultiCOGSource>;
 
-  /** The opened files, by name, in the order given. */
+  /** The opened files, by name, in the record's key order. */
   readonly geotiffs: ReadonlyMap<string, GeoTIFF>;
   /** The CRS that every file shares, resolved once. */
   readonly projection: ProjectionDefinition;
@@ -245,8 +248,8 @@ class MultiCOGSource extends RasterSource {
 `open()` does what the layers' parse methods do today, once:
 
 1. Open the files in parallel.
-2. Resolve each CRS.
-3. Check the files, if there are several.
+2. Check the files, if there are several.
+3. Resolve the CRS, once.
 4. Build the projection functions and the tile grid.
 5. Compute the geographic bounds.
 
@@ -503,13 +506,16 @@ Each stage is one PR.
    per format (`COGSource`, `ZarrSource`), instead of unrelated classes. The
    base class would hold what every format shares, such as the tile grid, and
    `RasterTileLayer` could store and read it itself. *Decided:* yes
-   (decision 10). In 2a, COGLayer stores and reads its source itself, and
-   `RasterTileLayer` only gives each tile grid its own inner TileLayer. Moving
-   more into `RasterTileLayer` can wait for a second layer that needs it.
-6. **Where `onSourceLoad` lives.** 2a declares `source` and `onSourceLoad` on
-   COGLayer's props: each layer's `source` takes its own inputs, and
-   `RasterTileLayer` never opens a source itself. Whether ZarrLayer shares a
-   props type for them is open until stage 4. *Open.*
+   (decision 10). In 2a and 2b, COGLayer and MultiCOGLayer each store and read
+   their source themselves, and `RasterTileLayer` only gives each tile grid its
+   own inner TileLayer. *Proposal:* when ZarrLayer becomes the third layer with
+   a source (stage 4), `RasterTileLayer` owns that plumbing, with two hooks per
+   layer, such as `isOpenedSource(value)` and `openSource(input, signal)`.
+6. **Where `onSourceLoad` lives.** 2a and 2b declare `source` and
+   `onSourceLoad` on each layer's props, COGLayer's and MultiCOGLayer's: each
+   layer's `source` takes its own inputs, and `RasterTileLayer` never opens a
+   source itself. Whether ZarrLayer shares a props type for them is open until
+   stage 4. *Open.*
 7. **MosaicLayer's naming.** MosaicLayer calls its items `sources`, and passes
    each to `getSource`, `renderSource` and `onSourceLoad(item, { data })`.
    Once `getSource` returns a `COGSource` (stage 3), "source" would name both

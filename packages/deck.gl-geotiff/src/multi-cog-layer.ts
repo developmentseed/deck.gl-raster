@@ -138,7 +138,8 @@ export type MultiCOGLayerProps = CompositeLayerProps &
      * The files of one scene to draw: an opened {@link MultiCOGSource}, or a
      * record of COGs for the layer to open with the defaults of
      * {@link MultiCOGSource.open}, each a URL string, {@link URL},
-     * {@link ArrayBuffer} or opened {@link GeoTIFF}.
+     * {@link ArrayBuffer} or opened {@link GeoTIFF}. An empty record draws
+     * nothing.
      *
      * Each name is a band name for `composite`. Open the files yourself to
      * change those defaults, such as the EPSG resolver or the request limiter,
@@ -223,7 +224,9 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     maxError?: number;
 
     /**
-     * AbortSignal to cancel loading of all sources.
+     * AbortSignal applied to every tile fetch. It doesn't abort opening
+     * `source`: the layer aborts that itself when `source` changes or the
+     * layer is removed.
      */
     signal?: AbortSignal;
 

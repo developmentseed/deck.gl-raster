@@ -90,7 +90,10 @@ function round(value: number): number {
  * share one source.
  */
 export class MultiCOGSource extends RasterSource {
-  /** The opened files, by name, in the order they were given. */
+  /**
+   * The opened files, by name, in the record's key order, as `Object.keys`
+   * lists them.
+   */
   readonly geotiffs: ReadonlyMap<string, GeoTIFF>;
 
   /** The CRS of every file, resolved once. */
