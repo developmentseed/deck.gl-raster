@@ -112,8 +112,6 @@ export class COGLayer<
   declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
     /** The source the layer draws: `source`, or the one opened from `geotiff`. */
     source?: COGSource;
-    /** Incremented with each new source, which gets its own inner TileLayer. */
-    sourceVersion?: number;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
   };
@@ -182,20 +180,11 @@ export class COGLayer<
         inferRenderPipeline(source.geotiff, this.context.device));
     }
 
-    return {
-      source,
-      sourceVersion: (this.state.sourceVersion ?? 0) + 1,
-      defaultGetTileData,
-      defaultRenderTile,
-    };
+    return { source, defaultGetTileData, defaultRenderTile };
   }
 
   protected override _tilesetDescriptor() {
     return this.state.source?.tilesetDescriptor;
-  }
-
-  protected override _tileLayerId(): string {
-    return `${super._tileLayerId()}-${this.state.sourceVersion ?? 0}`;
   }
 
   /**

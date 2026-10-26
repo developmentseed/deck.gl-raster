@@ -83,6 +83,9 @@ export type RasterTileLayerProps<
     /**
      * Tile pyramid + CRS projection descriptor.
      *
+     * Keep the same object across renders: a new descriptor starts the layer's
+     * tiles over.
+     *
      * Subclasses may supply this via state by overriding the protected
      * `_tilesetDescriptor()` method.
      */
@@ -179,6 +182,20 @@ const defaultProps: DefaultProps<RasterTileLayerProps> = {
   // every update.
   zRange: { type: "array", value: null, optional: true, compare: true },
 };
+
+/** A number for each tile grid descriptor, which names its inner TileLayer. */
+const descriptorIds = new WeakMap<RasterTilesetDescriptor, number>();
+let nextDescriptorId = 0;
+
+/** The number of `descriptor`, the same for as long as the object lives. */
+function descriptorId(descriptor: RasterTilesetDescriptor): number {
+  let id = descriptorIds.get(descriptor);
+  if (id === undefined) {
+    id = nextDescriptorId++;
+    descriptorIds.set(descriptor, id);
+  }
+  return id;
+}
 
 /**
  * Base-class prop shape that excludes the overridable fields.
@@ -315,18 +332,6 @@ export class RasterTileLayer<
     if (this.state.loadingMetadata) {
       this.setState({ loadingMetadata: false });
     }
-  }
-
-  /**
-   * The id of the inner TileLayer.
-   *
-   * deck.gl's TileLayer builds its tile grid once, from the first descriptor
-   * it gets. A subclass whose descriptor can change while the layer keeps
-   * rendering returns a new id for each descriptor, so that deck.gl replaces
-   * the TileLayer and its tile cache.
-   */
-  protected _tileLayerId(): string {
-    return `raster-tile-layer-${this.id}`;
   }
 
   /**
@@ -501,7 +506,9 @@ export class RasterTileLayer<
     } = this.props;
 
     return new TileLayer<DataT>({
-      id: this._tileLayerId(),
+      // A TileLayer builds its tile grid once, from its first descriptor, so a
+      // new descriptor needs a new TileLayer
+      id: `raster-tile-layer-${this.id}-${descriptorId(descriptor)}`,
       TilesetClass: TilesetFactory,
       getTileData: (tile) => this._wrapGetTileData(tile, getTileData),
       renderSubLayers: (props) =>

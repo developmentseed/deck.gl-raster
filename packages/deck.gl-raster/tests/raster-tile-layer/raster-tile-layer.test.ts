@@ -394,33 +394,29 @@ describe("RasterTileLayer.loadMetadata", () => {
   });
 });
 
-describe("RasterTileLayer inner TileLayer id", () => {
-  /** The id of the inner TileLayer that `renderLayers` returns. */
-  function innerTileLayerId(layer: RasterTileLayer): string | undefined {
+describe("RasterTileLayer inner TileLayer", () => {
+  type Descriptor = RasterTileLayerProps["tilesetDescriptor"];
+
+  /** The id of the inner TileLayer that a render with `descriptor` returns. */
+  function innerTileLayerId(descriptor: Descriptor): string | undefined {
+    const layer = new RasterTileLayer({
+      id: "t",
+      tilesetDescriptor: descriptor,
+      getTileData: vi.fn(),
+      renderTile: vi.fn(),
+    });
     Object.assign(layer as object, { context: { device: {} } });
     return (layer.renderLayers() as { id: string } | null)?.id;
   }
 
-  const props = {
-    id: "t",
-    tilesetDescriptor: {} as RasterTileLayerProps["tilesetDescriptor"],
-    getTileData: vi.fn(),
-    renderTile: vi.fn(),
-  };
-
-  it("names it after the layer by default", () => {
-    expect(innerTileLayerId(new RasterTileLayer(props))).toBe(
-      "raster-tile-layer-t",
-    );
+  it("keeps its id across renders with the same tile grid", () => {
+    const descriptor = {} as Descriptor;
+    expect(innerTileLayerId(descriptor)).toBe(innerTileLayerId(descriptor));
   });
 
-  it("names it with _tileLayerId", () => {
-    class CustomIdLayer extends RasterTileLayer {
-      protected override _tileLayerId(): string {
-        return "custom";
-      }
-    }
-
-    expect(innerTileLayerId(new CustomIdLayer(props))).toBe("custom");
+  it("gets a new id for a new tile grid, which a TileLayer builds only once", () => {
+    expect(innerTileLayerId({} as Descriptor)).not.toBe(
+      innerTileLayerId({} as Descriptor),
+    );
   });
 });
