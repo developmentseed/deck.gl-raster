@@ -299,58 +299,23 @@ export class MultiCOGLayer extends RasterTileLayer<
     source?: MultiCOGSource;
   };
 
-  override shouldLoadMetadata({
-    props,
-    oldProps,
-  }: UpdateParameters<this>): boolean {
-    // An opened source needs no loading
+  override shouldLoadMetadata(params: UpdateParameters<this>): boolean {
+    // An empty record names no files, so the layer draws nothing
     return (
-      props.source !== oldProps.source &&
-      !(props.source instanceof MultiCOGSource)
+      super.shouldLoadMetadata(params) &&
+      Object.keys(params.props.source).length > 0
     );
   }
 
-  override updateState(params: UpdateParameters<this>): void {
-    super.updateState(params);
-    const { props, oldProps } = params;
-    if (
-      props.source instanceof MultiCOGSource &&
-      props.source !== oldProps.source
-    ) {
-      // An opened source replaces any open still in flight
-      this._abortMetadataLoad();
-      this.clearState();
-      this.setState({ source: props.source });
-    }
-  }
-
-  clearState() {
-    this.setState({ source: undefined });
-  }
-
-  /** Open `source`, when it isn't an opened source already. */
-  override async loadMetadata(signal: AbortSignal): Promise<void> {
-    // Clear stale state so renderLayers returns null until the new source is
-    // ready. Without this, the TileLayer renders with new props but stale
-    // state, caching tiles with the wrong bands.
-    this.clearState();
-
-    const input = this.props.source;
-    // `source` was removed or names no files. An opened source never loads.
-    if (
-      input === undefined ||
-      input instanceof MultiCOGSource ||
-      Object.keys(input).length === 0
-    ) {
-      return;
-    }
-    const source = await MultiCOGSource.open(input, { signal });
-
-    // `source` changed or the layer was removed while we waited
-    signal.throwIfAborted();
-
-    this.props.onSourceLoad?.(source);
-    this.setState({ source });
+  /**
+   * Open the files that `source` names, with the defaults of
+   * {@link MultiCOGSource.open}.
+   */
+  protected override _openSource(
+    input: Record<string, COGInput>,
+    signal: AbortSignal,
+  ): Promise<MultiCOGSource> {
+    return MultiCOGSource.open(input, { signal });
   }
 
   /**
@@ -462,10 +427,6 @@ export class MultiCOGLayer extends RasterTileLayer<
       byteLength,
       debugInfo,
     };
-  }
-
-  protected override _tilesetDescriptor(): RasterTilesetDescriptor | undefined {
-    return this.state.source?.tilesetDescriptor;
   }
 
   protected override _getTileDataCallback() {
