@@ -137,6 +137,28 @@ These were settled on 2026-10-26, for stage 2:
     - Revisit once one pipeline is left (stage 5), or with a revamp of how
       shaders read textures.
 
+These were settled on 2026-10-26, for stage 3:
+
+15. **MosaicLayer's items are `data`** (answers question 7, as built). The
+    items come in through deck.gl's async `data` prop, so a URL with
+    `dataTransform` can load a STAC search, and `isLoaded` waits for it. The
+    callbacks get the opened source as `{ source }`, `onViewportLoad`'s
+    entries are `{ item, source }`, and `MosaicSource` is `MosaicItem`. The
+    source type stays unconstrained, so a mosaic of plain images still works.
+16. **naip-mosaic keeps its own source cache.** MosaicLayer's cache can't hold
+    sources cheaply yet. deck.gl's TileLayer keeps the sublayers of every
+    cached tile, out of view ones included, and a COGLayer out of view keeps
+    all its tiles, since a tileset evicts only after it adds a tile. So
+    naip-mosaic turns MosaicLayer's cache off (`maxCacheSize: 0`) and keeps
+    the opened sources itself. *Proposal, for its own PR:* MosaicLayer
+    creates sublayers only for items in view, so its cache holds only
+    sources.
+17. **`maxCacheByteSize` doesn't bound MosaicLayer's cache**
+    ([#803](https://github.com/developmentseed/deck.gl-raster/issues/803)):
+    its tiles report no `byteLength`, so deck.gl's byte count becomes NaN. It
+    gets fixed with decision 16's proposal, once sources report an
+    approximate `byteLength`.
+
 ## Goals
 
 - `COGSource` (one file), `MultiCOGSource` (several files of one scene) and
@@ -336,8 +358,8 @@ two paths can't drift apart, and stores the result in the same `state.source`.
 The open uses the layer's own load signal, which aborts when `source` changes
 or the layer is removed. The layer's `signal` prop stays for tile loads only:
 if it also aborted the open, the abort would reach `onError` while the layer is
-still alive. MosaicLayer removes a layer whose item leaves view, which aborts
-its open anyway.
+still alive. MosaicLayer removes a layer when its item leaves the cache, which
+aborts its open anyway.
 
 ### `ZarrSource`
 
@@ -360,10 +382,11 @@ new ZarrLayer({ id: "zarr", source, selection: { time: t }, getTileData, renderT
 
 ### MosaicLayer
 
-MosaicLayer still takes a list of `{bbox, id}` items, today called `sources`
-([`mosaic-layer.ts#L51`](https://github.com/developmentseed/deck.gl-raster/blob/0636834044bd9049a1a79a4e33f25a5bdda3ce90/packages/deck.gl-geotiff/src/mosaic-layer/mosaic-layer.ts#L51)),
-and `getSource` ([L75](https://github.com/developmentseed/deck.gl-raster/blob/0636834044bd9049a1a79a4e33f25a5bdda3ce90/packages/deck.gl-geotiff/src/mosaic-layer/mosaic-layer.ts#L75))
-returns a source. With the renames of question 7:
+MosaicLayer takes its `{bbox, id}` items as `data` (decision 15). Before stage
+3 it called them `sources`
+([`mosaic-layer.ts#L51`](https://github.com/developmentseed/deck.gl-raster/blob/0636834044bd9049a1a79a4e33f25a5bdda3ce90/packages/deck.gl-geotiff/src/mosaic-layer/mosaic-layer.ts#L51)).
+`getSource` ([L75](https://github.com/developmentseed/deck.gl-raster/blob/0636834044bd9049a1a79a4e33f25a5bdda3ce90/packages/deck.gl-geotiff/src/mosaic-layer/mosaic-layer.ts#L75))
+returns a source for each item in view:
 
 ```ts
 new MosaicLayer({
@@ -374,12 +397,16 @@ new MosaicLayer({
 });
 ```
 
-- `getSource` runs only for items in view. Its signal aborts the open if the
-  item leaves view first. Sublayers never re-open a file or re-resolve its CRS.
-- An opened source lives as long as its item stays in MosaicLayer's cache.
-  *Proposal:* sources expose an approximate `byteLength`, mostly the header byte
-  cache, so `maxCacheByteSize` can bound them. Verify that MosaicLayer's tileset
-  counts it.
+- `getSource` runs only for items in view. deck.gl aborts its signal when it
+  cancels the open: when the layer is removed, or, for an item no longer in
+  view, when more than `maxRequests` opens are in flight. Sublayers never
+  re-open a file or re-resolve its CRS.
+- An opened source lives as long as its item stays in MosaicLayer's cache, and
+  so does the layer drawn for it, with all its tiles (decision 16). The tileset
+  doesn't count a source's size either: `maxCacheByteSize` leaves the cache
+  unbounded (decision 17). *Proposal:* MosaicLayer creates sublayers only for
+  items in view, and sources expose an approximate `byteLength`, mostly the
+  header byte cache, so `maxCacheByteSize` can bound them.
 - A scene stored as one file per band is a record:
   `getSource: (item) => MultiCOGSource.open({ red: ..., nir: ... })`. That's
   the Sentinel-2 mosaic, drawn by MultiCOGLayer, or by COGLayer once it renders
@@ -397,8 +424,8 @@ new MosaicLayer({
 1. **Opening.** Aborting the signal passed to `open()` cancels pending header
    reads, which frees their limiter slots, and rejects with an `AbortError`.
    Whoever creates the promise owns its signal. When a promise is shared, its
-   owner decides when to abort: MosaicLayer when the item leaves view, an app
-   when the input changes or its view unmounts.
+   owner decides when to abort: MosaicLayer when deck.gl cancels the item's
+   request, an app when the input changes or its view unmounts.
 2. **Opened sources hold only memory:** handles, the header cache, the
    projection and the grid. There's no `dispose()`. Dropping the last
    reference frees a source. Verify during implementation that `GeoTIFF`
@@ -421,6 +448,10 @@ new MosaicLayer({
 | `onGeoTIFFLoad` | `onSourceLoad(source)` on the shorthand path (COGLayer in 2a, MultiCOGLayer in 2b). With a `source` prop, read `source.geographicBounds` before creating the layer. |
 | `MultiCOGLayer({ sources: { red: { url } } })` | `MultiCOGLayer({ source: { red: url } })`, or a `source` from `MultiCOGSource.open({ red: url })` (2b). MultiCOGLayer draws it until stage 5, then COGLayer does. |
 | `MultiCOGSourceConfig` | Removed. A record of inputs replaces it. |
+| `MosaicLayer({ sources })` | `MosaicLayer({ data })`: an array, a promise, or a URL with `dataTransform` (stage 3). |
+| `{ data }` in `renderSource`, `onSourceLoad` and `onSourceUnload` | `{ source }`, the source `getSource` opened (stage 3). |
+| `onViewportLoad` entries `{ source, data }` | `{ item, source }` (stage 3). |
+| `MosaicSource` | `MosaicItem` (stage 3). |
 | `ZarrLayer({ node, variable, metadata })` | `ZarrSource.open(node, { variable, metadata })` |
 | `updateTriggers: { renderTile: [selection] }` on ZarrLayer | Not needed (proposal) |
 
@@ -482,8 +513,12 @@ Each stage is one PR.
    - The renames of question 7: `sources` becomes `data`, the callbacks'
      `{ data }` becomes `{ source }`, and `MosaicSource` becomes `MosaicItem`.
    - Port naip-mosaic and vermont-cog-comparison, replacing their caches where
-     a shared source is enough.
-   - Use `source.geographicBounds` for `fitBounds`.
+     a shared source is enough. *Outcome:* neither cache goes. naip-mosaic's
+     can't yet (decision 16), and vermont-cog-comparison's keeps the sources
+     the app switches between, which is what an app's own cache is for
+     (decision 8).
+   - Use `source.geographicBounds` for `fitBounds`. *Done* in 2a and 2b, for
+     every example that fits the map.
    - Check the examples in a browser.
 4. **`ZarrSource`.**
    - A `source` prop on ZarrLayer, with its existing props as shorthand.

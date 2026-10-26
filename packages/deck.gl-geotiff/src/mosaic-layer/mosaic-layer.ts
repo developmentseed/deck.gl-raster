@@ -1,7 +1,7 @@
 import type {
   CompositeLayerProps,
   Layer,
-  LayerContext,
+  LayerDataSource,
   LayersList,
   UpdateParameters,
   Viewport,
@@ -16,12 +16,15 @@ import { TileLayer } from "@deck.gl/geo-layers";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
 import { nearestCopy, unwrapBbox } from "@developmentseed/proj";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
-import type { MosaicSource, SourceIndex } from "./mosaic-tileset-2d.js";
-import { buildSourceIndex, MosaicTileset2D } from "./mosaic-tileset-2d.js";
+import type { ItemIndex, MosaicItem } from "./mosaic-tileset-2d.js";
+import { buildItemIndex, MosaicTileset2D } from "./mosaic-tileset-2d.js";
 
+/**
+ * Props for {@link MosaicLayer}.
+ */
 export type MosaicLayerProps<
-  MosaicT extends MosaicSource = MosaicSource,
-  DataT = any,
+  ItemT extends MosaicItem = MosaicItem,
+  SourceT = any,
 > = CompositeLayerProps &
   Pick<
     TileLayerProps,
@@ -30,34 +33,33 @@ export type MosaicLayerProps<
     "maxCacheByteSize" | "maxCacheSize" | "maxRequests" | "maxZoom" | "minZoom"
   > & {
     /**
-     * List of mosaic sources to render.
+     * The items of the mosaic, each with a WGS84 `bbox`.
      *
-     * The mosaic updates reactively when this prop is replaced with a new
-     * array reference. Mutating the array in place will not trigger an
-     * update — pass a fresh array (e.g. `[...sources, newItem]`) to add or
-     * remove items.
+     * As in other deck.gl layers, this can be an array, a promise of one, or a
+     * URL that deck.gl loads. With `dataTransform`, the URL can be a STAC
+     * search, for example: `dataTransform: (results: any) => results.features`.
+     * `isLoaded` waits for it, and `onDataLoad` is called once it has loaded.
      *
-     * Tile cache reuse depends on stable tile IDs. By default, each source's
-     * tile ID is derived from its position in this array (see
-     * `MosaicSource.id`), so:
+     * To change the items, pass a new array, such as `[...items, newItem]`.
+     * deck.gl compares `data` by reference, and changing the array in place
+     * isn't supported.
      *
-     * - Appending items preserves all existing rendered tiles.
-     * - Reordering or removing items from the middle of the array invalidates
-     *   the cache slots of shifted items, causing them to re-fetch.
-     *
-     * Supply an explicit `id` per source if you need cache stability across
-     * arbitrary mutations of `sources`.
+     * Give each item a unique `id` (see {@link MosaicItem.id}), unless the
+     * items only ever change by appending. The layer caches each item's
+     * opened source under its `id`, which defaults to the item's position in
+     * this array. So after the items change in any other way, a new item at a
+     * cached position draws as the old one.
      */
-    sources: MosaicT[];
+    data: LayerDataSource<ItemT>;
 
     /**
-     * Only load and render sources whose `bbox` overlaps this bounding box,
+     * Only load and render items whose `bbox` overlaps this bounding box,
      * given as `[minLng, minLat, maxLng, maxLat]` in WGS84 degrees.
      *
-     * A source that overlaps it is drawn in full, not clipped to it. To limit
-     * what a source loads as well, pass the same `extent` to the layers
+     * An item that overlaps it is drawn in full, not clipped to it. To limit
+     * what an item loads as well, pass the same `extent` to the layers
      * `renderSource` returns. Unlike in deck.gl's TileLayer, it does not keep
-     * sources loading below `minZoom`.
+     * items loading below `minZoom`.
      */
     extent?: number[] | null;
 
@@ -71,82 +73,91 @@ export type MosaicLayerProps<
      */
     concurrencyLimiter?: ConcurrencyLimiter | null;
 
-    /** Fetch data for this source. */
+    /**
+     * Open the source of an item, such as a {@link COGSource} from
+     * {@link COGSource.open}.
+     *
+     * It's called only for items in view. deck.gl aborts `signal` when it
+     * cancels the open: when the layer is removed, or, for an item no longer
+     * in view, when more than `maxRequests` opens are in flight.
+     */
     getSource?: (
-      source: MosaicT,
-      opts: {
+      item: ItemT,
+      options: {
         signal?: AbortSignal;
         /**
-         * The layer's current `concurrencyLimiter` prop. Forward to
-         * {@link GeoTIFF.fromUrl}'s `concurrencyLimiter` option so this
-         * source's fetches join the shared per-origin queue.
+         * The layer's current `concurrencyLimiter` prop. Pass it to
+         * {@link COGSource.open} so the item's requests join the shared
+         * per-origin queue.
          */
         concurrencyLimiter?: ConcurrencyLimiter | null;
         /**
          * Callback that provides dynamic priority for fetches related to this
-         * source.
+         * item.
          *
          * This is designed to re-sort the limiter's queue on viewport pan,
-         * preferring sources closer to the viewport center.
+         * preferring items closer to the viewport center.
          */
         getPriority?: () => Priority;
       },
-    ) => Promise<DataT>;
+    ) => Promise<SourceT>;
 
-    /** Render a source */
+    /**
+     * Render an item, with the `source` that `getSource` opened for it, or
+     * `undefined` when no `getSource` was supplied.
+     */
     renderSource: (
-      source: MosaicT,
-      opts: {
-        data?: DataT;
+      item: ItemT,
+      options: {
+        source?: SourceT;
         signal?: AbortSignal;
       },
     ) => Layer | LayersList | null;
 
     /**
-     * Called after a source's data has loaded successfully. `data` is the
-     * value returned by `getSource`, or `undefined` when no `getSource` was
+     * Called after an item's source has opened. `source` is the value
+     * returned by `getSource`, or `undefined` when no `getSource` was
      * supplied.
      */
-    onSourceLoad?: (source: MosaicT, info: { data?: DataT }) => void;
+    onSourceLoad?: (item: ItemT, info: { source?: SourceT }) => void;
 
     /**
-     * Called when fetching a source's data fails.
+     * Called when opening an item's source fails.
      */
-    onSourceError?: (source: MosaicT, info: { error: Error }) => void;
+    onSourceError?: (item: ItemT, info: { error: Error }) => void;
 
     /**
-     * Called when a source is evicted from the tile cache.
+     * Called when an item is evicted from the tile cache, with its source.
      */
-    onSourceUnload?: (source: MosaicT, info: { data?: DataT }) => void;
+    onSourceUnload?: (item: ItemT, info: { source?: SourceT }) => void;
 
     /**
-     * Called when all sources currently in the viewport have finished
-     * loading.
+     * Called when the sources of all items currently in the viewport have
+     * opened.
      */
     onViewportLoad?: (
-      entries: Array<{ source: MosaicT; data?: DataT }>,
+      entries: Array<{ item: ItemT; source?: SourceT }>,
     ) => void;
   };
 
 const defaultProps: Partial<MosaicLayerProps> = {
   concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
-  sources: [],
 };
 
 /**
- * Build the limiter `getPriority` callback for one mosaic source: euclidean
- * distance from the source's bbox center to the current viewport center, in
+ * Build the limiter `getPriority` callback for one mosaic item: euclidean
+ * distance from the item's bbox center to the current viewport center, in
  * lon/lat degree-space (just an ordering key — great-circle isn't needed).
- * Longitude is measured the short way around, so a source just across the
+ * Longitude is measured the short way around, so an item just across the
  * antimeridian counts as near.
  *
  * `getViewport` is read on every call, so the limiter re-sorts its queue as
- * the viewport pans, pulling newly-central sources ahead of edge sources.
+ * the viewport pans, pulling newly-central items ahead of edge items.
  *
- * Returns `undefined` for non-geographic viewports — where the source bbox and
- * viewport center don't share a coordinate space — so the limiter falls back
- * to FIFO instead of comparing mismatched units. The viewport type is checked
- * once here; it isn't expected to change under the layer.
+ * Returns `undefined` for non-geographic viewports, where the item's bbox and
+ * the viewport center don't share a coordinate space, so the limiter falls
+ * back to FIFO instead of comparing mismatched units. The viewport type is
+ * checked once here; it isn't expected to change under the layer.
  */
 function createGetPriorityCallback(
   bbox: readonly [number, number, number, number],
@@ -161,60 +172,67 @@ function createGetPriorityCallback(
   }
 
   const [minX, minY, maxX, maxY] = unwrapBbox(bbox);
-  const sourceCx = (minX + maxX) / 2;
-  const sourceCy = (minY + maxY) / 2;
+  const itemCx = (minX + maxX) / 2;
+  const itemCy = (minY + maxY) / 2;
 
   return (): number => {
     // Geographic viewport (checked above); both types expose lon/lat.
     const v = getViewport() as WebMercatorViewport | _GlobeViewport;
-    const dx = nearestCopy(sourceCx, v.longitude, 360) - v.longitude;
-    const dy = sourceCy - v.latitude;
+    const dx = nearestCopy(itemCx, v.longitude, 360) - v.longitude;
+    const dy = itemCy - v.latitude;
     return Math.hypot(dx, dy);
   };
 }
 
 /**
- * A deck.gl layer for rendering a mosaic of raster sources.
+ * A deck.gl layer for rendering a mosaic of raster sources, such as the COGs
+ * of a STAC search.
  *
- * The `renderSource` prop is called whenever a source is present in the current
- * viewport.
+ * Only the items in view are opened and drawn: `getSource` opens an item's
+ * source, and `renderSource` draws the item with it.
+ *
+ * ```ts
+ * new MosaicLayer({
+ *   id: "mosaic",
+ *   data: items, // each with a unique `id`, a `bbox` and, here, a `url`
+ *   getSource: (item, { signal, concurrencyLimiter, getPriority }) =>
+ *     COGSource.open(item.url, { signal, concurrencyLimiter, getPriority }),
+ *   renderSource: (item, { source, signal }) =>
+ *     new COGLayer({ id: item.url, source, signal }),
+ * });
+ * ```
  */
 export class MosaicLayer<
-  MosaicT extends MosaicSource = MosaicSource,
-  DataT = any,
-> extends CompositeLayer<MosaicLayerProps<MosaicT, DataT>> {
+  ItemT extends MosaicItem = MosaicItem,
+  SourceT = any,
+> extends CompositeLayer<MosaicLayerProps<ItemT, SourceT>> {
   static override layerName = "MosaicLayer";
   static override defaultProps = defaultProps;
 
   declare state: {
-    // The index can be null if sources are empty
-    index: SourceIndex | null;
-    // The sources the index was built from
-    sources: MosaicT[];
+    // The index can be null if there are no items
+    index: ItemIndex | null;
+    // The items the index was built from
+    items: ItemT[];
   };
-
-  override initializeState(context: LayerContext): void {
-    super.initializeState(context);
-    this._buildSpatialIndex();
-  }
 
   override updateState(params: UpdateParameters<this>): void {
     super.updateState(params);
 
-    const { props, oldProps } = params;
-
-    if (props.sources !== oldProps.sources) {
+    // deck.gl sets `dataChanged` on the first update, and again whenever
+    // `data` changes or finishes loading
+    if (params.changeFlags.dataChanged) {
       this._buildSpatialIndex();
     }
   }
 
   private _buildSpatialIndex(): void {
-    const { sources } = this.props;
-    this.setState({ index: buildSourceIndex(sources), sources });
+    const items = toItems<ItemT>(this.props.data);
+    this.setState({ index: buildItemIndex(items), items });
   }
 
   renderTileLayer(
-    renderSource: MosaicLayerProps<MosaicT, DataT>["renderSource"],
+    renderSource: MosaicLayerProps<ItemT, SourceT>["renderSource"],
   ): TileLayer {
     const {
       id,
@@ -236,17 +254,17 @@ export class MosaicLayer<
     // render, and deck.gl hands it the same `state` object, but `this.props`
     // here stays the first instance's props. So both closures read
     // `this.state`.
-    const getSources = () => this.state.sources;
+    const getItems = () => this.state.items;
     const getIndex = () => this.state.index;
-    class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
+    class MosaicTileset2DFactory extends MosaicTileset2D<ItemT> {
       constructor(opts: any) {
-        super(getSources, getIndex, opts);
+        super(getItems, getIndex, opts);
       }
     }
 
     return new TileLayer<{
-      source: MosaicT;
-      data?: DataT;
+      item: ItemT;
+      source?: SourceT;
       signal?: AbortSignal;
     }>({
       id: `mosaic-layer-${id}`,
@@ -259,42 +277,37 @@ export class MosaicLayer<
         maxCacheSize,
         maxRequests,
       }),
-      getTileData: async (data) => {
+      getTileData: async (tile) => {
         // We hard-cast this because TilesetClass is not generic.
-        // MosaicTileset2D returns MosaicT in `index`, but TileLayer's typing
+        // MosaicTileset2D returns ItemT in `index`, but TileLayer's typing
         // exposes only the plain `TileIndex` here.
-        const index = data.index as unknown as MosaicT;
-        const { signal } = data;
+        const item = tile.index as unknown as ItemT;
+        const { signal } = tile;
         const getPriority = createGetPriorityCallback(
-          index.bbox,
+          item.bbox,
           () => this.context.viewport,
         );
-        const userData =
+        const source =
           this.props.getSource &&
-          (await this.props.getSource(index, {
+          (await this.props.getSource(item, {
             signal,
             concurrencyLimiter,
             getPriority,
           }));
 
-        return {
-          source: index,
-          data: userData,
-          signal,
-        };
+        return { item, source, signal };
       },
       renderSubLayers: (props) => {
-        const { data } = props;
-        const { source, signal, data: userData } = data;
-        return renderSource(source, { data: userData, signal });
+        const { item, source, signal } = props.data;
+        return renderSource(item, { source, signal });
       },
       ...(onSourceLoad && {
         onTileLoad: (tile) => {
-          // `tile.index` is a `ResolvedSource<MosaicT>` from
+          // `tile.index` is a `ResolvedItem<ItemT>` from
           // MosaicTileset2D.getTileIndices, which structurally extends
-          // MosaicT.
-          const source = tile.index as unknown as MosaicT;
-          onSourceLoad(source, { data: tile.content?.data });
+          // ItemT.
+          const item = tile.index as unknown as ItemT;
+          onSourceLoad(item, { source: tile.content?.source });
         },
       }),
       ...(onSourceError && {
@@ -302,22 +315,22 @@ export class MosaicLayer<
           if (!tile) {
             return;
           }
-          const source = tile.index as unknown as MosaicT;
-          onSourceError(source, { error });
+          const item = tile.index as unknown as ItemT;
+          onSourceError(item, { error });
         },
       }),
       ...(onSourceUnload && {
         onTileUnload: (tile) => {
-          const source = tile.index as unknown as MosaicT;
-          onSourceUnload(source, { data: tile.content?.data });
+          const item = tile.index as unknown as ItemT;
+          onSourceUnload(item, { source: tile.content?.source });
         },
       }),
       ...(onViewportLoad && {
         onViewportLoad: (tiles) => {
           onViewportLoad(
             tiles.map((tile) => ({
-              source: tile.index as unknown as MosaicT,
-              data: tile.content?.data,
+              item: tile.index as unknown as ItemT,
+              source: tile.content?.source,
             })),
           );
         },
@@ -326,17 +339,22 @@ export class MosaicLayer<
   }
 
   override renderLayers(): Layer | null | LayersList {
-    const { sources, renderSource } = this.props;
-
-    if (!sources) {
-      return null;
-    }
-
-    // Note: we deliberately render the inner TileLayer even when `sources` is
-    // empty so the same Tileset2D instance lives across empty -> non-empty
+    // Note: we deliberately render the inner TileLayer even when there are no
+    // items so the same Tileset2D instance lives across empty -> non-empty
     // transitions and picks up later updates without recreation.
-    return this.renderTileLayer(renderSource);
+    return this.renderTileLayer(this.props.renderSource);
   }
+}
+
+/**
+ * The items in a layer's `data`, which deck.gl has already loaded when it was
+ * a URL or a promise.
+ */
+function toItems<ItemT>(data: unknown): ItemT[] {
+  if (data == null) {
+    return [];
+  }
+  return Array.isArray(data) ? data : Array.from(data as Iterable<ItemT>);
 }
 
 /**
