@@ -67,13 +67,15 @@ type TextureDataT = {
 };
 
 /**
- * Module-level cache of opened GeoTIFFs keyed by URL.
+ * Module-level cache of opened COG sources keyed by URL.
  *
  * Header reads are small and the resulting `COGSource` can be reused
- * across the example's lifetime. Holding this outside the MosaicLayer's
- * TileLayer cache lets us drop `maxCacheSize: Infinity` (which was previously
- * needed to keep header data, but had the side-effect of pinning every parent
- * tile — and its inner COGLayer's in-flight requests — in memory forever).
+ * across the example's lifetime. MosaicLayer's own cache can't hold them
+ * cheaply: deck.gl's TileLayer keeps the sublayer of every cached item alive,
+ * and a COGLayer out of view keeps all its tiles. So each cached item would
+ * keep a whole COGLayer and its GPU textures. Instead, the MosaicLayer cache
+ * is off (`maxCacheSize: 0`), and only the opened sources are kept here. See
+ * https://github.com/developmentseed/deck.gl-raster/issues/803.
  *
  * We cache the `Promise<COGSource>` rather than the resolved `COGSource` so
  * that concurrent callers for the same URL share one in-flight fetch instead
@@ -415,12 +417,14 @@ export default function App() {
   if (stacItems.length > 0 && colormapTexture) {
     const mosaicLayer = new MosaicLayer<PartialSTACItem, COGSource>({
       id: "naip-mosaic-layer",
+      // `data` could also be the STAC search URL that `fetchSTACItems` builds,
+      // with `dataTransform: (fc) => fc.features`
       data: stacItems,
-      // For each source, fetch the opened COGSource from a module-level cache
+      // For each item, fetch the opened COGSource from a module-level cache
       // (see `geotiffCache` above). The cache is intentionally separate from
       // the MosaicLayer's TileLayer cache so we can keep cheap header metadata
-      // around indefinitely without pinning every parent tile (and its inner
-      // COGLayer's in-flight tile requests) in memory.
+      // around indefinitely without pinning every cached item's COGLayer, and
+      // its tiles, in memory.
       getSource: async (item, opts) =>
         getCachedGeoTIFF(item.assets.image.href, opts),
       renderSource: (item, { source, signal }) => {
@@ -446,7 +450,7 @@ export default function App() {
         });
       },
       // Disable the MosaicLayer tile cache: each cached tile is a full
-      // COGLayer instance, and opened GeoTIFFs are already kept in the
+      // COGLayer instance, and opened sources are already kept in the
       // module-level `geotiffCache`, so there's nothing cheap to retain here.
       maxCacheSize: 0,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
