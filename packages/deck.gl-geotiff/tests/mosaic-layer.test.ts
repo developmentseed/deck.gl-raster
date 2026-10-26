@@ -152,18 +152,32 @@ async function settle(layerManager: LayerManager): Promise<void> {
 /** The source `getSource` opens for an item in these tests. */
 type Marker = { of: string };
 
+/** What one render of {@link makeMosaicRenderer} saw, as it happens. */
+function newRecords() {
+  return {
+    fetched: [] as string[],
+    priorities: {} as Record<string, number>,
+    rendered: {} as Record<string, Marker | undefined>,
+    loadedSources: {} as Record<string, Marker | undefined>,
+    unloaded: {} as Record<string, Marker | undefined>,
+    viewportLoad: undefined as [string, string | undefined][] | undefined,
+    errors: [] as string[],
+  };
+}
+
 /**
  * Render {@link MosaicLayer} through deck.gl's `LayerManager`.
  *
  * Each call of `render` renders a new layer instance with the given props, as
- * apps do on every render. It reports what that update did:
- * - the items it fetched, and the priority each fetch got;
+ * apps do on every render. It reports what happened since that render began:
+ * - the items fetched, and the priority each fetch got;
  * - the source that `renderSource`, `onSourceLoad` and `onSourceUnload` got
  *   for each item;
  * - the items, and their sources, that `onViewportLoad` last reported;
  * - the errors deck.gl raised.
  *
- * `getSource` opens `{ of: item.id }` for each item. `moveTo` moves the view
+ * `getSource` opens `{ of: item.id }` for each item. `wait` lets pending loads
+ * finish without rendering, and reports the same way. `moveTo` moves the view
  * without rendering, as panning does.
  */
 function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
@@ -171,41 +185,47 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
   // `renderSource` returns no layers, so nothing draws with this stub.
   const device = {} as Device;
   const layerManager = new LayerManager(device, { viewport });
-  let errors: string[] = [];
+  let records = newRecords();
   layerManager.setProps({
     onError: (error: Error) => {
-      errors.push(error.message);
+      records.errors.push(error.message);
     },
   });
 
+  const report = () => ({
+    fetched: [...records.fetched].sort(),
+    priorities: records.priorities,
+    rendered: records.rendered,
+    loadedSources: records.loadedSources,
+    unloaded: records.unloaded,
+    loaded: records.viewportLoad?.map(([id]) => id),
+    viewportSources: records.viewportLoad,
+    errors: records.errors,
+  });
+
   const render = async (props: Partial<MosaicLayerProps<Item, Marker>>) => {
-    errors = [];
-    const fetched: string[] = [];
-    const priorities: Record<string, number> = {};
-    const rendered: Record<string, Marker | undefined> = {};
-    const loadedSources: Record<string, Marker | undefined> = {};
-    const unloaded: Record<string, Marker | undefined> = {};
-    let viewportLoad: [string, string | undefined][] | undefined;
+    records = newRecords();
+    const current = records;
     layerManager.setLayers([
       new MosaicLayer<Item, Marker>({
         id: "mosaic",
         getSource: async (item, { getPriority }) => {
-          fetched.push(item.id);
-          priorities[item.id] = getPriority?.() as number;
+          current.fetched.push(item.id);
+          current.priorities[item.id] = getPriority?.() as number;
           return { of: item.id };
         },
         renderSource: (item, { source }) => {
-          rendered[item.id] = source;
+          current.rendered[item.id] = source;
           return null;
         },
         onSourceLoad: (item, { source }) => {
-          loadedSources[item.id] = source;
+          current.loadedSources[item.id] = source;
         },
         onSourceUnload: (item, { source }) => {
-          unloaded[item.id] = source;
+          current.unloaded[item.id] = source;
         },
         onViewportLoad: (entries) => {
-          viewportLoad = entries
+          current.viewportLoad = entries
             .map(({ item, source }): [string, string | undefined] => [
               item.id,
               source?.of,
@@ -216,23 +236,19 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
       }),
     ]);
     await settle(layerManager);
-    return {
-      fetched: fetched.sort(),
-      priorities,
-      rendered,
-      loadedSources,
-      unloaded,
-      loaded: viewportLoad?.map(([id]) => id),
-      viewportSources: viewportLoad,
-      errors,
-    };
+    return report();
+  };
+
+  const wait = async () => {
+    await settle(layerManager);
+    return report();
   };
 
   const moveTo = (next: WebMercatorViewport) => {
     layerManager.activateViewport(next);
   };
 
-  return { render, moveTo };
+  return { render, wait, moveTo };
 }
 
 // The tests above reuse one layer instance. Apps create a new MosaicLayer on
@@ -306,18 +322,22 @@ describe("MosaicLayer data", () => {
   });
 
   it("keeps newer data when an older promise resolves late", async () => {
-    const { render } = makeMosaicRenderer();
+    const { render, wait } = makeMosaicRenderer();
     let resolveOlder!: (items: Item[]) => void;
     const older = new Promise<Item[]>((resolve) => {
       resolveOlder = resolve;
     });
+
     const newer = [C];
 
     await render({ data: older });
     const { loaded } = await render({ data: newer });
     expect(loaded).toEqual(["C"]);
 
+    // The older promise lands, then the app renders the same newer data
+    // again, as React apps do
     resolveOlder([A, B]);
+    await wait();
     const { fetched, errors } = await render({ data: newer });
     expect(errors).toEqual([]);
     expect(fetched).toEqual([]);
