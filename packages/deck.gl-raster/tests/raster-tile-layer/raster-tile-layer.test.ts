@@ -368,4 +368,55 @@ describe("RasterTileLayer.loadMetadata", () => {
 
     expect(loads.map((load) => load.signal.aborted)).toEqual([true, false]);
   });
+
+  it("abortMetadataLoad aborts the load in flight and stops loading", async () => {
+    const onError = vi.fn();
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads, onError });
+    runInitialUpdate(layer);
+
+    (layer as unknown as { _abortMetadataLoad(): void })._abortMetadataLoad();
+    loads[0]!.reject(new Error("late"));
+    await flush();
+
+    expect(loads[0]!.signal.aborted).toBe(true);
+    expect(layer.state.loadingMetadata).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("abortMetadataLoad sets no state when no load is in flight", () => {
+    const layer = makeBareLayer({ input: undefined, loads: [] });
+    const setState = vi.spyOn(layer, "setState");
+
+    (layer as unknown as { _abortMetadataLoad(): void })._abortMetadataLoad();
+
+    expect(setState).not.toHaveBeenCalled();
+  });
+});
+
+describe("RasterTileLayer inner TileLayer", () => {
+  type Descriptor = RasterTileLayerProps["tilesetDescriptor"];
+
+  /** The id of the inner TileLayer that a render with `descriptor` returns. */
+  function innerTileLayerId(descriptor: Descriptor): string | undefined {
+    const layer = new RasterTileLayer({
+      id: "t",
+      tilesetDescriptor: descriptor,
+      getTileData: vi.fn(),
+      renderTile: vi.fn(),
+    });
+    Object.assign(layer as object, { context: { device: {} } });
+    return (layer.renderLayers() as { id: string } | null)?.id;
+  }
+
+  it("keeps its id across renders with the same tile grid", () => {
+    const descriptor = {} as Descriptor;
+    expect(innerTileLayerId(descriptor)).toBe(innerTileLayerId(descriptor));
+  });
+
+  it("gets a new id for a new tile grid, which a TileLayer builds only once", () => {
+    expect(innerTileLayerId({} as Descriptor)).not.toBe(
+      innerTileLayerId({} as Descriptor),
+    );
+  });
 });

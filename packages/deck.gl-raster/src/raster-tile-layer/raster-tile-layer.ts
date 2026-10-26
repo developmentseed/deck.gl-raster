@@ -83,6 +83,9 @@ export type RasterTileLayerProps<
     /**
      * Tile pyramid + CRS projection descriptor.
      *
+     * Keep the same object across renders: a new descriptor starts the layer's
+     * tiles over.
+     *
      * Subclasses may supply this via state by overriding the protected
      * `_tilesetDescriptor()` method.
      */
@@ -179,6 +182,26 @@ const defaultProps: DefaultProps<RasterTileLayerProps> = {
   // every update.
   zRange: { type: "array", value: null, optional: true, compare: true },
 };
+
+/**
+ * A number for each tile grid descriptor, which names its inner TileLayer.
+ *
+ * JavaScript doesn't expose an object's identity as a value, like Python's
+ * `id()`, so the numbers are kept in a WeakMap, which doesn't keep the
+ * descriptors alive.
+ */
+const descriptorIds = new WeakMap<RasterTilesetDescriptor, number>();
+let nextDescriptorId = 0;
+
+/** The number of `descriptor`, the same for as long as the object lives. */
+function descriptorId(descriptor: RasterTilesetDescriptor): number {
+  let id = descriptorIds.get(descriptor);
+  if (id === undefined) {
+    id = nextDescriptorId++;
+    descriptorIds.set(descriptor, id);
+  }
+  return id;
+}
 
 /**
  * Base-class prop shape that excludes the overridable fields.
@@ -300,6 +323,21 @@ export class RasterTileLayer<
           this.setState({ loadingMetadata: false });
         }
       });
+  }
+
+  /**
+   * Abort the metadata load in flight, if any, for a layer whose metadata no
+   * longer needs loading, such as one given an opened source.
+   *
+   * As with a load that a newer one replaces, the aborted load's result and
+   * errors are dropped.
+   */
+  protected _abortMetadataLoad(): void {
+    this.state.metadataAbortController?.abort();
+    // Setting state redraws the layer, so skip it when nothing was loading
+    if (this.state.loadingMetadata) {
+      this.setState({ loadingMetadata: false });
+    }
   }
 
   /**
@@ -474,7 +512,9 @@ export class RasterTileLayer<
     } = this.props;
 
     return new TileLayer<DataT>({
-      id: `raster-tile-layer-${this.id}`,
+      // A TileLayer builds its tile grid once, from its first descriptor, so a
+      // new descriptor needs a new TileLayer
+      id: `raster-tile-layer-${this.id}-${descriptorId(descriptor)}`,
       TilesetClass: TilesetFactory,
       getTileData: (tile) => this._wrapGetTileData(tile, getTileData),
       renderSubLayers: (props) =>
