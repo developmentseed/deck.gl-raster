@@ -184,7 +184,7 @@ export class COGLayer<
       // Clear stale state so renderLayers returns null until the new GeoTIFF is
       // ready
       this.clearState();
-      this._reloadMetadata({ errorMsg: "loading GeoTIFF" });
+      this._reloadMetadata({ errorContext: "loading GeoTIFF" });
     }
   }
 

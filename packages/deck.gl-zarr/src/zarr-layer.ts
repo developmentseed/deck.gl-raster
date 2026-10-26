@@ -188,7 +188,7 @@ export class ZarrLayer<
     if (needsUpdate) {
       // Clear stale state so renderLayers returns null until the new Zarr is ready
       this._clearState();
-      this._reloadMetadata({ errorMsg: "loading Zarr metadata" });
+      this._reloadMetadata({ errorContext: "loading Zarr metadata" });
     }
   }
 

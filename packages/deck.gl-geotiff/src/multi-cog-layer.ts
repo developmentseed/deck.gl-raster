@@ -407,7 +407,7 @@ export class MultiCOGLayer extends RasterTileLayer<
         sources: null,
         multiDescriptor: null,
       });
-      this._reloadMetadata({ errorMsg: "loading COG sources" });
+      this._reloadMetadata({ errorContext: "loading COG sources" });
     }
   }
 
