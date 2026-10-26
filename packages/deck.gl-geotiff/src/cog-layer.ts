@@ -172,16 +172,11 @@ export class COGLayer<
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
   };
 
-  protected override readonly metadataErrorContext = "loading GeoTIFF";
-
   override shouldLoadMetadata({
     props,
     oldProps,
-    changeFlags,
   }: UpdateParameters<this>): boolean {
-    return (
-      Boolean(changeFlags.dataChanged) || props.geotiff !== oldProps.geotiff
-    );
+    return props.geotiff !== oldProps.geotiff;
   }
 
   clearState() {

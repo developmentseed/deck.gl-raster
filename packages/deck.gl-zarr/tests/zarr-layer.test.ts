@@ -21,12 +21,18 @@ function makeBareLayer(props: Record<string, unknown> = {}): ZarrLayer {
   return layer;
 }
 
-/** Run `updateState` as deck.gl does when the layer is first added. */
+/**
+
+ * Run `updateState` as deck.gl does when the layer is first added: the old
+
+ * props are empty.
+
+ */
 function runInitialUpdate(layer: ZarrLayer): void {
   layer.updateState({
     props: layer.props,
-    oldProps: layer.props,
-    changeFlags: { dataChanged: true },
+    oldProps: {},
+    changeFlags: { dataChanged: "init" },
   } as never);
 }
 
@@ -142,7 +148,7 @@ describe("ZarrLayer.updateState", () => {
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
     expect(onError.mock.calls[0]?.[0]?.message).toBe(
-      "loading Zarr metadata: boom",
+      "Metadata loading failed in ZarrLayer: boom",
     );
   });
 

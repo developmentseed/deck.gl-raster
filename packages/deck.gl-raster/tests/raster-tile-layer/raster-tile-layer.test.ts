@@ -207,16 +207,15 @@ describe("RasterTileLayer.loadMetadata", () => {
    */
   class MetadataTestLayer extends RasterTileLayer {
     declare state: RasterTileLayer["state"] & { result?: string };
-    protected override readonly metadataErrorContext = "loading test";
+    static override layerName = "MetadataTestLayer";
 
     override shouldLoadMetadata({
       props,
       oldProps,
-      changeFlags,
     }: UpdateParameters<this>): boolean {
       const { input } = props as unknown as TestProps;
       const { input: oldInput } = oldProps as unknown as TestProps;
-      return Boolean(changeFlags.dataChanged) || input !== oldInput;
+      return input !== oldInput;
     }
 
     override async loadMetadata(signal: AbortSignal): Promise<void> {
@@ -243,12 +242,18 @@ describe("RasterTileLayer.loadMetadata", () => {
     return layer;
   }
 
-  /** Run `updateState` as deck.gl does when the layer is first added. */
+  /**
+
+   * Run `updateState` as deck.gl does when the layer is first added: the old
+
+   * props are empty.
+
+   */
   function runInitialUpdate(layer: MetadataTestLayer): void {
     layer.updateState({
       props: layer.props,
-      oldProps: layer.props,
-      changeFlags: { dataChanged: true },
+      oldProps: {},
+      changeFlags: { dataChanged: "init" },
     } as never);
   }
 
@@ -329,7 +334,7 @@ describe("RasterTileLayer.loadMetadata", () => {
     loads[1]!.reject(new Error("boom"));
     await flush();
     expect(onError.mock.calls.map(([error]) => error.message)).toEqual([
-      "loading test: boom",
+      "Metadata loading failed in MetadataTestLayer: boom",
     ]);
   });
 

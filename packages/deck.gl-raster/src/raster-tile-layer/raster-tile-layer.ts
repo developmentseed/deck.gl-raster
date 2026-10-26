@@ -231,9 +231,6 @@ export class RasterTileLayer<
     loadingMetadata?: boolean;
   };
 
-  /** Prefix for errors raised while loading metadata, such as `"loading GeoTIFF"`. */
-  protected readonly metadataErrorContext: string = "loading metadata";
-
   override updateState(params: UpdateParameters<this>): void {
     super.updateState(params);
     if (this.shouldLoadMetadata(params)) {
@@ -280,8 +277,8 @@ export class RasterTileLayer<
    * It aborts the previous load's signal, and makes
    * {@link RasterTileLayer._isLoadingMetadata} return `true` until the latest
    * load settles. Only the latest load's errors reach `onError`, prefixed with
-   * {@link RasterTileLayer.metadataErrorContext}. Removing the layer aborts the
-   * load in flight.
+   * the layer's name, as in `"Metadata loading failed in COGLayer: ..."`.
+   * Removing the layer aborts the load in flight.
    */
   protected _loadMetadata(): void {
     this.state.metadataAbortController?.abort();
@@ -293,7 +290,8 @@ export class RasterTileLayer<
       .catch((error: Error) => {
         // A replaced load's errors, including its AbortError, are moot
         if (!signal.aborted) {
-          this.raiseError(error, this.metadataErrorContext);
+          const { layerName } = this.constructor as typeof RasterTileLayer;
+          this.raiseError(error, `Metadata loading failed in ${layerName}`);
         }
       })
       .finally(() => {

@@ -390,8 +390,6 @@ export class MultiCOGLayer extends RasterTileLayer<
     multiDescriptor: MultiRasterTilesetDescriptor | null;
   };
 
-  protected override readonly metadataErrorContext = "loading COG sources";
-
   override initializeState(): void {
     this.setState({
       sources: null,
@@ -400,13 +398,10 @@ export class MultiCOGLayer extends RasterTileLayer<
   }
 
   override shouldLoadMetadata({
-    changeFlags,
     props,
     oldProps,
   }: UpdateParameters<this>): boolean {
-    return (
-      Boolean(changeFlags.dataChanged) || props.sources !== oldProps.sources
-    );
+    return props.sources !== oldProps.sources;
   }
 
   /**

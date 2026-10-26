@@ -25,12 +25,18 @@ function makeBareLayer(props: Record<string, unknown> = {}): COGLayer {
   return layer;
 }
 
-/** Run `updateState` as deck.gl does when the layer is first added. */
+/**
+
+ * Run `updateState` as deck.gl does when the layer is first added: the old
+
+ * props are empty.
+
+ */
 function runInitialUpdate(layer: COGLayer): void {
   layer.updateState({
     props: layer.props,
-    oldProps: layer.props,
-    changeFlags: { dataChanged: true },
+    oldProps: {},
+    changeFlags: { dataChanged: "init" },
   } as never);
 }
 
@@ -138,7 +144,9 @@ describe("COGLayer.updateState", () => {
     runInitialUpdate(layer);
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
-    expect(onError.mock.calls[0]?.[0]?.message).toBe("loading GeoTIFF: boom");
+    expect(onError.mock.calls[0]?.[0]?.message).toBe(
+      "Metadata loading failed in COGLayer: boom",
+    );
   });
 
   it("keeps the new GeoTIFF when the old one finishes opening last", async () => {

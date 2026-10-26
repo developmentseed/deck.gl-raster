@@ -174,8 +174,6 @@ export class ZarrLayer<
     tilesetDescriptor?: RasterTilesetDescriptor;
   };
 
-  protected override readonly metadataErrorContext = "loading Zarr metadata";
-
   override initializeState(): void {
     this.setState({});
   }
@@ -183,13 +181,8 @@ export class ZarrLayer<
   override shouldLoadMetadata({
     props,
     oldProps,
-    changeFlags,
   }: UpdateParameters<this>): boolean {
-    return (
-      Boolean(changeFlags.dataChanged) ||
-      props.node !== oldProps.node ||
-      props.variable !== oldProps.variable
-    );
+    return props.node !== oldProps.node || props.variable !== oldProps.variable;
   }
 
   /** Reset all async-loaded state. */

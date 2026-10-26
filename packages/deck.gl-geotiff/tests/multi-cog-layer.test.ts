@@ -36,12 +36,18 @@ function makeBareLayer(props: Record<string, unknown> = {}): MultiCOGLayer {
   return layer;
 }
 
-/** Run `updateState` as deck.gl does when the layer is first added. */
+/**
+
+ * Run `updateState` as deck.gl does when the layer is first added: the old
+
+ * props are empty.
+
+ */
 function runInitialUpdate(layer: MultiCOGLayer): void {
   layer.updateState({
     props: layer.props,
-    oldProps: layer.props,
-    changeFlags: { dataChanged: true },
+    oldProps: {},
+    changeFlags: { dataChanged: "init" },
   } as never);
 }
 
@@ -135,7 +141,9 @@ describe("MultiCOGLayer.updateState", () => {
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
     const error = onError.mock.calls[0]?.[0];
-    expect(error?.message).toBe("loading COG sources: boom");
+    expect(error?.message).toBe(
+      "Metadata loading failed in MultiCOGLayer: boom",
+    );
     expect(error?.cause).toBeInstanceOf(Error);
   });
 
