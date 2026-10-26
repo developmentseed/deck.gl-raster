@@ -37,23 +37,18 @@ export type MosaicLayerProps<
      *
      * As in other deck.gl layers, this can be an array, a promise of one, or a
      * URL that deck.gl loads. With `dataTransform`, the URL can be a STAC
-     * search, for example: `dataTransform: (results) => results.features`.
+     * search, for example: `dataTransform: (results: any) => results.features`.
      * `isLoaded` waits for it, and `onDataLoad` is called once it has loaded.
      *
-     * The mosaic updates when this prop is replaced with a new array.
-     * Mutating the array in place doesn't update it: pass a new array (e.g.
-     * `[...items, newItem]`), or compare the items yourself with
-     * `dataComparator`.
+     * To change the items, pass a new array, such as `[...items, newItem]`.
+     * deck.gl compares `data` by reference, and changing the array in place
+     * isn't supported.
      *
-     * Tile cache reuse depends on stable item IDs. By default, each item's ID
-     * is its position in this array (see {@link MosaicItem.id}), so:
-     *
-     * - Appending items keeps every loaded item.
-     * - Reordering or removing items from the middle of the array invalidates
-     *   the cache slots of shifted items, causing them to re-fetch.
-     *
-     * Supply an explicit `id` per item if you need cache stability across
-     * arbitrary changes to the items.
+     * Give each item a unique `id` (see {@link MosaicItem.id}), unless the
+     * items only ever change by appending. The layer caches each item's
+     * opened source under its `id`, which defaults to the item's position in
+     * this array. So after the items change in any other way, a new item at a
+     * cached position draws as the old one.
      */
     data: LayerDataSource<ItemT>;
 
@@ -82,8 +77,9 @@ export type MosaicLayerProps<
      * Open the source of an item, such as a {@link COGSource} from
      * {@link COGSource.open}.
      *
-     * It's called only for items in view, and `signal` aborts when the item
-     * leaves view first.
+     * It's called only for items in view. deck.gl aborts `signal` when it
+     * cancels the open: when the layer is removed, or, for an item no longer
+     * in view, when more than `maxRequests` opens are in flight.
      */
     getSource?: (
       item: ItemT,
@@ -198,7 +194,7 @@ function createGetPriorityCallback(
  * ```ts
  * new MosaicLayer({
  *   id: "mosaic",
- *   data: items, // each with a `bbox` and, here, a `url`
+ *   data: items, // each with a unique `id`, a `bbox` and, here, a `url`
  *   getSource: (item, { signal, concurrencyLimiter, getPriority }) =>
  *     COGSource.open(item.url, { signal, concurrencyLimiter, getPriority }),
  *   renderSource: (item, { source, signal }) =>

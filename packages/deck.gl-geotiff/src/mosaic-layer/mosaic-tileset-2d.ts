@@ -21,10 +21,10 @@ export type TileIndex = { x: number; y: number; z: number };
  */
 export type MosaicItem = {
   /**
-   * Optional stable identifier used as this item's tile-cache key in the
-   * inner Tileset2D. Defaults to the item's position in the mosaic's list of
-   * items. Supply an explicit value when the list is reordered or spliced at
-   * runtime, so a given item keeps the same cache slot across updates.
+   * A unique identifier for the item, which keys the layer's cache of opened
+   * sources. Defaults to the item's position in the mosaic's list of items,
+   * which is only safe while the list changes by appending: after any other
+   * change, a new item at a cached position draws as the old one.
    */
   id?: string;
   /**

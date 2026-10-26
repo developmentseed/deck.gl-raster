@@ -418,7 +418,7 @@ export default function App() {
     const mosaicLayer = new MosaicLayer<PartialSTACItem, COGSource>({
       id: "naip-mosaic-layer",
       // `data` could also be the STAC search URL that `fetchSTACItems` builds,
-      // with `dataTransform: (fc) => fc.features`
+      // with `dataTransform: (fc: any) => fc.features`
       data: stacItems,
       // For each item, fetch the opened COGSource from a module-level cache
       // (see `geotiffCache` above). The cache is intentionally separate from

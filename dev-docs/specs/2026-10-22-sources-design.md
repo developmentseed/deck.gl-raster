@@ -358,8 +358,8 @@ two paths can't drift apart, and stores the result in the same `state.source`.
 The open uses the layer's own load signal, which aborts when `source` changes
 or the layer is removed. The layer's `signal` prop stays for tile loads only:
 if it also aborted the open, the abort would reach `onError` while the layer is
-still alive. MosaicLayer removes a layer whose item leaves view, which aborts
-its open anyway.
+still alive. MosaicLayer removes a layer when its item leaves the cache, which
+aborts its open anyway.
 
 ### `ZarrSource`
 
@@ -397,8 +397,10 @@ new MosaicLayer({
 });
 ```
 
-- `getSource` runs only for items in view. Its signal aborts the open if the
-  item leaves view first. Sublayers never re-open a file or re-resolve its CRS.
+- `getSource` runs only for items in view. deck.gl aborts its signal when it
+  cancels the open: when the layer is removed, or, for an item no longer in
+  view, when more than `maxRequests` opens are in flight. Sublayers never
+  re-open a file or re-resolve its CRS.
 - An opened source lives as long as its item stays in MosaicLayer's cache, and
   so does the layer drawn for it, with all its tiles (decision 16). The tileset
   doesn't count a source's size either: `maxCacheByteSize` leaves the cache
@@ -422,8 +424,8 @@ new MosaicLayer({
 1. **Opening.** Aborting the signal passed to `open()` cancels pending header
    reads, which frees their limiter slots, and rejects with an `AbortError`.
    Whoever creates the promise owns its signal. When a promise is shared, its
-   owner decides when to abort: MosaicLayer when the item leaves view, an app
-   when the input changes or its view unmounts.
+   owner decides when to abort: MosaicLayer when deck.gl cancels the item's
+   request, an app when the input changes or its view unmounts.
 2. **Opened sources hold only memory:** handles, the header cache, the
    projection and the grid. There's no `dispose()`. Dropping the last
    reference frees a source. Verify during implementation that `GeoTIFF`
