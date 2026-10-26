@@ -407,7 +407,7 @@ export class MultiCOGLayer extends RasterTileLayer<
         sources: null,
         multiDescriptor: null,
       });
-      this._reloadMetadata("loading COG sources");
+      this._reloadMetadata({ errorMsg: "loading COG sources" });
     }
   }
 
@@ -431,6 +431,7 @@ export class MultiCOGLayer extends RasterTileLayer<
       epsgResolver: this.props.epsgResolver!,
       signal,
     });
+
     // `sources` changed or the layer was removed while we waited
     signal.throwIfAborted();
 

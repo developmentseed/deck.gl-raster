@@ -244,11 +244,13 @@ export class RasterTileLayer<
    * Subclasses call this from `updateState` when their input changes. It
    * aborts the previous load's signal, and makes
    * {@link RasterTileLayer._isLoadingMetadata} return `true` until the latest
-   * load settles. Only the latest load's errors reach `onError`, prefixed with
-   * `errorContext`, such as `"loading GeoTIFF"`. Removing the layer aborts the
-   * load in flight.
+   * load settles. Only the latest load's errors reach `onError`. Removing the
+   * layer aborts the load in flight.
+   *
+   * @param options.errorMsg Prefix for errors raised from this load, such as
+   *   `"loading GeoTIFF"`.
    */
-  protected _reloadMetadata(errorContext: string): void {
+  protected _reloadMetadata({ errorMsg }: { errorMsg: string }): void {
     this.state.metadataAbortController?.abort();
     const metadataAbortController = new AbortController();
     const { signal } = metadataAbortController;
@@ -258,7 +260,7 @@ export class RasterTileLayer<
       .catch((error: Error) => {
         // A replaced load's errors, including its AbortError, are moot
         if (!signal.aborted) {
-          this.raiseError(error, errorContext);
+          this.raiseError(error, errorMsg);
         }
       })
       .finally(() => {

@@ -188,7 +188,7 @@ export class ZarrLayer<
     if (needsUpdate) {
       // Clear stale state so renderLayers returns null until the new Zarr is ready
       this._clearState();
-      this._reloadMetadata("loading Zarr metadata");
+      this._reloadMetadata({ errorMsg: "loading Zarr metadata" });
     }
   }
 
@@ -283,6 +283,7 @@ export class ZarrLayer<
     });
 
     const sourceProjection = await parseCrs(meta.crs, this.props.epsgResolver!);
+
     // `node` or `variable` changed, or the layer was removed, while we waited
     signal.throwIfAborted();
 

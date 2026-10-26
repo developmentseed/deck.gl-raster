@@ -202,7 +202,7 @@ describe("RasterTileLayer._reloadMetadata", () => {
    */
   class MetadataTestLayer extends RasterTileLayer {
     start(): void {
-      this._reloadMetadata("loading test");
+      this._reloadMetadata({ errorMsg: "loading test" });
     }
 
     protected override async _loadMetadata(signal: AbortSignal): Promise<void> {

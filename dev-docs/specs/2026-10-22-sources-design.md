@@ -367,7 +367,7 @@ Each stage is one PR.
      every instance the same `state` object, so `setState` from the instance
      that started the load lands where the newest instance reads.
    - Subclasses start a load from `updateState` with
-     `_reloadMetadata(errorContext)`. It aborts the previous load, owns
+     `_reloadMetadata({ errorMsg })`. It aborts the previous load, owns
      `loadingMetadata`, reports errors only from the latest load, and aborts in
      `finalizeState`.
    - COGLayer, MultiCOGLayer and ZarrLayer move onto it. That fixes ZarrLayer's

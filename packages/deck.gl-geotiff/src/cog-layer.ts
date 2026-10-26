@@ -184,7 +184,7 @@ export class COGLayer<
       // Clear stale state so renderLayers returns null until the new GeoTIFF is
       // ready
       this.clearState();
-      this._reloadMetadata("loading GeoTIFF");
+      this._reloadMetadata({ errorMsg: "loading GeoTIFF" });
     }
   }
 
@@ -208,6 +208,7 @@ export class COGLayer<
       typeof crs === "number"
         ? await this.props.epsgResolver!(crs)
         : parseWkt(crs);
+
     // `geotiff` changed or the layer was removed while we waited
     signal.throwIfAborted();
 
