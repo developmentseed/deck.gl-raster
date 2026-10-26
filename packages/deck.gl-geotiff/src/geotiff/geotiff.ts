@@ -91,7 +91,14 @@ export async function fetchGeoTIFF(
   } = {},
 ): Promise<GeoTIFF> {
   if (typeof input === "string" || input instanceof URL) {
-    return await GeoTIFF.fromUrl(input, options);
+    try {
+      return await GeoTIFF.fromUrl(input, options);
+    } catch (error) {
+      // The HTTP source wraps an aborted read in its own error, so throw the
+      // abort itself
+      options.signal?.throwIfAborted();
+      throw error;
+    }
   }
 
   if (input instanceof ArrayBuffer) {

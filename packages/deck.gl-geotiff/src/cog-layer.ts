@@ -94,7 +94,9 @@ export type COGLayerProps<DataT extends MinimalTileData = TextureDataT> = Omit<
      */
     pool?: DecoderPool;
 
-    /** A user-provided AbortSignal to cancel loading.
+    /** A user-provided AbortSignal to cancel tile requests. It doesn't abort
+     * opening `source`: the layer aborts that itself when `source` changes or
+     * the layer is removed.
      *
      * This can be useful in combination with the MosaicLayer, so that when a
      * mosaic source is out of the viewport, all of its tile requests are

@@ -9,6 +9,7 @@ import { fixturePath, loadGeoTIFF } from "./helpers.js";
 describe("COGSource.open", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("opens a GeoTIFF and builds its tile grid and bounds", async () => {
@@ -143,5 +144,21 @@ describe("COGSource.open", () => {
 
     await expect(opening).rejects.toMatchObject({ name: "AbortError" });
     expect(fromUrl).not.toHaveBeenCalled();
+  });
+
+  it("keeps an abort during a header read an AbortError", async () => {
+    const controller = new AbortController();
+    // Abort while the header read is in flight, through the real transport,
+    // which wraps a failed fetch in its own error
+    vi.stubGlobal("fetch", async () => {
+      controller.abort();
+      throw controller.signal.reason;
+    });
+
+    const opening = COGSource.open("https://example.com/a.tif", {
+      signal: controller.signal,
+    });
+
+    await expect(opening).rejects.toMatchObject({ name: "AbortError" });
   });
 });

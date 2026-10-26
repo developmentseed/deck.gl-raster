@@ -9,16 +9,11 @@ import type {
   Priority,
 } from "@developmentseed/geotiff";
 import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
-import {
-  epsgResolver as defaultEpsgResolver,
-  makeClampedForwardTo3857,
-  metersPerUnit,
-  parseWkt,
-} from "@developmentseed/proj";
-import proj4 from "proj4";
+import { epsgResolver as defaultEpsgResolver } from "@developmentseed/proj";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
+import { projectionFunctions, resolveProjection } from "./projection.js";
 
 /**
  * A Cloud-Optimized GeoTIFF to open:
@@ -113,54 +108,16 @@ export class COGSource extends RasterSource {
       getPriority,
       signal,
     });
-    const crs = geotiff.crs;
-    const projection =
-      typeof crs === "number" ? await epsgResolver(crs) : parseWkt(crs);
+    const projection = await resolveProjection(geotiff.crs, epsgResolver);
 
     // The open was aborted while we waited
     signal?.throwIfAborted();
 
-    // @ts-expect-error - proj4 typings are incomplete and don't support
-    // wkt-parser input
-    const converter4326 = proj4(projection, "EPSG:4326");
-    const projectTo4326 = (x: number, y: number) =>
-      converter4326.forward<[number, number]>([x, y], false);
-    const projectFrom4326 = (x: number, y: number) =>
-      converter4326.inverse<[number, number]>([x, y], false);
-
-    // @ts-expect-error - proj4 typings are incomplete and don't support
-    // wkt-parser input
-    const converter3857 = proj4(projection, "EPSG:3857");
-    const projectTo3857 = makeClampedForwardTo3857(
-      (x: number, y: number) =>
-        converter3857.forward<[number, number]>([x, y], false),
-      projectTo4326,
-    );
-    const projectFrom3857 = (x: number, y: number) =>
-      converter3857.inverse<[number, number]>([x, y], false);
-
-    const units = projection.units;
-    if (!units) {
-      throw new Error(
-        "Source projection is missing 'units' property, cannot compute meters per unit",
-      );
-    }
-    const mpu = metersPerUnit(units as Parameters<typeof metersPerUnit>[0], {
-      semiMajorAxis: projection.datum?.a ?? projection.a,
-    });
-
-    const tilesetDescriptor = geoTiffToDescriptor(geotiff, {
-      projectTo4326,
-      projectFrom4326,
-      projectTo3857,
-      projectFrom3857,
-      mpu,
-    });
-
+    const { converter4326, ...functions } = projectionFunctions(projection);
     return new COGSource({
       geotiff,
       projection,
-      tilesetDescriptor,
+      tilesetDescriptor: geoTiffToDescriptor(geotiff, functions),
       geographicBounds: getGeographicBounds(geotiff, converter4326),
     });
   }
