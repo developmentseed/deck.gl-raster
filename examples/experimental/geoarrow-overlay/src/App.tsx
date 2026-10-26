@@ -119,7 +119,7 @@ export default function App() {
 
   const cogLayer = new COGLayer({
     id: "eox-cloudless",
-    geotiff: EOX_CLOUDLESS_URL,
+    source: EOX_CLOUDLESS_URL,
     // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
     // doesn't know about it.
     beforeId: BEFORE_ID,

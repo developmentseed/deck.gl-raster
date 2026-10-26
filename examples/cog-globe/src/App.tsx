@@ -98,7 +98,7 @@ export default function App() {
 
   const cogLayer = new COGLayer({
     id: "cog-layer",
-    geotiff: selected.url,
+    source: selected.url,
     debug: debugState.debug,
     debugOpacity: debugState.debugOpacity,
     onSourceLoad: (source) => {

@@ -24,7 +24,7 @@ afterEach(() => {
 function makeBareLayer(props: Record<string, unknown> = {}): COGLayer {
   const layer = new COGLayer({
     id: "cog",
-    geotiff: "https://example.com/x.tif",
+    source: "https://example.com/x.tif",
     ...props,
   } as never);
   const state: Record<string, unknown> = {};
@@ -205,12 +205,12 @@ describe("COGLayer.updateState", () => {
 
     const layer = makeBareLayer({
       ...props,
-      geotiff: "https://example.com/old.tif",
+      source: "https://example.com/old.tif",
     });
     runInitialUpdate(layer);
     const next = rerender(layer, {
       ...props,
-      geotiff: "https://example.com/new.tif",
+      source: "https://example.com/new.tif",
     });
     opens[1]!.resolve(newSource);
     await flush();
@@ -228,12 +228,12 @@ describe("COGLayer.updateState", () => {
 
     const layer = makeBareLayer({
       ...customPipeline,
-      geotiff: "https://example.com/old.tif",
+      source: "https://example.com/old.tif",
     });
     runInitialUpdate(layer);
     rerender(layer, {
       ...customPipeline,
-      geotiff: "https://example.com/new.tif",
+      source: "https://example.com/new.tif",
     });
 
     // The first open's signal aborts when the second starts
@@ -244,10 +244,9 @@ describe("COGLayer.updateState", () => {
 });
 
 describe("COGLayer source", () => {
-  it("draws its source prop without opening anything, even with geotiff set", async () => {
+  it("draws an opened source without opening anything", async () => {
     const source = await openFixture("cog_uint8_rgba");
     const open = vi.spyOn(COGSource, "open");
-    // `makeBareLayer` also sets `geotiff`
     const layer = makeBareLayer({ source, ...customPipeline });
 
     runInitialUpdate(layer);
@@ -322,18 +321,35 @@ describe("COGLayer source", () => {
     expect(next.state.source).toBe(source);
   });
 
-  it("opens geotiff again when its source prop is removed", async () => {
+  it("opens a COG that replaces an opened source", async () => {
     const source = await openFixture("cog_uint8_rgba");
     const open = vi
       .spyOn(COGSource, "open")
       .mockReturnValue(new Promise(() => {}));
     const url = "https://example.com/x.tif";
 
-    const layer = makeBareLayer({ source, geotiff: url, ...customPipeline });
+    const layer = makeBareLayer({ source, ...customPipeline });
     runInitialUpdate(layer);
-    rerender(layer, { geotiff: url, ...customPipeline });
+    const next = rerender(layer, { source: url, ...customPipeline });
 
     expect(open.mock.calls.map(([input]) => input)).toEqual([url]);
+    // Nothing is drawn until the new COG opens
+    expect(next.state.source).toBeUndefined();
+  });
+
+  it("draws nothing once its source is removed", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const open = vi.spyOn(COGSource, "open");
+    const onError = vi.fn();
+    const layer = makeBareLayer({ source, onError, ...customPipeline });
+    runInitialUpdate(layer);
+
+    const next = rerender(layer, { onError, ...customPipeline });
+    await flush();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(next.renderLayers()).toBeNull();
   });
 
   it("throws from updateState for a source the default pipeline can't draw", async () => {
@@ -413,7 +429,7 @@ describe("COGLayer.isLoaded", () => {
 
     const layer = makeBareLayer();
     runInitialUpdate(layer);
-    const next = rerender(layer, { geotiff: "https://example.com/y.tif" });
+    const next = rerender(layer, { source: "https://example.com/y.tif" });
     finishOld();
     await new Promise((resolve) => setTimeout(resolve, 0));
 

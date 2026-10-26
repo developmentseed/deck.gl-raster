@@ -1,7 +1,6 @@
 import type { UpdateParameters } from "@deck.gl/core";
 import type {
   MinimalTileData,
-  RasterSourceLayerProps,
   GetTileDataOptions as RasterTileGetTileDataOptions,
   RasterTileLayerProps,
   RenderTileResult,
@@ -62,24 +61,30 @@ export type COGLayerProps<DataT extends MinimalTileData = TextureDataT> = Omit<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
 > &
-  COGLayerDataProps<DataT> &
-  RasterSourceLayerProps<COGSource> & {
+  COGLayerDataProps<DataT> & {
     /**
-     * A Cloud-Optimized GeoTIFF for the layer to open, as shorthand for
-     * `source`:
+     * The Cloud-Optimized GeoTIFF to draw: an opened {@link COGSource}, or one
+     * of these for the layer to open with the defaults of
+     * {@link COGSource.open}:
      *
-     * - {@link URL} or `string` pointing to a COG
-     * - {@link ArrayBuffer} containing the COG data
-     * - An instance of the {@link GeoTIFF} class.
+     * - a {@link URL} or `string` pointing to a COG
+     * - an {@link ArrayBuffer} containing the COG data
+     * - an opened {@link GeoTIFF}
      *
-     * The layer opens it with the defaults of {@link COGSource.open}. To change
-     * them, such as the EPSG resolver or the request limiter, or to share one
-     * opened COG between layers, open it with {@link COGSource.open} and pass
-     * `source` instead.
+     * Open the COG yourself to change those defaults, such as the EPSG
+     * resolver or the request limiter, or to share one opened COG between
+     * layers.
      *
-     * Ignored when `source` is set.
+     * Keep the same object across renders: a new one starts the layer's tiles
+     * over.
      */
-    geotiff?: COGInput;
+    source: COGSource | COGInput;
+
+    /**
+     * Called with the source the layer opened, when `source` isn't an opened
+     * {@link COGSource} already.
+     */
+    onSourceLoad?: (source: COGSource) => void;
 
     /**
      * Worker pool for decoding image chunks.
@@ -101,8 +106,7 @@ export type COGLayerProps<DataT extends MinimalTileData = TextureDataT> = Omit<
 /**
  * COGLayer renders a COG using a tiled approach with reprojection.
  *
- * Pass an opened {@link COGSource} as `source`, or a COG for the layer to open
- * as `geotiff`.
+ * Its `source` is an opened {@link COGSource}, or a COG for the layer to open.
  */
 export class COGLayer<
   DataT extends MinimalTileData = TextureDataT,
@@ -110,7 +114,7 @@ export class COGLayer<
   static override layerName = "COGLayer";
 
   declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
-    /** The source the layer draws: `source`, or the one opened from `geotiff`. */
+    /** The source the layer draws: `source` itself, or the one opened from it. */
     source?: COGSource;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
@@ -120,18 +124,16 @@ export class COGLayer<
     props,
     oldProps,
   }: UpdateParameters<this>): boolean {
-    // Only `geotiff` loads anything. Removing `source` loads too: it leaves
-    // `geotiff` to open, or nothing to draw.
+    // An opened source needs no loading
     return (
-      !props.source &&
-      (props.geotiff !== oldProps.geotiff || props.source !== oldProps.source)
+      props.source !== oldProps.source && !(props.source instanceof COGSource)
     );
   }
 
   override updateState(params: UpdateParameters<this>): void {
     super.updateState(params);
     const { props, oldProps } = params;
-    if (props.source && props.source !== oldProps.source) {
+    if (props.source instanceof COGSource && props.source !== oldProps.source) {
       // An opened source replaces any open still in flight
       this._abortMetadataLoad();
       // If the default pipeline can't draw the new source, draw nothing rather
@@ -149,19 +151,20 @@ export class COGLayer<
     });
   }
 
-  /** Open `geotiff` as the layer's source. */
+  /** Open `source`, when it isn't an opened source already. */
   override async loadMetadata(signal: AbortSignal): Promise<void> {
     // Clear stale state so renderLayers returns null until the new source is
     // ready
     this.clearState();
 
-    const { geotiff } = this.props;
-    if (geotiff === undefined) {
+    const input = this.props.source;
+    // `source` was removed. An opened source never loads.
+    if (input === undefined || input instanceof COGSource) {
       return;
     }
-    const source = await COGSource.open(geotiff, { signal });
+    const source = await COGSource.open(input, { signal });
 
-    // `geotiff` changed or the layer was removed while we waited
+    // `source` changed or the layer was removed while we waited
     signal.throwIfAborted();
 
     this.props.onSourceLoad?.(source);

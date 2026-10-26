@@ -57,8 +57,12 @@ export default function App() {
 
   useEffect(() => {
     const controller = new AbortController();
-    COGSource.open(COG_URL, { epsgResolver, signal: controller.signal })
-      .then((opened) => {
+    void (async () => {
+      try {
+        const opened = await COGSource.open(COG_URL, {
+          epsgResolver,
+          signal: controller.signal,
+        });
         setSource(opened);
         const { west, south, east, north } = opened.geographicBounds;
         mapRef.current?.fitBounds(
@@ -71,12 +75,12 @@ export default function App() {
             duration: 1000,
           },
         );
-      })
-      .catch((err: unknown) => {
+      } catch (err) {
         if (!controller.signal.aborted) {
           console.error(err);
         }
-      });
+      }
+    })();
     return () => controller.abort();
   }, []);
 
@@ -120,19 +124,21 @@ export default function App() {
     [colormapTexture, filterLUTTexture],
   );
 
-  const cog_layer = new COGLayer({
-    id: "cog-layer",
-    source: source ?? undefined,
-    debug,
-    debugOpacity,
-    maxError: meshMaxError,
-    getTileData,
-    renderTile,
-    onTileUnload: (tile) => tile.content?.texture.destroy(),
-    // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
-    // doesn't know about it.
-    beforeId: "aeroway-runway",
-  });
+  const cog_layer =
+    source &&
+    new COGLayer({
+      id: "cog-layer",
+      source,
+      debug,
+      debugOpacity,
+      maxError: meshMaxError,
+      getTileData,
+      renderTile,
+      onTileUnload: (tile) => tile.content?.texture.destroy(),
+      // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+      // doesn't know about it.
+      beforeId: "aeroway-runway",
+    });
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

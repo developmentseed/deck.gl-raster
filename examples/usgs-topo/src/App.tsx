@@ -91,7 +91,7 @@ export default function App() {
 
   const layer = new COGLayer({
     id: `usgs-topo-${selectedIndex}`,
-    geotiff: selected.url,
+    source: selected.url,
     // Discard fragments outside the USGS quad's data area.
     extensions: cutlineEnabled ? [CLIP_EXTENSION] : [],
     // @ts-expect-error clipBounds + clipByInstance are injected by

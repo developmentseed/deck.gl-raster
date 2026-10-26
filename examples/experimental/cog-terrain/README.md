@@ -48,7 +48,7 @@ const terrain = new TerrainLayer({
 
 const cogProps: COGLayerProps & TerrainExtensionProps = {
   id: "cog",
-  geotiff: "https://example.com/image.tif",
+  source: "https://example.com/image.tif",
   extensions: [new TerrainExtension()],
   terrainDrawMode: "drape",
   zRange: [500, 2100], // meters; the example measures it from the terrain

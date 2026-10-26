@@ -67,9 +67,9 @@ type TextureDataT = {
 };
 
 /**
- * Module-level cache of opened sources keyed by URL.
+ * Module-level cache of opened GeoTIFFs keyed by URL.
  *
- * Header reads are small and the resulting source can be reused
+ * Header reads are small and the resulting `COGSource` can be reused
  * across the example's lifetime. Holding this outside the MosaicLayer's
  * TileLayer cache lets us drop `maxCacheSize: Infinity` (which was previously
  * needed to keep header data, but had the side-effect of pinning every parent
@@ -92,19 +92,19 @@ type TextureDataT = {
  * cancellation (one underlying `AbortController`, abort only when all callers
  * have signalled).
  */
-const sourceCache = new Map<string, Promise<COGSource>>();
+const geotiffCache = new Map<string, Promise<COGSource>>();
 
-function getCachedSource(
+function getCachedGeoTIFF(
   url: string,
   opts: COGSourceOptions,
 ): Promise<COGSource> {
-  let promise = sourceCache.get(url);
+  let promise = geotiffCache.get(url);
   if (!promise) {
     promise = COGSource.open(url, { ...opts, epsgResolver }).catch((err) => {
-      sourceCache.delete(url);
+      geotiffCache.delete(url);
       throw err;
     });
-    sourceCache.set(url, promise);
+    geotiffCache.set(url, promise);
   }
   return promise;
 }
@@ -417,12 +417,12 @@ export default function App() {
       id: "naip-mosaic-layer",
       sources: stacItems,
       // For each source, fetch the opened COGSource from a module-level cache
-      // (see `sourceCache` above). The cache is intentionally separate from
+      // (see `geotiffCache` above). The cache is intentionally separate from
       // the MosaicLayer's TileLayer cache so we can keep cheap header metadata
       // around indefinitely without pinning every parent tile (and its inner
       // COGLayer's in-flight tile requests) in memory.
       getSource: async (source, opts) =>
-        getCachedSource(source.assets.image.href, opts),
+        getCachedGeoTIFF(source.assets.image.href, opts),
       renderSource: (source, { data, signal }) => {
         const url = source.assets.image.href;
         return new COGLayer<TextureDataT>({
@@ -446,8 +446,8 @@ export default function App() {
         });
       },
       // Disable the MosaicLayer tile cache: each cached tile is a full
-      // COGLayer instance, and opened sources are already kept in the
-      // module-level `sourceCache`, so there's nothing cheap to retain here.
+      // COGLayer instance, and opened GeoTIFFs are already kept in the
+      // module-level `geotiffCache`, so there's nothing cheap to retain here.
       maxCacheSize: 0,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.

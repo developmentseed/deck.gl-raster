@@ -27,7 +27,8 @@ export abstract class RasterSource {
   /** Bounds of the data in WGS84 degrees. */
   readonly geographicBounds: GeographicBounds;
 
-  constructor(options: {
+  /** Called by a subclass's factory, such as `COGSource.open`. */
+  protected constructor(options: {
     tilesetDescriptor: RasterTilesetDescriptor;
     geographicBounds: GeographicBounds;
   }) {
@@ -35,28 +36,3 @@ export abstract class RasterSource {
     this.geographicBounds = options.geographicBounds;
   }
 }
-
-/**
- * Props of a layer that draws a {@link RasterSource}.
- */
-export type RasterSourceLayerProps<SourceT extends RasterSource> = {
-  /**
-   * An opened source to draw.
-   *
-   * The layer derives everything from it without loading anything, and several
-   * layers can share one source. Keep the same object across renders: a new
-   * source starts the layer's tiles over.
-   *
-   * Takes precedence over the layer's shorthand props, such as COGLayer's
-   * `geotiff`.
-   */
-  source?: SourceT;
-
-  /**
-   * Called with the source the layer opened from its shorthand props, such as
-   * COGLayer's `geotiff`.
-   *
-   * Not called for a `source` prop, which the app opened itself.
-   */
-  onSourceLoad?: (source: SourceT) => void;
-};

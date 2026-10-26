@@ -396,7 +396,7 @@ export default function App() {
       // `terrainDrawMode`. Build the props separately.
       const props = {
         id: `cog-${url}`,
-        geotiff: url,
+        source: url,
         extensions: [new TerrainExtension()],
         // Required. Left unset, the extension picks "offset" for
         // deck.gl-raster's mesh layer, which lifts only the reprojection
