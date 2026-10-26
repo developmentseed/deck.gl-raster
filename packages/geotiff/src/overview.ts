@@ -2,6 +2,7 @@ import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { compose, scale } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
+import type { RasterArray } from "./array.js";
 import { fetchTile, fetchTiles } from "./fetch.js";
 import type { GeoTIFF } from "./geotiff.js";
 import type {
@@ -10,8 +11,10 @@ import type {
   GeoKeyDirectory,
 } from "./ifd.js";
 import type { DecoderPool } from "./pool/pool.js";
+import { read } from "./read.js";
 import type { Tile } from "./tile.js";
 import { index, xy } from "./transform.js";
+import type { Window } from "./window.js";
 
 /**
  * A single resolution level of a GeoTIFF — either the full-resolution image
@@ -173,6 +176,25 @@ export class Overview {
       imageTags: this.cachedSubImageTags,
       maskImageTags: this.cachedMaskImageTags,
     });
+  }
+
+  /**
+   * Read the pixels of a window of this overview.
+   *
+   * Fetches every tile that the window touches, stitches them together, and
+   * keeps only the pixels inside the window.
+   *
+   * @param options Optional parameters for reading.
+   * @param options.window The {@link Window} of pixels to read, in this overview's pixels. Defaults to the whole overview.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tile data. If not provided, a new decoder will be created for each tile.
+   * @param options.signal An optional {@link AbortSignal} to cancel the fetch requests.
+   * @returns A {@link RasterArray} of the window's pixels, with a mask if the overview has a mask IFD.
+   * @throws A `WindowError` if the window is invalid or extends outside the overview.
+   */
+  async read(
+    options: { window?: Window; pool?: DecoderPool; signal?: AbortSignal } = {},
+  ): Promise<RasterArray> {
+    return await read(this, options);
   }
 
   // TiledMixin

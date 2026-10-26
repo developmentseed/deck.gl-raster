@@ -31,3 +31,5 @@ export { Overview } from "./overview.js";
 export type { DecoderPoolOptions } from "./pool/pool.js";
 export { DecoderPool, defaultDecoderPool } from "./pool/pool.js";
 export type { Tile } from "./tile.js";
+export type { Window } from "./window.js";
+export { WindowError } from "./window.js";
