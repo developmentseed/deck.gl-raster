@@ -409,10 +409,7 @@ export default function App() {
         // Re-render the tiles when only their colors change, as between the
         // two NAIP options.
         updateTriggers: { renderTile: dataset.id },
-        onGeoTIFFLoad: (
-          _,
-          { geographicBounds: { west, south, east, north } },
-        ) =>
+        onSourceLoad: ({ geographicBounds: { west, south, east, north } }) =>
           setCogBounds((bounds) =>
             bounds[url]
               ? bounds

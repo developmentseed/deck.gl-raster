@@ -2,7 +2,7 @@ import { NativeSelect, Stack, Text } from "@chakra-ui/react";
 import { WebMercatorViewport } from "@deck.gl/core";
 import { ClipExtension } from "@deck.gl/extensions";
 import { LoadingWidget } from "@deck.gl/widgets";
-import { COGLayer } from "@developmentseed/deck.gl-geotiff";
+import { COGLayer, COGSource } from "@developmentseed/deck.gl-geotiff";
 import type { RenderTileResult } from "@developmentseed/deck.gl-raster";
 import {
   COLORMAP_INDEX,
@@ -112,7 +112,7 @@ function splitCommonSpaceX(
 type CogLayerArgs = {
   side: Side;
   file: VTFile;
-  geotiff: GeoTIFF;
+  source: COGSource;
   renderMode: RenderMode;
   clipBounds: [number, number, number, number];
   colormapTexture: Texture | null;
@@ -124,7 +124,7 @@ type CogLayerArgs = {
  * than queuing a broken layer.
  */
 function makeCOGLayer(args: CogLayerArgs): COGLayer<TileTextureData> | null {
-  const { side, file, geotiff, renderMode, clipBounds, colormapTexture } = args;
+  const { side, file, source, renderMode, clipBounds, colormapTexture } = args;
   const useGrayLoader = file.bands === 1;
 
   let renderTile: (tileData: TileTextureData) => RenderTileResult;
@@ -147,8 +147,7 @@ function makeCOGLayer(args: CogLayerArgs): COGLayer<TileTextureData> | null {
 
   return new COGLayer<TileTextureData>({
     id: `cog-${side}`,
-    geotiff,
-    epsgResolver,
+    source,
     getTileData: useGrayLoader ? getTileDataGray : getTileDataRGBA,
     renderTile,
     onTileUnload: (tile) => tile.content?.texture.destroy(),
@@ -315,24 +314,24 @@ export default function App() {
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
 
-  // Cache one GeoTIFF instance per URL across renders. Constructing a fresh
-  // GeoTIFF.fromUrl walks the IFD chain over many small range requests; for
-  // multi-hundred-GB Vermont files that adds up fast. Caching means once a
-  // year is loaded, switching the dropdown back to it is instant.
+  // Cache one opened source per URL across renders. Opening a GeoTIFF walks
+  // the IFD chain over many small range requests; for multi-hundred-GB Vermont
+  // files that adds up fast. Caching means once a year is loaded, switching
+  // the dropdown back to it is instant.
   //
-  // GeoTIFFs are stored in React state (not a ref) so the layers `useMemo`
+  // Sources are stored in React state (not a ref) so the layers `useMemo`
   // naturally re-runs when a new file finishes loading. `inFlightRef` tracks
   // URLs currently being fetched so we don't kick off duplicate requests
   // between the resolve and the state update on the next render.
-  const [geotiffs, setGeotiffs] = useState<Map<string, GeoTIFF>>(
+  const [sources, setSources] = useState<Map<string, COGSource>>(
     () => new Map(),
   );
   const inFlightRef = useRef<Set<string>>(new Set());
 
-  const ensureGeoTIFF = useCallback(
-    (file: VTFile): GeoTIFF | null => {
+  const ensureSource = useCallback(
+    (file: VTFile): COGSource | null => {
       const { url } = file;
-      const existing = geotiffs.get(url);
+      const existing = sources.get(url);
       if (existing) {
         return existing;
       }
@@ -342,10 +341,13 @@ export default function App() {
       inFlightRef.current.add(url);
       void (async () => {
         try {
-          const gt = await GeoTIFF.fromUrl(url, {
+          // A larger header cache than `COGSource.open` gives a URL, so open
+          // the GeoTIFF first
+          const geotiff = await GeoTIFF.fromUrl(url, {
             cacheSize: 64 * 1024 * 1024,
           });
-          setGeotiffs((prev) => new Map(prev).set(url, gt));
+          const source = await COGSource.open(geotiff, { epsgResolver });
+          setSources((prev) => new Map(prev).set(url, source));
         } catch (err) {
           console.error(`Failed to load GeoTIFF for ${url}:`, err);
         } finally {
@@ -354,7 +356,7 @@ export default function App() {
       })();
       return null;
     },
-    [geotiffs],
+    [sources],
   );
 
   // Decode the colormap sprite and upload to the GPU once `device` is ready.
@@ -406,12 +408,12 @@ export default function App() {
 
     const result: unknown[] = [];
     const leftFile = getVTFile(left.fileId);
-    const leftGeoTIFF = ensureGeoTIFF(leftFile);
-    if (leftGeoTIFF) {
+    const leftSource = ensureSource(leftFile);
+    if (leftSource) {
       const leftCog = makeCOGLayer({
         side: "left",
         file: leftFile,
-        geotiff: leftGeoTIFF,
+        source: leftSource,
         renderMode: left.renderMode,
         clipBounds: leftClip,
         colormapTexture,
@@ -421,12 +423,12 @@ export default function App() {
       }
     }
     const rightFile = getVTFile(right.fileId);
-    const rightGeoTIFF = ensureGeoTIFF(rightFile);
-    if (rightGeoTIFF) {
+    const rightSource = ensureSource(rightFile);
+    if (rightSource) {
       const rightCog = makeCOGLayer({
         side: "right",
         file: rightFile,
-        geotiff: rightGeoTIFF,
+        source: rightSource,
         renderMode: right.renderMode,
         clipBounds: rightClip,
         colormapTexture,
@@ -436,10 +438,10 @@ export default function App() {
       }
     }
     return result;
-    // `ensureGeoTIFF` closes over `geotiffs`, so when an async load resolves
-    // and we setGeotiffs(...), this useMemo re-runs and the layer that was
-    // waiting on the load picks up the new instance.
-  }, [viewState, splitFraction, left, right, colormapTexture, ensureGeoTIFF]);
+    // `ensureSource` closes over `sources`, so when an async load resolves
+    // and we setSources(...), this useMemo re-runs and the layer that was
+    // waiting on the load picks up the new source.
+  }, [viewState, splitFraction, left, right, colormapTexture, ensureSource]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

@@ -1,14 +1,25 @@
 import { CompositeLayer } from "@deck.gl/core";
-import { epsgResolver } from "@developmentseed/proj";
+import { GeoTIFF } from "@developmentseed/geotiff";
 import { Texture } from "@luma.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { COGLayer } from "../src/cog-layer.js";
+import { COGSource } from "../src/cog-source.js";
 import { loadGeoTIFF } from "./helpers.js";
+
+beforeEach(() => {
+  // Keep every test off the network: opening a URL never finishes
+  vi.spyOn(GeoTIFF, "fromUrl").mockReturnValue(new Promise(() => {}));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 /**
  * Build a {@link COGLayer} ready for direct lifecycle calls: bypasses deck.gl's
  * `LayerManager` by replacing `state` and `setState` with a plain object +
- * assign, mirroring `makeBareLayer` in the deck.gl-raster tests.
+ * assign, mirroring `makeBareLayer` in the deck.gl-raster tests. Its context
+ * has a stub device, enough to infer the default pipeline for the fixtures.
  */
 function makeBareLayer(props: Record<string, unknown> = {}): COGLayer {
   const layer = new COGLayer({
@@ -21,6 +32,7 @@ function makeBareLayer(props: Record<string, unknown> = {}): COGLayer {
     state,
     setState: (updates: Record<string, unknown>) =>
       Object.assign(state, updates),
+    context: { device: {} },
   });
   return layer;
 }
@@ -50,6 +62,7 @@ function rerender(layer: COGLayer, props: Record<string, unknown>): COGLayer {
   Object.assign(next as object, {
     state: layer.state,
     setState: layer.setState,
+    context: layer.context,
   });
   next.updateState({
     props: next.props,
@@ -57,6 +70,37 @@ function rerender(layer: COGLayer, props: Record<string, unknown>): COGLayer {
     changeFlags: {},
   } as never);
   return next;
+}
+
+/** A promise with its `resolve` exposed. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+/** Let every settled promise run its handlers. */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** `COGSource.open` itself, kept from before any test mocks it. */
+const openSource = COGSource.open.bind(COGSource);
+
+/** Open a rasterio test fixture as a {@link COGSource}. */
+async function openFixture(name: string): Promise<COGSource> {
+  return openSource(await loadGeoTIFF(name, "rasterio"));
+}
+
+/** Tile callbacks that replace the default pipeline. */
+const customPipeline = {
+  getTileData: async () => ({}),
+  renderTile: () => null,
+};
+
+/** The id of the inner TileLayer that `renderLayers` returns. */
+function innerTileLayerId(layer: COGLayer): string | undefined {
+  return (layer.renderLayers() as { id: string } | null)?.id;
 }
 
 function fakeTexture(): {
@@ -149,40 +193,157 @@ describe("COGLayer.updateState", () => {
     );
   });
 
-  it("keeps the new GeoTIFF when the old one finishes opening last", async () => {
-    // The old GeoTIFF is in EPSG:4326 and the new one in EPSG:3857.
-    const oldGeoTIFF = await loadGeoTIFF("cog_uint8_rgba", "rasterio");
-    const newGeoTIFF = await loadGeoTIFF("cog_uint8_rgba_3857", "rasterio");
-    // Hold each CRS lookup until the test releases it.
-    const lookups = new Map<number, () => void>();
-    const onGeoTIFFLoad = vi.fn();
-    const props = {
-      epsgResolver: (epsg: number) =>
-        new Promise((resolve) =>
-          lookups.set(epsg, () => resolve(epsgResolver(epsg))),
-        ),
-      onGeoTIFFLoad,
-      // Skip the default pipeline, which needs a device.
-      getTileData: async () => ({}),
-      renderTile: () => null,
-    };
+  it("keeps the new source when the old one finishes opening last", async () => {
+    const oldSource = await openFixture("cog_uint8_rgba");
+    const newSource = await openFixture("cog_uint8_rgba_3857");
+    const opens = [deferred<COGSource>(), deferred<COGSource>()];
+    vi.spyOn(COGSource, "open")
+      .mockReturnValueOnce(opens[0]!.promise)
+      .mockReturnValueOnce(opens[1]!.promise);
+    const onSourceLoad = vi.fn();
+    const props = { onSourceLoad, ...customPipeline };
 
-    const layer = makeBareLayer({ ...props, geotiff: oldGeoTIFF });
-    const oldLoad = vi.spyOn(layer, "loadMetadata");
+    const layer = makeBareLayer({
+      ...props,
+      geotiff: "https://example.com/old.tif",
+    });
     runInitialUpdate(layer);
-    const next = rerender(layer, { ...props, geotiff: newGeoTIFF });
-    await vi.waitFor(() => expect(lookups.size).toBe(2));
+    const next = rerender(layer, {
+      ...props,
+      geotiff: "https://example.com/new.tif",
+    });
+    opens[1]!.resolve(newSource);
+    await flush();
+    opens[0]!.resolve(oldSource);
+    await flush();
 
-    lookups.get(3857)!();
-    await vi.waitFor(() => expect(next.state.geotiff?.crs).toBe(3857));
-    lookups.get(4326)!();
-    // The old load is aborted
-    await expect(oldLoad.mock.results[0]!.value).rejects.toThrow();
+    expect(next.state.source).toBe(newSource);
+    expect(onSourceLoad.mock.calls).toEqual([[newSource]]);
+  });
 
-    expect(next.state.geotiff?.crs).toBe(3857);
-    expect(onGeoTIFFLoad.mock.calls.map(([geotiff]) => geotiff.crs)).toEqual([
-      3857,
-    ]);
+  it("passes its load signal to COGSource.open", () => {
+    const open = vi
+      .spyOn(COGSource, "open")
+      .mockReturnValue(new Promise(() => {}));
+
+    const layer = makeBareLayer({
+      ...customPipeline,
+      geotiff: "https://example.com/old.tif",
+    });
+    runInitialUpdate(layer);
+    rerender(layer, {
+      ...customPipeline,
+      geotiff: "https://example.com/new.tif",
+    });
+
+    // The first open's signal aborts when the second starts
+    expect(
+      open.mock.calls.map(([, options]) => options?.signal?.aborted),
+    ).toEqual([true, false]);
+  });
+});
+
+describe("COGLayer source", () => {
+  it("draws its source prop without opening anything, even with geotiff set", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const open = vi.spyOn(COGSource, "open");
+    // `makeBareLayer` also sets `geotiff`
+    const layer = makeBareLayer({ source, ...customPipeline });
+
+    runInitialUpdate(layer);
+
+    expect(open).not.toHaveBeenCalled();
+    expect(layer.state.loadingMetadata).toBeUndefined();
+    expect(layer.state.source).toBe(source);
+  });
+
+  it("two layers on one source share it without opening it again", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const open = vi.spyOn(COGSource, "open");
+    const layers = ["a", "b"].map((id) =>
+      makeBareLayer({ id, source, ...customPipeline }),
+    );
+
+    for (const layer of layers) {
+      runInitialUpdate(layer);
+    }
+
+    expect(open).not.toHaveBeenCalled();
+    expect(layers[0]!.state.source).toBe(source);
+    expect(layers[1]!.state.source).toBe(source);
+  });
+
+  it("infers the default pipeline for a source prop", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const layer = makeBareLayer({ source });
+
+    runInitialUpdate(layer);
+
+    expect(layer.state.defaultGetTileData).toBeTypeOf("function");
+    expect(layer.state.defaultRenderTile).toBeTypeOf("function");
+  });
+
+  it("keeps its inner TileLayer across renders with the same source", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const other = await openFixture("cog_uint8_rgba_3857");
+    const layer = makeBareLayer({ source, ...customPipeline });
+    runInitialUpdate(layer);
+    const id = innerTileLayerId(layer);
+
+    // Every instance shares one state, so read each id right after its render
+    const same = rerender(layer, { source, ...customPipeline });
+    const sameId = innerTileLayerId(same);
+    const replaced = rerender(same, { source: other, ...customPipeline });
+    const replacedId = innerTileLayerId(replaced);
+
+    expect(id).toBeDefined();
+    expect(sameId).toBe(id);
+    expect(replacedId).not.toBe(id);
+  });
+
+  it("aborts the shorthand's open when a source replaces it", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const late = await openFixture("cog_uint8_rgba_3857");
+    const opening = deferred<COGSource>();
+    const open = vi.spyOn(COGSource, "open").mockReturnValue(opening.promise);
+    const onSourceLoad = vi.fn();
+
+    const layer = makeBareLayer({ onSourceLoad, ...customPipeline });
+    runInitialUpdate(layer);
+    const next = rerender(layer, { source, onSourceLoad, ...customPipeline });
+
+    expect(open.mock.calls[0]![1]!.signal!.aborted).toBe(true);
+    expect(next.state.loadingMetadata).toBe(false);
+
+    opening.resolve(late);
+    await flush();
+
+    expect(onSourceLoad).not.toHaveBeenCalled();
+    expect(next.state.source).toBe(source);
+  });
+
+  it("opens geotiff again when its source prop is removed", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const open = vi
+      .spyOn(COGSource, "open")
+      .mockReturnValue(new Promise(() => {}));
+    const url = "https://example.com/x.tif";
+
+    const layer = makeBareLayer({ source, geotiff: url, ...customPipeline });
+    runInitialUpdate(layer);
+    rerender(layer, { geotiff: url, ...customPipeline });
+
+    expect(open.mock.calls.map(([input]) => input)).toEqual([url]);
+  });
+
+  it("throws from updateState for a source the default pipeline can't draw", async () => {
+    const source = await openFixture(
+      "float32_1band_deflate_block64_predictor3",
+    );
+    const layer = makeBareLayer({ source });
+
+    // deck.gl's LayerManager reports this through `onError`
+    expect(() => runInitialUpdate(layer)).toThrow(/non-unsigned integers/);
   });
 });
 

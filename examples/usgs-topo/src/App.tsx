@@ -101,8 +101,8 @@ export default function App() {
     // `instancePositions` on the underlying SimpleMeshLayer and defaults to
     // vertex-shader mode, which cuts along a coarse per-triangle isoline.
     clipByInstance: false,
-    onGeoTIFFLoad: (_tiff, options) => {
-      const { west, south, east, north } = options.geographicBounds;
+    onSourceLoad: (source) => {
+      const { west, south, east, north } = source.geographicBounds;
       mapRef.current?.fitBounds(
         [
           [west, south],

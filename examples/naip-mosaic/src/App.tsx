@@ -1,5 +1,10 @@
 import { LoadingWidget } from "@deck.gl/widgets";
-import { COGLayer, MosaicLayer } from "@developmentseed/deck.gl-geotiff";
+import type { COGSourceOptions } from "@developmentseed/deck.gl-geotiff";
+import {
+  COGLayer,
+  COGSource,
+  MosaicLayer,
+} from "@developmentseed/deck.gl-geotiff";
 import type {
   RasterModule,
   RenderTileResult,
@@ -12,8 +17,7 @@ import {
   LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
-import type { GeoTIFFFromUrlOptions, Overview } from "@developmentseed/geotiff";
-import { GeoTIFF } from "@developmentseed/geotiff";
+import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 import {
@@ -63,19 +67,19 @@ type TextureDataT = {
 };
 
 /**
- * Module-level cache of opened GeoTIFFs keyed by URL.
+ * Module-level cache of opened sources keyed by URL.
  *
- * Header reads are small and the resulting GeoTIFF instance can be reused
+ * Header reads are small and the resulting source can be reused
  * across the example's lifetime. Holding this outside the MosaicLayer's
  * TileLayer cache lets us drop `maxCacheSize: Infinity` (which was previously
  * needed to keep header data, but had the side-effect of pinning every parent
  * tile — and its inner COGLayer's in-flight requests — in memory forever).
  *
- * We cache the `Promise<GeoTIFF>` rather than the resolved `GeoTIFF` so that
- * concurrent callers for the same URL share one in-flight fetch instead of
- * each kicking off a duplicate request before any of them sets the cache.
+ * We cache the `Promise<COGSource>` rather than the resolved `COGSource` so
+ * that concurrent callers for the same URL share one in-flight fetch instead
+ * of each kicking off a duplicate request before any of them sets the cache.
  *
- * The caller's signal is forwarded into `GeoTIFF.fromUrl` so an in-flight
+ * The caller's signal is forwarded into `COGSource.open` so an in-flight
  * header read can be aborted when the parent tile leaves view. On any
  * rejection (including `AbortError`) the entry is evicted, so a later visit
  * to the same source restarts the fetch rather than reusing a failed promise.
@@ -88,19 +92,19 @@ type TextureDataT = {
  * cancellation (one underlying `AbortController`, abort only when all callers
  * have signalled).
  */
-const geotiffCache = new Map<string, Promise<GeoTIFF>>();
+const sourceCache = new Map<string, Promise<COGSource>>();
 
-function getCachedGeoTIFF(
+function getCachedSource(
   url: string,
-  opts: GeoTIFFFromUrlOptions,
-): Promise<GeoTIFF> {
-  let promise = geotiffCache.get(url);
+  opts: COGSourceOptions,
+): Promise<COGSource> {
+  let promise = sourceCache.get(url);
   if (!promise) {
-    promise = GeoTIFF.fromUrl(url, opts).catch((err) => {
-      geotiffCache.delete(url);
+    promise = COGSource.open(url, { ...opts, epsgResolver }).catch((err) => {
+      sourceCache.delete(url);
       throw err;
     });
-    geotiffCache.set(url, promise);
+    sourceCache.set(url, promise);
   }
   return promise;
 }
@@ -409,22 +413,21 @@ export default function App() {
   const layers = [];
 
   if (stacItems.length > 0 && colormapTexture) {
-    const mosaicLayer = new MosaicLayer<PartialSTACItem, GeoTIFF>({
+    const mosaicLayer = new MosaicLayer<PartialSTACItem, COGSource>({
       id: "naip-mosaic-layer",
       sources: stacItems,
-      // For each source, fetch the GeoTIFF instance from a module-level cache
-      // (see `geotiffCache` above). The cache is intentionally separate from
+      // For each source, fetch the opened COGSource from a module-level cache
+      // (see `sourceCache` above). The cache is intentionally separate from
       // the MosaicLayer's TileLayer cache so we can keep cheap header metadata
       // around indefinitely without pinning every parent tile (and its inner
       // COGLayer's in-flight tile requests) in memory.
       getSource: async (source, opts) =>
-        getCachedGeoTIFF(source.assets.image.href, opts),
+        getCachedSource(source.assets.image.href, opts),
       renderSource: (source, { data, signal }) => {
         const url = source.assets.image.href;
         return new COGLayer<TextureDataT>({
           id: `cog-${url}`,
-          epsgResolver,
-          geotiff: data,
+          source: data,
           getTileData,
           renderTile:
             renderMode === "trueColor"
@@ -443,8 +446,8 @@ export default function App() {
         });
       },
       // Disable the MosaicLayer tile cache: each cached tile is a full
-      // COGLayer instance, and opened GeoTIFFs are already kept in the
-      // module-level `geotiffCache`, so there's nothing cheap to retain here.
+      // COGLayer instance, and opened sources are already kept in the
+      // module-level `sourceCache`, so there's nothing cheap to retain here.
       maxCacheSize: 0,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.

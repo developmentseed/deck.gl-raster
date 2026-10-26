@@ -1,8 +1,7 @@
 import { LoadingWidget } from "@deck.gl/widgets";
-import { COGLayer } from "@developmentseed/deck.gl-geotiff";
+import { COGLayer, COGSource } from "@developmentseed/deck.gl-geotiff";
 import loadEpsg from "@developmentseed/epsg/all";
 import epsgCsvUrl from "@developmentseed/epsg/all.csv.gz?url";
-import type { GeoTIFF } from "@developmentseed/geotiff";
 import { parseWkt } from "@developmentseed/proj";
 import type { Device } from "@luma.gl/core";
 import {
@@ -25,7 +24,7 @@ import {
 import { ALL_NLCD_CODES } from "./nlcd/categories.js";
 import { makeRenderTile } from "./render-tile.js";
 
-/** An example for embedded EPSG code resolution.
+/** An example of a custom EPSG code resolver, passed to `COGSource.open`.
  *
  * Since this image is described by a custom Projection in the GeoTIFF keys,
  * this will never actually get called anyways.
@@ -53,7 +52,33 @@ export default function App() {
     () => new Set(ALL_NLCD_CODES),
   );
   const [device, setDevice] = useState<Device | null>(null);
-  const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
+  const [source, setSource] = useState<COGSource | null>(null);
+  const geotiff = source?.geotiff ?? null;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    COGSource.open(COG_URL, { epsgResolver, signal: controller.signal })
+      .then((opened) => {
+        setSource(opened);
+        const { west, south, east, north } = opened.geographicBounds;
+        mapRef.current?.fitBounds(
+          [
+            [west, south],
+            [east, north],
+          ],
+          {
+            padding: 40,
+            duration: 1000,
+          },
+        );
+      })
+      .catch((err: unknown) => {
+        if (!controller.signal.aborted) {
+          console.error(err);
+        }
+      });
+    return () => controller.abort();
+  }, []);
 
   const colormapTexture = useMemo(() => {
     if (!device || !geotiff) {
@@ -97,28 +122,13 @@ export default function App() {
 
   const cog_layer = new COGLayer({
     id: "cog-layer",
-    geotiff: COG_URL,
+    source: source ?? undefined,
     debug,
     debugOpacity,
     maxError: meshMaxError,
-    epsgResolver,
     getTileData,
     renderTile,
     onTileUnload: (tile) => tile.content?.texture.destroy(),
-    onGeoTIFFLoad: (tiff, options) => {
-      setGeotiff(tiff);
-      const { west, south, east, north } = options.geographicBounds;
-      mapRef.current?.fitBounds(
-        [
-          [west, south],
-          [east, north],
-        ],
-        {
-          padding: 40,
-          duration: 1000,
-        },
-      );
-    },
     // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
     // doesn't know about it.
     beforeId: "aeroway-runway",
