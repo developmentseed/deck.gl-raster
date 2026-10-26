@@ -415,19 +415,19 @@ export default function App() {
   if (stacItems.length > 0 && colormapTexture) {
     const mosaicLayer = new MosaicLayer<PartialSTACItem, COGSource>({
       id: "naip-mosaic-layer",
-      sources: stacItems,
+      data: stacItems,
       // For each source, fetch the opened COGSource from a module-level cache
       // (see `geotiffCache` above). The cache is intentionally separate from
       // the MosaicLayer's TileLayer cache so we can keep cheap header metadata
       // around indefinitely without pinning every parent tile (and its inner
       // COGLayer's in-flight tile requests) in memory.
-      getSource: async (source, opts) =>
-        getCachedGeoTIFF(source.assets.image.href, opts),
-      renderSource: (source, { data, signal }) => {
-        const url = source.assets.image.href;
+      getSource: async (item, opts) =>
+        getCachedGeoTIFF(item.assets.image.href, opts),
+      renderSource: (item, { source, signal }) => {
+        const url = item.assets.image.href;
         return new COGLayer<TextureDataT>({
           id: `cog-${url}`,
-          source: data,
+          source,
           getTileData,
           renderTile:
             renderMode === "trueColor"
