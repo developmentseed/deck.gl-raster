@@ -183,16 +183,23 @@ const defaultProps: DefaultProps<RasterTileLayerProps> = {
   zRange: { type: "array", value: null, optional: true, compare: true },
 };
 
-/** A number for each tile grid descriptor, which names its inner TileLayer. */
-const descriptorIds = new WeakMap<RasterTilesetDescriptor, number>();
-let nextDescriptorId = 0;
+/** The numbers {@link objectId} has handed out, by object. */
+const objectIds = new WeakMap<object, number>();
+let nextObjectId = 0;
 
-/** The number of `descriptor`, the same for as long as the object lives. */
-function descriptorId(descriptor: RasterTilesetDescriptor): number {
-  let id = descriptorIds.get(descriptor);
+/**
+ * A number that identifies `object` for as long as it lives, like Python's
+ * `id()`.
+ *
+ * JavaScript doesn't expose an object's identity as a value, so this hands out
+ * a number the first time it sees an object, and keeps it in a WeakMap, which
+ * doesn't keep the object alive.
+ */
+function objectId(object: object): number {
+  let id = objectIds.get(object);
   if (id === undefined) {
-    id = nextDescriptorId++;
-    descriptorIds.set(descriptor, id);
+    id = nextObjectId++;
+    objectIds.set(object, id);
   }
   return id;
 }
@@ -508,7 +515,7 @@ export class RasterTileLayer<
     return new TileLayer<DataT>({
       // A TileLayer builds its tile grid once, from its first descriptor, so a
       // new descriptor needs a new TileLayer
-      id: `raster-tile-layer-${this.id}-${descriptorId(descriptor)}`,
+      id: `raster-tile-layer-${this.id}-${objectId(descriptor)}`,
       TilesetClass: TilesetFactory,
       getTileData: (tile) => this._wrapGetTileData(tile, getTileData),
       renderSubLayers: (props) =>
