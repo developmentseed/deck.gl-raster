@@ -352,14 +352,20 @@ describe("COGLayer source", () => {
     expect(next.renderLayers()).toBeNull();
   });
 
-  it("throws from updateState for a source the default pipeline can't draw", async () => {
+  it("reports a source the default pipeline can't draw through onError", async () => {
     const source = await openFixture(
       "float32_1band_deflate_block64_predictor3",
     );
-    const layer = makeBareLayer({ source });
+    const onError = vi.fn((_error: Error) => true);
+    const layer = makeBareLayer({ source, onError });
 
-    // deck.gl's LayerManager reports this through `onError`
-    expect(() => runInitialUpdate(layer)).toThrow(/non-unsigned integers/);
+    runInitialUpdate(layer);
+
+    expect(onError.mock.calls.map(([error]) => error.message)).toEqual([
+      expect.stringMatching(
+        /^Can't draw the source in COGLayer: .*non-unsigned integers/,
+      ),
+    ]);
   });
 
   it("draws nothing, not the old source, after switching to a source the default pipeline can't draw", async () => {
@@ -367,12 +373,11 @@ describe("COGLayer source", () => {
     const undrawable = await openFixture(
       "float32_1band_deflate_block64_predictor3",
     );
-    const layer = makeBareLayer({ source: drawable });
+    const onError = vi.fn((_error: Error) => true);
+    const layer = makeBareLayer({ source: drawable, onError });
     runInitialUpdate(layer);
 
-    expect(() => rerender(layer, { source: undrawable })).toThrow(
-      /non-unsigned integers/,
-    );
+    rerender(layer, { source: undrawable, onError });
 
     // Every instance shares this state
     expect(layer.state.source).toBeUndefined();

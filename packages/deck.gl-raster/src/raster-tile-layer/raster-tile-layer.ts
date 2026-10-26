@@ -300,15 +300,15 @@ export class RasterTileLayer<
    * deck.gl's `shouldUpdateState`.
    *
    * By default, the layer loads when `source` changes to input it has to open,
-   * such as a URL. An opened {@link RasterSource} needs no loading. Subclasses
-   * that load other metadata return `true` when a prop it depends on has
-   * changed.
+   * such as a URL. An opened {@link RasterSource} needs no loading, and
+   * neither does `undefined` or `null`, which draw nothing. Subclasses that
+   * load other metadata return `true` when a prop it depends on has changed.
    */
   shouldLoadMetadata({ props, oldProps }: UpdateParameters<this>): boolean {
     const { source } = props as SourceProps;
     return (
       source !== (oldProps as SourceProps).source &&
-      source !== undefined &&
+      source != null &&
       !(source instanceof RasterSource)
     );
   }
@@ -371,9 +371,22 @@ export class RasterTileLayer<
     // Clear the old source first, so that if `_sourceState` throws for the new
     // one, the layer draws nothing rather than the old source
     this.setState({ source: undefined });
-    if (source) {
-      this.setState({ ...this._sourceState(source), source });
+    if (!source) {
+      return;
     }
+
+    let sourceState: object;
+    try {
+      sourceState = this._sourceState(source);
+    } catch (error) {
+      // Report the error rather than throw it: after a throw from
+      // `updateState`, deck.gl skips `renderLayers` and keeps drawing the old
+      // source's sublayers
+      const { layerName } = this.constructor as typeof RasterTileLayer;
+      this.raiseError(error as Error, `Can't draw the source in ${layerName}`);
+      return;
+    }
+    this.setState({ ...sourceState, source });
   }
 
   /**

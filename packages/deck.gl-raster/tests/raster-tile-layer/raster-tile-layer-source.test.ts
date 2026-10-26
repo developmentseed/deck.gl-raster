@@ -1,3 +1,5 @@
+import { CompositeLayer, LayerManager } from "@deck.gl/core";
+import type { Device } from "@luma.gl/core";
 import { describe, expect, it, vi } from "vitest";
 import { RasterSource } from "../../src/raster-source.js";
 import { RasterTileLayer } from "../../src/raster-tile-layer/index.js";
@@ -267,31 +269,22 @@ describe("RasterTileLayer source", () => {
     expect(layer.state.drawn).toBe("a");
   });
 
-  it("draws nothing, not the old source, when _sourceState throws for a new source", () => {
+  it("treats a null source as no source", async () => {
+    const opens: Open[] = [];
+    const onError = vi.fn();
     const layer = makeBareLayer(SourceTestLayer, {
       source: new TestSource("a"),
-      opens: [],
+      onError,
+      opens,
     });
     runInitialUpdate(layer);
 
-    expect(() =>
-      rerender(layer, { source: new TestSource("undrawable"), opens: [] }),
-    ).toThrow(/can't draw undrawable/);
+    const next = rerender(layer, { source: null, onError, opens });
+    await flush();
 
-    // Every instance shares this state
-    expect(layer.state.source).toBeUndefined();
-  });
-
-  it("aborts the open in flight even when _sourceState throws for the source that replaced it", () => {
-    const opens: Open[] = [];
-    const layer = makeBareLayer(SourceTestLayer, { source: "a.tif", opens });
-    runInitialUpdate(layer);
-
-    expect(() =>
-      rerender(layer, { source: new TestSource("undrawable"), opens }),
-    ).toThrow(/can't draw undrawable/);
-
-    expect(opens[0]!.signal.aborted).toBe(true);
+    expect(next.state.source).toBeUndefined();
+    expect(opens).toEqual([]);
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it("reports a _sourceState error for a source it opened through onError", async () => {
@@ -308,7 +301,7 @@ describe("RasterTileLayer source", () => {
     await flush();
 
     expect(onError.mock.calls.map(([error]) => error.message)).toEqual([
-      "Metadata loading failed in SourceTestLayer: can't draw undrawable",
+      "Can't draw the source in SourceTestLayer: can't draw undrawable",
     ]);
     expect(layer.state.source).toBeUndefined();
   });
@@ -325,6 +318,60 @@ describe("RasterTileLayer source", () => {
 
     expect(onError.mock.calls.map(([error]) => error.message)).toEqual([
       "Metadata loading failed in PlainLayer: PlainLayer can't open a source",
+    ]);
+  });
+});
+
+/** Stands in for the inner TileLayer that draws a source's tiles. */
+class TilesMarker extends CompositeLayer {
+  static override layerName = "TilesMarker";
+
+  override renderLayers() {
+    return null;
+  }
+}
+
+/**
+ * {@link SourceTestLayer} with a sublayer for the source it draws, as
+ * `RasterTileLayer` has an inner TileLayer for its tile grid, and none without
+ * a source.
+ */
+class SublayerTestLayer extends SourceTestLayer {
+  static override layerName = "SublayerTestLayer";
+
+  override renderLayers() {
+    const source = this.state.source as TestSource | undefined;
+    return source ? new TilesMarker({ id: `tiles-${source.name}` }) : null;
+  }
+}
+
+describe("RasterTileLayer source in deck.gl's LayerManager", () => {
+  it("stops drawing the old source when _sourceState throws for a new one", () => {
+    // deck.gl ignores errors thrown in `updateState` when there is no device.
+    // No layer here draws anything, so a stub is enough.
+    const device = {} as Device;
+    const layerManager = new LayerManager(device, {});
+    const onError = vi.fn((_error: Error) => true);
+    const props = { id: "test", opens: [], onError };
+    const drawn = () => layerManager.getLayers().map((layer) => layer.id);
+
+    layerManager.setLayers([
+      new SublayerTestLayer({ ...props, source: new TestSource("a") } as never),
+    ]);
+    const before = drawn();
+    layerManager.setLayers([
+      new SublayerTestLayer({
+        ...props,
+        source: new TestSource("undrawable"),
+      } as never),
+    ]);
+    const after = drawn();
+    layerManager.finalize();
+
+    expect(before).toEqual(["test", "tiles-a"]);
+    expect(after).toEqual(["test"]);
+    expect(onError.mock.calls.map(([error]) => error.message)).toEqual([
+      "Can't draw the source in SublayerTestLayer: can't draw undrawable",
     ]);
   });
 });

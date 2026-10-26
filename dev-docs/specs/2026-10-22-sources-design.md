@@ -174,7 +174,10 @@ These were settled on 2026-10-26, for stage 4:
     - It keeps the source in `state.source`, and takes the tile grid from it.
     - A layer's `_sourceState(source)` returns more state to keep with a
       source, such as COGLayer's default pipeline. If it throws, the layer
-      draws nothing rather than the old source.
+      reports the error through `onError` and draws nothing rather than the
+      old source. The error doesn't escape `updateState`: deck.gl then skips
+      `renderLayers`, which kept the old source drawn after 2a.
+    - `undefined` and `null` both mean no source.
 20. **Each layer declares its own `source` and `onSourceLoad`** (answers
     question 6). Each layer's `source` takes its own inputs, so
     `RasterTileLayer` reads the two props without declaring them.
