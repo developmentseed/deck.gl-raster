@@ -99,6 +99,7 @@ describe("checkSameScene", () => {
 describe("MultiCOGSource.open", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("opens the files of one scene and groups their tile grids", async () => {
@@ -167,9 +168,11 @@ describe("MultiCOGSource.open", () => {
     });
   });
 
-  it("keeps an abort an AbortError", async () => {
+  it("keeps an abort during a header read an AbortError", async () => {
     const controller = new AbortController();
-    vi.spyOn(GeoTIFF, "fromUrl").mockImplementation(async () => {
+    // Abort while the header read is in flight, through the real transport,
+    // which wraps a failed fetch in its own error
+    vi.stubGlobal("fetch", async () => {
       controller.abort();
       throw controller.signal.reason;
     });
@@ -180,7 +183,7 @@ describe("MultiCOGSource.open", () => {
     );
 
     await expect(opening).rejects.toMatchObject({ name: "AbortError" });
-    await expect(opening).rejects.not.toThrow(/Failed to open/);
+    await expect(opening).rejects.not.toThrow(/Failed to/);
   });
 
   it("opens URLs through the shared limiter by default", async () => {
