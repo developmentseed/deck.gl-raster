@@ -53,27 +53,18 @@ export default function App() {
   );
   const [device, setDevice] = useState<Device | null>(null);
   const [source, setSource] = useState<COGSource | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
   const geotiff = source?.geotiff ?? null;
 
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
       try {
-        const opened = await COGSource.open(COG_URL, {
-          epsgResolver,
-          signal: controller.signal,
-        });
-        setSource(opened);
-        const { west, south, east, north } = opened.geographicBounds;
-        mapRef.current?.fitBounds(
-          [
-            [west, south],
-            [east, north],
-          ],
-          {
-            padding: 40,
-            duration: 1000,
-          },
+        setSource(
+          await COGSource.open(COG_URL, {
+            epsgResolver,
+            signal: controller.signal,
+          }),
         );
       } catch (err) {
         if (!controller.signal.aborted) {
@@ -83,6 +74,24 @@ export default function App() {
     })();
     return () => controller.abort();
   }, []);
+
+  // The COG can open before the map exists, so fit once both have loaded
+  useEffect(() => {
+    if (!source || !mapLoaded) {
+      return;
+    }
+    const { west, south, east, north } = source.geographicBounds;
+    mapRef.current?.fitBounds(
+      [
+        [west, south],
+        [east, north],
+      ],
+      {
+        padding: 40,
+        duration: 1000,
+      },
+    );
+  }, [source, mapLoaded]);
 
   const colormapTexture = useMemo(() => {
     if (!device || !geotiff) {
@@ -144,6 +153,7 @@ export default function App() {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
         ref={mapRef}
+        onLoad={() => setMapLoaded(true)}
         initialViewState={{
           longitude: 0,
           latitude: 0,
