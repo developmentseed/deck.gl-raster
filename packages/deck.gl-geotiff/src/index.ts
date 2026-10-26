@@ -3,6 +3,8 @@ export type {
   GetTileDataOptions,
 } from "./cog-layer.js";
 export { COGLayer } from "./cog-layer.js";
+export type { COGInput, COGSourceOptions } from "./cog-source.js";
+export { COGSource } from "./cog-source.js";
 export { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 export { addAlphaChannel } from "./geotiff/geotiff.js";
 export type { TextureDataT } from "./geotiff/render-pipeline.js";
