@@ -197,14 +197,10 @@ These were settled on 2026-10-26, for stage 2:
 
 ### `COGSource`
 
-A sketch. Stage 2a built the one-file case with these names. 2b decides how a
-record's files are exposed, e.g. as `files: ReadonlyMap<string, GeoTIFF>`, and
-how its tile grid is grouped, possibly in a separate `MultiCOGSource` class
-(question 8).
+As built, with these names: a `COGSource` for one file (2a), and a
+`MultiCOGSource` for the files of one scene (2b, question 8).
 
 ```ts
-/** One COG, or several COGs that are the bands of one scene (2b). */
-type COGSourceInput = COGInput | Record<string, COGInput>;
 type COGInput = string | URL | ArrayBuffer | GeoTIFF;
 
 type COGSourceOptions = {
@@ -219,7 +215,7 @@ type COGSourceOptions = {
 };
 
 class COGSource extends RasterSource {
-  static open(input: COGSourceInput, options?: COGSourceOptions): Promise<COGSource>;
+  static open(input: COGInput, options?: COGSourceOptions): Promise<COGSource>;
 
   /** The opened file. */
   readonly geotiff: GeoTIFF;
@@ -230,6 +226,19 @@ class COGSource extends RasterSource {
   readonly geographicBounds: GeographicBounds;
   /** The tile grid: the file's pyramid. */
   readonly tilesetDescriptor: RasterTilesetDescriptor;
+}
+
+/** The files of one scene, by name (2b). */
+class MultiCOGSource extends RasterSource {
+  static open(inputs: Record<string, COGInput>, options?: COGSourceOptions): Promise<MultiCOGSource>;
+
+  /** The opened files, by name, in the order given. */
+  readonly geotiffs: ReadonlyMap<string, GeoTIFF>;
+  /** The CRS that every file shares, resolved once. */
+  readonly projection: ProjectionDefinition;
+  /** Every file's tile grid, with the finest file's grid as primary. */
+  readonly multiTilesetDescriptor: MultiRasterTilesetDescriptor;
+  // From RasterSource: the primary's tile grid and geographic bounds
 }
 ```
 
@@ -247,28 +256,35 @@ names the file. On the source path no load happens inside a layer, so the app
 handles these rejections. (On the shorthand path the layer still reports them
 through `onError`, as today.)
 
-**A bare input versus a record (proposal).** A bare input is one file, rendered
-by today's COGLayer pipeline. A record input means bands addressed by name,
-rendered by band compositing (`composite` refers to the record's keys), even if
-it has only one entry. The input's shape states the intent, so the file count
-never decides how something renders.
+**A bare input versus a record.** A bare input is one file, opened as a
+`COGSource` and rendered by today's COGLayer pipeline. A record means bands
+addressed by name, opened as a `MultiCOGSource` and rendered by band
+compositing (`composite` refers to the record's keys), even if it has only one
+entry. The class states the intent, so the file count never decides how
+something renders.
 
 ### The files of one scene
 
-For a record input, `open()` checks the files after opening them, and rejects
-with an error naming the files and the mismatch.
+`MultiCOGSource.open` checks the files after opening them, before resolving
+their CRS. It compares each file with the first one, and rejects with an error
+naming both files and the mismatch. These rules are as built in 2b.
 
-- **Same CRS:** the `crs` values must be identical. *Proposal:* compare the
-  values strictly in v1, since the files of one product carry the same
-  encoding.
-- **Same extent:** each file's bbox must be within one pixel of the coarser
-  file on every edge. *Proposal:* this answers #723's open question. Bands at
-  different resolutions may not end on exactly the same edge, but one coarse
-  pixel covers that. Sentinel-2's 10, 20 and 60 m bands of one tile share an
-  extent exactly. A larger difference usually means the files are a mosaic, not
-  one scene.
+- **Same CRS:** the `crs` values must be identical: EPSG codes by number, and
+  WKT and PROJJSON by value. The comparison is strict, since the files of one
+  product carry the same encoding, so a CRS given as an EPSG code in one file
+  and as WKT in another is rejected.
+- **Same extent:** each bounding box edge must be within one pixel of the
+  coarser of the two files. A pixel's size is the longer side of a pixel in the
+  file's transform. This answers #723's open question.
+  - Bands at different resolutions may not end on exactly the same edge, but
+    one coarse pixel covers that. Sentinel-2's 10, 20 and 60 m bands of one
+    tile share an extent exactly.
+  - A larger difference usually means the files are a mosaic, not one scene.
 - **Resolution:** no constraint. The secondary-level selection already handles
   any ratio.
+- **A file that fails to open** is named: `Failed to open "nir" (<url>):
+  <reason>`, with the original error as its `cause`. An abort stays a plain
+  `AbortError`.
 
 ### Layers
 
@@ -361,9 +377,10 @@ new MosaicLayer({
   *Proposal:* sources expose an approximate `byteLength`, mostly the header byte
   cache, so `maxCacheByteSize` can bound them. Verify that MosaicLayer's tileset
   counts it.
-- A scene stored as one file per band is a record input:
-  `getSource: (item) => COGSource.open({ red: ..., nir: ... })`. That's the
-  Sentinel-2 mosaic, once COGLayer renders record sources (stage 5).
+- A scene stored as one file per band is a record:
+  `getSource: (item) => MultiCOGSource.open({ red: ..., nir: ... })`. That's
+  the Sentinel-2 mosaic, drawn by MultiCOGLayer, or by COGLayer once it renders
+  multi-file sources (stage 5).
 
 ### Sharing
 
@@ -396,10 +413,10 @@ new MosaicLayer({
 | Today | With sources |
 | --- | --- |
 | `COGLayer({ geotiff })` | `COGLayer({ source })`: `source` takes the same inputs, or a `COGSource` from `COGSource.open(input)` (decision 6). |
-| `epsgResolver` on COGLayer, MultiCOGLayer, ZarrLayer | `open()` option. Removed from COGLayer in 2a. |
-| `concurrencyLimiter` on COGLayer, MultiCOGLayer | `open()` option, removed from COGLayer in 2a. MosaicLayer keeps its prop and forwards it to `getSource`. |
-| `onGeoTIFFLoad` | `onSourceLoad(source)` on the shorthand path (COGLayer in 2a). With a `source` prop, read `source.geographicBounds` before creating the layer. |
-| `MultiCOGLayer({ sources: { red: { url } } })` | `COGSource.open({ red: url })`. MultiCOGLayer renders it until stage 5, then COGLayer does. |
+| `epsgResolver` on COGLayer, MultiCOGLayer, ZarrLayer | `open()` option. Removed from COGLayer in 2a and from MultiCOGLayer in 2b. |
+| `concurrencyLimiter` on COGLayer, MultiCOGLayer | `open()` option, removed from COGLayer in 2a and from MultiCOGLayer in 2b. MosaicLayer keeps its prop and forwards it to `getSource`. |
+| `onGeoTIFFLoad` | `onSourceLoad(source)` on the shorthand path (COGLayer in 2a, MultiCOGLayer in 2b). With a `source` prop, read `source.geographicBounds` before creating the layer. |
+| `MultiCOGLayer({ sources: { red: { url } } })` | `MultiCOGLayer({ source: { red: url } })`, or a `source` from `MultiCOGSource.open({ red: url })` (2b). MultiCOGLayer draws it until stage 5, then COGLayer does. |
 | `MultiCOGSourceConfig` | Removed. A record of inputs replaces it. |
 | `ZarrLayer({ node, variable, metadata })` | `ZarrSource.open(node, { variable, metadata })` |
 | `updateTriggers: { renderTile: [selection] }` on ZarrLayer | Not needed (proposal) |
@@ -448,10 +465,13 @@ Each stage is one PR.
        sets `loadingMetadata`. Two layers sharing one source don't open it
        again. A new source gets a new inner TileLayer.
    - **2b: several files per source.**
-     - Record inputs, with the checks above (#723). Failures name the file.
-     - A `source` prop on MultiCOGLayer, which takes sources from a record
-       until stage 5. Its existing props become the shorthand path, and its
-       `onGeoTIFFLoad` becomes `onSourceLoad`.
+     - `MultiCOGSource.open(record, options)`, with the checks above (#723).
+       Failures name the file.
+     - MultiCOGLayer's `source` prop takes an opened `MultiCOGSource`, or a
+       record of COGs to open (the shorthand), until stage 5. `sources` and
+       its `{ url }` wrapper are removed, its `epsgResolver` and
+       `concurrencyLimiter` move to `open()`, and `onGeoTIFFLoad` becomes
+       `onSourceLoad`.
      - Tests: mismatched CRS and extents are rejected, and Sentinel-2-like
        10/20/60 m bands pass.
 3. **MosaicLayer docs and examples.**
@@ -506,15 +526,15 @@ Each stage is one PR.
    load a STAC search result, and `isLoaded` waits for it.
 8. **One class or two for files of one scene.** A separate `MultiCOGSource`
    would keep `COGSource.geotiff` a single `GeoTIFF`, rather than one class
-   whose fields depend on its input. Leaning toward two classes; *decide at
-   2b.*
+   whose fields depend on its input. *Decided (2026-10-26):* two classes.
+   `MultiCOGSource` opens a record of files, and `COGSource` stays one file.
 
 ## Left to the implementer
 
 - **Names and types:**
-  - `tilesetDescriptor` and `geotiff` are settled for one file (2a). For
-    several files, the class split and how a record's files are exposed
-    (question 8).
+  - Settled: `tilesetDescriptor` and `geotiff` for one file (2a);
+    `MultiCOGSource`, `geotiffs` and `multiTilesetDescriptor` for several
+    (2b).
 - **Code organization:** file layout, error wording, and sharing helpers
   between the COG and Zarr `open()` code.
 - **Input normalization:** where it happens. Today's `fetchGeoTIFF` already
