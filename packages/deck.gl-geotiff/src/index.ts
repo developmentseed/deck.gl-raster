@@ -17,3 +17,4 @@ export type {
   MultiCOGSourceConfig,
 } from "./multi-cog-layer.js";
 export { MultiCOGLayer } from "./multi-cog-layer.js";
+export { MultiCOGSource } from "./multi-cog-source.js";
