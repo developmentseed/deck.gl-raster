@@ -303,6 +303,33 @@ export class RasterTileLayer<
   }
 
   /**
+   * Abort the metadata load in flight, if any, for a layer whose metadata no
+   * longer needs loading, such as one given an opened source.
+   *
+   * As with a load that a newer one replaces, the aborted load's result and
+   * errors are dropped.
+   */
+  protected _abortMetadataLoad(): void {
+    this.state.metadataAbortController?.abort();
+    // Setting state redraws the layer, so skip it when nothing was loading
+    if (this.state.loadingMetadata) {
+      this.setState({ loadingMetadata: false });
+    }
+  }
+
+  /**
+   * The id of the inner TileLayer.
+   *
+   * deck.gl's TileLayer builds its tile grid once, from the first descriptor
+   * it gets. A subclass whose descriptor can change while the layer keeps
+   * rendering returns a new id for each descriptor, so that deck.gl replaces
+   * the TileLayer and its tile cache.
+   */
+  protected _tileLayerId(): string {
+    return `raster-tile-layer-${this.id}`;
+  }
+
+  /**
    * The currently effective {@link RasterTilesetDescriptor}.
    *
    * Subclasses override this to return a descriptor built from their own
@@ -474,7 +501,7 @@ export class RasterTileLayer<
     } = this.props;
 
     return new TileLayer<DataT>({
-      id: `raster-tile-layer-${this.id}`,
+      id: this._tileLayerId(),
       TilesetClass: TilesetFactory,
       getTileData: (tile) => this._wrapGetTileData(tile, getTileData),
       renderSubLayers: (props) =>

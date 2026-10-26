@@ -16,6 +16,11 @@ export {
 export type { RasterLayerProps, RenderTileResult } from "./raster-layer.js";
 export { RasterLayer } from "./raster-layer.js";
 export type {
+  GeographicBounds,
+  RasterSourceLayerProps,
+} from "./raster-source.js";
+export { RasterSource } from "./raster-source.js";
+export type {
   GetTileDataOptions,
   MinimalTileData,
   RasterTileLayerProps,

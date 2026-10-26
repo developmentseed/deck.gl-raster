@@ -368,4 +368,59 @@ describe("RasterTileLayer.loadMetadata", () => {
 
     expect(loads.map((load) => load.signal.aborted)).toEqual([true, false]);
   });
+
+  it("abortMetadataLoad aborts the load in flight and stops loading", async () => {
+    const onError = vi.fn();
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads, onError });
+    runInitialUpdate(layer);
+
+    (layer as unknown as { _abortMetadataLoad(): void })._abortMetadataLoad();
+    loads[0]!.reject(new Error("late"));
+    await flush();
+
+    expect(loads[0]!.signal.aborted).toBe(true);
+    expect(layer.state.loadingMetadata).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("abortMetadataLoad sets no state when no load is in flight", () => {
+    const layer = makeBareLayer({ input: undefined, loads: [] });
+    const setState = vi.spyOn(layer, "setState");
+
+    (layer as unknown as { _abortMetadataLoad(): void })._abortMetadataLoad();
+
+    expect(setState).not.toHaveBeenCalled();
+  });
+});
+
+describe("RasterTileLayer inner TileLayer id", () => {
+  /** The id of the inner TileLayer that `renderLayers` returns. */
+  function innerTileLayerId(layer: RasterTileLayer): string | undefined {
+    Object.assign(layer as object, { context: { device: {} } });
+    return (layer.renderLayers() as { id: string } | null)?.id;
+  }
+
+  const props = {
+    id: "t",
+    tilesetDescriptor: {} as RasterTileLayerProps["tilesetDescriptor"],
+    getTileData: vi.fn(),
+    renderTile: vi.fn(),
+  };
+
+  it("names it after the layer by default", () => {
+    expect(innerTileLayerId(new RasterTileLayer(props))).toBe(
+      "raster-tile-layer-t",
+    );
+  });
+
+  it("names it with _tileLayerId", () => {
+    class CustomIdLayer extends RasterTileLayer {
+      protected override _tileLayerId(): string {
+        return "custom";
+      }
+    }
+
+    expect(innerTileLayerId(new CustomIdLayer(props))).toBe("custom");
+  });
 });
