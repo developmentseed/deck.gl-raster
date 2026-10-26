@@ -16,11 +16,11 @@ import { TileLayer } from "@deck.gl/geo-layers";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
 import { nearestCopy, unwrapBbox } from "@developmentseed/proj";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
-import type { MosaicSource, SourceIndex } from "./mosaic-tileset-2d.js";
-import { buildSourceIndex, MosaicTileset2D } from "./mosaic-tileset-2d.js";
+import type { ItemIndex, MosaicItem } from "./mosaic-tileset-2d.js";
+import { buildItemIndex, MosaicTileset2D } from "./mosaic-tileset-2d.js";
 
 export type MosaicLayerProps<
-  MosaicT extends MosaicSource = MosaicSource,
+  ItemT extends MosaicItem = MosaicItem,
   DataT = any,
 > = CompositeLayerProps &
   Pick<
@@ -39,7 +39,7 @@ export type MosaicLayerProps<
      *
      * Tile cache reuse depends on stable tile IDs. By default, each source's
      * tile ID is derived from its position in this array (see
-     * `MosaicSource.id`), so:
+     * `MosaicItem.id`), so:
      *
      * - Appending items preserves all existing rendered tiles.
      * - Reordering or removing items from the middle of the array invalidates
@@ -48,7 +48,7 @@ export type MosaicLayerProps<
      * Supply an explicit `id` per source if you need cache stability across
      * arbitrary mutations of `sources`.
      */
-    sources: MosaicT[];
+    sources: ItemT[];
 
     /**
      * Only load and render sources whose `bbox` overlaps this bounding box,
@@ -73,7 +73,7 @@ export type MosaicLayerProps<
 
     /** Fetch data for this source. */
     getSource?: (
-      source: MosaicT,
+      source: ItemT,
       opts: {
         signal?: AbortSignal;
         /**
@@ -95,7 +95,7 @@ export type MosaicLayerProps<
 
     /** Render a source */
     renderSource: (
-      source: MosaicT,
+      source: ItemT,
       opts: {
         data?: DataT;
         signal?: AbortSignal;
@@ -107,25 +107,23 @@ export type MosaicLayerProps<
      * value returned by `getSource`, or `undefined` when no `getSource` was
      * supplied.
      */
-    onSourceLoad?: (source: MosaicT, info: { data?: DataT }) => void;
+    onSourceLoad?: (source: ItemT, info: { data?: DataT }) => void;
 
     /**
      * Called when fetching a source's data fails.
      */
-    onSourceError?: (source: MosaicT, info: { error: Error }) => void;
+    onSourceError?: (source: ItemT, info: { error: Error }) => void;
 
     /**
      * Called when a source is evicted from the tile cache.
      */
-    onSourceUnload?: (source: MosaicT, info: { data?: DataT }) => void;
+    onSourceUnload?: (source: ItemT, info: { data?: DataT }) => void;
 
     /**
      * Called when all sources currently in the viewport have finished
      * loading.
      */
-    onViewportLoad?: (
-      entries: Array<{ source: MosaicT; data?: DataT }>,
-    ) => void;
+    onViewportLoad?: (entries: Array<{ source: ItemT; data?: DataT }>) => void;
   };
 
 const defaultProps: Partial<MosaicLayerProps> = {
@@ -180,17 +178,17 @@ function createGetPriorityCallback(
  * viewport.
  */
 export class MosaicLayer<
-  MosaicT extends MosaicSource = MosaicSource,
+  ItemT extends MosaicItem = MosaicItem,
   DataT = any,
-> extends CompositeLayer<MosaicLayerProps<MosaicT, DataT>> {
+> extends CompositeLayer<MosaicLayerProps<ItemT, DataT>> {
   static override layerName = "MosaicLayer";
   static override defaultProps = defaultProps;
 
   declare state: {
-    // The index can be null if sources are empty
-    index: SourceIndex | null;
-    // The sources the index was built from
-    sources: MosaicT[];
+    // The index can be null if there are no items
+    index: ItemIndex | null;
+    // The items the index was built from
+    items: ItemT[];
   };
 
   override initializeState(context: LayerContext): void {
@@ -210,11 +208,11 @@ export class MosaicLayer<
 
   private _buildSpatialIndex(): void {
     const { sources } = this.props;
-    this.setState({ index: buildSourceIndex(sources), sources });
+    this.setState({ index: buildItemIndex(sources), items: sources });
   }
 
   renderTileLayer(
-    renderSource: MosaicLayerProps<MosaicT, DataT>["renderSource"],
+    renderSource: MosaicLayerProps<ItemT, DataT>["renderSource"],
   ): TileLayer {
     const {
       id,
@@ -236,16 +234,16 @@ export class MosaicLayer<
     // render, and deck.gl hands it the same `state` object, but `this.props`
     // here stays the first instance's props. So both closures read
     // `this.state`.
-    const getSources = () => this.state.sources;
+    const getItems = () => this.state.items;
     const getIndex = () => this.state.index;
-    class MosaicTileset2DFactory extends MosaicTileset2D<MosaicT> {
+    class MosaicTileset2DFactory extends MosaicTileset2D<ItemT> {
       constructor(opts: any) {
-        super(getSources, getIndex, opts);
+        super(getItems, getIndex, opts);
       }
     }
 
     return new TileLayer<{
-      source: MosaicT;
+      source: ItemT;
       data?: DataT;
       signal?: AbortSignal;
     }>({
@@ -261,9 +259,9 @@ export class MosaicLayer<
       }),
       getTileData: async (data) => {
         // We hard-cast this because TilesetClass is not generic.
-        // MosaicTileset2D returns MosaicT in `index`, but TileLayer's typing
+        // MosaicTileset2D returns ItemT in `index`, but TileLayer's typing
         // exposes only the plain `TileIndex` here.
-        const index = data.index as unknown as MosaicT;
+        const index = data.index as unknown as ItemT;
         const { signal } = data;
         const getPriority = createGetPriorityCallback(
           index.bbox,
@@ -290,10 +288,10 @@ export class MosaicLayer<
       },
       ...(onSourceLoad && {
         onTileLoad: (tile) => {
-          // `tile.index` is a `ResolvedSource<MosaicT>` from
+          // `tile.index` is a `ResolvedItem<ItemT>` from
           // MosaicTileset2D.getTileIndices, which structurally extends
-          // MosaicT.
-          const source = tile.index as unknown as MosaicT;
+          // ItemT.
+          const source = tile.index as unknown as ItemT;
           onSourceLoad(source, { data: tile.content?.data });
         },
       }),
@@ -302,13 +300,13 @@ export class MosaicLayer<
           if (!tile) {
             return;
           }
-          const source = tile.index as unknown as MosaicT;
+          const source = tile.index as unknown as ItemT;
           onSourceError(source, { error });
         },
       }),
       ...(onSourceUnload && {
         onTileUnload: (tile) => {
-          const source = tile.index as unknown as MosaicT;
+          const source = tile.index as unknown as ItemT;
           onSourceUnload(source, { data: tile.content?.data });
         },
       }),
@@ -316,7 +314,7 @@ export class MosaicLayer<
         onViewportLoad: (tiles) => {
           onViewportLoad(
             tiles.map((tile) => ({
-              source: tile.index as unknown as MosaicT,
+              source: tile.index as unknown as ItemT,
               data: tile.content?.data,
             })),
           );

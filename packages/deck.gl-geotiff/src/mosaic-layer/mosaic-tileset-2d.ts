@@ -19,17 +19,16 @@ export type TileIndex = { x: number; y: number; z: number };
 /**
  * Minimal required interface of a mosaic item.
  */
-export type MosaicSource = {
+export type MosaicItem = {
   /**
-   * Optional stable identifier used as this source's tile-cache key in the
-   * inner Tileset2D. Defaults to the source's position in the `sources`
-   * array. Supply an explicit value when the sources list is reordered or
-   * spliced at runtime, so a given source keeps the same cache slot across
-   * updates.
+   * Optional stable identifier used as this item's tile-cache key in the
+   * inner Tileset2D. Defaults to the item's position in the mosaic's list of
+   * items. Supply an explicit value when the list is reordered or spliced at
+   * runtime, so a given item keeps the same cache slot across updates.
    */
   id?: string;
   /**
-   * Geographic bounds (WGS84) of the source in [minX, minY, maxX, maxY] format.
+   * Geographic bounds (WGS84) of the item in [minX, minY, maxX, maxY] format.
    *
    * A bbox across the antimeridian may be written with `minX > maxX`, as
    * GeoJSON (RFC 7946 section 5.2) and STAC do.
@@ -38,17 +37,22 @@ export type MosaicSource = {
 };
 
 /**
- * The spatial index of a mosaic's sources.
+ * The spatial index of a mosaic's items.
  *
- * A source whose bbox crosses the antimeridian is indexed as two boxes, one on
- * each side, so `boxToSource` maps each box back to its source.
+ * An item whose bbox crosses the antimeridian is indexed as two boxes, one on
+ * each side, so `boxToItem` maps each box back to its item.
  */
-export type SourceIndex = {
-  /** Flatbush index of the sources' boxes. */
+export type ItemIndex = {
+  /** Flatbush index of the items' boxes. */
   boxes: Flatbush;
-  /** For each box in `boxes`, the position of its source in `sources`. */
-  boxToSource: Uint32Array;
+  /** For each box in `boxes`, the position of its item in the list of items. */
+  boxToItem: Uint32Array;
 };
+
+/** An item augmented with the `TileIndex` fields and a resolved `id`
+ * (defaulting to the array position) so deck.gl typing is satisfied and the
+ * cache identifier is always defined. */
+type ResolvedItem<ItemT> = TileIndex & ItemT & { id: string };
 
 /**
  * A deck.gl Tileset2D for navigating an arbitrary collection of bounding boxes.
@@ -56,41 +60,35 @@ export type SourceIndex = {
  * This is intended to be used for a collection of image mosaics, where we want
  * to render all images currently visible in the viewport.
  *
- * The constructor accepts a `getSources` closure rather than a sources array
- * so that updates to the parent layer's `sources` prop are picked up across
- * the tileset's lifetime. The spatial index is rebuilt on demand whenever the
- * closure returns a new array reference (compared by `===`); mutating the
- * array in place will not be detected.
+ * The constructor takes getters for the parent layer's items and their
+ * spatial index rather than the values themselves, so the tileset picks up
+ * changes to the layer's items across its lifetime. The layer rebuilds the
+ * index when its items change.
  */
-/** A source augmented with the `TileIndex` fields and a resolved `id`
- * (defaulting to the array position) so deck.gl typing is satisfied and the
- * cache identifier is always defined. */
-type ResolvedSource<MosaicT> = TileIndex & MosaicT & { id: string };
-
-export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
-  /** Closure returning the parent layer's current sources array. Re-evaluated
-   * on each `getTileIndices` call so updates to the layer's `sources` prop
-   * propagate without recreating the tileset. */
-  private getSources: () => MosaicT[];
+export class MosaicTileset2D<ItemT extends MosaicItem> extends Tileset2D {
+  /** Getter for the parent layer's current items. Re-evaluated on each
+   * `getTileIndices` call so updates to the layer's items propagate without
+   * recreating the tileset. */
+  private getItems: () => ItemT[];
 
   /** Access the spatial index on the MosaicLayer instance. */
-  private getIndex: () => SourceIndex | null;
+  private getIndex: () => ItemIndex | null;
 
   constructor(
-    getSources: () => MosaicT[],
-    getIndex: () => SourceIndex | null,
+    getItems: () => ItemT[],
+    getIndex: () => ItemIndex | null,
     opts: Tileset2DProps,
   ) {
     super(opts);
     this.getIndex = getIndex;
-    this.getSources = getSources;
+    this.getItems = getItems;
   }
 
-  /** The Tileset2D cache key for a source. */
+  /** The Tileset2D cache key for an item. */
   override getTileId(tileIndex: TileIndex): string {
-    // `getTileIndices` always returns `ResolvedSource`s, so an `id` is
+    // `getTileIndices` always returns `ResolvedItem`s, so an `id` is
     // present on every value deck.gl will pass back here.
-    return (tileIndex as ResolvedSource<MosaicT>).id;
+    return (tileIndex as ResolvedItem<ItemT>).id;
   }
 
   /** Must override to provide a zoom level for the tile. */
@@ -109,7 +107,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     id: string;
     bbox: GeoBoundingBox;
   } {
-    const { id, bbox } = tileIndex as unknown as ResolvedSource<MosaicT>;
+    const { id, bbox } = tileIndex as unknown as ResolvedItem<ItemT>;
     const [west, south, east, north] = unwrapBbox(bbox);
     return { id, bbox: { west, south, east, north } };
   }
@@ -126,7 +124,7 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
     viewport: Viewport;
     maxZoom?: number;
     minZoom?: number;
-  }): ResolvedSource<MosaicT>[] {
+  }): ResolvedItem<ItemT>[] {
     if (viewport.zoom < (minZoom ?? -Infinity)) {
       return [];
     }
@@ -139,66 +137,66 @@ export class MosaicTileset2D<MosaicT extends MosaicSource> extends Tileset2D {
       return [];
     }
 
-    // A source can match more than once, since bounds and bboxes across the
+    // An item can match more than once, since bounds and bboxes across the
     // antimeridian are both split in two.
     const matched = new Set<number>();
     for (const bounds of visibleWorldBounds(viewport)) {
       for (const box of index.boxes.search(...bounds)) {
-        matched.add(index.boxToSource[box]!);
+        matched.add(index.boxToItem[box]!);
       }
     }
     let indices = [...matched];
 
-    const sources = this.getSources();
+    const items = this.getItems();
     // Read `extent` on every call: TileLayer updates it through `setOptions`.
     const extent = this.opts.extent as Bounds | null;
     if (extent) {
-      indices = indices.filter((i) => overlapsExtent(sources[i]!.bbox, extent));
+      indices = indices.filter((i) => overlapsExtent(items[i]!.bbox, extent));
     }
 
-    return indices.map((sourceIndex) => {
-      const source = sources[sourceIndex]!;
+    return indices.map((itemIndex) => {
+      const item = items[itemIndex]!;
       return {
         // Remove once https://github.com/visgl/deck.gl/pull/10299
         // is merged and released
         x: 0,
         y: 0,
         z: 0,
-        ...source,
-        id: source.id ?? String(sourceIndex),
+        ...item,
+        id: item.id ?? String(itemIndex),
       };
     });
   }
 }
 
 /**
- * Index the bboxes of `sources`, or return `null` when there are none.
+ * Index the bboxes of `items`, or return `null` when there are none.
  */
-export function buildSourceIndex(sources: MosaicSource[]): SourceIndex | null {
-  if (sources.length === 0) {
+export function buildItemIndex(items: MosaicItem[]): ItemIndex | null {
+  if (items.length === 0) {
     return null;
   }
 
-  const splitBboxes = sources.map((source) =>
-    splitAtAntimeridian(unwrapBbox(source.bbox)),
+  const splitBboxes = items.map((item) =>
+    splitAtAntimeridian(unwrapBbox(item.bbox)),
   );
   const numBoxes = splitBboxes.reduce((sum, split) => sum + split.length, 0);
   const boxes = new Flatbush(numBoxes);
-  const boxToSource = new Uint32Array(numBoxes);
-  splitBboxes.forEach((split, sourceIndex) => {
+  const boxToItem = new Uint32Array(numBoxes);
+  splitBboxes.forEach((split, itemIndex) => {
     for (const box of split) {
       const boxIndex = boxes.add(...box);
-      boxToSource[boxIndex] = sourceIndex;
+      boxToItem[boxIndex] = itemIndex;
     }
   });
   boxes.finish();
-  return { boxes, boxToSource };
+  return { boxes, boxToItem };
 }
 
 /**
- * Whether a source's bbox overlaps `extent`. A bbox across the antimeridian is
+ * Whether an item's bbox overlaps `extent`. A bbox across the antimeridian is
  * split first, so each side is tested on its own; any other bbox is tested
- * without allocating, since this runs for each matched source on every call.
+ * without allocating, since this runs for each matched item on every call.
  */
 function overlapsExtent(bbox: Bounds, extent: Bounds): boolean {
   if (bbox[0] <= bbox[2]) {

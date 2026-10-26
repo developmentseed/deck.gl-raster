@@ -4,18 +4,18 @@ import { describe, expect, it } from "vitest";
 import type { MosaicLayerProps } from "../src/mosaic-layer/mosaic-layer.js";
 import { MosaicLayer } from "../src/mosaic-layer/mosaic-layer.js";
 import type {
-  MosaicSource,
-  SourceIndex,
+  ItemIndex,
+  MosaicItem,
 } from "../src/mosaic-layer/mosaic-tileset-2d.js";
 
-type Item = MosaicSource & { id: string };
+type Item = MosaicItem & { id: string };
 const A: Item = { id: "A", bbox: [0, 0, 10, 10] };
 const B: Item = { id: "B", bbox: [20, 0, 30, 10] };
 const C: Item = { id: "C", bbox: [40, 0, 50, 10] };
 const P: Item = { id: "P", bbox: [5, -10, 15, 0] };
 const Q: Item = { id: "Q", bbox: [30, -10, 40, 0] };
 
-type LayerState = { index: SourceIndex | null };
+type LayerState = { index: ItemIndex | null };
 
 type LayerInternals = {
   initializeState: () => void;
@@ -34,10 +34,10 @@ type LayerInternals = {
  * object + assign, mirroring the `makeBareLayer` pattern in
  * `packages/deck.gl-raster/tests/raster-layer.test.ts`.
  */
-function makeBareLayer(sources: Item[]) {
+function makeBareLayer(items: Item[]) {
   const layer = new MosaicLayer<Item>({
     id: "test",
-    sources,
+    sources: items,
     renderSource: () => null,
   });
   const state: LayerState = { index: null };
@@ -48,9 +48,9 @@ function makeBareLayer(sources: Item[]) {
   return { layer, state, internals: layer as unknown as LayerInternals };
 }
 
-function setSources(layer: MosaicLayer<Item>, sources: Item[]) {
+function setSources(layer: MosaicLayer<Item>, items: Item[]) {
   const oldProps = layer.props;
-  const newProps = { ...oldProps, sources };
+  const newProps = { ...oldProps, sources: items };
   Object.assign(layer as object, { props: newProps });
   return { oldProps, newProps };
 }
@@ -179,7 +179,7 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
     },
   });
 
-  return async (sources: Item[]) => {
+  return async (items: Item[]) => {
     errors = [];
     const fetched: string[] = [];
     const priorities: Record<string, number> = {};
@@ -187,10 +187,10 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
     layerManager.setLayers([
       new MosaicLayer<Item>({
         id: "mosaic",
-        sources,
-        getSource: async (source, { getPriority }) => {
-          fetched.push(source.id);
-          priorities[source.id] = getPriority?.() as number;
+        sources: items,
+        getSource: async (item, { getPriority }) => {
+          fetched.push(item.id);
+          priorities[item.id] = getPriority?.() as number;
         },
         renderSource: () => null,
         onViewportLoad: (entries) => {
