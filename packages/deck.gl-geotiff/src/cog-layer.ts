@@ -1,4 +1,4 @@
-import type { LayerContext, UpdateParameters } from "@deck.gl/core";
+import type { UpdateParameters } from "@deck.gl/core";
 import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
@@ -165,49 +165,18 @@ export class COGLayer<
     concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
   } as typeof RasterTileLayer.defaultProps;
 
-  declare state: {
+  declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
     geotiff?: GeoTIFF;
     tilesetDescriptor?: RasterTilesetDescriptor;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
-    /** Aborts the in-flight header read when the `geotiff` prop changes or the
-     *  layer is removed
-     */
-    abortController?: AbortController;
-    /** True while `_parseGeoTIFF` is in flight. */
-    loadingMetadata?: boolean;
   };
 
-  override finalizeState(context: LayerContext): void {
-    this.state.abortController?.abort();
-    super.finalizeState(context);
-  }
-
-  override updateState(params: UpdateParameters<this>) {
-    super.updateState(params);
-
-    const { props, oldProps, changeFlags } = params;
-
-    const needsUpdate =
-      Boolean(changeFlags.dataChanged) || props.geotiff !== oldProps.geotiff;
-
-    if (needsUpdate) {
-      // Abort the previous GeoTIFF's parse so it can't overwrite this one
-      this.state.abortController?.abort();
-      const abortController = new AbortController();
-      // Clear stale state so renderLayers returns null until the new GeoTIFF is
-      // ready
-      this.clearState();
-      this.setState({ abortController, loadingMetadata: true });
-      this._parseGeoTIFF()
-        .catch((error: Error) => this.raiseError(error, "loading GeoTIFF"))
-        .finally(() => {
-          // An aborted parse no longer owns `loadingMetadata`
-          if (!abortController.signal.aborted) {
-            this.setState({ loadingMetadata: false });
-          }
-        });
-    }
+  override shouldLoadMetadata({
+    props,
+    oldProps,
+  }: UpdateParameters<this>): boolean {
+    return props.geotiff !== oldProps.geotiff;
   }
 
   clearState() {
@@ -219,32 +188,24 @@ export class COGLayer<
     });
   }
 
-  async _parseGeoTIFF(): Promise<void> {
-    const signal = this.state.abortController?.signal;
+  /** Open the GeoTIFF, resolve its CRS, and store its tile grid in state. */
+  override async loadMetadata(signal: AbortSignal): Promise<void> {
+    // Clear stale state so renderLayers returns null until the new GeoTIFF is
+    // ready
+    this.clearState();
 
-    let geotiff: GeoTIFF;
-    let sourceProjection: ProjectionDefinition;
-    try {
-      geotiff = await fetchGeoTIFF(this.props.geotiff, {
-        concurrencyLimiter: this.props.concurrencyLimiter,
-        signal,
-      });
-      const crs = geotiff.crs;
-      sourceProjection =
-        typeof crs === "number"
-          ? await this.props.epsgResolver!(crs)
-          : parseWkt(crs);
-    } catch (err) {
-      // `geotiff` changed or the layer was removed mid-open; drop it.
-      if (signal?.aborted) {
-        return;
-      }
-      throw err;
-    }
+    const geotiff = await fetchGeoTIFF(this.props.geotiff, {
+      concurrencyLimiter: this.props.concurrencyLimiter,
+      signal,
+    });
+    const crs = geotiff.crs;
+    const sourceProjection =
+      typeof crs === "number"
+        ? await this.props.epsgResolver!(crs)
+        : parseWkt(crs);
 
-    if (signal?.aborted) {
-      return;
-    }
+    // `geotiff` changed or the layer was removed while we waited
+    signal.throwIfAborted();
 
     // @ts-expect-error - proj4 typings are incomplete and don't support
     // wkt-parser input
@@ -308,10 +269,6 @@ export class COGLayer<
 
   protected override _tilesetDescriptor() {
     return this.state.tilesetDescriptor;
-  }
-
-  protected override _isLoadingMetadata(): boolean {
-    return this.state.loadingMetadata === true;
   }
 
   /**

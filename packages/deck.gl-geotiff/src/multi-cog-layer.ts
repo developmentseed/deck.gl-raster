@@ -1,7 +1,6 @@
 import type {
   CompositeLayerProps,
   Layer,
-  LayerContext,
   UpdateParameters,
 } from "@deck.gl/core";
 import type {
@@ -329,8 +328,7 @@ type OpenedCogSource = {
 
 /**
  * Open every configured source's GeoTIFF in parallel and resolve each one's
- * projection. Returns `null` when `signal` aborts mid-open (the layer was
- * removed), so the caller can bail without applying stale state.
+ * projection.
  */
 async function openCogSources(
   entries: [string, MultiCOGSourceConfig][],
@@ -339,28 +337,20 @@ async function openCogSources(
     epsgResolver: EpsgResolver;
     signal?: AbortSignal;
   },
-): Promise<OpenedCogSource[] | null> {
+): Promise<OpenedCogSource[]> {
   const { concurrencyLimiter, epsgResolver, signal } = options;
-  try {
-    return await Promise.all(
-      entries.map(async ([name, config]) => {
-        const geotiff = await fetchGeoTIFF(config.url, {
-          concurrencyLimiter,
-          signal,
-        });
-        const crs = geotiff.crs;
-        const sourceProjection =
-          typeof crs === "number" ? await epsgResolver(crs) : parseWkt(crs);
-        return { name, geotiff, sourceProjection };
-      }),
-    );
-  } catch (err) {
-    // `sources` changed or the layer was removed mid-open; bail.
-    if (signal?.aborted) {
-      return null;
-    }
-    throw err;
-  }
+  return await Promise.all(
+    entries.map(async ([name, config]) => {
+      const geotiff = await fetchGeoTIFF(config.url, {
+        concurrencyLimiter,
+        signal,
+      });
+      const crs = geotiff.crs;
+      const sourceProjection =
+        typeof crs === "number" ? await epsgResolver(crs) : parseWkt(crs);
+      return { name, geotiff, sourceProjection };
+    }),
+  );
 }
 
 /**
@@ -392,14 +382,12 @@ export class MultiCOGLayer extends RasterTileLayer<
   static override defaultProps =
     defaultProps as unknown as typeof RasterTileLayer.defaultProps;
 
-  declare state: {
+  declare state: RasterTileLayer<
+    MultiTileResult,
+    MultiCOGLayerProps
+  >["state"] & {
     sources: Map<string, SourceState> | null;
     multiDescriptor: MultiRasterTilesetDescriptor | null;
-    /** Aborts the in-flight header reads when `sources` changes or the layer
-     *  is removed, freeing their limiter slots for fresh work. */
-    abortController?: AbortController;
-    /** True while `_parseAllSources` is in flight. */
-    loadingMetadata?: boolean;
   };
 
   override initializeState(): void {
@@ -409,38 +397,11 @@ export class MultiCOGLayer extends RasterTileLayer<
     });
   }
 
-  override finalizeState(context: LayerContext): void {
-    this.state.abortController?.abort();
-    super.finalizeState(context);
-  }
-
-  override updateState({
-    changeFlags,
+  override shouldLoadMetadata({
     props,
     oldProps,
-  }: UpdateParameters<this>): void {
-    if (changeFlags.dataChanged || props.sources !== oldProps.sources) {
-      // Abort the previous sources' parse so it can't overwrite these
-      this.state.abortController?.abort();
-      const abortController = new AbortController();
-      // Reset state so renderLayers() returns null while we re-open COGs.
-      // Without this, the TileLayer renders with new props but stale state,
-      // caching tiles with the wrong bands.
-      this.setState({
-        sources: null,
-        multiDescriptor: null,
-        abortController,
-        loadingMetadata: true,
-      });
-      this._parseAllSources()
-        .catch((error: Error) => this.raiseError(error, "loading COG sources"))
-        .finally(() => {
-          // An aborted parse no longer owns `loadingMetadata`
-          if (!abortController.signal.aborted) {
-            this.setState({ loadingMetadata: false });
-          }
-        });
-    }
+  }: UpdateParameters<this>): boolean {
+    return props.sources !== oldProps.sources;
   }
 
   /**
@@ -449,10 +410,16 @@ export class MultiCOGLayer extends RasterTileLayer<
    *
    * All sources are assumed to share the same CRS; the projection of the
    * first source is used for the shared coordinate converters.
-   *
-   * @returns Resolves when all sources have been opened and state has been set.
    */
-  async _parseAllSources(): Promise<void> {
+  override async loadMetadata(signal: AbortSignal): Promise<void> {
+    // Reset state so renderLayers() returns null while we re-open COGs.
+    // Without this, the TileLayer renders with new props but stale state,
+    // caching tiles with the wrong bands.
+    this.setState({
+      sources: null,
+      multiDescriptor: null,
+    });
+
     const { sources } = this.props;
     const entries = Object.entries(sources);
 
@@ -460,16 +427,14 @@ export class MultiCOGLayer extends RasterTileLayer<
       return;
     }
 
-    const signal = this.state.abortController?.signal;
-
     const cogSources = await openCogSources(entries, {
       concurrencyLimiter: this.props.concurrencyLimiter,
       epsgResolver: this.props.epsgResolver!,
       signal,
     });
-    if (cogSources === null) {
-      return;
-    }
+
+    // `sources` changed or the layer was removed while we waited
+    signal.throwIfAborted();
 
     // Use the first source's projection for shared projection functions
     // (all sources must share the same CRS)
@@ -522,12 +487,6 @@ export class MultiCOGLayer extends RasterTileLayer<
     }
 
     const multiDescriptor = createMultiRasterTilesetDescriptor(tilesetMap);
-
-    // `sources` changed or the layer was removed while we resolved
-    // projections; drop the result.
-    if (signal?.aborted) {
-      return;
-    }
 
     this.setState({
       sources: sourceMap,
@@ -661,10 +620,6 @@ export class MultiCOGLayer extends RasterTileLayer<
 
   protected override _tilesetDescriptor(): RasterTilesetDescriptor | undefined {
     return this.state.multiDescriptor?.primary;
-  }
-
-  protected override _isLoadingMetadata(): boolean {
-    return this.state.loadingMetadata === true;
   }
 
   protected override _getTileDataCallback() {

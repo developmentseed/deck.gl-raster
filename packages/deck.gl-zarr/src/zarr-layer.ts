@@ -163,40 +163,26 @@ export class ZarrLayer<
     epsgResolver,
   } as typeof RasterTileLayer.defaultProps;
 
-  declare state: {
+  declare state: RasterTileLayer<
+    DataT,
+    ZarrLayerProps<Store, Dtype, DataT>
+  >["state"] & {
     meta?: GeoZarrMetadata;
     spatialDims?: [string, string];
     /** One opened array per level, finest-first (matches meta.levels order). */
     arrays?: zarr.Array<zarr.DataType, zarr.Readable>[];
     tilesetDescriptor?: RasterTilesetDescriptor;
-    /** True while `_parseZarr` is in flight. */
-    loadingMetadata?: boolean;
   };
 
   override initializeState(): void {
     this.setState({});
   }
 
-  override updateState(params: UpdateParameters<this>) {
-    super.updateState(params);
-
-    const { props, oldProps, changeFlags } = params;
-
-    const needsUpdate =
-      Boolean(changeFlags.dataChanged) ||
-      props.node !== oldProps.node ||
-      props.variable !== oldProps.variable;
-
-    if (needsUpdate) {
-      // Clear stale state so renderLayers returns null until the new Zarr is ready
-      this._clearState();
-      this.setState({ loadingMetadata: true });
-      this._parseZarr()
-        .catch((error: Error) =>
-          this.raiseError(error, "loading Zarr metadata"),
-        )
-        .finally(() => this.setState({ loadingMetadata: false }));
-    }
+  override shouldLoadMetadata({
+    props,
+    oldProps,
+  }: UpdateParameters<this>): boolean {
+    return props.node !== oldProps.node || props.variable !== oldProps.variable;
   }
 
   /** Reset all async-loaded state. */
@@ -210,7 +196,10 @@ export class ZarrLayer<
   }
 
   /** Open the Zarr store, parse GeoZarr metadata, validate dims, build reprojection fns. */
-  async _parseZarr(): Promise<void> {
+  override async loadMetadata(signal: AbortSignal): Promise<void> {
+    // Clear stale state so renderLayers returns null until the new Zarr is ready
+    this._clearState();
+
     const { node, variable, metadata: metadataOverride } = this.props;
 
     // Callers own the store. We accept a pre-opened Array (rendered as a
@@ -232,7 +221,7 @@ export class ZarrLayer<
     window.root = root;
 
     const group = variable
-      ? await zarr.open(root.resolve(variable), { kind: "group" })
+      ? await zarr.open(root.resolve(variable), { kind: "group", signal })
       : root;
     // @ts-expect-error - for debugging
     window.group = group;
@@ -250,7 +239,7 @@ export class ZarrLayer<
         ? [preopenedArray]
         : await Promise.all(
             meta.levels.map((level) =>
-              zarr.open(group.resolve(level.path), { kind: "array" }),
+              zarr.open(group.resolve(level.path), { kind: "array", signal }),
             ),
           );
 
@@ -290,6 +279,9 @@ export class ZarrLayer<
     });
 
     const sourceProjection = await parseCrs(meta.crs, this.props.epsgResolver!);
+
+    // `node` or `variable` changed, or the layer was removed, while we waited
+    signal.throwIfAborted();
 
     // Build proj4 converters
     // @ts-expect-error - proj4 typings don't cover wkt-parser output
@@ -346,10 +338,6 @@ export class ZarrLayer<
 
   protected override _tilesetDescriptor() {
     return this.state.tilesetDescriptor;
-  }
-
-  protected override _isLoadingMetadata(): boolean {
-    return this.state.loadingMetadata === true;
   }
 
   /**
