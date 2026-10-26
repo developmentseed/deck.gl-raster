@@ -345,6 +345,23 @@ describe("COGLayer source", () => {
     // deck.gl's LayerManager reports this through `onError`
     expect(() => runInitialUpdate(layer)).toThrow(/non-unsigned integers/);
   });
+
+  it("draws nothing, not the old source, after switching to a source the default pipeline can't draw", async () => {
+    const drawable = await openFixture("cog_uint8_rgba");
+    const undrawable = await openFixture(
+      "float32_1band_deflate_block64_predictor3",
+    );
+    const layer = makeBareLayer({ source: drawable });
+    runInitialUpdate(layer);
+
+    expect(() => rerender(layer, { source: undrawable })).toThrow(
+      /non-unsigned integers/,
+    );
+
+    // Every instance shares this state
+    expect(layer.state.source).toBeUndefined();
+    expect(layer.renderLayers()).toBeNull();
+  });
 });
 
 describe("COGLayer.isLoaded", () => {

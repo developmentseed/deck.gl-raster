@@ -136,6 +136,9 @@ export class COGLayer<
     if (props.source && props.source !== oldProps.source) {
       // An opened source replaces any open still in flight
       this._abortMetadataLoad();
+      // If the default pipeline can't draw the new source, draw nothing rather
+      // than the old one
+      this.clearState();
       this.setState(this._sourceState(props.source));
     }
   }
