@@ -50,3 +50,49 @@ export default defineConfig({
 `vite dev` works without this setting, because it doesn't bundle workers.
 
 [vite-worker-format]: https://vite.dev/config/worker-options#worker-format
+
+## Requests, caching and authentication
+
+The COG layers read through one shared
+[`RangeReader`](../range-reader/README.md): the reads a selection of tiles
+needs are issued together and merged into few streamed HTTP range requests,
+each tile resolves as its bytes arrive, a request is cancelled as soon as
+its tiles leave the view, and everything received is cached, so a pan back
+over tiles already downloaded costs no request. Every `COGLayer`,
+`MultiCOGLayer` and `MosaicLayer` on a page shares that reader's cache and
+batching window by default.
+
+- **Tuning.** Pass your own reader to change its gap and over-fetch limits
+  or its cache budgets, or to isolate a layer:
+
+  ```ts
+  import { RangeReader } from "@developmentseed/range-reader";
+
+  const reader = new RangeReader({
+    maxOverfetchBytes: 4 * 1024 * 1024,
+    cache: { headerBytes: 64 * 1024 * 1024, dataBytes: 256 * 1024 * 1024 },
+  });
+  new COGLayer({ id: "scene", source: url, reader });
+  ```
+
+  `reader.stats` counts requests, bytes requested and received, bytes
+  over-fetched and cache hits.
+- **Authentication.** `requestInit` sets the headers, credentials and mode
+  of every request a layer's sources make. Sources read with different
+  inits never share a request or a cached byte, even for one URL.
+
+  ```ts
+  new COGLayer({
+    id: "private",
+    source: url,
+    requestInit: { headers: { authorization: `Bearer ${token}` } },
+  });
+  ```
+- **Throttling.** `COGLayer` and `MultiCOGLayer` default to
+  `maxRequests: 256` and `debounceTime: 50` so a whole selection reaches
+  the reader in one task and a pan settles before anything is requested;
+  the per-origin `concurrencyLimiter` (six at a time by default, matching
+  the browser's HTTP/1.1 limit) caps the merged requests instead. A tile
+  whose load is no longer wanted is aborted as soon as it leaves the view.
+  `MosaicLayer`'s own `maxRequests` still caps how many sources open at
+  once.
