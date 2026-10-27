@@ -390,3 +390,223 @@ describe("RangeStream cancellation", () => {
     }
   });
 });
+
+describe("RangeStream responses", () => {
+  it("resolves the remaining members short when the object ends early and reports the size", async () => {
+    const { fetch, next } = fakeFetch();
+    const a = member(0, 10);
+    const b = member(50, 20);
+    const c = member(90, 10);
+    const stream = new RangeStream(
+      file(),
+      { offset: 0, length: 100 },
+      [a, b, c],
+      {
+        fetch,
+        maxRequestBytes: MAX,
+      },
+    );
+    const done = stream.run();
+    const body = (await next()).reply({
+      status: 206,
+      headers: { "content-length": "60" },
+    });
+    await body.push(pattern(60));
+    await body.close();
+    expect(await a.promise).toEqual({ kind: "bytes", bytes: pattern(10) });
+    expect(await b.promise).toEqual({ kind: "bytes", bytes: pattern(10, 50) });
+    expect(await c.promise).toEqual({
+      kind: "bytes",
+      bytes: new Uint8Array(0),
+    });
+    const outcome = await done;
+    expect(outcome.end).toEqual({ kind: "eof", size: 60 });
+    expect(outcome.size).toBe(60);
+    expect(outcome.bytes).toEqual(pattern(60));
+  });
+
+  it("rejects the remaining members on a truncated transfer and keeps the prefix", async () => {
+    const { fetch, next } = fakeFetch();
+    const a = member(0, 10);
+    const b = member(50, 20);
+    const stream = new RangeStream(file(), { offset: 0, length: 100 }, [a, b], {
+      fetch,
+      maxRequestBytes: MAX,
+    });
+    const done = stream.run();
+    const body = (await next()).reply({
+      status: 206,
+      headers: { "content-length": "100" },
+    });
+    await body.push(pattern(30));
+    await body.close();
+    expect(await a.promise).toEqual({ kind: "bytes", bytes: pattern(10) });
+    await expect(b.promise).rejects.toThrow(
+      /Short read from https:\/\/x\.test\/a\.tif: wanted 100 bytes at 0, got 30/,
+    );
+    const outcome = await done;
+    expect(outcome.end).toEqual({ kind: "truncated" });
+    expect(outcome.bytes).toEqual(pattern(30));
+  });
+
+  it("treats a clean early end without Content-Length as the end of the object", async () => {
+    const { fetch, next } = fakeFetch();
+    const a = member(50, 20);
+    const stream = new RangeStream(file(), { offset: 0, length: 100 }, [a], {
+      fetch,
+      maxRequestBytes: MAX,
+    });
+    const done = stream.run();
+    const body = (await next()).reply({ status: 206 });
+    await body.push(pattern(30));
+    await body.close();
+    expect(await a.promise).toEqual({
+      kind: "bytes",
+      bytes: new Uint8Array(0),
+    });
+    expect((await done).end).toEqual({ kind: "eof", size: 30 });
+  });
+
+  it("consumes a 200 with a small Content-Length as the whole object", async () => {
+    const { fetch, next } = fakeFetch();
+    const a = member(120, 10);
+    const stream = new RangeStream(file(), { offset: 100, length: 50 }, [a], {
+      fetch,
+      maxRequestBytes: MAX,
+    });
+    const done = stream.run();
+    const body = (await next()).reply({
+      status: 200,
+      headers: { "content-length": "300" },
+    });
+    await body.push(pattern(300));
+    await body.close();
+    expect(await a.promise).toEqual({ kind: "bytes", bytes: pattern(10, 120) });
+    const outcome = await done;
+    expect(outcome.offset).toBe(0);
+    expect(outcome.bytes).toHaveLength(300);
+    expect(outcome.end).toEqual({ kind: "complete" });
+  });
+
+  it("rejects a 200 without a usable Content-Length", async () => {
+    for (const headers of [
+      undefined,
+      { "content-length": String(17 * 1024 * 1024) },
+    ]) {
+      const { fetch, next } = fakeFetch();
+      const a = member(120, 10);
+      const stream = new RangeStream(file(), { offset: 100, length: 50 }, [a], {
+        fetch,
+        maxRequestBytes: MAX,
+      });
+      const done = stream.run();
+      const call = await next();
+      call.reply({ status: 200, headers });
+      await expect(a.promise).rejects.toThrow(/answered 200/);
+      expect((await done).end.kind).toBe("failed");
+      expect(call.cancelled).toBe(true);
+    }
+  });
+
+  it("resolves every member not-found on 404", async () => {
+    const { fetch, next } = fakeFetch();
+    const a = member(0, 10);
+    const b = member(50, 20);
+    const stream = new RangeStream(file(), { offset: 0, length: 100 }, [a, b], {
+      fetch,
+      maxRequestBytes: MAX,
+    });
+    const done = stream.run();
+    (await next()).reply({ status: 404 });
+    expect(await a.promise).toEqual({ kind: "not-found" });
+    expect(await b.promise).toEqual({ kind: "not-found" });
+    const outcome = await done;
+    expect(outcome.end).toEqual({ kind: "not-found" });
+    expect(outcome.bytes).toHaveLength(0);
+  });
+
+  it("rejects every member on 416 and 500 with the status", async () => {
+    for (const status of [416, 500]) {
+      const { fetch, next } = fakeFetch();
+      const a = member(0, 10);
+      const stream = new RangeStream(file(), { offset: 0, length: 100 }, [a], {
+        fetch,
+        maxRequestBytes: MAX,
+      });
+      const done = stream.run();
+      (await next()).reply({ status });
+      await expect(a.promise).rejects.toThrow(new RegExp(`answered ${status}`));
+      expect((await done).end.kind).toBe("failed");
+    }
+  });
+
+  it("records the object size from Content-Range", async () => {
+    const { fetch, next } = fakeFetch();
+    const a = member(0, 10);
+    const stream = new RangeStream(file(), { offset: 0, length: 100 }, [a], {
+      fetch,
+      maxRequestBytes: MAX,
+    });
+    const done = stream.run();
+    const body = (await next()).reply({
+      status: 206,
+      headers: { "content-length": "100", "content-range": "bytes 0-99/5000" },
+    });
+    await body.push(pattern(100));
+    await body.close();
+    expect((await done).size).toBe(5000);
+  });
+
+  it("copies only the requested length when the body sends more, then cancels", async () => {
+    const { fetch, next } = fakeFetch();
+    const a = member(90, 10);
+    const stream = new RangeStream(file(), { offset: 0, length: 100 }, [a], {
+      fetch,
+      maxRequestBytes: MAX,
+    });
+    const done = stream.run();
+    const call = await next();
+    const body = call.reply({
+      status: 206,
+      headers: { "content-length": "100" },
+    });
+    await body.push(pattern(150));
+    expect(await a.promise).toEqual({ kind: "bytes", bytes: pattern(10, 90) });
+    const outcome = await done;
+    expect(call.cancelled).toBe(true);
+    expect(outcome.end).toEqual({ kind: "complete" });
+    expect(outcome.bytes).toHaveLength(100);
+  });
+
+  it("rejects live members when fetch rejects or throws", async () => {
+    const rejecting = (() => Promise.reject(new Error("net"))) as typeof fetch;
+    const a = member(0, 10);
+    const outcome = await new RangeStream(
+      file(),
+      { offset: 0, length: 100 },
+      [a],
+      {
+        fetch: rejecting,
+        maxRequestBytes: MAX,
+      },
+    ).run();
+    await expect(a.promise).rejects.toThrow("net");
+    expect(outcome.end.kind).toBe("failed");
+
+    const throwing = (() => {
+      throw new Error("sync");
+    }) as typeof fetch;
+    const b = member(0, 10);
+    const outcome2 = await new RangeStream(
+      file(),
+      { offset: 0, length: 100 },
+      [b],
+      {
+        fetch: throwing,
+        maxRequestBytes: MAX,
+      },
+    ).run();
+    await expect(b.promise).rejects.toThrow("sync");
+    expect(outcome2.end.kind).toBe("failed");
+  });
+});

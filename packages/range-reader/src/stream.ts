@@ -76,6 +76,11 @@ export class RangeStream {
   /** File offset of the first received byte, once known. */
   private offset: number | undefined;
   private size: number | undefined;
+  /**
+   * The range the buffer covers: `range`, or the whole object when a server
+   * answered a range request with 200 and the object was small enough.
+   */
+  private base: ByteRange | undefined;
   private cancelled = false;
   private reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   /** The abort listener installed for each live member, removed when it settles. */
@@ -92,6 +97,7 @@ export class RangeStream {
     this.options = options;
     this.range =
       request !== undefined && "offset" in request ? request : undefined;
+    this.base = this.range;
     if (this.range !== undefined) {
       this.offset = this.range.offset;
     } else if (request === undefined) {
@@ -119,19 +125,19 @@ export class RangeStream {
    * read.
    */
   attach(member: StreamMember): boolean {
-    if (!this.isActive || this.range === undefined) {
+    if (!this.isActive || this.base === undefined) {
       return false;
     }
     const end = member.offset + member.length;
     if (
-      member.offset < this.range.offset ||
-      end > this.range.offset + this.range.length
+      member.offset < this.base.offset ||
+      end > this.base.offset + this.base.length
     ) {
       return false;
     }
     if (member.signal?.aborted) {
       member.reject(member.signal.reason);
-    } else if (end - this.range.offset <= this.receivedBytes) {
+    } else if (end - this.base.offset <= this.receivedBytes) {
       member.resolve({ kind: "bytes", bytes: this.view(member) });
     } else {
       this.insert(member);
@@ -208,15 +214,45 @@ export class RangeStream {
         this.offset = Number(contentRange[1]);
       }
     }
-    if (response.status !== 206 && response.status !== 200) {
-      return this.fail(
-        new Error(`${this.file.url.href} answered ${response.status}`),
-      );
+    const lengthHeader = response.headers.get("content-length");
+    const contentLength =
+      lengthHeader !== null && /^\d+$/.test(lengthHeader)
+        ? Number(lengthHeader)
+        : undefined;
+    const { status } = response;
+    if (status === 404) {
+      void response.body?.cancel().catch(() => {});
+      for (const member of this.live.splice(0)) {
+        this.resolveMember(member, { kind: "not-found" });
+      }
+      return this.settle(new Uint8Array(0), { kind: "not-found" });
     }
-    const contentLength = response.headers.get("content-length");
-    const expected =
-      this.range?.length ??
-      (contentLength !== null ? Number(contentLength) : undefined);
+    if (status !== 206 && status !== 200) {
+      void response.body?.cancel().catch(() => {});
+      return this.fail(new Error(`${this.file.url.href} answered ${status}`));
+    }
+    if (status === 200 && this.request !== undefined) {
+      // The server ignored `Range`. Take the whole object when it is small
+      // enough to be worth it; otherwise nothing it sends is usable.
+      if (
+        contentLength === undefined ||
+        contentLength > this.options.maxRequestBytes
+      ) {
+        void response.body?.cancel().catch(() => {});
+        const length =
+          contentLength === undefined
+            ? "an unknown length"
+            : `${contentLength} bytes`;
+        return this.fail(
+          new Error(
+            `Range request to ${this.file.url.href} answered 200 with ${length}`,
+          ),
+        );
+      }
+      this.offset = 0;
+      this.base = { offset: 0, length: contentLength };
+    }
+    const expected = this.base?.length ?? contentLength;
     if (expected !== undefined) {
       this.buffer = new Uint8Array(expected);
     }
@@ -227,32 +263,55 @@ export class RangeStream {
         if (done || this.cancelled) {
           break;
         }
-        this.append(value);
+        const excess = this.append(value);
         this.settleReady();
+        if (excess > 0) {
+          // The body runs past the range; nothing after it is wanted.
+          void this.reader.cancel().catch(() => {});
+          break;
+        }
       }
     }
-    return this.finish(expected);
+    return this.finish(expected, contentLength);
   }
 
-  private finish(expected: number | undefined): StreamOutcome {
+  private finish(
+    expected: number | undefined,
+    contentLength: number | undefined,
+  ): StreamOutcome {
     const bytes = this.collect();
     if (this.cancelled) {
       return this.settle(bytes, { kind: "cancelled" });
     }
-    if (this.range === undefined) {
-      for (const member of this.live.splice(0)) {
-        this.resolveMember(member, { kind: "bytes", bytes });
-      }
-      return this.settle(bytes, { kind: "complete" });
-    }
     if (expected !== undefined && this.receivedBytes < expected) {
+      const clean =
+        contentLength === undefined || this.receivedBytes === contentLength;
+      if (clean && this.base !== undefined) {
+        // The range ran past the end of the object: the object's size is now
+        // known and the members past it get what exists, possibly nothing.
+        this.size = this.base.offset + this.receivedBytes;
+        for (const member of this.live.splice(0)) {
+          this.resolveMember(member, {
+            kind: "bytes",
+            bytes: this.view(member),
+          });
+        }
+        return this.settle(bytes, { kind: "eof", size: this.size });
+      }
       const error = new Error(
-        `Short read from ${this.file.url.href}: wanted ${expected} bytes at ${this.range.offset}, got ${this.receivedBytes}`,
+        `Short read from ${this.file.url.href}: wanted ${expected} bytes at ${this.base?.offset ?? 0}, got ${this.receivedBytes}`,
       );
       for (const member of this.live.splice(0)) {
         this.rejectMember(member, error);
       }
       return this.settle(bytes, { kind: "truncated" });
+    }
+    for (const member of this.live.splice(0)) {
+      // Suffix and whole-object members resolve with everything received.
+      this.resolveMember(member, {
+        kind: "bytes",
+        bytes: this.base !== undefined ? this.view(member) : bytes,
+      });
     }
     return this.settle(bytes, { kind: "complete" });
   }
@@ -273,27 +332,28 @@ export class RangeStream {
     return outcome;
   }
 
-  /** Copy a chunk in, never past the buffer's end. */
-  private append(value: Uint8Array): void {
+  /** Copy a chunk in, never past the buffer's end. Returns the bytes left over. */
+  private append(value: Uint8Array): number {
     if (this.buffer === undefined) {
       this.chunks.push(value);
       this.receivedBytes += value.length;
-      return;
+      return 0;
     }
     const room = this.buffer.length - this.receivedBytes;
     const taken = Math.min(room, value.length);
     this.buffer.set(value.subarray(0, taken), this.receivedBytes);
     this.receivedBytes += taken;
+    return value.length - taken;
   }
 
   /** Resolve every live member whose last byte has arrived. */
   private settleReady(): void {
-    if (this.range === undefined) {
+    if (this.base === undefined) {
       return;
     }
     while (this.live.length > 0) {
       const next = this.live[0]!;
-      if (next.offset + next.length - this.range.offset > this.receivedBytes) {
+      if (next.offset + next.length - this.base.offset > this.receivedBytes) {
         break;
       }
       this.live.shift();
@@ -315,9 +375,14 @@ export class RangeStream {
     return out;
   }
 
+  /** A member's bytes as a view into the buffer, clamped to what arrived. */
   private view(member: StreamMember): Uint8Array {
-    const start = member.offset - (this.range?.offset ?? 0);
-    return this.buffer!.subarray(start, start + member.length);
+    const start = Math.min(
+      member.offset - (this.base?.offset ?? 0),
+      this.receivedBytes,
+    );
+    const end = Math.min(start + member.length, this.receivedBytes);
+    return this.buffer!.subarray(start, end);
   }
 
   /**
