@@ -16,8 +16,9 @@ export function projectionFunctions(projection: ProjectionDefinition): {
   /** From WGS84 longitude and latitude to the CRS. */
   projectFrom4326: ProjectionFunction;
   /**
-   * From the CRS to Web Mercator, with latitudes clamped to Web Mercator's
-   * limit (see {@link makeClampedForwardTo3857}).
+   * From the CRS to Web Mercator. Where proj4 can't project a point, such as
+   * at a pole, its latitude is clamped to Web Mercator's limit first (see
+   * {@link makeClampedForwardTo3857}).
    */
   projectTo3857: ProjectionFunction;
   /** From Web Mercator to the CRS. */

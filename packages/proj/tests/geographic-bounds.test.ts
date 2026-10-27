@@ -1,7 +1,7 @@
 import proj4 from "proj4";
 import { describe, expect, it } from "vitest";
 import type { Point } from "../src/index.js";
-import { geographicBounds } from "../src/index.js";
+import { geographicBounds, nearestCopy } from "../src/index.js";
 
 const UTM_60N = "+proj=utm +zone=60 +datum=WGS84 +units=m +no_defs";
 
@@ -44,8 +44,14 @@ describe("geographicBounds", () => {
   });
 
   it("keeps a ring all the way around the world from -180° to 180°", () => {
-    expect(geographicBounds(box(-180, -90, 180, 90), identity)).toEqual([
-      -180, -90, 180, 90,
+    // Each point's longitude comes back in [-180°, 180°), so only the walk
+    // along the ring sees that it goes all the way around
+    const wrapped = (x: number, y: number): Point => [
+      nearestCopy(x, 0, 360),
+      y,
+    ];
+    expect(geographicBounds(box(-170, -10, 190, 10), wrapped)).toEqual([
+      -180, -10, 180, 10,
     ]);
   });
 
