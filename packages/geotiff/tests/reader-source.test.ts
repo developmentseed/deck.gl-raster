@@ -96,6 +96,34 @@ describe("RangeReaderSource", () => {
     expect(acquires[0]!.priority).toBe(7);
   });
 
+  it("fails a read whose validator differs from the first it saw, as chunkd did", async () => {
+    const server = fixtureServer(pattern(256), { etag: '"v1"' });
+    const reader = new RangeReader({ fetch: server.fetch });
+    const source = new RangeReaderSource({
+      reader,
+      url: URL_A,
+      purpose: "data",
+    });
+    await source.fetch(0, 10);
+    // The object was replaced underneath the open file.
+    server.etag = '"v2"';
+    await expect(source.fetch(100, 10)).rejects.toThrow(
+      'ETag conflict for https://x.test/a.tif: it was "v1" when opened, now "v2"',
+    );
+    // The reader adopted the new version: a fresh source over it works, and
+    // the stale one keeps failing even on a cache hit.
+    const fresh = new RangeReaderSource({
+      reader,
+      url: URL_A,
+      purpose: "data",
+    });
+    expect(new Uint8Array(await fresh.fetch(100, 10))).toEqual(
+      pattern(10, 100),
+    );
+    await expect(source.fetch(100, 10)).rejects.toThrow("ETag conflict");
+    expect(reader.stats.validatorChanges).toBe(1);
+  });
+
   it("rejects with the signal's reason when the read is aborted", async () => {
     const { source, server } = open();
     const held = server.holdNext();

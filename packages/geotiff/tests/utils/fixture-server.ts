@@ -16,12 +16,14 @@ export interface FixtureServer {
   holdNext(): { arrived: Promise<void>; release(): void };
   /** Answer the next request with this status and an empty body. */
   failNext(status: number): void;
+  /** Sent as `ETag` on every 200 and 206 while set; change it to replace the object. */
+  etag: string | undefined;
 }
 
 /** Build a {@link FixtureServer} for `file`. */
 export function fixtureServer(
   file: Uint8Array,
-  options: { chunkBytes?: number } = {},
+  options: { chunkBytes?: number; etag?: string } = {},
 ): FixtureServer {
   const chunkBytes = options.chunkBytes ?? (file.length || 1);
   const requests: string[] = [];
@@ -107,16 +109,20 @@ export function fixtureServer(
         );
       },
     });
-    return new Response(body, {
-      status,
-      headers: { "content-length": String(slice.length) },
-    });
+    const responseHeaders: Record<string, string> = {
+      "content-length": String(slice.length),
+    };
+    if (server.etag !== undefined) {
+      responseHeaders.etag = server.etag;
+    }
+    return new Response(body, { status, headers: responseHeaders });
   };
 
-  return {
+  const server: FixtureServer = {
     fetch: fetchImpl as typeof fetch,
     requests,
     headers,
+    etag: options.etag,
     holdNext() {
       let arrived!: () => void;
       let release!: () => void;
@@ -133,4 +139,5 @@ export function fixtureServer(
       failStatus = status;
     },
   };
+  return server;
 }

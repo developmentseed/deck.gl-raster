@@ -36,6 +36,12 @@ export interface RangeReaderSourceOptions {
  * size and rejected every later read past it
  * (https://github.com/developmentseed/deck.gl-raster/issues/524). The reader
  * handles the end of the object on its own.
+ *
+ * The first result's validator (`ETag`, or `Last-Modified`) is remembered,
+ * and a later result with a different one fails with an `ETag conflict`
+ * error, as chunkd's `SourceHttp` did: the object was replaced underneath
+ * a `GeoTIFF` whose parsed layout no longer applies, so it must be opened
+ * again. The reader itself drops its cached bytes of the old version.
  */
 export class RangeReaderSource implements Source {
   readonly type = "range-reader";
@@ -47,6 +53,8 @@ export class RangeReaderSource implements Source {
   private readonly purpose: Purpose;
   private readonly limiter: ConcurrencyLimiter | null | undefined;
   private readonly getPriority: (() => Priority) | undefined;
+  /** The validator of the first result; a different one later means a replaced object. */
+  private validator: string | undefined;
 
   constructor(options: RangeReaderSourceOptions) {
     this.reader = options.reader;
@@ -91,6 +99,15 @@ export class RangeReaderSource implements Source {
     });
     if (result.kind === "not-found") {
       throw new Error(`${this.url.href} not found`);
+    }
+    if (result.validator !== undefined) {
+      if (this.validator === undefined) {
+        this.validator = result.validator;
+      } else if (this.validator !== result.validator) {
+        throw new Error(
+          `ETag conflict for ${this.url.href}: it was ${this.validator} when opened, now ${result.validator}`,
+        );
+      }
     }
     return result.bytes.slice().buffer as ArrayBuffer;
   }

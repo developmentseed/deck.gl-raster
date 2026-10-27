@@ -235,7 +235,9 @@ Tune the reader, not the file: `maxGap`, `maxOverfetchBytes`,
 `reader.stats` counts requests, bytes and cache hits. Without a
 `concurrencyLimiter`, every merged request goes out at once; the deck.gl
 layers pass a shared per-origin limiter, and so should a page that opens
-many files itself.
+many files itself. A file replaced in place while open fails its next read
+with an `ETag conflict` error, as it did through chunkd, because the parsed
+layout no longer applies; open it again.
 
 ## Why not build on top of geotiff.js?
 
