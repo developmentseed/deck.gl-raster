@@ -41,6 +41,17 @@ describe("COGLayer source props", () => {
     });
   });
 
+  it("draws the COGSource that its source prop takes", () => {
+    expectTypeOf<COGLayer["state"]["source"]>().toEqualTypeOf<
+      COGSource | undefined
+    >();
+  });
+
+  it("takes nothing else as source", () => {
+    // @ts-expect-error a number is neither a COGSource nor a COG to open
+    new COGLayer({ source: 42 });
+  });
+
   it("no longer takes the props that source and COGSource.open replaced", () => {
     new COGLayer({
       source: "https://example.com/x.tif",

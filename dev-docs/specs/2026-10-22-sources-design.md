@@ -159,6 +159,51 @@ These were settled on 2026-10-26, for stage 3:
     gets fixed with decision 16's proposal, once sources report an
     approximate `byteLength`.
 
+These were settled on 2026-10-26, for stage 4:
+
+18. **Stage 4 lands as three PRs:** 4a, `RasterTileLayer` handles `source` for
+    every layer; 4b, `ZarrSource` and ZarrLayer's `source`; 4c, ZarrLayer
+    fetches its tiles again when `selection` changes (see Stages).
+19. **`RasterTileLayer` handles `source`** (answers question 5, as built in
+    4a). It tells an opened source from other input with
+    `instanceof RasterSource`:
+    - It draws an opened source at once, and aborts any open in flight.
+    - It opens other input in `loadMetadata`, through the layer's
+      `_openSource(input, signal)`. It drops the result if `source` changed
+      meanwhile, and otherwise calls `onSourceLoad`.
+    - It keeps the source in `state.source`, and takes the tile grid from it.
+    - A layer's `_sourceState(source)` returns more state to keep with a
+      source, such as COGLayer's default pipeline. If it throws, the layer
+      reports the error through `onError` and draws nothing rather than the
+      old source. The error doesn't escape `updateState`: deck.gl then skips
+      `renderLayers`, which kept the old source drawn after 2a.
+    - `undefined` and `null` both mean no source.
+    - Two type parameters type all of this: `SourceT`, the opened source a
+      layer draws, and `InputT`, the input it opens. They default to the two
+      parts of the layer's `source` prop, so COGLayer's
+      `source: COGSource | COGInput` gives `COGSource` and `COGInput`, and a
+      layer passes neither. The base reads `source` and `onSourceLoad`
+      without casts.
+20. **Each layer declares its own `source` and `onSourceLoad`** (answers
+    question 6). Each layer's `source` takes its own inputs, and its
+    declaration documents them. `RasterTileLayer` adds the same two props,
+    typed by `SourceT` and `InputT`, to every layer's props.
+21. **ZarrLayer takes one `source`** (decisions 6 and 11, for 4b): a
+    `ZarrSource`, or a zarrita group or array to open with the defaults.
+    `node`, `variable`, `metadata` and `epsgResolver` are removed from
+    ZarrLayer and become `ZarrSource.open` options. Stage 4's first draft kept
+    the old props as shorthand, from before decision 6's amendment.
+22. **`selection` stays on ZarrLayer.** The source is the whole Zarr object,
+    while the layer decides which chunks to load from it. The layer checks
+    `selection` against the source's dimensions whenever either changes, so
+    two layers can draw different selections of one source.
+23. **What `ZarrSource` holds:** one opened array per level, finest first; the
+    parsed GeoZarr metadata; every dimension name; the projection; the tile
+    grid; and geographic bounds, which ZarrLayer never had. The bounds are
+    computed as COGSource's are: from the finest level's corners, the short
+    way across the antimeridian. That calculation and `projectionFunctions`
+    move to `@developmentseed/proj`, so both formats share them.
+
 ## Goals
 
 - `COGSource` (one file), `MultiCOGSource` (several files of one scene) and
@@ -321,21 +366,17 @@ new COGLayer({ id: "overview", source });    // e.g. an overview map's Deck: sam
 ```
 
 When `source` is an opened source, the layer derives its state synchronously.
-`updateState` stores the source in state with the default pipeline inferred
-from it, and aborts any open still in flight:
+`RasterTileLayer.updateState` stores the source in state, with whatever the
+layer's `_sourceState` derives from it, such as COGLayer's default pipeline,
+and aborts any open still in flight (decision 19). Each layer only says how to
+open its other inputs:
 
 ```ts
-updateState(params) {
-  super.updateState(params);
-  const { props, oldProps } = params;
-  if (props.source instanceof COGSource && props.source !== oldProps.source) {
-    this._abortMetadataLoad();
-    this.clearState(); // draw nothing if the pipeline can't draw the new source
-    this.setState(this._sourceState(props.source)); // source, pipeline
+// The source types come from COGLayerProps' `source: COGSource | COGInput`
+class COGLayer extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
+  protected override _openSource(input: COGInput, signal: AbortSignal) {
+    return COGSource.open(input, { signal });
   }
-}
-protected _tilesetDescriptor() {
-  return this.state.source?.tilesetDescriptor;
 }
 ```
 
@@ -369,16 +410,24 @@ new ZarrLayer({ id: "zarr", source, selection: { time: t }, getTileData, renderT
 ```
 
 - **Input:** a zarrita `Group` or `Array`. The caller still owns the store, as
-  today.
+  today. ZarrLayer's `source` also takes one, as shorthand opened with the
+  defaults (decision 21).
 - **Holds:** the arrays of each level (finest first), the parsed GeoZarr
-  metadata, the spatial dimensions, the projection, the tile grid and the
-  geographic bounds.
-- **Options:** `variable` and the `metadata` override move to `open()` options.
+  metadata, the dimension names, the projection, the tile grid and the
+  geographic bounds (decision 23).
+- **Options:** `variable`, the `metadata` override and `epsgResolver` move
+  from the layer to `open()` options.
+- **Checks:** `open` rejects what ZarrLayer's load rejects today, except the
+  selection: unnamed axes or array dimensions, spatial dimensions that aren't
+  last in y, x order, and a CRS that doesn't resolve.
 - **Stays on the layer:** `selection`, checked against the source's dimensions
-  synchronously whenever it changes.
-- **Proposal:** ZarrLayer refreshes its tiles when `selection` changes, so apps
-  no longer pass `updateTriggers: { renderTile: [selection] }`
-  ([today's note](https://github.com/developmentseed/deck.gl-raster/blob/0636834044bd9049a1a79a4e33f25a5bdda3ce90/packages/deck.gl-zarr/src/zarr-layer.ts#L372)).
+  synchronously whenever it or the source changes (decision 22).
+- **Refetching (4c):** ZarrLayer fetches its tiles again when `selection`
+  changes. Apps then no longer pass
+  `updateTriggers: { renderTile: [selection] }`
+  ([today's note](https://github.com/developmentseed/deck.gl-raster/blob/0636834044bd9049a1a79a4e33f25a5bdda3ce90/packages/deck.gl-zarr/src/zarr-layer.ts#L372)),
+  which only redraws the old data, or put the selection in the layer `id`,
+  which drops every tile and leaves the map blank until new ones load.
 
 ### MosaicLayer
 
@@ -443,7 +492,7 @@ new MosaicLayer({
 | Today | With sources |
 | --- | --- |
 | `COGLayer({ geotiff })` | `COGLayer({ source })`: `source` takes the same inputs, or a `COGSource` from `COGSource.open(input)` (decision 6). |
-| `epsgResolver` on COGLayer, MultiCOGLayer, ZarrLayer | `open()` option. Removed from COGLayer in 2a and from MultiCOGLayer in 2b. |
+| `epsgResolver` on COGLayer, MultiCOGLayer, ZarrLayer | `open()` option. Removed from COGLayer in 2a, from MultiCOGLayer in 2b, and from ZarrLayer in 4b. |
 | `concurrencyLimiter` on COGLayer, MultiCOGLayer | `open()` option, removed from COGLayer in 2a and from MultiCOGLayer in 2b. MosaicLayer keeps its prop and forwards it to `getSource`. |
 | `onGeoTIFFLoad` | `onSourceLoad(source)` on the shorthand path (COGLayer in 2a, MultiCOGLayer in 2b). With a `source` prop, read `source.geographicBounds` before creating the layer. |
 | `MultiCOGLayer({ sources: { red: { url } } })` | `MultiCOGLayer({ source: { red: url } })`, or a `source` from `MultiCOGSource.open({ red: url })` (2b). MultiCOGLayer draws it until stage 5, then COGLayer does. |
@@ -452,8 +501,8 @@ new MosaicLayer({
 | `{ data }` in `renderSource`, `onSourceLoad` and `onSourceUnload` | `{ source }`, the source `getSource` opened (stage 3). |
 | `onViewportLoad` entries `{ source, data }` | `{ item, source }` (stage 3). |
 | `MosaicSource` | `MosaicItem` (stage 3). |
-| `ZarrLayer({ node, variable, metadata })` | `ZarrSource.open(node, { variable, metadata })` |
-| `updateTriggers: { renderTile: [selection] }` on ZarrLayer | Not needed (proposal) |
+| `ZarrLayer({ node, variable, metadata })` | `ZarrLayer({ source })`: a group or array, or a `ZarrSource` from `ZarrSource.open(node, { variable, metadata })` (4b). |
+| `updateTriggers: { renderTile: [selection] }` on ZarrLayer | Not needed (4c). |
 
 ## Stages
 
@@ -520,10 +569,34 @@ Each stage is one PR.
    - Use `source.geographicBounds` for `fitBounds`. *Done* in 2a and 2b, for
      every example that fits the map.
    - Check the examples in a browser.
-4. **`ZarrSource`.**
-   - A `source` prop on ZarrLayer, with its existing props as shorthand.
-   - Tiles refresh when `selection` changes.
-   - Tests mirror stage 2.
+4. **`ZarrSource`**, in three PRs (decision 18).
+   - **4a: `RasterTileLayer` handles `source`** (decision 19). COGLayer and
+     MultiCOGLayer move onto it, and their behavior doesn't change.
+     - Tests: the base's handling, with a test layer. The COG layers' tests
+       pass as they were.
+   - **4b: `ZarrSource`** and ZarrLayer's `source` (decisions 21 to 23).
+     - `ZarrSource.open(node, options)` in deck.gl-zarr.
+       `projectionFunctions` and the bounds calculation move to
+       `@developmentseed/proj`.
+     - ZarrLayer's `source` prop, the clean break, and the examples.
+       aef-mosaic, dynamical-zarr-ecmwf and nldas-icechunk pass `metadata`,
+       so they call `ZarrSource.open`. zarr-sentinel2-tci passes its group.
+     - The `window.*` debug lines in ZarrLayer's load go: they throw where
+       `window` is undefined.
+     - Tests mirror stage 2, and check `selection` when it changes.
+   - **4c: tiles refresh when `selection` changes.** *Plan:*
+     - `RasterTileLayer` passes `updateTriggers.getTileData` (and `all`) to
+       its inner TileLayer, the first part of
+       [#797](https://github.com/developmentseed/deck.gl-raster/issues/797).
+     - ZarrLayer adds its `selection` to that trigger, compared by value, so
+       an inline `{ time: t }` doesn't refetch on every render.
+     - deck.gl keeps the old tiles drawn until their replacements arrive.
+     - deck.gl 9.4's `Tileset2D.reloadAll` never calls `onTileUnload`, either
+       for the tiles it drops or for the data it replaces, so their textures
+       would leak. `RasterTileset2D` unloads them, as it already does on
+       `finalize`
+       ([#728](https://github.com/developmentseed/deck.gl-raster/pull/728)).
+       #797's proposal has the same leak.
 5. **COGLayer renders record sources.** It takes over MultiCOGLayer's band
    compositing, and MultiCOGLayer is deprecated (removed later). The Sentinel-2
    mosaic demo follows.
@@ -546,11 +619,14 @@ Each stage is one PR.
    own inner TileLayer. *Proposal:* when ZarrLayer becomes the third layer with
    a source (stage 4), `RasterTileLayer` owns that plumbing, with two hooks per
    layer, such as `isOpenedSource(value)` and `openSource(input, signal)`.
+   *Decided (2026-10-26):* it does, from 4a (decision 19).
+   `instanceof RasterSource` takes the place of `isOpenedSource`, and the
+   hooks are `_openSource` and `_sourceState`.
 6. **Where `onSourceLoad` lives.** 2a and 2b declare `source` and
-   `onSourceLoad` on each layer's props, COGLayer's and MultiCOGLayer's: each
-   layer's `source` takes its own inputs, and `RasterTileLayer` never opens a
-   source itself. Whether ZarrLayer shares a props type for them is open until
-   stage 4. *Open.*
+   `onSourceLoad` on each layer's props, COGLayer's and MultiCOGLayer's, since
+   each layer's `source` takes its own inputs. *Decided (2026-10-26):* every
+   layer keeps declaring its own, ZarrLayer included, and `RasterTileLayer`
+   reads them (decision 20).
 7. **MosaicLayer's naming.** MosaicLayer calls its items `sources`, and passes
    each to `getSource`, `renderSource` and `onSourceLoad(item, { data })`.
    Once `getSource` returns a `COGSource` (stage 3), "source" would name both
@@ -569,14 +645,25 @@ Each stage is one PR.
    would keep `COGSource.geotiff` a single `GeoTIFF`, rather than one class
    whose fields depend on its input. *Decided (2026-10-26):* two classes.
    `MultiCOGSource` opens a record of files, and `COGSource` stays one file.
+9. **Naming ZarrSource's metadata.** The `metadata` option holds raw
+   attributes that replace the group's, while the source's field holds the
+   parsed GeoZarr metadata. Keep `metadata` for both, call the field
+   `geozarr`, or rename the option `attrs`, after the zarrita property it
+   replaces? Decide in 4b. *Open.*
+10. **A `ServerSource` for tile servers.** The titiler-cog example gives
+    `RasterTileLayer` a `tilesetDescriptor` built from a tile server's
+    TileMatrixSet, with no source behind it. A `RasterSource` for tile
+    servers would let every layer take a `source`, and the
+    `tilesetDescriptor` prop could go. *Later* (raised in #805's review).
 
 ## Left to the implementer
 
 - **Names and types:**
   - Settled: `tilesetDescriptor` and `geotiff` for one file (2a);
     `MultiCOGSource`, `geotiffs` and `multiTilesetDescriptor` for several
-    (2b).
-- **Code organization:** file layout, error wording, and sharing helpers
-  between the COG and Zarr `open()` code.
+    (2b); `_openSource` and `_sourceState` on `RasterTileLayer` (4a).
+- **Code organization:** file layout and error wording. The COG and Zarr
+  `open()` code share their projection helpers through
+  `@developmentseed/proj` (decision 23).
 - **Input normalization:** where it happens. Today's `fetchGeoTIFF` already
   handles strings, `URL`s, `ArrayBuffer`s and `GeoTIFF`s.

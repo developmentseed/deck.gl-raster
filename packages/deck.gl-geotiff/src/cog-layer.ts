@@ -1,4 +1,3 @@
-import type { UpdateParameters } from "@deck.gl/core";
 import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
@@ -116,68 +115,26 @@ export class COGLayer<
   static override layerName = "COGLayer";
 
   declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
-    /** The source the layer draws: `source` itself, or the one opened from it. */
-    source?: COGSource;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
   };
 
-  override shouldLoadMetadata({
-    props,
-    oldProps,
-  }: UpdateParameters<this>): boolean {
-    // An opened source needs no loading
-    return (
-      props.source !== oldProps.source && !(props.source instanceof COGSource)
-    );
-  }
-
-  override updateState(params: UpdateParameters<this>): void {
-    super.updateState(params);
-    const { props, oldProps } = params;
-    if (props.source instanceof COGSource && props.source !== oldProps.source) {
-      // An opened source replaces any open still in flight
-      this._abortMetadataLoad();
-      // If the default pipeline can't draw the new source, draw nothing rather
-      // than the old one
-      this.clearState();
-      this.setState(this._sourceState(props.source));
-    }
-  }
-
-  clearState() {
-    this.setState({
-      source: undefined,
-      defaultGetTileData: undefined,
-      defaultRenderTile: undefined,
-    });
-  }
-
-  /** Open `source`, when it isn't an opened source already. */
-  override async loadMetadata(signal: AbortSignal): Promise<void> {
-    // Clear stale state so renderLayers returns null until the new source is
-    // ready
-    this.clearState();
-
-    const input = this.props.source;
-    // `source` was removed. An opened source never loads.
-    if (input === undefined || input instanceof COGSource) {
-      return;
-    }
-    const source = await COGSource.open(input, { signal });
-
-    // `source` changed or the layer was removed while we waited
-    signal.throwIfAborted();
-
-    this.props.onSourceLoad?.(source);
-    this.setState(this._sourceState(source));
+  /**
+   * Open the COG that `source` points to, with the defaults of
+   * {@link COGSource.open}.
+   */
+  protected override _openSource(
+    input: COGInput,
+    signal: AbortSignal,
+  ): Promise<COGSource> {
+    return COGSource.open(input, { signal });
   }
 
   /**
-   * The state for drawing `source`, with the default pipeline unless the app
-   * passed both `getTileData` and `renderTile`.
+   * The default pipeline for drawing `source`, unless the app passed both
+   * `getTileData` and `renderTile`.
    */
-  private _sourceState(source: COGSource) {
+  protected override _sourceState(source: COGSource) {
     let defaultGetTileData: COGLayerProps<TextureDataT>["getTileData"];
     let defaultRenderTile: COGLayerProps<TextureDataT>["renderTile"];
     if (!this.props.getTileData || !this.props.renderTile) {
@@ -185,11 +142,7 @@ export class COGLayer<
         inferRenderPipeline(source.geotiff, this.context.device));
     }
 
-    return { source, defaultGetTileData, defaultRenderTile };
-  }
-
-  protected override _tilesetDescriptor() {
-    return this.state.source?.tilesetDescriptor;
+    return { defaultGetTileData, defaultRenderTile };
   }
 
   /**
