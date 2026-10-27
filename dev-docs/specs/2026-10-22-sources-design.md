@@ -191,8 +191,9 @@ These were settled on 2026-10-26, for stage 4:
 21. **ZarrLayer takes one `source`** (decisions 6 and 11, for 4b): a
     `ZarrSource`, or a zarrita group or array to open with the defaults.
     `node`, `variable`, `metadata` and `epsgResolver` are removed from
-    ZarrLayer and become `ZarrSource.open` options, with `metadata` renamed
-    `geoZarrMetadata` (question 9). Stage 4's first draft kept the old props
+    ZarrLayer: `node` becomes `ZarrSource.open`'s first argument, and the
+    others its options, with `metadata` renamed `geoZarrMetadata`
+    (question 9). Stage 4's first draft kept the old props
     as shorthand, from before decision 6's amendment.
 22. **`selection` stays on ZarrLayer.** The source is the whole Zarr object,
     while the layer decides which chunks to load from it. The layer checks

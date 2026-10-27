@@ -66,13 +66,13 @@ export class ZarrSource<
   Dtype extends zarr.DataType = zarr.DataType,
 > extends RasterSource {
   /** One opened array per level, finest first. */
-  readonly arrays: zarr.Array<Dtype, Store>[];
+  readonly arrays: readonly zarr.Array<Dtype, Store>[];
 
   /**
    * The names of the arrays' dimensions, in order, such as
    * `["time", "y", "x"]`.
    */
-  readonly dimensionNames: string[];
+  readonly dimensionNames: readonly string[];
 
   /** The names of the y and x dimensions: the last two dimensions. */
   readonly spatialDims: [y: string, x: string];
@@ -81,8 +81,8 @@ export class ZarrSource<
   readonly projection: ProjectionDefinition;
 
   private constructor(options: {
-    arrays: zarr.Array<Dtype, Store>[];
-    dimensionNames: string[];
+    arrays: readonly zarr.Array<Dtype, Store>[];
+    dimensionNames: readonly string[];
     spatialDims: [y: string, x: string];
     projection: ProjectionDefinition;
     tilesetDescriptor: RasterTilesetDescriptor;
@@ -99,12 +99,14 @@ export class ZarrSource<
    * Open GeoZarr data: read its metadata, open the array of each level,
    * resolve its CRS, and build its tile grid.
    *
+   * Rejects when `signal` aborts before the source is ready, when the
+   * metadata is missing or invalid, when a level's array can't be opened,
+   * when the CRS can't be resolved, and when the arrays' dimensions aren't
+   * named or aren't in y, x order at the end.
+   *
    * @param node A zarrita group, whose attributes hold the GeoZarr metadata,
    *   or an array to draw as a single level. The caller owns the store, so it
    *   can wrap it, for example with `withConsolidatedMetadata`.
-   *
-   * Rejects when `signal` aborts before the source is ready, and when the
-   * arrays' dimensions aren't named or aren't in y, x order at the end.
    */
   static async open<
     Store extends zarr.Readable = zarr.Readable,

@@ -96,7 +96,7 @@ describe("ZarrSource.open", () => {
     expect(geographicBounds.north).toBeCloseTo(Math.max(...lats), 9);
   });
 
-  it("widens the bounds by half a pixel for node registration", async () => {
+  it("moves the bounds by half a pixel for node registration", async () => {
     const { group, attributes } = await openGroup("a");
 
     const pixel = await ZarrSource.open(group);
@@ -104,12 +104,37 @@ describe("ZarrSource.open", () => {
       geoZarrMetadata: { ...attributes, "spatial:registration": "node" },
     });
 
+    // The pixels' corners are half a pixel up and to the left of their
+    // centers, as in the tile grid
     expect(node.geographicBounds.west).toBeLessThan(
       pixel.geographicBounds.west,
+    );
+    expect(node.geographicBounds.east).toBeLessThan(
+      pixel.geographicBounds.east,
     );
     expect(node.geographicBounds.north).toBeGreaterThan(
       pixel.geographicBounds.north,
     );
+  });
+
+  it("keeps the bounds of a grid centered on the poles within -90° to 90°", async () => {
+    const { group } = await openGroup("a");
+    const array = await zarr.open(group.resolve("r10m"), { kind: "array" });
+    // A global 0.25° grid of 721 rows from 90°N, as in the ECMWF example,
+    // reaches to 90.25°S
+    const geoZarrMetadata = {
+      "proj:code": "EPSG:4326",
+      "spatial:dimensions": ["Y", "X"],
+      "spatial:shape": [721, 1440],
+      "spatial:transform": [0.25, 0, -180, 0, -0.25, 90],
+    };
+
+    const { geographicBounds } = await ZarrSource.open(array, {
+      geoZarrMetadata,
+    });
+
+    expect(geographicBounds.south).toBe(-90);
+    expect(geographicBounds.north).toBe(90);
   });
 
   it("passes its signal to every read", async () => {

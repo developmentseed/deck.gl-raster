@@ -1,6 +1,7 @@
 import { CompositeLayer } from "@deck.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as zarr from "zarrita";
+import type { GetTileDataOptions } from "../src/zarr-layer.js";
 import { ZarrLayer } from "../src/zarr-layer.js";
 import { ZarrSource } from "../src/zarr-source.js";
 import { geoZarrStore } from "./helpers.js";
@@ -222,25 +223,91 @@ describe("ZarrLayer selection", () => {
     expect(onError).toHaveBeenCalledOnce();
   });
 
-  it("checks the selection against a source opened from input", async () => {
+  it("checks the newest selection against a source opened from input", async () => {
     const onError = vi.fn((_error: Error) => true);
-    const props = {
-      source: await openGroup("a"),
-      selection: { time: 0 },
-      onError,
-    };
-    const layer = makeBareLayer(props);
+    const group = await openGroup("a");
+    const layer = makeBareLayer({ source: group, selection: {}, onError });
     runInitialUpdate(layer);
-    await vi.waitFor(() =>
-      expect(layer.state.source).toBeInstanceOf(ZarrSource),
-    );
 
-    // deck.gl updates the layer after the open's `setState`, with the same
+    // The selection changes while the group opens
+    const newest = { source: group, selection: { time: 0 }, onError };
+    const next = rerender(layer, newest);
+    await vi.waitFor(() =>
+      expect(next.state.source).toBeInstanceOf(ZarrSource),
+    );
+    // deck.gl updates the layer after the open's `setState`, with the newest
     // props
-    rerender(layer, props);
+    rerender(next, newest);
 
     expect(errorMessages(onError)).toEqual([
       expect.stringMatching(/unknown dim "time"/),
+    ]);
+  });
+
+  it("checks a selection that changed while there was no source", async () => {
+    const source = await openFixture();
+    vi.spyOn(ZarrSource, "open").mockReturnValue(new Promise(() => {}));
+    const onError = vi.fn((_error: Error) => true);
+    const props = { onError, ...tileCallbacks };
+    const layer = makeBareLayer({ ...props, source, selection: {} });
+    runInitialUpdate(layer);
+
+    // While a group opens, the selection changes. Then the first source
+    // comes back.
+    const opening = rerender(layer, {
+      ...props,
+      source: await openGroup("b"),
+      selection: { time: 0 },
+    });
+    const next = rerender(opening, {
+      ...props,
+      source,
+      selection: { time: 0 },
+    });
+
+    expect(errorMessages(onError)).toEqual([
+      expect.stringMatching(/unknown dim "time"/),
+    ]);
+    expect(tileCallback(next)).toBeUndefined();
+  });
+});
+
+describe("ZarrLayer tiles", () => {
+  it("reads an edge tile of the finest level, at the selection", async () => {
+    const source = await openSource(await openGroup("timed"));
+    const getTileData = vi.fn(
+      async (_arr: zarr.Array<zarr.DataType>, _options: GetTileDataOptions) =>
+        null,
+    );
+    const layer = makeBareLayer({
+      source,
+      selection: { time: 1 },
+      getTileData,
+      renderTile: vi.fn(),
+    });
+    runInitialUpdate(layer);
+    const callback = tileCallback(layer) as (
+      tile: unknown,
+      options: unknown,
+    ) => Promise<unknown>;
+
+    // The finest level is the last of 3. r10m is 1200 pixels in 256-pixel
+    // tiles, so its last tile is 176 pixels across.
+    await callback({ index: { x: 4, y: 4, z: 2 } }, { device: {} });
+
+    const [arr, options] = getTileData.mock.calls[0]!;
+    expect(arr.path).toBe("/timed/r10m");
+    expect(options).toMatchObject({
+      x: 4,
+      y: 4,
+      z: 2,
+      width: 176,
+      height: 176,
+    });
+    expect(options.sliceSpec).toEqual([
+      1,
+      zarr.slice(1024, 1200),
+      zarr.slice(1024, 1200),
     ]);
   });
 });

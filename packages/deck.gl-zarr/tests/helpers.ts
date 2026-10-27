@@ -6,6 +6,8 @@ type GroupSpec = {
   attributes: Record<string, unknown>;
   /** The `dimension_names` of the group's arrays. */
   dimensionNames: (string | null)[];
+  /** The length of a leading time dimension, for arrays that have one. */
+  times?: number;
 };
 
 /**
@@ -17,6 +19,7 @@ type GroupSpec = {
  * - `bare`: no GeoZarr attributes.
  * - `unnamed`: arrays whose dimensions have no names.
  * - `transposed`: arrays with x before y.
+ * - `timed`: arrays with a leading `time` dimension of 4, in chunks of 1.
  *
  * It records each read's key and abort signal.
  */
@@ -37,6 +40,7 @@ export async function geoZarrStore() {
     bare: { attributes: {}, dimensionNames: dimensions },
     unnamed: { attributes, dimensionNames: [null, null] },
     transposed: { attributes, dimensionNames: [...dimensions].reverse() },
+    timed: { attributes, dimensionNames: ["time", ...dimensions], times: 4 },
   };
 
   const encode = (json: unknown) =>
@@ -61,11 +65,15 @@ export async function geoZarrStore() {
         encode({
           zarr_format: 3,
           node_type: "array",
-          shape: level["spatial:shape"],
+          shape: group.times
+            ? [group.times, ...level["spatial:shape"]]
+            : level["spatial:shape"],
           data_type: "uint16",
           chunk_grid: {
             name: "regular",
-            configuration: { chunk_shape: [256, 256] },
+            configuration: {
+              chunk_shape: group.times ? [1, 256, 256] : [256, 256],
+            },
           },
           chunk_key_encoding: {
             name: "default",

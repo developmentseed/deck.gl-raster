@@ -93,6 +93,9 @@ export type ZarrLayerProps<
    * A selection that doesn't fit the source goes to `onError`, and the layer
    * draws nothing until the selection is fixed. Changing the selection never
    * opens the source again.
+   *
+   * Tiles already loaded keep the data of the selection they were fetched
+   * with. To fetch them again for a new selection, give the layer a new `id`.
    */
   selection: Record<string, SliceInput>;
 
@@ -138,44 +141,50 @@ export class ZarrLayer<
     DataT,
     ZarrLayerProps<Store, Dtype, DataT>
   >["state"] & {
-    /** The source that `selection` was last checked against. */
-    checkedSource?: ZarrSource<Store, Dtype>;
-    /** `selection`, while it fits that source. */
-    checkedSelection?: Record<string, SliceInput>;
+    /**
+     * The source and selection last checked against each other, and whether
+     * the selection fits the source.
+     */
+    checked?: {
+      source: ZarrSource<Store, Dtype>;
+      selection: Record<string, SliceInput>;
+      fits: boolean;
+    };
   };
 
   override updateState(params: UpdateParameters<this>): void {
     super.updateState(params);
 
-    // Check `selection` whenever it or the source changes. A source opened
-    // from input arrives between renders, so compare with the source it was
-    // last checked against rather than with the old props.
-    const { source, checkedSource } = this.state;
+    // Check `selection` whenever it or the source differs from the pair last
+    // checked. Comparing with that pair, rather than with the old props, also
+    // catches a source opened from input, which arrives between renders, and
+    // a selection that changed while there was no source.
+    const { source, checked } = this.state;
     const { selection } = params.props;
     if (
       !source ||
-      (source === checkedSource &&
-        sameSelection(selection, params.oldProps.selection))
+      (checked?.source === source &&
+        sameSelection(selection, checked.selection))
     ) {
       return;
     }
 
-    let checkedSelection: Record<string, SliceInput> | undefined;
+    let fits = true;
     try {
       validateSelection({
         dimensionNames: source.dimensionNames,
         spatialDims: source.spatialDims,
         selection,
       });
-      checkedSelection = selection;
     } catch (error) {
+      fits = false;
       const { layerName } = this.constructor as typeof ZarrLayer;
       this.raiseError(
         error as Error,
         `Can't draw the selection in ${layerName}`,
       );
     }
-    this.setState({ checkedSource: source, checkedSelection });
+    this.setState({ checked: { source, selection, fits } });
   }
 
   /**
@@ -194,9 +203,9 @@ export class ZarrLayer<
    * signature into RasterTileLayer's `(tile, { signal, device }) => Promise<DataT>`.
    */
   protected override _getTileDataCallback() {
-    const { source, checkedSource, checkedSelection } = this.state;
+    const { source, checked } = this.state;
     // Draw nothing while the selection doesn't fit the source
-    if (!source || source !== checkedSource || !checkedSelection) {
+    if (!source || checked?.source !== source || !checked.fits) {
       return undefined;
     }
     const userFn = this.props.getTileData;
@@ -205,6 +214,7 @@ export class ZarrLayer<
     }
 
     const { arrays, dimensionNames, spatialDims } = source;
+    const { selection } = checked;
     type RasterGetTileData = NonNullable<
       RasterTileLayerProps<DataT>["getTileData"]
     >;
@@ -234,7 +244,7 @@ export class ZarrLayer<
           return zarr.slice(colStart, colEnd);
         }
         // The selection was checked to have every non-spatial dim
-        return checkedSelection[dimName]!;
+        return selection[dimName]!;
       });
 
       return userFn(arr, {
@@ -263,13 +273,10 @@ export class ZarrLayer<
 /** Whether two selections pick the same indices of every dimension. */
 function sameSelection(
   a: Record<string, SliceInput>,
-  b: Record<string, SliceInput> | undefined,
+  b: Record<string, SliceInput>,
 ): boolean {
   if (a === b) {
     return true;
-  }
-  if (!b) {
-    return false;
   }
   const keys = Object.keys(a);
   return (
