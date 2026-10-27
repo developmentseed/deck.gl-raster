@@ -15,7 +15,9 @@ import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
 import { nearestCopy, unwrapBbox } from "@developmentseed/proj";
+import type { RangeReader } from "@developmentseed/range-reader";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
+import { DEFAULT_RANGE_READER } from "../default-range-reader.js";
 import type { ItemIndex, MosaicItem } from "./mosaic-tileset-2d.js";
 import { buildItemIndex, MosaicTileset2D } from "./mosaic-tileset-2d.js";
 
@@ -74,6 +76,20 @@ export type MosaicLayerProps<
     concurrencyLimiter?: ConcurrencyLimiter | null;
 
     /**
+     * The {@link RangeReader} this layer's sources read through, passed to
+     * `getSource`. Defaults to {@link DEFAULT_RANGE_READER}, shared by every
+     * COG layer on the page, so items of several layers share one byte cache
+     * and one batching window.
+     */
+    reader?: RangeReader;
+
+    /**
+     * Headers, credentials and mode for every request of this layer's
+     * sources, passed to `getSource`, for data behind authentication.
+     */
+    requestInit?: RequestInit;
+
+    /**
      * Open the source of an item, such as a {@link COGSource} from
      * {@link COGSource.open}.
      *
@@ -91,6 +107,10 @@ export type MosaicLayerProps<
          * per-origin queue.
          */
         concurrencyLimiter?: ConcurrencyLimiter | null;
+        /** The layer's current `reader` prop. Pass it to {@link COGSource.open}. */
+        reader?: RangeReader;
+        /** The layer's current `requestInit` prop. Pass it to {@link COGSource.open}. */
+        requestInit?: RequestInit;
         /**
          * Callback that provides dynamic priority for fetches related to this
          * item.
@@ -142,6 +162,7 @@ export type MosaicLayerProps<
 
 const defaultProps: Partial<MosaicLayerProps> = {
   concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
+  reader: DEFAULT_RANGE_READER,
 };
 
 /**
@@ -195,8 +216,7 @@ function createGetPriorityCallback(
  * new MosaicLayer({
  *   id: "mosaic",
  *   data: items, // each with a unique `id`, a `bbox` and, here, a `url`
- *   getSource: (item, { signal, concurrencyLimiter, getPriority }) =>
- *     COGSource.open(item.url, { signal, concurrencyLimiter, getPriority }),
+ *   getSource: (item, options) => COGSource.open(item.url, options),
  *   renderSource: (item, { source, signal }) =>
  *     new COGLayer({ id: item.url, source, signal }),
  * });
@@ -237,6 +257,8 @@ export class MosaicLayer<
     const {
       id,
       concurrencyLimiter,
+      reader,
+      requestInit,
       extent,
       maxCacheByteSize,
       maxCacheSize,
@@ -292,6 +314,8 @@ export class MosaicLayer<
           (await this.props.getSource(item, {
             signal,
             concurrencyLimiter,
+            reader,
+            requestInit,
             getPriority,
           }));
 

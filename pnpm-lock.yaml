@@ -1383,6 +1383,9 @@ importers:
       '@developmentseed/proj':
         specifier: workspace:^
         version: link:../proj
+      '@developmentseed/range-reader':
+        specifier: workspace:^
+        version: link:../range-reader
       '@developmentseed/raster-reproject':
         specifier: workspace:^
         version: link:../raster-reproject
