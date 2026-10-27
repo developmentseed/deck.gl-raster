@@ -331,11 +331,11 @@ export class GeoTIFF {
   /**
    * Create a new GeoTIFF from a URL.
    *
-   * Wraps the HTTP source with a fixed-size block-aligned LRU cache tuned for
-   * TIFF metadata. cogeotiff's lazy per-entry reads (for tile offsets, byte
-   * counts, and other tag values) are served by the block cache; adjacent
-   * entries within a single block hit one underlying request. Tile data reads
-   * bypass the cache and go straight to the raw HTTP source.
+   * Reads through a `RangeReader`: cogeotiff's lazy per-entry reads (tile
+   * offsets, byte counts, other tag values) are widened to 64 KiB blocks and
+   * cached, so adjacent entries cost one request; tile reads issued together
+   * are merged into few streamed range requests and cached under their own
+   * budget, so they never evict header blocks.
    *
    * @param url The URL of the GeoTIFF to open.
    * @param options Optional parameters; see {@link GeoTIFFFromUrlOptions}.
