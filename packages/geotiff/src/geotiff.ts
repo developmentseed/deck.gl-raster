@@ -345,7 +345,7 @@ export class GeoTIFF {
     url: string | URL,
     {
       reader = new RangeReader({
-        cache: { headerBytes: 8 * 1024 * 1024, dataBytes: 8 * 1024 * 1024 },
+        cache: { metadataBytes: 8 * 1024 * 1024, dataBytes: 8 * 1024 * 1024 },
       }),
       requestInit,
       signal,
@@ -358,7 +358,7 @@ export class GeoTIFF {
     // Two sources over one reader: the header reads (IFDs and the offset
     // tables cogeotiff reads one entry at a time) and the tile reads are
     // merged and cached separately, so tile churn never evicts the header.
-    const source = (purpose: "header" | "data") =>
+    const source = (purpose: "metadata" | "data") =>
       new RangeReaderSource({
         reader,
         url: resolved,
@@ -369,7 +369,7 @@ export class GeoTIFF {
       });
     return await GeoTIFF.open({
       dataSource: source("data"),
-      headerSource: source("header"),
+      headerSource: source("metadata"),
       signal,
       debug,
     });

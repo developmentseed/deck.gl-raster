@@ -229,9 +229,9 @@ const tiles = await tiff.fetchTiles([
 ```
 
 Tune the reader, not the file: `maxGap`, `maxOverfetchBytes`,
-`maxRequestBytes`, `minHeaderReadBytes` and the cache budgets are
+`maxRequestBytes`, `minMetadataReadBytes` and the cache budgets are
 `RangeReader` options (the former `chunkSize` and `cacheSize` options of
-`fromUrl` are `minHeaderReadBytes` and `cache.headerBytes` there).
+`fromUrl` are `minMetadataReadBytes` and `cache.metadataBytes` there).
 `reader.stats` counts requests, bytes and cache hits. Without a
 `concurrencyLimiter`, every merged request goes out at once; the deck.gl
 layers pass a shared per-origin limiter, and so should a page that opens

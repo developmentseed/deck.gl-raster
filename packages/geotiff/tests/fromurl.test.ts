@@ -27,7 +27,7 @@ describe("GeoTIFF.fromUrl", () => {
     // first block's `Content-Length` would be mistaken for the file size.
     const reader = new RangeReader({
       fetch: server.fetch,
-      minHeaderReadBytes: 1024,
+      minMetadataReadBytes: 1024,
     });
     const tiff = await GeoTIFF.fromUrl("https://example.test/cog.tif", {
       reader,
@@ -45,7 +45,7 @@ describe("GeoTIFF.fromUrl", () => {
     // read is not a cache hit from the first block.
     const reader = new RangeReader({
       fetch: server.fetch,
-      minHeaderReadBytes: 1024,
+      minMetadataReadBytes: 1024,
     });
     const tiff = await GeoTIFF.fromUrl("https://example.test/cog.tif", {
       reader,

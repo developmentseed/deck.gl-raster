@@ -14,7 +14,7 @@ export interface RangeReaderSourceOptions {
   /** The reader every read of this file goes through. */
   reader: RangeReader;
   url: URL;
-  /** Which of the reader's budgets this source's reads belong to. */
+  /** Which of the reader's budgets this source's reads belong to: `metadata` for the header, `data` for tiles. */
   purpose: Purpose;
   /** Headers, credentials and mode sent with every request for this file. */
   init?: RequestInit;
@@ -28,7 +28,7 @@ export interface RangeReaderSourceOptions {
  * A chunkd {@link Source} whose reads go through a {@link RangeReader}, so
  * cogeotiff's header reads and our tile reads are merged, streamed and
  * cached by it. `GeoTIFF.fromUrl` builds two over one reader: one for the
- * header (purpose `header`) and one for tile data (purpose `data`).
+ * header (purpose `metadata`) and one for tile data (purpose `data`).
  *
  * `metadata.size` is seeded infinite and never updated: cogeotiff clamps a
  * read to the size it knows, and in a browser a range response often reveals
@@ -73,7 +73,7 @@ export class RangeReaderSource implements Source {
     length?: number,
     options?: { signal?: AbortSignal },
   ): Promise<ArrayBuffer> {
-    let range: ReadRange;
+    let range: ReadRange | undefined;
     if (offset < 0) {
       range = { suffixLength: -offset };
     } else if (length !== undefined) {

@@ -18,7 +18,7 @@ function pattern(n: number, seed = 0): Uint8Array {
   return out;
 }
 
-function open(file = pattern(256), purpose: "header" | "data" = "data") {
+function open(file = pattern(256), purpose: "metadata" | "data" = "data") {
   const server = fixtureServer(file);
   const reader = new RangeReader({ fetch: server.fetch });
   const source = new RangeReaderSource({ reader, url: URL_A, purpose });
@@ -81,14 +81,14 @@ describe("RangeReaderSource", () => {
     const source = new RangeReaderSource({
       reader,
       url: URL_A,
-      purpose: "header",
+      purpose: "metadata",
       init: { headers: { authorization: "Bearer t" } },
       limiter,
       getPriority: () => 7,
     });
     const bytes = await source.fetch(100, 8);
     expect(new Uint8Array(bytes)).toEqual(pattern(8, 100));
-    // A header read is widened to its 64 KiB block.
+    // A metadata read is widened to its 64 KiB block.
     expect(server.requests).toEqual(["bytes=0-65535"]);
     expect(server.headers[0]!.get("authorization")).toBe("Bearer t");
     expect(acquires).toHaveLength(1);

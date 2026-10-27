@@ -33,7 +33,7 @@ describe("GeoTIFF.fromUrl({ concurrencyLimiter })", () => {
       // first block the open fetched.
       reader: new RangeReader({
         fetch: server.fetch,
-        minHeaderReadBytes: 1024,
+        minMetadataReadBytes: 1024,
       }),
       concurrencyLimiter: limiter,
     });

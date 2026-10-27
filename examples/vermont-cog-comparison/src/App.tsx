@@ -48,16 +48,16 @@ type Side = "left" | "right";
 /** Render mode union; valid choices per side depend on the source band count. */
 type RenderMode = "trueColor" | "falseColor" | "ndvi" | "grayscale";
 
-/** Fixed colormap for NDVI; spec says no per-side colormap selector. */
 /**
  * One reader for every Vermont file: the multi-hundred-GB files have offset
- * tables far larger than the default 32 MiB header budget, so give the
+ * tables far larger than the default 32 MiB metadata budget, so give the
  * shared cache a larger one.
  */
 const reader = new RangeReader({
-  cache: { headerBytes: 64 * 1024 * 1024 },
+  cache: { metadataBytes: 64 * 1024 * 1024 },
 });
 
+/** Fixed colormap for NDVI; spec says no per-side colormap selector. */
 const NDVI_COLORMAP_INDEX = COLORMAP_INDEX.cfastie;
 
 /**

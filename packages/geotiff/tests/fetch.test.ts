@@ -185,7 +185,7 @@ describe("fetchTiles", () => {
     const server = fixtureServer(file, { chunkBytes: 4096 });
     const reader = new RangeReader({
       fetch: server.fetch,
-      minHeaderReadBytes: 1024,
+      minMetadataReadBytes: 1024,
     });
     const tiff = await GeoTIFF.fromUrl("https://example.test/cog.tif", {
       reader,
@@ -276,7 +276,7 @@ describe("fetchTiles", () => {
     const server = fixtureServer(file, { chunkBytes: 4096 });
     const reader = new RangeReader({
       fetch: server.fetch,
-      minHeaderReadBytes: 1024,
+      minMetadataReadBytes: 1024,
     });
     const tiff = await GeoTIFF.fromUrl("https://example.test/bands.tif", {
       reader,
