@@ -84,7 +84,7 @@ export function mergeReads(
 
 /**
  * Widen a read shorter than `blockSize` to the aligned block span that
- * contains it, so small header reads (cogeotiff reads one offset-table entry
+ * contains it, so small metadata reads (cogeotiff reads one offset-table entry
  * at a time) become block reads that neighbouring entries hit in the cache.
  * A read of `blockSize` or more is returned as is.
  */

@@ -6,8 +6,8 @@ import type {
   Purpose,
 } from "./types.js";
 
-/** Default budget for header-purpose spans, shared by every file a reader serves. */
-export const DEFAULT_HEADER_CACHE_BYTES = 32 * 1024 * 1024;
+/** Default budget for metadata-purpose spans, shared by every file a reader serves. */
+export const DEFAULT_METADATA_CACHE_BYTES = 32 * 1024 * 1024;
 
 /** Default budget for data-purpose spans, shared by every file a reader serves. */
 export const DEFAULT_DATA_CACHE_BYTES = 64 * 1024 * 1024;
@@ -34,7 +34,7 @@ class Tier {
 /**
  * The default {@link ByteCache}: contiguous spans in memory, looked up by
  * containment, with one LRU budget per {@link Purpose} so data churn can
- * never evict header spans. A read is served from any span that contains
+ * never evict metadata spans. A read is served from any span that contains
  * it, whichever purpose fetched it; the purpose only decides which budget a
  * stored span counts against. A span larger than its budget, or empty, is not
  * stored. A span contained in a stored span is dropped; stored spans the new
@@ -46,9 +46,9 @@ export class MemoryByteCache implements ByteCache {
   private readonly byFile = new Map<FileKey, Set<Span>>();
   private nextId = 0;
 
-  constructor(options: { headerBytes?: number; dataBytes?: number } = {}) {
+  constructor(options: { metadataBytes?: number; dataBytes?: number } = {}) {
     this.tiers = {
-      header: new Tier(options.headerBytes ?? DEFAULT_HEADER_CACHE_BYTES),
+      metadata: new Tier(options.metadataBytes ?? DEFAULT_METADATA_CACHE_BYTES),
       data: new Tier(options.dataBytes ?? DEFAULT_DATA_CACHE_BYTES),
     };
   }
@@ -60,7 +60,7 @@ export class MemoryByteCache implements ByteCache {
   ): Promise<Uint8Array | undefined> {
     const end = range.offset + range.length;
     // Any span serves any purpose: the first tiles of a COG often sit inside
-    // its first header block, and a data read for them must not fetch them
+    // its first metadata block, and a data read for them must not fetch them
     // again. The span's own tier keeps the recency and the budget.
     for (const span of this.byFile.get(file.key) ?? []) {
       if (

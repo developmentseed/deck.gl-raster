@@ -162,8 +162,10 @@ Verified on 2026-10-26 unless noted.
   then the tiles of each level in row-major order, overviews first. Tiles of
   one level are contiguous, so a viewport's tiles are a few runs of adjacent
   tiles separated by the off-screen tiles of the same rows.
-- GeoTIFFs from other writers may put IFDs at the end. "Header" is therefore a
-  purpose of a read, not a byte offset.
+- GeoTIFFs from other writers may put IFDs at the end. "Metadata" is therefore
+  a purpose of a read, not a byte offset: the bytes a format reads before it
+  can ask for data (a COG's IFDs and offset tables, a sharded Zarr shard's
+  index, a PMTiles directory), as opposed to the payload.
 - GDAL's COG driver also writes a "ghost region" of structural metadata right
   after the file header (`LAYOUT=IFDS_BEFORE_DATA`, `BLOCK_ORDER=ROW_MAJOR`,
   `BLOCK_LEADER=SIZE_AS_UINT4`, `BLOCK_TRAILER=LAST_4_BYTES_REPEATED`,
@@ -239,7 +241,7 @@ COGLayer / MultiCOGLayer / MosaicLayer        (deck.gl-geotiff)
   |  getTileData(tile, { signal })             one call per selected tile, one task
   v
 GeoTIFF.fetchTile / fetchTiles                 (geotiff)
-  |  headerSource.fetch(...)  purpose "header"  offset-table entries, IFDs
+  |  headerSource.fetch(...)  purpose "metadata"  offset-table entries, IFDs
   |  dataSource.fetch(...)    purpose "data"    tile bytes
   v
 RangeReader                                    (range-reader)
@@ -276,13 +278,13 @@ interface RangeReaderOptions {
   fetch?: typeof fetch;
   /** Byte budgets of the default in-memory cache, by purpose, or a
    *  user-supplied `ByteCache` (see "Cache"). */
-  cache?: { headerBytes?: number; dataBytes?: number } | ByteCache;
+  cache?: { metadataBytes?: number; dataBytes?: number } | ByteCache;
   /** Merge rule knobs; see "Merging". */
   maxGap?: number | "median";
   maxOverfetchBytes?: number;
   maxRequestBytes?: number;
-  /** Header-purpose reads smaller than this are widened to an aligned block. */
-  minHeaderReadBytes?: number;
+  /** Metadata-purpose reads smaller than this are widened to an aligned block. */
+  minMetadataReadBytes?: number;
   /** `RequestInit.cache` for range requests. Default: the browser default. */
   cacheMode?: RequestCache;
 }
@@ -298,7 +300,8 @@ type ReadResult =
 
 interface ReadOptions {
   signal?: AbortSignal;
-  purpose: "header" | "data";
+  /** `"data"` when omitted. */
+  purpose?: "metadata" | "data";
   /** Re-evaluated by the limiter on every slot-open; lower is sooner. */
   getPriority?: () => Priority;
   limiter?: ConcurrencyLimiter | null;
@@ -351,7 +354,7 @@ the merged range stays within both caps:
 - `maxRequestBytes` bounds one merged request's total size, so a large view
   still splits across the six connections rather than serialising on one.
 
-Header-purpose reads smaller than `minHeaderReadBytes` are first widened to
+Metadata-purpose reads smaller than `minMetadataReadBytes` are first widened to
 an aligned block of that size (64 KiB, today's `chunkSize`), so cogeotiff's
 entry reads become block reads as they do today, and neighbouring entries hit
 the cache.
@@ -442,8 +445,8 @@ read is a hit if one span contains its range; partial overlaps are misses (no
 stitching). A read whose range lies inside an in-flight stream attaches to it
 and resolves when the stream passes its end.
 
-Two budgets, one LRU order each: header-purpose spans count against
-`headerBytes`, data-purpose spans against `dataBytes`. Lookup is across both:
+Two budgets, one LRU order each: metadata-purpose spans count against
+`metadataBytes`, data-purpose spans against `dataBytes`. Lookup is across both:
 a read of either purpose is served by any span that contains it, so tile
 bytes that arrived inside a header block are never fetched again (the
 purpose decides which budget a span counts against, not who may read it). Tile churn can never
@@ -453,7 +456,7 @@ visited. In-flight buffers count against their budget and are never evicted;
 the budget may be overshot by in-flight bytes, as neuroglancer admits
 downloads at size zero.
 
-Defaults, to be measured: `headerBytes` 32 MiB (today is 8 MiB per source;
+Defaults, to be measured: `metadataBytes` 32 MiB (today is 8 MiB per source;
 this is shared, and a mosaic of a thousand sheets needs about 80 MB to hold
 every header), `dataBytes` 64 MiB. Both are constructor options and both are
 documented as the knobs to raise for large mosaics or scrubbing.
@@ -531,14 +534,14 @@ the same object hit it.
   reads; a missing length maps to a whole-object read, matching chunkd's
   contract even though cogeotiff never uses either.
 - `GeoTIFF.fromUrl(url, options)` builds two adapters over one reader, purpose
-  `header` for cogeotiff's `Tiff` and purpose `data` for tile bytes, and
+  `metadata` for cogeotiff's `Tiff` and purpose `data` for tile bytes, and
   passes them to `GeoTIFF.open` as `headerSource` and `dataSource` exactly as
   today. New options: `reader?: RangeReader` (when omitted, `fromUrl` creates
   a private reader with default options, so a bare `fromUrl` still batches
   and caches within that file) and `requestInit?: RequestInit`.
   `concurrencyLimiter` and `getPriority` stay as they are. `chunkSize` and
   `cacheSize` are removed; they are reader options now
-  (`minHeaderReadBytes`, `cache.headerBytes`), and the changelog says so.
+  (`minMetadataReadBytes`, `cache.metadataBytes`), and the changelog says so.
 - Removed from the geotiff package: `SourceChunk` and `LRUCacheMiddleware`
   usage, `LimiterMiddleware`, `cache.ts`, `coalesce.ts` and the
   `@chunkd/middleware` dependency. `@chunkd/source-http` is no longer used by

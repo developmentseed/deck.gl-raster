@@ -9,7 +9,7 @@ reads each response body as a stream and resolves every read the moment its
 last byte arrives, and cancels a request as soon as nobody wants what is
 left of it. Everything received, including the bytes between the reads a
 request was merged across, lands in a byte cache with separate budgets for
-header and data bytes, so a later read inside an earlier request is served
+metadata and data bytes, so a later read inside an earlier request is served
 from memory.
 
 ## Usage
@@ -58,18 +58,18 @@ cancelled, keeping what arrived, when the last one leaves.
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `fetch` | `globalThis.fetch` | Transport. Replace it for custom auth or in tests. |
-| `cache` | in-memory, 32 MiB header + 64 MiB data | Budgets for the default cache, or a `ByteCache` of your own. |
+| `cache` | in-memory, 32 MiB metadata + 64 MiB data | Budgets for the default cache, or a `ByteCache` of your own. |
 | `maxGap` | `"median"` | Largest gap between two reads that still share a request; `"median"` is the batch's median read length. |
 | `maxOverfetchBytes` | 1 MiB | Largest number of bytes in one request that no read covers. |
 | `maxRequestBytes` | 16 MiB | Largest merged request; also the largest whole object accepted from a server that ignores `Range`. |
-| `minHeaderReadBytes` | 64 KiB | Header-purpose reads shorter than this are widened to an aligned block of this size. |
+| `minMetadataReadBytes` | 64 KiB | Metadata-purpose reads shorter than this are widened to an aligned block of this size. |
 | `cacheMode` | the browser's default | `RequestInit.cache` for every request. |
 
-Every read names its `purpose`, `"header"` or `"data"`. The two are merged
+Every read names its `purpose`, `"metadata"` or `"data"`. The two are merged
 separately and count against separate cache budgets, so data churn never
 evicts the small structural reads every later read depends on. A read is
 served from any cached span that contains it, whichever purpose fetched it:
-the first tiles of a COG often arrive inside its first header block.
+the first tiles of a COG often arrive inside its first metadata block.
 
 ## Bring your own cache
 

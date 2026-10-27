@@ -7,7 +7,7 @@ export {
 } from "./limiter.js";
 export {
   DEFAULT_DATA_CACHE_BYTES,
-  DEFAULT_HEADER_CACHE_BYTES,
+  DEFAULT_METADATA_CACHE_BYTES,
   MemoryByteCache,
 } from "./memory-cache.js";
 export type { MergedRange, MergeOptions } from "./merge.js";
@@ -15,7 +15,7 @@ export { mergeReads, widenRead } from "./merge.js";
 export {
   DEFAULT_MAX_OVERFETCH_BYTES,
   DEFAULT_MAX_REQUEST_BYTES,
-  DEFAULT_MIN_HEADER_READ_BYTES,
+  DEFAULT_MIN_METADATA_READ_BYTES,
   RangeReader,
 } from "./reader.js";
 export type {

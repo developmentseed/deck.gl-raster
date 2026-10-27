@@ -26,13 +26,16 @@ export const DEFAULT_MAX_OVERFETCH_BYTES = 1024 * 1024;
 /** Default for {@link RangeReaderOptions.maxRequestBytes}: 16 MiB. */
 export const DEFAULT_MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 
-/** Default for {@link RangeReaderOptions.minHeaderReadBytes}: 64 KiB. */
-export const DEFAULT_MIN_HEADER_READ_BYTES = 64 * 1024;
+/** Default for {@link RangeReaderOptions.minMetadataReadBytes}: 64 KiB. */
+export const DEFAULT_MIN_METADATA_READ_BYTES = 64 * 1024;
+
+/** {@link ReadOptions} with the purpose filled in. */
+type ResolvedReadOptions = ReadOptions & { purpose: Purpose };
 
 /** A read waiting for the task window to close. */
 interface PendingRead {
   member: StreamMember;
-  /** The range to merge: the member itself, or its widened header block. */
+  /** The range to merge: the member itself, or its widened metadata block. */
   request: ByteRange;
   limiter: ConcurrencyLimiter | null | undefined;
   /** Removes the queued-abort listener once the read leaves the queue. */
@@ -74,14 +77,14 @@ export class RangeReader {
   private readonly maxGap: number | "median";
   private readonly maxOverfetchBytes: number;
   private readonly maxRequestBytes: number;
-  private readonly minHeaderReadBytes: number;
+  private readonly minMetadataReadBytes: number;
   private readonly cacheMode: RequestCache | undefined;
   /** Queued reads by file key and purpose, flushed once per task. */
   private readonly pending = new Map<string, PendingGroup>();
   /**
    * Streams still running, by file key. Keyed without the purpose: a read
    * of either purpose may attach to a stream that covers it, and the first
-   * tiles of a COG often sit inside its first header block.
+   * tiles of a COG often sit inside its first metadata block.
    */
   private readonly inflight = new Map<FileKey, Set<RangeStream>>();
   /** Object sizes learned from responses, by file key. */
@@ -98,8 +101,8 @@ export class RangeReader {
     this.maxOverfetchBytes =
       options.maxOverfetchBytes ?? DEFAULT_MAX_OVERFETCH_BYTES;
     this.maxRequestBytes = options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES;
-    this.minHeaderReadBytes =
-      options.minHeaderReadBytes ?? DEFAULT_MIN_HEADER_READ_BYTES;
+    this.minMetadataReadBytes =
+      options.minMetadataReadBytes ?? DEFAULT_MIN_METADATA_READ_BYTES;
     this.cacheMode = options.cacheMode;
   }
 
@@ -120,20 +123,24 @@ export class RangeReader {
     if (signal?.aborted) {
       return Promise.reject(signal.reason);
     }
+    const resolved: ResolvedReadOptions =
+      options.purpose === undefined
+        ? { ...options, purpose: "data" }
+        : (options as ResolvedReadOptions);
     if (range === undefined || "suffixLength" in range) {
-      return this.single(file, range, options);
+      return this.single(file, range, resolved);
     }
     if (range.length === 0) {
       return Promise.resolve({ kind: "bytes", bytes: new Uint8Array(0) });
     }
-    return this.lookup(file, range, options);
+    return this.lookup(file, range, resolved);
   }
 
   /** The cache, then in-flight streams, then the queue. */
   private async lookup(
     file: FileIdentity,
     range: ByteRange,
-    options: ReadOptions,
+    options: ResolvedReadOptions,
   ): Promise<ReadResult> {
     const size = this.sizes.get(file.key);
     if (size !== undefined && range.offset >= size) {
@@ -171,7 +178,7 @@ export class RangeReader {
   private single(
     file: FileIdentity,
     request: ReadRange | undefined,
-    options: ReadOptions,
+    options: ResolvedReadOptions,
   ): Promise<ReadResult> {
     return new Promise((resolve, reject) => {
       const member: StreamMember = {
@@ -199,7 +206,7 @@ export class RangeReader {
   private enqueue(
     key: string,
     file: FileIdentity,
-    options: ReadOptions,
+    options: ResolvedReadOptions,
     member: StreamMember,
   ): void {
     const { signal } = options;
@@ -211,8 +218,9 @@ export class RangeReader {
     const pending: PendingRead = {
       member,
       request:
-        options.purpose === "header" && member.length < this.minHeaderReadBytes
-          ? widenRead(member, this.minHeaderReadBytes)
+        options.purpose === "metadata" &&
+        member.length < this.minMetadataReadBytes
+          ? widenRead(member, this.minMetadataReadBytes)
           : member,
       limiter: options.limiter,
       detach: () => {},
@@ -270,7 +278,7 @@ export class RangeReader {
             // A widened block is wanted to its end for the cache's sake, even
             // once the small read inside it has resolved; otherwise the stream
             // would be cancelled after the first chunk and the block never
-            // land. It is at most `minHeaderReadBytes`, and reads of it that
+            // land. It is at most `minMetadataReadBytes`, and reads of it that
             // abort do not cut it short.
             kept.add(pending.request.offset);
             members.push(keepMember(pending.request));

@@ -25,19 +25,19 @@ describe("MemoryByteCache", () => {
   });
 
   it("serves a read of either purpose from a span the other purpose fetched", async () => {
-    // The first tiles of a COG often sit inside its first header block; a
+    // The first tiles of a COG often sit inside its first metadata block; a
     // data read for them must not fetch them again.
-    const cache = new MemoryByteCache({ dataBytes: 100, headerBytes: 100 });
-    await cache.put(file, 0, bytes(60, 3), "header");
+    const cache = new MemoryByteCache({ dataBytes: 100, metadataBytes: 100 });
+    await cache.put(file, 0, bytes(60, 3), "metadata");
     expect(await cache.get(file, { offset: 10, length: 10 }, "data")).toEqual(
       bytes(10, 3),
     );
-    expect(cache.byteSize("header")).toBe(60);
+    expect(cache.byteSize("metadata")).toBe(60);
     expect(cache.byteSize("data")).toBe(0);
   });
 
   it("evicts least recently used spans within one purpose's budget", async () => {
-    const cache = new MemoryByteCache({ dataBytes: 100, headerBytes: 100 });
+    const cache = new MemoryByteCache({ dataBytes: 100, metadataBytes: 100 });
     await cache.put(file, 0, bytes(60), "data");
     await cache.put(file, 1000, bytes(30), "data");
     await cache.get(file, { offset: 0, length: 1 }, "data");
@@ -51,16 +51,16 @@ describe("MemoryByteCache", () => {
     expect(cache.byteSize("data")).toBe(90);
   });
 
-  it("keeps header spans when data churns", async () => {
-    const cache = new MemoryByteCache({ dataBytes: 100, headerBytes: 100 });
-    await cache.put(file, 0, bytes(60), "header");
+  it("keeps metadata spans when data churns", async () => {
+    const cache = new MemoryByteCache({ dataBytes: 100, metadataBytes: 100 });
+    await cache.put(file, 0, bytes(60), "metadata");
     for (let i = 0; i < 10; i++) {
       await cache.put(file, i * 1000, bytes(60), "data");
     }
     expect(
-      await cache.get(file, { offset: 0, length: 60 }, "header"),
+      await cache.get(file, { offset: 0, length: 60 }, "metadata"),
     ).toBeDefined();
-    expect(cache.byteSize("header")).toBe(60);
+    expect(cache.byteSize("metadata")).toBe(60);
     expect(cache.byteSize("data")).toBe(60);
   });
 

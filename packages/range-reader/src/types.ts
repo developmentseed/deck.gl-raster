@@ -1,12 +1,14 @@
 import type { ConcurrencyLimiter, Priority } from "./limiter.js";
 
 /**
- * What a read is for. Header reads (file structure: IFDs, offset tables,
- * metadata) and data reads (tile or chunk bytes) are merged and cached
- * separately, so data churn never evicts the small reads every later read
- * depends on.
+ * What a read is for. Metadata is what a format reads before it can ask
+ * for data and what every later read depends on: a COG's IFDs and offset
+ * tables, a sharded Zarr shard's index, a PMTiles directory. Data is the
+ * payload: tiles, chunks. The two are merged separately, metadata reads
+ * are widened to blocks, and each counts against its own cache budget, so
+ * data churn never evicts the small structural reads.
  */
-export type Purpose = "header" | "data";
+export type Purpose = "metadata" | "data";
 
 /** A byte range: `length` bytes starting at `offset`. */
 export interface ByteRange {
@@ -56,7 +58,8 @@ export interface FileIdentity {
 
 /** Per-read options for {@link RangeReader.read}. */
 export interface ReadOptions {
-  purpose: Purpose;
+  /** What the read is for; `"data"` when omitted. */
+  purpose?: Purpose;
   /** Ends this read's wait; never aborts a request another read still wants. */
   signal?: AbortSignal;
   /** Re-evaluated by the limiter on every slot-open; lower is served sooner. */
@@ -117,7 +120,7 @@ export interface RangeReaderOptions {
    * Byte budgets of the default in-memory cache, by purpose, or a
    * user-supplied {@link ByteCache}.
    */
-  cache?: { headerBytes?: number; dataBytes?: number } | ByteCache;
+  cache?: { metadataBytes?: number; dataBytes?: number } | ByteCache;
   /**
    * Largest gap between two reads that still share a request. `"median"`
    * uses the batch's median read length.
@@ -127,8 +130,8 @@ export interface RangeReaderOptions {
   maxOverfetchBytes?: number;
   /** Largest merged request; also the largest whole object accepted from a server that ignores `Range`. */
   maxRequestBytes?: number;
-  /** Header reads shorter than this are widened to an aligned block of this size. */
-  minHeaderReadBytes?: number;
+  /** Metadata reads shorter than this are widened to an aligned block of this size. */
+  minMetadataReadBytes?: number;
   /** `RequestInit.cache` for every request. Default: the browser's default. */
   cacheMode?: RequestCache;
 }

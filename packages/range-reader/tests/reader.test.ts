@@ -7,7 +7,7 @@ import { fakeFetch, file, pattern } from "./helpers.js";
 
 const f = file();
 const DATA = { purpose: "data" } as const;
-const HEADER = { purpose: "header" } as const;
+const METADATA = { purpose: "metadata" } as const;
 
 /** Run the reader's task window. */
 const flush = () => vi.advanceTimersByTimeAsync(0);
@@ -94,16 +94,16 @@ describe("RangeReader", () => {
     expect(fake.calls[0]!.range).toBe("bytes=0-99");
   });
 
-  it("widens small header reads to aligned blocks and merges them", async () => {
+  it("widens small metadata reads to aligned blocks and merges them", async () => {
     // Widened to [64, 128) and [192, 256): one request only if the 64-byte
     // gap between the blocks may be merged across.
     const reader = new RangeReader({
       fetch: fake.fetch,
       maxGap: 64,
-      minHeaderReadBytes: 64,
+      minMetadataReadBytes: 64,
     });
-    const p1 = reader.read(f, { offset: 100, length: 8 }, HEADER);
-    const p2 = reader.read(f, { offset: 200, length: 8 }, HEADER);
+    const p1 = reader.read(f, { offset: 100, length: 8 }, METADATA);
+    const p2 = reader.read(f, { offset: 200, length: 8 }, METADATA);
     await flush();
     expect(fake.calls).toHaveLength(1);
     expect(fake.calls[0]!.range).toBe("bytes=64-255");
@@ -122,9 +122,9 @@ describe("RangeReader", () => {
     // and the block must stay wanted until the second lands in the cache.
     const reader = new RangeReader({
       fetch: fake.fetch,
-      minHeaderReadBytes: 64,
+      minMetadataReadBytes: 64,
     });
-    const p = reader.read(f, { offset: 4, length: 8 }, HEADER);
+    const p = reader.read(f, { offset: 4, length: 8 }, METADATA);
     await flush();
     expect(fake.calls[0]!.range).toBe("bytes=0-63");
     const body = fake.calls[0]!.reply({
@@ -137,20 +137,20 @@ describe("RangeReader", () => {
     await body.push(pattern(48, 16));
     await body.close();
     await microtasks();
-    const later = await reader.read(f, { offset: 40, length: 8 }, HEADER);
+    const later = await reader.read(f, { offset: 40, length: 8 }, METADATA);
     expect(later).toEqual({ kind: "bytes", bytes: pattern(8, 40) });
     expect(fake.calls).toHaveLength(1);
     expect(reader.stats.cancelled).toBe(0);
   });
 
-  it("attaches a data read to an in-flight header block instead of requesting", async () => {
-    // The top overview tile often sits inside the first header block and is
+  it("attaches a data read to an in-flight metadata block instead of requesting", async () => {
+    // The top overview tile often sits inside the first metadata block and is
     // asked for as soon as its offset entry resolves, early in that stream.
     const reader = new RangeReader({
       fetch: fake.fetch,
-      minHeaderReadBytes: 64,
+      minMetadataReadBytes: 64,
     });
-    const h = reader.read(f, { offset: 4, length: 8 }, HEADER);
+    const h = reader.read(f, { offset: 4, length: 8 }, METADATA);
     await flush();
     const body = fake.calls[0]!.reply({
       status: 206,
@@ -167,8 +167,18 @@ describe("RangeReader", () => {
     expect(await d).toEqual({ kind: "bytes", bytes: pattern(8, 40) });
   });
 
-  it("never shares a request between header and data reads of one file", async () => {
-    void reader.read(f, { offset: 0, length: 10 }, HEADER);
+  it("treats a read without a purpose as data: not widened", async () => {
+    const reader = new RangeReader({
+      fetch: fake.fetch,
+      minMetadataReadBytes: 64,
+    });
+    void reader.read(f, { offset: 4, length: 8 }, {});
+    await flush();
+    expect(fake.calls[0]!.range).toBe("bytes=4-11");
+  });
+
+  it("never shares a request between metadata and data reads of one file", async () => {
+    void reader.read(f, { offset: 0, length: 10 }, METADATA);
     void reader.read(f, { offset: 10, length: 10 }, DATA);
     await flush();
     expect(fake.calls).toHaveLength(2);
