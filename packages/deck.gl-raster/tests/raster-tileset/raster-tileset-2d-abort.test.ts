@@ -111,3 +111,66 @@ describe("RasterTileset2D abort of unwanted loads", () => {
     expect(signals.slice(first).some((signal) => signal.aborted)).toBe(false);
   });
 });
+
+describe("RasterTileset2D abort of unloaded loads", () => {
+  /** Nearly the same view, one level coarser: a new tile, the old ones unselected. */
+  const COARSER = new WebMercatorViewport({
+    longitude: 0,
+    latitude: 0,
+    zoom: 15,
+    width: 100,
+    height: 100,
+  });
+
+  function makeTinyCacheTileset(abortUnwantedLoads: boolean) {
+    const signals: AbortSignal[] = [];
+    const unloaded: unknown[] = [];
+    const getTileData: Tileset2DProps["getTileData"] = (tile) => {
+      signals.push(tile.signal!);
+      return new Promise(() => {});
+    };
+    const tileset = new RasterTileset2D(
+      {
+        getTileData,
+        onTileUnload: (tile) => unloaded.push(tile),
+        maxRequests: 0,
+        // Any newly created tile overflows the cache, so deck.gl evicts the
+        // unselected ones inside the same update, before our loop sees them.
+        maxCacheSize: 1,
+      },
+      descriptor,
+      { abortUnwantedLoads },
+    );
+    return { tileset, signals, unloaded };
+  }
+
+  it("aborts a loading tile when deck.gl unloads it", async () => {
+    const { tileset, signals, unloaded } = makeTinyCacheTileset(true);
+    tileset.update(HERE);
+    await settle();
+    const first = signals.length;
+    expect(first).toBeGreaterThan(0);
+
+    tileset.update(COARSER);
+    await settle();
+    expect(signals.length).toBeGreaterThan(first);
+    expect(unloaded.length).toBeGreaterThanOrEqual(first);
+    expect(signals.slice(0, first).every((signal) => signal.aborted)).toBe(
+      true,
+    );
+  });
+
+  it("leaves an unloaded tile loading when the option is off", async () => {
+    const { tileset, signals, unloaded } = makeTinyCacheTileset(false);
+    tileset.update(HERE);
+    await settle();
+    const first = signals.length;
+
+    tileset.update(COARSER);
+    await settle();
+    expect(unloaded.length).toBeGreaterThanOrEqual(first);
+    expect(signals.slice(0, first).some((signal) => signal.aborted)).toBe(
+      false,
+    );
+  });
+});

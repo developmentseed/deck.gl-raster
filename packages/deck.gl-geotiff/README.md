@@ -62,8 +62,9 @@ over tiles already downloaded costs no request. Every `COGLayer`,
 `MultiCOGLayer` and `MosaicLayer` on a page shares that reader's cache and
 batching window by default.
 
-- **Tuning.** Pass your own reader to change its gap and over-fetch limits
-  or its cache budgets, or to isolate a layer:
+- **Tuning.** Open the source yourself with a reader of your own to change
+  its gap and over-fetch limits or its cache budgets, or to isolate a layer
+  (`MosaicLayer` takes `reader` as a prop and passes it to `getSource`):
 
   ```ts
   import { RangeReader } from "@developmentseed/range-reader";
@@ -72,21 +73,23 @@ batching window by default.
     maxOverfetchBytes: 4 * 1024 * 1024,
     cache: { headerBytes: 64 * 1024 * 1024, dataBytes: 256 * 1024 * 1024 },
   });
-  new COGLayer({ id: "scene", source: url, reader });
+  const source = await COGSource.open(url, { reader });
+  new COGLayer({ id: "scene", source });
   ```
 
   `reader.stats` counts requests, bytes requested and received, bytes
   over-fetched and cache hits.
-- **Authentication.** `requestInit` sets the headers, credentials and mode
-  of every request a layer's sources make. Sources read with different
-  inits never share a request or a cached byte, even for one URL.
+- **Authentication.** `requestInit` on `COGSource.open` and
+  `MultiCOGSource.open` (and the `MosaicLayer` prop of the same name) sets
+  the headers, credentials and mode of every request the source makes.
+  Sources read with different inits never share a request or a cached byte,
+  even for one URL.
 
   ```ts
-  new COGLayer({
-    id: "private",
-    source: url,
+  const source = await COGSource.open(url, {
     requestInit: { headers: { authorization: `Bearer ${token}` } },
   });
+  new COGLayer({ id: "private", source });
   ```
 - **Throttling.** `COGLayer` and `MultiCOGLayer` default to
   `maxRequests: 256` and `debounceTime: 50` so a whole selection reaches

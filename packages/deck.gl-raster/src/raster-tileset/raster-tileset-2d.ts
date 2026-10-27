@@ -232,17 +232,31 @@ export class RasterTileset2D extends Tileset2D {
   }
 
   /**
-   * Unloads every cached tile. deck.gl's `Tileset2D.finalize` clears its cache
-   * without calling `onTileUnload`, so GPU resources that `getTileData` made
-   * for those tiles, like textures, would be freed only by garbage collection.
-   * A tile still loading is unloaded once its load finishes, since deck.gl
-   * keeps the data that `getTileData` returns after an abort.
+   * deck.gl's options, with `onTileUnload` wrapped so that, with
+   * {@link RasterTileset2DOptions.abortUnwantedLoads}, a tile unloaded while
+   * still loading is aborted first. deck.gl evicts unselected loading tiles
+   * inside `update` (its `_resizeCache`), before {@link update}'s own pass
+   * can see them, and `TileLayer` calls `setOptions` on every props change
+   * with a fresh `onTileUnload`, so the wrap has to live here.
    */
+  override setOptions(opts: Tileset2DProps): void {
+    const { onTileUnload } = opts;
+    super.setOptions({
+      ...opts,
+      onTileUnload: (tile) => {
+        if (this.abortUnwantedLoads && tile.isLoading) {
+          tile.abort();
+        }
+        onTileUnload?.(tile);
+      },
+    });
+  }
+
   /**
    * deck.gl's update, then, with {@link RasterTileset2DOptions.abortUnwantedLoads},
-   * the abort of every loading tile that is neither selected nor visible.
-   * deck.gl only unloads tiles that satisfy the same predicate, so this also
-   * covers a loading tile about to be unloaded.
+   * the abort of every loading tile that is neither selected nor visible and
+   * still cached. A loading tile deck.gl unloads during the update is aborted
+   * by the `onTileUnload` wrap in {@link setOptions} instead.
    */
   override update(...args: Parameters<Tileset2D["update"]>): number {
     const frame = super.update(...args);
@@ -256,6 +270,13 @@ export class RasterTileset2D extends Tileset2D {
     return frame;
   }
 
+  /**
+   * Unloads every cached tile. deck.gl's `Tileset2D.finalize` clears its cache
+   * without calling `onTileUnload`, so GPU resources that `getTileData` made
+   * for those tiles, like textures, would be freed only by garbage collection.
+   * A tile still loading is unloaded once its load finishes, since deck.gl
+   * keeps the data that `getTileData` returns after an abort.
+   */
   override finalize(): void {
     const { onTileUnload } = this.opts;
     for (const tile of this.tiles) {
