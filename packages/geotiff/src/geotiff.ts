@@ -1,6 +1,3 @@
-import { SourceChunk } from "@chunkd/middleware";
-import { SourceView } from "@chunkd/source";
-import { SourceHttp } from "@chunkd/source-http";
 import { SourceMemory } from "@chunkd/source-memory";
 import type { Source, TiffImage, TiffImageTileCount } from "@cogeotiff/core";
 import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
@@ -11,7 +8,7 @@ import type {
   ConcurrencyLimiter,
   Priority,
 } from "@developmentseed/range-reader";
-import { LRUCacheMiddleware } from "./cache.js";
+import { RangeReader } from "@developmentseed/range-reader";
 import type { ColorInterp } from "./colorinterp.js";
 import { inferColorInterpretation } from "./colorinterp.js";
 import { crsFromGeoKeys } from "./crs.js";
@@ -28,37 +25,44 @@ import {
   prefetchPrimaryImageTags,
   prefetchSubImageTags,
 } from "./ifd.js";
-import { LimiterMiddleware } from "./limiter.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
+import { RangeReaderSource } from "./reader-source.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 
 /** Options for {@link GeoTIFF.fromUrl}. */
 export interface GeoTIFFFromUrlOptions {
-  /** Bytes per chunk for the header cache. Defaults to 64 KiB (matches
-   *  geotiff.js's BlockedSource). */
-  chunkSize?: number;
-  /** Total cache size in bytes. Defaults to 8 MiB (~128 blocks at the default
-   *  chunk size). */
-  cacheSize?: number;
+  /**
+   * The {@link RangeReader} every read of this file goes through: header
+   * reads and tile reads are merged into few streamed range requests and
+   * cached by it. Share one reader between files to share its cache and
+   * batching window; omitted, the file gets a private reader with default
+   * options.
+   */
+  reader?: RangeReader;
+  /**
+   * Headers, credentials and mode sent with every request for this file,
+   * for data behind authentication. Files read with different inits never
+   * share a request or a cached byte.
+   */
+  requestInit?: RequestInit;
   /** An optional {@link AbortSignal} to cancel the header reads. */
   signal?: AbortSignal;
   /** When true, the returned GeoTIFF logs each tile/mask data fetch to the
    *  console with offset/length and a `data`/`mask` label. Off by default. */
   debug?: boolean;
-  /** Caps concurrent HTTP requests for both the header/metadata and tile-data
-   *  paths. Header reads go through the cached `SourceView`, so cache hits
-   *  short-circuit before the limiter and never consume a slot — only network
-   *  reads gate. Pass `null` to explicitly disable; omit (or pass `undefined`)
-   *  for the same effect — `GeoTIFF.fromUrl` does *not* default to a shared
-   *  limiter on its own. The deck.gl-geotiff layers default to a shared
+  /** Caps concurrent HTTP requests for both the header and tile-data paths:
+   *  one slot per merged request, none for a cache hit. Pass `null` to
+   *  explicitly disable; omit (or pass `undefined`) for the same effect.
+   *  `GeoTIFF.fromUrl` does *not* default to a shared limiter on its own.
+   *  The deck.gl-geotiff layers default to a shared
    *  {@link PerOriginSemaphore} via their `defaultProps`. */
   concurrencyLimiter?: ConcurrencyLimiter | null;
-  /** Optional dynamic priority for every fetch through this GeoTIFF's sources.
-   *  Re-invoked by the limiter on each slot-open, so closures over dynamic
-   *  state (e.g. layer viewport center, tile bbox) re-sort the queue when that
-   *  state changes. Lower = serviced sooner. Only meaningful when
+  /** Optional dynamic priority for every request of this file. Re-invoked
+   *  by the limiter on each slot-open, so closures over dynamic state (e.g.
+   *  layer viewport center, tile bbox) re-sort the queue when that state
+   *  changes. Lower = serviced sooner. Only meaningful when
    *  `concurrencyLimiter` is set. */
   getPriority?: () => Priority;
 }
@@ -164,7 +168,7 @@ export class GeoTIFF {
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    *
    * @param options.dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
-   * @param options.headerSource The source used to construct the TIFF. This is typically a layered source with caching and chunking, to optimise access to TIFF tags and IFDs. Callers who want to control the initial read size should compose a `SourceChunk` of the desired block size; cogeotiff's default `defaultReadSize` (16 KiB) gets padded up by the chunking layer anyway.
+   * @param options.headerSource The source used to construct the TIFF. `fromUrl` passes a {@link RangeReaderSource} whose reader widens the small header reads to 64 KiB blocks and caches them; a caller composing its own source should cache and chunk it the same way, since cogeotiff reads offset-table entries one at a time.
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console. Off by default.
    */
@@ -178,8 +182,8 @@ export class GeoTIFF {
     // Construct + init in two steps so we don't have to pass cogeotiff's
     // `defaultReadSize` ourselves (the constructor defaults it to
     // `Tiff.DefaultReadSize` when no options are provided). In the typical
-    // fromUrl path, SourceChunk pads any small request up to the block size
-    // anyway, so tuning this independently of the chunk size is rarely useful.
+    // fromUrl path, the reader widens any small header read up to its block
+    // size anyway, so tuning this independently is rarely useful.
     const tiff = await new Tiff(headerSource).init({ signal });
     // Disable cogeotiff's GDAL leader-bytes path so `TiffImage.getTileSize`
     // always reads from TileOffsets/TileByteCounts through the header source.
@@ -338,59 +342,30 @@ export class GeoTIFF {
   static async fromUrl(
     url: string | URL,
     {
-      chunkSize = 64 * 1024,
-      cacheSize = 8 * 1024 * 1024,
+      reader = new RangeReader(),
+      requestInit,
       signal,
       debug,
       concurrencyLimiter,
       getPriority,
     }: GeoTIFFFromUrlOptions = {},
   ): Promise<GeoTIFF> {
-    const source = new SourceHttp(url, {});
-
-    // TEMPORARY workaround for
-    // https://github.com/developmentseed/deck.gl-raster/issues/524
-    //
-    // `@chunkd/source-http` records `source.metadata.size` from the first range
-    // response, preferring `Content-Range` and falling back to `Content-Length`.
-    // In a browser, `Content-Range` is only readable when the server lists it in
-    // `Access-Control-Expose-Headers` (S3 does not by default), so the
-    // `Content-Length` fallback — the length of a single *chunk*, not the file —
-    // gets recorded as the file size. Reads past that bogus size would then be
-    // rejected as out-of-bounds.
-    //
-    // Seed `metadata` ourselves so `SourceHttp` never records a size (it only
-    // fills in `metadata` while it is still null), treating the source as having
-    // unbounded length. Remove once the upstream fix lands.
-    source.metadata = { size: Number.POSITIVE_INFINITY };
-
-    // When a limiter is supplied, slot a LimiterMiddleware into both
-    // sources' middleware stacks. On the header source, it sits *after*
-    // SourceChunk + LRUCacheMiddleware so a cache hit short-circuits and never
-    // consumes a slot — only network reads that escape the cache are gated.
-    // On the data source (no caching), every fetch is gated. Both stacks
-    // share one LimiterMiddleware instance, so they share one per-origin pool.
-    const limiter = concurrencyLimiter
-      ? new LimiterMiddleware({
-          url: new URL(url),
-          limiter: concurrencyLimiter,
-          getPriority,
-        })
-      : null;
-
-    const view = new SourceView(source, [
-      new SourceChunk({ size: chunkSize }),
-      new LRUCacheMiddleware({ size: cacheSize }),
-      ...(limiter ? [limiter] : []),
-    ]);
-
-    const dataSource: Pick<Source, "fetch"> = limiter
-      ? new SourceView(source, [limiter])
-      : source;
-
+    const resolved = typeof url === "string" ? new URL(url) : url;
+    // Two sources over one reader: the header reads (IFDs and the offset
+    // tables cogeotiff reads one entry at a time) and the tile reads are
+    // merged and cached separately, so tile churn never evicts the header.
+    const source = (purpose: "header" | "data") =>
+      new RangeReaderSource({
+        reader,
+        url: resolved,
+        purpose,
+        init: requestInit,
+        limiter: concurrencyLimiter,
+        getPriority,
+      });
     return await GeoTIFF.open({
-      dataSource,
-      headerSource: view,
+      dataSource: source("data"),
+      headerSource: source("header"),
       signal,
       debug,
     });

@@ -1,83 +1,25 @@
 /**
- * Verifies that GeoTIFF.fromUrl gates network reads through a
- * ConcurrencyLimiter when one is supplied. Both the header reads (cache
- * misses through the SourceView) and the tile-data reads are gated; cache
- * hits short-circuit in SourceCache and never reach the limiter.
- *
- * The SourceHttp stubbing pattern mirrors fromurl.test.ts.
+ * `GeoTIFF.fromUrl({ concurrencyLimiter })` gates every request of the file,
+ * header and tile data alike, through the limiter: one slot per merged
+ * request, none for a cache hit, and a read dropped while it waits for a
+ * slot never reaches the network.
  */
 
 import { readFileSync } from "node:fs";
-import { SourceHttp } from "@chunkd/source-http";
 import type { ConcurrencyLimiter } from "@developmentseed/range-reader";
-import { PerOriginSemaphore } from "@developmentseed/range-reader";
-import { afterEach, describe, expect, it } from "vitest";
+import { PerOriginSemaphore, RangeReader } from "@developmentseed/range-reader";
+import { describe, expect, it } from "vitest";
 import { GeoTIFF } from "../src/geotiff.js";
 import { fixturePath } from "./helpers.js";
+import { fixtureServer } from "./utils/fixture-server.js";
 
-const FIXTURE = readFileSync(
-  fixturePath("uint8_rgb_deflate_block64_cog", "rasterio"),
+const FIXTURE = new Uint8Array(
+  readFileSync(fixturePath("uint8_rgb_deflate_block64_cog", "rasterio")),
 );
 
-function makeResponse(body: Uint8Array) {
-  return {
-    ok: true,
-    status: 206,
-    statusText: "",
-    headers: {
-      get: (key: string) =>
-        key.toLowerCase() === "content-length" ? String(body.byteLength) : null,
-    },
-    body: null,
-    arrayBuffer: async () =>
-      body.buffer.slice(
-        body.byteOffset,
-        body.byteOffset + body.byteLength,
-      ) as ArrayBuffer,
-  };
-}
-
-function staticFetch(file: Uint8Array) {
-  return async (
-    _url: string | URL,
-    init?: { method?: string; headers?: Record<string, string> },
-  ) => {
-    const method = (init?.method ?? "GET").toUpperCase();
-    if (method === "HEAD") {
-      return {
-        ok: true,
-        status: 200,
-        statusText: "",
-        headers: {
-          get: (key: string) =>
-            key.toLowerCase() === "content-length"
-              ? String(file.byteLength)
-              : null,
-        },
-        body: null,
-        arrayBuffer: async () => new ArrayBuffer(0),
-      };
-    }
-    const range = init?.headers?.range ?? "";
-    const match = /^bytes=(\d+)-(\d+)?$/.exec(range);
-    const start = match ? Number(match[1]) : 0;
-    const end =
-      match?.[2] != null
-        ? Math.min(Number(match[2]), file.byteLength - 1)
-        : file.byteLength - 1;
-    return makeResponse(file.subarray(start, end + 1));
-  };
-}
-
 describe("GeoTIFF.fromUrl({ concurrencyLimiter })", () => {
-  const realFetch = SourceHttp.fetch;
-  afterEach(() => {
-    SourceHttp.fetch = realFetch;
-  });
-
-  it("routes both header and tile-data fetches through the limiter (cache hits skip it)", async () => {
-    SourceHttp.fetch = staticFetch(FIXTURE) as typeof SourceHttp.fetch;
-
+  it("routes both header and tile-data requests through the limiter (cache hits skip it)", async () => {
+    const server = fixtureServer(FIXTURE);
     const acquired: URL[] = [];
     const limiter: ConcurrencyLimiter = {
       acquire: async (url) => {
@@ -86,48 +28,45 @@ describe("GeoTIFF.fromUrl({ concurrencyLimiter })", () => {
       },
     };
     const url = "https://example.test/cog.tif";
-    const tiff = await GeoTIFF.fromUrl(url, { concurrencyLimiter: limiter });
+    const tiff = await GeoTIFF.fromUrl(url, {
+      // Small header blocks, so the tile read below is not served from the
+      // first block the open fetched.
+      reader: new RangeReader({
+        fetch: server.fetch,
+        minHeaderReadBytes: 1024,
+      }),
+      concurrencyLimiter: limiter,
+    });
 
-    // Opening the TIFF reads headers — those network reads (cache misses
-    // through the SourceView) go through the limiter too.
+    // Opening the TIFF reads its header through the limiter.
     expect(acquired.length).toBeGreaterThan(0);
     const headerCount = acquired.length;
 
     await tiff.fetchTile(0, 0);
 
-    // The tile fetch added at least one more acquire (the data-source
-    // path). Every URL must be ours.
+    // The tile fetch added at least one more acquire (the data path). Every
+    // URL must be ours, and the limiter saw exactly the requests made.
     expect(acquired.length).toBeGreaterThan(headerCount);
+    expect(acquired.length).toBe(server.requests.length);
     for (const u of acquired) {
       expect(u.href).toBe(url);
     }
   });
 
-  it("with concurrencyLimiter: null does not wrap (no acquires)", async () => {
-    SourceHttp.fetch = staticFetch(FIXTURE) as typeof SourceHttp.fetch;
-    const acquired: URL[] = [];
-    const limiter: ConcurrencyLimiter = {
-      acquire: async (url) => {
-        acquired.push(url);
-        return () => {};
-      },
-    };
-    // null = explicitly off.
+  it("with concurrencyLimiter: null does not gate (no acquires)", async () => {
+    const server = fixtureServer(FIXTURE);
     const tiff = await GeoTIFF.fromUrl("https://example.test/cog.tif", {
+      reader: new RangeReader({ fetch: server.fetch }),
       concurrencyLimiter: null,
     });
     await tiff.fetchTile(0, 0);
-    // Limiter was passed `null`, so `acquired` only contains entries from
-    // explicit calls — but no one called this `limiter` from anywhere, so
-    // it must be exactly empty.
-    expect(acquired).toEqual([]);
-    // Reference `limiter` so it isn't flagged as unused.
-    expect(limiter.acquire).toBeDefined();
+    expect(server.requests.length).toBeGreaterThan(0);
   });
 
   it("drops a queued header read when its signal aborts, without fetching it", async () => {
     // One slot per origin, so the second open must queue behind the first.
     const limiter = new PerOriginSemaphore({ maxRequests: 1 });
+    const server = fixtureServer(FIXTURE);
 
     const fetched: string[] = [];
     let firstHolds!: () => void;
@@ -138,12 +77,11 @@ describe("GeoTIFF.fromUrl({ concurrencyLimiter })", () => {
     const firstReleased = new Promise<void>((resolve) => {
       releaseFirst = resolve;
     });
-
-    SourceHttp.fetch = (async (
-      url: string | URL,
-      init?: { method?: string; headers?: Record<string, string> },
+    const routingFetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
     ) => {
-      const href = String(url);
+      const href = String(input);
       fetched.push(href);
       if (href.includes("first.tif")) {
         // The first open holds the only slot until we release it, so the
@@ -151,18 +89,13 @@ describe("GeoTIFF.fromUrl({ concurrencyLimiter })", () => {
         firstHolds();
         await firstReleased;
       }
-      const range = init?.headers?.range ?? "";
-      const match = /^bytes=(\d+)-(\d+)?$/.exec(range);
-      const start = match ? Number(match[1]) : 0;
-      const end =
-        match?.[2] != null
-          ? Math.min(Number(match[2]), FIXTURE.byteLength - 1)
-          : FIXTURE.byteLength - 1;
-      return makeResponse(FIXTURE.subarray(start, end + 1));
-    }) as typeof SourceHttp.fetch;
+      return server.fetch(input, init);
+    }) as typeof fetch;
+    const reader = new RangeReader({ fetch: routingFetch });
 
     // First open acquires the only slot and parks in its first read.
     const first = GeoTIFF.fromUrl("https://ex.test/first.tif", {
+      reader,
       concurrencyLimiter: limiter,
     });
     await firstHolding;
@@ -170,6 +103,7 @@ describe("GeoTIFF.fromUrl({ concurrencyLimiter })", () => {
     // Second open queues behind the first; abort it while it waits.
     const ac = new AbortController();
     const second = GeoTIFF.fromUrl("https://ex.test/second.tif", {
+      reader,
       concurrencyLimiter: limiter,
       signal: ac.signal,
     });
