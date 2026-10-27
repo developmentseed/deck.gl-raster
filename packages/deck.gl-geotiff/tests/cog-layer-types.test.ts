@@ -1,6 +1,11 @@
 import { describe, expectTypeOf, it } from "vitest";
-import type { COGInput, COGLayerProps, TextureDataT } from "../src/index.js";
-import { COGLayer, COGSource } from "../src/index.js";
+import type {
+  COGInput,
+  COGLayerProps,
+  COGSource,
+  TextureDataT,
+} from "../src/index.js";
+import { COGLayer } from "../src/index.js";
 
 // These assertions are checked by `tsc` (the package's `typecheck` script),
 // not at runtime.
@@ -42,14 +47,9 @@ describe("COGLayer source props", () => {
     >();
   });
 
-  it("opens only the input that its source prop takes", () => {
-    class WrongInputLayer extends COGLayer {
-      // @ts-expect-error COGLayer opens a COGInput, not a number
-      protected override _openSource(input: number, signal: AbortSignal) {
-        return COGSource.open(String(input), { signal });
-      }
-    }
-    expectTypeOf(WrongInputLayer).toBeConstructibleWith({ source: "x.tif" });
+  it("takes nothing else as source", () => {
+    // @ts-expect-error a number is neither a COGSource nor a COG to open
+    new COGLayer({ source: 42 });
   });
 
   it("no longer takes the props that source and COGSource.open replaced", () => {
