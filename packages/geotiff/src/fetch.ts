@@ -3,7 +3,6 @@ import { Compression, PlanarConfiguration, TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
 import type { RasterArray } from "./array.js";
-import { coalesceRanges } from "./coalesce.js";
 import type { DecodedPixels, DecoderMetadata } from "./decode.js";
 import { decode } from "./decode.js";
 import type { CachedPrimaryImageTags, CachedSubImageTags } from "./ifd.js";
@@ -162,7 +161,8 @@ async function assembleTile(
  *
  * Unlike repeated {@link fetchTile} calls, this resolves every requested
  * tile's byte range up front and fetches the data through {@link getTiles} /
- * {@link getMultipleBytes}, which coalesce nearby ranges into far fewer HTTP
+ * {@link getMultipleBytes}, which issue every range in one task so the range
+ * reader can merge them into far fewer HTTP
  * range requests — a big win when the coordinates form a contiguous block, as
  * they do when assembling a coarse tile from finer covering tiles. Decoding is
  * still done per tile (via the shared {@link assembleTile}); only the I/O is
@@ -682,20 +682,17 @@ export function prependJpegTables(
 }
 
 /**
- * Read image bytes for multiple ranges in a single batched I/O round trip.
+ * Read image bytes for multiple ranges, issued together.
  *
- * Vectorized counterpart to {@link getBytes}. The non-sparse ranges are
- * dispatched through {@link coalesceRanges}, which merges nearby byte ranges
- * into fewer `dataSource.fetch` calls. Returns one entry per input range, in
- * input order; sparse ranges (`offset === 0` or `byteCount === 0`) yield `null`,
- * matching {@link getBytes}.
+ * Vectorized counterpart to {@link getBytes}. The non-sparse ranges are read
+ * through `dataSource` in one task, so a data source that merges reads (the
+ * range reader under `GeoTIFF.fromUrl`) turns them into few requests. Returns
+ * one entry per input range, in input order; sparse ranges (`offset === 0` or
+ * `byteCount === 0`) yield `null`, matching {@link getBytes}.
  *
  * Vendored from cogeotiff PR #1463 (`TiffImage.getMultipleBytes`) for the same
- * reason as {@link getBytes}: tile data must read through the uncached
- * `dataSource` rather than the cached header source. Upstream also lets a
- * `Source` provide its own `fetchRanges`; `@cogeotiff/core@9.5.0` has no such
- * interface method and `dataSource` is only `Pick<Source, "fetch">`, so the
- * coalescing here is always done locally.
+ * reason as {@link getBytes}: tile data must read through the data source
+ * rather than the header source.
  */
 export async function getMultipleBytes(
   image: TiffImage,
@@ -704,8 +701,6 @@ export async function getMultipleBytes(
   options: {
     signal?: AbortSignal;
     debug?: DebugTag;
-    coalesce?: number;
-    maxRangeSize?: number;
     imageTags: CachedSubImageTags;
   },
 ): Promise<Array<{ bytes: ArrayBuffer; compression: Compression } | null>> {
@@ -741,11 +736,21 @@ export async function getMultipleBytes(
     }
   }
 
-  const fetched = await coalesceRanges(dataSource, realRanges, {
-    coalesce: options?.coalesce,
-    maxRangeSize: options?.maxRangeSize,
-    signal: options?.signal,
-  });
+  // One read per range, issued together: the data source (the range reader
+  // under `fromUrl`) merges the reads of one task into few requests.
+  const fetched = await Promise.all(
+    realRanges.map(async (range) => {
+      const bytes = await dataSource.fetch(range.offset, range.length, {
+        signal: options.signal,
+      });
+      if (bytes.byteLength < range.length) {
+        throw new Error(
+          `Failed to fetch bytes from offset:${range.offset} wanted:${range.length} got:${bytes.byteLength}`,
+        );
+      }
+      return bytes;
+    }),
+  );
 
   const compression = image.value(TiffTag.Compression) ?? Compression.None;
   for (let k = 0; k < fetched.length; k++) {
@@ -780,8 +785,6 @@ export async function getTiles(
   options: {
     signal?: AbortSignal;
     debug?: DebugTag;
-    coalesce?: number;
-    maxRangeSize?: number;
     imageTags: CachedSubImageTags;
   },
 ): Promise<Array<{ bytes: ArrayBuffer; compression: Compression } | null>> {
