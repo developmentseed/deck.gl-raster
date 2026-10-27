@@ -31,7 +31,6 @@ import {
 import type { NldasTileData } from "./nldas/get-tile-data.js";
 import { getTileData } from "./nldas/get-tile-data.js";
 import {
-  NLDAS_GEOZARR_ATTRS,
   RESCALE_MAX,
   RESCALE_MIN,
   RESCALE_SLIDER_MAX,
@@ -41,7 +40,7 @@ import {
   TIME_INDEX,
 } from "./nldas/metadata.js";
 import { makeRenderTile } from "./nldas/render-tile.js";
-import type { SurfaceTempSource } from "./nldas/store.js";
+import type { SurfaceTemp } from "./nldas/store.js";
 import { openSurfaceTemp } from "./nldas/store.js";
 
 // Keyless CARTO basemap; light background reads well under a data overlay.
@@ -63,7 +62,7 @@ const kelvinToCelsius = (k: number) => (k - 273.15).toFixed(1);
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
-  const [source, setSource] = useState<SurfaceTempSource | null>(null);
+  const [surfaceTemp, setSurfaceTemp] = useState<SurfaceTemp | null>(null);
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapImage, setColormapImage] = useState<ImageData | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
@@ -83,7 +82,7 @@ export default function App() {
     (async () => {
       const opened = await openSurfaceTemp();
       if (!cancelled) {
-        setSource(opened);
+        setSurfaceTemp(opened);
       }
     })();
     return () => {
@@ -116,19 +115,18 @@ export default function App() {
   }, [device, colormapImage]);
 
   const layers =
-    source && colormapTexture
+    surfaceTemp && colormapTexture
       ? [
           new ZarrLayer<zarr.Readable, "float32", NldasTileData>({
             id: "nldas-surface-temp",
-            node: source.array,
-            metadata: NLDAS_GEOZARR_ATTRS,
+            source: surfaceTemp.source,
             selection: { [TIME_DIM]: TIME_INDEX },
             getTileData,
             renderTile: makeRenderTile({
               colormapTexture,
               colormapIndex: colormapChoice.colormapIndex,
               colormapReversed: colormapChoice.reversed,
-              noDataValue: source.noDataValue,
+              noDataValue: surfaceTemp.noDataValue,
               rescaleMin,
               rescaleMax,
             }),

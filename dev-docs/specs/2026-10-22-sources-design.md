@@ -191,18 +191,21 @@ These were settled on 2026-10-26, for stage 4:
 21. **ZarrLayer takes one `source`** (decisions 6 and 11, for 4b): a
     `ZarrSource`, or a zarrita group or array to open with the defaults.
     `node`, `variable`, `metadata` and `epsgResolver` are removed from
-    ZarrLayer and become `ZarrSource.open` options. Stage 4's first draft kept
-    the old props as shorthand, from before decision 6's amendment.
+    ZarrLayer and become `ZarrSource.open` options, with `metadata` renamed
+    `geoZarrMetadata` (question 9). Stage 4's first draft kept the old props
+    as shorthand, from before decision 6's amendment.
 22. **`selection` stays on ZarrLayer.** The source is the whole Zarr object,
     while the layer decides which chunks to load from it. The layer checks
     `selection` against the source's dimensions whenever either changes, so
     two layers can draw different selections of one source.
-23. **What `ZarrSource` holds:** one opened array per level, finest first; the
-    parsed GeoZarr metadata; every dimension name; the projection; the tile
-    grid; and geographic bounds, which ZarrLayer never had. The bounds are
-    computed as COGSource's are: from the finest level's corners, the short
-    way across the antimeridian. That calculation and `projectionFunctions`
-    move to `@developmentseed/proj`, so both formats share them.
+23. **What `ZarrSource` holds:** one opened array per level, finest first;
+    every dimension name, and the names of the y and x dimensions; the
+    projection; the tile grid; and geographic bounds, which ZarrLayer never
+    had. It doesn't keep the parsed GeoZarr metadata (question 9). The
+    bounds are computed as COGSource's are: from the finest level's corners,
+    the short way across the antimeridian. That calculation and
+    `projectionFunctions` move to `@developmentseed/proj`, so both formats
+    share them.
 
 ## Goals
 
@@ -412,11 +415,11 @@ new ZarrLayer({ id: "zarr", source, selection: { time: t }, getTileData, renderT
 - **Input:** a zarrita `Group` or `Array`. The caller still owns the store, as
   today. ZarrLayer's `source` also takes one, as shorthand opened with the
   defaults (decision 21).
-- **Holds:** the arrays of each level (finest first), the parsed GeoZarr
-  metadata, the dimension names, the projection, the tile grid and the
-  geographic bounds (decision 23).
-- **Options:** `variable`, the `metadata` override and `epsgResolver` move
-  from the layer to `open()` options.
+- **Holds:** the arrays of each level (finest first), the dimension names,
+  the spatial dimensions, the projection, the tile grid and the geographic
+  bounds (decision 23).
+- **Options:** `variable`, the `metadata` override, renamed `geoZarrMetadata`,
+  and `epsgResolver` move from the layer to `open()` options.
 - **Checks:** `open` rejects what ZarrLayer's load rejects today, except the
   selection: unnamed axes or array dimensions, spatial dimensions that aren't
   last in y, x order, and a CRS that doesn't resolve.
@@ -501,7 +504,7 @@ new MosaicLayer({
 | `{ data }` in `renderSource`, `onSourceLoad` and `onSourceUnload` | `{ source }`, the source `getSource` opened (stage 3). |
 | `onViewportLoad` entries `{ source, data }` | `{ item, source }` (stage 3). |
 | `MosaicSource` | `MosaicItem` (stage 3). |
-| `ZarrLayer({ node, variable, metadata })` | `ZarrLayer({ source })`: a group or array, or a `ZarrSource` from `ZarrSource.open(node, { variable, metadata })` (4b). |
+| `ZarrLayer({ node, variable, metadata })` | `ZarrLayer({ source })`: a group or array, or a `ZarrSource` from `ZarrSource.open(node, { variable, geoZarrMetadata })` (4b). |
 | `updateTriggers: { renderTile: [selection] }` on ZarrLayer | Not needed (4c). |
 
 ## Stages
@@ -574,13 +577,20 @@ Each stage is one PR.
      MultiCOGLayer move onto it, and their behavior doesn't change.
      - Tests: the base's handling, with a test layer. The COG layers' tests
        pass as they were.
-   - **4b: `ZarrSource`** and ZarrLayer's `source` (decisions 21 to 23).
+   - **4b: `ZarrSource`** and ZarrLayer's `source` (decisions 21 to 23),
+     in two PRs at Kyle's request.
+     - `projectionFunctions` and the bounds calculation move to
+       `@developmentseed/proj`
+       ([#811](https://github.com/developmentseed/deck.gl-raster/pull/811)).
      - `ZarrSource.open(node, options)` in deck.gl-zarr.
-       `projectionFunctions` and the bounds calculation move to
-       `@developmentseed/proj`.
      - ZarrLayer's `source` prop, the clean break, and the examples.
-       aef-mosaic, dynamical-zarr-ecmwf and nldas-icechunk pass `metadata`,
-       so they call `ZarrSource.open`. zarr-sentinel2-tci passes its group.
+       aef-mosaic, dynamical-zarr-ecmwf and nldas-icechunk pass
+       `geoZarrMetadata`, so they call `ZarrSource.open`.
+       zarr-sentinel2-tci passes its group.
+     - *As built:* a `selection` that doesn't fit the source goes to
+       `onError` and draws nothing. Fixing it draws again, and a selection
+       change never opens the source again. Selections are compared by
+       value, so an inline literal isn't checked again on every render.
      - The `window.*` debug lines in ZarrLayer's load go: they throw where
        `window` is undefined.
      - Tests mirror stage 2, and check `selection` when it changes.
@@ -649,7 +659,9 @@ Each stage is one PR.
    attributes that replace the group's, while the source's field holds the
    parsed GeoZarr metadata. Keep `metadata` for both, call the field
    `geozarr`, or rename the option `attrs`, after the zarrita property it
-   replaces? Decide in 4b. *Open.*
+   replaces? *Decided (2026-10-27):* the option is `geoZarrMetadata`, since
+   `attrs` is zarr's own name for a node's attributes. The source doesn't
+   keep the parsed metadata: nothing outside `open()` needs it.
 10. **A `ServerSource` for tile servers.** The titiler-cog example gives
     `RasterTileLayer` a `tilesetDescriptor` built from a tile server's
     TileMatrixSet, with no source behind it. A `RasterSource` for tile

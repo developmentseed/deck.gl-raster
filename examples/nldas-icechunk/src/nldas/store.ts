@@ -1,3 +1,4 @@
+import { ZarrSource } from "@developmentseed/deck.gl-zarr";
 import {
   HttpStorage,
   IcechunkStore,
@@ -7,15 +8,16 @@ import {
 import * as zarr from "zarrita";
 import {
   BRANCH,
+  NLDAS_GEOZARR_ATTRS,
   REPO_URL,
   SURFACE_TEMP_PATH,
   VIRTUAL_CHUNK_CONTAINERS,
 } from "./metadata.js";
 
-/** The opened temperature array plus the fill sentinel read from its attrs. */
-export interface SurfaceTempSource {
-  /** The near-surface air temperature array. */
-  array: zarr.Array<"float32", zarr.Readable>;
+/** The opened temperature data plus the fill sentinel read from its attrs. */
+export interface SurfaceTemp {
+  /** The near-surface air temperature, for a `ZarrLayer` to draw. */
+  source: ZarrSource<zarr.Readable, "float32">;
   /** Fill value, read from the array's `missing_value` attribute. */
   noDataValue: number;
 }
@@ -28,7 +30,7 @@ export interface SurfaceTempSource {
  * The containers are only accepted by `ReadSession.open`, so we resolve the
  * branch snapshot id first, then open a session that carries them.
  */
-export async function openSurfaceTemp(): Promise<SurfaceTempSource> {
+export async function openSurfaceTemp(): Promise<SurfaceTemp> {
   const storage = new HttpStorage(REPO_URL);
   // NLDAS-3 is a v1 icechunk repo
   const repo = await Repository.open({ storage, formatVersion: "v1" });
@@ -59,5 +61,8 @@ export async function openSurfaceTemp(): Promise<SurfaceTempSource> {
     );
   }
 
-  return { array: node, noDataValue: missingValue };
+  const source = await ZarrSource.open(node, {
+    geoZarrMetadata: NLDAS_GEOZARR_ATTRS,
+  });
+  return { source, noDataValue: missingValue };
 }
