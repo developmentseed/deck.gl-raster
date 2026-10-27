@@ -63,8 +63,16 @@ export function fakeFetch(): FakeFetch {
             ? input.href
             : input.url;
       let cancelled = false;
+      let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+      // Like a real fetch: aborting the request errors the body stream, so a
+      // pending read on it rejects with the abort reason.
       init?.signal?.addEventListener("abort", () => {
         cancelled = true;
+        try {
+          controller?.error(init.signal?.reason);
+        } catch {
+          // Already closed or errored.
+        }
       });
       const call: FakeCall = {
         url,
@@ -74,7 +82,6 @@ export function fakeFetch(): FakeFetch {
           return cancelled;
         },
         reply(replyInit) {
-          let controller: ReadableStreamDefaultController<Uint8Array>;
           const stream = new ReadableStream<Uint8Array>({
             start(c) {
               controller = c;
@@ -91,15 +98,15 @@ export function fakeFetch(): FakeFetch {
           );
           return {
             async push(bytes) {
-              controller.enqueue(bytes);
+              controller?.enqueue(bytes);
               await tick();
             },
             async close() {
-              controller.close();
+              controller?.close();
               await tick();
             },
             async error(err) {
-              controller.error(err);
+              controller?.error(err);
               await tick();
             },
           };

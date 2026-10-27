@@ -68,10 +68,17 @@ describe("RangeStream", () => {
     it("resolves an attached member when its bytes pass, at once when they already have", async () => {
       const { fetch, next } = fakeFetch();
       const a = member(0, 10);
-      const stream = new RangeStream(file(), { offset: 0, length: 100 }, [a], {
-        fetch,
-        maxRequestBytes: MAX,
-      });
+      // Keeps the stream alive after `a` resolves, so `c` can attach.
+      const d = member(95, 5);
+      const stream = new RangeStream(
+        file(),
+        { offset: 0, length: 100 },
+        [a, d],
+        {
+          fetch,
+          maxRequestBytes: MAX,
+        },
+      );
       const done = stream.run();
       const body = (await next()).reply({
         status: 206,
@@ -93,6 +100,7 @@ describe("RangeStream", () => {
       });
       await body.close();
       await done;
+      expect(await d.promise).toEqual({ kind: "bytes", bytes: pattern(5, 95) });
       expect(stream.attach(member(0, 1))).toBe(false);
     });
 
@@ -608,5 +616,96 @@ describe("RangeStream responses", () => {
     ).run();
     await expect(b.promise).rejects.toThrow("sync");
     expect(outcome2.end.kind).toBe("failed");
+  });
+});
+
+describe("RangeStream under real-fetch failure modes", () => {
+  it("rejects the unresolved members when the body errors mid-way and keeps the prefix", async () => {
+    const { fetch, next } = fakeFetch();
+    const a = member(0, 10);
+    const b = member(50, 20);
+    const stream = new RangeStream(file(), { offset: 0, length: 100 }, [a, b], {
+      fetch,
+      maxRequestBytes: MAX,
+    });
+    const done = stream.run();
+    const body = (await next()).reply({
+      status: 206,
+      headers: { "content-length": "100" },
+    });
+    await body.push(pattern(30));
+    expect(await a.promise).toEqual({ kind: "bytes", bytes: pattern(10) });
+    await body.error(new Error("net"));
+    await expect(b.promise).rejects.toThrow("net");
+    const outcome = await done;
+    expect(outcome.end).toMatchObject({ kind: "failed" });
+    expect(outcome.bytes).toEqual(pattern(30));
+    expect(stream.active).toBe(false);
+  });
+
+  it("does not pin the whole preallocated buffer for a cancelled prefix", async () => {
+    const { fetch, next } = fakeFetch();
+    const ac = new AbortController();
+    const a = member(0, 100, { signal: ac.signal });
+    const stream = new RangeStream(file(), { offset: 0, length: MAX }, [a], {
+      fetch,
+      maxRequestBytes: MAX,
+    });
+    const done = stream.run();
+    const body = (await next()).reply({
+      status: 206,
+      headers: { "content-length": String(MAX) },
+    });
+    await body.push(pattern(30));
+    ac.abort("gone");
+    const outcome = await done;
+    expect(outcome.end).toEqual({ kind: "cancelled" });
+    expect(outcome.bytes).toEqual(pattern(30));
+    expect(outcome.bytes.buffer.byteLength).toBe(30);
+  });
+
+  it("cancels once the last live member resolves while bytes remain", async () => {
+    const { fetch, next } = fakeFetch();
+    const ac = new AbortController();
+    const a = member(0, 100);
+    const b = member(100, 100, { signal: ac.signal });
+    const stream = new RangeStream(file(), { offset: 0, length: 200 }, [a, b], {
+      fetch,
+      maxRequestBytes: MAX,
+    });
+    const done = stream.run();
+    const call = await next();
+    const body = call.reply({
+      status: 206,
+      headers: { "content-length": "200" },
+    });
+    ac.abort("gone");
+    await expect(b.promise).rejects.toBe("gone");
+    await body.push(pattern(100));
+    expect(await a.promise).toEqual({ kind: "bytes", bytes: pattern(100) });
+    const outcome = await done;
+    expect(call.cancelled).toBe(true);
+    expect(outcome.end).toEqual({ kind: "cancelled" });
+    expect(outcome.bytes).toEqual(pattern(100));
+  });
+
+  it("serves a suffix read from a 200 whole-object answer", async () => {
+    const { fetch, next } = fakeFetch();
+    const a = member(0, 0);
+    const stream = new RangeStream(file(), { suffixLength: 16 }, [a], {
+      fetch,
+      maxRequestBytes: MAX,
+    });
+    const done = stream.run();
+    const body = (await next()).reply({
+      status: 200,
+      headers: { "content-length": "100" },
+    });
+    await body.push(pattern(100));
+    await body.close();
+    expect(await a.promise).toEqual({ kind: "bytes", bytes: pattern(16, 84) });
+    const outcome = await done;
+    expect(outcome.offset).toBe(0);
+    expect(outcome.bytes).toHaveLength(100);
   });
 });

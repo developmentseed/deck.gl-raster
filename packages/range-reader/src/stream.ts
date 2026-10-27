@@ -251,6 +251,16 @@ export class RangeStream {
       }
       this.offset = 0;
       this.base = { offset: 0, length: contentLength };
+      if ("suffixLength" in this.request) {
+        // The suffix member was addressed relative to the end; place it.
+        for (const member of this.live) {
+          member.offset = Math.max(
+            0,
+            contentLength - this.request.suffixLength,
+          );
+          member.length = contentLength - member.offset;
+        }
+      }
     }
     const expected = this.base?.length ?? contentLength;
     if (expected !== undefined) {
@@ -258,17 +268,28 @@ export class RangeStream {
     }
     if (response.body !== null) {
       this.reader = response.body.getReader();
-      for (;;) {
-        const { done, value } = await this.reader.read();
-        if (done || this.cancelled) {
-          break;
+      try {
+        for (;;) {
+          const { done, value } = await this.reader.read();
+          if (done || this.cancelled) {
+            break;
+          }
+          const excess = this.append(value);
+          this.settleReady();
+          if (excess > 0) {
+            // The body runs past the range; nothing after it is wanted.
+            void this.reader.cancel().catch(() => {});
+            break;
+          }
+          if (this.cancelled) {
+            break;
+          }
         }
-        const excess = this.append(value);
-        this.settleReady();
-        if (excess > 0) {
-          // The body runs past the range; nothing after it is wanted.
-          void this.reader.cancel().catch(() => {});
-          break;
+      } catch (error) {
+        // A real fetch errors the body when the request is aborted, and on a
+        // dropped connection; the first is our own cancellation.
+        if (!this.cancelled) {
+          return this.fail(error);
         }
       }
     }
@@ -359,12 +380,26 @@ export class RangeStream {
       this.live.shift();
       this.resolveMember(next, { kind: "bytes", bytes: this.view(next) });
     }
+    // Nothing ahead is wanted: every remaining member left by abort. A 200
+    // that replaced the range with the whole object is read to its end, as
+    // the spec says to consume it.
+    if (
+      this.live.length === 0 &&
+      !this.cancelled &&
+      this.base === this.range &&
+      this.receivedBytes < this.base.length
+    ) {
+      this.cancel();
+    }
   }
 
   /** Everything received so far, as one array. */
   private collect(): Uint8Array {
     if (this.buffer !== undefined) {
-      return this.buffer.subarray(0, this.receivedBytes);
+      // A partial stream must not pin its whole preallocation in the cache.
+      return this.receivedBytes < this.buffer.length
+        ? this.buffer.slice(0, this.receivedBytes)
+        : this.buffer;
     }
     const out = new Uint8Array(this.receivedBytes);
     let at = 0;

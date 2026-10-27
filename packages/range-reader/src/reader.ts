@@ -288,13 +288,21 @@ export class RangeReader {
       this.inflight.set(key, streams);
     }
     streams.add(stream);
-    void stream.run().then((outcome) => {
+    const forget = () => {
       streams.delete(stream);
       if (streams.size === 0) {
         this.inflight.delete(key);
       }
-      this.settled(file, purpose, outcome);
-    });
+    };
+    void stream.run().then(
+      (outcome) => {
+        forget();
+        this.settled(file, purpose, outcome);
+      },
+      // `run` never rejects by contract; should it, the stream must at least
+      // stop catching later reads.
+      forget,
+    );
   }
 
   private settled(

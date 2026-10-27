@@ -366,3 +366,41 @@ describe("RangeReader cache and in-flight reads", () => {
     expect(fake.calls).toHaveLength(2);
   });
 });
+
+describe("RangeReader after a request fails mid-body", () => {
+  let fake: FakeFetch;
+  let reader: RangeReader;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    fake = fakeFetch();
+    reader = new RangeReader({ fetch: fake.fetch, maxGap: 100 });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("rejects the read, caches the prefix, and requests again afterwards", async () => {
+    const p = reader.read(f, { offset: 0, length: 100 }, DATA);
+    await flush();
+    const body = fake.calls[0]!.reply({
+      status: 206,
+      headers: { "content-length": "100" },
+    });
+    await body.push(pattern(30));
+    // Attach the handler before the rejection lands, as a caller would.
+    const rejection = expect(p).rejects.toThrow("net");
+    await body.error(new Error("net"));
+    await rejection;
+    await microtasks();
+    expect(reader.stats.bytesReceived).toBe(30);
+    expect(await reader.read(f, { offset: 10, length: 10 }, DATA)).toEqual({
+      kind: "bytes",
+      bytes: pattern(10, 10),
+    });
+    void reader.read(f, { offset: 0, length: 100 }, DATA);
+    await flush();
+    expect(fake.calls).toHaveLength(2);
+  });
+});
