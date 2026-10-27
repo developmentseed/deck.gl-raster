@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-27 (revised the same day: a 2D hillshade, not 3D terrain)
 - **Issues:** builds on [#805](https://github.com/developmentseed/deck.gl-raster/pull/805) (merged); needs the range reader from [#806](https://github.com/developmentseed/deck.gl-raster/pull/806) (open); follows [#809](https://github.com/developmentseed/deck.gl-raster/pull/809)'s load settings for COG layers (open); ports the hillshade pipeline from [#647](https://github.com/developmentseed/deck.gl-raster/pull/647) (draft)
-- **Status:** Draft for review
+- **Status:** Accepted (Kyle, 2026-10-27), with one decision open
 
 Code links are pinned to main at
 [`6c9da23b`](https://github.com/developmentseed/deck.gl-raster/commit/6c9da23b40457dfd0c6ae8ca61ee34042f41e548)
@@ -105,8 +105,8 @@ round trips. Stage 1 measures it rather than assuming it.
   (a `ServerSource`) is decided.
 - PMTiles that aren't Web Mercator, or that hold several bands, or vector
   tiles.
-- Adding terrain modules to the library's `gpu-modules`. They stay in the
-  examples for now (decision 1).
+- Adding terrain modules to the library's `gpu-modules`. They live in this
+  example for now.
 
 ## What would make it a failure
 
@@ -133,7 +133,7 @@ round trips. Stage 1 measures it rather than assuming it.
   reviewing it here.
 - Needs #806's `@developmentseed/range-reader`. If #806 hasn't merged when work
   starts, stack the branch on it. Aborting unwanted loads also needs #809 (see
-  decision 2).
+  the open decision).
 - Mapterhorn is a third party. Its hosts send `Access-Control-Allow-Origin: *`
   and honor range requests, but don't expose `ETag` through CORS. Attribution
   is required: "© Mapterhorn", linking to <https://mapterhorn.com/attribution>.
@@ -328,8 +328,7 @@ float latitude = 2.0 * atan(exp(mercatorY / 6378137.0)) - 0.5 * PI;
 float groundCellSize = terrainDerivative.cellSize * cos(latitude);
 ```
 
-If #647 keeps sharing the module (decision 1), an unset range turns the
-correction off for its UTM data.
+#647 is parked, so the module needs only this Mercator form.
 
 ### The layer
 
@@ -339,7 +338,7 @@ A `RasterTileLayer` with:
   `renderTile` from `makeRenderTile`.
 - `maxRequests: 256` and `debounceTime: 50`, as #809 gives the COG layers.
 - `onTileUnload` destroys the tile's texture.
-- Aborting loads for tiles that left the view: decision 2.
+- Aborting loads for tiles that left the view: the open decision below.
 
 Past z12 the planet tiles are stretched, and with `texelFetch` each texel's
 shade covers a block of screen pixels. If that looks blocky, blend the shade of
@@ -389,8 +388,10 @@ One PR per stage, with a review stop after each.
    13`, `extent` set to the archive's bounds). A missing tile returns `null`,
    so the planet layer shows through where coverage stops. Halos at the
    coverage edge replicate. Raise the Matterhorn's view `maxZoom`.
-3. **If #647 continues** (decision 1): move the shared pieces where both
-   examples can import them.
+
+Later, the `pmtiles` adapter and `PMTilesSource` move into library code,
+shaped by whatever question 10 decides. If #647's USGS 1 m data comes back, it
+reuses this example's pieces.
 
 ## Verification
 
@@ -416,28 +417,28 @@ One PR per stage, with a review stop after each.
   requests, MB, time to the first tile, time until every ring is complete, and
   main-thread decode time per tile. They go in the PR.
 
-## Decisions for Kyle
+## Decisions
 
-1. **What happens to #647.** I recommend (a).
-   - (a) This example becomes the hillshade example. #647's modules are ported
-     and reviewed here, and #647 is parked. It could come back later as a USGS
-     1 m data source on the same pieces.
-   - (b) Land #647 first, then move its modules to `examples/_shared` for both
-     examples.
-   - (c) Copy the modules now and deduplicate later.
-2. **Aborting loads nobody wants.** #809 adds `abortUnwantedLoads` to
-   `RasterTileset2D`, but `RasterTileLayer` exposes it only as a protected
-   hook, which the COG layers turn on. A `RasterTileLayer` used directly with
-   `maxRequests: 256` needs it too, and the cache's cancellation only helps
-   once tile loads actually get aborted. I recommend a public
-   `abortUnwantedLoads` prop, off by default: a few lines, in #809 or here.
-   The alternative is a three-line subclass in the example.
-3. **The merge switch.** It makes the "fast" claim visible, but costs a second
-   source path and a remount. Keep it, or show the numbers only in the README?
-4. **Where the `pmtiles` adapter ends up.** It stays in the example for now.
-   Later it could be exported by `@developmentseed/range-reader` (which would
-   then depend on `pmtiles` types), live in a small `deck.gl-pmtiles` package,
-   or become part of whatever question 10 decides.
+Kyle, 2026-10-27:
+
+- **No loaders.gl.** The example reads PMTiles with the `pmtiles` library.
+- **This is the hillshade example.** #647's modules are ported and reviewed
+  here, and #647 is parked.
+- **The merge switch stays.**
+- **The `pmtiles` adapter lives in the example** for now and moves to library
+  code later.
+- **Tile borders in the cache, rewriting only the ring, and cancelling
+  abandoned fetches:** +1.
+
+### Still open
+
+**Aborting loads nobody wants.** #809 adds `abortUnwantedLoads` to
+`RasterTileset2D`, but `RasterTileLayer` exposes it only as a protected hook,
+which the COG layers turn on. A `RasterTileLayer` used directly with
+`maxRequests: 256` needs it too, and the cache's cancellation only helps once
+tile loads actually get aborted. I recommend a public `abortUnwantedLoads`
+prop, off by default: a few lines, in #809 or here. The alternative is a
+three-line subclass in the example.
 
 ## Calls I made
 
@@ -451,4 +452,3 @@ These are mine, not decided with Kyle. Each is cheap to change.
 - Cancellation counted per cache entry.
 - Decoding on the main thread first, with MapLibre's canvas and `VideoFrame`
   readback.
-- The stats readout and the merge switch are in stage 1.
