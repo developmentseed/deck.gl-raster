@@ -117,6 +117,56 @@ describe("RangeReader", () => {
     expect(await p2).toEqual({ kind: "bytes", bytes: pattern(8, 200) });
   });
 
+  it("keeps a widened block streaming after its small read resolves and caches it whole", async () => {
+    // The body arrives in two chunks: the small read resolves on the first,
+    // and the block must stay wanted until the second lands in the cache.
+    const reader = new RangeReader({
+      fetch: fake.fetch,
+      minHeaderReadBytes: 64,
+    });
+    const p = reader.read(f, { offset: 4, length: 8 }, HEADER);
+    await flush();
+    expect(fake.calls[0]!.range).toBe("bytes=0-63");
+    const body = fake.calls[0]!.reply({
+      status: 206,
+      headers: { "content-length": "64" },
+    });
+    await body.push(pattern(16));
+    expect(await p).toEqual({ kind: "bytes", bytes: pattern(8, 4) });
+    expect(fake.calls[0]!.cancelled).toBe(false);
+    await body.push(pattern(48, 16));
+    await body.close();
+    await microtasks();
+    const later = await reader.read(f, { offset: 40, length: 8 }, HEADER);
+    expect(later).toEqual({ kind: "bytes", bytes: pattern(8, 40) });
+    expect(fake.calls).toHaveLength(1);
+    expect(reader.stats.cancelled).toBe(0);
+  });
+
+  it("attaches a data read to an in-flight header block instead of requesting", async () => {
+    // The top overview tile often sits inside the first header block and is
+    // asked for as soon as its offset entry resolves, early in that stream.
+    const reader = new RangeReader({
+      fetch: fake.fetch,
+      minHeaderReadBytes: 64,
+    });
+    const h = reader.read(f, { offset: 4, length: 8 }, HEADER);
+    await flush();
+    const body = fake.calls[0]!.reply({
+      status: 206,
+      headers: { "content-length": "64" },
+    });
+    await body.push(pattern(16));
+    expect(await h).toEqual({ kind: "bytes", bytes: pattern(8, 4) });
+    const d = reader.read(f, { offset: 40, length: 8 }, DATA);
+    await flush();
+    expect(fake.calls).toHaveLength(1);
+    expect(reader.stats.attached).toBe(1);
+    await body.push(pattern(48, 16));
+    await body.close();
+    expect(await d).toEqual({ kind: "bytes", bytes: pattern(8, 40) });
+  });
+
   it("never shares a request between header and data reads of one file", async () => {
     void reader.read(f, { offset: 0, length: 10 }, HEADER);
     void reader.read(f, { offset: 10, length: 10 }, DATA);

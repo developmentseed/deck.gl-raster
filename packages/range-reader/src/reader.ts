@@ -31,7 +31,7 @@ export const DEFAULT_MIN_HEADER_READ_BYTES = 64 * 1024;
 /** A read waiting for the task window to close. */
 interface PendingRead {
   member: StreamMember;
-  /** The range to merge: the member's own, or its widened header block. */
+  /** The range to merge: the member itself, or its widened header block. */
   request: ByteRange;
   limiter: ConcurrencyLimiter | null | undefined;
   /** Removes the queued-abort listener once the read leaves the queue. */
@@ -77,7 +77,11 @@ export class RangeReader {
   private readonly cacheMode: RequestCache | undefined;
   /** Queued reads by file key and purpose, flushed once per task. */
   private readonly pending = new Map<string, PendingGroup>();
-  /** Streams still running, by file key and purpose. */
+  /**
+   * Streams still running, by file key. Keyed without the purpose: a read
+   * of either purpose may attach to a stream that covers it, and the first
+   * tiles of a COG often sit inside its first header block.
+   */
   private readonly inflight = new Map<string, Set<RangeStream>>();
   /** Object sizes learned from responses, by file key. */
   private readonly sizes = new Map<string, number>();
@@ -151,14 +155,13 @@ export class RangeReader {
         signal,
         getPriority: options.getPriority,
       };
-      const key = groupKey(file, options.purpose);
-      for (const stream of this.inflight.get(key) ?? []) {
+      for (const stream of this.inflight.get(file.key) ?? []) {
         if (stream.attach(member)) {
           this.stats.attached += 1;
           return;
         }
       }
-      this.enqueue(key, file, options, member);
+      this.enqueue(groupKey(file, options.purpose), file, options, member);
     });
   }
 
@@ -187,13 +190,7 @@ export class RangeReader {
         request !== undefined && "suffixLength" in request
           ? request.suffixLength
           : 0;
-      this.launch(
-        groupKey(file, options.purpose),
-        file,
-        options.purpose,
-        stream,
-        requested,
-      );
+      this.launch(file, options.purpose, stream, requested);
     });
   }
 
@@ -209,13 +206,12 @@ export class RangeReader {
       group = { file, purpose: options.purpose, reads: [] };
       this.pending.set(key, group);
     }
-    const range: ByteRange = { offset: member.offset, length: member.length };
     const pending: PendingRead = {
       member,
       request:
-        options.purpose === "header" && range.length < this.minHeaderReadBytes
-          ? widenRead(range, this.minHeaderReadBytes)
-          : range,
+        options.purpose === "header" && member.length < this.minHeaderReadBytes
+          ? widenRead(member, this.minHeaderReadBytes)
+          : member,
       limiter: options.limiter,
       detach: () => {},
     };
@@ -240,9 +236,9 @@ export class RangeReader {
   /** Close the task window: merge each group's reads and start their streams. */
   private flush(): void {
     this.flushTimer = undefined;
-    const groups = [...this.pending.entries()];
+    const groups = [...this.pending.values()];
     this.pending.clear();
-    for (const [key, group] of groups) {
+    for (const group of groups) {
       if (group.reads.length === 0) {
         continue;
       }
@@ -260,7 +256,24 @@ export class RangeReader {
         },
       );
       for (const range of merged) {
-        const members = range.members.map((i) => group.reads[i]!.member);
+        const members: StreamMember[] = [];
+        const kept = new Set<number>();
+        for (const i of range.members) {
+          const pending = group.reads[i]!;
+          members.push(pending.member);
+          if (
+            pending.request !== pending.member &&
+            !kept.has(pending.request.offset)
+          ) {
+            // A widened block is wanted to its end for the cache's sake, even
+            // once the small read inside it has resolved; otherwise the stream
+            // would be cancelled after the first chunk and the block never
+            // land. It is at most `minHeaderReadBytes`, and reads of it that
+            // abort do not cut it short.
+            kept.add(pending.request.offset);
+            members.push(keepMember(pending.request));
+          }
+        }
         const stream = new RangeStream(
           file,
           { offset: range.offset, length: range.length },
@@ -268,13 +281,12 @@ export class RangeReader {
           this.streamOptions(group.reads[0]!.limiter),
         );
         this.stats.bytesOverfetched += range.overfetch;
-        this.launch(key, file, purpose, stream, range.length);
+        this.launch(file, purpose, stream, range.length);
       }
     }
   }
 
   private launch(
-    key: string,
     file: FileIdentity,
     purpose: Purpose,
     stream: RangeStream,
@@ -282,16 +294,16 @@ export class RangeReader {
   ): void {
     this.stats.requests += 1;
     this.stats.bytesRequested += requestedBytes;
-    let streams = this.inflight.get(key);
+    let streams = this.inflight.get(file.key);
     if (streams === undefined) {
       streams = new Set();
-      this.inflight.set(key, streams);
+      this.inflight.set(file.key, streams);
     }
     streams.add(stream);
     const forget = () => {
       streams.delete(stream);
       if (streams.size === 0) {
-        this.inflight.delete(key);
+        this.inflight.delete(file.key);
       }
     };
     void stream.run().then(
@@ -340,7 +352,17 @@ export class RangeReader {
   }
 }
 
-/** Reads merge, attach and cache only within one file identity and purpose. */
+/** Reads merge only within one file identity and purpose. */
 function groupKey(file: FileIdentity, purpose: Purpose): string {
   return `${file.key}\0${purpose}`;
+}
+
+/** A member that wants a range for the cache's sake and nobody waits on. */
+function keepMember(range: ByteRange): StreamMember {
+  return {
+    offset: range.offset,
+    length: range.length,
+    resolve() {},
+    reject() {},
+  };
 }
