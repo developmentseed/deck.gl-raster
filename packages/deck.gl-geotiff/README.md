@@ -71,7 +71,7 @@ batching window by default.
 
   const reader = new RangeReader({
     maxOverfetchBytes: 4 * 1024 * 1024,
-    cache: { headerBytes: 64 * 1024 * 1024, dataBytes: 256 * 1024 * 1024 },
+    cache: { metadataBytes: 64 * 1024 * 1024, dataBytes: 256 * 1024 * 1024 },
   });
   const source = await COGSource.open(url, { reader });
   new COGLayer({ id: "scene", source });
