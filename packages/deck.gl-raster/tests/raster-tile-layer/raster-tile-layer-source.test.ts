@@ -2,6 +2,7 @@ import { CompositeLayer, LayerManager } from "@deck.gl/core";
 import type { Device } from "@luma.gl/core";
 import { describe, expect, it, vi } from "vitest";
 import { RasterSource } from "../../src/raster-source.js";
+import type { MinimalTileData } from "../../src/raster-tile-layer/index.js";
 import { RasterTileLayer } from "../../src/raster-tile-layer/index.js";
 import type { RasterTilesetDescriptor } from "../../src/raster-tileset/index.js";
 
@@ -43,16 +44,26 @@ type TestProps = { opens: Open[] };
  * to the `opens` prop for the test to settle. `_sourceState` derives `drawn`
  * from a source, and throws for one named "undrawable".
  */
-class SourceTestLayer extends RasterTileLayer {
+class SourceTestLayer extends RasterTileLayer<
+  MinimalTileData,
+  TestProps,
+  TestSource,
+  string
+> {
   static override layerName = "SourceTestLayer";
-  declare state: RasterTileLayer["state"] & { drawn?: string };
+  declare state: RasterTileLayer<
+    MinimalTileData,
+    TestProps,
+    TestSource,
+    string
+  >["state"] & { drawn?: string };
 
   protected override _openSource(
     input: string,
     signal: AbortSignal,
   ): Promise<TestSource> {
     const open = { input, signal, ...deferred<TestSource>() };
-    (this.props as unknown as TestProps).opens.push(open);
+    this.props.opens.push(open);
     return open.promise;
   }
 
@@ -68,7 +79,7 @@ class SourceTestLayer extends RasterTileLayer {
  * Build a layer ready for direct lifecycle calls: replace `state` and
  * `setState` with a plain object + assign.
  */
-function makeBareLayer<L extends RasterTileLayer>(
+function makeBareLayer<L extends CompositeLayer>(
   Layer: new (props: never) => L,
   props: Record<string, unknown>,
 ): L {
@@ -86,7 +97,7 @@ function makeBareLayer<L extends RasterTileLayer>(
  * Run `updateState` as deck.gl does when the layer is first added: the old
  * props are empty.
  */
-function runInitialUpdate(layer: RasterTileLayer): void {
+function runInitialUpdate(layer: CompositeLayer): void {
   layer.updateState({
     props: layer.props,
     oldProps: {},
@@ -98,7 +109,7 @@ function runInitialUpdate(layer: RasterTileLayer): void {
  * Render a new instance with `props`, as apps do on every render: deck.gl
  * hands it the old instance's `state`, then runs `updateState`.
  */
-function rerender<L extends RasterTileLayer>(
+function rerender<L extends CompositeLayer>(
   layer: L,
   props: Record<string, unknown>,
 ): L {
@@ -117,7 +128,7 @@ function rerender<L extends RasterTileLayer>(
 }
 
 /** The protected `_tilesetDescriptor()` of `layer`. */
-function tilesetDescriptor(layer: RasterTileLayer): unknown {
+function tilesetDescriptor(layer: CompositeLayer): unknown {
   return (
     layer as unknown as { _tilesetDescriptor(): unknown }
   )._tilesetDescriptor();
@@ -340,7 +351,7 @@ class SublayerTestLayer extends SourceTestLayer {
   static override layerName = "SublayerTestLayer";
 
   override renderLayers() {
-    const source = this.state.source as TestSource | undefined;
+    const { source } = this.state;
     return source ? new TilesMarker({ id: `tiles-${source.name}` }) : null;
   }
 }
@@ -356,14 +367,14 @@ describe("RasterTileLayer source in deck.gl's LayerManager", () => {
     const drawn = () => layerManager.getLayers().map((layer) => layer.id);
 
     layerManager.setLayers([
-      new SublayerTestLayer({ ...props, source: new TestSource("a") } as never),
+      new SublayerTestLayer({ ...props, source: new TestSource("a") }),
     ]);
     const before = drawn();
     layerManager.setLayers([
       new SublayerTestLayer({
         ...props,
         source: new TestSource("undrawable"),
-      } as never),
+      }),
     ]);
     const after = drawn();
     layerManager.finalize();

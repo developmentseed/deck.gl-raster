@@ -111,12 +111,15 @@ export type COGLayerProps<DataT extends MinimalTileData = TextureDataT> = Omit<
  */
 export class COGLayer<
   DataT extends MinimalTileData = TextureDataT,
-> extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
+> extends RasterTileLayer<DataT, COGLayerProps<DataT>, COGSource, COGInput> {
   static override layerName = "COGLayer";
 
-  declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
-    /** The source the layer draws: `source` itself, or the one opened from it. */
-    source?: COGSource;
+  declare state: RasterTileLayer<
+    DataT,
+    COGLayerProps<DataT>,
+    COGSource,
+    COGInput
+  >["state"] & {
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
   };

@@ -282,7 +282,9 @@ const defaultProps = {
  */
 export class MultiCOGLayer extends RasterTileLayer<
   MultiTileResult,
-  MultiCOGLayerProps
+  MultiCOGLayerProps,
+  MultiCOGSource,
+  Record<string, COGInput>
 > {
   static override layerName = "MultiCOGLayer";
   // Same casting trick as COGLayer: defaultProps shape diverges from the
@@ -290,14 +292,6 @@ export class MultiCOGLayer extends RasterTileLayer<
   // check while keeping subclass-specific defaults.
   static override defaultProps =
     defaultProps as unknown as typeof RasterTileLayer.defaultProps;
-
-  declare state: RasterTileLayer<
-    MultiTileResult,
-    MultiCOGLayerProps
-  >["state"] & {
-    /** The source the layer draws: `source` itself, or the one opened from it. */
-    source?: MultiCOGSource;
-  };
 
   override shouldLoadMetadata(params: UpdateParameters<this>): boolean {
     // An empty record names no files, so the layer draws nothing

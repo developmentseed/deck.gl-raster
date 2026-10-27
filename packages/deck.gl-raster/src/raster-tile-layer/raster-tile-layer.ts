@@ -206,15 +206,17 @@ function descriptorId(descriptor: RasterTilesetDescriptor): number {
 }
 
 /**
- * The props of a layer that takes a `source`, as {@link RasterTileLayer} reads
- * them. Each such layer declares them itself, with the inputs its `source`
- * takes.
+ * The props of a layer that takes a `source`: the opened source it draws, of
+ * type `SourceT`, or input of type `InputT` for it to open.
+ *
+ * {@link RasterTileLayer} reads them with these types. Each such layer also
+ * declares them itself, to document the inputs its `source` takes.
  */
-type SourceProps = {
-  /** An opened {@link RasterSource}, or input for the layer to open. */
-  source?: unknown;
+type SourceProps<SourceT extends RasterSource, InputT> = {
+  /** An opened source, or input for the layer to open. */
+  source?: SourceT | InputT | null;
   /** Called with the source the layer opened from input. */
-  onSourceLoad?: (source: RasterSource) => void;
+  onSourceLoad?: (source: SourceT) => void;
 };
 
 /**
@@ -255,14 +257,22 @@ type RasterTileLayerDefaultExtraProps<DataT extends MinimalTileData> = Pick<
  * at once, opens other input in {@link RasterTileLayer.loadMetadata}, and takes
  * the tile grid from the source.
  *
- * The generic `ExtraProps` parameter lets a subclass redeclare any of the
- * overridable fields with a domain-specific signature (e.g. `COGLayer`'s
- * `getTileData(image, options)`).
+ * The generic parameters:
+ * - `ExtraProps` lets a subclass redeclare any of the overridable fields with
+ *   a domain-specific signature (e.g. `COGLayer`'s
+ *   `getTileData(image, options)`).
+ * - `SourceT` and `InputT` type a subclass's `source`: the opened source it
+ *   draws and the input it opens, such as COGLayer's `COGSource` and
+ *   `COGInput`. A layer without a `source` leaves them as `never`.
  */
 export class RasterTileLayer<
   DataT extends MinimalTileData = MinimalTileData,
   ExtraProps extends object = RasterTileLayerDefaultExtraProps<DataT>,
-> extends CompositeLayer<RasterTileLayerBaseProps<DataT> & ExtraProps> {
+  SourceT extends RasterSource = never,
+  InputT = never,
+> extends CompositeLayer<
+  RasterTileLayerBaseProps<DataT> & SourceProps<SourceT, InputT> & ExtraProps
+> {
   static override layerName = "RasterTileLayer";
   static override defaultProps = defaultProps;
 
@@ -273,17 +283,17 @@ export class RasterTileLayer<
     /** True while the latest metadata load is in flight. */
     loadingMetadata?: boolean;
     /** The source the layer draws: `source` itself, or the one opened from it. */
-    source?: RasterSource;
+    source?: SourceT;
   };
 
   override updateState(params: UpdateParameters<this>): void {
     super.updateState(params);
-    const { source } = params.props as SourceProps;
-    if (source !== (params.oldProps as SourceProps).source) {
+    const { source } = params.props;
+    if (source !== params.oldProps.source) {
       // A new `source` replaces the old one, and any open still in flight.
       // Input draws nothing until it opens.
       this._abortMetadataLoad();
-      this._setSource(source instanceof RasterSource ? source : undefined);
+      this._setSource(this._isOpened(source) ? source : undefined);
     }
     if (this.shouldLoadMetadata(params)) {
       this._loadMetadata();
@@ -305,11 +315,9 @@ export class RasterTileLayer<
    * load other metadata return `true` when a prop it depends on has changed.
    */
   shouldLoadMetadata({ props, oldProps }: UpdateParameters<this>): boolean {
-    const { source } = props as SourceProps;
+    const { source } = props;
     return (
-      source !== (oldProps as SourceProps).source &&
-      source != null &&
-      !(source instanceof RasterSource)
+      source !== oldProps.source && source != null && !this._isOpened(source)
     );
   }
 
@@ -328,13 +336,17 @@ export class RasterTileLayer<
    * calls `onSourceLoad` with the opened source, and draws it.
    */
   async loadMetadata(signal: AbortSignal): Promise<void> {
-    const props = this.props as SourceProps;
-    const source = await this._openSource(props.source, signal);
+    const input = this.props.source;
+    // An opened source, or none, needs no opening
+    if (input == null || this._isOpened(input)) {
+      return;
+    }
+    const source = await this._openSource(input, signal);
 
     // `source` changed or the layer was removed while we waited
     signal.throwIfAborted();
 
-    props.onSourceLoad?.(source);
+    this.props.onSourceLoad?.(source);
     this._setSource(source);
   }
 
@@ -348,9 +360,9 @@ export class RasterTileLayer<
    * rejects.
    */
   protected _openSource(
-    _input: unknown,
+    _input: InputT,
     _signal: AbortSignal,
-  ): Promise<RasterSource> {
+  ): Promise<SourceT> {
     const { layerName } = this.constructor as typeof RasterTileLayer;
     return Promise.reject(new Error(`${layerName} can't open a source`));
   }
@@ -362,12 +374,22 @@ export class RasterTileLayer<
    * Throw if the layer can't draw `source`: it then draws nothing, and the
    * error reaches `onError`. The base layer stores nothing more.
    */
-  protected _sourceState(_source: RasterSource): object {
+  protected _sourceState(_source: SourceT): object {
     return {};
   }
 
+  /**
+   * Whether `source` is an opened source, rather than input for the layer to
+   * open: every opened source is a {@link RasterSource}.
+   */
+  private _isOpened(
+    source: SourceT | InputT | null | undefined,
+  ): source is SourceT {
+    return source instanceof RasterSource;
+  }
+
   /** Draw `source`, or nothing when it's `undefined`. */
-  private _setSource(source: RasterSource | undefined): void {
+  private _setSource(source: SourceT | undefined): void {
     // Clear the old source first, so that if `_sourceState` throws for the new
     // one, the layer draws nothing rather than the old source
     this.setState({ source: undefined });
