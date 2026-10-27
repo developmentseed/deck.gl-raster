@@ -443,7 +443,10 @@ stitching). A read whose range lies inside an in-flight stream attaches to it
 and resolves when the stream passes its end.
 
 Two budgets, one LRU order each: header-purpose spans count against
-`headerBytes`, data-purpose spans against `dataBytes`. Tile churn can never
+`headerBytes`, data-purpose spans against `dataBytes`. Lookup is across both:
+a read of either purpose is served by any span that contains it, so tile
+bytes that arrived inside a header block are never fetched again (the
+purpose decides which budget a span counts against, not who may read it). Tile churn can never
 evict a header span, which is the point; within its budget the header side is
 still LRU, so a 150 GB COG keeps only the blocks around regions that have been
 visited. In-flight buffers count against their budget and are never evicted;

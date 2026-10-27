@@ -27,7 +27,9 @@ class Tier {
 /**
  * The default {@link ByteCache}: contiguous spans in memory, looked up by
  * containment, with one LRU budget per {@link Purpose} so data churn can
- * never evict header spans. A span larger than its budget, or empty, is not
+ * never evict header spans. A read is served from any span that contains
+ * it, whichever purpose fetched it; the purpose only decides which budget a
+ * stored span counts against. A span larger than its budget, or empty, is not
  * stored. A span contained in a stored span is dropped; stored spans the new
  * span contains are replaced by it. Partial overlaps are kept side by side
  * and are misses for a read that straddles them.
@@ -47,16 +49,18 @@ export class MemoryByteCache implements ByteCache {
   get(
     file: FileIdentity,
     range: ByteRange,
-    purpose: Purpose,
+    _purpose: Purpose,
   ): Promise<Uint8Array | undefined> {
     const end = range.offset + range.length;
+    // Any span serves any purpose: the first tiles of a COG often sit inside
+    // its first header block, and a data read for them must not fetch them
+    // again. The span's own tier keeps the recency and the budget.
     for (const span of this.byFile.get(file.key) ?? []) {
       if (
-        span.purpose === purpose &&
         span.offset <= range.offset &&
         span.offset + span.bytes.length >= end
       ) {
-        const tier = this.tiers[purpose];
+        const tier = this.tiers[span.purpose];
         tier.order.delete(span.id);
         tier.order.set(span.id, span);
         const start = range.offset - span.offset;

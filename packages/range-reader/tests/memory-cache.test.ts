@@ -22,9 +22,18 @@ describe("MemoryByteCache", () => {
     expect(
       await cache.get(file, { offset: 149, length: 2 }, "data"),
     ).toBeUndefined();
-    expect(
-      await cache.get(file, { offset: 120, length: 10 }, "header"),
-    ).toBeUndefined();
+  });
+
+  it("serves a read of either purpose from a span the other purpose fetched", async () => {
+    // The first tiles of a COG often sit inside its first header block; a
+    // data read for them must not fetch them again.
+    const cache = new MemoryByteCache({ dataBytes: 100, headerBytes: 100 });
+    await cache.put(file, 0, bytes(60, 3), "header");
+    expect(await cache.get(file, { offset: 10, length: 10 }, "data")).toEqual(
+      bytes(10, 3),
+    );
+    expect(cache.byteSize("header")).toBe(60);
+    expect(cache.byteSize("data")).toBe(0);
   });
 
   it("evicts least recently used spans within one purpose's budget", async () => {

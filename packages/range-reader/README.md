@@ -66,8 +66,10 @@ cancelled, keeping what arrived, when the last one leaves.
 | `cacheMode` | the browser's default | `RequestInit.cache` for every request. |
 
 Every read names its `purpose`, `"header"` or `"data"`. The two are merged
-and cached separately, so data churn never evicts the small structural
-reads every later read depends on.
+separately and count against separate cache budgets, so data churn never
+evicts the small structural reads every later read depends on. A read is
+served from any cached span that contains it, whichever purpose fetched it:
+the first tiles of a COG often arrive inside its first header block.
 
 ## Bring your own cache
 
