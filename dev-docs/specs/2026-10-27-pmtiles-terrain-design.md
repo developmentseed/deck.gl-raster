@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-27 (revised the same day: a 2D hillshade, not 3D terrain)
 - **Issues:** builds on [#805](https://github.com/developmentseed/deck.gl-raster/pull/805) (merged); needs the range reader from [#806](https://github.com/developmentseed/deck.gl-raster/pull/806) (open); follows [#809](https://github.com/developmentseed/deck.gl-raster/pull/809)'s load settings for COG layers (open); ports the hillshade pipeline from [#647](https://github.com/developmentseed/deck.gl-raster/pull/647) (draft)
-- **Status:** Accepted (Kyle, 2026-10-27), with one decision open
+- **Status:** Accepted (Kyle, 2026-10-27)
 
 Code links are pinned to main at
 [`6c9da23b`](https://github.com/developmentseed/deck.gl-raster/commit/6c9da23b40457dfd0c6ae8ca61ee34042f41e548)
@@ -132,8 +132,8 @@ round trips. Stage 1 measures it rather than assuming it.
 - #647's code is unreviewed LLM output (its PR says so). Porting it means
   reviewing it here.
 - Needs #806's `@developmentseed/range-reader`. If #806 hasn't merged when work
-  starts, stack the branch on it. Aborting unwanted loads also needs #809 (see
-  the open decision).
+  starts, stack the branch on it. Aborting unwanted loads also needs #809's
+  protected hook, which the example's layer subclass turns on.
 - Mapterhorn is a third party. Its hosts send `Access-Control-Allow-Origin: *`
   and honor range requests, but don't expose `ETag` through CORS. Attribution
   is required: "© Mapterhorn", linking to <https://mapterhorn.com/attribution>.
@@ -338,7 +338,9 @@ A `RasterTileLayer` with:
   `renderTile` from `makeRenderTile`.
 - `maxRequests: 256` and `debounceTime: 50`, as #809 gives the COG layers.
 - `onTileUnload` destroys the tile's texture.
-- Aborting loads for tiles that left the view: the open decision below.
+- Aborting loads for tiles that left the view: the example subclasses
+  `RasterTileLayer` and overrides #809's protected `_abortUnwantedLoads()` to
+  return `true`. There's no public prop for it yet.
 
 Past z12 the planet tiles are stretched, and with `texelFetch` each texel's
 shade covers a block of screen pixels. If that looks blocky, blend the shade of
@@ -429,16 +431,13 @@ Kyle, 2026-10-27:
   code later.
 - **Tile borders in the cache, rewriting only the ring, and cancelling
   abandoned fetches:** +1.
-
-### Still open
-
-**Aborting loads nobody wants.** #809 adds `abortUnwantedLoads` to
-`RasterTileset2D`, but `RasterTileLayer` exposes it only as a protected hook,
-which the COG layers turn on. A `RasterTileLayer` used directly with
-`maxRequests: 256` needs it too, and the cache's cancellation only helps once
-tile loads actually get aborted. I recommend a public `abortUnwantedLoads`
-prop, off by default: a few lines, in #809 or here. The alternative is a
-three-line subclass in the example.
+- **Aborting unwanted loads: a subclass in the example, for now.** #809 adds
+  `abortUnwantedLoads` to `RasterTileset2D` but exposes it on
+  `RasterTileLayer` only as a protected hook, which the COG layers turn on.
+  The example's layer subclass overrides the hook rather than adding a public
+  prop. This matters here: with `maxRequests: 256`, deck.gl no longer aborts
+  loads for tiles that left the view, and the cache's cancellation only helps
+  once tile loads actually get aborted.
 
 ## Calls I made
 
