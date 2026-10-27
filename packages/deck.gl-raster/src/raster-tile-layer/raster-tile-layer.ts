@@ -221,18 +221,15 @@ type SourceProps<SourceT extends RasterSource, InputT> = {
 };
 
 /**
- * What a layer's `source` prop takes, from the layer's props type, or `never`
- * for a layer without one.
+ * The type of the `source` prop in a layer's props, without `null` and
+ * `undefined`. For COGLayerProps, that's `COGSource | COGInput`.
+ *
+ * Props without a `source` give `never`; that's what the `keyof` check is for.
+ * Indexing with `"source" & keyof PropsT` only tells TypeScript the key exists.
  */
 type SourcePropOf<PropsT> = "source" extends keyof PropsT
   ? NonNullable<PropsT["source" & keyof PropsT]>
   : never;
-
-/** The opened source a layer's `source` prop takes, such as `COGSource`. */
-type SourceOf<PropsT> = Extract<SourcePropOf<PropsT>, RasterSource>;
-
-/** The input a layer's `source` prop takes, for the layer to open. */
-type InputOf<PropsT> = Exclude<SourcePropOf<PropsT>, RasterSource>;
 
 /**
  * Base-class prop shape that excludes the overridable fields.
@@ -285,8 +282,13 @@ type RasterTileLayerDefaultExtraProps<DataT extends MinimalTileData> = Pick<
 export class RasterTileLayer<
   DataT extends MinimalTileData = MinimalTileData,
   ExtraProps extends object = RasterTileLayerDefaultExtraProps<DataT>,
-  SourceT extends RasterSource = SourceOf<ExtraProps>,
-  InputT = InputOf<ExtraProps>,
+  // The opened sources in `source`: COGSource for COGLayer
+  SourceT extends RasterSource = Extract<
+    SourcePropOf<ExtraProps>,
+    RasterSource
+  >,
+  // The rest of `source`, which the layer opens: COGInput for COGLayer
+  InputT = Exclude<SourcePropOf<ExtraProps>, RasterSource>,
 > extends CompositeLayer<
   RasterTileLayerBaseProps<DataT> & SourceProps<SourceT, InputT> & ExtraProps
 > {
