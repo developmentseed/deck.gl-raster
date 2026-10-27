@@ -5,6 +5,8 @@ export {
   PerOriginSemaphore,
   Semaphore,
 } from "./limiter.js";
+export type { MergedRange, MergeOptions } from "./merge.js";
+export { mergeReads, widenRead } from "./merge.js";
 export type {
   ByteCache,
   ByteRange,
