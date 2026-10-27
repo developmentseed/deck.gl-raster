@@ -1228,6 +1228,9 @@ importers:
       '@developmentseed/geotiff':
         specifier: workspace:^
         version: link:../../packages/geotiff
+      '@developmentseed/range-reader':
+        specifier: workspace:^
+        version: link:../../packages/range-reader
       '@luma.gl/core':
         specifier: ^9.4.2
         version: 9.4.2
