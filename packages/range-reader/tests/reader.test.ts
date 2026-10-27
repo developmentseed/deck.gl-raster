@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConcurrencyLimiter } from "../src/limiter.js";
+import type { ConcurrencyLimiter, Priority } from "../src/limiter.js";
 import { RangeReader } from "../src/reader.js";
 import type { ByteCache } from "../src/types.js";
 import type { FakeFetch } from "./helpers.js";
@@ -165,6 +165,29 @@ describe("RangeReader", () => {
     await body.push(pattern(48, 16));
     await body.close();
     expect(await d).toEqual({ kind: "bytes", bytes: pattern(8, 40) });
+  });
+
+  it("lends a widened metadata read's own priority to its request", async () => {
+    // The keep member that holds the block open offers no priority and must
+    // not count as the best one.
+    const seen: Priority[] = [];
+    const limiter: ConcurrencyLimiter = {
+      acquire(_url, _signal, getPriority) {
+        seen.push(getPriority?.() ?? -1);
+        return Promise.resolve(() => {});
+      },
+    };
+    const reader = new RangeReader({
+      fetch: fake.fetch,
+      minMetadataReadBytes: 64,
+    });
+    void reader.read(
+      f,
+      { offset: 4, length: 8 },
+      { ...METADATA, limiter, getPriority: () => 7 },
+    );
+    await flush();
+    expect(seen).toEqual([7]);
   });
 
   it("treats a read without a purpose as data: not widened", async () => {

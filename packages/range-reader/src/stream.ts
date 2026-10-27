@@ -503,11 +503,14 @@ export class RangeStream {
     void this.reader?.cancel().catch(() => {});
   }
 
-  /** The best (lowest) priority among live members; 0 when none offers one. */
+  /** The best (lowest) priority among live members that offer one; 0 when none does. */
   private bestPriority(): Priority {
     let best: Priority | undefined;
     for (const member of this.live) {
-      const priority = member.getPriority?.() ?? 0;
+      if (member.getPriority === undefined) {
+        continue;
+      }
+      const priority = member.getPriority();
       if (best === undefined || comparePriorities(priority, best) < 0) {
         best = priority;
       }
