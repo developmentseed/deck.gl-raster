@@ -176,15 +176,21 @@ with `RangeReader.read(file, { offset, length }, { purpose, limiter, signal })`:
 - The page has one `RangeReader` and one `PerOriginSemaphore`, like #809's
   shared reader.
 - `purpose` is `"data"` for reads inside the header's tile data section and
-  `"header"` for everything else (header, directories, metadata). The reader
-  widens short header reads to aligned 64 KiB blocks, so reading one 10 KB leaf
-  directory brings its neighbors along.
+  `"metadata"` for everything else (header, directories, JSON metadata). The
+  adapter learns the section from the first read at offset 0, parsed with
+  `pmtiles`' `bytesToHeader`. The reader widens short metadata reads to
+  aligned 64 KiB blocks, so reading one 10 KB leaf directory brings its
+  neighbors along.
 - **Return a copy.** The reader resolves each read with a view into a merged
   response or a cached span. Hand `pmtiles` `bytes.slice().buffer`, never
   `bytes.buffer`, which holds the whole merged span.
-- A `not-found` result throws an error that names the URL. `etag` is ignored:
-  Mapterhorn doesn't expose it, and the reader's file identity already pins
-  the URL.
+- A `not-found` result throws an error that names the URL.
+- Validators work as in #807's chunkd adapter
+  (`packages/geotiff/src/reader-source.ts`). The adapter remembers the first
+  read's validator (`ETag`, or `Last-Modified` when there is none). A
+  different one later throws `pmtiles`' `EtagMismatch`, which makes `getZxy`
+  drop its cached header and directories and retry once. The reader drops its
+  own cached bytes of the old version.
 
 Why merging works with `pmtiles` 4.5:
 
@@ -201,10 +207,11 @@ Why merging works with `pmtiles` 4.5:
 
 `PMTilesSource`, a `RasterSource` subclass in the example:
 
-- `static async open(url, { tileSize, reader, limiter, signal })` creates
-  `new PMTiles(new RangeReaderSource(...))`, reads the header and checks that
-  the tile type is WebP or PNG. If not, it throws an error that names the URL
-  and the type it found.
+- `static async open({ byteSource, tileSize })` creates
+  `new PMTiles(byteSource)`, reads the header and checks that the tile type is
+  WebP or PNG. If not, it throws an error that names the URL and the type it
+  found. `byteSource` is a `RangeReaderSource`, or, with merging switched
+  off, a counting wrapper around `pmtiles`' own `FetchSource`.
 - Fields: `archive` (the `PMTiles`), `header` and `tileSize`, plus the base's
   `tilesetDescriptor`, and `geographicBounds` from the header's bounds.
 - `tilesetDescriptor` is a WebMercatorQuad tile matrix set with 512 px tiles,
