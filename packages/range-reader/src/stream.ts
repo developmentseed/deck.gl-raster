@@ -1,4 +1,5 @@
 import type { ConcurrencyLimiter, Priority } from "./limiter.js";
+import { comparePriorities } from "./limiter.js";
 import type {
   ByteRange,
   FileIdentity,
@@ -75,6 +76,10 @@ export class RangeStream {
   /** File offset of the first received byte, once known. */
   private offset: number | undefined;
   private size: number | undefined;
+  private cancelled = false;
+  private reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  /** The abort listener installed for each live member, removed when it settles. */
+  private readonly abortListeners = new Map<StreamMember, () => void>();
 
   constructor(
     file: FileIdentity,
@@ -124,7 +129,9 @@ export class RangeStream {
     ) {
       return false;
     }
-    if (end - this.range.offset <= this.receivedBytes) {
+    if (member.signal?.aborted) {
+      member.reject(member.signal.reason);
+    } else if (end - this.range.offset <= this.receivedBytes) {
       member.resolve({ kind: "bytes", bytes: this.view(member) });
     } else {
       this.insert(member);
@@ -132,24 +139,61 @@ export class RangeStream {
     return true;
   }
 
-  /** Send the request and read its body. Never rejects. */
+  /**
+   * Take the limiter slot, send the request and read its body. Never
+   * rejects: every way the request can end is an outcome.
+   */
   async run(): Promise<StreamOutcome> {
-    const headers = new Headers(this.file.init?.headers);
-    const rangeHeader = this.rangeHeader();
-    if (rangeHeader !== undefined) {
-      headers.set("Range", rangeHeader);
+    if (this.live.length === 0) {
+      return this.settle(this.collect(), { kind: "cancelled" });
     }
-    const init: RequestInit = {
-      ...this.file.init,
-      headers,
-      signal: this.controller.signal,
-    };
-    const cache = this.options.cacheMode ?? this.file.init?.cache;
-    if (cache !== undefined) {
-      init.cache = cache;
+    let release: (() => void) | undefined;
+    try {
+      const { limiter } = this.options;
+      if (limiter) {
+        try {
+          release = await limiter.acquire(
+            this.file.url,
+            this.controller.signal,
+            () => this.bestPriority(),
+          );
+        } catch (error) {
+          return this.cancelled
+            ? this.settle(this.collect(), { kind: "cancelled" })
+            : this.fail(error);
+        }
+      }
+      if (this.cancelled) {
+        return this.settle(this.collect(), { kind: "cancelled" });
+      }
+      const headers = new Headers(this.file.init?.headers);
+      const rangeHeader = this.rangeHeader();
+      if (rangeHeader !== undefined) {
+        headers.set("Range", rangeHeader);
+      }
+      const init: RequestInit = {
+        ...this.file.init,
+        headers,
+        signal: this.controller.signal,
+      };
+      const cache = this.options.cacheMode ?? this.file.init?.cache;
+      if (cache !== undefined) {
+        init.cache = cache;
+      }
+      let response: Response;
+      try {
+        response = await this.untilCancelled(
+          this.options.fetch(this.file.url, init),
+        );
+      } catch (error) {
+        return this.cancelled
+          ? this.settle(this.collect(), { kind: "cancelled" })
+          : this.fail(error);
+      }
+      return await this.consume(response);
+    } finally {
+      release?.();
     }
-    const response = await this.options.fetch(this.file.url, init);
-    return this.consume(response);
   }
 
   private async consume(response: Response): Promise<StreamOutcome> {
@@ -177,10 +221,10 @@ export class RangeStream {
       this.buffer = new Uint8Array(expected);
     }
     if (response.body !== null) {
-      const reader = response.body.getReader();
+      this.reader = response.body.getReader();
       for (;;) {
-        const { done, value } = await reader.read();
-        if (done) {
+        const { done, value } = await this.reader.read();
+        if (done || this.cancelled) {
           break;
         }
         this.append(value);
@@ -192,9 +236,12 @@ export class RangeStream {
 
   private finish(expected: number | undefined): StreamOutcome {
     const bytes = this.collect();
+    if (this.cancelled) {
+      return this.settle(bytes, { kind: "cancelled" });
+    }
     if (this.range === undefined) {
       for (const member of this.live.splice(0)) {
-        member.resolve({ kind: "bytes", bytes });
+        this.resolveMember(member, { kind: "bytes", bytes });
       }
       return this.settle(bytes, { kind: "complete" });
     }
@@ -203,7 +250,7 @@ export class RangeStream {
         `Short read from ${this.file.url.href}: wanted ${expected} bytes at ${this.range.offset}, got ${this.receivedBytes}`,
       );
       for (const member of this.live.splice(0)) {
-        member.reject(error);
+        this.rejectMember(member, error);
       }
       return this.settle(bytes, { kind: "truncated" });
     }
@@ -212,7 +259,7 @@ export class RangeStream {
 
   private fail(error: unknown): StreamOutcome {
     for (const member of this.live.splice(0)) {
-      member.reject(error);
+      this.rejectMember(member, error);
     }
     return this.settle(this.collect(), { kind: "failed", error });
   }
@@ -250,7 +297,7 @@ export class RangeStream {
         break;
       }
       this.live.shift();
-      next.resolve({ kind: "bytes", bytes: this.view(next) });
+      this.resolveMember(next, { kind: "bytes", bytes: this.view(next) });
     }
   }
 
@@ -273,7 +320,34 @@ export class RangeStream {
     return this.buffer!.subarray(start, start + member.length);
   }
 
+  /**
+   * Add a member to the live set, ordered by end offset. A member whose
+   * signal has already aborted is rejected and never joins; one that aborts
+   * later leaves the set at once, rejected with its reason, and the stream
+   * is cancelled if it was the last.
+   */
   private insert(member: StreamMember): void {
+    const { signal } = member;
+    if (signal?.aborted) {
+      member.reject(signal.reason);
+      return;
+    }
+    if (signal !== undefined) {
+      const onAbort = () => {
+        this.abortListeners.delete(member);
+        const at = this.live.indexOf(member);
+        if (at < 0) {
+          return;
+        }
+        this.live.splice(at, 1);
+        member.reject(signal.reason);
+        if (this.isActive && this.live.length === 0) {
+          this.cancel();
+        }
+      };
+      this.abortListeners.set(member, onAbort);
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
     const end = member.offset + member.length;
     let at = this.live.length;
     while (at > 0) {
@@ -284,6 +358,72 @@ export class RangeStream {
       at -= 1;
     }
     this.live.splice(at, 0, member);
+  }
+
+  private resolveMember(member: StreamMember, result: ReadResult): void {
+    this.forget(member);
+    member.resolve(result);
+  }
+
+  private rejectMember(member: StreamMember, reason: unknown): void {
+    this.forget(member);
+    member.reject(reason);
+  }
+
+  /** Drop a settled member's abort listener. */
+  private forget(member: StreamMember): void {
+    const onAbort = this.abortListeners.get(member);
+    if (onAbort !== undefined) {
+      this.abortListeners.delete(member);
+      member.signal?.removeEventListener("abort", onAbort);
+    }
+  }
+
+  /** Stop the request: nothing ahead is wanted. What arrived is kept. */
+  private cancel(): void {
+    this.cancelled = true;
+    this.controller.abort(
+      new DOMException("No read wants the rest of this request", "AbortError"),
+    );
+    void this.reader?.cancel().catch(() => {});
+  }
+
+  /** The best (lowest) priority among live members; 0 when none offers one. */
+  private bestPriority(): Priority {
+    let best: Priority | undefined;
+    for (const member of this.live) {
+      const priority = member.getPriority?.() ?? 0;
+      if (best === undefined || comparePriorities(priority, best) < 0) {
+        best = priority;
+      }
+    }
+    return best ?? 0;
+  }
+
+  /**
+   * Settle with the response, or reject as soon as the stream is cancelled
+   * while the response is still on its way. A response that arrives after
+   * the cancellation has its body cancelled.
+   */
+  private untilCancelled(response: Promise<Response>): Promise<Response> {
+    return new Promise((resolve, reject) => {
+      const { signal } = this.controller;
+      const onAbort = () => reject(signal.reason);
+      signal.addEventListener("abort", onAbort, { once: true });
+      response.then(
+        (value) => {
+          signal.removeEventListener("abort", onAbort);
+          if (this.cancelled) {
+            void value.body?.cancel().catch(() => {});
+          }
+          resolve(value);
+        },
+        (error) => {
+          signal.removeEventListener("abort", onAbort);
+          reject(error);
+        },
+      );
+    });
   }
 
   private rangeHeader(): string | undefined {
