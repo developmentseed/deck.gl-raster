@@ -260,6 +260,9 @@ export type MultiCOGLayerProps = CompositeLayerProps &
 
 const defaultProps = {
   ...RasterTileLayer.defaultProps,
+  // See COGLayer: a whole selection goes to the range reader in one task.
+  maxRequests: 256,
+  debounceTime: 50,
   debugLevel: { type: "number" as const, value: 1 },
 };
 
