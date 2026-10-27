@@ -35,6 +35,8 @@ export interface StreamOutcome {
   end: StreamEnd;
   /** The object's size when a response revealed it. */
   size?: number;
+  /** The response's `ETag`, or `Last-Modified` without one. */
+  validator?: string;
 }
 
 /** Options for {@link RangeStream}. */
@@ -83,6 +85,7 @@ export class RangeStream {
    */
   private base: ByteRange | undefined;
   private cancelled = false;
+  private validator: string | undefined;
   private reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   /** The abort listener installed for each live member, removed when it settles. */
   private readonly abortListeners = new Map<StreamMember, () => void>();
@@ -139,7 +142,7 @@ export class RangeStream {
     if (member.signal?.aborted) {
       member.reject(member.signal.reason);
     } else if (end - this.base.offset <= this.receivedBytes) {
-      member.resolve({ kind: "bytes", bytes: this.view(member) });
+      member.resolve(this.bytes(this.view(member)));
     } else {
       this.insert(member);
     }
@@ -232,6 +235,10 @@ export class RangeStream {
       void response.body?.cancel().catch(() => {});
       return this.fail(new Error(`${this.file.url.href} answered ${status}`));
     }
+    this.validator =
+      response.headers.get("etag") ??
+      response.headers.get("last-modified") ??
+      undefined;
     if (status === 200 && this.request !== undefined) {
       // The server ignored `Range`. Take the whole object when it is small
       // enough to be worth it; otherwise nothing it sends is usable.
@@ -313,10 +320,7 @@ export class RangeStream {
         // known and the members past it get what exists, possibly nothing.
         this.size = this.base.offset + this.receivedBytes;
         for (const member of this.live.splice(0)) {
-          this.resolveMember(member, {
-            kind: "bytes",
-            bytes: this.view(member),
-          });
+          this.resolveMember(member, this.bytes(this.view(member)));
         }
         return this.settle(bytes, { kind: "eof", size: this.size });
       }
@@ -330,10 +334,10 @@ export class RangeStream {
     }
     for (const member of this.live.splice(0)) {
       // Suffix and whole-object members resolve with everything received.
-      this.resolveMember(member, {
-        kind: "bytes",
-        bytes: this.base !== undefined ? this.view(member) : bytes,
-      });
+      this.resolveMember(
+        member,
+        this.bytes(this.base !== undefined ? this.view(member) : bytes),
+      );
     }
     return this.settle(bytes, { kind: "complete" });
   }
@@ -351,7 +355,17 @@ export class RangeStream {
     if (this.size !== undefined) {
       outcome.size = this.size;
     }
+    if (this.validator !== undefined) {
+      outcome.validator = this.validator;
+    }
     return outcome;
+  }
+
+  /** A bytes result carrying the response's validator, when it sent one. */
+  private bytes(bytes: Uint8Array): ReadResult {
+    return this.validator === undefined
+      ? { kind: "bytes", bytes }
+      : { kind: "bytes", bytes, validator: this.validator };
   }
 
   /** Copy a chunk in, never past the buffer's end. Returns the bytes left over. */
@@ -379,7 +393,7 @@ export class RangeStream {
         break;
       }
       this.live.shift();
-      this.resolveMember(next, { kind: "bytes", bytes: this.view(next) });
+      this.resolveMember(next, this.bytes(this.view(next)));
     }
     // Nothing ahead is wanted: every remaining member left by abort. A 200
     // that replaced the range with the whole object is read to its end, as

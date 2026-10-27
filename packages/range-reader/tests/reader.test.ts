@@ -427,6 +427,102 @@ describe("RangeReader cache and in-flight reads", () => {
   });
 });
 
+describe("RangeReader validators", () => {
+  let fake: FakeFetch;
+  let reader: RangeReader;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    fake = fakeFetch();
+    reader = new RangeReader({ fetch: fake.fetch });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Issue one read, answer it whole with `headers`, and return its result. */
+  async function readWith(
+    range: { offset: number; length: number },
+    headers: Record<string, string>,
+  ) {
+    const p = reader.read(f, range, DATA);
+    await flush();
+    const call = fake.calls.at(-1)!;
+    const body = call.reply({
+      status: 206,
+      headers: { "content-length": String(range.length), ...headers },
+    });
+    await body.push(pattern(range.length, range.offset));
+    await body.close();
+    await microtasks();
+    return p;
+  }
+
+  it("returns the response's ETag with the bytes, and again on a cache hit", async () => {
+    const first = await readWith({ offset: 0, length: 10 }, { etag: '"v1"' });
+    expect(first).toEqual({
+      kind: "bytes",
+      bytes: pattern(10),
+      validator: '"v1"',
+    });
+    const hit = await reader.read(f, { offset: 2, length: 4 }, DATA);
+    expect(hit).toEqual({
+      kind: "bytes",
+      bytes: pattern(4, 2),
+      validator: '"v1"',
+    });
+    expect(fake.calls).toHaveLength(1);
+  });
+
+  it("falls back to Last-Modified when there is no ETag", async () => {
+    const result = await readWith(
+      { offset: 0, length: 10 },
+      { "last-modified": "Mon, 26 Oct 2026 00:00:00 GMT" },
+    );
+    expect(result).toMatchObject({
+      validator: "Mon, 26 Oct 2026 00:00:00 GMT",
+    });
+  });
+
+  it("purges a file's cached spans when its validator changes", async () => {
+    await readWith({ offset: 0, length: 10 }, { etag: '"v1"' });
+    // The object was replaced: a response for another range carries a new tag.
+    const changed = await readWith(
+      { offset: 100, length: 10 },
+      { etag: '"v2"' },
+    );
+    expect(changed).toMatchObject({ validator: '"v2"' });
+    expect(reader.stats.validatorChanges).toBe(1);
+    // The first range is no longer served from the old bytes.
+    const again = await readWith({ offset: 0, length: 10 }, { etag: '"v2"' });
+    expect(again).toMatchObject({ validator: '"v2"' });
+    expect(fake.calls).toHaveLength(3);
+    expect(reader.stats.cacheHits).toBe(0);
+  });
+
+  it("forgets a learned object size when the validator changes", async () => {
+    const p = reader.read(f, { offset: 0, length: 10 }, DATA);
+    await flush();
+    const body = fake.calls[0]!.reply({
+      status: 206,
+      headers: {
+        "content-length": "10",
+        "content-range": "bytes 0-9/50",
+        etag: '"v1"',
+      },
+    });
+    await body.push(pattern(10));
+    await body.close();
+    await p;
+    await readWith({ offset: 20, length: 10 }, { etag: '"v2"' });
+    // Past the old size of 50: must be requested, not answered empty.
+    void reader.read(f, { offset: 60, length: 10 }, DATA);
+    await flush();
+    expect(fake.calls).toHaveLength(3);
+  });
+});
+
 describe("RangeReader after a request fails mid-body", () => {
   let fake: FakeFetch;
   let reader: RangeReader;

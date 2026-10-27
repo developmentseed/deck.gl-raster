@@ -92,12 +92,26 @@ interface ByteCache {
   get(file: FileIdentity, range: ByteRange, purpose: Purpose): Promise<Uint8Array | undefined>;
   put(file: FileIdentity, offset: number, bytes: Uint8Array, purpose: Purpose): Promise<void>;
   byteSize?(purpose: Purpose): number;
+  delete?(file: FileIdentity): Promise<void>;
 }
 ```
 
 `get` answers with the bytes of `range` when one stored span contains all of
 it. In-flight requests and the not-found outcome stay in the reader; a cache
 only ever holds bytes.
+
+## Objects replaced in place
+
+The reader remembers each file's validator, its `ETag` or, failing that, its
+`Last-Modified`, from the latest response. A response that carries a
+different one means the object was replaced: the reader drops the file's
+cached spans (`delete` on the cache) before storing the new bytes, so the
+cache never holds two versions of one object, and counts the change in
+`stats.validatorChanges`. Every result carries the validator it came from, so
+a caller that parsed a file's layout can fail its own reads when the layout
+is stale, as `@developmentseed/geotiff` does. The reader never sends
+`If-Match` itself: a conditional header forces a CORS preflight on every
+request.
 
 ## Status
 

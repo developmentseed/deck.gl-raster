@@ -136,6 +136,13 @@ export class MemoryByteCache implements ByteCache {
     return this.tiers[purpose].size;
   }
 
+  delete(file: FileIdentity): Promise<void> {
+    for (const span of [...(this.byFile.get(file.key) ?? [])]) {
+      this.remove(span);
+    }
+    return Promise.resolve();
+  }
+
   private remove(span: Span): void {
     const tier = this.tiers[span.purpose];
     if (tier.order.delete(span.id)) {

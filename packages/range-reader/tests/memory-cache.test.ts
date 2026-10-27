@@ -82,6 +82,25 @@ describe("MemoryByteCache", () => {
     expect(cache.byteSize("data")).toBe(100);
   });
 
+  it("deletes every span of a file and frees its budget", async () => {
+    const other = fileIdentity("https://x.test/b.tif");
+    await cache.put(file, 0, bytes(10), "data");
+    await cache.put(file, 50, bytes(10), "metadata");
+    await cache.put(other, 0, bytes(10, 2), "data");
+    await cache.delete(file);
+    expect(
+      await cache.get(file, { offset: 0, length: 10 }, "data"),
+    ).toBeUndefined();
+    expect(
+      await cache.get(file, { offset: 50, length: 10 }, "data"),
+    ).toBeUndefined();
+    expect(await cache.get(other, { offset: 0, length: 10 }, "data")).toEqual(
+      bytes(10, 2),
+    );
+    expect(cache.byteSize("data")).toBe(10);
+    expect(cache.byteSize("metadata")).toBe(0);
+  });
+
   it("keys spans by file identity", async () => {
     await cache.put(file, 0, bytes(10), "data");
     expect(

@@ -29,7 +29,17 @@ export type ReadRange = ByteRange | { suffixLength: number };
  * chunk means its fill value) and an error for others (a missing COG).
  */
 export type ReadResult =
-  | { kind: "bytes"; bytes: Uint8Array }
+  | {
+      kind: "bytes";
+      bytes: Uint8Array;
+      /**
+       * The `ETag`, or `Last-Modified` when there is none, of the response
+       * the bytes came from; absent when the server sent neither. A caller
+       * that parsed a file's structure can compare it across reads and fail
+       * when the object was replaced underneath it.
+       */
+      validator?: string;
+    }
   | { kind: "not-found" };
 
 declare const fileKeyBrand: unique symbol;
@@ -90,6 +100,12 @@ export interface ByteCache {
   ): Promise<void>;
   /** Bytes currently held for `purpose`, when the cache can tell. */
   byteSize?(purpose: Purpose): number;
+  /**
+   * Drop every span of `file`. The reader calls this when a response shows
+   * the object was replaced, so a cache without it keeps serving the old
+   * bytes after a change.
+   */
+  delete?(file: FileIdentity): Promise<void>;
 }
 
 /** Monotonic counters kept by a {@link RangeReader} for measurement. */
@@ -110,6 +126,8 @@ export interface RangeReaderStats {
   cacheHitBytes: number;
   /** Reads attached to a request already in flight. */
   attached: number;
+  /** Responses whose validator differed from the file's last one. */
+  validatorChanges: number;
 }
 
 /** Options for {@link RangeReader}. */

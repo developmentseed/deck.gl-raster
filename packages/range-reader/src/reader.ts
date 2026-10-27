@@ -71,6 +71,7 @@ export class RangeReader {
     cacheHits: 0,
     cacheHitBytes: 0,
     attached: 0,
+    validatorChanges: 0,
   };
 
   private readonly fetch: typeof fetch;
@@ -89,6 +90,14 @@ export class RangeReader {
   private readonly inflight = new Map<FileKey, Set<RangeStream>>();
   /** Object sizes learned from responses, by file key. */
   private readonly sizes = new Map<FileKey, number>();
+  /**
+   * Each file's validator (`ETag`, or `Last-Modified`) as of its latest
+   * response. Every cached span of a file matches it: a response with a
+   * different one purges the file's spans before its own are stored, so the
+   * cache never holds two versions of one object, as a browser's own range
+   * cache never combines ranges with different validators.
+   */
+  private readonly validators = new Map<FileKey, string>();
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: RangeReaderOptions = {}) {
@@ -154,7 +163,10 @@ export class RangeReader {
     if (hit !== undefined) {
       this.stats.cacheHits += 1;
       this.stats.cacheHitBytes += range.length;
-      return { kind: "bytes", bytes: hit };
+      const validator = this.validators.get(file.key);
+      return validator === undefined
+        ? { kind: "bytes", bytes: hit }
+        : { kind: "bytes", bytes: hit, validator };
     }
     return new Promise((resolve, reject) => {
       const member: StreamMember = {
@@ -335,6 +347,17 @@ export class RangeReader {
     this.stats.bytesReceived += outcome.bytes.length;
     if (outcome.end.kind === "cancelled") {
       this.stats.cancelled += 1;
+    }
+    if (outcome.validator !== undefined) {
+      const known = this.validators.get(file.key);
+      if (known !== undefined && known !== outcome.validator) {
+        // The object was replaced: nothing cached for it may be served next
+        // to the new bytes, and its size is unknown again.
+        this.stats.validatorChanges += 1;
+        this.sizes.delete(file.key);
+        void this.cache.delete?.(file).catch(() => {});
+      }
+      this.validators.set(file.key, outcome.validator);
     }
     if (outcome.size !== undefined) {
       this.sizes.set(file.key, outcome.size);

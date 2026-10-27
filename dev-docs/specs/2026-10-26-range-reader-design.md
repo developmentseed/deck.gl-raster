@@ -456,6 +456,17 @@ visited. In-flight buffers count against their budget and are never evicted;
 the budget may be overshot by in-flight bytes, as neuroglancer admits
 downloads at size zero.
 
+Validators (added in review, 2026-10-27): the reader keeps each file's
+`ETag` (or `Last-Modified`) from its latest response. A response with a
+different one purges the file's cached spans and forgets its learned size
+before the new bytes are stored, so the cache holds one version of an object
+at a time, the rule a browser's own range cache follows. Every `ReadResult`
+carries its validator; the geotiff adapter compares it per source instance and
+throws an `ETag conflict` error on a change, as chunkd's `SourceHttp` did,
+so a stale `GeoTIFF` fails loudly and a reopen works. The reader never sends
+`If-Match`: it would force a CORS preflight on every request. icechunk builds
+its own `If-Match` behind `validateChecksums` and passes through unchanged.
+
 Defaults, to be measured: `metadataBytes` 32 MiB (today is 8 MiB per source;
 this is shared, and a mosaic of a thousand sheets needs about 80 MB to hold
 every header), `dataBytes` 64 MiB. Both are constructor options and both are
