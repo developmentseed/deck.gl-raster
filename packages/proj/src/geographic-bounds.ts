@@ -9,6 +9,8 @@ import { unwrapAlong } from "./unwrap.js";
  * so a ring across the antimeridian is bounded the short way: `west` is in
  * [-180°, 180°), and `east` can run past 180°, as MapLibre's `fitBounds`
  * accepts. A ring that goes all the way around the world gets -180° to 180°.
+ * Latitudes are kept within -90° to 90°, which a global grid whose cells are
+ * centered on the poles reaches past.
  *
  * Two limits:
  * - The walk stops at the last point, without the edge back to the first, so
@@ -46,8 +48,8 @@ export function geographicBounds(
   // 180°. All the way around the world gives -180° to 180°.
   return normalizeLongitudes([
     Math.min(...lons),
-    Math.min(...lats),
+    Math.max(-90, Math.min(...lats)),
     Math.max(...lons),
-    Math.max(...lats),
+    Math.min(90, Math.max(...lats)),
   ]);
 }

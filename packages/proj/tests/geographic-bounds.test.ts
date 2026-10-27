@@ -43,6 +43,14 @@ describe("geographicBounds", () => {
     ]);
   });
 
+  it("keeps latitudes within -90° to 90°", () => {
+    // A global grid whose cells are centered on the poles reaches half a cell
+    // past them
+    expect(geographicBounds(box(0, -90.25, 10, 90.25), identity)).toEqual([
+      0, -90, 10, 90,
+    ]);
+  });
+
   it("keeps a ring all the way around the world from -180° to 180°", () => {
     // Each point's longitude comes back in [-180°, 180°), so only the walk
     // along the ring sees that it goes all the way around
