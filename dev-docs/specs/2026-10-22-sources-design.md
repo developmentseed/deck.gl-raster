@@ -179,9 +179,11 @@ These were settled on 2026-10-26, for stage 4:
       `renderLayers`, which kept the old source drawn after 2a.
     - `undefined` and `null` both mean no source.
     - Two type parameters type all of this: `SourceT`, the opened source a
-      layer draws, and `InputT`, the input it opens, such as COGLayer's
-      `COGSource` and `COGInput`. So the base reads `source` and
-      `onSourceLoad` without casts.
+      layer draws, and `InputT`, the input it opens. They default to the two
+      parts of the layer's `source` prop, so COGLayer's
+      `source: COGSource | COGInput` gives `COGSource` and `COGInput`, and a
+      layer passes neither. The base reads `source` and `onSourceLoad`
+      without casts.
 20. **Each layer declares its own `source` and `onSourceLoad`** (answers
     question 6). Each layer's `source` takes its own inputs, and its
     declaration documents them. `RasterTileLayer` adds the same two props,
@@ -370,12 +372,8 @@ and aborts any open still in flight (decision 19). Each layer only says how to
 open its other inputs:
 
 ```ts
-class COGLayer extends RasterTileLayer<
-  DataT,
-  COGLayerProps<DataT>,
-  COGSource, // SourceT: the opened source it draws
-  COGInput // InputT: the input it opens
-> {
+// The source types come from COGLayerProps' `source: COGSource | COGInput`
+class COGLayer extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
   protected override _openSource(input: COGInput, signal: AbortSignal) {
     return COGSource.open(input, { signal });
   }
@@ -652,6 +650,11 @@ Each stage is one PR.
    parsed GeoZarr metadata. Keep `metadata` for both, call the field
    `geozarr`, or rename the option `attrs`, after the zarrita property it
    replaces? Decide in 4b. *Open.*
+10. **A `ServerSource` for tile servers.** The titiler-cog example gives
+    `RasterTileLayer` a `tilesetDescriptor` built from a tile server's
+    TileMatrixSet, with no source behind it. A `RasterSource` for tile
+    servers would let every layer take a `source`, and the
+    `tilesetDescriptor` prop could go. *Later* (raised in #805's review).
 
 ## Left to the implementer
 
