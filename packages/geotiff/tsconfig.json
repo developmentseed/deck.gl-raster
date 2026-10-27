@@ -9,6 +9,7 @@
   "exclude": ["node_modules", "dist"],
   "references": [
     { "path": "../affine/tsconfig.build.json" },
-    { "path": "../proj/tsconfig.build.json" }
+    { "path": "../proj/tsconfig.build.json" },
+    { "path": "../range-reader/tsconfig.build.json" }
   ]
 }

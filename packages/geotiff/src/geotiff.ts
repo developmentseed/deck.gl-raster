@@ -7,6 +7,10 @@ import { Photometric, SubFileType, Tiff, TiffTag } from "@cogeotiff/core";
 import type { Affine } from "@developmentseed/affine";
 import { apply } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
+import type {
+  ConcurrencyLimiter,
+  Priority,
+} from "@developmentseed/range-reader";
 import { LRUCacheMiddleware } from "./cache.js";
 import type { ColorInterp } from "./colorinterp.js";
 import { inferColorInterpretation } from "./colorinterp.js";
@@ -24,7 +28,6 @@ import {
   prefetchPrimaryImageTags,
   prefetchSubImageTags,
 } from "./ifd.js";
-import type { ConcurrencyLimiter, Priority } from "./limiter.js";
 import { LimiterMiddleware } from "./limiter.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
