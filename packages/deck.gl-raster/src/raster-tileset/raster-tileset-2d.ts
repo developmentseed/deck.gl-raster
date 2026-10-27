@@ -140,6 +140,25 @@ export interface RasterTileset2DOptions {
    * @default 65536
    */
   maxBoundingVolumeCacheSize?: number;
+
+  /**
+   * Abort a tile's load as soon as the tile is neither selected nor visible.
+   *
+   * deck.gl aborts such loads only while more than `maxRequests` are in
+   * flight. A layer that releases a whole selection to a range reader at
+   * once (a high `maxRequests`) needs the abort regardless: the reader
+   * cancels a streamed request the moment no read wants what is left of it,
+   * and a tile nobody wants must not keep one alive. deck.gl requests a
+   * cancelled tile again when it is selected again, by then often from the
+   * reader's cache.
+   *
+   * Off by default; the COG-backed layers turn it on. Left off for a store
+   * whose own coalescing fails every read of a merged request when one of
+   * them aborts.
+   *
+   * @default false
+   */
+  abortUnwantedLoads?: boolean;
 }
 
 /**
@@ -153,6 +172,7 @@ export class RasterTileset2D extends Tileset2D {
   private descriptor: RasterTilesetDescriptor;
   private wgs84Bounds: Bounds;
   private getPixelRatio: () => number;
+  private abortUnwantedLoads: boolean;
   private boundingVolumeCache: BoundingVolumeCache;
   private projectPosition: ProjectionFunction;
   private unprojectPosition: ProjectionFunction;
@@ -166,11 +186,16 @@ export class RasterTileset2D extends Tileset2D {
   constructor(
     opts: Tileset2DProps,
     descriptor: RasterTilesetDescriptor,
-    { getPixelRatio, maxBoundingVolumeCacheSize }: RasterTileset2DOptions = {},
+    {
+      getPixelRatio,
+      maxBoundingVolumeCacheSize,
+      abortUnwantedLoads = false,
+    }: RasterTileset2DOptions = {},
   ) {
     super(opts);
     this.descriptor = descriptor;
     this.getPixelRatio = getPixelRatio ?? (() => 1);
+    this.abortUnwantedLoads = abortUnwantedLoads;
     this.boundingVolumeCache = new BoundingVolumeCache({
       maxEntries: maxBoundingVolumeCacheSize,
     });
@@ -213,6 +238,24 @@ export class RasterTileset2D extends Tileset2D {
    * A tile still loading is unloaded once its load finishes, since deck.gl
    * keeps the data that `getTileData` returns after an abort.
    */
+  /**
+   * deck.gl's update, then, with {@link RasterTileset2DOptions.abortUnwantedLoads},
+   * the abort of every loading tile that is neither selected nor visible.
+   * deck.gl only unloads tiles that satisfy the same predicate, so this also
+   * covers a loading tile about to be unloaded.
+   */
+  override update(...args: Parameters<Tileset2D["update"]>): number {
+    const frame = super.update(...args);
+    if (this.abortUnwantedLoads) {
+      for (const tile of this.tiles) {
+        if (tile.isLoading && !tile.isSelected && !tile.isVisible) {
+          tile.abort();
+        }
+      }
+    }
+    return frame;
+  }
+
   override finalize(): void {
     const { onTileUnload } = this.opts;
     for (const tile of this.tiles) {

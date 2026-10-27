@@ -125,6 +125,11 @@ export class COGLayer<
     debounceTime: 50,
   } as unknown as typeof RasterTileLayer.defaultProps;
 
+  /** A whole selection goes to the reader at once; tiles that leave it must stop their stream. */
+  protected override _abortUnwantedLoads(): boolean {
+    return true;
+  }
+
   declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];

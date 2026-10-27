@@ -294,6 +294,11 @@ export class MultiCOGLayer extends RasterTileLayer<
   static override defaultProps =
     defaultProps as unknown as typeof RasterTileLayer.defaultProps;
 
+  /** A whole selection goes to the reader at once; tiles that leave it must stop their stream. */
+  protected override _abortUnwantedLoads(): boolean {
+    return true;
+  }
+
   override shouldLoadMetadata(params: UpdateParameters<this>): boolean {
     // An empty record names no files, so the layer draws nothing
     return (
