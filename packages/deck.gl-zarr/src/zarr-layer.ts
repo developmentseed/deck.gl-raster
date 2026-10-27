@@ -16,11 +16,9 @@ import type {
 } from "@developmentseed/proj";
 import {
   epsgResolver,
-  makeClampedForwardTo3857,
-  metersPerUnit,
   parseWkt,
+  projectionFunctions,
 } from "@developmentseed/proj";
-import proj4 from "proj4";
 import * as zarr from "zarrita";
 import { validateSelection, validateSpatialDimOrder } from "./validation.js";
 import { geoZarrToDescriptor } from "./zarr-tileset.js";
@@ -283,36 +281,7 @@ export class ZarrLayer<
     // `node` or `variable` changed, or the layer was removed, while we waited
     signal.throwIfAborted();
 
-    // Build proj4 converters
-    // @ts-expect-error - proj4 typings don't cover wkt-parser output
-    const converter4326 = proj4(sourceProjection, "EPSG:4326");
-    const projectTo4326 = (x: number, y: number) =>
-      converter4326.forward<[number, number]>([x, y], false);
-    const projectFrom4326 = (x: number, y: number) =>
-      converter4326.inverse<[number, number]>([x, y], false);
-
-    // @ts-expect-error - proj4 typings don't cover wkt-parser output
-    const converter3857 = proj4(sourceProjection, "EPSG:3857");
-    const projectTo3857 = makeClampedForwardTo3857(
-      (x: number, y: number) =>
-        converter3857.forward<[number, number]>([x, y], false),
-      projectTo4326,
-    );
-    const projectFrom3857 = (x: number, y: number) =>
-      converter3857.inverse<[number, number]>([x, y], false);
-
-    // Compute meters-per-CRS-unit from the resolved projection
-    const units = sourceProjection.units;
-    if (!units) {
-      throw new Error(
-        "Source projection is missing 'units' property, cannot compute meters per unit",
-      );
-    }
-    const semiMajorAxis: number | undefined =
-      sourceProjection.datum?.a ?? sourceProjection.a;
-    const mpu = metersPerUnit(units as Parameters<typeof metersPerUnit>[0], {
-      semiMajorAxis,
-    });
+    const functions = projectionFunctions(sourceProjection);
 
     const chunkSizes = arrays.map((arr) => ({
       width: arr.chunks[arr.chunks.length - 1]!,
@@ -320,12 +289,8 @@ export class ZarrLayer<
     }));
 
     const tilesetDescriptor = geoZarrToDescriptor(meta, {
-      projectTo4326,
-      projectFrom4326,
-      projectTo3857,
-      projectFrom3857,
+      ...functions,
       chunkSizes,
-      mpu,
     });
 
     this.setState({
