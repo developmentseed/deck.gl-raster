@@ -90,7 +90,7 @@ export async function fetchTile(
  * Decode already-fetched compressed tile (and optional mask) bytes into a
  * {@link Tile}. Performs no I/O — the bytes are supplied by the caller. Shared
  * by {@link fetchTile} (single-tile fetch) and {@link fetchTiles} (batched
- * fetch with range coalescing).
+ * fetch).
  */
 async function assembleTile(
   self: HasTiffReference,
@@ -174,7 +174,7 @@ async function assembleTile(
  * @returns Array of {@link Tile} objects in the same order as `xy`.
  *
  * @see {@link fetchTile} for single-tile fetching.
- * @see {@link getTiles} for the batched, range-coalescing byte reader.
+ * @see {@link getTiles} for the batched byte reader.
  */
 export async function fetchTiles(
   self: HasTiffReference,
@@ -396,8 +396,9 @@ async function fetchBandSeparateTileBytes(
 }
 
 /**
- * Batched, range-coalescing counterpart to {@link fetchCogBytes}: fetch the
- * compressed bytes for many tiles in as few HTTP range requests as possible.
+ * Batched counterpart to {@link fetchCogBytes}: issue the compressed-byte
+ * reads of many tiles together, so the data source can merge them into few
+ * HTTP range requests.
  * Returns one entry per input coordinate, in input order. Throws (matching
  * {@link fetchCogBytes}) if a requested tile is sparse / not present.
  */
@@ -443,10 +444,10 @@ async function fetchCogBytesMultiple(
 }
 
 /**
- * Batched, range-coalescing counterpart to {@link fetchBandSeparateTileBytes}.
- * Every band of every requested tile is flattened into a single
- * {@link getMultipleBytes} call, so coalescing can merge ranges across both
- * bands and neighbouring tiles; the results are regrouped per tile afterwards.
+ * Batched counterpart to {@link fetchBandSeparateTileBytes}. Every band of
+ * every requested tile is flattened into a single {@link getMultipleBytes}
+ * call, so the data source can merge reads across both bands and
+ * neighbouring tiles; the results are regrouped per tile afterwards.
  */
 async function fetchBandSeparateTileBytesMultiple(
   self: HasTiffReference,
@@ -497,10 +498,10 @@ async function fetchBandSeparateTileBytesMultiple(
  * Though this function lives upstream in @cogeotiff/core, we vendor it here
  * so we can route the *tile data* read through a separate source. The tile's
  * byte range is looked up via {@link getTileByteRange}, which reads it through
- * the source that was passed to `Tiff.create` (our header source — cached for
- * small repeated reads). The actual tile bytes are then fetched from
- * `dataSource`, which is the raw HTTP source with no caching: tile data is
- * large and read once, so caching it would just evict header metadata.
+ * the source that was passed to `Tiff.create` (our header source, whose
+ * small reads are widened to blocks and cached). The actual tile bytes are
+ * then fetched from `dataSource`, which is merged and cached under its own
+ * budget, so tile bytes never evict header blocks.
  */
 async function getTile(
   image: TiffImage,
@@ -546,7 +547,7 @@ async function getTile(
     signal: options?.signal,
   });
 
-  // The actual tile bytes go through dataSource (uncached HTTP).
+  // The actual tile bytes go through dataSource.
   return getBytes(image, offset, imageSize, dataSource, options);
 }
 
@@ -603,10 +604,9 @@ function getTileByteRange(
  * Read image bytes at the given offset from `dataSource`.
  *
  * Though this function lives upstream in @cogeotiff/core, we vendor it here
- * so we can route reads through the data source (uncached) rather than the
- * header source (cached) that cogeotiff would use by default. Tile data is
- * large and read once; caching it would evict header metadata and inflate
- * memory.
+ * so we can route reads through the data source rather than the header
+ * source that cogeotiff would use by default. The two are merged and cached
+ * under separate budgets, so tile data never evicts header blocks.
  */
 async function getBytes(
   image: TiffImage,
@@ -770,10 +770,10 @@ export async function getMultipleBytes(
  * Load multiple tiles in a single batched I/O round trip.
  *
  * Resolves the offset/size of every requested tile via {@link getTileByteRange}
- * (header-source reads — small entries, served by the chunk cache), then fetches
- * the tile data through {@link getMultipleBytes} (uncached `dataSource`, with
- * range coalescing). Returns one entry per input tile, in input order; sparse
- * tiles yield `null` matching {@link getBytes}.
+ * (header-source reads — small entries, served from cached blocks), then
+ * fetches the tile data through {@link getMultipleBytes} (one read per tile,
+ * issued together for the data source to merge). Returns one entry per input
+ * tile, in input order; sparse tiles yield `null` matching {@link getBytes}.
  *
  * Vendored from cogeotiff PR #1463 (`TiffImage.getTiles`) for the same reason as
  * {@link getTile}: the tile-data read must route through `dataSource`.

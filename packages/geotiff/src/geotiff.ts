@@ -37,8 +37,10 @@ export interface GeoTIFFFromUrlOptions {
    * The {@link RangeReader} every read of this file goes through: header
    * reads and tile reads are merged into few streamed range requests and
    * cached by it. Share one reader between files to share its cache and
-   * batching window; omitted, the file gets a private reader with default
-   * options.
+   * batching window (the deck.gl-geotiff layers share one page-wide).
+   * Omitted, the file gets a private reader with small budgets, 8 MiB of
+   * header bytes and 8 MiB of tile bytes, so opening many files this way
+   * never retains more than 16 MiB each.
    */
   reader?: RangeReader;
   /**
@@ -168,7 +170,7 @@ export class GeoTIFF {
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    *
    * @param options.dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
-   * @param options.headerSource The source used to construct the TIFF. `fromUrl` passes a {@link RangeReaderSource} whose reader widens the small header reads to 64 KiB blocks and caches them; a caller composing its own source should cache and chunk it the same way, since cogeotiff reads offset-table entries one at a time.
+   * @param options.headerSource The source used to construct the TIFF. `fromUrl` passes a source backed by a `RangeReader`, which widens the small header reads to 64 KiB blocks and caches them; a caller composing its own source should cache and chunk it the same way, since cogeotiff reads offset-table entries one at a time.
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console. Off by default.
    */
@@ -342,7 +344,9 @@ export class GeoTIFF {
   static async fromUrl(
     url: string | URL,
     {
-      reader = new RangeReader(),
+      reader = new RangeReader({
+        cache: { headerBytes: 8 * 1024 * 1024, dataBytes: 8 * 1024 * 1024 },
+      }),
       requestInit,
       signal,
       debug,
