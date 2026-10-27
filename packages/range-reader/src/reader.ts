@@ -30,8 +30,6 @@ export const DEFAULT_MIN_HEADER_READ_BYTES = 64 * 1024;
 
 /** A read waiting for the task window to close. */
 interface PendingRead {
-  file: FileIdentity;
-  purpose: Purpose;
   member: StreamMember;
   /** The range to merge: the member's own, or its widened header block. */
   request: ByteRange;
@@ -40,13 +38,21 @@ interface PendingRead {
   detach: () => void;
 }
 
+/** The reads of one file and purpose queued in this task. */
+interface PendingGroup {
+  file: FileIdentity;
+  purpose: Purpose;
+  reads: PendingRead[];
+}
+
 /**
  * Reads byte ranges of files over HTTP, as few streamed range requests as
  * the reads allow. Reads issued in one task are merged per file and purpose
  * ({@link mergeReads}); each merged range is one {@link RangeStream} that
  * resolves every read the moment its bytes arrive and is cancelled when no
  * read wants what is left. Everything received lands in the {@link ByteCache},
- * which later reads are served from.
+ * which later reads are served from; a read inside a request still in flight
+ * attaches to it instead of starting another.
  */
 export class RangeReader {
   /** Where received spans live. */
@@ -70,7 +76,11 @@ export class RangeReader {
   private readonly minHeaderReadBytes: number;
   private readonly cacheMode: RequestCache | undefined;
   /** Queued reads by file key and purpose, flushed once per task. */
-  private readonly pending = new Map<string, PendingRead[]>();
+  private readonly pending = new Map<string, PendingGroup>();
+  /** Streams still running, by file key and purpose. */
+  private readonly inflight = new Map<string, Set<RangeStream>>();
+  /** Object sizes learned from responses, by file key. */
+  private readonly sizes = new Map<string, number>();
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: RangeReaderOptions = {}) {
@@ -89,7 +99,8 @@ export class RangeReader {
   }
 
   /**
-   * Read `range` of `file`. An absolute range is queued and merged with the
+   * Read `range` of `file`. An absolute range is served from the cache, or
+   * attached to a request already in flight, or queued and merged with the
    * other reads of this task; a suffix or whole-object read goes out at once
    * on its own. Rejects with the signal's reason if `options.signal` aborts
    * before the bytes arrive; the request itself runs on for other reads.
@@ -109,7 +120,46 @@ export class RangeReader {
     if (range.length === 0) {
       return Promise.resolve({ kind: "bytes", bytes: new Uint8Array(0) });
     }
-    return this.enqueue(file, range, options);
+    return this.lookup(file, range, options);
+  }
+
+  /** The cache, then in-flight streams, then the queue. */
+  private async lookup(
+    file: FileIdentity,
+    range: ByteRange,
+    options: ReadOptions,
+  ): Promise<ReadResult> {
+    const size = this.sizes.get(file.key);
+    if (size !== undefined && range.offset >= size) {
+      return { kind: "bytes", bytes: new Uint8Array(0) };
+    }
+    const hit = await this.cache.get(file, range, options.purpose);
+    const { signal } = options;
+    if (signal?.aborted) {
+      throw signal.reason;
+    }
+    if (hit !== undefined) {
+      this.stats.cacheHits += 1;
+      this.stats.cacheHitBytes += range.length;
+      return { kind: "bytes", bytes: hit };
+    }
+    return new Promise((resolve, reject) => {
+      const member: StreamMember = {
+        ...range,
+        resolve,
+        reject,
+        signal,
+        getPriority: options.getPriority,
+      };
+      const key = groupKey(file, options.purpose);
+      for (const stream of this.inflight.get(key) ?? []) {
+        if (stream.attach(member)) {
+          this.stats.attached += 1;
+          return;
+        }
+      }
+      this.enqueue(key, file, options, member);
+    });
   }
 
   /** One read, one request: suffix and whole-object reads never merge. */
@@ -137,75 +187,72 @@ export class RangeReader {
         request !== undefined && "suffixLength" in request
           ? request.suffixLength
           : 0;
-      this.launch(file, options.purpose, stream, requested);
+      this.launch(
+        groupKey(file, options.purpose),
+        file,
+        options.purpose,
+        stream,
+        requested,
+      );
     });
   }
 
   private enqueue(
+    key: string,
     file: FileIdentity,
-    range: ByteRange,
     options: ReadOptions,
-  ): Promise<ReadResult> {
-    return new Promise((resolve, reject) => {
-      const { signal } = options;
-      const key = `${file.key}\0${options.purpose}`;
-      let group = this.pending.get(key);
-      if (group === undefined) {
-        group = [];
-        this.pending.set(key, group);
-      }
-      const pending: PendingRead = {
-        file,
-        purpose: options.purpose,
-        member: {
-          ...range,
-          resolve,
-          reject,
-          signal,
-          getPriority: options.getPriority,
-        },
-        request:
-          options.purpose === "header" && range.length < this.minHeaderReadBytes
-            ? widenRead(range, this.minHeaderReadBytes)
-            : range,
-        limiter: options.limiter,
-        detach: () => {},
+    member: StreamMember,
+  ): void {
+    const { signal } = options;
+    let group = this.pending.get(key);
+    if (group === undefined) {
+      group = { file, purpose: options.purpose, reads: [] };
+      this.pending.set(key, group);
+    }
+    const range: ByteRange = { offset: member.offset, length: member.length };
+    const pending: PendingRead = {
+      member,
+      request:
+        options.purpose === "header" && range.length < this.minHeaderReadBytes
+          ? widenRead(range, this.minHeaderReadBytes)
+          : range,
+      limiter: options.limiter,
+      detach: () => {},
+    };
+    if (signal !== undefined) {
+      const onAbort = () => {
+        const queue = this.pending.get(key)?.reads;
+        const at = queue?.indexOf(pending) ?? -1;
+        if (queue !== undefined && at >= 0) {
+          queue.splice(at, 1);
+          member.reject(signal.reason);
+        }
       };
-      if (signal !== undefined) {
-        const onAbort = () => {
-          const queue = this.pending.get(key);
-          const at = queue?.indexOf(pending) ?? -1;
-          if (queue !== undefined && at >= 0) {
-            queue.splice(at, 1);
-            reject(signal.reason);
-          }
-        };
-        signal.addEventListener("abort", onAbort, { once: true });
-        pending.detach = () => signal.removeEventListener("abort", onAbort);
-      }
-      group.push(pending);
-      if (this.flushTimer === undefined) {
-        this.flushTimer = setTimeout(() => this.flush(), 0);
-      }
-    });
+      signal.addEventListener("abort", onAbort, { once: true });
+      pending.detach = () => signal.removeEventListener("abort", onAbort);
+    }
+    group.reads.push(pending);
+    if (this.flushTimer === undefined) {
+      this.flushTimer = setTimeout(() => this.flush(), 0);
+    }
   }
 
   /** Close the task window: merge each group's reads and start their streams. */
   private flush(): void {
     this.flushTimer = undefined;
-    const groups = [...this.pending.values()];
+    const groups = [...this.pending.entries()];
     this.pending.clear();
-    for (const group of groups) {
-      if (group.length === 0) {
+    for (const [key, group] of groups) {
+      if (group.reads.length === 0) {
         continue;
       }
-      for (const pending of group) {
+      for (const pending of group.reads) {
         // The stream installs its own abort handling from here on.
         pending.detach();
       }
-      const { file, purpose, limiter } = group[0]!;
+      const { file, purpose } = group;
       const merged = mergeReads(
-        group.map((pending) => pending.request),
+        group.reads.map((pending) => pending.request),
         {
           maxGap: this.maxGap,
           maxOverfetchBytes: this.maxOverfetchBytes,
@@ -213,20 +260,21 @@ export class RangeReader {
         },
       );
       for (const range of merged) {
-        const members = range.members.map((i) => group[i]!.member);
+        const members = range.members.map((i) => group.reads[i]!.member);
         const stream = new RangeStream(
           file,
           { offset: range.offset, length: range.length },
           members,
-          this.streamOptions(limiter),
+          this.streamOptions(group.reads[0]!.limiter),
         );
         this.stats.bytesOverfetched += range.overfetch;
-        this.launch(file, purpose, stream, range.length);
+        this.launch(key, file, purpose, stream, range.length);
       }
     }
   }
 
   private launch(
+    key: string,
     file: FileIdentity,
     purpose: Purpose,
     stream: RangeStream,
@@ -234,7 +282,19 @@ export class RangeReader {
   ): void {
     this.stats.requests += 1;
     this.stats.bytesRequested += requestedBytes;
-    void stream.run().then((outcome) => this.settled(file, purpose, outcome));
+    let streams = this.inflight.get(key);
+    if (streams === undefined) {
+      streams = new Set();
+      this.inflight.set(key, streams);
+    }
+    streams.add(stream);
+    void stream.run().then((outcome) => {
+      streams.delete(stream);
+      if (streams.size === 0) {
+        this.inflight.delete(key);
+      }
+      this.settled(file, purpose, outcome);
+    });
   }
 
   private settled(
@@ -245,6 +305,9 @@ export class RangeReader {
     this.stats.bytesReceived += outcome.bytes.length;
     if (outcome.end.kind === "cancelled") {
       this.stats.cancelled += 1;
+    }
+    if (outcome.size !== undefined) {
+      this.sizes.set(file.key, outcome.size);
     }
     if (
       outcome.offset !== undefined &&
@@ -267,4 +330,9 @@ export class RangeReader {
       maxRequestBytes: this.maxRequestBytes,
     };
   }
+}
+
+/** Reads merge, attach and cache only within one file identity and purpose. */
+function groupKey(file: FileIdentity, purpose: Purpose): string {
+  return `${file.key}\0${purpose}`;
 }
