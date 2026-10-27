@@ -3,25 +3,12 @@ import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
   RasterTileLayerProps,
-  RasterTilesetDescriptor,
   RenderTileResult,
 } from "@developmentseed/deck.gl-raster";
 import { RasterTileLayer } from "@developmentseed/deck.gl-raster";
-import type { GeoZarrMetadata } from "@developmentseed/geozarr";
-import { parseGeoZarrMetadata } from "@developmentseed/geozarr";
-import type {
-  EpsgResolver,
-  ProjectionDefinition,
-  ProjJson,
-} from "@developmentseed/proj";
-import {
-  epsgResolver,
-  parseWkt,
-  projectionFunctions,
-} from "@developmentseed/proj";
 import * as zarr from "zarrita";
-import { validateSelection, validateSpatialDimOrder } from "./validation.js";
-import { geoZarrToDescriptor } from "./zarr-tileset.js";
+import { validateSelection } from "./validation.js";
+import { ZarrSource } from "./zarr-source.js";
 
 /**
  * A single dimension selector: a fixed integer index, a `zarr.Slice` range,
@@ -71,23 +58,28 @@ export type ZarrLayerProps<
   "tilesetDescriptor" | "getTileData" | "renderTile"
 > & {
   /**
-   * A pre-opened zarrita {@link zarr.Array} or {@link zarr.Group}. Callers
-   * must build and configure the underlying store themselves (for example, a
-   * user may want to wrap a {@link zarr.FetchStore} with
-   * `withConsolidatedMetadata`, `withRangeCoalescing`.
+   * The GeoZarr data to draw: an opened {@link ZarrSource}, or a zarrita
+   * {@link zarr.Group} or {@link zarr.Array} for the layer to open with the
+   * defaults of {@link ZarrSource.open}.
    *
-   * Pass an Array to render it directly as a single-level source; pass a
-   * Group to let the layer resolve a `variable` path and use the GeoZarr
-   * multiscale layout from its attrs.
+   * Open the data yourself to change those defaults, such as the variable or
+   * the GeoZarr metadata, or to share it between layers. Callers build and
+   * configure the store either way, for example to wrap a
+   * {@link zarr.FetchStore} with `withConsolidatedMetadata`.
+   *
+   * Keep the same object across renders: a new one starts the layer's tiles
+   * over.
    */
-  node: zarr.Array<Dtype, Store> | zarr.Group<Store>;
+  source:
+    | ZarrSource<Store, Dtype>
+    | zarr.Group<Store>
+    | zarr.Array<Dtype, Store>;
 
   /**
-   * Optional path within the store to the variable group. Only applies
-   * when `node` is a {@link zarr.Group}; ignored when an Array is passed
-   * directly. If omitted, the group itself is used.
+   * Called with the source the layer opened, when `source` isn't an opened
+   * {@link ZarrSource} already.
    */
-  variable?: string;
+  onSourceLoad?: (source: ZarrSource<Store, Dtype>) => void;
 
   /**
    * Selection for non-spatial dimensions. Must include exactly one entry
@@ -97,25 +89,20 @@ export type ZarrLayerProps<
    * For datasets with only spatial dimensions (e.g. a plain [H, W] or
    * [bands, H, W] array whose non-spatial dims are already accounted for),
    * pass an empty object `{}`.
+   *
+   * A selection that doesn't fit the source goes to `onError`, and the layer
+   * draws nothing until the selection is fixed. Changing the selection never
+   * opens the source again.
    */
   selection: Record<string, SliceInput>;
 
   /**
-   * Optional raw group attrs to use in place of `group.attrs` when parsing
-   * GeoZarr metadata.
-   *
-   * Use this to hard-code GeoZarr metadata when the Zarr data source does not
-   * include it.
-   */
-  metadata?: unknown;
-
-  /**
    * Fetch and return the tile data for a given tile coordinate.
    *
-   * The layer opens the appropriate zarr array for the requested zoom level
-   * and passes it along with a pre-built `sliceSpec` (one entry per array
-   * dim). Call `zarr.get(arr, sliceSpec)` and convert the result to whatever
-   * format your `renderTile` callback expects.
+   * The layer picks the zarr array for the requested zoom level and passes it
+   * along with a pre-built `sliceSpec` (one entry per array dim). Call
+   * `zarr.get(arr, sliceSpec)` and convert the result to whatever format your
+   * `renderTile` callback expects.
    */
   getTileData: (
     arr: zarr.Array<Dtype, Store>,
@@ -129,21 +116,16 @@ export type ZarrLayerProps<
    * pipeline.
    */
   renderTile: (data: DataT) => RenderTileResult;
-
-  /**
-   * Resolver for authority:code CRS strings (e.g. "EPSG:4326").
-   * Defaults to fetching from epsg.io.
-   */
-  epsgResolver?: EpsgResolver;
 };
 
 /**
  * ZarrLayer renders a GeoZarr dataset using a tiled approach with reprojection.
  *
- * The caller is responsible for supplying `getTileData` (which fetches and
- * converts the zarr chunk) and `renderTile` (which converts the result into a
- * {@link RenderTileResult} for the GPU). This keeps the layer agnostic about
- * data format and rendering pipeline.
+ * Its `source` is an opened {@link ZarrSource}, or a zarrita group or array
+ * for the layer to open. The caller is responsible for supplying `getTileData`
+ * (which fetches and converts the zarr chunk) and `renderTile` (which converts
+ * the result into a {@link RenderTileResult} for the GPU). This keeps the
+ * layer agnostic about data format and rendering pipeline.
  */
 export class ZarrLayer<
   Store extends zarr.Readable = zarr.Readable,
@@ -151,158 +133,60 @@ export class ZarrLayer<
   DataT extends MinimalTileData = MinimalTileData,
 > extends RasterTileLayer<DataT, ZarrLayerProps<Store, Dtype, DataT>> {
   static override layerName = "ZarrLayer";
-  // ZarrLayer's getTileData signature differs from the base class's, so
-  // `DefaultProps<ZarrLayerProps>` is not assignable to
-  // `DefaultProps<RasterTileLayerProps>`. Cast to the base static-side type
-  // to keep inheritance happy. The only ZarrLayer-specific default is
-  // `epsgResolver`; all behavior still flows from the base class.
-  static override defaultProps = {
-    ...RasterTileLayer.defaultProps,
-    epsgResolver,
-  } as typeof RasterTileLayer.defaultProps;
 
   declare state: RasterTileLayer<
     DataT,
     ZarrLayerProps<Store, Dtype, DataT>
   >["state"] & {
-    meta?: GeoZarrMetadata;
-    spatialDims?: [string, string];
-    /** One opened array per level, finest-first (matches meta.levels order). */
-    arrays?: zarr.Array<zarr.DataType, zarr.Readable>[];
-    tilesetDescriptor?: RasterTilesetDescriptor;
+    /** The source that `selection` was last checked against. */
+    checkedSource?: ZarrSource<Store, Dtype>;
+    /** `selection`, while it fits that source. */
+    checkedSelection?: Record<string, SliceInput>;
   };
 
-  override initializeState(): void {
-    this.setState({});
-  }
+  override updateState(params: UpdateParameters<this>): void {
+    super.updateState(params);
 
-  override shouldLoadMetadata({
-    props,
-    oldProps,
-  }: UpdateParameters<this>): boolean {
-    return props.node !== oldProps.node || props.variable !== oldProps.variable;
-  }
-
-  /** Reset all async-loaded state. */
-  _clearState() {
-    this.setState({
-      meta: undefined,
-      spatialDims: undefined,
-      arrays: undefined,
-      tilesetDescriptor: undefined,
-    });
-  }
-
-  /** Open the Zarr store, parse GeoZarr metadata, validate dims, build reprojection fns. */
-  override async loadMetadata(signal: AbortSignal): Promise<void> {
-    // Clear stale state so renderLayers returns null until the new Zarr is ready
-    this._clearState();
-
-    const { node, variable, metadata: metadataOverride } = this.props;
-
-    // Callers own the store. We accept a pre-opened Array (rendered as a
-    // single-level source) or Group (used directly, with optional `variable`
-    // resolution to a child group).
-    let preopenedArray: zarr.Array<zarr.DataType, zarr.Readable> | null = null;
-    let root:
-      | zarr.Group<zarr.Readable>
-      | zarr.Array<zarr.DataType, zarr.Readable>;
-    if ("shape" in node) {
-      // zarr.Array — reuse directly as the (single) level's array.
-      preopenedArray = node;
-      root = node;
-    } else {
-      // zarr.Group
-      root = node;
+    // Check `selection` whenever it or the source changes. A source opened
+    // from input arrives between renders, so compare with the source it was
+    // last checked against rather than with the old props.
+    const { source, checkedSource } = this.state;
+    const { selection } = params.props;
+    if (
+      !source ||
+      (source === checkedSource &&
+        sameSelection(selection, params.oldProps.selection))
+    ) {
+      return;
     }
-    // @ts-expect-error - for debugging
-    window.root = root;
 
-    const group = variable
-      ? await zarr.open(root.resolve(variable), { kind: "group", signal })
-      : root;
-    // @ts-expect-error - for debugging
-    window.group = group;
-
-    const rawAttrs = metadataOverride ?? group.attrs;
-    const meta = parseGeoZarrMetadata(rawAttrs);
-    // @ts-expect-error - for debugging
-    window.meta = meta;
-
-    // Open each level's array once and keep the references in state. If the
-    // caller passed a pre-opened array and the metadata describes a single
-    // level, reuse that array directly.
-    const arrays: zarr.Array<zarr.DataType, zarr.Readable>[] =
-      preopenedArray && meta.levels.length === 1
-        ? [preopenedArray]
-        : await Promise.all(
-            meta.levels.map((level) =>
-              zarr.open(group.resolve(level.path), { kind: "array", signal }),
-            ),
-          );
-
-    // Derive spatial dim names from GeoZarr metadata.
-    // `meta.axes` lists only the *spatial* dims (from the `spatial:dimensions`
-    // convention). The full ordered dim list comes from the zarr array's own
-    // `dimension_names`, which includes non-spatial dims (e.g. time, band).
-    if (!meta.axes || meta.axes.length === 0) {
-      throw new Error(
-        "ZarrLayer requires named axes in GeoZarr metadata (spatial:dimensions). " +
-          "Arrays without named dims are not supported.",
+    let checkedSelection: Record<string, SliceInput> | undefined;
+    try {
+      validateSelection({
+        dimensionNames: source.dimensionNames,
+        spatialDims: source.spatialDims,
+        selection,
+      });
+      checkedSelection = selection;
+    } catch (error) {
+      const { layerName } = this.constructor as typeof ZarrLayer;
+      this.raiseError(
+        error as Error,
+        `Can't draw the selection in ${layerName}`,
       );
     }
-    const spatialDims: [string, string] = [
-      meta.axes[meta.yAxisIndex]!,
-      meta.axes[meta.xAxisIndex]!,
-    ];
-
-    // Use the first array's dim names as the canonical list. All levels of a
-    // multiscale pyramid share the same dim names by spec.
-    const arrDimNames: (string | null)[] = arrays[0]?.dimensionNames ?? [];
-    const dimensionNames: string[] = arrDimNames.filter(
-      (d): d is string => d !== null,
-    );
-    if (dimensionNames.length !== arrDimNames.length) {
-      throw new Error(
-        "ZarrLayer requires every zarr array dimension to have a name. " +
-          `Got dimension_names = ${JSON.stringify(arrDimNames)}.`,
-      );
-    }
-
-    validateSpatialDimOrder({ dimensionNames, spatialDims });
-    validateSelection({
-      dimensionNames,
-      spatialDims,
-      selection: this.props.selection,
-    });
-
-    const sourceProjection = await parseCrs(meta.crs, this.props.epsgResolver!);
-
-    // `node` or `variable` changed, or the layer was removed, while we waited
-    signal.throwIfAborted();
-
-    const functions = projectionFunctions(sourceProjection);
-
-    const chunkSizes = arrays.map((arr) => ({
-      width: arr.chunks[arr.chunks.length - 1]!,
-      height: arr.chunks[arr.chunks.length - 2]!,
-    }));
-
-    const tilesetDescriptor = geoZarrToDescriptor(meta, {
-      ...functions,
-      chunkSizes,
-    });
-
-    this.setState({
-      meta,
-      spatialDims,
-      arrays,
-      tilesetDescriptor,
-    });
+    this.setState({ checkedSource: source, checkedSelection });
   }
 
-  protected override _tilesetDescriptor() {
-    return this.state.tilesetDescriptor;
+  /**
+   * Open the group or array that `source` names, with the defaults of
+   * {@link ZarrSource.open}.
+   */
+  protected override _openSource(
+    input: zarr.Group<Store> | zarr.Array<Dtype, Store>,
+    signal: AbortSignal,
+  ): Promise<ZarrSource<Store, Dtype>> {
+    return ZarrSource.open(input, { signal });
   }
 
   /**
@@ -310,59 +194,47 @@ export class ZarrLayer<
    * signature into RasterTileLayer's `(tile, { signal, device }) => Promise<DataT>`.
    */
   protected override _getTileDataCallback() {
-    const { meta, arrays, spatialDims } = this.state;
-    if (!meta || !arrays || !spatialDims) {
+    const { source, checkedSource, checkedSelection } = this.state;
+    // Draw nothing while the selection doesn't fit the source
+    if (!source || source !== checkedSource || !checkedSelection) {
       return undefined;
     }
     const userFn = this.props.getTileData;
     if (!userFn) {
       return undefined;
     }
-    // Capture selection at closure time. The base RasterTileLayer re-invokes
-    // this accessor on every render, so new fetches always see the latest
-    // selection. Note: deck.gl's inner TileLayer only calls getTileData for
-    // uncached tiles — to invalidate cached tiles when selection changes,
-    // pass `updateTriggers: { renderTile: [selection] }` on the ZarrLayer.
-    const selection = this.props.selection;
+
+    const { arrays, dimensionNames, spatialDims } = source;
     type RasterGetTileData = NonNullable<
       RasterTileLayerProps<DataT>["getTileData"]
     >;
     const wrapped: RasterGetTileData = async (tile, options) => {
       const { x, y, z } = tile.index;
-      // descriptor z=0 is coarsest; meta.levels is finest-first
-      // so descriptor level z maps to meta.levels[numLevels - 1 - z]
-      const zarrLevelIdx = meta.levels.length - 1 - z;
-      const level = meta.levels[zarrLevelIdx]!;
-      // TODO: the cast is needed because `arrays` is typed as the widest
-      // zarr.Array<DataType, Readable> to avoid threading Store/Dtype through
-      // the state declaration. Revisit if zarrita exposes a narrower getter.
-      const arr = arrays[zarrLevelIdx]! as zarr.Array<Dtype, Store>;
+      // The tile grid's levels are coarsest-first, and `arrays` finest-first
+      const arr = arrays[arrays.length - 1 - z]!;
 
-      // Use the zarr array's actual ordered dim names (includes non-spatial
-      // dims like time/band), not meta.axes (spatial only).
-      const arrDimNames = arr.dimensionNames ?? [];
+      // The spatial dims are the last two
       const tileWidth = arr.chunks[arr.chunks.length - 1]!;
       const tileHeight = arr.chunks[arr.chunks.length - 2]!;
+      const arrayWidth = arr.shape[arr.shape.length - 1]!;
+      const arrayHeight = arr.shape[arr.shape.length - 2]!;
 
       const rowStart = y * tileHeight;
-      const rowEnd = Math.min((y + 1) * tileHeight, level.arrayHeight);
+      const rowEnd = Math.min((y + 1) * tileHeight, arrayHeight);
       const colStart = x * tileWidth;
-      const colEnd = Math.min((x + 1) * tileWidth, level.arrayWidth);
-
-      const actualHeight = rowEnd - rowStart;
-      const actualWidth = colEnd - colStart;
+      const colEnd = Math.min((x + 1) * tileWidth, arrayWidth);
 
       // Build slice per array dim: spatial dims get tile-bounded slices,
-      // non-spatial dims are filled from the user's `selection` prop.
-      const sliceSpec: SliceInput[] = arrDimNames.map((dimName) => {
+      // non-spatial dims are filled from the checked `selection`.
+      const sliceSpec: SliceInput[] = dimensionNames.map((dimName) => {
         if (dimName === spatialDims[0]) {
           return zarr.slice(rowStart, rowEnd);
         }
         if (dimName === spatialDims[1]) {
           return zarr.slice(colStart, colEnd);
         }
-        // validateSelection guarantees presence for all non-spatial dims.
-        return selection[dimName!]!;
+        // The selection was checked to have every non-spatial dim
+        return checkedSelection[dimName]!;
       });
 
       return userFn(arr, {
@@ -371,8 +243,8 @@ export class ZarrLayer<
         y,
         z,
         sliceSpec,
-        width: actualWidth,
-        height: actualHeight,
+        width: colEnd - colStart,
+        height: rowEnd - rowStart,
         signal: options.signal,
       });
     };
@@ -388,28 +260,34 @@ export class ZarrLayer<
   }
 }
 
-async function parseCrs(
-  crs: GeoZarrMetadata["crs"],
-  epsgResolver: EpsgResolver,
-): Promise<ProjectionDefinition> {
-  if (crs.code) {
-    const [authority, code] = crs.code.split(":");
-    if (authority !== "EPSG") {
-      throw new Error(
-        `Unsupported CRS authority "${authority}". Only "EPSG" is supported.`,
-      );
-    }
-    if (!code) {
-      throw new Error(
-        `Invalid CRS code "${crs.code}". Expected format "EPSG:XXXX".`,
-      );
-    }
-    return await epsgResolver(Number.parseInt(code, 10));
-  } else if (crs.wkt2) {
-    return parseWkt(crs.wkt2);
-  } else if (crs.projjson) {
-    return parseWkt(crs.projjson as unknown as ProjJson);
-  } else {
-    throw new Error("No CRS information found in GeoZarr metadata");
+/** Whether two selections pick the same indices of every dimension. */
+function sameSelection(
+  a: Record<string, SliceInput>,
+  b: Record<string, SliceInput> | undefined,
+): boolean {
+  if (a === b) {
+    return true;
   }
+  if (!b) {
+    return false;
+  }
+  const keys = Object.keys(a);
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((key) => sameSliceInput(a[key], b[key]))
+  );
+}
+
+/** Whether two dimension selectors pick the same indices. */
+function sameSliceInput(
+  a: SliceInput | undefined,
+  b: SliceInput | undefined,
+): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (typeof a !== "object" || typeof b !== "object" || !a || !b) {
+    return false;
+  }
+  return a.start === b.start && a.stop === b.stop && a.step === b.step;
 }
