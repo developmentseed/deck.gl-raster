@@ -178,9 +178,14 @@ These were settled on 2026-10-26, for stage 4:
       old source. The error doesn't escape `updateState`: deck.gl then skips
       `renderLayers`, which kept the old source drawn after 2a.
     - `undefined` and `null` both mean no source.
+    - Two type parameters type all of this: `SourceT`, the opened source a
+      layer draws, and `InputT`, the input it opens, such as COGLayer's
+      `COGSource` and `COGInput`. So the base reads `source` and
+      `onSourceLoad` without casts.
 20. **Each layer declares its own `source` and `onSourceLoad`** (answers
-    question 6). Each layer's `source` takes its own inputs, so
-    `RasterTileLayer` reads the two props without declaring them.
+    question 6). Each layer's `source` takes its own inputs, and its
+    declaration documents them. `RasterTileLayer` adds the same two props,
+    typed by `SourceT` and `InputT`, to every layer's props.
 21. **ZarrLayer takes one `source`** (decisions 6 and 11, for 4b): a
     `ZarrSource`, or a zarrita group or array to open with the defaults.
     `node`, `variable`, `metadata` and `epsgResolver` are removed from
@@ -365,7 +370,12 @@ and aborts any open still in flight (decision 19). Each layer only says how to
 open its other inputs:
 
 ```ts
-class COGLayer extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
+class COGLayer extends RasterTileLayer<
+  DataT,
+  COGLayerProps<DataT>,
+  COGSource, // SourceT: the opened source it draws
+  COGInput // InputT: the input it opens
+> {
   protected override _openSource(input: COGInput, signal: AbortSignal) {
     return COGSource.open(input, { signal });
   }
