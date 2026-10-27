@@ -74,8 +74,8 @@ the first tiles of a COG often arrive inside its first header block.
 ## Bring your own cache
 
 The byte cache is an interface. The default keeps spans in memory under two
-budgets; a disk-backed one (OPFS, Cache Storage) implements the same three
-methods:
+budgets; a disk-backed one (OPFS, Cache Storage) implements the same two
+methods, plus the optional `byteSize`:
 
 ```ts
 interface ByteCache {
