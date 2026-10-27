@@ -36,27 +36,22 @@ type Open = { input: string; signal: AbortSignal } & ReturnType<
   typeof deferred<TestSource>
 >;
 
-/** The test props {@link SourceTestLayer} reads. */
-type TestProps = { opens: Open[] };
+/**
+ * The props of {@link SourceTestLayer}: an opened {@link TestSource} or a
+ * name to open as `source`, and the `opens` it records.
+ */
+type TestProps = { source?: TestSource | string | null; opens: Open[] };
 
 /**
  * Takes a `source` as layers with sources do. `_openSource` pushes each open
  * to the `opens` prop for the test to settle. `_sourceState` derives `drawn`
  * from a source, and throws for one named "undrawable".
  */
-class SourceTestLayer extends RasterTileLayer<
-  MinimalTileData,
-  TestProps,
-  TestSource,
-  string
-> {
+class SourceTestLayer extends RasterTileLayer<MinimalTileData, TestProps> {
   static override layerName = "SourceTestLayer";
-  declare state: RasterTileLayer<
-    MinimalTileData,
-    TestProps,
-    TestSource,
-    string
-  >["state"] & { drawn?: string };
+  declare state: RasterTileLayer<MinimalTileData, TestProps>["state"] & {
+    drawn?: string;
+  };
 
   protected override _openSource(
     input: string,

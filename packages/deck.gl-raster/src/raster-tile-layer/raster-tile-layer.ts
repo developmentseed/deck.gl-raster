@@ -209,8 +209,9 @@ function descriptorId(descriptor: RasterTilesetDescriptor): number {
  * The props of a layer that takes a `source`: the opened source it draws, of
  * type `SourceT`, or input of type `InputT` for it to open.
  *
- * {@link RasterTileLayer} reads them with these types. Each such layer also
- * declares them itself, to document the inputs its `source` takes.
+ * {@link RasterTileLayer} reads them with these types. Each such layer
+ * declares `source` itself, to document its inputs, and the types come from
+ * that declaration.
  */
 type SourceProps<SourceT extends RasterSource, InputT> = {
   /** An opened source, or input for the layer to open. */
@@ -218,6 +219,20 @@ type SourceProps<SourceT extends RasterSource, InputT> = {
   /** Called with the source the layer opened from input. */
   onSourceLoad?: (source: SourceT) => void;
 };
+
+/**
+ * What a layer's `source` prop takes, from the layer's props type, or `never`
+ * for a layer without one.
+ */
+type SourcePropOf<PropsT> = "source" extends keyof PropsT
+  ? NonNullable<PropsT["source" & keyof PropsT]>
+  : never;
+
+/** The opened source a layer's `source` prop takes, such as `COGSource`. */
+type SourceOf<PropsT> = Extract<SourcePropOf<PropsT>, RasterSource>;
+
+/** The input a layer's `source` prop takes, for the layer to open. */
+type InputOf<PropsT> = Exclude<SourcePropOf<PropsT>, RasterSource>;
 
 /**
  * Base-class prop shape that excludes the overridable fields.
@@ -262,14 +277,16 @@ type RasterTileLayerDefaultExtraProps<DataT extends MinimalTileData> = Pick<
  *   a domain-specific signature (e.g. `COGLayer`'s
  *   `getTileData(image, options)`).
  * - `SourceT` and `InputT` type a subclass's `source`: the opened source it
- *   draws and the input it opens, such as COGLayer's `COGSource` and
- *   `COGInput`. A layer without a `source` leaves them as `never`.
+ *   draws and the input it opens. They default to what the `source` prop in
+ *   `ExtraProps` takes, so a subclass doesn't pass them: COGLayer's
+ *   `source: COGSource | COGInput` makes them `COGSource` and `COGInput`. A
+ *   layer without a `source` gets `never`.
  */
 export class RasterTileLayer<
   DataT extends MinimalTileData = MinimalTileData,
   ExtraProps extends object = RasterTileLayerDefaultExtraProps<DataT>,
-  SourceT extends RasterSource = never,
-  InputT = never,
+  SourceT extends RasterSource = SourceOf<ExtraProps>,
+  InputT = InputOf<ExtraProps>,
 > extends CompositeLayer<
   RasterTileLayerBaseProps<DataT> & SourceProps<SourceT, InputT> & ExtraProps
 > {

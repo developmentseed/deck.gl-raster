@@ -282,9 +282,7 @@ const defaultProps = {
  */
 export class MultiCOGLayer extends RasterTileLayer<
   MultiTileResult,
-  MultiCOGLayerProps,
-  MultiCOGSource,
-  Record<string, COGInput>
+  MultiCOGLayerProps
 > {
   static override layerName = "MultiCOGLayer";
   // Same casting trick as COGLayer: defaultProps shape diverges from the

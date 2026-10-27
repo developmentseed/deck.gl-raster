@@ -24,6 +24,12 @@ describe("MultiCOGLayer source props", () => {
     });
   });
 
+  it("draws the MultiCOGSource that its source prop takes", () => {
+    expectTypeOf<MultiCOGLayer["state"]["source"]>().toEqualTypeOf<
+      MultiCOGSource | undefined
+    >();
+  });
+
   it("no longer takes the props that source and MultiCOGSource.open replaced", () => {
     new MultiCOGLayer({
       // @ts-expect-error source replaces sources
