@@ -29,6 +29,7 @@ export type {
   ByteCache,
   ByteRange,
   FileIdentity,
+  FileKey,
   Purpose,
   RangeReaderOptions,
   RangeReaderStats,

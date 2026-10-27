@@ -11,6 +11,7 @@ import type {
   ByteCache,
   ByteRange,
   FileIdentity,
+  FileKey,
   Purpose,
   RangeReaderOptions,
   RangeReaderStats,
@@ -82,9 +83,9 @@ export class RangeReader {
    * of either purpose may attach to a stream that covers it, and the first
    * tiles of a COG often sit inside its first header block.
    */
-  private readonly inflight = new Map<string, Set<RangeStream>>();
+  private readonly inflight = new Map<FileKey, Set<RangeStream>>();
   /** Object sizes learned from responses, by file key. */
-  private readonly sizes = new Map<string, number>();
+  private readonly sizes = new Map<FileKey, number>();
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: RangeReaderOptions = {}) {
@@ -105,13 +106,14 @@ export class RangeReader {
   /**
    * Read `range` of `file`. An absolute range is served from the cache, or
    * attached to a request already in flight, or queued and merged with the
-   * other reads of this task; a suffix or whole-object read goes out at once
-   * on its own. Rejects with the signal's reason if `options.signal` aborts
-   * before the bytes arrive; the request itself runs on for other reads.
+   * other reads of this task; a suffix read, or a whole-object read (`range`
+   * undefined), goes out at once on its own. Rejects with the signal's
+   * reason if `options.signal` aborts before the bytes arrive; the request
+   * itself runs on for other reads.
    */
   read(
     file: FileIdentity,
-    range: ReadRange,
+    range: ReadRange | undefined,
     options: ReadOptions,
   ): Promise<ReadResult> {
     const { signal } = options;
@@ -168,7 +170,7 @@ export class RangeReader {
   /** One read, one request: suffix and whole-object reads never merge. */
   private single(
     file: FileIdentity,
-    request: ReadRange,
+    request: ReadRange | undefined,
     options: ReadOptions,
   ): Promise<ReadResult> {
     return new Promise((resolve, reject) => {

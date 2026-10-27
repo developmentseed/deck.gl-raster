@@ -62,7 +62,8 @@ export class RangeStream {
   /** The absolute range requested; undefined for suffix and whole-object requests. */
   readonly range: ByteRange | undefined;
 
-  private readonly request: ReadRange;
+  /** Undefined for a whole-object request. */
+  private readonly request: ReadRange | undefined;
   private readonly options: RangeStreamOptions;
   private readonly controller = new AbortController();
   /** Members not yet settled, ordered by their end offset. */
@@ -88,7 +89,7 @@ export class RangeStream {
 
   constructor(
     file: FileIdentity,
-    request: ReadRange,
+    request: ReadRange | undefined,
     members: StreamMember[],
     options: RangeStreamOptions,
   ) {

@@ -1,4 +1,10 @@
-import type { ByteCache, ByteRange, FileIdentity, Purpose } from "./types.js";
+import type {
+  ByteCache,
+  ByteRange,
+  FileIdentity,
+  FileKey,
+  Purpose,
+} from "./types.js";
 
 /** Default budget for header-purpose spans, shared by every file a reader serves. */
 export const DEFAULT_HEADER_CACHE_BYTES = 32 * 1024 * 1024;
@@ -9,7 +15,8 @@ export const DEFAULT_DATA_CACHE_BYTES = 64 * 1024 * 1024;
 /** One stored span: contiguous bytes of one file, starting at `offset`. */
 interface Span {
   readonly id: number;
-  readonly fileKey: string;
+  /** The {@link FileIdentity.key} of the file the span belongs to. */
+  readonly fileKey: FileKey;
   readonly purpose: Purpose;
   readonly offset: number;
   readonly bytes: Uint8Array;
@@ -36,7 +43,7 @@ class Tier {
  */
 export class MemoryByteCache implements ByteCache {
   private readonly tiers: Record<Purpose, Tier>;
-  private readonly byFile = new Map<string, Set<Span>>();
+  private readonly byFile = new Map<FileKey, Set<Span>>();
   private nextId = 0;
 
   constructor(options: { headerBytes?: number; dataBytes?: number } = {}) {

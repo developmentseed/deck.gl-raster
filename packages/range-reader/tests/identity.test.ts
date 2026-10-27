@@ -1,12 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { fileIdentity, initSignature } from "../src/identity.js";
+import type { FileKey } from "../src/types.js";
 
 const URL_A = new URL("https://x.test/a.tif");
 
 describe("fileIdentity", () => {
   it("keys a bare URL by href", () => {
     const id = fileIdentity("https://x.test/a.tif");
-    expect(id.key).toBe("https://x.test/a.tif\0");
+    expect(id.key).toBe("https://x.test/a.tif ");
     expect(id.url.href).toBe("https://x.test/a.tif");
     expect(id.init).toBeUndefined();
   });
@@ -43,6 +44,24 @@ describe("fileIdentity", () => {
       cache: "no-store",
     });
     expect(withExtras.key).toBe(fileIdentity(URL_A, {}).key);
+  });
+
+  it("keeps the URL and the signature apart in the key", () => {
+    // A URL cannot contain a space, so the first space is the split point
+    // whatever the signature holds.
+    const id = fileIdentity("https://x.test/a%20b.tif", {
+      headers: { "x-note": "a b" },
+    });
+    const at = id.key.indexOf(" ");
+    expect(id.key.slice(0, at)).toBe("https://x.test/a%20b.tif");
+    expect(id.key.slice(at + 1)).toBe(initSignature(id.init));
+  });
+
+  it("brands the key so a plain string is not one", () => {
+    expectTypeOf<string>().not.toMatchTypeOf<FileKey>();
+    expectTypeOf(
+      fileIdentity("https://x.test/a.tif").key,
+    ).toMatchTypeOf<string>();
   });
 
   it("separates different URLs", () => {

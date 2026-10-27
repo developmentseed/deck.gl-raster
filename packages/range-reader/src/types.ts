@@ -15,10 +15,11 @@ export interface ByteRange {
 }
 
 /**
- * What to read from a file: an absolute {@link ByteRange}, the last
- * `suffixLength` bytes, or `undefined` for the whole object.
+ * What to read from a file: an absolute {@link ByteRange} or the last
+ * `suffixLength` bytes. {@link RangeReader.read} also takes `undefined`
+ * for the whole object.
  */
-export type ReadRange = ByteRange | { suffixLength: number } | undefined;
+export type ReadRange = ByteRange | { suffixLength: number };
 
 /**
  * The outcome of a read. `not-found` is a distinct outcome rather than an
@@ -29,19 +30,28 @@ export type ReadResult =
   | { kind: "bytes"; bytes: Uint8Array }
   | { kind: "not-found" };
 
+declare const fileKeyBrand: unique symbol;
+
+/**
+ * The key of a {@link FileIdentity}: its href, a space, and the canonical
+ * signature of its init. Branded so that only {@link fileIdentity} makes one
+ * and a plain string cannot be passed where a key is expected.
+ */
+export type FileKey = string & { readonly [fileKeyBrand]: true };
+
 /**
  * One file as the reader sees it: its URL plus the request parameters it is
- * read with. Reads of one identity may share a request and a cache span;
- * reads of different identities never do, so two layers reading one URL
- * with different credentials never see each other's bytes. Build one with
+ * read with. A merged request carries exactly one set of headers, so reads
+ * of one identity may share a request, an in-flight stream and a cache
+ * span, and reads of different identities never do. Build one with
  * {@link fileIdentity} and keep it for the file's lifetime.
  */
 export interface FileIdentity {
   readonly url: URL;
   /** Headers, credentials and mode sent with every request for this file. */
   readonly init?: RequestInit;
-  /** `url.href` + `"\0"` + the canonical signature of `init`. */
-  readonly key: string;
+  /** Precomputed once, so every read's map lookups skip the signature. */
+  readonly key: FileKey;
 }
 
 /** Per-read options for {@link RangeReader.read}. */
