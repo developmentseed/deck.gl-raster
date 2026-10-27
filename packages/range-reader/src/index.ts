@@ -13,6 +13,13 @@ export {
 export type { MergedRange, MergeOptions } from "./merge.js";
 export { mergeReads, widenRead } from "./merge.js";
 export type {
+  RangeStreamOptions,
+  StreamEnd,
+  StreamMember,
+  StreamOutcome,
+} from "./stream.js";
+export { RangeStream } from "./stream.js";
+export type {
   ByteCache,
   ByteRange,
   FileIdentity,
