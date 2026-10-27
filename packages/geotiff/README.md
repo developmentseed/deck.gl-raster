@@ -193,6 +193,47 @@ This is extremely useful for us as we build visualization projects for both Pyth
 
 [`async-geotiff`]: https://github.com/developmentseed/async-geotiff
 
+## Reading over HTTP
+
+`GeoTIFF.fromUrl` reads through a
+[`RangeReader`](../range-reader/README.md): the reads cogeotiff makes for the
+header (IFDs, then one offset-table entry per tile) and the reads for tile
+bytes are merged into few streamed range requests, each tile resolves as its
+bytes arrive, and everything received is cached, so a pan back over tiles
+that were already downloaded costs no request.
+
+```ts
+import { GeoTIFF } from "@developmentseed/geotiff";
+import { PerOriginSemaphore, RangeReader } from "@developmentseed/range-reader";
+
+// One reader per page: files that share it share its cache and its batching
+// window. (The deck.gl layers do this for you.)
+const reader = new RangeReader();
+const concurrencyLimiter = new PerOriginSemaphore({ maxRequests: 6 });
+
+const tiff = await GeoTIFF.fromUrl("https://example.com/scene.tif", {
+  reader,
+  concurrencyLimiter,
+  // Headers, credentials and mode for every request of this file.
+  requestInit: { headers: { authorization: "Bearer ..." } },
+});
+
+// Reads issued together are merged: these four tiles become one or two
+// range requests, not four.
+const tiles = await tiff.fetchTiles([
+  [0, 0],
+  [1, 0],
+  [0, 1],
+  [1, 1],
+]);
+```
+
+Tune the reader, not the file: `maxGap`, `maxOverfetchBytes`,
+`maxRequestBytes`, `minHeaderReadBytes` and the cache budgets are
+`RangeReader` options (the former `chunkSize` and `cacheSize` options of
+`fromUrl` are `minHeaderReadBytes` and `cache.headerBytes` there).
+`reader.stats` counts requests, bytes and cache hits.
+
 ## Why not build on top of geotiff.js?
 
 The initial implementation of deck.gl-raster used [geotiff.js], and geotiff.js was great for quickly getting started. But there's a few reasons why this project switched to [`@cogeotiff/core`][cogeotiff-lib].
