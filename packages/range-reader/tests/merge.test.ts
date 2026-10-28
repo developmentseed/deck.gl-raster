@@ -44,6 +44,23 @@ describe("mergeReads", () => {
     ).toEqual([{ offset: 0, length: 100, members: [1, 0], overfetch: 0 }]);
   });
 
+  it("applies maxRequestBytes to adjacent reads, as COG tiles in a row are", () => {
+    // Ten contiguous 2.4 MB tiles must not become one request because each
+    // starts exactly where the previous one ends.
+    const reads = Array.from({ length: 10 }, (_, i) => ({
+      offset: i * 100,
+      length: 100,
+    }));
+    const ranges = mergeReads(reads, { ...big, maxRequestBytes: 250 });
+    expect(ranges.map((r) => [r.offset, r.length])).toEqual([
+      [0, 200],
+      [200, 200],
+      [400, 200],
+      [600, 200],
+      [800, 200],
+    ]);
+  });
+
   it("joins an overlapping read even past maxRequestBytes", () => {
     expect(
       mergeReads(
