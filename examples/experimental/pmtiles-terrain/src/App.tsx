@@ -21,8 +21,10 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import type { PlaceId } from "./places.js";
 import { DEFAULT_PLACE_ID, PLACES } from "./places.js";
+import { CountingFetchSource } from "./pmtiles/counting-fetch-source.js";
 import { PMTilesSource } from "./pmtiles/pmtiles-source.js";
 import { RangeReaderSource } from "./pmtiles/range-reader-source.js";
+import type { ReadStats } from "./pmtiles/read-stats.js";
 import { PMTilesTerrainLayer } from "./pmtiles-terrain-layer.js";
 import { BorderCache } from "./terrain/border-cache.js";
 import {
@@ -31,6 +33,7 @@ import {
 } from "./terrain/get-tile-data.js";
 import type { RenderMode } from "./terrain/render-tile.js";
 import { makeRenderTile, RENDER_MODES } from "./terrain/render-tile.js";
+import { StatsReadout } from "./ui/stats-readout.js";
 import { ValueSlider } from "./ui/value-slider.js";
 
 /** Mapterhorn's global terrain: z0-12 of Terrarium-encoded 512 px WebP tiles. */
@@ -43,14 +46,20 @@ const TILE_SIZE = 512;
 const BORDER_CACHE_CAPACITY = 2048;
 
 /**
- * One reader and one limiter for the page, so every read shares one byte
- * cache and one batching window.
+ * One limiter for the page: it caps concurrent requests per origin. Each
+ * opened archive gets its own reader (byte cache and batching window), so the
+ * merge switch compares two cold starts.
  */
-const READER = new RangeReader();
 const LIMITER = new PerOriginSemaphore({ maxRequests: 6 });
 
 /** Slope, in degrees, spans a fixed range wherever you look. */
 const SLOPE_RANGE: [number, number] = [0, 70];
+
+/** How often the stats readout refreshes, in milliseconds. */
+const STATS_INTERVAL = 250;
+
+/** No reads yet. */
+const NO_STATS: ReadStats = { requests: 0, bytesReceived: 0, sharedReads: 0 };
 
 /** Required by Mapterhorn's terms. */
 const ATTRIBUTION =
@@ -75,16 +84,24 @@ export default function App() {
   const [rescaleMin, rescaleMax] =
     mode === "slope" ? SLOPE_RANGE : place.elevationRange;
 
-  // Open the archive: read its header and describe its tile grid.
+  // Open the archive: read its header and describe its tile grid. With
+  // merging on, bytes come through the range reader; off, through pmtiles'
+  // own FetchSource, one request per read. Flipping the switch opens the
+  // archive anew, so the layer remounts and the counts start over.
+  const [merge, setMerge] = useState(true);
   const [source, setSource] = useState<PMTilesSource | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    const byteSource = new RangeReaderSource({
-      reader: READER,
-      url: ARCHIVE_URL,
-      limiter: LIMITER,
-    });
+    setSource(null);
+    setError(null);
+    const byteSource = merge
+      ? new RangeReaderSource({
+          reader: new RangeReader(),
+          url: ARCHIVE_URL,
+          limiter: LIMITER,
+        })
+      : new CountingFetchSource({ url: ARCHIVE_URL });
     PMTilesSource.open({ byteSource, tileSize: TILE_SIZE }).then(
       (opened) => {
         if (!cancelled) {
@@ -100,7 +117,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [merge]);
 
   // One border cache per archive. Neighbors fetched for one tile's halo are
   // mostly the tiles drawn next to it, so they share one load per tile.
@@ -130,6 +147,32 @@ export default function App() {
         : null,
     [cache, onTileRefined],
   );
+
+  // Counts for the readout, polled rather than set per read or per tile.
+  const tilesDrawn = useRef(0);
+  const [readout, setReadout] = useState({
+    stats: NO_STATS,
+    tilesDrawn: 0,
+    tilesDecoded: 0,
+  });
+  useEffect(() => {
+    tilesDrawn.current = 0;
+    if (!source || !cache) {
+      setReadout({ stats: NO_STATS, tilesDrawn: 0, tilesDecoded: 0 });
+      return;
+    }
+    const timer = setInterval(() => {
+      const next = {
+        stats: source.byteSource.readStats(),
+        tilesDrawn: tilesDrawn.current,
+        tilesDecoded: cache.stats.loads,
+      };
+      setReadout((previous) =>
+        JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
+      );
+    }, STATS_INTERVAL);
+    return () => clearInterval(timer);
+  }, [source, cache]);
 
   // Decode the shipped colormap sprite once, then upload it when the luma.gl
   // device arrives from the overlay.
@@ -178,9 +221,13 @@ export default function App() {
           getTileData,
           renderTile,
           // The range reader merges a view's reads into a few requests, so
-          // deck.gl's six-at-a-time limit only gets in the way.
-          maxRequests: 256,
-          debounceTime: 50,
+          // deck.gl's six-at-a-time limit only gets in the way. Without it,
+          // keep deck.gl's defaults: one request per tile, six at a time.
+          maxRequests: merge ? 256 : 6,
+          debounceTime: merge ? 50 : 0,
+          onTileLoad: () => {
+            tilesDrawn.current += 1;
+          },
           onTileUnload: (tile) => {
             tile.content?.texture.destroy();
           },
@@ -355,6 +402,14 @@ export default function App() {
               />
             </Field>
           ) : null}
+
+          <StatsReadout
+            stats={readout.stats}
+            tilesDrawn={readout.tilesDrawn}
+            tilesDecoded={readout.tilesDecoded}
+            merge={merge}
+            onMergeChange={setMerge}
+          />
 
           <Text fontSize="xs" color="gray.600">
             Elevation data ©{" "}

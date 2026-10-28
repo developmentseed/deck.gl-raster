@@ -12,6 +12,6 @@ export type ReadStats = {
 
 /** A `pmtiles` byte source that counts what it fetches. */
 export interface CountedSource extends Source {
-  /** Totals since the source was made (or, for a shared reader, the page loaded). */
+  /** Totals since the source's reader (or the source itself) was made. */
   readStats(): ReadStats;
 }
