@@ -553,10 +553,8 @@ export class RasterTileLayer<
   }
 
   /**
-   * Whether the tileset aborts a tile's load as soon as the tile is neither
-   * selected nor visible (see `RasterTileset2DOptions.abortUnwantedLoads`).
-   * Off here; the COG-backed layers, which release a whole selection to the
-   * range reader at once, turn it on.
+   * Whether the tileset aborts a tile's load once the tile is neither
+   * selected nor visible. Off here; the COG layers turn it on.
    */
   protected _abortUnwantedLoads(): boolean {
     return false;

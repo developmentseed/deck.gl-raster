@@ -294,7 +294,7 @@ export class MultiCOGLayer extends RasterTileLayer<
   static override defaultProps =
     defaultProps as unknown as typeof RasterTileLayer.defaultProps;
 
-  /** A whole selection goes to the reader at once; tiles that leave it must stop their stream. */
+  /** On: a tile that leaves the view must stop its stream. */
   protected override _abortUnwantedLoads(): boolean {
     return true;
   }

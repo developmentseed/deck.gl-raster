@@ -77,15 +77,13 @@ export type MosaicLayerProps<
 
     /**
      * The {@link RangeReader} this layer's sources read through, passed to
-     * `getSource`. Defaults to {@link DEFAULT_RANGE_READER}, shared by every
-     * COG layer on the page, so items of several layers share one byte cache
-     * and one batching window.
+     * `getSource`; defaults to the shared {@link DEFAULT_RANGE_READER}.
      */
     reader?: RangeReader;
 
     /**
      * Headers, credentials and mode for every request of this layer's
-     * sources, passed to `getSource`, for data behind authentication.
+     * sources, passed to `getSource`.
      */
     requestInit?: RequestInit;
 

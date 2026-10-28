@@ -66,19 +66,15 @@ export type COGSourceOptions = {
   getPriority?: () => Priority;
 
   /**
-   * The {@link RangeReader} this COG's header and tile reads go through:
-   * reads issued together are merged into few streamed range requests and
-   * everything received is cached. Defaults to {@link DEFAULT_RANGE_READER},
-   * shared by every COG layer on the page. Ignored when the input is an
-   * opened `GeoTIFF` or an `ArrayBuffer`.
+   * The {@link RangeReader} this COG reads through; defaults to the shared
+   * {@link DEFAULT_RANGE_READER}. Ignored for an opened `GeoTIFF` or an
+   * `ArrayBuffer`.
    */
   reader?: RangeReader;
 
   /**
-   * Headers, credentials and mode sent with every request for this COG, for
-   * data behind authentication. COGs read with different inits never share
-   * a request or a cached byte. Ignored for an opened `GeoTIFF` or an
-   * `ArrayBuffer`.
+   * Headers, credentials and mode sent with every request for this COG.
+   * Ignored for an opened `GeoTIFF` or an `ArrayBuffer`.
    */
   requestInit?: RequestInit;
 };

@@ -142,19 +142,10 @@ export interface RasterTileset2DOptions {
   maxBoundingVolumeCacheSize?: number;
 
   /**
-   * Abort a tile's load as soon as the tile is neither selected nor visible.
-   *
-   * deck.gl aborts such loads only while more than `maxRequests` are in
-   * flight. A layer that releases a whole selection to a range reader at
-   * once (a high `maxRequests`) needs the abort regardless: the reader
-   * cancels a streamed request the moment no read wants what is left of it,
-   * and a tile nobody wants must not keep one alive. deck.gl requests a
-   * cancelled tile again when it is selected again, by then often from the
-   * reader's cache.
-   *
-   * Off by default; the COG-backed layers turn it on. Left off for a store
-   * whose own coalescing fails every read of a merged request when one of
-   * them aborts.
+   * Abort a tile's load as soon as the tile is neither selected nor visible,
+   * not only while more than `maxRequests` loads are in flight as deck.gl
+   * does. Needed by layers that hand a whole selection to a range reader at
+   * once; deck.gl requests an aborted tile again when it is selected again.
    *
    * @default false
    */
@@ -232,12 +223,10 @@ export class RasterTileset2D extends Tileset2D {
   }
 
   /**
-   * deck.gl's options, with `onTileUnload` wrapped so that, with
-   * {@link RasterTileset2DOptions.abortUnwantedLoads}, a tile unloaded while
-   * still loading is aborted first. deck.gl evicts unselected loading tiles
-   * inside `update` (its `_resizeCache`), before {@link update}'s own pass
-   * can see them, and `TileLayer` calls `setOptions` on every props change
-   * with a fresh `onTileUnload`, so the wrap has to live here.
+   * deck.gl's options, with `onTileUnload` wrapped to abort a still-loading
+   * tile first when {@link RasterTileset2DOptions.abortUnwantedLoads} is on:
+   * deck.gl evicts such tiles inside `update`, before {@link update}'s own
+   * pass sees them.
    */
   override setOptions(opts: Tileset2DProps): void {
     const { onTileUnload } = opts;
@@ -253,10 +242,9 @@ export class RasterTileset2D extends Tileset2D {
   }
 
   /**
-   * deck.gl's update, then, with {@link RasterTileset2DOptions.abortUnwantedLoads},
-   * the abort of every loading tile that is neither selected nor visible and
-   * still cached. A loading tile deck.gl unloads during the update is aborted
-   * by the `onTileUnload` wrap in {@link setOptions} instead.
+   * deck.gl's update, then the abort of every loading tile that is neither
+   * selected nor visible, when
+   * {@link RasterTileset2DOptions.abortUnwantedLoads} is on.
    */
   override update(...args: Parameters<Tileset2D["update"]>): number {
     const frame = super.update(...args);

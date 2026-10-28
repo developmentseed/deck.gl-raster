@@ -113,19 +113,15 @@ export class COGLayer<
   DataT extends MinimalTileData = TextureDataT,
 > extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
   static override layerName = "COGLayer";
-  // A whole selection is released to the range reader in one task, which
-  // merges the tiles' reads into few streamed requests; deck.gl's six-at-a-
-  // time throttle would starve it. The per-origin limiter caps requests
-  // instead. The debounce lets a pan settle before any request is issued.
-  // (Cast as in MultiCOGLayer: the defaults' shape diverges from the base's
-  // parameterized type.)
+  // Release a whole selection to the range reader at once, which merges its
+  // reads; the per-origin limiter caps requests. Cast as in MultiCOGLayer.
   static override defaultProps = {
     ...RasterTileLayer.defaultProps,
     maxRequests: 256,
     debounceTime: 50,
   } as unknown as typeof RasterTileLayer.defaultProps;
 
-  /** A whole selection goes to the reader at once; tiles that leave it must stop their stream. */
+  /** On: a tile that leaves the view must stop its stream. */
   protected override _abortUnwantedLoads(): boolean {
     return true;
   }
