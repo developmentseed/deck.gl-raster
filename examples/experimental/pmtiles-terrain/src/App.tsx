@@ -24,7 +24,6 @@ import { DEFAULT_PLACE_ID, PLACES } from "./places.js";
 import { CountingFetchSource } from "./pmtiles/counting-fetch-source.js";
 import { PMTilesSource } from "./pmtiles/pmtiles-source.js";
 import { RangeReaderSource } from "./pmtiles/range-reader-source.js";
-import type { ReadStats } from "./pmtiles/read-stats.js";
 import { PMTilesTerrainLayer } from "./pmtiles-terrain-layer.js";
 import { BorderCache } from "./terrain/border-cache.js";
 import {
@@ -33,6 +32,7 @@ import {
 } from "./terrain/get-tile-data.js";
 import type { RenderMode } from "./terrain/render-tile.js";
 import { makeRenderTile, RENDER_MODES } from "./terrain/render-tile.js";
+import type { TerrainTileData } from "./terrain/types.js";
 import { StatsReadout } from "./ui/stats-readout.js";
 import { ValueSlider } from "./ui/value-slider.js";
 
@@ -54,12 +54,6 @@ const LIMITER = new PerOriginSemaphore({ maxRequests: 6 });
 
 /** Slope, in degrees, spans a fixed range wherever you look. */
 const SLOPE_RANGE: [number, number] = [0, 70];
-
-/** How often the stats readout refreshes, in milliseconds. */
-const STATS_INTERVAL = 250;
-
-/** No reads yet. */
-const NO_STATS: ReadStats = { requests: 0, bytesReceived: 0, sharedReads: 0 };
 
 /** Required by Mapterhorn's terms. */
 const ATTRIBUTION =
@@ -148,31 +142,25 @@ export default function App() {
     [cache, onTileRefined],
   );
 
-  // Counts for the readout, polled rather than set per read or per tile.
+  // Tiles drawn since the archive opened, counted in a ref that the readout
+  // polls: setting state per tile would re-render the app, and with it the
+  // layer, on every tile.
   const tilesDrawn = useRef(0);
-  const [readout, setReadout] = useState({
-    stats: NO_STATS,
-    tilesDrawn: 0,
-    tilesDecoded: 0,
-  });
   useEffect(() => {
-    tilesDrawn.current = 0;
-    if (!source || !cache) {
-      setReadout({ stats: NO_STATS, tilesDrawn: 0, tilesDecoded: 0 });
-      return;
+    if (source) {
+      tilesDrawn.current = 0;
     }
-    const timer = setInterval(() => {
-      const next = {
-        stats: source.byteSource.readStats(),
-        tilesDrawn: tilesDrawn.current,
-        tilesDecoded: cache.stats.loads,
-      };
-      setReadout((previous) =>
-        JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
-      );
-    }, STATS_INTERVAL);
-    return () => clearInterval(timer);
-  }, [source, cache]);
+  }, [source]);
+  const onTileLoad = useCallback(() => {
+    tilesDrawn.current += 1;
+  }, []);
+  const onTileUnload = useCallback(
+    (tile: { content: TerrainTileData | null }) => {
+      tile.content?.releaseHalo();
+      tile.content?.texture.destroy();
+    },
+    [],
+  );
 
   // Decode the shipped colormap sprite once, then upload it when the luma.gl
   // device arrives from the overlay.
@@ -200,18 +188,34 @@ export default function App() {
 
   const colormapIndex =
     mode === "slope" ? COLORMAP_INDEX.magma : COLORMAP_INDEX.terrain;
-  const renderTile = makeRenderTile({
-    mode,
-    sunAzimuth,
-    sunAltitude,
-    zFactor,
-    colormapTexture,
-    colormapIndex,
-    colormapReversed: false,
-    rescaleMin,
-    rescaleMax,
-    shadeStrength,
-  });
+  // Memoized so a re-render that changes none of these doesn't hand the layer
+  // a new function.
+  const renderTile = useMemo(
+    () =>
+      makeRenderTile({
+        mode,
+        sunAzimuth,
+        sunAltitude,
+        zFactor,
+        colormapTexture,
+        colormapIndex,
+        colormapReversed: false,
+        rescaleMin,
+        rescaleMax,
+        shadeStrength,
+      }),
+    [
+      mode,
+      sunAzimuth,
+      sunAltitude,
+      zFactor,
+      colormapTexture,
+      colormapIndex,
+      rescaleMin,
+      rescaleMax,
+      shadeStrength,
+    ],
+  );
 
   const layer =
     source && getTileData
@@ -221,17 +225,13 @@ export default function App() {
           getTileData,
           renderTile,
           // The range reader merges a view's reads into a few requests, so
-          // deck.gl's six-at-a-time limit only gets in the way. Without it,
-          // keep deck.gl's defaults: one request per tile, six at a time.
+          // deck.gl's six-tiles-at-a-time limit only gets in the way. Without
+          // merging, keep deck.gl's defaults; every read is then its own
+          // request (halo reads aren't throttled by deck.gl either way).
           maxRequests: merge ? 256 : 6,
           debounceTime: merge ? 50 : 0,
-          onTileLoad: () => {
-            tilesDrawn.current += 1;
-          },
-          onTileUnload: (tile) => {
-            tile.content?.releaseHalo();
-            tile.content?.texture.destroy();
-          },
+          onTileLoad,
+          onTileUnload,
           updateTriggers: {
             renderTile: [
               mode,
@@ -405,9 +405,9 @@ export default function App() {
           ) : null}
 
           <StatsReadout
-            stats={readout.stats}
-            tilesDrawn={readout.tilesDrawn}
-            tilesDecoded={readout.tilesDecoded}
+            source={source}
+            cache={cache}
+            tilesDrawn={tilesDrawn}
             merge={merge}
             onMergeChange={setMerge}
           />
