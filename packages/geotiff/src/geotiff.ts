@@ -9,6 +9,7 @@ import type {
   Priority,
 } from "@developmentseed/range-reader";
 import { RangeReader } from "@developmentseed/range-reader";
+import { ByteSource } from "./byte-source.js";
 import type { ColorInterp } from "./colorinterp.js";
 import { inferColorInterpretation } from "./colorinterp.js";
 import { crsFromGeoKeys } from "./crs.js";
@@ -27,7 +28,6 @@ import {
 } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
-import { RangeReaderSource } from "./reader-source.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
 
@@ -359,7 +359,7 @@ export class GeoTIFF {
     // tables cogeotiff reads one entry at a time) and the tile reads are
     // merged and cached separately, so tile churn never evicts the header.
     const source = (purpose: "metadata" | "data") =>
-      new RangeReaderSource({
+      new ByteSource({
         reader,
         url: resolved,
         purpose,

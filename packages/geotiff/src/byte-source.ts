@@ -1,4 +1,4 @@
-import type { Source, SourceMetadata } from "@chunkd/source";
+import type { Source as ChunkdSource, SourceMetadata } from "@chunkd/source";
 import type {
   ConcurrencyLimiter,
   FileIdentity,
@@ -9,8 +9,8 @@ import type {
 } from "@developmentseed/range-reader";
 import { fileIdentity } from "@developmentseed/range-reader";
 
-/** Options for {@link RangeReaderSource}. */
-export interface RangeReaderSourceOptions {
+/** Options for {@link ByteSource}. */
+export interface ByteSourceOptions {
   /** The reader every read of this file goes through. */
   reader: RangeReader;
   url: URL;
@@ -25,9 +25,11 @@ export interface RangeReaderSourceOptions {
 }
 
 /**
- * A chunkd {@link Source} whose reads go through a {@link RangeReader}, so
+ * A chunkd `Source` whose reads go through a {@link RangeReader}, so
  * cogeotiff's header reads and our tile reads are merged, streamed and
- * cached by it. `GeoTIFF.fromUrl` builds two over one reader: one for the
+ * cached by it. "Source" here is chunkd's byte-range interface, the thing
+ * `GeoTIFF.open` reads bytes through, not a dataset source like `COGSource`:
+ * one of these is a cheap per-file, per-purpose handle on a shared reader. `GeoTIFF.fromUrl` builds two over one reader: one for the
  * header (purpose `metadata`) and one for tile data (purpose `data`).
  *
  * `metadata.size` is seeded infinite and never updated: cogeotiff clamps a
@@ -43,7 +45,7 @@ export interface RangeReaderSourceOptions {
  * a `GeoTIFF` whose parsed layout no longer applies, so it must be opened
  * again. The reader itself drops its cached bytes of the old version.
  */
-export class RangeReaderSource implements Source {
+export class ByteSource implements ChunkdSource {
   readonly type = "range-reader";
   readonly url: URL;
   metadata: SourceMetadata = { size: Number.POSITIVE_INFINITY };
@@ -56,7 +58,7 @@ export class RangeReaderSource implements Source {
   /** The validator of the first result; a different one later means a replaced object. */
   private validator: string | undefined;
 
-  constructor(options: RangeReaderSourceOptions) {
+  constructor(options: ByteSourceOptions) {
     this.reader = options.reader;
     this.url = options.url;
     this.file = fileIdentity(options.url, options.init);

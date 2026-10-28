@@ -4,7 +4,7 @@ import type {
 } from "@developmentseed/range-reader";
 import { RangeReader } from "@developmentseed/range-reader";
 import { describe, expect, it } from "vitest";
-import { RangeReaderSource } from "../src/reader-source.js";
+import { ByteSource } from "../src/byte-source.js";
 import { fixtureServer } from "./utils/fixture-server.js";
 
 const URL_A = new URL("https://x.test/a.tif");
@@ -21,11 +21,11 @@ function pattern(n: number, seed = 0): Uint8Array {
 function open(file = pattern(256), purpose: "metadata" | "data" = "data") {
   const server = fixtureServer(file);
   const reader = new RangeReader({ fetch: server.fetch });
-  const source = new RangeReaderSource({ reader, url: URL_A, purpose });
+  const source = new ByteSource({ reader, url: URL_A, purpose });
   return { server, reader, source };
 }
 
-describe("RangeReaderSource", () => {
+describe("ByteSource", () => {
   it("reads an absolute range into a fresh ArrayBuffer", async () => {
     const { source } = open();
     const bytes = await source.fetch(100, 10);
@@ -78,7 +78,7 @@ describe("RangeReaderSource", () => {
         return Promise.resolve(() => {});
       },
     };
-    const source = new RangeReaderSource({
+    const source = new ByteSource({
       reader,
       url: URL_A,
       purpose: "metadata",
@@ -99,7 +99,7 @@ describe("RangeReaderSource", () => {
   it("fails a read whose validator differs from the first it saw, as chunkd did", async () => {
     const server = fixtureServer(pattern(256), { etag: '"v1"' });
     const reader = new RangeReader({ fetch: server.fetch });
-    const source = new RangeReaderSource({
+    const source = new ByteSource({
       reader,
       url: URL_A,
       purpose: "data",
@@ -112,7 +112,7 @@ describe("RangeReaderSource", () => {
     );
     // The reader adopted the new version: a fresh source over it works, and
     // the stale one keeps failing even on a cache hit.
-    const fresh = new RangeReaderSource({
+    const fresh = new ByteSource({
       reader,
       url: URL_A,
       purpose: "data",
