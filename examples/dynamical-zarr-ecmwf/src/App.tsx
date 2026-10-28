@@ -218,9 +218,7 @@ export default function App() {
     source && colormapTexture
       ? [
           new ZarrLayer<EcmwfTileData, "float32">({
-            // Include initTimeIdx in the id so switching init_time discards
-            // cached tiles from the previous forecast run.
-            id: `ecmwf-zarr-layer-${initTimeIdx}`,
+            id: "ecmwf-zarr-layer",
             source,
             selection,
             getTileData,
