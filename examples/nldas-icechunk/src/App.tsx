@@ -22,7 +22,6 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
-import type * as zarr from "zarrita";
 import type { ColormapId } from "./nldas/colormap-choices.js";
 import {
   COLORMAP_CHOICES,
@@ -117,7 +116,7 @@ export default function App() {
   const layers =
     surfaceTemp && colormapTexture
       ? [
-          new ZarrLayer<"float32", zarr.Readable, NldasTileData>({
+          new ZarrLayer<NldasTileData, "float32">({
             id: "nldas-surface-temp",
             source: surfaceTemp.source,
             selection: { [TIME_DIM]: TIME_INDEX },

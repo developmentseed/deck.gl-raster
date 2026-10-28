@@ -1,3 +1,4 @@
+import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 import { describe, expectTypeOf, it } from "vitest";
 import type * as zarr from "zarrita";
 import type { ZarrLayerProps, ZarrSource } from "../src/index.js";
@@ -25,9 +26,9 @@ describe("ZarrLayer source props", () => {
     expectTypeOf<ZarrLayer["state"]["source"]>().toEqualTypeOf<
       ZarrSource | undefined
     >();
-    expectTypeOf<ZarrLayer<"int8">["state"]["source"]>().toEqualTypeOf<
-      ZarrSource<"int8"> | undefined
-    >();
+    expectTypeOf<
+      ZarrLayer<MinimalTileData, "int8">["state"]["source"]
+    >().toEqualTypeOf<ZarrSource<"int8"> | undefined>();
   });
 
   it("passes a ZarrSource to onSourceLoad", () => {

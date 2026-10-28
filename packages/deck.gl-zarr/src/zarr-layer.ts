@@ -50,9 +50,9 @@ export type GetTileDataOptions = RasterTileGetTileDataOptions & {
  * Props for the {@link ZarrLayer}.
  */
 export type ZarrLayerProps<
+  DataT extends MinimalTileData = MinimalTileData,
   Dtype extends zarr.DataType = zarr.DataType,
   Store extends zarr.Readable = zarr.Readable,
-  DataT extends MinimalTileData = MinimalTileData,
 > = Omit<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
@@ -131,15 +131,15 @@ export type ZarrLayerProps<
  * layer agnostic about data format and rendering pipeline.
  */
 export class ZarrLayer<
+  DataT extends MinimalTileData = MinimalTileData,
   Dtype extends zarr.DataType = zarr.DataType,
   Store extends zarr.Readable = zarr.Readable,
-  DataT extends MinimalTileData = MinimalTileData,
-> extends RasterTileLayer<DataT, ZarrLayerProps<Dtype, Store, DataT>> {
+> extends RasterTileLayer<DataT, ZarrLayerProps<DataT, Dtype, Store>> {
   static override layerName = "ZarrLayer";
 
   declare state: RasterTileLayer<
     DataT,
-    ZarrLayerProps<Dtype, Store, DataT>
+    ZarrLayerProps<DataT, Dtype, Store>
   >["state"] & {
     /**
      * The source and selection last checked against each other, and whether
