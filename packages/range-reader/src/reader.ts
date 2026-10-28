@@ -1,5 +1,6 @@
 import type { ConcurrencyLimiter } from "./limiter.js";
 import { MemoryByteCache } from "./memory-cache.js";
+import type { MergedRange } from "./merge.js";
 import { mergeReads, widenRead } from "./merge.js";
 import type {
   RangeStreamOptions,
@@ -23,8 +24,12 @@ import type {
 /** Default for {@link RangeReaderOptions.maxOverfetchBytes}: 1 MiB. */
 export const DEFAULT_MAX_OVERFETCH_BYTES = 1024 * 1024;
 
-/** Default for {@link RangeReaderOptions.maxRequestBytes}: 16 MiB. */
-export const DEFAULT_MAX_REQUEST_BYTES = 16 * 1024 * 1024;
+/**
+ * Default for {@link RangeReaderOptions.maxRequestBytes}: 1 MiB.
+ *
+ * Merging is beneficial when tiles are small against the link's latency. See #815 for more information.
+ */
+export const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024;
 
 /** Default for {@link RangeReaderOptions.minMetadataReadBytes}: 64 KiB. */
 export const DEFAULT_MIN_METADATA_READ_BYTES = 64 * 1024;
@@ -255,11 +260,18 @@ export class RangeReader {
     }
   }
 
-  /** Close the task window: merge each group's reads and start their streams. */
+  /**
+   * Close the task window: merge each group's reads and start their streams,
+   * round-robin across groups. A limiter serves streams in the order they
+   * were launched, and a tile of a multi-file dataset needs one range of
+   * each file, so launching file by file would hold every tile until the
+   * last file's streams started.
+   */
   private flush(): void {
     this.flushTimer = undefined;
     const groups = [...this.pending.values()];
     this.pending.clear();
+    const launches: Array<{ group: PendingGroup; ranges: MergedRange[] }> = [];
     for (const group of groups) {
       if (group.reads.length === 0) {
         continue;
@@ -268,8 +280,7 @@ export class RangeReader {
         // The stream installs its own abort handling from here on.
         pending.detach();
       }
-      const { file, purpose } = group;
-      const merged = mergeReads(
+      const ranges = mergeReads(
         group.reads.map((pending) => pending.request),
         {
           maxGap: this.maxGap,
@@ -277,35 +288,48 @@ export class RangeReader {
           maxRequestBytes: this.maxRequestBytes,
         },
       );
-      for (const range of merged) {
-        const members: StreamMember[] = [];
-        const kept = new Set<number>();
-        for (const i of range.members) {
-          const pending = group.reads[i]!;
-          members.push(pending.member);
-          if (
-            pending.request !== pending.member &&
-            !kept.has(pending.request.offset)
-          ) {
-            // A widened block is wanted to its end for the cache's sake, even
-            // once the small read inside it has resolved; otherwise the stream
-            // would be cancelled after the first chunk and the block never
-            // land. It is at most `minMetadataReadBytes`, and reads of it that
-            // abort do not cut it short.
-            kept.add(pending.request.offset);
-            members.push(keepMember(pending.request));
-          }
+      launches.push({ group, ranges });
+    }
+    const longest = Math.max(0, ...launches.map((l) => l.ranges.length));
+    for (let i = 0; i < longest; i++) {
+      for (const { group, ranges } of launches) {
+        const range = ranges[i];
+        if (range !== undefined) {
+          this.launchMerged(group, range);
         }
-        const stream = new RangeStream(
-          file,
-          { offset: range.offset, length: range.length },
-          members,
-          this.streamOptions(group.reads[0]!.limiter),
-        );
-        this.stats.bytesOverfetched += range.overfetch;
-        this.launch(file, purpose, stream, range.length);
       }
     }
+  }
+
+  /** Start one merged range of a group as a stream. */
+  private launchMerged(group: PendingGroup, range: MergedRange): void {
+    const { file, purpose } = group;
+    const members: StreamMember[] = [];
+    const kept = new Set<number>();
+    for (const i of range.members) {
+      const pending = group.reads[i]!;
+      members.push(pending.member);
+      if (
+        pending.request !== pending.member &&
+        !kept.has(pending.request.offset)
+      ) {
+        // A widened block is wanted to its end for the cache's sake, even
+        // once the small read inside it has resolved; otherwise the stream
+        // would be cancelled after the first chunk and the block never
+        // land. It is at most `minMetadataReadBytes`, and reads of it that
+        // abort do not cut it short.
+        kept.add(pending.request.offset);
+        members.push(keepMember(pending.request));
+      }
+    }
+    const stream = new RangeStream(
+      file,
+      { offset: range.offset, length: range.length },
+      members,
+      this.streamOptions(group.reads[0]!.limiter),
+    );
+    this.stats.bytesOverfetched += range.overfetch;
+    this.launch(file, purpose, stream, range.length);
   }
 
   private launch(

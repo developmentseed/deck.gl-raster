@@ -49,6 +49,24 @@ describe("RangeReader", () => {
     expect(await p2).toEqual({ kind: "bytes", bytes: pattern(100, 100) });
   });
 
+  it("launches merged ranges round-robin across files", async () => {
+    // A MultiCOG tile needs one range of each band file; file by file, no
+    // tile could complete before the last file's streams started.
+    const a = file("https://x.test/a.tif");
+    const b = file("https://x.test/b.tif");
+    for (const each of [a, b]) {
+      void reader.read(each, { offset: 0, length: 10 }, DATA);
+      void reader.read(each, { offset: 10_000, length: 10 }, DATA);
+    }
+    await flush();
+    expect(fake.calls.map((c) => c.url.split("/").pop())).toEqual([
+      "a.tif",
+      "b.tif",
+      "a.tif",
+      "b.tif",
+    ]);
+  });
+
   it("sends reads issued in different tasks separately", async () => {
     void reader.read(f, { offset: 0, length: 10 }, DATA);
     await flush();

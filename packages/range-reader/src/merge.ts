@@ -29,12 +29,13 @@ export interface MergedRange extends ByteRange {
  * Group reads into as few contiguous ranges as the options allow.
  *
  * Reads are taken in offset order, longest first among equals, so a range
- * starts with its widest read. A read that starts at or before the current
- * range's end joins it unconditionally: it is contained or overlapping, adds
- * no gap, and the caps do not apply. A read past the end joins only if the
- * gap is at most `maxGap`, the merged range stays within `maxRequestBytes`,
- * and the range's over-fetch stays within `maxOverfetchBytes`. Ported from
- * kylebarron/usgs-topo `src/map/merge-reads.ts` with the two caps added.
+ * starts with its widest read. A read that starts before the current range's
+ * end joins it unconditionally: it is contained or overlapping, and fetching
+ * the overlap twice would cost more than the longer request. A read that
+ * starts at or past the end, adjacent reads included (the tiles of a COG
+ * row are contiguous), joins only if the gap is at most `maxGap`, the merged
+ * range stays within `maxRequestBytes`, and the range's over-fetch stays
+ * within `maxOverfetchBytes`.
  */
 export function mergeReads(
   reads: readonly ByteRange[],
@@ -57,7 +58,7 @@ export function mergeReads(
     const end = offset + length;
     if (current !== undefined) {
       const currentEnd = current.offset + current.length;
-      if (offset <= currentEnd) {
+      if (offset < currentEnd) {
         current.length = Math.max(currentEnd, end) - current.offset;
         current.members.push(i);
         continue;
