@@ -26,6 +26,7 @@ import { PMTilesSource } from "./pmtiles/pmtiles-source.js";
 import { RangeReaderSource } from "./pmtiles/range-reader-source.js";
 import { PMTilesTerrainLayer } from "./pmtiles-terrain-layer.js";
 import { BorderCache } from "./terrain/border-cache.js";
+import { ExactPixelsUnavailableError } from "./terrain/decode-tile.js";
 import {
   loadTerrariumElevation,
   makeGetTileData,
@@ -154,6 +155,18 @@ export default function App() {
   const onTileLoad = useCallback(() => {
     tilesDrawn.current += 1;
   }, []);
+
+  // A browser that randomizes canvas reads and lacks VideoFrame can't decode
+  // tiles exactly. Say so once in the panel rather than per tile in the
+  // console; other tile errors are logged, as deck.gl does by default.
+  const [pixelError, setPixelError] = useState<string | null>(null);
+  const onTileError = useCallback((reason: unknown) => {
+    if (reason instanceof ExactPixelsUnavailableError) {
+      setPixelError((previous) => previous ?? reason.message);
+      return;
+    }
+    console.error(reason);
+  }, []);
   const onTileUnload = useCallback(
     (tile: { content: TerrainTileData | null }) => {
       tile.content?.releaseHalo();
@@ -232,6 +245,7 @@ export default function App() {
           debounceTime: merge ? 50 : 0,
           onTileLoad,
           onTileUnload,
+          onTileError,
           updateTriggers: {
             renderTile: [
               mode,
@@ -323,6 +337,12 @@ export default function App() {
           {error ? (
             <Text fontSize="sm" color="red.600">
               Failed to open the archive: {error}
+            </Text>
+          ) : null}
+
+          {pixelError ? (
+            <Text fontSize="sm" color="red.600">
+              {pixelError}. Another browser will draw them.
             </Text>
           ) : null}
 

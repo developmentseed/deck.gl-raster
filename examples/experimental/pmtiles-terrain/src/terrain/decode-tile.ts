@@ -18,8 +18,43 @@ let canvasDistorted: boolean | undefined;
 /** Reused for every tile, as MapLibre does. */
 let canvasContext: OffscreenCanvasRenderingContext2D | null | undefined;
 
-/** Whether `VideoFrame` reads have failed, so the warning shows once. */
-let warnedVideoFrameFailed = false;
+/**
+ * Thrown when this browser can't hand back a tile's exact pixels: it alters
+ * canvas reads to resist fingerprinting, and has no working `VideoFrame`.
+ * Firefox with `privacy.resistFingerprinting` randomizes canvas reads and
+ * switches WebCodecs off. Decoding from altered bytes would draw wrong
+ * elevations, so the tile fails instead.
+ */
+export class ExactPixelsUnavailableError extends Error {
+  /** Why `VideoFrame` failed, when it was tried. */
+  readonly cause: unknown;
+
+  constructor(options?: { cause?: unknown }) {
+    super(
+      "This browser alters canvas reads to resist fingerprinting and can't read pixels through VideoFrame, so terrain tiles can't be decoded exactly",
+    );
+    this.name = "ExactPixelsUnavailableError";
+    this.cause = options?.cause;
+  }
+}
+
+/** How a tile's pixels can be read exactly, if at all. */
+export type PixelReader = "canvas" | "video-frame" | "none";
+
+/**
+ * Pick how to read pixels, as MapLibre does for DEM tiles: through a canvas,
+ * unless the browser alters canvas reads; then through `VideoFrame`. Unlike
+ * MapLibre, never fall back to an altered canvas.
+ */
+export function choosePixelReader(options: {
+  canvasDistorted: boolean;
+  hasVideoFrame: boolean;
+}): PixelReader {
+  if (!options.canvasDistorted) {
+    return "canvas";
+  }
+  return options.hasVideoFrame ? "video-frame" : "none";
+}
 
 /**
  * Whether this browser adds noise to canvas reads, as some do to resist
@@ -97,25 +132,27 @@ function readWithCanvas(bitmap: ImageBitmap): Uint8ClampedArray {
 }
 
 /**
- * Read a bitmap's exact RGBA bytes, the way MapLibre reads DEM tiles: through
- * a canvas, unless the browser distorts canvas reads; then through
- * `VideoFrame.copyTo`, falling back to the canvas if that fails.
+ * Read a bitmap's exact RGBA bytes; see {@link choosePixelReader}.
+ *
+ * @throws {@link ExactPixelsUnavailableError} if this browser alters canvas
+ *   reads and `VideoFrame` is missing or fails.
  */
 async function readPixels(bitmap: ImageBitmap): Promise<Uint8ClampedArray> {
-  if (isCanvasDistorted() && typeof VideoFrame !== "undefined") {
-    try {
-      return await readWithVideoFrame(bitmap);
-    } catch (error) {
-      if (!warnedVideoFrameFailed) {
-        warnedVideoFrameFailed = true;
-        console.warn(
-          "This browser alters canvas reads, and VideoFrame failed too, so elevations may be off.",
-          error,
-        );
-      }
-    }
+  const reader = choosePixelReader({
+    canvasDistorted: isCanvasDistorted(),
+    hasVideoFrame: typeof VideoFrame !== "undefined",
+  });
+  if (reader === "canvas") {
+    return readWithCanvas(bitmap);
   }
-  return readWithCanvas(bitmap);
+  if (reader === "none") {
+    throw new ExactPixelsUnavailableError();
+  }
+  try {
+    return await readWithVideoFrame(bitmap);
+  } catch (error) {
+    throw new ExactPixelsUnavailableError({ cause: error });
+  }
 }
 
 /**

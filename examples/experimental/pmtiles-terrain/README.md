@@ -88,6 +88,11 @@ elevation), and aborts a load once every tile waiting on it has aborted.
 Neighbors are also neighbors in the file, so they mostly arrive in the same
 merged requests.
 
+deck.gl stops aborting a tile once it has drawn, so a drawn tile keeps
+waiting for its late neighbors until deck.gl unloads it, when the app calls
+the tile's `releaseHalo`. Cancelling them as soon as the tile leaves the view
+would need a hook in `RasterTileLayer`.
+
 ### Ground distance in Web Mercator
 
 Slope is rise over ground distance, and a Web Mercator pixel covers
@@ -104,6 +109,11 @@ reads DEM tiles ([`decode-tile.ts`](src/terrain/decode-tile.ts)): through a
 canvas, or through `VideoFrame` when the browser adds noise to canvas reads
 to resist fingerprinting. Reading back and converting a tile takes about
 1-2 ms on the main thread.
+
+A browser that alters canvas reads and has no `VideoFrame` can't decode tiles
+exactly, so the tiles fail and the panel says why rather than draw wrong
+elevations. Firefox with `privacy.resistFingerprinting` is one: it randomizes
+canvas reads and switches WebCodecs off.
 
 ## Measured
 
