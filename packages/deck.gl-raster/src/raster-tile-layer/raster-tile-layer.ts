@@ -504,7 +504,8 @@ export class RasterTileLayer<
    *
    * A change to `updateTriggers.getTileData` or `updateTriggers.all` calls
    * this. Subclasses call it when something their `getTileData` reads
-   * changes, as `ZarrLayer` does for `selection`.
+   * changes, as `ZarrLayer` does for `selection`. A subclass that renders its
+   * own TileLayer puts `state.refetchCount` in that TileLayer's id.
    *
    * deck.gl's own reload, `Tileset2D.reloadAll`, would keep drawing old tiles.
    * It also drops or replaces their data without `onTileUnload`, so their
