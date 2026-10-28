@@ -94,8 +94,10 @@ export type ZarrLayerProps<
    * draws nothing until the selection is fixed. Changing the selection never
    * opens the source again.
    *
-   * Tiles already loaded keep the data of the selection they were fetched
-   * with. To fetch them again for a new selection, give the layer a new `id`.
+   * Changing the selection fetches the visible tiles again. The tiles of the
+   * old selection go at once, so their data is never drawn for the new one.
+   * Selections are compared by value, so an inline literal with the same
+   * contents fetches nothing.
    */
   selection: Record<string, SliceInput>;
 
@@ -185,6 +187,8 @@ export class ZarrLayer<
       );
     }
     this.setState({ checked: { source, selection, fits } });
+    // Tiles fetched for the old pair hold the wrong data
+    this._refetchTiles();
   }
 
   /**
