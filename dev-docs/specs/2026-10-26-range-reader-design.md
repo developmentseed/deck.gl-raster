@@ -5,9 +5,7 @@
 - **Status:** Draft for review; three PRs, then a release; Zarr follows in a later release
 
 Code links are pinned to main at
-[`48141bb7`](https://github.com/developmentseed/deck.gl-raster/commit/48141bb7b8ced5f871eae1ddf58fa1170068a776)
-and to kylebarron/usgs-topo at
-[`f706675b`](https://github.com/kylebarron/usgs-topo/commit/f706675b426ec01a7620dcad96a12a028bafc0c1).
+[`48141bb7`](https://github.com/developmentseed/deck.gl-raster/commit/48141bb7b8ced5f871eae1ddf58fa1170068a776).
 
 ## Problem
 
@@ -26,10 +24,8 @@ cannot do this, since its client only knows tile addresses. Range coalescing
 is the one place where client-side reading is strictly better informed than a
 server-side tiler, and we are not using it.
 
-The usgs-topo prototype ([PR #23](https://github.com/kylebarron/usgs-topo/pull/23),
-[`batching-source.ts`](https://github.com/kylebarron/usgs-topo/blob/f706675b426ec01a7620dcad96a12a028bafc0c1/src/map/batching-source.ts),
-[`merge-reads.ts`](https://github.com/kylebarron/usgs-topo/blob/f706675b426ec01a7620dcad96a12a028bafc0c1/src/map/merge-reads.ts))
-proved that merging the reads of one task into few range requests cuts the
+An earlier prototype of this batching, in a private app that draws thousands
+of USGS topo sheets, proved that merging the reads of one task into few range requests cuts the
 same views to 30 requests and 0.79 s, and 53 requests and 1.38 s, with
 pixel-identical output. It held back in two places: it capped merged requests
 at 512 KiB, because a merged request runs to the end while any tile in it is
@@ -327,7 +323,7 @@ file always carry the same one.
 
 A `read` call first checks the cache, then the in-flight streams, then
 queues. Queued reads are flushed once per task (`setTimeout(flush, 0)`, as the
-usgs-topo prototype does). A task, not a microtask, because a tile's data read
+prototype did). A task, not a microtask, because a tile's data read
 is issued only after its offset lookup resolves, which may itself be a header
 read; the task window still catches every data read that follows one cached
 offset block.
@@ -625,7 +621,7 @@ Each scenario runs before and after, three repeats, same network.
 |---|---|---|
 | `cog-basic` | COGLayer | 512 px tiles, the common case |
 | `usgs-topo` (in-repo) | COGLayer | one 128 px sheet; header and tile runs |
-| kylebarron/usgs-topo app, linked to the local build | MosaicLayer | thousands of 128 px sheets; the 226-request baseline |
+| the private topo-sheet app, linked to the local build | MosaicLayer | thousands of 128 px sheets; the 226-request baseline |
 | `naip-mosaic` | MosaicLayer | many files per view, shared cache |
 | `sentinel-2` | MultiCOGLayer | secondaries through `getMultipleBytes` |
 | `vermont-cog-comparison` | COGLayer | multi-hundred-GB files; header budget |
