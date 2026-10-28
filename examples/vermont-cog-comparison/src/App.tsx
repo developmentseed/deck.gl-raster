@@ -11,6 +11,7 @@ import {
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import { GeoTIFF } from "@developmentseed/geotiff";
+import { RangeReader } from "@developmentseed/range-reader";
 import type { Device, Texture } from "@luma.gl/core";
 import {
   ControlPanel,
@@ -46,6 +47,15 @@ type Side = "left" | "right";
 
 /** Render mode union; valid choices per side depend on the source band count. */
 type RenderMode = "trueColor" | "falseColor" | "ndvi" | "grayscale";
+
+/**
+ * One reader for every Vermont file: the multi-hundred-GB files have offset
+ * tables far larger than the default 32 MiB metadata budget, so give the
+ * shared cache a larger one.
+ */
+const reader = new RangeReader({
+  cache: { metadataBytes: 64 * 1024 * 1024 },
+});
 
 /** Fixed colormap for NDVI; spec says no per-side colormap selector. */
 const NDVI_COLORMAP_INDEX = COLORMAP_INDEX.cfastie;
@@ -341,11 +351,9 @@ export default function App() {
       inFlightRef.current.add(url);
       void (async () => {
         try {
-          // A larger header cache than `COGSource.open` gives a URL, so open
-          // the GeoTIFF first
-          const geotiff = await GeoTIFF.fromUrl(url, {
-            cacheSize: 64 * 1024 * 1024,
-          });
+          // A larger header budget than the default reader gives a URL, so
+          // open the GeoTIFF through the example's own reader first
+          const geotiff = await GeoTIFF.fromUrl(url, { reader });
           const source = await COGSource.open(geotiff, { epsgResolver });
           setSources((prev) => new Map(prev).set(url, source));
         } catch (err) {

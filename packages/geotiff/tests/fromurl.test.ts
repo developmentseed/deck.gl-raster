@@ -2,106 +2,73 @@
  * Regression test for https://github.com/developmentseed/deck.gl-raster/issues/524
  *
  * In a browser, S3 (and many other hosts) don't list `Content-Range` in
- * `Access-Control-Expose-Headers`, so `@chunkd/source-http` can only read the
- * `Content-Length` of a range response — the length of a single *chunk*, not
- * the file. That value used to be recorded as `source.metadata.size`, after
- * which `@chunkd/middleware`'s chunk layer rejected any later read past it with
- * "SourceError: Request outside of bounds". `GeoTIFF.fromUrl` must guard
- * against that.
+ * `Access-Control-Expose-Headers`, so a range response reveals only the
+ * `Content-Length` of the range, not the file size. That value once got
+ * recorded as the source's size, after which every later read past it was
+ * rejected as out of bounds. `GeoTIFF.fromUrl` must never let a range
+ * response set a size.
  */
 
 import { readFileSync } from "node:fs";
-import { SourceHttp } from "@chunkd/source-http";
-import { afterEach, describe, expect, it } from "vitest";
+import { RangeReader } from "@developmentseed/range-reader";
+import { describe, expect, it } from "vitest";
 import { GeoTIFF } from "../src/geotiff.js";
 import { fixturePath } from "./helpers.js";
+import { fixtureServer } from "./utils/fixture-server.js";
 
-const FIXTURE = readFileSync(
-  fixturePath("uint8_rgb_deflate_block64_cog", "rasterio"),
+const FIXTURE = new Uint8Array(
+  readFileSync(fixturePath("uint8_rgb_deflate_block64_cog", "rasterio")),
 );
 
-/** Minimal `Response`-like object for the {@link SourceHttp.fetch} stub. */
-function makeResponse(
-  status: number,
-  headers: Record<string, string>,
-  body: Uint8Array,
-): {
-  ok: boolean;
-  status: number;
-  statusText: string;
-  headers: { get(key: string): string | null };
-  body: null;
-  arrayBuffer(): Promise<ArrayBuffer>;
-} {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: "",
-    headers: { get: (key) => headers[key.toLowerCase()] ?? null },
-    body: null,
-    arrayBuffer: async () =>
-      body.buffer.slice(
-        body.byteOffset,
-        body.byteOffset + body.byteLength,
-      ) as ArrayBuffer,
-  };
-}
-
-/**
- * A stand-in for {@link SourceHttp.fetch} that mimics S3 as seen from a
- * browser: range GETs answer with `Content-Length` (the bytes actually
- * returned) but never expose `Content-Range`; HEAD answers with the full file
- * size.
- */
-function browserLikeS3Fetch(file: Uint8Array) {
-  return async (
-    _url: string | URL,
-    init?: { method?: string; headers?: Record<string, string> },
-  ) => {
-    const method = (init?.method ?? "GET").toUpperCase();
-    if (method === "HEAD") {
-      return makeResponse(
-        200,
-        { "content-length": String(file.byteLength) },
-        new Uint8Array(),
-      );
-    }
-    const range = init?.headers?.range ?? "";
-    const match = /^bytes=(\d+)-(\d+)?$/.exec(range);
-    const start = match ? Number(match[1]) : 0;
-    const end =
-      match?.[2] != null
-        ? Math.min(Number(match[2]), file.byteLength - 1)
-        : file.byteLength - 1;
-    const body = file.subarray(start, end + 1);
-    // Deliberately no `content-range` header — that is what triggers the bug.
-    return makeResponse(
-      206,
-      { "content-length": String(body.byteLength) },
-      body,
-    );
-  };
-}
-
 describe("GeoTIFF.fromUrl", () => {
-  const realFetch = SourceHttp.fetch;
-  afterEach(() => {
-    SourceHttp.fetch = realFetch;
-  });
-
-  it("reads ranges past the first chunk when the server hides Content-Range (issue #524)", async () => {
-    SourceHttp.fetch = browserLikeS3Fetch(FIXTURE) as typeof SourceHttp.fetch;
-
-    // A small chunk size makes the file span many chunks; without the fix the
-    // first chunk's `Content-Length` gets mistaken for the file size.
+  it("reads ranges past the first block when the server hides Content-Range (issue #524)", async () => {
+    const server = fixtureServer(FIXTURE);
+    // A small block makes the file span many blocks; without the guard the
+    // first block's `Content-Length` would be mistaken for the file size.
+    const reader = new RangeReader({
+      fetch: server.fetch,
+      minMetadataReadBytes: 1024,
+    });
     const tiff = await GeoTIFF.fromUrl("https://example.test/cog.tif", {
-      chunkSize: 1024,
+      reader,
     });
 
-    // A header-source read near the end of the file must not be rejected by
-    // the chunk middleware (this is the read that `TiffImage.getTileSize`
-    // performs for GDAL "tile leader" bytes).
+    // A header-source read near the end of the file must not be rejected.
     const tail = await tiff.tiff.source.fetch(FIXTURE.byteLength - 16, 16);
     expect(tail.byteLength).toBe(16);
+    expect(new Uint8Array(tail)).toEqual(FIXTURE.subarray(-16));
+  });
+
+  it("sends requestInit headers on every request", async () => {
+    const server = fixtureServer(FIXTURE);
+    // Small header blocks, so the open takes several requests and the tile
+    // read is not a cache hit from the first block.
+    const reader = new RangeReader({
+      fetch: server.fetch,
+      minMetadataReadBytes: 1024,
+    });
+    const tiff = await GeoTIFF.fromUrl("https://example.test/cog.tif", {
+      reader,
+      requestInit: { headers: { authorization: "Bearer t" } },
+    });
+    await tiff.fetchTile(0, 0);
+
+    expect(server.requests.length).toBeGreaterThan(1);
+    for (const headers of server.headers) {
+      expect(headers.get("authorization")).toBe("Bearer t");
+    }
+  });
+
+  it("opens without a reader of its own being supplied", async () => {
+    const server = fixtureServer(FIXTURE);
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = server.fetch;
+    try {
+      const tiff = await GeoTIFF.fromUrl("https://example.test/cog.tif");
+      expect(tiff.tiff.images.length).toBeGreaterThan(0);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    expect(server.requests.length).toBeGreaterThan(0);
   });
 });

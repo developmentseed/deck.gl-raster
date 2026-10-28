@@ -39,6 +39,7 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
+    "@chunkd/middleware": "^11.3.1",
     "@chunkd/source-file": "^11.2.1",
     "@developmentseed/geotiff": "workspace:^",
     "@types/node": "^26.6.3",
@@ -50,9 +51,7 @@
     "extends": "../../package.json"
   },
   "dependencies": {
-    "@chunkd/middleware": "^11.3.1",
     "@chunkd/source": "^11.4.1",
-    "@chunkd/source-http": "^11.4.1",
     "@chunkd/source-memory": "^11.2.1",
     "@cogeotiff/core": "^9.5.0",
     "@developmentseed/affine": "workspace:^",

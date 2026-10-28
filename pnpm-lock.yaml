@@ -1228,6 +1228,9 @@ importers:
       '@developmentseed/geotiff':
         specifier: workspace:^
         version: link:../../packages/geotiff
+      '@developmentseed/range-reader':
+        specifier: workspace:^
+        version: link:../../packages/range-reader
       '@luma.gl/core':
         specifier: ^9.4.2
         version: 9.4.2
@@ -1536,13 +1539,7 @@ importers:
 
   packages/geotiff:
     dependencies:
-      '@chunkd/middleware':
-        specifier: ^11.3.1
-        version: 11.3.1
       '@chunkd/source':
-        specifier: ^11.4.1
-        version: 11.4.1
-      '@chunkd/source-http':
         specifier: ^11.4.1
         version: 11.4.1
       '@chunkd/source-memory':
@@ -1576,6 +1573,9 @@ importers:
         specifier: ^14.0.2
         version: 14.0.2
     devDependencies:
+      '@chunkd/middleware':
+        specifier: ^11.3.1
+        version: 11.3.1
       '@chunkd/source-file':
         specifier: ^11.2.1
         version: 11.2.1
@@ -2454,10 +2454,6 @@ packages:
   '@chunkd/source-file@11.2.1':
     resolution: {integrity: sha512-+WV6kCcd4ehe0/9nd7VCUBFOJPtP+X0OHohlZlr1RsM8LnMBd0+Jo/CUwrlStmGAUgU4T3qSdbUE/cwCODXZNQ==}
     engines: {node: '>=16.0.0'}
-
-  '@chunkd/source-http@11.4.1':
-    resolution: {integrity: sha512-h/7tWxFh6EUh5k/pcYh66WSwiVbIWM6mCCLH0TZpBSWzgekjOXqXkEMRUBXrhekqrmtPQdTPro5e7tnknIdESg==}
-    engines: {node: '>=18.0.0'}
 
   '@chunkd/source-memory@11.2.1':
     resolution: {integrity: sha512-+WDp5x71OqfFm2AbX4ev9xn+HhP8SAfUAdTsDQtiO8sR65abZAkZ6GK0laOK5p24tA72dhCaUIVrFC8swVgFiQ==}
@@ -11200,10 +11196,6 @@ snapshots:
       '@chunkd/source': 11.4.1
 
   '@chunkd/source-file@11.2.1':
-    dependencies:
-      '@chunkd/source': 11.4.1
-
-  '@chunkd/source-http@11.4.1':
     dependencies:
       '@chunkd/source': 11.4.1
 
