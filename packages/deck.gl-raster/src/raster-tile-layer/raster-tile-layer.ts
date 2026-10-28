@@ -87,9 +87,7 @@ export type RasterTileLayerProps<
      * Keep the same object across renders: a new descriptor starts the layer's
      * tiles over.
      *
-     * Layers that take a `source` take the descriptor from it instead. Other
-     * subclasses may supply it via state by overriding the protected
-     * `_tilesetDescriptor()` method.
+     * Layers that take a `source` take the descriptor from it instead.
      */
     tilesetDescriptor?: RasterTilesetDescriptor;
 
