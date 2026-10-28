@@ -260,6 +260,9 @@ export type MultiCOGLayerProps = CompositeLayerProps &
 
 const defaultProps = {
   ...RasterTileLayer.defaultProps,
+  // See COGLayer: a whole selection goes to the range reader in one task.
+  maxRequests: 256,
+  debounceTime: 50,
   debugLevel: { type: "number" as const, value: 1 },
 };
 
@@ -290,6 +293,11 @@ export class MultiCOGLayer extends RasterTileLayer<
   // check while keeping subclass-specific defaults.
   static override defaultProps =
     defaultProps as unknown as typeof RasterTileLayer.defaultProps;
+
+  /** On: a tile that leaves the view must stop its stream. */
+  protected override _abortUnwantedLoads(): boolean {
+    return true;
+  }
 
   override shouldLoadMetadata(params: UpdateParameters<this>): boolean {
     // An empty record names no files, so the layer draws nothing

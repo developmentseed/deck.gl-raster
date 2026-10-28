@@ -13,7 +13,9 @@ import {
   epsgResolver as defaultEpsgResolver,
   projectionFunctions,
 } from "@developmentseed/proj";
+import type { RangeReader } from "@developmentseed/range-reader";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
+import { DEFAULT_RANGE_READER } from "./default-range-reader.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 import { resolveProjection } from "./projection.js";
@@ -62,6 +64,19 @@ export type COGSourceOptions = {
    * Only used with a `concurrencyLimiter`.
    */
   getPriority?: () => Priority;
+
+  /**
+   * The {@link RangeReader} this COG reads through; defaults to the shared
+   * {@link DEFAULT_RANGE_READER}. Ignored for an opened `GeoTIFF` or an
+   * `ArrayBuffer`.
+   */
+  reader?: RangeReader;
+
+  /**
+   * Headers, credentials and mode sent with every request for this COG.
+   * Ignored for an opened `GeoTIFF` or an `ArrayBuffer`.
+   */
+  requestInit?: RequestInit;
 };
 
 /**
@@ -103,12 +118,16 @@ export class COGSource extends RasterSource {
       epsgResolver = defaultEpsgResolver,
       concurrencyLimiter = DEFAULT_CONCURRENCY_LIMITER,
       getPriority,
+      reader = DEFAULT_RANGE_READER,
+      requestInit,
     } = options;
     signal?.throwIfAborted();
 
     const geotiff = await fetchGeoTIFF(input, {
       concurrencyLimiter,
       getPriority,
+      reader,
+      requestInit,
       signal,
     });
     const projection = await resolveProjection(geotiff.crs, epsgResolver);

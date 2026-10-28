@@ -10,6 +10,7 @@ import type {
 import { GeoTIFF } from "@developmentseed/geotiff";
 import type { ProjectionFunction } from "@developmentseed/proj";
 import { geographicBounds } from "@developmentseed/proj";
+import type { RangeReader } from "@developmentseed/range-reader";
 
 /**
  * Add an alpha channel to an RGB image array.
@@ -87,6 +88,8 @@ export async function fetchGeoTIFF(
   options: {
     concurrencyLimiter?: ConcurrencyLimiter | null;
     getPriority?: () => Priority;
+    reader?: RangeReader;
+    requestInit?: RequestInit;
     signal?: AbortSignal;
   } = {},
 ): Promise<GeoTIFF> {

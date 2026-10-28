@@ -50,3 +50,52 @@ export default defineConfig({
 `vite dev` works without this setting, because it doesn't bundle workers.
 
 [vite-worker-format]: https://vite.dev/config/worker-options#worker-format
+
+## Requests, caching and authentication
+
+The COG layers read through one shared
+[`RangeReader`](../range-reader/README.md): the reads a selection of tiles
+needs are issued together and merged into few streamed HTTP range requests,
+each tile resolves as its bytes arrive, a request is cancelled as soon as
+its tiles leave the view, and everything received is cached, so a pan back
+over tiles already downloaded costs no request. Every `COGLayer`,
+`MultiCOGLayer` and `MosaicLayer` on a page shares that reader's cache and
+batching window by default.
+
+- **Tuning.** Open the source yourself with a reader of your own to change
+  its gap and over-fetch limits or its cache budgets, or to isolate a layer
+  (`MosaicLayer` takes `reader` as a prop and passes it to `getSource`):
+
+  ```ts
+  import { RangeReader } from "@developmentseed/range-reader";
+
+  const reader = new RangeReader({
+    maxOverfetchBytes: 4 * 1024 * 1024,
+    cache: { metadataBytes: 64 * 1024 * 1024, dataBytes: 256 * 1024 * 1024 },
+  });
+  const source = await COGSource.open(url, { reader });
+  new COGLayer({ id: "scene", source });
+  ```
+
+  `reader.stats` counts requests, bytes requested and received, bytes
+  over-fetched and cache hits.
+- **Authentication.** `requestInit` on `COGSource.open` and
+  `MultiCOGSource.open` (and the `MosaicLayer` prop of the same name) sets
+  the headers, credentials and mode of every request the source makes.
+  Sources read with different inits never share a request or a cached byte,
+  even for one URL.
+
+  ```ts
+  const source = await COGSource.open(url, {
+    requestInit: { headers: { authorization: `Bearer ${token}` } },
+  });
+  new COGLayer({ id: "private", source });
+  ```
+- **Throttling.** `COGLayer` and `MultiCOGLayer` default to
+  `maxRequests: 256` and `debounceTime: 50` so a whole selection reaches
+  the reader in one task and a pan settles before anything is requested;
+  the per-origin `concurrencyLimiter` (six at a time by default, matching
+  the browser's HTTP/1.1 limit) caps the merged requests instead. A tile
+  whose load is no longer wanted is aborted as soon as it leaves the view.
+  `MosaicLayer`'s own `maxRequests` still caps how many sources open at
+  once.
