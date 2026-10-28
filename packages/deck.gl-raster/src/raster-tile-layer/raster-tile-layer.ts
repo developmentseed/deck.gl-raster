@@ -108,7 +108,10 @@ export type RasterTileLayerProps<
      * To fetch the tiles again when something this function reads changes,
      * change `updateTriggers.getTileData` (or `updateTriggers.all`). The layer
      * drops every tile at once, so the old data is never drawn after the
-     * change, and fetches the visible tiles again.
+     * change, and fetches the visible tiles again. deck.gl compares each
+     * element of a trigger with `===`, so keep them the same across renders:
+     * a new object in one, such as `[{ time }]`, fetches every tile again on
+     * every render.
      *
      * Subclasses may supply this via state by overriding
      * `_getTileDataCallback()`.

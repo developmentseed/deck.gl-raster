@@ -108,6 +108,13 @@ export type ZarrLayerProps<
    * along with a pre-built `sliceSpec` (one entry per array dim). Call
    * `zarr.get(arr, sliceSpec)` and convert the result to whatever format your
    * `renderTile` callback expects.
+   *
+   * A new `selection` fetches the tiles again on its own. For anything else
+   * this function reads, change `updateTriggers.getTileData` (or
+   * `updateTriggers.all`): the layer drops every tile at once and fetches the
+   * visible ones again. deck.gl compares each element of a trigger with
+   * `===`, so keep them the same across renders, or every render fetches
+   * every tile again.
    */
   getTileData: (
     arr: zarr.Array<Dtype, Store>,
