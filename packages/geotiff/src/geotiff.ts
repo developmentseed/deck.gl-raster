@@ -534,7 +534,7 @@ export class GeoTIFF {
    * @param y The tile row index (0-based).
    * @param options Optional parameters for fetching the tile.
    * @param options.boundless Whether to clip tiles that are partially outside the image bounds. When `true`, no clipping is applied and edge tiles are returned at the full nominal tile size. Defaults to `true`.
-   * @param options.pool An optional {@link DecoderPool} for decoding the tile data. If not provided, a new decoder will be created for each tile.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tile data off the main thread, such as the one {@link defaultDecoderPool} returns. If not provided, the tile is decoded on the main thread.
    * @param options.signal An optional {@link AbortSignal} to cancel the fetch request.
    */
   async fetchTile(
