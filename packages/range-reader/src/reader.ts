@@ -25,14 +25,9 @@ import type {
 export const DEFAULT_MAX_OVERFETCH_BYTES = 1024 * 1024;
 
 /**
- * Default for {@link RangeReaderOptions.maxRequestBytes}: 1 MiB. Measured
- * (2026-10-28, PR #815): merging pays when tiles are small against the
- * link's latency, and a cap near 1 MiB is where it stops paying. Small
- * tiles (a 128 px topo sheet, 99 reads) still merge to 9 requests and load
- * 2-4x faster; 460 KB NAIP tiles merge in pairs, at parity or better; 2.4 MB
- * tiles go alone, at parity. Caps of 2-4 MiB cost NAIP 20-30% on a home
- * link, and 8 MiB and more merged big-tile views into two or three streams
- * that ran at 0.5-0.8x of unmerged requests on a fast link.
+ * Default for {@link RangeReaderOptions.maxRequestBytes}: 1 MiB.
+ *
+ * Merging is beneficial when tiles are small against the link's latency. See #815 for more information.
  */
 export const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024;
 

@@ -35,8 +35,7 @@ export interface MergedRange extends ByteRange {
  * starts at or past the end, adjacent reads included (the tiles of a COG
  * row are contiguous), joins only if the gap is at most `maxGap`, the merged
  * range stays within `maxRequestBytes`, and the range's over-fetch stays
- * within `maxOverfetchBytes`. Ported from kylebarron/usgs-topo
- * `src/map/merge-reads.ts` with the two caps added.
+ * within `maxOverfetchBytes`.
  */
 export function mergeReads(
   reads: readonly ByteRange[],
