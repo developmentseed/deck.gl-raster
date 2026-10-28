@@ -5,8 +5,8 @@ import type { Texture } from "@luma.gl/core";
 export type TerrainTileData = NonNullable<MinimalTileData> & {
   /**
    * `r32float` elevation texture of size `(width + 2) x (height + 2)`: the
-   * tile ringed by one texel of its neighbors. The ring may start out
-   * replicated from the tile's own edge and be rewritten once they arrive.
+   * tile ringed by one texel of its neighbors. A side whose neighbor hasn't
+   * loaded replicates the tile's own edge, and is rewritten when it loads.
    */
   texture: Texture;
   /**
@@ -23,9 +23,8 @@ export type TerrainTileData = NonNullable<MinimalTileData> & {
   /** Web Mercator y of the tile's north and south edges, in meters. */
   mercatorYRange: [north: number, south: number];
   /**
-   * Stop waiting for the neighbors this tile's halo still needs. Call it when
-   * the tile is unloaded: deck.gl no longer aborts a tile once it has drawn,
-   * so this is the only way its halo reads get cancelled.
+   * Stop rewriting this tile's halo as its neighbors load. Call it when the
+   * tile is unloaded, so the shared borders let go of its texture.
    */
-  releaseHalo: () => void;
+  release: () => void;
 };

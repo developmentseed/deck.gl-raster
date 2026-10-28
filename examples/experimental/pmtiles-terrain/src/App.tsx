@@ -25,7 +25,6 @@ import { CountingFetchSource } from "./pmtiles/counting-fetch-source.js";
 import { PMTilesSource } from "./pmtiles/pmtiles-source.js";
 import { RangeReaderSource } from "./pmtiles/range-reader-source.js";
 import { PMTilesTerrainLayer } from "./pmtiles-terrain-layer.js";
-import { BorderCache } from "./terrain/border-cache.js";
 import { ExactPixelsUnavailableError } from "./terrain/decode-tile.js";
 import {
   loadTerrariumElevation,
@@ -33,6 +32,7 @@ import {
 } from "./terrain/get-tile-data.js";
 import type { RenderMode } from "./terrain/render-tile.js";
 import { makeRenderTile, RENDER_MODES } from "./terrain/render-tile.js";
+import { TileBorders } from "./terrain/tile-borders.js";
 import type { TerrainTileData } from "./terrain/types.js";
 import { StatsReadout } from "./ui/stats-readout.js";
 import { ValueSlider } from "./ui/value-slider.js";
@@ -43,8 +43,8 @@ const ARCHIVE_URL = "https://download.mapterhorn.com/planet.pmtiles";
 /** Mapterhorn's tile size; the PMTiles header doesn't record it. */
 const TILE_SIZE = 512;
 
-/** Settled tile borders to keep, at 8 KiB each. */
-const BORDER_CACHE_CAPACITY = 2048;
+/** Loaded tiles' borders to remember, at 8 KiB each. */
+const BORDER_CAPACITY = 2048;
 
 /**
  * One limiter for the page: it caps concurrent requests per origin. Each
@@ -114,33 +114,26 @@ export default function App() {
     };
   }, [merge]);
 
-  // One border cache per archive. Neighbors fetched for one tile's halo are
-  // mostly the tiles drawn next to it, so they share one load per tile.
-  const cache = useMemo(
-    () =>
-      source
-        ? new BorderCache({
-            load: (tile, signal) =>
-              loadTerrariumElevation({ source, tile, signal }),
-            tileSize: TILE_SIZE,
-            capacity: BORDER_CACHE_CAPACITY,
-          })
-        : null,
-    [source],
-  );
-
-  // A tile's halo ring is rewritten in place when late neighbors arrive.
+  // A drawn tile's halo ring is rewritten in place when a neighbor loads.
   // No prop changes, so ask the map, which draws deck.gl, to repaint.
   const onTileRefined = useCallback(() => {
     mapRef.current?.triggerRepaint();
   }, []);
 
+  // Each tile fetches only itself. Its halo is filled from the borders of
+  // neighbors that loaded too, remembered per archive.
   const getTileData = useMemo(
     () =>
-      cache
-        ? makeGetTileData({ cache, tileSize: TILE_SIZE, onTileRefined })
+      source
+        ? makeGetTileData({
+            load: (tile, signal) =>
+              loadTerrariumElevation({ source, tile, signal }),
+            borders: new TileBorders({ capacity: BORDER_CAPACITY }),
+            tileSize: TILE_SIZE,
+            onTileRefined,
+          })
         : null,
-    [cache, onTileRefined],
+    [source, onTileRefined],
   );
 
   // Tiles drawn since the archive opened, counted in a ref that the readout
@@ -169,7 +162,7 @@ export default function App() {
   }, []);
   const onTileUnload = useCallback(
     (tile: { content: TerrainTileData | null }) => {
-      tile.content?.releaseHalo();
+      tile.content?.release();
       tile.content?.texture.destroy();
     },
     [],
@@ -240,7 +233,7 @@ export default function App() {
           // The range reader merges a view's reads into a few requests, so
           // deck.gl's six-tiles-at-a-time limit only gets in the way. Without
           // merging, keep deck.gl's defaults; every read is then its own
-          // request (halo reads aren't throttled by deck.gl either way).
+          // request.
           maxRequests: merge ? 256 : 6,
           debounceTime: merge ? 50 : 0,
           onTileLoad,
@@ -426,7 +419,6 @@ export default function App() {
 
           <StatsReadout
             source={source}
-            cache={cache}
             tilesDrawn={tilesDrawn}
             merge={merge}
             onMergeChange={setMerge}

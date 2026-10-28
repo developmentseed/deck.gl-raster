@@ -75,23 +75,19 @@ URL or a `Blob`, so its reads couldn't merge, and it can't cancel a tile.
 Horn's method needs each pixel's 3 x 3 neighborhood, so at a tile's edge it
 needs the neighboring tiles. Each tile uploads a 514 x 514 `r32float` texture
 whose outer ring comes from its eight neighbors
-([`halo.ts`](src/terrain/halo.ts)), in two phases
-([`get-tile-data.ts`](src/terrain/get-tile-data.ts)): the tile draws as soon
-as it decodes, using the neighbors already there, and only the ring is
-rewritten when the rest arrive. Columns wrap across the antimeridian.
+([`halo.ts`](src/terrain/halo.ts)). Columns wrap across the antimeridian.
 
-The neighbors are mostly tiles the layer draws anyway, so a tile and its
-neighbors share one load per tile through a
-[`BorderCache`](src/terrain/border-cache.ts). It keeps only each tile's
+Nothing is fetched just for a halo
+([`get-tile-data.ts`](src/terrain/get-tile-data.ts)). A tile loads only
+itself and draws as soon as it decodes, its ring filled from the neighbors
+that have loaded. A side whose neighbor hasn't loaded repeats the tile's own
+edge, but that neighbor isn't in view, so neither is the side. When the
+neighbor loads, the tile rewrites only its ring and the map redraws.
+
+[`TileBorders`](src/terrain/tile-borders.ts) remembers each loaded tile's
 border, its outermost rows and columns (8 KiB, not the 1 MiB of decoded
-elevation), and aborts a load once every tile waiting on it has aborted.
-Neighbors are also neighbors in the file, so they mostly arrive in the same
-merged requests.
-
-deck.gl stops aborting a tile once it has drawn, so a drawn tile keeps
-waiting for its late neighbors until deck.gl unloads it, when the app calls
-the tile's `releaseHalo`. Cancelling them as soon as the tile leaves the view
-would need a hook in `RasterTileLayer`.
+elevation), so a tile still finds a neighbor's border after deck.gl has
+unloaded that neighbor.
 
 ### Ground distance in Web Mercator
 
@@ -117,19 +113,20 @@ canvas reads and switches WebCodecs off.
 
 ## Measured
 
-The opening view at the Matterhorn: 12 tiles drawn and about 30 decoded (the
-rest are halo neighbors), each mode measured cold, in headed Chrome.
+The opening view at the Matterhorn, 12 tiles, each mode measured cold, in
+headed Chrome.
 
 | Connection | Mode | HTTP requests | Data | All tiles drawn |
 | --- | --- | --- | --- | --- |
-| fast | per tile | 35 | 5.2 MB | 1.6-1.9 s |
-| fast | merged | 7 | 4.8 MB | 1.3-1.4 s |
-| 150 ms round trips, 20 Mbit/s | per tile | 33-35 | 4.9-5.2 MB | 2.8-3.3 s |
-| 150 ms round trips, 20 Mbit/s | merged | 7 | 4.8 MB | 2.9 s |
+| fast | per tile | 14 | 1.9 MB | 1.9 s |
+| fast | merged | 7 | 2.0 MB | 1.2-1.6 s |
+| 150 ms round trips, 20 Mbit/s | per tile | 14 | 1.9 MB | 2.1-2.3 s |
+| 150 ms round trips, 20 Mbit/s | merged | 7 | 2.0 MB | 1.8-1.9 s |
 
 Mapterhorn serves over HTTP/2, which multiplexes many requests cheaply, so
-merging mostly saves requests here: five times fewer, for a view that
-finishes as soon or sooner, and more consistently.
+merging saves more requests than time here: half the requests, and the view
+drawn 0.2-0.7 s sooner. Times come from a readout that refreshes every
+250 ms.
 
 ## What's provisional
 

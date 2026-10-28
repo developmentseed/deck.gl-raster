@@ -1,6 +1,6 @@
 # PMTiles Terrain Example
 
-- **Date:** 2026-10-27 (revised the same day: a 2D hillshade, not 3D terrain)
+- **Date:** 2026-10-27 (revised the same day: a 2D hillshade, not 3D terrain; revised 2026-10-28: halos fill only from neighbors that load anyway)
 - **Issues:** builds on [#805](https://github.com/developmentseed/deck.gl-raster/pull/805) (merged); needs the range reader from [#806](https://github.com/developmentseed/deck.gl-raster/pull/806) (open); follows [#809](https://github.com/developmentseed/deck.gl-raster/pull/809)'s load settings for COG layers (open); ports the hillshade pipeline from [#647](https://github.com/developmentseed/deck.gl-raster/pull/647) (draft)
 - **Status:** Accepted (Kyle, 2026-10-27)
 
@@ -61,19 +61,21 @@ The runs are hundreds of KB to megabytes apart, so nothing merges across them
 and nothing is over-fetched. Each block needed one leaf directory of about
 10 KB. Tiles are 140-170 KB each.
 
-Hillshade makes this matter more. Each tile needs its eight neighbors (the
-halo, below), so a view also loads a ring of tiles just off screen. Those
-neighbors sit next to the view's tiles in the file, so most of them arrive in
-the same merged requests.
+Hillshade needs each tile's eight neighbors at its edges (the halo, below).
+The first design fetched them too, the ring of tiles just off screen. Measured
+in the app, that more than doubled the opening view's bytes (4.8 MB instead of
+2.0 MB) and made the tiles in view wait behind the ring in the merged
+requests. So a halo is now filled only from neighbors that load anyway because
+they're in view (Kyle, 2026-10-28).
 
 **Where the speed comes from.** deck.gl's `TileLayer` loads at most
 `maxRequests` tiles at a time, 6 by default. Raising that limit is only safe
 when the requests collapse into a few. #809 gives the COG layers
 `maxRequests: 256` and `debounceTime: 50`, and lets the range reader's
-per-origin limiter cap the real HTTP requests. With the same settings, the
-opening view's 42 tiles should arrive as about 7 streamed requests, all at
-once, instead of 42 requests in waves of six. Each tile still draws as soon as
-its own bytes arrive.
+per-origin limiter cap the real HTTP requests. With the same settings, a
+view's tiles should arrive as a few streamed requests, all at once, instead of
+one request per tile in waves of six. Each tile still draws as soon as its own
+bytes arrive.
 
 Mapterhorn serves over HTTP/2, where an extra request costs less than over
 HTTP/1.1. So most of the gain should come from the removed throttle and fewer
@@ -118,8 +120,7 @@ round trips. Stage 1 measures it rather than assuming it.
   tile compared with one request per tile.
 - Loads that keep running for tiles that left the view and slow down the tiles
   you're looking at.
-- Memory that balloons. A decoded tile is 1 MiB of float32, and a view plus
-  its ring is about 42 tiles.
+- Memory that balloons. A decoded tile is 1 MiB of float32.
 - Teaching a pattern that question 10 then contradicts without saying so. The
   README says what's provisional.
 
@@ -162,8 +163,8 @@ round trips. Stage 1 measures it rather than assuming it.
 | [`TerrainDerivative`](https://github.com/developmentseed/deck.gl-raster/blob/d64c1b75a770a02c932beb37d31b9d1007821029/examples/experimental/terrain-usgs/src/gpu-modules/terrain-derivative.ts) | Kept. Its fixed `cellSize` becomes a ground cell size that follows latitude |
 | `Hillshade`, `SlopeDegrees`, `ElevationScalar`, `MultiplyShade` | As they are |
 | [`makeRenderTile`](https://github.com/developmentseed/deck.gl-raster/blob/d64c1b75a770a02c932beb37d31b9d1007821029/examples/experimental/terrain-usgs/src/render-tile.ts) | As it is |
-| [`TileCache`](https://github.com/developmentseed/deck.gl-raster/blob/d64c1b75a770a02c932beb37d31b9d1007821029/examples/experimental/terrain-usgs/src/tile-cache.ts) | Keyed by z/x/y. Stores borders, and cancels a fetch once every tile waiting on it has aborted |
-| [`makeGetTileData`](https://github.com/developmentseed/deck.gl-raster/blob/d64c1b75a770a02c932beb37d31b9d1007821029/examples/experimental/terrain-usgs/src/get-tile-data.ts) | The same two phases. Neighbors by z/x/y, and the refine phase rewrites only the ring |
+| [`TileCache`](https://github.com/developmentseed/deck.gl-raster/blob/d64c1b75a770a02c932beb37d31b9d1007821029/examples/experimental/terrain-usgs/src/tile-cache.ts) | Replaced by `TileBorders`: the borders of tiles that have loaded, by z/x/y. Nothing is fetched for a halo |
+| [`makeGetTileData`](https://github.com/developmentseed/deck.gl-raster/blob/d64c1b75a770a02c932beb37d31b9d1007821029/examples/experimental/terrain-usgs/src/get-tile-data.ts) | Loads only its own tile. Its ring starts from the neighbors already loaded, and only the ring is rewritten when another loads |
 | `ValueSlider`, the controls, the MapLibre basemap | As they are, but the USGS cell picker becomes a place picker |
 | `usgs/cells.ts` and the COG reads | Replaced by PMTiles |
 
@@ -276,23 +277,21 @@ Steps 3 and 4 run on the main thread at first. Measure their time per tile. If
 it shows up in frame times, move them into a worker (`OffscreenCanvas` and
 `VideoFrame` both exist there).
 
-### The decoded-tile cache
+### Tile borders
 
-- One cache per archive, keyed by z/x/y.
-- **It keeps each tile's border, not the whole tile:** its top and bottom rows
-  and its left and right columns, 4 x 512 floats (8 KiB) instead of 1 MiB. A
-  neighbor's halo needs only that, so the cache can hold thousands of tiles.
-  A tile's full elevation is needed once, to upload its own texture, and is
-  not kept.
-- As in #647, entries hold the fetch's promise, so concurrent halos share one
-  fetch, and `peek` returns borders that have already arrived. A failed fetch
-  isn't cached.
-- **Cancellation.** Each entry counts the tile loads waiting on it, as
-  `pmtiles` does for directories. When the last one aborts, the entry aborts
-  its read and drops out. #647's cache threads no signal ("letting an unneeded
-  fetch complete is cheaper"), which leaves a whole ring of reads running after
-  every pan.
-- Least recently used entries are evicted by count.
+- One `TileBorders` per archive, keyed by z/x/y.
+- **It keeps each loaded tile's border, not the whole tile:** its top and
+  bottom rows and its left and right columns, 4 x 512 floats (8 KiB) instead
+  of 1 MiB. A neighbor's halo needs only that, so it can hold thousands of
+  borders. A tile's full elevation is needed once, to upload its own texture,
+  and is not kept.
+- Borders outlive their tiles, so a tile that loads later still finds its
+  neighbor's border after deck.gl has evicted the neighbor. Least recently
+  used borders are evicted by count.
+- Loaded tiles watch for their neighbors. When a tile adds its border, each
+  loaded neighbor rewrites its side of the ring.
+- It fetches nothing, so there's nothing to cancel: a tile's load is deck.gl's
+  own, and deck.gl aborts it.
 
 ### Building the halo
 
@@ -300,13 +299,18 @@ it shows up in frame times, move them into a worker (`OffscreenCanvas` and
   2^z: tiles across the antimeridian are real neighbors. A y outside
   `[0, 2^z)` has no neighbor, so the tile's own edge is replicated there, as
   in #647 and `gdaldem`.
-- Phase 1, as in #647: once the center tile decodes, build the 514 x 514 array
-  from it and whatever borders are cached, and upload it as `r32float` with
-  nearest sampling and edge clamping. The tile draws at once.
-- Phase 2: when the other neighbors settle, write only the ring, four strips
-  one texel wide, with luma.gl 9.4's `texture.writeData(data, { x, y, width,
-  height })`, then ask for a redraw. #647 rebuilds and rewrites the whole
-  texture.
+- A tile loads only itself. Once it decodes, it adds its border, then builds
+  the 514 x 514 array from itself and the borders of the neighbors already
+  loaded, and uploads it as `r32float` with nearest sampling and edge
+  clamping. The tile draws at once. A side whose neighbor hasn't loaded
+  replicates the tile's own edge; that neighbor isn't in view, so neither is
+  the side.
+- When a neighbor loads later, write only the ring, four strips one texel
+  wide, with luma.gl 9.4's `texture.writeData(data, { x, y, width, height })`,
+  then ask for a redraw. #647 fetches every neighbor, and rebuilds and
+  rewrites the whole texture when they arrive.
+- Where tiles of two zoom levels meet, the finer tile's neighbor at its own
+  zoom may never load, so that side stays replicated.
 - `getTileData` returns the logical size (512) as `width` and `height`, as in
   #647, so the mesh stays on the unpadded grid.
 
@@ -344,7 +348,8 @@ A `RasterTileLayer` with:
 - `tilesetDescriptor: source.tilesetDescriptor`, `getTileData` (above) and
   `renderTile` from `makeRenderTile`.
 - `maxRequests: 256` and `debounceTime: 50`, as #809 gives the COG layers.
-- `onTileUnload` destroys the tile's texture.
+- `onTileUnload` destroys the tile's texture and stops it watching for
+  neighbors.
 - Aborting loads for tiles that left the view: the example subclasses
   `RasterTileLayer` and overrides #809's protected `_abortUnwantedLoads()` to
   return `true`. There's no public prop for it yet.
@@ -370,7 +375,7 @@ its switch.
 
 A readout, updated a few times a second:
 
-- tiles drawn, and tiles fetched only for halos
+- tiles drawn
 - HTTP requests and MB received
 - reads that joined a request already in flight or came from the byte cache
 
@@ -414,8 +419,8 @@ reuses this example's pieces.
     at known latitudes.
   - `RangeReaderSource` against a fake reader: the purpose split, that it
     returns copies, and `not-found`.
-  - Cache cancellation: aborting one of two waiting tiles keeps the read;
-    aborting both cancels it.
+  - Tile borders: a tile loads only itself; a side fills from a neighbor
+    that loaded first, and is rewritten when one loads later.
 - In real, headed Chrome:
   - The opening view renders.
   - No seams at tile edges or between tile rows, at z5 and z12.
@@ -437,14 +442,22 @@ Kyle, 2026-10-27:
 - **The `pmtiles` adapter lives in the example** for now and moves to library
   code later.
 - **Tile borders in the cache, rewriting only the ring, and cancelling
-  abandoned fetches:** +1.
+  abandoned fetches:** +1. The cache and its cancellation were superseded on
+  2026-10-28 (below): nothing is fetched for a halo, so there's nothing to
+  cancel.
 - **Aborting unwanted loads: a subclass in the example, for now.** #809 adds
   `abortUnwantedLoads` to `RasterTileset2D` but exposes it on
   `RasterTileLayer` only as a protected hook, which the COG layers turn on.
   The example's layer subclass overrides the hook rather than adding a public
   prop. This matters here: with `maxRequests: 256`, deck.gl no longer aborts
-  loads for tiles that left the view, and the cache's cancellation only helps
-  once tile loads actually get aborted.
+  loads for tiles that left the view.
+
+Kyle, 2026-10-28, after browsing the example ("it's kinda slow"):
+
+- **Fill a halo only from neighbors that load anyway.** "Instead of
+  pre-fetching the entire halo, we should only fill in the halo _when its
+  neighbors are already loaded_. So only fill in a side when a neighbor is
+  also in view, essentially."
 
 ## Calls I made
 
@@ -454,7 +467,7 @@ These are mine, not decided with Kyle. Each is cheap to change.
   #647: a 2D MapLibre map with a dark basemap.
 - Open on the Matterhorn, with four places.
 - The latitude correction per fragment, rather than one cell size per tile.
-- A cache of tile borders, and a refine phase that rewrites only the ring.
-- Cancellation counted per cache entry.
+- Borders kept after their tiles unload, up to 2048 (16 MiB), and a refine
+  step that rewrites only the ring.
 - Decoding on the main thread first, with MapLibre's canvas and `VideoFrame`
   readback.

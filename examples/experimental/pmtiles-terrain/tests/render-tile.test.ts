@@ -25,7 +25,7 @@ const data: TerrainTileData = {
   byteLength: 514 * 514 * 4,
   cellSize: 19.109257071294063,
   mercatorYRange: [5774194.4, 5764411.7],
-  releaseHalo: () => {},
+  release: () => {},
 };
 
 const options: MakeRenderTileOptions = {
