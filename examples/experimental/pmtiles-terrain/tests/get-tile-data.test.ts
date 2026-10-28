@@ -1,4 +1,5 @@
 import type { _TileLoadProps as TileLoadProps } from "@deck.gl/geo-layers";
+import { _Tile2DHeader as Tile2DHeader } from "@deck.gl/geo-layers";
 import type { Device } from "@luma.gl/core";
 import { describe, expect, it, vi } from "vitest";
 import type { PMTilesSource } from "../src/pmtiles/pmtiles-source.js";
@@ -9,6 +10,7 @@ import {
 } from "../src/terrain/get-tile-data.js";
 import type { TileIndex } from "../src/terrain/neighbors.js";
 import { tileKey } from "../src/terrain/neighbors.js";
+import type { TerrainTileData } from "../src/terrain/types.js";
 
 /** Let settled promises run their handlers. */
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -25,10 +27,12 @@ const NEIGHBOR_VALUES: Record<string, number> = {
   "2/1/2": 80,
   "2/2/2": 90,
 };
+const NEIGHBOR_KEYS = Object.keys(NEIGHBOR_VALUES);
 
 type Deferred = {
   resolve: (elevation: Float32Array | null) => void;
   reject: (error: unknown) => void;
+  signal: AbortSignal;
 };
 
 /** A cache over a load whose tiles the test settles by hand, by key. */
@@ -40,7 +44,7 @@ function setup() {
         signal.addEventListener("abort", () => reject(signal.reason), {
           once: true,
         });
-        loads.set(tileKey(tile), { resolve, reject });
+        loads.set(tileKey(tile), { resolve, reject, signal });
       }),
   );
   const cache = new BorderCache({ load, tileSize: 2, capacity: 100 });
@@ -73,6 +77,9 @@ function setup() {
       }
     }
   };
+  /** Whether every neighbor's load has been aborted. */
+  const neighborsAborted = () =>
+    NEIGHBOR_KEYS.map((key) => loads.get(key)!.signal.aborted);
   const run = (signal?: AbortSignal) =>
     getTileData({ index: TILE } as TileLoadProps, { device, signal });
 
@@ -82,8 +89,10 @@ function setup() {
     onTileRefined,
     textures,
     device,
+    getTileData,
     resolveCenter,
     resolveNeighbors,
+    neighborsAborted,
     run,
   };
 }
@@ -92,6 +101,13 @@ function setup() {
 function rows(data: unknown): number[][] {
   const values = Array.from(data as Float32Array);
   return [0, 1, 2, 3].map((r) => values.slice(r * 4, r * 4 + 4));
+}
+
+/** The halo a texture was first filled with: its first, whole-texture write. */
+function uploaded(texture: { writeData: ReturnType<typeof vi.fn> }) {
+  const [data, rect] = texture.writeData.mock.calls[0]!;
+  expect(rect).toBeUndefined();
+  return data;
 }
 
 describe("makeGetTileData", () => {
@@ -121,7 +137,7 @@ describe("makeGetTileData", () => {
         addressModeV: "clamp-to-edge",
       },
     });
-    expect(rows(textures[0]!.options.data)).toEqual([
+    expect(rows(uploaded(textures[0]!))).toEqual([
       [10, 20, 20, 30],
       [40, 1, 2, 60],
       [40, 3, 4, 60],
@@ -129,6 +145,14 @@ describe("makeGetTileData", () => {
     ]);
     await flush();
     expect(onTileRefined).not.toHaveBeenCalled();
+  });
+
+  it("doesn't hand the halo array to createTexture, which would keep it alive", async () => {
+    const { textures, resolveCenter, run } = setup();
+    const result = run();
+    resolveCenter();
+    await result;
+    expect(textures[0]!.options).not.toHaveProperty("data");
   });
 
   it("returns null when the archive has no center tile", async () => {
@@ -147,7 +171,7 @@ describe("makeGetTileData", () => {
     await flush();
     resolveCenter();
     await result;
-    expect(rows(textures[0]!.options.data).map((row) => row[0])).toEqual([
+    expect(rows(uploaded(textures[0]!)).map((row) => row[0])).toEqual([
       10, 1, 3, 70,
     ]);
   });
@@ -158,7 +182,7 @@ describe("makeGetTileData", () => {
     const result = run();
     resolveCenter();
     await result;
-    expect(rows(textures[0]!.options.data)).toEqual([
+    expect(rows(uploaded(textures[0]!))).toEqual([
       [1, 1, 2, 2],
       [1, 1, 2, 2],
       [3, 3, 4, 4],
@@ -166,10 +190,9 @@ describe("makeGetTileData", () => {
     ]);
     resolveNeighbors();
     await flush();
-    const writes = textures[0]!.writeData.mock.calls.map(([data, options]) => [
-      Array.from(data as Float32Array),
-      options,
-    ]);
+    const writes = textures[0]!.writeData.mock.calls
+      .slice(1)
+      .map(([data, options]) => [Array.from(data as Float32Array), options]);
     expect(writes).toEqual([
       [[10, 20, 20, 30], { x: 0, y: 0, width: 4, height: 1 }],
       [[70, 80, 80, 90], { x: 0, y: 3, width: 4, height: 1 }],
@@ -188,19 +211,70 @@ describe("makeGetTileData", () => {
     textures[0]!.destroyed = true;
     resolveNeighbors();
     await flush();
-    expect(textures[0]!.writeData).not.toHaveBeenCalled();
+    expect(textures[0]!.writeData).toHaveBeenCalledTimes(1);
     expect(onTileRefined).not.toHaveBeenCalled();
   });
 
-  it("leaves an aborted tile's texture alone", async () => {
-    const { textures, resolveCenter, run, onTileRefined } = setup();
+  it("stops its halo reads when its load is aborted", async () => {
+    const { run, neighborsAborted } = setup();
     const controller = new AbortController();
     const result = run(controller.signal);
-    resolveCenter();
-    await result;
     controller.abort();
+    await expect(result).rejects.toBe(controller.signal.reason);
+    expect(neighborsAborted()).toEqual(NEIGHBOR_KEYS.map(() => true));
+  });
+
+  it("stops its halo reads when the archive has no center tile", async () => {
+    const { loads, run, neighborsAborted } = setup();
+    const result = run();
+    loads.get(tileKey(TILE))!.resolve(null);
+    await result;
+    expect(neighborsAborted()).toEqual(NEIGHBOR_KEYS.map(() => true));
+  });
+
+  it("stops its halo reads when the center fails", async () => {
+    const { loads, run, neighborsAborted } = setup();
+    const failure = new Error("network");
+    const result = run();
+    loads.get(tileKey(TILE))!.reject(failure);
+    await expect(result).rejects.toBe(failure);
+    expect(neighborsAborted()).toEqual(NEIGHBOR_KEYS.map(() => true));
+  });
+
+  it("stops a drawn tile's halo reads on releaseHalo, which deck.gl's abort() can't", async () => {
+    const {
+      getTileData,
+      device,
+      textures,
+      resolveCenter,
+      neighborsAborted,
+      onTileRefined,
+    } = setup();
+    // A real deck.gl tile header, driven the way Tileset2D drives it.
+    const header = new Tile2DHeader({ x: 1, y: 1, z: 2 });
+    const loaded = header.loadData({
+      getData: ({ index, signal }: { index: TileIndex; signal: AbortSignal }) =>
+        getTileData({ index, signal } as TileLoadProps, { device, signal }),
+      getRequestPriority: () => 0,
+      requestScheduler: { scheduleRequest: async () => ({ done: () => {} }) },
+      onLoad: () => {},
+      onError: () => {},
+    } as never);
     await flush();
-    expect(textures[0]!.writeData).not.toHaveBeenCalled();
+    resolveCenter();
+    await loaded;
+    expect(header.isLoaded).toBe(true);
+
+    // deck.gl ignores abort() on a loaded tile, so the halo reads run on...
+    header.abort();
+    await flush();
+    expect(neighborsAborted()).toEqual(NEIGHBOR_KEYS.map(() => false));
+
+    // ...until the tile is unloaded, where the app calls releaseHalo.
+    (header.content as TerrainTileData).releaseHalo();
+    await flush();
+    expect(neighborsAborted()).toEqual(NEIGHBOR_KEYS.map(() => true));
+    expect(textures[0]!.writeData).toHaveBeenCalledTimes(1);
     expect(onTileRefined).not.toHaveBeenCalled();
   });
 

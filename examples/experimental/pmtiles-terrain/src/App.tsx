@@ -229,6 +229,7 @@ export default function App() {
             tilesDrawn.current += 1;
           },
           onTileUnload: (tile) => {
+            tile.content?.releaseHalo();
             tile.content?.texture.destroy();
           },
           updateTriggers: {

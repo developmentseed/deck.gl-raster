@@ -63,6 +63,11 @@ export interface MakeGetTileDataOptions {
  *
  * The tile and its neighbors are requested in one synchronous pass, so their
  * reads land in one task and the range reader merges them.
+ *
+ * The neighbor (halo) reads outlive the load deck.gl knows about: deck.gl
+ * stops aborting a tile once phase 1 returns. So they hold their own signal,
+ * aborted when the tile's load is, when there's no tile to draw, and when the
+ * caller unloads the tile and calls `releaseHalo`.
  */
 export function makeGetTileData(
   options: MakeGetTileDataOptions,
@@ -77,19 +82,30 @@ export function makeGetTileData(
     const { x, y, z } = tile.index;
     const block = neighborIndices({ z, x, y });
 
+    const halo = new AbortController();
+    const haloSignal = signal
+      ? AbortSignal.any([signal, halo.signal])
+      : halo.signal;
     const elevationRequest = cache.getElevation({ z, x, y }, signal);
     const neighborRequests = block.map((neighbor, i) =>
       neighbor === null || i === CENTER_INDEX
         ? null
-        : cache.getBorder(neighbor, signal),
+        : cache.getBorder(neighbor, haloSignal),
     );
     // A neighbor that fails only leaves its side replicated.
     for (const request of neighborRequests) {
       request?.catch(() => {});
     }
 
-    const elevation = await elevationRequest;
+    let elevation: Float32Array | null;
+    try {
+      elevation = await elevationRequest;
+    } catch (error) {
+      halo.abort();
+      throw error;
+    }
     if (elevation === null) {
+      halo.abort();
       return null;
     }
 
@@ -101,17 +117,18 @@ export function makeGetTileData(
           : cache.peekBorder(neighbor),
       );
     const borders = knownBorders();
-    const halo = buildHaloArray({
+    const haloArray = buildHaloArray({
       elevation,
       ring: buildRing({ center, neighbors: borders, tileSize }),
       tileSize,
     });
+    // Not `data: haloArray`: luma.gl keeps a texture's props, which would hold
+    // this 1 MiB array for as long as the tile is cached.
     const texture = device.createTexture({
       format: "r32float",
       width: tileSize + 2,
       height: tileSize + 2,
       mipLevels: 1,
-      data: halo,
       sampler: {
         // The kernel reads exact texels with `texelFetch`, so no filtering is
         // wanted (and `r32float` isn't filterable everywhere).
@@ -121,6 +138,7 @@ export function makeGetTileData(
         addressModeV: "clamp-to-edge",
       },
     });
+    texture.writeData(haloArray);
 
     const pending = neighborRequests.filter(
       (request, i): request is Promise<TileBorder | null> =>
@@ -129,7 +147,7 @@ export function makeGetTileData(
     if (pending.length > 0) {
       // Deliberately not awaited. The closure keeps only the tile's border.
       void Promise.allSettled(pending).then(() => {
-        if (signal?.aborted || texture.destroyed) {
+        if (haloSignal.aborted || texture.destroyed) {
           return;
         }
         const ring = buildRing({
@@ -149,9 +167,10 @@ export function makeGetTileData(
       texture,
       width: tileSize,
       height: tileSize,
-      byteLength: halo.byteLength,
+      byteLength: haloArray.byteLength,
       cellSize: cellSize(z, tileSize),
       mercatorYRange: tileMercatorYRange(z, y),
+      releaseHalo: () => halo.abort(),
     };
   };
 }
