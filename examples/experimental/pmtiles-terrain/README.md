@@ -122,13 +122,14 @@ rest are halo neighbors), each mode measured cold, in headed Chrome.
 
 | Connection | Mode | HTTP requests | Data | All tiles drawn |
 | --- | --- | --- | --- | --- |
-| fast | per tile | 34-35 | 5.1 MB | 1.3-1.6 s |
+| fast | per tile | 35 | 5.2 MB | 1.6-1.9 s |
 | fast | merged | 7 | 4.8 MB | 1.3-1.4 s |
-| 150 ms round trips, 20 Mbit/s | per tile | 33-34 | 5.0 MB | 3.1-3.2 s |
-| 150 ms round trips, 20 Mbit/s | merged | 7 | 4.8 MB | 2.9-3.0 s |
+| 150 ms round trips, 20 Mbit/s | per tile | 33-35 | 4.9-5.2 MB | 2.8-3.3 s |
+| 150 ms round trips, 20 Mbit/s | merged | 7 | 4.8 MB | 2.9 s |
 
 Mapterhorn serves over HTTP/2, which multiplexes many requests cheaply, so
-merging mostly saves requests here; it pays more as round trips get longer.
+merging mostly saves requests here: five times fewer, for a view that
+finishes as soon or sooner, and more consistently.
 
 ## What's provisional
 
