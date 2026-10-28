@@ -36,12 +36,13 @@ export interface RangeReaderSourceOptions {
  * other read (header, directories, JSON metadata) has purpose `metadata`. The
  * section is learned from the header, the first read at offset 0.
  *
- * Like `@developmentseed/geotiff`'s chunkd `RangeReaderSource`, this
- * remembers the response validator (`ETag`, or `Last-Modified` when there is
- * none) and fails a read whose validator changed: the archive was replaced, so
- * its cached directories no longer apply. Unlike that one, it fails only once,
- * with `pmtiles`' own `EtagMismatch`, on which `pmtiles` drops its cached
- * header and directories and retries against the new version.
+ * A replaced archive is caught the way `pmtiles`' own `FetchSource` catches
+ * it. Each response's validator (`ETag`, or `Last-Modified` when there is
+ * none) is returned as the read's `etag`. `pmtiles` keeps the header's, and
+ * passes it with every later directory and tile read. A read whose validator
+ * differs fails with `pmtiles`' `EtagMismatch`, on which `pmtiles` drops its
+ * cached header and directories and retries. The header read itself carries
+ * no `etag`, so it always succeeds and adopts the new version.
  */
 export class RangeReaderSource implements CountedSource {
   /** The archive's URL. */
@@ -52,8 +53,6 @@ export class RangeReaderSource implements CountedSource {
   readonly #limiter: ConcurrencyLimiter | null | undefined;
   /** The tile data section, once the header has been read. */
   #tileData: { offset: number; length: number } | undefined;
-  /** The validator of the archive version being read. */
-  #validator: string | undefined;
 
   constructor(options: RangeReaderSourceOptions) {
     this.url = new URL(options.url);
@@ -68,17 +67,21 @@ export class RangeReaderSource implements CountedSource {
   }
 
   /**
-   * Read `length` bytes at `offset`. `pmtiles`' `etag` argument is ignored:
-   * validators are tracked here instead.
+   * Read `length` bytes at `offset`.
    *
+   * @param etag - The header's validator, which `pmtiles` passes with every
+   *   read after the header. A response with a different one means the
+   *   archive was replaced.
    * @returns A copy of the bytes. The reader's bytes are views into a merged
    *   response or a cached span, which must not escape: a consumer could
    *   transfer the buffer to a worker and detach the cache's bytes.
+   * @throws `EtagMismatch` if the archive was replaced.
    */
   async getBytes(
     offset: number,
     length: number,
     signal?: AbortSignal,
+    etag?: string,
   ): Promise<RangeResponse> {
     const result = await this.#reader.read(
       this.#file,
@@ -89,14 +92,10 @@ export class RangeReaderSource implements CountedSource {
       throw new Error(`${this.url.href} not found`);
     }
     const { bytes, validator } = result;
-    if (validator !== undefined) {
-      const previous = this.#validator;
-      this.#validator = validator;
-      if (previous !== undefined && previous !== validator) {
-        throw new EtagMismatch(
-          `${this.url.href} changed: it was ${previous}, now ${validator}`,
-        );
-      }
+    if (etag !== undefined && validator !== undefined && validator !== etag) {
+      throw new EtagMismatch(
+        `${this.url.href} changed: its header was read at ${etag}, this read got ${validator}`,
+      );
     }
     if (offset === 0) {
       this.#learnTileData(bytes);
@@ -104,7 +103,7 @@ export class RangeReaderSource implements CountedSource {
     return { data: bytes.slice().buffer, etag: validator };
   }
 
-  /** Totals of the page's reader, which all its archives share. */
+  /** Totals of this source's reader. */
   readStats(): ReadStats {
     const { requests, bytesReceived, attached, cacheHits } = this.#reader.stats;
     return { requests, bytesReceived, sharedReads: attached + cacheHits };

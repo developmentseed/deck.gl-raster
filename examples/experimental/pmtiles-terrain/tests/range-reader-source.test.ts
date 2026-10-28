@@ -7,11 +7,11 @@ import type {
   ReadRange,
   ReadResult,
 } from "@developmentseed/range-reader";
-import { EtagMismatch } from "pmtiles";
+import { EtagMismatch, PMTiles } from "pmtiles";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CountingFetchSource } from "../src/pmtiles/counting-fetch-source.js";
 import { RangeReaderSource } from "../src/pmtiles/range-reader-source.js";
-import { archiveBytes } from "./pmtiles-fixture.js";
+import { archiveBytes, oneTileArchive } from "./pmtiles-fixture.js";
 
 const URL_ = "https://example.com/terrain.pmtiles";
 
@@ -96,8 +96,20 @@ describe("RangeReaderSource", () => {
     await expect(source.getBytes(0, 10)).rejects.toThrow(`${URL_} not found`);
   });
 
-  it("throws EtagMismatch once when the validator changes, then accepts the new one", async () => {
-    const validators = ["a", "b", "b"];
+  it("throws EtagMismatch when a read's validator differs from the header's etag", async () => {
+    const { reader } = fakeReader(() => ({
+      kind: "bytes",
+      bytes: new Uint8Array(10),
+      validator: "b",
+    }));
+    const source = new RangeReaderSource({ reader, url: URL_ });
+    await expect(
+      source.getBytes(200, 10, undefined, "a"),
+    ).rejects.toBeInstanceOf(EtagMismatch);
+  });
+
+  it("accepts a header read, which carries no etag, at a new version", async () => {
+    const validators = ["a", "b"];
     const { reader } = fakeReader(() => ({
       kind: "bytes",
       bytes: new Uint8Array(10),
@@ -105,8 +117,34 @@ describe("RangeReaderSource", () => {
     }));
     const source = new RangeReaderSource({ reader, url: URL_ });
     await expect(source.getBytes(0, 10)).resolves.toMatchObject({ etag: "a" });
-    await expect(source.getBytes(0, 10)).rejects.toBeInstanceOf(EtagMismatch);
     await expect(source.getBytes(0, 10)).resolves.toMatchObject({ etag: "b" });
+  });
+
+  it("keeps a real PMTiles readable after the archive is replaced", async () => {
+    const bytes = oneTileArchive();
+    // Until the request that saw the new version settles, the reader still
+    // serves the header from its cache, tagged with the old validator.
+    let phase: "before" | "during" | "after" = "before";
+    const validatorFor = (offset: number) =>
+      phase === "before" || (phase === "during" && offset === 0) ? "a" : "b";
+    const { reader } = fakeReader((range) => {
+      const { offset, length } = range as { offset: number; length: number };
+      return {
+        kind: "bytes",
+        bytes: bytes.subarray(offset, offset + length),
+        validator: validatorFor(offset),
+      };
+    });
+    const archive = new PMTiles(new RangeReaderSource({ reader, url: URL_ }));
+    await expect(archive.getZxy(0, 0, 0)).resolves.toBeDefined();
+
+    phase = "during";
+    await expect(archive.getZxy(0, 0, 0)).rejects.toBeInstanceOf(EtagMismatch);
+
+    phase = "after";
+    for (let i = 0; i < 3; i++) {
+      await expect(archive.getZxy(0, 0, 0)).resolves.toBeDefined();
+    }
   });
 
   it("passes the signal and limiter to the reader", async () => {
