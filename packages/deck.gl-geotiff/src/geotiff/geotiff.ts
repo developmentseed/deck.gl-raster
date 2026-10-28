@@ -8,8 +8,8 @@ import type {
   RasterArrayPixelInterleaved,
 } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
-import { normalizeLongitudes, unwrapAlong } from "@developmentseed/proj";
-import type { Converter } from "proj4";
+import type { ProjectionFunction } from "@developmentseed/proj";
+import { geographicBounds } from "@developmentseed/proj";
 
 /**
  * Add an alpha channel to an RGB image array.
@@ -117,43 +117,17 @@ export async function fetchGeoTIFF(
  */
 export function getGeographicBounds(
   geotiff: GeoTIFF,
-  converter: Converter,
+  projectTo4326: ProjectionFunction,
 ): { west: number; south: number; east: number; north: number } {
   const [minX, minY, maxX, maxY] = geotiff.bbox;
-
-  // Reproject all four corners to handle rotation/skew
-  const outline: [number, number][] = [
-    [minX, minY], // bottom-left
-    [maxX, minY], // bottom-right
-    [maxX, maxY], // top-right
-    [minX, maxY], // top-left
-  ];
-  const corners = outline.map((corner) => converter.forward(corner));
-
-  // Unwrap each corner's longitude by walking the outline to it from the
-  // previous corner, so an image across the antimeridian goes the short way.
-  const lons = [corners[0]![0]];
-  for (let i = 1; i < outline.length; i++) {
-    const [x0, y0] = outline[i - 1]!;
-    const [x1, y1] = outline[i]!;
-    lons.push(
-      unwrapAlong(
-        (t) => converter.forward([x0 + t * (x1 - x0), y0 + t * (y1 - y0)])[0]!,
-        { start: lons[i - 1]!, period: 360 },
-      ),
-    );
-  }
-  const lats = corners.map((c) => c[1]);
-
-  // Move west into [-180°, 180°), and east with it: east may then run past
-  // 180°. All the way around the world, or around a pole, gives -180° to 180°.
-  const [west, south, east, north] = normalizeLongitudes([
-    Math.min(...lons),
-    Math.min(...lats),
-    Math.max(...lons),
-    Math.max(...lats),
-  ]);
-
-  // Return bounds in MapLibre format: [[west, south], [east, north]]
+  const [west, south, east, north] = geographicBounds(
+    [
+      [minX, minY], // bottom-left
+      [maxX, minY], // bottom-right
+      [maxX, maxY], // top-right
+      [minX, maxY], // top-left
+    ],
+    projectTo4326,
+  );
   return { west, south, east, north };
 }

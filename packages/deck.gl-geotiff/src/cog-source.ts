@@ -9,11 +9,14 @@ import type {
   Priority,
 } from "@developmentseed/geotiff";
 import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
-import { epsgResolver as defaultEpsgResolver } from "@developmentseed/proj";
+import {
+  epsgResolver as defaultEpsgResolver,
+  projectionFunctions,
+} from "@developmentseed/proj";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
-import { projectionFunctions, resolveProjection } from "./projection.js";
+import { resolveProjection } from "./projection.js";
 
 /**
  * A Cloud-Optimized GeoTIFF to open:
@@ -113,12 +116,12 @@ export class COGSource extends RasterSource {
     // The open was aborted while we waited
     signal?.throwIfAborted();
 
-    const { converter4326, ...functions } = projectionFunctions(projection);
+    const functions = projectionFunctions(projection);
     return new COGSource({
       geotiff,
       projection,
       tilesetDescriptor: geoTiffToDescriptor(geotiff, functions),
-      geographicBounds: getGeographicBounds(geotiff, converter4326),
+      geographicBounds: getGeographicBounds(geotiff, functions.projectTo4326),
     });
   }
 }
