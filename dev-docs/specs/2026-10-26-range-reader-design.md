@@ -13,7 +13,7 @@ A COG layer fetches every tile with its own HTTP range request. S3 and most
 object stores speak HTTP/1.1 to browsers, which allow six connections per
 origin, so a view of a hundred tiles is a hundred round trips through six
 lanes. The smaller the tiles, the worse it gets: the USGS historical topo
-sheets use 128 x 128 tiles, and in the usgs-topo mosaic app a zoom-12 view
+sheets use 128 x 128 tiles, and in the private topo-sheet app a zoom-12 view
 costs 226 requests and 4.19 s on a 2x screen, 673 requests and 13.4 s on 4x.
 Panning back over tiles that were already downloaded fetches them again
 (#762), because tile bytes are never cached.
@@ -85,7 +85,7 @@ Kyle's decisions, from the brainstorm on 2026-10-26:
 ## Goals
 
 - Fewer requests and less total time for the same view, measured on the
-  examples and on the usgs-topo mosaic app.
+  examples and on the private topo-sheet app.
 - At a minimum: the first tile of a view starts rendering in about the same
   time as today, and the last tile always renders sooner with coalesced
   requests than with standalone ones.
@@ -114,7 +114,7 @@ Kyle's decisions, from the brainstorm on 2026-10-26:
 
 ## Anti-goals
 
-Carried from usgs-topo PR #23. Any of these makes the work a failure even if
+Carried from the prototype. Any of these makes the work a failure even if
 the request count drops:
 
 - **The map looks different once loaded**, including tiles left blank. A read
@@ -171,7 +171,7 @@ Verified on 2026-10-26 unless noted.
   knobs, which can rely on row-major contiguity, and read a tile's size from
   its leader without the byte-count table.
 - Offset tables cost about 16 bytes per tile (8-byte BigTIFF offsets plus
-  4 to 8-byte byte counts). A usgs-topo sheet has about 5k tiles (80 KB). A
+  4 to 8-byte byte counts). A USGS topo sheet has about 5k tiles (80 KB). A
   150 GB COG with 512 px tiles has about 800k tiles (13 MB); with 128 px
   tiles, 13M tiles (200 MB). The whole table of a large COG must not be
   resident.
@@ -339,7 +339,7 @@ entry; the second caller attaches to the first.
 
 At flush, reads are grouped by file identity (URL plus request-init
 signature, see "Request init and isolation") and by purpose, so every span
-the cache ends up holding belongs to one budget, and merged by the usgs-topo
+the cache ends up holding belongs to one budget, and merged by the prototype's
 rule: sort by offset, then by length descending; a read joins the current
 merged range if it is contained in it, or if the gap is at most `maxGap` and
 the merged range stays within both caps:
@@ -710,7 +710,7 @@ Then a release with COG coalescing. Zarr starts after it.
 
 - Names and file layout inside `range-reader`; whether the window is one
   `setTimeout` per reader or per file.
-- The merge implementation (the usgs-topo `mergeReads` is the reference).
+- The merge implementation (the prototype's merge routine is the reference).
 - How `stats` is structured and how the harness reads it from the page.
 - The exact `RasterTileset2D` hook for the abort rule (`updateTileStates`
   after `super`, or a `_pruneRequests` override).
