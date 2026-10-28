@@ -34,19 +34,14 @@ import { createTransform, index, xy } from "./transform.js";
 /** Options for {@link GeoTIFF.fromUrl}. */
 export interface GeoTIFFFromUrlOptions {
   /**
-   * The {@link RangeReader} every read of this file goes through: header
-   * reads and tile reads are merged into few streamed range requests and
-   * cached by it. Share one reader between files to share its cache and
-   * batching window (the deck.gl-geotiff layers share one page-wide).
-   * Omitted, the file gets a private reader with small budgets, 8 MiB of
-   * header bytes and 8 MiB of tile bytes, so opening many files this way
-   * never retains more than 16 MiB each.
+   * The {@link RangeReader} this file's reads go through. Share one between
+   * files to share its cache and batching window; omitted, a private reader
+   * with 8 MiB budgets.
    */
   reader?: RangeReader;
   /**
-   * Headers, credentials and mode sent with every request for this file,
-   * for data behind authentication. Files read with different inits never
-   * share a request or a cached byte.
+   * Headers, credentials and mode sent with every request for this file.
+   * Files read with different inits never share a request or a cached byte.
    */
   requestInit?: RequestInit;
   /** An optional {@link AbortSignal} to cancel the header reads. */
@@ -170,7 +165,7 @@ export class GeoTIFF {
    * This creates and initialises the underlying Tiff, then classifies IFDs.
    *
    * @param options.dataSource A source for fetching tile data. This is separate from the source used to construct the TIFF to allow for separate caching implementations.
-   * @param options.headerSource The source used to construct the TIFF. `fromUrl` passes a source backed by a `RangeReader`, which widens the small header reads to 64 KiB blocks and caches them; a caller composing its own source should cache and chunk it the same way, since cogeotiff reads offset-table entries one at a time.
+   * @param options.headerSource The source used to construct the TIFF. Cache and chunk it: cogeotiff reads offset-table entries one at a time.
    * @param options.signal An optional {@link AbortSignal} to cancel the header reads.
    * @param options.debug When true, the returned GeoTIFF logs each tile/mask data fetch to the console. Off by default.
    */
@@ -329,13 +324,7 @@ export class GeoTIFF {
   }
 
   /**
-   * Create a new GeoTIFF from a URL.
-   *
-   * Reads through a `RangeReader`: cogeotiff's lazy per-entry reads (tile
-   * offsets, byte counts, other tag values) are widened to 64 KiB blocks and
-   * cached, so adjacent entries cost one request; tile reads issued together
-   * are merged into few streamed range requests and cached under their own
-   * budget, so they never evict header blocks.
+   * Create a new GeoTIFF from a URL, reading through a {@link RangeReader}.
    *
    * @param url The URL of the GeoTIFF to open.
    * @param options Optional parameters; see {@link GeoTIFFFromUrlOptions}.

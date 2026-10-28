@@ -14,7 +14,7 @@ export interface ByteSourceOptions {
   /** The reader every read of this file goes through. */
   reader: RangeReader;
   url: URL;
-  /** Which of the reader's budgets this source's reads belong to: `metadata` for the header, `data` for tiles. */
+  /** `metadata` for the header, `data` for tiles. */
   purpose: Purpose;
   /** Headers, credentials and mode sent with every request for this file. */
   init?: RequestInit;
@@ -27,28 +27,20 @@ export interface ByteSourceOptions {
 /**
  * A chunkd `Source` whose reads go through a {@link RangeReader}, so
  * cogeotiff's header reads and our tile reads are merged, streamed and
- * cached by it. "Source" here is chunkd's byte-range interface, the thing
- * `GeoTIFF.open` reads bytes through, not a dataset source like `COGSource`:
- * one of these is a cheap per-file, per-purpose handle on a shared reader. `GeoTIFF.fromUrl` builds two over one reader: one for the
- * header (purpose `metadata`) and one for tile data (purpose `data`).
+ * cached by it.
  *
- * `metadata.size` is seeded infinite and never updated: cogeotiff clamps a
- * read to the size it knows, and in a browser a range response often reveals
- * only the range's own `Content-Length`, which once got recorded as the file
- * size and rejected every later read past it
- * (https://github.com/developmentseed/deck.gl-raster/issues/524). The reader
- * handles the end of the object on its own.
+ * "Source" here is chunkd's byte-range interface, the thing
+ * `GeoTIFF.open` reads bytes through, not a dataset source like `COGSource`.
  *
  * The first result's validator (`ETag`, or `Last-Modified`) is remembered,
  * and a later result with a different one fails with an `ETag conflict`
- * error, as chunkd's `SourceHttp` did: the object was replaced underneath
- * a `GeoTIFF` whose parsed layout no longer applies, so it must be opened
- * again. The reader itself drops its cached bytes of the old version.
+ * error, as chunkd's `SourceHttp` did.
  */
 export class ByteSource implements ChunkdSource {
   readonly type = "range-reader";
   readonly url: URL;
-  metadata: SourceMetadata = { size: Number.POSITIVE_INFINITY };
+  /** Never set: without a size, cogeotiff reads the length it asks for. */
+  metadata?: SourceMetadata;
 
   private readonly reader: RangeReader;
   private readonly file: FileIdentity;
@@ -67,16 +59,14 @@ export class ByteSource implements ChunkdSource {
     this.getPriority = options.getPriority;
   }
 
-  /** Not supported: the reader never needs the object's size up front. */
+  /** Not supported. */
   head(): Promise<SourceMetadata> {
     return Promise.reject(new Error("head() is not supported"));
   }
 
   /**
-   * Read `length` bytes at `offset`, as chunkd defines it: a negative offset
-   * reads that many bytes from the end, and offset `0` with no length reads
-   * the whole object. The bytes are copied into a fresh `ArrayBuffer`, which
-   * cogeotiff reads from offset zero.
+   * chunkd's `fetch`: a negative offset reads that many bytes from the end,
+   * offset `0` without a length reads the whole object. Returns a copy.
    */
   async fetch(
     offset: number,

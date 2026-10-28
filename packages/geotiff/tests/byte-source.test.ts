@@ -59,11 +59,11 @@ describe("ByteSource", () => {
     );
   });
 
-  it("keeps an infinite size whatever the server says", async () => {
+  it("records no size, so a read past the end returns what exists", async () => {
     const { source } = open();
     const short = await source.fetch(200, 100);
     expect(short.byteLength).toBe(56);
-    expect(source.metadata.size).toBe(Number.POSITIVE_INFINITY);
+    expect(source.metadata).toBeUndefined();
   });
 
   it("passes purpose, limiter, priority and init through to the reader", async () => {
