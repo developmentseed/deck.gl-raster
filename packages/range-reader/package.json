@@ -1,0 +1,48 @@
+{
+  "name": "@developmentseed/range-reader",
+  "version": "0.9.0",
+  "description": "Streamed, coalesced HTTP byte-range reads with a budgeted byte cache",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "http",
+    "range-request",
+    "cog",
+    "zarr",
+    "cache"
+  ],
+  "author": "Development Seed",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {},
+  "peerDependencies": {},
+  "volta": {
+    "extends": "../../package.json"
+  }
+}

@@ -9,10 +9,10 @@
 
 import { readFileSync } from "node:fs";
 import { SourceHttp } from "@chunkd/source-http";
+import type { ConcurrencyLimiter } from "@developmentseed/range-reader";
+import { PerOriginSemaphore } from "@developmentseed/range-reader";
 import { afterEach, describe, expect, it } from "vitest";
 import { GeoTIFF } from "../src/geotiff.js";
-import type { ConcurrencyLimiter } from "../src/limiter.js";
-import { PerOriginSemaphore } from "../src/limiter.js";
 import { fixturePath } from "./helpers.js";
 
 const FIXTURE = readFileSync(

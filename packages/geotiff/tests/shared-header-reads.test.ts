@@ -12,9 +12,9 @@
  */
 
 import { SourceHttp } from "@chunkd/source-http";
+import { PerOriginSemaphore } from "@developmentseed/range-reader";
 import { afterEach, describe, expect, it } from "vitest";
 import { GeoTIFF } from "../src/geotiff.js";
-import { PerOriginSemaphore } from "../src/limiter.js";
 import type { Tile } from "../src/tile.js";
 import { makeTiledGeoTIFF } from "./utils/tiled-tiff.js";
 
