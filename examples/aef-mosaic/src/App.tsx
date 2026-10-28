@@ -31,10 +31,7 @@ const DEFAULT_RESCALE_MAX = 0.3;
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
-  const [source, setSource] = useState<ZarrSource<
-    zarr.Readable,
-    "int8"
-  > | null>(null);
+  const [source, setSource] = useState<ZarrSource<"int8"> | null>(null);
   const [bandLabels, setBandLabels] = useState<string[] | null>(null);
 
   const [locationId, setLocationId] = useState(DEFAULT_LOCATION.id);
@@ -100,7 +97,7 @@ export default function App() {
 
   const layers = source
     ? [
-        new ZarrLayer<zarr.Readable, "int8", AefTileData>({
+        new ZarrLayer<"int8", zarr.Readable, AefTileData>({
           id: `aef-zarr-layer-${yearIdx}`,
           source,
           selection,

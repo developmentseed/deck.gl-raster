@@ -25,9 +25,9 @@ describe("ZarrLayer source props", () => {
     expectTypeOf<ZarrLayer["state"]["source"]>().toEqualTypeOf<
       ZarrSource | undefined
     >();
-    expectTypeOf<
-      ZarrLayer<zarr.Readable, "int8">["state"]["source"]
-    >().toEqualTypeOf<ZarrSource<zarr.Readable, "int8"> | undefined>();
+    expectTypeOf<ZarrLayer<"int8">["state"]["source"]>().toEqualTypeOf<
+      ZarrSource<"int8"> | undefined
+    >();
   });
 
   it("passes a ZarrSource to onSourceLoad", () => {

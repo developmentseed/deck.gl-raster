@@ -57,10 +57,7 @@ export default function App() {
   const [leadTimeIdx, setLeadTimeIdx] = useState(0);
   const [initTimeIdx, setInitTimeIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [source, setSource] = useState<ZarrSource<
-    zarr.Readable,
-    "float32"
-  > | null>(null);
+  const [source, setSource] = useState<ZarrSource<"float32"> | null>(null);
   // Number of init_time values in the dataset (= first dim of the array),
   // known once the zarr array is opened.
   const initTimeCount = source ? source.arrays[0]!.shape[0]! : 0;
@@ -220,7 +217,7 @@ export default function App() {
   const layers =
     source && colormapTexture
       ? [
-          new ZarrLayer<zarr.Readable, "float32", EcmwfTileData>({
+          new ZarrLayer<"float32", zarr.Readable, EcmwfTileData>({
             // Include initTimeIdx in the id so switching init_time discards
             // cached tiles from the previous forecast run.
             id: `ecmwf-zarr-layer-${initTimeIdx}`,

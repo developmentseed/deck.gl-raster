@@ -50,8 +50,8 @@ export type GetTileDataOptions = RasterTileGetTileDataOptions & {
  * Props for the {@link ZarrLayer}.
  */
 export type ZarrLayerProps<
-  Store extends zarr.Readable = zarr.Readable,
   Dtype extends zarr.DataType = zarr.DataType,
+  Store extends zarr.Readable = zarr.Readable,
   DataT extends MinimalTileData = MinimalTileData,
 > = Omit<
   RasterTileLayerProps<DataT>,
@@ -71,7 +71,7 @@ export type ZarrLayerProps<
    * over.
    */
   source:
-    | ZarrSource<Store, Dtype>
+    | ZarrSource<Dtype, Store>
     | zarr.Group<Store>
     | zarr.Array<Dtype, Store>;
 
@@ -79,7 +79,7 @@ export type ZarrLayerProps<
    * Called with the source the layer opened, when `source` isn't an opened
    * {@link ZarrSource} already.
    */
-  onSourceLoad?: (source: ZarrSource<Store, Dtype>) => void;
+  onSourceLoad?: (source: ZarrSource<Dtype, Store>) => void;
 
   /**
    * Selection for non-spatial dimensions. Must include exactly one entry
@@ -131,22 +131,22 @@ export type ZarrLayerProps<
  * layer agnostic about data format and rendering pipeline.
  */
 export class ZarrLayer<
-  Store extends zarr.Readable = zarr.Readable,
   Dtype extends zarr.DataType = zarr.DataType,
+  Store extends zarr.Readable = zarr.Readable,
   DataT extends MinimalTileData = MinimalTileData,
-> extends RasterTileLayer<DataT, ZarrLayerProps<Store, Dtype, DataT>> {
+> extends RasterTileLayer<DataT, ZarrLayerProps<Dtype, Store, DataT>> {
   static override layerName = "ZarrLayer";
 
   declare state: RasterTileLayer<
     DataT,
-    ZarrLayerProps<Store, Dtype, DataT>
+    ZarrLayerProps<Dtype, Store, DataT>
   >["state"] & {
     /**
      * The source and selection last checked against each other, and whether
      * the selection fits the source.
      */
     checked?: {
-      source: ZarrSource<Store, Dtype>;
+      source: ZarrSource<Dtype, Store>;
       selection: Record<string, SliceInput>;
       fits: boolean;
     };
@@ -194,7 +194,7 @@ export class ZarrLayer<
   protected override _openSource(
     input: zarr.Group<Store> | zarr.Array<Dtype, Store>,
     signal: AbortSignal,
-  ): Promise<ZarrSource<Store, Dtype>> {
+  ): Promise<ZarrSource<Dtype, Store>> {
     return ZarrSource.open(input, { signal });
   }
 

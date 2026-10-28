@@ -117,7 +117,7 @@ export default function App() {
   const layers =
     surfaceTemp && colormapTexture
       ? [
-          new ZarrLayer<zarr.Readable, "float32", NldasTileData>({
+          new ZarrLayer<"float32", zarr.Readable, NldasTileData>({
             id: "nldas-surface-temp",
             source: surfaceTemp.source,
             selection: { [TIME_DIM]: TIME_INDEX },

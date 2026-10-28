@@ -62,8 +62,8 @@ export type ZarrSourceOptions = {
  * source, such as two layers drawing different selections of it.
  */
 export class ZarrSource<
-  Store extends zarr.Readable = zarr.Readable,
   Dtype extends zarr.DataType = zarr.DataType,
+  Store extends zarr.Readable = zarr.Readable,
 > extends RasterSource {
   /** One opened array per level, finest first. */
   readonly arrays: readonly zarr.Array<Dtype, Store>[];
@@ -109,12 +109,12 @@ export class ZarrSource<
    *   can wrap it, for example with `withConsolidatedMetadata`.
    */
   static async open<
-    Store extends zarr.Readable = zarr.Readable,
     Dtype extends zarr.DataType = zarr.DataType,
+    Store extends zarr.Readable = zarr.Readable,
   >(
     node: zarr.Group<Store> | zarr.Array<Dtype, Store>,
     options: ZarrSourceOptions = {},
-  ): Promise<ZarrSource<Store, Dtype>> {
+  ): Promise<ZarrSource<Dtype, Store>> {
     const {
       variable,
       geoZarrMetadata,

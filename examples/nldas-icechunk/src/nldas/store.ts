@@ -17,7 +17,7 @@ import {
 /** The opened temperature data plus the fill sentinel read from its attrs. */
 export interface SurfaceTemp {
   /** The near-surface air temperature, for a `ZarrLayer` to draw. */
-  source: ZarrSource<zarr.Readable, "float32">;
+  source: ZarrSource<"float32">;
   /** Fill value, read from the array's `missing_value` attribute. */
   noDataValue: number;
 }
