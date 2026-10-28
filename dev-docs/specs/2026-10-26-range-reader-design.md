@@ -361,7 +361,7 @@ the cache.
 
 Defaults for the first implementation, all to be replaced by the measurement
 gate: `maxGap: "median"` (the batch's median read length, PR #23's measured
-default), `maxOverfetchBytes: 1 MiB`, `maxRequestBytes: 4 MiB` (measured 2026-10-28, see PR #815; was 16 MiB, today's
+default), `maxOverfetchBytes: 1 MiB`, `maxRequestBytes: 1 MiB` (measured 2026-10-28, see PR #815; was 16 MiB, today's
 `coalesce.ts` constants for the latter two). The gap decision is per join,
 the over-fetch cap is per merged request.
 

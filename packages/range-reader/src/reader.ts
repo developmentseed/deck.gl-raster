@@ -25,13 +25,16 @@ import type {
 export const DEFAULT_MAX_OVERFETCH_BYTES = 1024 * 1024;
 
 /**
- * Default for {@link RangeReaderOptions.maxRequestBytes}: 4 MiB. Measured
- * (2026-10-28): with 2.4 MB tiles, caps of 8 MiB and more merged a view
- * into two or three streams, which cannot fill a fast link that ten parallel
- * requests fill (0.5-0.8x of unmerged); 1-4 MiB stay at parity on totals
- * while small tiles still merge dozens to one.
+ * Default for {@link RangeReaderOptions.maxRequestBytes}: 1 MiB. Measured
+ * (2026-10-28, PR #815): merging pays when tiles are small against the
+ * link's latency, and a cap near 1 MiB is where it stops paying. Small
+ * tiles (a 128 px topo sheet, 99 reads) still merge to 9 requests and load
+ * 2-4x faster; 460 KB NAIP tiles merge in pairs, at parity or better; 2.4 MB
+ * tiles go alone, at parity. Caps of 2-4 MiB cost NAIP 20-30% on a home
+ * link, and 8 MiB and more merged big-tile views into two or three streams
+ * that ran at 0.5-0.8x of unmerged requests on a fast link.
  */
-export const DEFAULT_MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+export const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024;
 
 /** Default for {@link RangeReaderOptions.minMetadataReadBytes}: 64 KiB. */
 export const DEFAULT_MIN_METADATA_READ_BYTES = 64 * 1024;

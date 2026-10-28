@@ -67,7 +67,7 @@ cancelled, keeping what arrived, when the last one leaves.
 | `cache` | in-memory, 32 MiB metadata + 64 MiB data | Budgets for the default cache, or a `ByteCache` of your own. |
 | `maxGap` | `"median"` | Largest gap between two reads that still share a request; `"median"` is the batch's median read length. |
 | `maxOverfetchBytes` | 1 MiB | Largest number of bytes in one request that no read covers. |
-| `maxRequestBytes` | 4 MiB | Largest merged request; also the largest whole object accepted from a server that ignores `Range`. |
+| `maxRequestBytes` | 1 MiB | Largest merged request; also the largest whole object accepted from a server that ignores `Range`. |
 | `minMetadataReadBytes` | 64 KiB | Metadata reads shorter than this are widened to an aligned block of this size, read to its end. |
 | `cacheMode` | the browser's default | `RequestInit.cache` for every request. |
 
