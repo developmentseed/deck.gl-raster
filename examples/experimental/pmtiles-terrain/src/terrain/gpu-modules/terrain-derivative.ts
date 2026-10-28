@@ -140,7 +140,10 @@ float ${MODULE_NAME}_sample(ivec2 base, int dx, int dy) {
   float rise = ${MODULE_NAME}.zFactor * sqrt(dzdx * dzdx + dzdy * dzdy);
   float slopeRadians = atan(rise);
   float slopeDegrees = degrees(slopeRadians);
-  float aspectRadians = atan(dzdy, -dzdx);
+  // atan(0, 0) is undefined in GLSL. On flat ground, such as a lake, the
+  // aspect doesn't matter, since sin(slope) is 0, but an undefined value can
+  // still turn the shade into NaN and draw the lake black.
+  float aspectRadians = (dzdx == 0.0 && dzdy == 0.0) ? 0.0 : atan(dzdy, -dzdx);
 
   // Compass azimuth (clockwise from north) into the math convention the
   // aspect above is expressed in.

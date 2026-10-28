@@ -123,3 +123,9 @@ describe("TerrainDerivative.getUniforms", () => {
     ).toMatchObject({ mercatorYNorth: 5774194.4, mercatorYSouth: 5764411.7 });
   });
 });
+
+describe("makeRenderTile with a missing tile", () => {
+  it("draws nothing for a tile the archive lacks", () => {
+    expect(makeRenderTile(options)(null)).toBeNull();
+  });
+});

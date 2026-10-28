@@ -59,12 +59,12 @@ export interface MakeRenderTileOptions {
  * `CreateTexture`, which samples without the halo inset. The scalar modes then
  * hand off to the library's own `LinearRescale` and `Colormap`.
  *
- * Returns `null` for a tile when a colormap is needed but not yet uploaded,
- * which skips rendering that tile until it is.
+ * Returns `null`, which skips rendering the tile, for a tile the archive
+ * lacks, and for every tile while a needed colormap isn't uploaded yet.
  */
 export function makeRenderTile(
   options: MakeRenderTileOptions,
-): (data: TerrainTileData) => RenderTileResult | null {
+): (data: TerrainTileData | null) => RenderTileResult | null {
   const {
     mode,
     sunAzimuth,
@@ -79,6 +79,9 @@ export function makeRenderTile(
   } = options;
 
   return (data) => {
+    if (!data) {
+      return null;
+    }
     const derivative = {
       module: TerrainDerivative,
       props: {

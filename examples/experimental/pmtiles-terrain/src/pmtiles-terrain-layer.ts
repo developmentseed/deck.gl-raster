@@ -13,7 +13,7 @@ import type { TerrainTileData } from "./terrain/types.js";
  * a protected hook, which the COG layers turn on the same way. This subclass
  * exists for that, until a public prop does.
  */
-export class PMTilesTerrainLayer extends RasterTileLayer<TerrainTileData> {
+export class PMTilesTerrainLayer extends RasterTileLayer<TerrainTileData | null> {
   static override layerName = "PMTilesTerrainLayer";
 
   /** Abort loads nobody wants; see the class comment. */
