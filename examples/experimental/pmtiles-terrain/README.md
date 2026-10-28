@@ -119,14 +119,14 @@ headed Chrome.
 | Connection | Mode | HTTP requests | Data | All tiles drawn |
 | --- | --- | --- | --- | --- |
 | fast | per tile | 14 | 1.9 MB | 1.9 s |
-| fast | merged | 7 | 2.0 MB | 1.2-1.6 s |
+| fast | merged | 7 | 2.0 MB | 1.2-1.9 s |
 | 150 ms round trips, 20 Mbit/s | per tile | 14 | 1.9 MB | 2.1-2.3 s |
 | 150 ms round trips, 20 Mbit/s | merged | 7 | 2.0 MB | 1.8-1.9 s |
 
 Mapterhorn serves over HTTP/2, which multiplexes many requests cheaply, so
-merging saves more requests than time here: half the requests, and the view
-drawn 0.2-0.7 s sooner. Times come from a readout that refreshes every
-250 ms.
+merging saves more requests than time here: half the requests, for a view
+drawn as soon or up to 0.7 s sooner. Times come from a readout that refreshes
+every 250 ms.
 
 ## What's provisional
 
