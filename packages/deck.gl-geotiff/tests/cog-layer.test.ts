@@ -488,7 +488,9 @@ describe("COGLayer refetching", () => {
           renderTile: () => null,
           onTileUnload,
           pool: {} as DecoderPool,
+          // Start every load at once, without COGLayer's default debounce
           maxRequests: 0,
+          debounceTime: 0,
           updateTriggers: { getTileData: [trigger] },
         }),
       ]);
