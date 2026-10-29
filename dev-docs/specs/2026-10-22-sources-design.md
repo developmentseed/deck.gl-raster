@@ -534,6 +534,7 @@ new MosaicLayer({
 | `MultiCOGSourceConfig` | Removed. A record of inputs replaces it. |
 | `MosaicLayer({ sources })` | `MosaicLayer({ data })`: an array, a promise, or a URL with `dataTransform` (stage 3). |
 | `{ data }` in `renderSource`, `onSourceLoad` and `onSourceUnload` | `{ source }`, the source `getSource` opened (stage 3). |
+| `signal` in `renderSource`'s options | Removed: it couldn't stop a layer's tile requests, and could arrive already aborted. |
 | `onViewportLoad` entries `{ source, data }` | `{ item, source }` (stage 3). |
 | `MosaicSource` | `MosaicItem` (stage 3). |
 | `ZarrLayer({ node, variable, metadata })` | `ZarrLayer({ source })`: a group or array, or a `ZarrSource` from `ZarrSource.open(node, { variable, geoZarrMetadata })` (4b). |
