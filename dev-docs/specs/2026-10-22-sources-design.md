@@ -225,7 +225,7 @@ This was settled on 2026-10-28, for 4c:
       still marked visible. It also drops or replaces their data without
       `onTileUnload`, so their textures would leak.
 
-This was settled on 2026-10-29, instead of stage 5:
+This was settled on 2026-10-29, replacing stage 5's plan:
 
 25. **One layer per source class.** COGLayer draws a `COGSource`,
     MultiCOGLayer a `MultiCOGSource`, and ZarrLayer a `ZarrSource`, so each
