@@ -35,10 +35,9 @@ type COGLayerDataProps<DataT extends MinimalTileData> =
        * GPU texture, and renders it using an inferred shader pipeline.
        *
        * To fetch the tiles again when something this function reads changes,
-       * change `updateTriggers.getTileData` (or `updateTriggers.all`). The
-       * layer drops every tile at once and fetches the visible ones again.
+       * change `updateTriggers.getTileData` (or `updateTriggers.all`).
        * deck.gl compares each element of a trigger with `===`, so keep them
-       * the same across renders, or every render fetches every tile again.
+       * the same across renders.
        */
       getTileData: (
         image: GeoTIFF | Overview,

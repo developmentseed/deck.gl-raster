@@ -94,10 +94,8 @@ export type ZarrLayerProps<
    * draws nothing until the selection is fixed. Changing the selection never
    * opens the source again.
    *
-   * Changing the selection fetches the visible tiles again. The tiles of the
-   * old selection go at once, so their data is never drawn for the new one.
-   * Selections are compared by value, so an inline literal with the same
-   * contents fetches nothing.
+   * Changing the selection fetches the tiles again. Selections are compared
+   * by value.
    */
   selection: Record<string, SliceInput>;
 
@@ -109,12 +107,10 @@ export type ZarrLayerProps<
    * `zarr.get(arr, sliceSpec)` and convert the result to whatever format your
    * `renderTile` callback expects.
    *
-   * A new `selection` fetches the tiles again on its own. For anything else
-   * this function reads, change `updateTriggers.getTileData` (or
-   * `updateTriggers.all`): the layer drops every tile at once and fetches the
-   * visible ones again. deck.gl compares each element of a trigger with
-   * `===`, so keep them the same across renders, or every render fetches
-   * every tile again.
+   * A new `selection` fetches the tiles again. For anything else this
+   * function reads, change `updateTriggers.getTileData` (or
+   * `updateTriggers.all`). deck.gl compares each element of a trigger with
+   * `===`, so keep them the same across renders.
    */
   getTileData: (
     arr: zarr.Array<Dtype, Store>,

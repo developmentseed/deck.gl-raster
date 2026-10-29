@@ -106,12 +106,9 @@ export type RasterTileLayerProps<
      * is cached by the underlying TileLayer.
      *
      * To fetch the tiles again when something this function reads changes,
-     * change `updateTriggers.getTileData` (or `updateTriggers.all`). The layer
-     * drops every tile at once, so the old data is never drawn after the
-     * change, and fetches the visible tiles again. deck.gl compares each
-     * element of a trigger with `===`, so keep them the same across renders:
-     * a new object in one, such as `[{ time }]`, fetches every tile again on
-     * every render.
+     * change `updateTriggers.getTileData` (or `updateTriggers.all`). deck.gl
+     * compares each element of a trigger with `===`, so keep them the same
+     * across renders.
      *
      * Subclasses may supply this via state by overriding
      * `_getTileDataCallback()`.
@@ -309,10 +306,7 @@ export class RasterTileLayer<
     loadingMetadata?: boolean;
     /** The source the layer draws: `source` itself, or the one opened from it. */
     source?: SourceT;
-    /**
-     * How many times the layer has fetched its tiles again. It's part of the
-     * inner TileLayer's id, so each refetch gets a new TileLayer.
-     */
+    /** The number of refetches, part of the inner TileLayer's id. */
     refetchCount?: number;
   };
 
@@ -496,20 +490,13 @@ export class RasterTileLayer<
   }
 
   /**
-   * Drop every tile and fetch the visible ones again.
+   * Drop every tile and fetch the visible ones again, through a new inner
+   * TileLayer. It doesn't use deck.gl's `reloadAll`, which keeps drawing old
+   * tiles (see #818).
    *
-   * The inner TileLayer gets a new id, so deck.gl removes the old one at once.
-   * Its tileset aborts the loads in flight and unloads every tile, so the old
-   * data is never drawn again. The new tiles appear as they load.
-   *
-   * A change to `updateTriggers.getTileData` or `updateTriggers.all` calls
-   * this. Subclasses call it when something their `getTileData` reads
-   * changes, as `ZarrLayer` does for `selection`. A subclass that renders its
-   * own TileLayer puts `state.refetchCount` in that TileLayer's id.
-   *
-   * deck.gl's own reload, `Tileset2D.reloadAll`, would keep drawing old tiles.
-   * It also drops or replaces their data without `onTileUnload`, so their
-   * textures would leak.
+   * Subclasses call this when something their `getTileData` reads changes. A
+   * subclass that renders its own TileLayer puts `state.refetchCount` in its
+   * id.
    */
   protected _refetchTiles(): void {
     this.setState({ refetchCount: (this.state.refetchCount ?? 0) + 1 });
