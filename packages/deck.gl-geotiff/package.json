@@ -51,6 +51,7 @@
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/geotiff": "workspace:^",
+    "@developmentseed/range-reader": "workspace:^",
     "@developmentseed/morecantile": "workspace:^",
     "@developmentseed/proj": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",

@@ -6,6 +6,7 @@ export { COGLayer } from "./cog-layer.js";
 export type { COGInput, COGSourceOptions } from "./cog-source.js";
 export { COGSource } from "./cog-source.js";
 export { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
+export { DEFAULT_RANGE_READER } from "./default-range-reader.js";
 export { addAlphaChannel } from "./geotiff/geotiff.js";
 export type { TextureDataT } from "./geotiff/render-pipeline.js";
 export { createTextureProps, inferTextureFormat } from "./geotiff/texture.js";

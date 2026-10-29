@@ -580,6 +580,14 @@ export class RasterTileLayer<
   }
 
   /**
+   * Whether the tileset aborts a tile's load once the tile is neither
+   * selected nor visible. Off here; the COG layers turn it on.
+   */
+  protected _abortUnwantedLoads(): boolean {
+    return false;
+  }
+
+  /**
    * Hook for rendering per-tile debug overlay sub-layers.
    *
    * Called once per tile from `_renderSubLayers` only when `props.debug` is
@@ -645,9 +653,11 @@ export class RasterTileLayer<
     // because deck.gl compares `TilesetClass` by identity: the new class makes
     // the inner `TileLayer` re-render loaded tiles with the current props.
     // See #710.
+    const abortUnwantedLoads = this._abortUnwantedLoads();
     class TilesetFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
         super(opts, descriptor, {
+          abortUnwantedLoads,
           getPixelRatio: () => {
             const ctx = device.getDefaultCanvasContext();
             const [drawingBufferWidth] = ctx.getDrawingBufferSize();

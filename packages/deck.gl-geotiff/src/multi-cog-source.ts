@@ -14,6 +14,7 @@ import {
 } from "@developmentseed/proj";
 import type { COGInput, COGSourceOptions } from "./cog-source.js";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
+import { DEFAULT_RANGE_READER } from "./default-range-reader.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 import { resolveProjection } from "./projection.js";
@@ -142,6 +143,8 @@ export class MultiCOGSource extends RasterSource {
       epsgResolver = defaultEpsgResolver,
       concurrencyLimiter = DEFAULT_CONCURRENCY_LIMITER,
       getPriority,
+      reader = DEFAULT_RANGE_READER,
+      requestInit,
     } = options;
     signal?.throwIfAborted();
 
@@ -156,6 +159,8 @@ export class MultiCOGSource extends RasterSource {
           const geotiff = await fetchGeoTIFF(input, {
             concurrencyLimiter,
             getPriority,
+            reader,
+            requestInit,
             signal,
           });
           return [name, geotiff] as const;

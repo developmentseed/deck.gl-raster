@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../src/default-concurrency-limiter.js";
+import { DEFAULT_RANGE_READER } from "../src/default-range-reader.js";
 import type { SceneFile } from "../src/multi-cog-source.js";
 import { checkSameScene, MultiCOGSource } from "../src/multi-cog-source.js";
 import { fixturePath, loadGeoTIFF } from "./helpers.js";
@@ -201,6 +202,8 @@ describe("MultiCOGSource.open", () => {
     expect(fromUrl).toHaveBeenCalledWith("https://example.com/a.tif", {
       concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
       getPriority,
+      reader: DEFAULT_RANGE_READER,
+      requestInit: undefined,
       signal,
     });
   });

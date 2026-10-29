@@ -115,6 +115,8 @@ request.
 
 ## Status
 
-Stage 1 of the design in `dev-docs/specs/2026-10-26-range-reader-design.md`:
-the package has no consumers yet. `@developmentseed/geotiff` adopts it in
-stage 2, so every COG layer reads through it.
+The design in `dev-docs/specs/2026-10-26-range-reader-design.md`, all
+three stages: `@developmentseed/geotiff` reads every COG through it
+(`GeoTIFF.fromUrl`), and the deck.gl COG layers share one reader by default
+(`DEFAULT_RANGE_READER` in `@developmentseed/deck.gl-geotiff`). Sharded Zarr
+is next.

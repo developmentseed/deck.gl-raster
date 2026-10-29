@@ -617,6 +617,82 @@ importers:
         specifier: ^8.3.1
         version: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0)
 
+  examples/experimental/pmtiles-terrain:
+    dependencies:
+      '@chakra-ui/react':
+        specifier: ^3.37.0
+        version: 3.37.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@deck.gl/core':
+        specifier: ^9.4.0
+        version: 9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
+      '@deck.gl/geo-layers':
+        specifier: ^9.4.0
+        version: 9.4.0(1911ea764947fb8f33e4dca0f8034ddd)
+      '@deck.gl/layers':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
+      '@deck.gl/mesh-layers':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.4.3)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))
+      '@deck.gl/widgets':
+        specifier: ^9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@luma.gl/core@9.4.2)
+      '@developmentseed/deck.gl-raster':
+        specifier: workspace:^
+        version: link:../../../packages/deck.gl-raster
+      '@developmentseed/morecantile':
+        specifier: workspace:^
+        version: link:../../../packages/morecantile
+      '@developmentseed/range-reader':
+        specifier: workspace:^
+        version: link:../../../packages/range-reader
+      '@luma.gl/core':
+        specifier: ^9.4.2
+        version: 9.4.2
+      '@luma.gl/shadertools':
+        specifier: ^9.4.2
+        version: 9.4.2(@luma.gl/core@9.4.2)
+      deck.gl-raster-examples-shared:
+        specifier: workspace:*
+        version: link:../../_shared
+      maplibre-gl:
+        specifier: ^5.24.0
+        version: 5.24.0
+      pmtiles:
+        specifier: ^4.5.0
+        version: 4.5.0
+      proj4:
+        specifier: ^2.22.0
+        version: 2.22.0(geotiff@3.0.5)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.0(react@19.3.0)
+      react-map-gl:
+        specifier: ^8.1.3
+        version: 8.1.3(maplibre-gl@5.24.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.1
+        version: 6.1.1(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0))
+      gh-pages:
+        specifier: ^6.3.0
+        version: 6.3.0
+      vite:
+        specifier: ^8.3.1
+        version: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0)
+      vitest:
+        specifier: ^5.0.2
+        version: 5.0.2(@types/node@26.6.3)(happy-dom@20.0.11)(jsdom@30.1.1(@noble/hashes@1.8.0))(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0))
+
   examples/experimental/titiler-cog:
     dependencies:
       '@chakra-ui/react':
@@ -1228,6 +1304,9 @@ importers:
       '@developmentseed/geotiff':
         specifier: workspace:^
         version: link:../../packages/geotiff
+      '@developmentseed/range-reader':
+        specifier: workspace:^
+        version: link:../../packages/range-reader
       '@luma.gl/core':
         specifier: ^9.4.2
         version: 9.4.2
@@ -1380,6 +1459,9 @@ importers:
       '@developmentseed/proj':
         specifier: workspace:^
         version: link:../proj
+      '@developmentseed/range-reader':
+        specifier: workspace:^
+        version: link:../range-reader
       '@developmentseed/raster-reproject':
         specifier: workspace:^
         version: link:../raster-reproject
@@ -1536,13 +1618,7 @@ importers:
 
   packages/geotiff:
     dependencies:
-      '@chunkd/middleware':
-        specifier: ^11.3.1
-        version: 11.3.1
       '@chunkd/source':
-        specifier: ^11.4.1
-        version: 11.4.1
-      '@chunkd/source-http':
         specifier: ^11.4.1
         version: 11.4.1
       '@chunkd/source-memory':
@@ -1576,6 +1652,9 @@ importers:
         specifier: ^14.0.2
         version: 14.0.2
     devDependencies:
+      '@chunkd/middleware':
+        specifier: ^11.3.1
+        version: 11.3.1
       '@chunkd/source-file':
         specifier: ^11.2.1
         version: 11.2.1
@@ -2454,10 +2533,6 @@ packages:
   '@chunkd/source-file@11.2.1':
     resolution: {integrity: sha512-+WV6kCcd4ehe0/9nd7VCUBFOJPtP+X0OHohlZlr1RsM8LnMBd0+Jo/CUwrlStmGAUgU4T3qSdbUE/cwCODXZNQ==}
     engines: {node: '>=16.0.0'}
-
-  '@chunkd/source-http@11.4.1':
-    resolution: {integrity: sha512-h/7tWxFh6EUh5k/pcYh66WSwiVbIWM6mCCLH0TZpBSWzgekjOXqXkEMRUBXrhekqrmtPQdTPro5e7tnknIdESg==}
-    engines: {node: '>=18.0.0'}
 
   '@chunkd/source-memory@11.2.1':
     resolution: {integrity: sha512-+WDp5x71OqfFm2AbX4ev9xn+HhP8SAfUAdTsDQtiO8sR65abZAkZ6GK0laOK5p24tA72dhCaUIVrFC8swVgFiQ==}
@@ -8266,6 +8341,9 @@ packages:
     resolution: {integrity: sha512-Oo/NZcSWccq8KyoG7gLE9fnltgHns+pNCjCAp/WmjsUySi+sX7y4z4Xqu4fVb42CDHzRPl33fjzT15V1wvcyhA==}
     engines: {node: '>=16.0.0'}
 
+  pmtiles@4.5.0:
+    resolution: {integrity: sha512-CBeD4SoUluFziGdy/8k7FOjQxQy486n+929W/tWophauvMICpkZ26vGBWhDt/6b1FZQWNaf4jFdT/5+q0Wii5w==}
+
   postcss-attribute-case-insensitive@7.0.1:
     resolution: {integrity: sha512-Uai+SupNSqzlschRyNx3kbCTWgY/2hcwtHEI/ej2LJWc9JJ77qKgGptd8DHwY1mXtZ7Aoh4z4yxfwMBue9eNgw==}
     engines: {node: '>=18'}
@@ -11200,10 +11278,6 @@ snapshots:
       '@chunkd/source': 11.4.1
 
   '@chunkd/source-file@11.2.1':
-    dependencies:
-      '@chunkd/source': 11.4.1
-
-  '@chunkd/source-http@11.4.1':
     dependencies:
       '@chunkd/source': 11.4.1
 
@@ -18862,6 +18936,10 @@ snapshots:
       pvtsutils: 1.3.6
       pvutils: 1.2.0
       tslib: 2.8.1
+
+  pmtiles@4.5.0:
+    dependencies:
+      fflate: 0.8.3
 
   postcss-attribute-case-insensitive@7.0.1(postcss@8.5.28):
     dependencies:

@@ -118,6 +118,18 @@ export class COGLayer<
   DataT extends MinimalTileData = TextureDataT,
 > extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
   static override layerName = "COGLayer";
+  // Release a whole selection to the range reader at once, which merges its
+  // reads; the per-origin limiter caps requests. Cast as in MultiCOGLayer.
+  static override defaultProps = {
+    ...RasterTileLayer.defaultProps,
+    maxRequests: 256,
+    debounceTime: 50,
+  } as unknown as typeof RasterTileLayer.defaultProps;
+
+  /** On: a tile that leaves the view must stop its stream. */
+  protected override _abortUnwantedLoads(): boolean {
+    return true;
+  }
 
   declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
