@@ -98,7 +98,7 @@ export default function App() {
   const layers = source
     ? [
         new ZarrLayer<AefTileData, "int8">({
-          id: `aef-zarr-layer-${yearIdx}`,
+          id: "aef-zarr-layer",
           source,
           selection,
           getTileData,

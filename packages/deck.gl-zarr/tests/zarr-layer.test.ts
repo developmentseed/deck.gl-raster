@@ -272,6 +272,42 @@ describe("ZarrLayer selection", () => {
   });
 });
 
+describe("ZarrLayer refetching", () => {
+  /**
+   * The id of the inner TileLayer that `layer` renders. Each refetch gets a
+   * new one, which drops every tile of the old one.
+   */
+  function innerTileLayerId(layer: ZarrLayer): string | undefined {
+    Object.assign(layer as object, { context: { device: {} } });
+    return (layer.renderLayers() as { id: string } | null)?.id;
+  }
+
+  it("fetches its tiles again when the selection changes", async () => {
+    const source = await openFixture("timed");
+    const props = { source, ...tileCallbacks };
+    const layer = makeBareLayer({ ...props, selection: { time: 0 } });
+    runInitialUpdate(layer);
+    const before = innerTileLayerId(layer);
+
+    const next = rerender(layer, { ...props, selection: { time: 1 } });
+
+    expect(innerTileLayerId(next)).not.toBe(before);
+  });
+
+  it("keeps its tiles for an equal selection", async () => {
+    const source = await openFixture("timed");
+    const props = { source, ...tileCallbacks };
+    const layer = makeBareLayer({ ...props, selection: { time: 0 } });
+    runInitialUpdate(layer);
+    const before = innerTileLayerId(layer);
+
+    // A new object with the same contents, as an inline literal gives
+    const next = rerender(layer, { ...props, selection: { time: 0 } });
+
+    expect(innerTileLayerId(next)).toBe(before);
+  });
+});
+
 describe("ZarrLayer tiles", () => {
   it("reads an edge tile of the finest level, at the selection", async () => {
     const source = await openSource(await openGroup("timed"));

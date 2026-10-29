@@ -208,6 +208,24 @@ These were settled on 2026-10-26, for stage 4:
     `projectionFunctions` move to `@developmentseed/proj`, so both formats
     share them.
 
+This was settled on 2026-10-28, for 4c:
+
+24. **A refetch replaces the inner TileLayer.**
+    - **The mechanism:** `RasterTileLayer` counts refetches, and puts the
+      count in its inner TileLayer's id. deck.gl removes the old TileLayer at
+      once, and its tileset aborts the loads in flight and unloads every tile
+      ([#728](https://github.com/developmentseed/deck.gl-raster/pull/728)).
+    - **What refetches:** a change to `updateTriggers.getTileData` or
+      `updateTriggers.all`, and a change to ZarrLayer's `selection`, compared
+      by value.
+    - **The old tiles go at once.** The map shows nothing where new tiles
+      haven't loaded yet. Kyle chose this over keeping the old tiles drawn:
+      they would show stale data after the controls show the new selection.
+    - **deck.gl's own reload, `Tileset2D.reloadAll`, isn't used.** In 9.4 it
+      keeps drawing old tiles: the tiles it drops stay in `tileset.tiles`,
+      still marked visible. It also drops or replaces their data without
+      `onTileUnload`, so their textures would leak.
+
 ## Goals
 
 - `COGSource` (one file), `MultiCOGSource` (several files of one scene) and
@@ -394,8 +412,8 @@ Today's layers reload by rendering nothing for a frame, which removes the
 TileLayer. A new opened source switches without that gap. So `RasterTileLayer`
 names its inner TileLayer after the descriptor object, and a new descriptor
 gets a new TileLayer. Without that, the layer would keep drawing the old
-source's tiles on the old grid. Refetching tiles on the same grid, as #797
-proposes with `updateTriggers`, is a separate need.
+source's tiles on the old grid. Refetching tiles on the same grid gets a new
+TileLayer too (decision 24).
 
 **Shorthand (decision 6).** `new COGLayer({ source: url })` opens a private
 source in `loadMetadata` (stage 1). It calls the same `COGSource.open`, so the
@@ -427,11 +445,14 @@ new ZarrLayer({ id: "zarr", source, selection: { time: t }, getTileData, renderT
 - **Stays on the layer:** `selection`, checked against the source's dimensions
   synchronously whenever it or the source changes (decision 22).
 - **Refetching (4c):** ZarrLayer fetches its tiles again when `selection`
-  changes. Apps then no longer pass
-  `updateTriggers: { renderTile: [selection] }`
-  ([today's note](https://github.com/developmentseed/deck.gl-raster/blob/0636834044bd9049a1a79a4e33f25a5bdda3ce90/packages/deck.gl-zarr/src/zarr-layer.ts#L372)),
-  which only redraws the old data, or put the selection in the layer `id`,
-  which drops every tile and leaves the map blank until new ones load.
+  changes, compared by value (decision 24).
+  - The old tiles go at once, so the map shows nothing where new tiles haven't
+    loaded yet, rather than the old selection's data.
+  - Apps no longer pass `updateTriggers: { renderTile: [selection] }`
+    ([today's note](https://github.com/developmentseed/deck.gl-raster/blob/0636834044bd9049a1a79a4e33f25a5bdda3ce90/packages/deck.gl-zarr/src/zarr-layer.ts#L372)),
+    which only redraws the old data.
+  - Apps no longer put the selection in the layer `id` either, which started
+    a new layer.
 
 ### MosaicLayer
 
@@ -506,7 +527,7 @@ new MosaicLayer({
 | `onViewportLoad` entries `{ source, data }` | `{ item, source }` (stage 3). |
 | `MosaicSource` | `MosaicItem` (stage 3). |
 | `ZarrLayer({ node, variable, metadata })` | `ZarrLayer({ source })`: a group or array, or a `ZarrSource` from `ZarrSource.open(node, { variable, geoZarrMetadata })` (4b). |
-| `updateTriggers: { renderTile: [selection] }` on ZarrLayer | Not needed (4c). |
+| `updateTriggers: { renderTile: [selection] }`, or the selection in the layer `id`, on ZarrLayer | Not needed: a new `selection` fetches the tiles again (4c). |
 
 ## Stages
 
@@ -595,19 +616,23 @@ Each stage is one PR.
      - The `window.*` debug lines in ZarrLayer's load go: they throw where
        `window` is undefined.
      - Tests mirror stage 2, and check `selection` when it changes.
-   - **4c: tiles refresh when `selection` changes.** *Plan:*
-     - `RasterTileLayer` passes `updateTriggers.getTileData` (and `all`) to
-       its inner TileLayer, the first part of
-       [#797](https://github.com/developmentseed/deck.gl-raster/issues/797).
-     - ZarrLayer adds its `selection` to that trigger, compared by value, so
-       an inline `{ time: t }` doesn't refetch on every render.
-     - deck.gl keeps the old tiles drawn until their replacements arrive.
-     - deck.gl 9.4's `Tileset2D.reloadAll` never calls `onTileUnload`, either
-       for the tiles it drops or for the data it replaces, so their textures
-       would leak. `RasterTileset2D` unloads them, as it already does on
-       `finalize`
-       ([#728](https://github.com/developmentseed/deck.gl-raster/pull/728)).
-       #797's proposal has the same leak.
+   - **4c: tiles refresh when `selection` changes** (decision 24). *As built:*
+     - **`RasterTileLayer._refetchTiles()`** gives the inner TileLayer a new
+       id. A change to `updateTriggers.getTileData` or `updateTriggers.all`
+       calls it. That closes
+       [#797](https://github.com/developmentseed/deck.gl-raster/issues/797)
+       for COGLayer, MultiCOGLayer and ZarrLayer; MosaicLayer's part is
+       [#816](https://github.com/developmentseed/deck.gl-raster/issues/816).
+     - **ZarrLayer** calls it when it checks a new source and selection pair,
+       so an inline `{ time: t }` with the same contents fetches nothing.
+     - **The old tiles go at once.**
+     - **The plan changed.** It was to forward the triggers to the inner
+       TileLayer, keep the old tiles drawn until replaced, and patch
+       `reloadAll`'s leaks in `RasterTileset2D`. Checking deck.gl 9.4 showed
+       that `reloadAll` also keeps drawing the tiles it drops, so 4c doesn't
+       use it.
+     - **Examples:** aef-mosaic and dynamical-zarr-ecmwf no longer put the
+       selection in their layer `id`.
 5. **COGLayer renders record sources.** It takes over MultiCOGLayer's band
    compositing, and MultiCOGLayer is deprecated (removed later). The Sentinel-2
    mosaic demo follows.

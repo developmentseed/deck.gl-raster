@@ -105,6 +105,11 @@ export type RasterTileLayerProps<
      * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
      * is cached by the underlying TileLayer.
      *
+     * To fetch the tiles again when something this function reads changes,
+     * change `updateTriggers.getTileData` (or `updateTriggers.all`). deck.gl
+     * compares each element of a trigger with `===`, so keep them the same
+     * across renders.
+     *
      * Subclasses may supply this via state by overriding
      * `_getTileDataCallback()`.
      */
@@ -301,6 +306,8 @@ export class RasterTileLayer<
     loadingMetadata?: boolean;
     /** The source the layer draws: `source` itself, or the one opened from it. */
     source?: SourceT;
+    /** The number of refetches, part of the inner TileLayer's id. */
+    refetchCount?: number;
   };
 
   override updateState(params: UpdateParameters<this>): void {
@@ -314,6 +321,13 @@ export class RasterTileLayer<
     }
     if (this.shouldLoadMetadata(params)) {
       this._loadMetadata();
+    }
+    const { updateTriggersChanged } = params.changeFlags;
+    if (
+      updateTriggersChanged &&
+      (updateTriggersChanged.all || updateTriggersChanged.getTileData)
+    ) {
+      this._refetchTiles();
     }
   }
 
@@ -473,6 +487,19 @@ export class RasterTileLayer<
     if (this.state.loadingMetadata) {
       this.setState({ loadingMetadata: false });
     }
+  }
+
+  /**
+   * Drop every tile and fetch the visible ones again, through a new inner
+   * TileLayer. It doesn't use deck.gl's `reloadAll`, which keeps drawing old
+   * tiles (see #818).
+   *
+   * Subclasses call this when something their `getTileData` reads changes. A
+   * subclass that renders its own TileLayer puts `state.refetchCount` in its
+   * id.
+   */
+  protected _refetchTiles(): void {
+    this.setState({ refetchCount: (this.state.refetchCount ?? 0) + 1 });
   }
 
   /**
@@ -661,8 +688,8 @@ export class RasterTileLayer<
 
     return new TileLayer<DataT>({
       // A TileLayer builds its tile grid once, from its first descriptor, so a
-      // new descriptor needs a new TileLayer
-      id: `raster-tile-layer-${this.id}-${descriptorId(descriptor)}`,
+      // new descriptor needs a new TileLayer. So does each refetch.
+      id: `raster-tile-layer-${this.id}-${descriptorId(descriptor)}-${this.state?.refetchCount ?? 0}`,
       TilesetClass: TilesetFactory,
       getTileData: (tile) => this._wrapGetTileData(tile, getTileData),
       renderSubLayers: (props) =>

@@ -94,8 +94,8 @@ export type ZarrLayerProps<
    * draws nothing until the selection is fixed. Changing the selection never
    * opens the source again.
    *
-   * Tiles already loaded keep the data of the selection they were fetched
-   * with. To fetch them again for a new selection, give the layer a new `id`.
+   * Changing the selection fetches the tiles again. Selections are compared
+   * by value.
    */
   selection: Record<string, SliceInput>;
 
@@ -106,6 +106,11 @@ export type ZarrLayerProps<
    * along with a pre-built `sliceSpec` (one entry per array dim). Call
    * `zarr.get(arr, sliceSpec)` and convert the result to whatever format your
    * `renderTile` callback expects.
+   *
+   * A new `selection` fetches the tiles again. For anything else this
+   * function reads, change `updateTriggers.getTileData` (or
+   * `updateTriggers.all`). deck.gl compares each element of a trigger with
+   * `===`, so keep them the same across renders.
    */
   getTileData: (
     arr: zarr.Array<Dtype, Store>,
@@ -185,6 +190,8 @@ export class ZarrLayer<
       );
     }
     this.setState({ checked: { source, selection, fits } });
+    // Tiles fetched for the old pair hold the wrong data
+    this._refetchTiles();
   }
 
   /**
