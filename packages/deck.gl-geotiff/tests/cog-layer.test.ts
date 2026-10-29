@@ -1,5 +1,12 @@
-import { CompositeLayer } from "@deck.gl/core";
+import {
+  CompositeLayer,
+  LayerManager,
+  WebMercatorViewport,
+} from "@deck.gl/core";
+import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
+import type { DecoderPool } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
+import type { Device } from "@luma.gl/core";
 import { Texture } from "@luma.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { COGLayer } from "../src/cog-layer.js";
@@ -439,5 +446,68 @@ describe("COGLayer.isLoaded", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(next.isLoaded).toBe(false);
+  });
+});
+
+describe("COGLayer refetching", () => {
+  it("fetches its tiles again when updateTriggers.getTileData changes", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const { west, south, east, north } = source.geographicBounds;
+    const viewport = new WebMercatorViewport({
+      width: 100,
+      height: 100,
+    }).fitBounds([
+      [west, south],
+      [east, north],
+    ]);
+    // A device that draws nothing. The layer reads only its canvas sizes.
+    const device = {
+      getDefaultCanvasContext: () => ({
+        getDrawingBufferSize: () => [100, 100],
+        getCSSSize: () => [100, 100],
+      }),
+    } as unknown as Device;
+    const errors: Error[] = [];
+    const layerManager = new LayerManager(device, {});
+    layerManager.setProps({ onError: (error: Error) => errors.push(error) });
+    layerManager.activateViewport(viewport);
+    const signals: AbortSignal[] = [];
+    const onTileUnload = vi.fn();
+    const render = (trigger: number) =>
+      layerManager.setLayers([
+        new COGLayer<MinimalTileData>({
+          id: "cog",
+          source,
+          // Each load settles only when aborted
+          getTileData: (_image, { signal }) => {
+            signals.push(signal!);
+            return new Promise<never>((_resolve, reject) => {
+              signal?.addEventListener("abort", () => reject(signal.reason));
+            });
+          },
+          renderTile: () => null,
+          onTileUnload,
+          pool: {} as DecoderPool,
+          maxRequests: 0,
+          updateTriggers: { getTileData: [trigger] },
+        }),
+      ]);
+
+    render(0);
+    await flush();
+    const first = [...signals];
+    render(1);
+    await flush();
+    // Read these before finalize, which aborts and unloads every tile
+    const aborted = first.filter((signal) => signal.aborted).length;
+    const unloaded = onTileUnload.mock.calls.length;
+    const refetched = signals.length - first.length;
+    layerManager.finalize();
+
+    expect(errors).toEqual([]);
+    expect(first.length).toBeGreaterThan(0);
+    expect(aborted).toBe(first.length);
+    expect(unloaded).toBe(first.length);
+    expect(refetched).toBe(first.length);
   });
 });
