@@ -427,7 +427,7 @@ export default function App() {
       // its tiles, in memory.
       getSource: async (item, opts) =>
         getCachedGeoTIFF(item.assets.image.href, opts),
-      renderSource: (item, { source, signal }) => {
+      renderSource: (item, { source }) => {
         const url = item.assets.image.href;
         return new COGLayer<TextureDataT>({
           id: `cog-${url}`,
@@ -446,7 +446,6 @@ export default function App() {
                       colormapReversed: colormapChoice.reversed,
                     }),
           onTileUnload: (tile) => tile.content?.texture.destroy(),
-          signal,
         });
       },
       // Disable the MosaicLayer tile cache: each cached tile is a full

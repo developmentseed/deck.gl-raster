@@ -393,6 +393,49 @@ describe("MosaicLayer sources", () => {
     ]);
   });
 
+  it("gives renderSource only the source of an item whose aborted open finished anyway", async () => {
+    const { render, moveTo } = makeMosaicRenderer();
+    const finish: Record<string, () => void> = {};
+    const seen: Record<string, object> = {};
+    const props = {
+      data: [A, F],
+      maxRequests: 1,
+      // Ignores the abort, as a source cache shared between loads can
+      getSource: (item: Item) =>
+        new Promise<Marker>((resolve) => {
+          finish[item.id] = () => resolve({ of: item.id });
+        }),
+      renderSource: (item: Item, options: object) => {
+        seen[item.id] = options;
+        return null;
+      },
+    };
+    await render(props);
+
+    // A leaves view while F starts. With more opens in flight than
+    // `maxRequests`, deck.gl aborts A's, which finishes anyway.
+    moveTo(
+      new WebMercatorViewport({
+        width: 512,
+        height: 512,
+        longitude: 105,
+        latitude: 5,
+        zoom: 3,
+      }),
+    );
+    await render(props);
+    finish.A!();
+    await render(props);
+    // A comes back into view
+    moveTo(VIEWPORT);
+    const { errors } = await render(props);
+
+    expect(errors).toEqual([]);
+    const { signal } = seen.A as { signal?: AbortSignal };
+    expect(signal?.aborted).not.toBe(true);
+    expect(seen.A).toEqual({ source: { of: "A" } });
+  });
+
   it("passes an evicted item's source to onSourceUnload", async () => {
     const { render, moveTo } = makeMosaicRenderer();
     const data = [A, B, F];
