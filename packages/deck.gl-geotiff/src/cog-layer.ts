@@ -91,28 +91,18 @@ export type COGLayerProps<DataT extends MinimalTileData = TextureDataT> = Omit<
     onSourceLoad?: (source: COGSource) => void;
 
     /**
-     * Worker pool for decoding image chunks.
-     *
-     * If none is provided, a default Pool will be created and shared between all
-     * COGLayer and GeoTIFFLayer instances.
+     * Worker pool for decoding image chunks. Without one, every layer shares a
+     * default pool.
      */
     pool?: DecoderPool;
-
-    /** A user-provided AbortSignal to cancel tile requests. It doesn't abort
-     * opening `source`: the layer aborts that itself when `source` changes or
-     * the layer is removed.
-     *
-     * This can be useful in combination with the MosaicLayer, so that when a
-     * mosaic source is out of the viewport, all of its tile requests are
-     * automatically aborted.
-     */
-    signal?: AbortSignal;
   };
 
 /**
  * COGLayer renders a COG using a tiled approach with reprojection.
  *
  * Its `source` is an opened {@link COGSource}, or a COG for the layer to open.
+ * For the bands of one scene stored as separate files, use
+ * {@link MultiCOGLayer}.
  */
 export class COGLayer<
   DataT extends MinimalTileData = TextureDataT,

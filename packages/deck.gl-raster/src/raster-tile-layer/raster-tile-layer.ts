@@ -154,7 +154,8 @@ export type RasterTileLayerProps<
 
     /**
      * AbortSignal applied to every tile fetch, composed with TileLayer's
-     * per-tile signal.
+     * per-tile signal. It doesn't abort opening `source`: the layer aborts
+     * that itself when `source` changes or the layer is removed.
      */
     signal?: AbortSignal;
 

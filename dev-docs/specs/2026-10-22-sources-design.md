@@ -134,8 +134,7 @@ These were settled on 2026-10-26, for stage 2:
       texture, while MultiCOGLayer uploads each band as its own one-channel
       texture and turns integers into `r32float`. A format on the source would
       fit only one of them.
-    - Revisit once one pipeline is left (stage 5), or with a revamp of how
-      shaders read textures.
+    - Revisit with a revamp of how shaders read textures.
 
 These were settled on 2026-10-26, for stage 3:
 
@@ -225,6 +224,18 @@ This was settled on 2026-10-28, for 4c:
       keeps drawing old tiles: the tiles it drops stay in `tileset.tiles`,
       still marked visible. It also drops or replaces their data without
       `onTileUnload`, so their textures would leak.
+
+This was settled on 2026-10-29, replacing stage 5's plan:
+
+25. **One layer per source class.** COGLayer draws a `COGSource`,
+    MultiCOGLayer a `MultiCOGSource`, and ZarrLayer a `ZarrSource`, so each
+    layer's props, `onSourceLoad` and tile data have exact types.
+    - **Why not one COG layer:** TypeScript can't pick props by what `source`
+      holds. One layer for both COG classes would need a union for
+      `onSourceLoad`, props that apply to one kind of source only, and tile
+      callbacks typed for the wrong data.
+    - **Mosaics:** `renderSource` returns the layer for each item's source,
+      as it already can.
 
 ## Goals
 
@@ -349,11 +360,11 @@ handles these rejections. (On the shorthand path the layer still reports them
 through `onError`, as today.)
 
 **A bare input versus a record.** A bare input is one file, opened as a
-`COGSource` and rendered by today's COGLayer pipeline. A record means bands
-addressed by name, opened as a `MultiCOGSource` and rendered by band
-compositing (`composite` refers to the record's keys), even if it has only one
-entry. The class states the intent, so the file count never decides how
-something renders.
+`COGSource` and drawn by COGLayer. A record means bands addressed by name,
+opened as a `MultiCOGSource` and drawn by MultiCOGLayer's band compositing
+(`composite` refers to the record's keys), even if it has only one entry. The
+class states the intent, so the file count never decides how something renders
+(decision 25).
 
 ### The files of one scene
 
@@ -483,8 +494,7 @@ new MosaicLayer({
   header byte cache, so `maxCacheByteSize` can bound them.
 - A scene stored as one file per band is a record:
   `getSource: (item) => MultiCOGSource.open({ red: ..., nir: ... })`. That's
-  the Sentinel-2 mosaic, drawn by MultiCOGLayer, or by COGLayer once it renders
-  multi-file sources (stage 5).
+  the Sentinel-2 mosaic, drawn by MultiCOGLayer (decision 25).
 
 ### Sharing
 
@@ -520,7 +530,7 @@ new MosaicLayer({
 | `epsgResolver` on COGLayer, MultiCOGLayer, ZarrLayer | `open()` option. Removed from COGLayer in 2a, from MultiCOGLayer in 2b, and from ZarrLayer in 4b. |
 | `concurrencyLimiter` on COGLayer, MultiCOGLayer | `open()` option, removed from COGLayer in 2a and from MultiCOGLayer in 2b. MosaicLayer keeps its prop and forwards it to `getSource`. |
 | `onGeoTIFFLoad` | `onSourceLoad(source)` on the shorthand path (COGLayer in 2a, MultiCOGLayer in 2b). With a `source` prop, read `source.geographicBounds` before creating the layer. |
-| `MultiCOGLayer({ sources: { red: { url } } })` | `MultiCOGLayer({ source: { red: url } })`, or a `source` from `MultiCOGSource.open({ red: url })` (2b). MultiCOGLayer draws it until stage 5, then COGLayer does. |
+| `MultiCOGLayer({ sources: { red: { url } } })` | `MultiCOGLayer({ source: { red: url } })`, or a `source` from `MultiCOGSource.open({ red: url })` (2b). |
 | `MultiCOGSourceConfig` | Removed. A record of inputs replaces it. |
 | `MosaicLayer({ sources })` | `MosaicLayer({ data })`: an array, a promise, or a URL with `dataTransform` (stage 3). |
 | `{ data }` in `renderSource`, `onSourceLoad` and `onSourceUnload` | `{ source }`, the source `getSource` opened (stage 3). |
@@ -576,7 +586,7 @@ Each stage is one PR.
      - `MultiCOGSource.open(record, options)`, with the checks above (#723).
        Failures name the file.
      - MultiCOGLayer's `source` prop takes an opened `MultiCOGSource`, or a
-       record of COGs to open (the shorthand), until stage 5. `sources` and
+       record of COGs to open (the shorthand). `sources` and
        its `{ url }` wrapper are removed, its `epsgResolver` and
        `concurrencyLimiter` move to `open()`, and `onGeoTIFFLoad` becomes
        `onSourceLoad`.
@@ -633,9 +643,11 @@ Each stage is one PR.
        use it.
      - **Examples:** aef-mosaic and dynamical-zarr-ecmwf no longer put the
        selection in their layer `id`.
-5. **COGLayer renders record sources.** It takes over MultiCOGLayer's band
-   compositing, and MultiCOGLayer is deprecated (removed later). The Sentinel-2
-   mosaic demo follows.
+5. **One layer per source class** (decision 25). It replaces the plan for
+   COGLayer to take over MultiCOGLayer's band compositing and deprecate it.
+   *As built:* `MultiCOGLayerProps` starts from `RasterTileLayerProps`, as
+   `COGLayerProps` does, so each prop is declared once, and COGLayer's docs
+   point to MultiCOGLayer. The Sentinel-2 mosaic demo follows.
 
 ## Open questions
 
@@ -646,6 +658,8 @@ Each stage is one PR.
    outright, since we're before 1.0? *Decided:* removed outright
    (decision 11).
 4. **Timing of stage 5** (COGLayer absorbing MultiCOGLayer): 0.10, or later?
+   *Decided (2026-10-29):* COGLayer doesn't absorb MultiCOGLayer; each
+   source class keeps its own layer (decision 25).
 5. **A generic `RasterSource` base class** in deck.gl-raster, with a subclass
    per format (`COGSource`, `ZarrSource`), instead of unrelated classes. The
    base class would hold what every format shares, such as the tile grid, and
