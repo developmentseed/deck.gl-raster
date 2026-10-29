@@ -1,11 +1,6 @@
-import type {
-  CompositeLayerProps,
-  Layer,
-  UpdateParameters,
-} from "@deck.gl/core";
+import type { Layer, UpdateParameters } from "@deck.gl/core";
 import type {
   _Tile2DHeader as Tile2DHeader,
-  TileLayerProps,
   _TileLoadProps as TileLoadProps,
 } from "@deck.gl/geo-layers";
 import { PathLayer, TextLayer } from "@deck.gl/layers";
@@ -39,6 +34,7 @@ import type {
 import { assembleTiles, defaultDecoderPool } from "@developmentseed/geotiff";
 import type { Device, TextureFormat } from "@luma.gl/core";
 import { Texture } from "@luma.gl/core";
+import type { COGLayerProps } from "./cog-layer.js";
 import type { COGInput } from "./cog-source.js";
 import { isFilterable, resolveTextureFormat } from "./geotiff/texture.js";
 import { MultiCOGSource } from "./multi-cog-source.js";
@@ -117,23 +113,15 @@ interface MultiTileResult {
 }
 
 /**
- * Props accepted by {@link MultiCOGLayer}.
- *
- * Extends {@link CompositeLayerProps} with multi-source COG configuration and
- * optional tile-layer tuning knobs forwarded to the underlying
- * {@link TileLayerProps | TileLayer}.
- *
- * @see {@link MultiCOGLayer}
+ * Props for the {@link MultiCOGLayer}: those of {@link COGLayerProps}, with the
+ * files of one scene as `source`, and band compositing in place of a custom
+ * `getTileData` and `renderTile`.
  */
-export type MultiCOGLayerProps = CompositeLayerProps &
-  Pick<
-    TileLayerProps,
-    | "debounceTime"
-    | "maxCacheSize"
-    | "maxCacheByteSize"
-    | "maxRequests"
-    | "refinementStrategy"
-  > & {
+export type MultiCOGLayerProps = Omit<
+  RasterTileLayerProps<MultiTileResult>,
+  "tilesetDescriptor" | "getTileData" | "renderTile"
+> &
+  Pick<COGLayerProps, "pool"> & {
     /**
      * The files of one scene to draw: an opened {@link MultiCOGSource}, or a
      * record of COGs for the layer to open with the defaults of
@@ -206,48 +194,8 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     resampling?: "linear" | "nearest";
 
     /**
-     * Decoder pool for parallel image chunk decompression.
-     *
-     * @see {@link DecoderPool}
-     */
-    pool?: DecoderPool;
-
-    /**
-     * Maximum reprojection error for mesh refinement: how far a tile's mesh
-     * may draw a point from where it belongs on the map, in output pixels
-     * (one input pixel's size on the map, normally at the center of the
-     * meshed area).
-     * Lower values create denser meshes with higher accuracy.
-     *
-     * @default 0.125
-     */
-    maxError?: number;
-
-    /**
-     * AbortSignal applied to every tile fetch. It doesn't abort opening
-     * `source`: the layer aborts that itself when `source` changes or the
-     * layer is removed.
-     */
-    signal?: AbortSignal;
-
-    /**
-     * Enable debug overlay showing tile boundaries and metadata labels
-     * for all tilesets.
-     *
-     * @default false
-     */
-    debug?: boolean;
-
-    /**
-     * Opacity of the reprojection mesh debug overlay. Only used when
-     * `debug` is `true`. Forwarded to the underlying {@link RasterLayer}.
-     *
-     * @default 0.5
-     */
-    debugOpacity?: number;
-
-    /**
-     * Controls how much detail is shown in debug text labels.
+     * How much the debug labels show, with `debug` on. They label the primary
+     * tile and each band read at another resolution.
      *
      * - `1`: tile index and resolution only
      * - `2`: adds UV transform and tile count
