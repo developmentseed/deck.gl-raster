@@ -72,6 +72,12 @@ const packages = [
     readme: "../packages/proj/README.md",
   },
   {
+    id: "range-reader",
+    label: "range-reader",
+    entry: "../packages/range-reader/src/index.ts",
+    readme: "../packages/range-reader/README.md",
+  },
+  {
     id: "raster-reproject",
     label: "raster-reproject",
     entry: "../packages/raster-reproject/src/index.ts",

@@ -3,7 +3,6 @@ import { Compression, PlanarConfiguration, TiffTag } from "@cogeotiff/core";
 import { compose, translation } from "@developmentseed/affine";
 import type { ProjJson } from "@developmentseed/proj";
 import type { RasterArray } from "./array.js";
-import { coalesceRanges } from "./coalesce.js";
 import type { DecodedPixels, DecoderMetadata } from "./decode.js";
 import { decode } from "./decode.js";
 import type { CachedPrimaryImageTags, CachedSubImageTags } from "./ifd.js";
@@ -91,7 +90,7 @@ export async function fetchTile(
  * Decode already-fetched compressed tile (and optional mask) bytes into a
  * {@link Tile}. Performs no I/O — the bytes are supplied by the caller. Shared
  * by {@link fetchTile} (single-tile fetch) and {@link fetchTiles} (batched
- * fetch with range coalescing).
+ * fetch).
  */
 async function assembleTile(
   self: HasTiffReference,
@@ -161,12 +160,9 @@ async function assembleTile(
  * reads.
  *
  * Unlike repeated {@link fetchTile} calls, this resolves every requested
- * tile's byte range up front and fetches the data through {@link getTiles} /
- * {@link getMultipleBytes}, which coalesce nearby ranges into far fewer HTTP
- * range requests — a big win when the coordinates form a contiguous block, as
- * they do when assembling a coarse tile from finer covering tiles. Decoding is
- * still done per tile (via the shared {@link assembleTile}); only the I/O is
- * batched.
+ * tile's byte range up front and issues the reads together through
+ * {@link getTiles}, so the range reader can merge them. Decoding is still
+ * per tile; only the I/O is batched.
  *
  * @param self - The GeoTIFF or Overview to fetch tiles from.
  * @param xy - Array of `[x, y]` tile coordinates.
@@ -174,7 +170,7 @@ async function assembleTile(
  * @returns Array of {@link Tile} objects in the same order as `xy`.
  *
  * @see {@link fetchTile} for single-tile fetching.
- * @see {@link getTiles} for the batched, range-coalescing byte reader.
+ * @see {@link getTiles} for the batched byte reader.
  */
 export async function fetchTiles(
   self: HasTiffReference,
@@ -396,10 +392,9 @@ async function fetchBandSeparateTileBytes(
 }
 
 /**
- * Batched, range-coalescing counterpart to {@link fetchCogBytes}: fetch the
- * compressed bytes for many tiles in as few HTTP range requests as possible.
- * Returns one entry per input coordinate, in input order. Throws (matching
- * {@link fetchCogBytes}) if a requested tile is sparse / not present.
+ * Batched {@link fetchCogBytes}: the reads of many tiles are issued together.
+ * One entry per input coordinate, in order; throws for a sparse tile like
+ * {@link fetchCogBytes}.
  */
 async function fetchCogBytesMultiple(
   self: HasTiffReference,
@@ -443,10 +438,8 @@ async function fetchCogBytesMultiple(
 }
 
 /**
- * Batched, range-coalescing counterpart to {@link fetchBandSeparateTileBytes}.
- * Every band of every requested tile is flattened into a single
- * {@link getMultipleBytes} call, so coalescing can merge ranges across both
- * bands and neighbouring tiles; the results are regrouped per tile afterwards.
+ * Batched {@link fetchBandSeparateTileBytes}: every band of every tile goes
+ * into one {@link getMultipleBytes} call, regrouped per tile afterwards.
  */
 async function fetchBandSeparateTileBytesMultiple(
   self: HasTiffReference,
@@ -494,13 +487,8 @@ async function fetchBandSeparateTileBytesMultiple(
  * from `options.imageTags`, to the resulting ArrayBuffer (see
  * {@link prependJpegTables}).
  *
- * Though this function lives upstream in @cogeotiff/core, we vendor it here
- * so we can route the *tile data* read through a separate source. The tile's
- * byte range is looked up via {@link getTileByteRange}, which reads it through
- * the source that was passed to `Tiff.create` (our header source — cached for
- * small repeated reads). The actual tile bytes are then fetched from
- * `dataSource`, which is the raw HTTP source with no caching: tile data is
- * large and read once, so caching it would just evict header metadata.
+ * Vendored from @cogeotiff/core to read the tile bytes through `dataSource`
+ * rather than the header source.
  */
 async function getTile(
   image: TiffImage,
@@ -546,7 +534,7 @@ async function getTile(
     signal: options?.signal,
   });
 
-  // The actual tile bytes go through dataSource (uncached HTTP).
+  // The actual tile bytes go through dataSource.
   return getBytes(image, offset, imageSize, dataSource, options);
 }
 
@@ -602,11 +590,8 @@ function getTileByteRange(
 /**
  * Read image bytes at the given offset from `dataSource`.
  *
- * Though this function lives upstream in @cogeotiff/core, we vendor it here
- * so we can route reads through the data source (uncached) rather than the
- * header source (cached) that cogeotiff would use by default. Tile data is
- * large and read once; caching it would evict header metadata and inflate
- * memory.
+ * Vendored from @cogeotiff/core to read through `dataSource` rather than the
+ * header source.
  */
 async function getBytes(
   image: TiffImage,
@@ -682,20 +667,15 @@ export function prependJpegTables(
 }
 
 /**
- * Read image bytes for multiple ranges in a single batched I/O round trip.
+ * Read image bytes for multiple ranges, issued together.
  *
- * Vectorized counterpart to {@link getBytes}. The non-sparse ranges are
- * dispatched through {@link coalesceRanges}, which merges nearby byte ranges
- * into fewer `dataSource.fetch` calls. Returns one entry per input range, in
- * input order; sparse ranges (`offset === 0` or `byteCount === 0`) yield `null`,
- * matching {@link getBytes}.
+ * Vectorized {@link getBytes}: the non-sparse ranges go to `dataSource` in
+ * one task so the range reader can merge them. One entry per input range, in
+ * order; sparse ranges (`offset === 0` or `byteCount === 0`) yield `null`.
  *
  * Vendored from cogeotiff PR #1463 (`TiffImage.getMultipleBytes`) for the same
- * reason as {@link getBytes}: tile data must read through the uncached
- * `dataSource` rather than the cached header source. Upstream also lets a
- * `Source` provide its own `fetchRanges`; `@cogeotiff/core@9.5.0` has no such
- * interface method and `dataSource` is only `Pick<Source, "fetch">`, so the
- * coalescing here is always done locally.
+ * reason as {@link getBytes}: tile data must read through the data source
+ * rather than the header source.
  */
 export async function getMultipleBytes(
   image: TiffImage,
@@ -704,8 +684,6 @@ export async function getMultipleBytes(
   options: {
     signal?: AbortSignal;
     debug?: DebugTag;
-    coalesce?: number;
-    maxRangeSize?: number;
     imageTags: CachedSubImageTags;
   },
 ): Promise<Array<{ bytes: ArrayBuffer; compression: Compression } | null>> {
@@ -741,11 +719,21 @@ export async function getMultipleBytes(
     }
   }
 
-  const fetched = await coalesceRanges(dataSource, realRanges, {
-    coalesce: options?.coalesce,
-    maxRangeSize: options?.maxRangeSize,
-    signal: options?.signal,
-  });
+  // One read per range, issued together: the data source (the range reader
+  // under `fromUrl`) merges the reads of one task into few requests.
+  const fetched = await Promise.all(
+    realRanges.map(async (range) => {
+      const bytes = await dataSource.fetch(range.offset, range.length, {
+        signal: options.signal,
+      });
+      if (bytes.byteLength < range.length) {
+        throw new Error(
+          `Failed to fetch bytes from offset:${range.offset} wanted:${range.length} got:${bytes.byteLength}`,
+        );
+      }
+      return bytes;
+    }),
+  );
 
   const compression = image.value(TiffTag.Compression) ?? Compression.None;
   for (let k = 0; k < fetched.length; k++) {
@@ -764,11 +752,9 @@ export async function getMultipleBytes(
 /**
  * Load multiple tiles in a single batched I/O round trip.
  *
- * Resolves the offset/size of every requested tile via {@link getTileByteRange}
- * (header-source reads — small entries, served by the chunk cache), then fetches
- * the tile data through {@link getMultipleBytes} (uncached `dataSource`, with
- * range coalescing). Returns one entry per input tile, in input order; sparse
- * tiles yield `null` matching {@link getBytes}.
+ * Resolves every tile's byte range via {@link getTileByteRange}, then reads
+ * the data through {@link getMultipleBytes}. One entry per input tile, in
+ * order; sparse tiles yield `null`.
  *
  * Vendored from cogeotiff PR #1463 (`TiffImage.getTiles`) for the same reason as
  * {@link getTile}: the tile-data read must route through `dataSource`.
@@ -780,8 +766,6 @@ export async function getTiles(
   options: {
     signal?: AbortSignal;
     debug?: DebugTag;
-    coalesce?: number;
-    maxRangeSize?: number;
     imageTags: CachedSubImageTags;
   },
 ): Promise<Array<{ bytes: ArrayBuffer; compression: Compression } | null>> {

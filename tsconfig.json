@@ -35,6 +35,7 @@
     { "path": "packages/geozarr/tsconfig.build.json" },
     { "path": "packages/morecantile/tsconfig.build.json" },
     { "path": "packages/raster-reproject/tsconfig.build.json" },
-    { "path": "packages/proj/tsconfig.build.json" }
+    { "path": "packages/proj/tsconfig.build.json" },
+    { "path": "packages/range-reader/tsconfig.build.json" }
   ]
 }

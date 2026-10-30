@@ -1,0 +1,114 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { fileIdentity } from "../src/identity.js";
+import { MemoryByteCache } from "../src/memory-cache.js";
+
+const file = fileIdentity("https://x.test/a.tif");
+const bytes = (n: number, fill = 1): Uint8Array => new Uint8Array(n).fill(fill);
+
+describe("MemoryByteCache", () => {
+  let cache: MemoryByteCache;
+
+  beforeEach(() => {
+    cache = new MemoryByteCache();
+  });
+
+  it("serves a contained range as a view and misses on partial overlap", async () => {
+    await cache.put(file, 100, bytes(50, 7), "data");
+    const hit = await cache.get(file, { offset: 120, length: 10 }, "data");
+    expect(hit).toEqual(bytes(10, 7));
+    expect(
+      await cache.get(file, { offset: 90, length: 20 }, "data"),
+    ).toBeUndefined();
+    expect(
+      await cache.get(file, { offset: 149, length: 2 }, "data"),
+    ).toBeUndefined();
+  });
+
+  it("serves a read of either purpose from a span the other purpose fetched", async () => {
+    // The first tiles of a COG often sit inside its first metadata block; a
+    // data read for them must not fetch them again.
+    const cache = new MemoryByteCache({ dataBytes: 100, metadataBytes: 100 });
+    await cache.put(file, 0, bytes(60, 3), "metadata");
+    expect(await cache.get(file, { offset: 10, length: 10 }, "data")).toEqual(
+      bytes(10, 3),
+    );
+    expect(cache.byteSize("metadata")).toBe(60);
+    expect(cache.byteSize("data")).toBe(0);
+  });
+
+  it("evicts least recently used spans within one purpose's budget", async () => {
+    const cache = new MemoryByteCache({ dataBytes: 100, metadataBytes: 100 });
+    await cache.put(file, 0, bytes(60), "data");
+    await cache.put(file, 1000, bytes(30), "data");
+    await cache.get(file, { offset: 0, length: 1 }, "data");
+    await cache.put(file, 2000, bytes(30), "data");
+    expect(
+      await cache.get(file, { offset: 1000, length: 1 }, "data"),
+    ).toBeUndefined();
+    expect(
+      await cache.get(file, { offset: 0, length: 1 }, "data"),
+    ).toBeDefined();
+    expect(cache.byteSize("data")).toBe(90);
+  });
+
+  it("keeps metadata spans when data churns", async () => {
+    const cache = new MemoryByteCache({ dataBytes: 100, metadataBytes: 100 });
+    await cache.put(file, 0, bytes(60), "metadata");
+    for (let i = 0; i < 10; i++) {
+      await cache.put(file, i * 1000, bytes(60), "data");
+    }
+    expect(
+      await cache.get(file, { offset: 0, length: 60 }, "metadata"),
+    ).toBeDefined();
+    expect(cache.byteSize("metadata")).toBe(60);
+    expect(cache.byteSize("data")).toBe(60);
+  });
+
+  it("does not store a span larger than the budget, or an empty one", async () => {
+    const cache = new MemoryByteCache({ dataBytes: 100 });
+    await cache.put(file, 0, bytes(150), "data");
+    await cache.put(file, 500, bytes(0), "data");
+    expect(cache.byteSize("data")).toBe(0);
+    expect(
+      await cache.get(file, { offset: 0, length: 1 }, "data"),
+    ).toBeUndefined();
+  });
+
+  it("drops spans the new one contains and ignores a put the stored one contains", async () => {
+    await cache.put(file, 10, bytes(20), "data");
+    await cache.put(file, 0, bytes(100), "data");
+    expect(cache.byteSize("data")).toBe(100);
+    await cache.put(file, 30, bytes(5), "data");
+    expect(cache.byteSize("data")).toBe(100);
+  });
+
+  it("deletes every span of a file and frees its budget", async () => {
+    const other = fileIdentity("https://x.test/b.tif");
+    await cache.put(file, 0, bytes(10), "data");
+    await cache.put(file, 50, bytes(10), "metadata");
+    await cache.put(other, 0, bytes(10, 2), "data");
+    await cache.delete(file);
+    expect(
+      await cache.get(file, { offset: 0, length: 10 }, "data"),
+    ).toBeUndefined();
+    expect(
+      await cache.get(file, { offset: 50, length: 10 }, "data"),
+    ).toBeUndefined();
+    expect(await cache.get(other, { offset: 0, length: 10 }, "data")).toEqual(
+      bytes(10, 2),
+    );
+    expect(cache.byteSize("data")).toBe(10);
+    expect(cache.byteSize("metadata")).toBe(0);
+  });
+
+  it("keys spans by file identity", async () => {
+    await cache.put(file, 0, bytes(10), "data");
+    expect(
+      await cache.get(
+        fileIdentity("https://x.test/b.tif"),
+        { offset: 0, length: 10 },
+        "data",
+      ),
+    ).toBeUndefined();
+  });
+});

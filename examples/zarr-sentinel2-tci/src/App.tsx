@@ -117,9 +117,9 @@ export default function App() {
   }, []);
 
   const zarrLayer = node
-    ? new ZarrLayer<zarr.Readable, zarr.DataType, SentinelTileData>({
+    ? new ZarrLayer<SentinelTileData>({
         id: "zarr-layer",
-        node,
+        source: node,
         // Keep all 3 bands; `toImageData` consumes the band-planar RGB and
         // packs it into RGBA ImageData.
         selection: { band: null },

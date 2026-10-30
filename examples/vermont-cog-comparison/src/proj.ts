@@ -21,8 +21,8 @@ for (const [code, def] of Object.entries(PROJ_DEFS)) {
 /**
  * Resolve a numeric EPSG code to a parsed proj4 definition.
  *
- * Used by `COGLayer` to reproject tiles into Web Mercator. Throws if the
- * code is not in the static table. Return type is inferred from
+ * Passed to `COGSource.open` to reproject tiles into Web Mercator. Throws if
+ * the code is not in the static table. Return type is inferred from
  * `proj4.defs`, which returns a `ProjectionDefinition`-compatible object
  * after the corresponding `proj4.defs(code, def)` registration above.
  */

@@ -10,6 +10,7 @@
   "references": [
     { "path": "../affine/tsconfig.build.json" },
     { "path": "../morecantile/tsconfig.build.json" },
-    { "path": "../proj/tsconfig.build.json" }
+    { "path": "../proj/tsconfig.build.json" },
+    { "path": "../range-reader/tsconfig.build.json" }
   ]
 }

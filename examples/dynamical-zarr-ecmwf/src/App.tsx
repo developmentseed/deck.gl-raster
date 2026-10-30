@@ -4,7 +4,7 @@ import {
   decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
-import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
+import { ZarrLayer, ZarrSource } from "@developmentseed/deck.gl-zarr";
 import type { Device, Texture } from "@luma.gl/core";
 import {
   DeckGlOverlay,
@@ -57,12 +57,10 @@ export default function App() {
   const [leadTimeIdx, setLeadTimeIdx] = useState(0);
   const [initTimeIdx, setInitTimeIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [arr, setArr] = useState<zarr.Array<"float32", zarr.Readable> | null>(
-    null,
-  );
+  const [source, setSource] = useState<ZarrSource<"float32"> | null>(null);
   // Number of init_time values in the dataset (= first dim of the array),
   // known once the zarr array is opened.
-  const initTimeCount = arr ? arr.shape[0]! : 0;
+  const initTimeCount = source ? source.arrays[0]!.shape[0]! : 0;
   const [colormapId, setColormapId] = useState<ColormapId>(DEFAULT_COLORMAP_ID);
   const [rescaleMin, setRescaleMin] = useState(INITIAL_RESCALE_MIN);
   const [rescaleMax, setRescaleMax] = useState(INITIAL_RESCALE_MAX);
@@ -131,10 +129,13 @@ export default function App() {
           `Expected ${VARIABLE} to be float32, got ${opened.dtype}`,
         );
       }
+      const source = await ZarrSource.open(opened, {
+        geoZarrMetadata: ECMWF_GEOZARR_ATTRS,
+      });
       if (cancelled) {
         return;
       }
-      setArr(opened);
+      setSource(source);
       // Default to the latest available forecast run.
       setInitTimeIdx(opened.shape[0]! - 1);
     })();
@@ -214,14 +215,11 @@ export default function App() {
   );
 
   const layers =
-    arr && colormapTexture
+    source && colormapTexture
       ? [
-          new ZarrLayer<zarr.Readable, "float32", EcmwfTileData>({
-            // Include initTimeIdx in the id so switching init_time discards
-            // cached tiles from the previous forecast run.
-            id: `ecmwf-zarr-layer-${initTimeIdx}`,
-            node: arr,
-            metadata: ECMWF_GEOZARR_ATTRS,
+          new ZarrLayer<EcmwfTileData, "float32">({
+            id: "ecmwf-zarr-layer",
+            source,
             selection,
             getTileData,
             renderTile,
