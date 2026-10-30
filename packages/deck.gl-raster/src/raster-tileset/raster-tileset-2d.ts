@@ -263,7 +263,8 @@ export class RasterTileset2D extends Tileset2D {
    * without calling `onTileUnload`, so GPU resources that `getTileData` made
    * for those tiles, like textures, would be freed only by garbage collection.
    * A tile still loading is unloaded once its load finishes, since deck.gl
-   * keeps the data that `getTileData` returns after an abort.
+   * keeps the data that `getTileData` returns after an abort. Not needed once
+   * https://github.com/visgl/deck.gl/pull/10883 lands.
    */
   override finalize(): void {
     const { onTileUnload } = this.opts;
