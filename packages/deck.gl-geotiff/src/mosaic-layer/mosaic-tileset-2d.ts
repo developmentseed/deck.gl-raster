@@ -84,6 +84,23 @@ export class MosaicTileset2D<ItemT extends MosaicItem> extends Tileset2D {
     this.getItems = getItems;
   }
 
+  /**
+   * Unloads every cached item, which deck.gl's `finalize` skips (see #728). An
+   * item still opening is unloaded once its open finishes.
+   */
+  override finalize(): void {
+    const { onTileUnload } = this.opts;
+    for (const tile of this.tiles) {
+      if (tile.isLoading) {
+        // `data` is a promise until the load finishes
+        void Promise.resolve(tile.data).then(() => onTileUnload(tile));
+      } else {
+        onTileUnload(tile);
+      }
+    }
+    super.finalize();
+  }
+
   /** The Tileset2D cache key for an item. */
   override getTileId(tileIndex: TileIndex): string {
     // `getTileIndices` always returns `ResolvedItem`s, so an `id` is

@@ -248,7 +248,14 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
     layerManager.activateViewport(next);
   };
 
-  return { render, wait, moveTo };
+  /** Remove the layer, as an app does by no longer rendering it. */
+  const remove = async () => {
+    layerManager.setLayers([]);
+    await settle(layerManager);
+    return report();
+  };
+
+  return { render, wait, moveTo, remove };
 }
 
 // The tests above reuse one layer instance. Apps create a new MosaicLayer on
@@ -454,6 +461,36 @@ describe("MosaicLayer sources", () => {
     const { unloaded, errors } = await render({ data, maxCacheSize: 0 });
     expect(errors).toEqual([]);
     expect(unloaded).toEqual({ A: { of: "A" }, B: { of: "B" } });
+  });
+
+  it("passes every cached item's source to onSourceUnload when the layer is removed", async () => {
+    const { render, remove } = makeMosaicRenderer();
+    await render({ data: [A, B] });
+
+    const { unloaded, errors } = await remove();
+    expect(errors).toEqual([]);
+    expect(unloaded).toEqual({ A: { of: "A" }, B: { of: "B" } });
+  });
+
+  it("passes the source of an item still opening at removal to onSourceUnload once it arrives", async () => {
+    const { render, remove, wait } = makeMosaicRenderer();
+    let finish!: () => void;
+    await render({
+      data: [A],
+      // Ignores the abort, as a source cache shared between loads can
+      getSource: (item) =>
+        new Promise((resolve) => {
+          finish = () => resolve({ of: item.id });
+        }),
+    });
+
+    // A copy: the report's records keep filling in
+    const atRemoval = { ...(await remove()).unloaded };
+    finish();
+    const { unloaded, errors } = await wait();
+    expect(errors).toEqual([]);
+    expect(atRemoval).toEqual({});
+    expect(unloaded).toEqual({ A: { of: "A" } });
   });
 });
 
