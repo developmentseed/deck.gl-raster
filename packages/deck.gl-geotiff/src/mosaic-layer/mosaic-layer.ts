@@ -128,7 +128,6 @@ export type MosaicLayerProps<
       item: ItemT,
       options: {
         source?: SourceT;
-        signal?: AbortSignal;
       },
     ) => Layer | LayersList | null;
 
@@ -215,8 +214,7 @@ function createGetPriorityCallback(
  *   id: "mosaic",
  *   data: items, // each with a unique `id`, a `bbox` and, here, a `url`
  *   getSource: (item, options) => COGSource.open(item.url, options),
- *   renderSource: (item, { source, signal }) =>
- *     new COGLayer({ id: item.url, source, signal }),
+ *   renderSource: (item, { source }) => new COGLayer({ id: item.url, source }),
  * });
  * ```
  */
@@ -285,7 +283,6 @@ export class MosaicLayer<
     return new TileLayer<{
       item: ItemT;
       source?: SourceT;
-      signal?: AbortSignal;
     }>({
       id: `mosaic-layer-${id}`,
       TilesetClass: MosaicTileset2DFactory,
@@ -317,11 +314,11 @@ export class MosaicLayer<
             getPriority,
           }));
 
-        return { item, source, signal };
+        return { item, source };
       },
       renderSubLayers: (props) => {
-        const { item, source, signal } = props.data;
-        return renderSource(item, { source, signal });
+        const { item, source } = props.data;
+        return renderSource(item, { source });
       },
       ...(onSourceLoad && {
         onTileLoad: (tile) => {

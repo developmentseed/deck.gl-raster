@@ -26,6 +26,12 @@ describe("MosaicLayer props", () => {
     });
   });
 
+  it("gives renderSource no abort signal", () => {
+    expectTypeOf<
+      Parameters<MosaicLayerProps<Item, COGSource>["renderSource"]>[1]
+    >().toEqualTypeOf<{ source?: COGSource }>();
+  });
+
   it("reports each item with its source to onViewportLoad", () => {
     new MosaicLayer<Item, COGSource>({
       data: [item],
