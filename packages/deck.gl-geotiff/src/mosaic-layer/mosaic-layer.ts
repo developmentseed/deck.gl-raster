@@ -9,6 +9,7 @@ import type {
 import {
   _GlobeViewport,
   CompositeLayer,
+  _flatten as flatten,
   WebMercatorViewport,
 } from "@deck.gl/core";
 import type { TileLayerProps } from "@deck.gl/geo-layers";
@@ -123,6 +124,10 @@ export type MosaicLayerProps<
     /**
      * Render an item, with the `source` that `getSource` opened for it, or
      * `undefined` when no `getSource` was supplied.
+     *
+     * The layers it returns inherit the props that deck.gl passes from a
+     * composite layer to its sublayers, such as `opacity`, `pickable` and
+     * `extensions`, except those they set themselves.
      */
     renderSource: (
       item: ItemT,
@@ -274,17 +279,32 @@ export class MosaicLayer<
     // `this.state`.
     const getItems = () => this.state.items;
     const getIndex = () => this.state.index;
+    // A new class on every render: deck.gl compares `TilesetClass` by
+    // identity, so the inner TileLayer picks up new items and re-renders
+    // loaded ones with the current `renderSource`. See #784.
     class MosaicTileset2DFactory extends MosaicTileset2D<ItemT> {
       constructor(opts: any) {
         super(getItems, getIndex, opts);
       }
     }
 
+    // The props deck.gl passes from a composite layer to its sublayers, such
+    // as `opacity`. An item's layers inherit all but the per-layer `id` and
+    // `updateTriggers`.
+    const subLayerProps = this.getSubLayerProps();
+    const inheritedKeys = Object.keys(subLayerProps).filter(
+      (key) => key !== "id" && key !== "updateTriggers",
+    );
+
     return new TileLayer<{
       item: ItemT;
       source?: SourceT;
-    }>({
+    }>(subLayerProps, {
       id: `mosaic-layer-${id}`,
+      // Not `updateTriggers.all`, which `getSubLayerProps` passes: deck.gl's
+      // TileLayer would reload through `Tileset2D.reloadAll`, which leaks
+      // sources. See #816.
+      updateTriggers: {},
       TilesetClass: MosaicTileset2DFactory,
       ...omitUndefined({
         minZoom,
@@ -318,7 +338,8 @@ export class MosaicLayer<
       },
       renderSubLayers: (props) => {
         const { item, source } = props.data;
-        return renderSource(item, { source });
+        const layers = renderSource(item, { source });
+        return withInheritedProps(layers, props, inheritedKeys);
       },
       ...(onSourceLoad && {
         onTileLoad: (tile) => {
@@ -374,6 +395,28 @@ function toItems<ItemT>(data: unknown): ItemT[] {
     return [];
   }
   return Array.isArray(data) ? data : Array.from(data as Iterable<ItemT>);
+}
+
+/**
+ * Clone each of `layers` with the `keys` of `props` that it didn't set itself,
+ * so an item's layers inherit props such as `opacity` but can still set their
+ * own. A layer's own props are the ones passed to its constructor: deck.gl
+ * keeps defaults on the props prototype.
+ */
+function withInheritedProps(
+  layers: Layer | LayersList | null,
+  props: Record<string, unknown>,
+  keys: string[],
+): Layer[] {
+  return (flatten(layers, Boolean) as Layer[]).map((layer) => {
+    const inheritedProps: Record<string, unknown> = {};
+    for (const key of keys) {
+      if (!Object.hasOwn(layer.props, key)) {
+        inheritedProps[key] = props[key];
+      }
+    }
+    return layer.clone(inheritedProps);
+  });
 }
 
 /**
