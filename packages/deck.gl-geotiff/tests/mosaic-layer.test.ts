@@ -1,4 +1,9 @@
-import { LayerManager, WebMercatorViewport } from "@deck.gl/core";
+import type { Layer } from "@deck.gl/core";
+import {
+  CompositeLayer,
+  LayerManager,
+  WebMercatorViewport,
+} from "@deck.gl/core";
 import type { Device } from "@luma.gl/core";
 import { describe, expect, it } from "vitest";
 import type { MosaicLayerProps } from "../src/mosaic-layer/mosaic-layer.js";
@@ -200,6 +205,7 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
     unloaded: records.unloaded,
     loaded: records.viewportLoad?.map(([id]) => id),
     viewportSources: records.viewportLoad,
+    layers: layerManager.getLayers(),
     errors: records.errors,
   });
 
@@ -400,7 +406,7 @@ describe("MosaicLayer sources", () => {
     ]);
   });
 
-  it("gives renderSource only the source of an item whose aborted open finished anyway", async () => {
+  it("gives renderSource no signal for an item whose aborted open finished anyway", async () => {
     const { render, moveTo } = makeMosaicRenderer();
     const finish: Record<string, () => void> = {};
     const seen: Record<string, object> = {};
@@ -440,7 +446,8 @@ describe("MosaicLayer sources", () => {
     expect(errors).toEqual([]);
     const { signal } = seen.A as { signal?: AbortSignal };
     expect(signal?.aborted).not.toBe(true);
-    expect(seen.A).toEqual({ source: { of: "A" } });
+    expect(seen.A).toMatchObject({ source: { of: "A" } });
+    expect(seen.A).not.toHaveProperty("signal");
   });
 
   it("passes an evicted item's source to onSourceUnload", async () => {
@@ -535,5 +542,85 @@ describe("MosaicLayer fetch priority", () => {
     const { priorities, errors } = await render({ data: [across] });
     expect(errors).toEqual([]);
     expect(priorities.across).toBeCloseTo(0.1);
+  });
+});
+
+/** Stands in for a layer that an item renders. It draws nothing. */
+class ItemLayer extends CompositeLayer {
+  static override layerName = "ItemLayer";
+
+  override renderLayers() {
+    return null;
+  }
+}
+
+/** The `opacity` of the rendered layer with this `id`. */
+function opacityOf(layers: Layer[], id: string): number | undefined {
+  return layers.find((layer) => layer.id === id)?.props.opacity;
+}
+
+describe("MosaicLayer sublayer props", () => {
+  // Spreads `subLayerProps`, as apps do, and keeps its `id`
+  const renderSource: MosaicLayerProps<Item, Marker>["renderSource"] = (
+    _item,
+    { subLayerProps },
+  ) => new ItemLayer({ ...subLayerProps });
+
+  it("hands its opacity to renderSource, for the layers its items render", async () => {
+    const { render } = makeMosaicRenderer();
+
+    const { layers, errors } = await render({
+      data: [A],
+      opacity: 0.5,
+      renderSource,
+    });
+    expect(errors).toEqual([]);
+    expect(opacityOf(layers, "mosaic-A")).toBe(0.5);
+  });
+
+  it("hands renderSource a unique id for each item, and no updateTriggers", async () => {
+    const { render } = makeMosaicRenderer();
+    const seen: Record<string, object> = {};
+
+    const { errors } = await render({
+      data: [A, B],
+      opacity: 0.5,
+      updateTriggers: { all: [0] },
+      renderSource: (item, { subLayerProps }) => {
+        seen[item.id] = subLayerProps;
+        return null;
+      },
+    });
+    expect(errors).toEqual([]);
+    expect(seen.A).toMatchObject({ id: "mosaic-A", opacity: 0.5 });
+    expect(seen.B).toMatchObject({ id: "mosaic-B", opacity: 0.5 });
+    expect(seen.A).not.toHaveProperty("updateTriggers");
+  });
+
+  it("hands a new opacity to items already loaded, without opening them again", async () => {
+    const { render } = makeMosaicRenderer();
+    await render({ data: [A], opacity: 0.5, renderSource });
+
+    const { fetched, layers, errors } = await render({
+      data: [A],
+      opacity: 0.8,
+      renderSource,
+    });
+    expect(errors).toEqual([]);
+    expect(fetched).toEqual([]);
+    expect(opacityOf(layers, "mosaic-A")).toBe(0.8);
+  });
+
+  it("doesn't open its sources again through deck.gl's reload when updateTriggers.all changes", async () => {
+    const { render } = makeMosaicRenderer();
+    const data = [A, B];
+    await render({ data, updateTriggers: { all: [0] } });
+
+    const { fetched, errors } = await render({
+      data,
+      updateTriggers: { all: [1] },
+    });
+    expect(errors).toEqual([]);
+    expect(fetched).toEqual([]);
   });
 });

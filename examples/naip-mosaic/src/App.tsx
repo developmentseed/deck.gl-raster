@@ -47,6 +47,8 @@ const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];
  * These are the only properties we actually care about for this example.
  */
 type PartialSTACItem = {
+  /** The image's URL, set when the items load. */
+  id?: string;
   bbox: [number, number, number, number];
   assets: {
     image: {
@@ -348,6 +350,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [renderMode, setRenderMode] = useState<RenderMode>("trueColor");
+  const [opacity, setOpacity] = useState(1);
   const [ndviRange, setNdviRange] = useState<[number, number]>([-1, 1]);
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
@@ -365,7 +368,14 @@ export default function App() {
     async function wrappedFetchSTACItems() {
       try {
         const data = STAC_DATA as unknown as STACFeatureCollection;
-        setStacItems(data.features);
+        // Each item's URL is its `id`: it keys MosaicLayer's cache and names
+        // the item's layer
+        setStacItems(
+          data.features.map((feature) => ({
+            ...feature,
+            id: feature.assets.image.href,
+          })),
+        );
       } catch (err) {
         console.error("Error fetching STAC items:", err);
         setError(
@@ -427,10 +437,12 @@ export default function App() {
       // its tiles, in memory.
       getSource: async (item, opts) =>
         getCachedGeoTIFF(item.assets.image.href, opts),
-      renderSource: (item, { source }) => {
-        const url = item.assets.image.href;
+      // The mosaic's `opacity` reaches each item's COGLayer through
+      // `subLayerProps`
+      opacity,
+      renderSource: (_item, { source, subLayerProps }) => {
         return new COGLayer<TextureDataT>({
-          id: `cog-${url}`,
+          ...subLayerProps,
           source,
           getTileData,
           renderTile:
@@ -495,6 +507,8 @@ export default function App() {
         stacItemCount={stacItems.length}
         renderMode={renderMode}
         onRenderModeChange={setRenderMode}
+        opacity={opacity}
+        onOpacityChange={setOpacity}
         colormapId={colormapId}
         onColormapIdChange={setColormapId}
         colormapChoice={colormapChoice}
