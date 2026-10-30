@@ -85,8 +85,9 @@ export class MosaicTileset2D<ItemT extends MosaicItem> extends Tileset2D {
   }
 
   /**
-   * Unloads every cached item, which deck.gl's `finalize` skips (see #728). An
-   * item still opening is unloaded once its open finishes.
+   * Unloads every cached item, which deck.gl's `finalize` skips until
+   * https://github.com/visgl/deck.gl/pull/10883 lands. An item still opening
+   * is unloaded once its open finishes.
    */
   override finalize(): void {
     const { onTileUnload } = this.opts;
