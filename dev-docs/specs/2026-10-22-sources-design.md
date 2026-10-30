@@ -479,7 +479,7 @@ new MosaicLayer({
   getSource: (item, { signal, concurrencyLimiter, getPriority }) =>
     COGSource.open(item.url, { signal, concurrencyLimiter, getPriority }),
   renderSource: (item, { source, subLayerProps }) =>
-    new COGLayer({ ...subLayerProps, id: item.id, source }),
+    new COGLayer({ ...subLayerProps, source }),
 });
 ```
 

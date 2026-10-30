@@ -2,6 +2,7 @@ import type {
   CompositeLayerProps,
   Layer,
   LayerDataSource,
+  LayerProps,
   LayersList,
   UpdateParameters,
   Viewport,
@@ -20,6 +21,32 @@ import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
 import { DEFAULT_RANGE_READER } from "../default-range-reader.js";
 import type { ItemIndex, MosaicItem } from "./mosaic-tileset-2d.js";
 import { buildItemIndex, MosaicTileset2D } from "./mosaic-tileset-2d.js";
+
+/**
+ * The props `renderSource` gets for an item's layers: a unique `id`, and the
+ * props deck.gl passes from a composite layer to its sublayers. Extensions may
+ * add their own.
+ */
+type SubLayerProps = Pick<
+  LayerProps,
+  | "id"
+  | "opacity"
+  | "pickable"
+  | "visible"
+  | "parameters"
+  | "getPolygonOffset"
+  | "highlightedObjectIndex"
+  | "autoHighlight"
+  | "highlightColor"
+  | "coordinateSystem"
+  | "coordinateOrigin"
+  | "wrapLongitude"
+  | "positionFormat"
+  | "modelMatrix"
+  | "extensions"
+  | "fetch"
+  | "operation"
+>;
 
 /**
  * Props for {@link MosaicLayer}.
@@ -124,19 +151,17 @@ export type MosaicLayerProps<
      * Render an item, with the `source` that `getSource` opened for it, or
      * `undefined` when no `getSource` was supplied.
      *
-     * `subLayerProps` holds the props deck.gl passes from a composite layer to
-     * its sublayers, such as `opacity`, `pickable` and `extensions`. Spread
-     * them into the layers it returns, before their own props:
-     * `new COGLayer({ ...subLayerProps, id, source })`.
+     * `subLayerProps` holds a unique `id` for the item, and the props deck.gl
+     * passes from a composite layer to its sublayers, such as `opacity`.
+     * Spread them into the layers it returns, before their own props:
+     * `new COGLayer({ ...subLayerProps, source })`. An item that returns
+     * several layers gives each its own `id`.
      */
     renderSource: (
       item: ItemT,
       options: {
         source?: SourceT;
-        subLayerProps: Omit<
-          Partial<CompositeLayerProps>,
-          "id" | "data" | "updateTriggers"
-        >;
+        subLayerProps: SubLayerProps;
       },
     ) => Layer | LayersList | null;
 
@@ -224,7 +249,7 @@ function createGetPriorityCallback(
  *   data: items, // each with a unique `id`, a `bbox` and, here, a `url`
  *   getSource: (item, options) => COGSource.open(item.url, options),
  *   renderSource: (item, { source, subLayerProps }) =>
- *     new COGLayer({ ...subLayerProps, id: item.url, source }),
+ *     new COGLayer({ ...subLayerProps, source }),
  * });
  * ```
  */
@@ -294,8 +319,8 @@ export class MosaicLayer<
     }
 
     // The props deck.gl passes from a composite layer to its sublayers, such
-    // as `opacity`, for the inner TileLayer and `renderSource`. Without the
-    // per-layer `id`, and without `updateTriggers`: its `all` would make
+    // as `opacity`, for the inner TileLayer and `renderSource`. The `id` is
+    // set for each, and `updateTriggers` dropped: its `all` would make
     // deck.gl's TileLayer reload through `Tileset2D.reloadAll`, which leaks
     // sources (see #816).
     const {
@@ -342,7 +367,10 @@ export class MosaicLayer<
       },
       renderSubLayers: (props) => {
         const { item, source } = props.data;
-        return renderSource(item, { source, subLayerProps });
+        return renderSource(item, {
+          source,
+          subLayerProps: { ...subLayerProps, id: `${id}-${props.tile.id}` },
+        });
       },
       ...(onSourceLoad && {
         onTileLoad: (tile) => {

@@ -431,11 +431,9 @@ export default function App() {
       // The mosaic's `opacity` reaches each item's COGLayer through
       // `subLayerProps`
       opacity,
-      renderSource: (item, { source, subLayerProps }) => {
-        const url = item.assets.image.href;
+      renderSource: (_item, { source, subLayerProps }) => {
         return new COGLayer<TextureDataT>({
           ...subLayerProps,
-          id: `cog-${url}`,
           source,
           getTileData,
           renderTile:

@@ -560,11 +560,11 @@ function opacityOf(layers: Layer[], id: string): number | undefined {
 }
 
 describe("MosaicLayer sublayer props", () => {
-  // Spreads `subLayerProps` first, as apps do
+  // Spreads `subLayerProps`, as apps do, and keeps its `id`
   const renderSource: MosaicLayerProps<Item, Marker>["renderSource"] = (
-    item,
+    _item,
     { subLayerProps },
-  ) => new ItemLayer({ ...subLayerProps, id: item.id });
+  ) => new ItemLayer({ ...subLayerProps });
 
   it("hands its opacity to renderSource, for the layers its items render", async () => {
     const { render } = makeMosaicRenderer();
@@ -575,26 +575,26 @@ describe("MosaicLayer sublayer props", () => {
       renderSource,
     });
     expect(errors).toEqual([]);
-    expect(opacityOf(layers, "A")).toBe(0.5);
+    expect(opacityOf(layers, "mosaic-A")).toBe(0.5);
   });
 
-  it("hands renderSource no per-layer id or updateTriggers", async () => {
+  it("hands renderSource a unique id for each item, and no updateTriggers", async () => {
     const { render } = makeMosaicRenderer();
-    let seen: object = {};
+    const seen: Record<string, object> = {};
 
     const { errors } = await render({
-      data: [A],
+      data: [A, B],
       opacity: 0.5,
       updateTriggers: { all: [0] },
-      renderSource: (_item, { subLayerProps }) => {
-        seen = subLayerProps;
+      renderSource: (item, { subLayerProps }) => {
+        seen[item.id] = subLayerProps;
         return null;
       },
     });
     expect(errors).toEqual([]);
-    expect(seen).toMatchObject({ opacity: 0.5 });
-    expect(seen).not.toHaveProperty("id");
-    expect(seen).not.toHaveProperty("updateTriggers");
+    expect(seen.A).toMatchObject({ id: "mosaic-A", opacity: 0.5 });
+    expect(seen.B).toMatchObject({ id: "mosaic-B", opacity: 0.5 });
+    expect(seen.A).not.toHaveProperty("updateTriggers");
   });
 
   it("hands a new opacity to items already loaded, without opening them again", async () => {
@@ -608,7 +608,7 @@ describe("MosaicLayer sublayer props", () => {
     });
     expect(errors).toEqual([]);
     expect(fetched).toEqual([]);
-    expect(opacityOf(layers, "A")).toBe(0.8);
+    expect(opacityOf(layers, "mosaic-A")).toBe(0.8);
   });
 
   it("doesn't open its sources again through deck.gl's reload when updateTriggers.all changes", async () => {
