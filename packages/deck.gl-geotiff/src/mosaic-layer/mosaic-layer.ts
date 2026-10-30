@@ -289,9 +289,11 @@ export class MosaicLayer<
     }
 
     // The props deck.gl passes from a composite layer to its sublayers, such
-    // as `opacity`. An item's layers inherit all but the per-layer `id` and
-    // `updateTriggers`.
+    // as `opacity`. The inner TileLayer takes them below.
     const subLayerProps = this.getSubLayerProps();
+    // An item's layers take them too, copied from the props TileLayer hands
+    // `renderSubLayers`. There, `id` is the tile's and `updateTriggers` are
+    // TileLayer's own, so an item's layers don't take those two.
     const inheritedKeys = Object.keys(subLayerProps).filter(
       (key) => key !== "id" && key !== "updateTriggers",
     );
