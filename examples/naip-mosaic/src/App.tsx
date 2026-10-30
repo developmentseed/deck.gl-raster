@@ -47,6 +47,8 @@ const STAC_BBOX = [-106.6059, 38.7455, -104.5917, 40.4223];
  * These are the only properties we actually care about for this example.
  */
 type PartialSTACItem = {
+  /** The image's URL, set when the items load. */
+  id?: string;
   bbox: [number, number, number, number];
   assets: {
     image: {
@@ -366,7 +368,14 @@ export default function App() {
     async function wrappedFetchSTACItems() {
       try {
         const data = STAC_DATA as unknown as STACFeatureCollection;
-        setStacItems(data.features);
+        // Each item's URL is its `id`: it keys MosaicLayer's cache and names
+        // the item's layer
+        setStacItems(
+          data.features.map((feature) => ({
+            ...feature,
+            id: feature.assets.image.href,
+          })),
+        );
       } catch (err) {
         console.error("Error fetching STAC items:", err);
         setError(
