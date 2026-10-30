@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.10.0-beta.2 - 2026-10-30
+
+### What's Changed
+
+* fix(deck.gl-geotiff): call onSourceUnload for MosaicLayer's cached sources when it's removed by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/823
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.10.0-beta.1...v0.10.0-beta.2
+
 ## v0.10.0-beta.1 - 2026-10-30
 
 ### What's Changed

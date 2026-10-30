@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/range-reader",
-  "version": "0.10.0-beta.1",
+  "version": "0.10.0-beta.2",
   "description": "Streamed, coalesced HTTP byte-range reads with a budgeted byte cache",
   "type": "module",
   "main": "./dist/index.js",
