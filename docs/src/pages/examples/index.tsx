@@ -152,6 +152,22 @@ const zarrExamples: Example[] = [
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/dynamical-zarr-ecmwf",
   },
   {
+    title: "Globe View",
+    description: (
+      <>
+        Animate the ECMWF temperature forecast on a 3D globe using the{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-zarr/classes/ZarrLayer/">
+          ZarrLayer
+        </Link>{" "}
+        with MapLibre's globe projection.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/zarr-globe/",
+    image: "/deck.gl-raster/img/zarr-globe-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/zarr-globe",
+  },
+  {
     title: "AEF Mosaic Embeddings",
     description: (
       <>
