@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.10.0-beta.1 - 2026-10-30
+
+### What's Changed
+
+* docs: reorder sections in 0.9 release post by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/795
+* refactor: load layer metadata through one RasterTileLayer helper by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/783
+* fix(examples): draw the icechunk example's labels above the raster by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/793
+* feat(deck.gl-geotiff)!: open COGs with COGSource by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/799
+* feat(deck.gl-geotiff)!: open the files of one scene with MultiCOGSource by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/801
+* fix(deck.gl-raster): stop leaking a WebGL vertex array per tile by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/786
+* feat(deck.gl-geotiff)!: take MosaicLayer's items as data, and pass their sources as source by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/804
+* refactor(deck.gl-raster): handle every layer's source in RasterTileLayer by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/805
+* refactor(proj): share projectionFunctions and geographicBounds through @developmentseed/proj by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/811
+* feat(range-reader): add streamed, coalesced byte-range reads by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/806
+* feat(deck.gl-zarr)!: open GeoZarr data with ZarrSource by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/812
+* fix(range-reader): request cap for adjacent reads, round-robin launches, 1 MiB default by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/815
+* feat(geotiff)!: read COGs through the range reader by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/807
+* feat(deck.gl-geotiff): coalesce COG tile reads by default by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/809
+* feat(examples): add a GPU hillshade of Mapterhorn PMTiles by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/817
+* docs(specs): drop citations of a private repository by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/819
+* feat: fetch tiles again when updateTriggers.getTileData or ZarrLayer's selection changes by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/818
+* refactor(deck.gl-geotiff): keep one layer per source class, and build MultiCOGLayerProps from RasterTileLayerProps by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/820
+* fix(deck.gl-geotiff)!: stop passing renderSource an abort signal by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/821
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.9.0...v0.10.0-beta.1
+
 ## v0.9.0 - 2026-10-26
 
 ### What's Changed
