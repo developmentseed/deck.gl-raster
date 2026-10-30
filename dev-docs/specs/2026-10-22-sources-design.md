@@ -478,7 +478,8 @@ new MosaicLayer({
   data: items, // {bbox, id}: nothing fetched
   getSource: (item, { signal, concurrencyLimiter, getPriority }) =>
     COGSource.open(item.url, { signal, concurrencyLimiter, getPriority }),
-  renderSource: (item, { source }) => new COGLayer({ id: item.id, source }),
+  renderSource: (item, { source, subLayerProps }) =>
+    new COGLayer({ ...subLayerProps, id: item.id, source }),
 });
 ```
 

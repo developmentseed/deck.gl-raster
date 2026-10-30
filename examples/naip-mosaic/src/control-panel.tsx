@@ -1,4 +1,4 @@
-import { NativeSelect, Text } from "@chakra-ui/react";
+import { NativeSelect, Slider, Text } from "@chakra-ui/react";
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import {
@@ -35,6 +35,10 @@ export interface ControlPanelProps {
   renderMode: RenderMode;
   /** Called with the next render mode. */
   onRenderModeChange: (mode: RenderMode) => void;
+  /** The mosaic's opacity, from 0 to 1. */
+  opacity: number;
+  /** Called with the next opacity. */
+  onOpacityChange: (opacity: number) => void;
   /** Active colormap id (NDVI mode only). */
   colormapId: ColormapId;
   /** Called with the next colormap id. */
@@ -48,8 +52,8 @@ export interface ControlPanelProps {
 }
 
 /**
- * NAIP mosaic control panel: render-mode picker plus, in NDVI mode, a colormap
- * picker with preview and an NDVI-range filter slider.
+ * NAIP mosaic control panel: render-mode picker and opacity slider plus, in
+ * NDVI mode, a colormap picker with preview and an NDVI-range filter slider.
  */
 export function ControlPanel({
   loading,
@@ -57,6 +61,8 @@ export function ControlPanel({
   stacItemCount,
   renderMode,
   onRenderModeChange,
+  opacity,
+  onOpacityChange,
   colormapId,
   onColormapIdChange,
   colormapChoice,
@@ -97,6 +103,28 @@ export function ControlPanel({
           </NativeSelect.Field>
           <NativeSelect.Indicator />
         </NativeSelect.Root>
+      </Field>
+
+      <Field label={<Text as="span">Opacity: {opacity.toFixed(2)}</Text>}>
+        <Slider.Root
+          size="sm"
+          width="full"
+          min={0}
+          max={1}
+          step={0.01}
+          value={[opacity]}
+          aria-label={["Opacity"]}
+          onValueChange={(details) => onOpacityChange(details.value[0]!)}
+        >
+          <Slider.Control>
+            <Slider.Track>
+              <Slider.Range />
+            </Slider.Track>
+            <Slider.Thumb index={0}>
+              <Slider.HiddenInput />
+            </Slider.Thumb>
+          </Slider.Control>
+        </Slider.Root>
       </Field>
 
       {renderMode === "ndvi" ? (

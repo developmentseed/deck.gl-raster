@@ -348,6 +348,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [renderMode, setRenderMode] = useState<RenderMode>("trueColor");
+  const [opacity, setOpacity] = useState(1);
   const [ndviRange, setNdviRange] = useState<[number, number]>([-1, 1]);
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
@@ -427,9 +428,13 @@ export default function App() {
       // its tiles, in memory.
       getSource: async (item, opts) =>
         getCachedGeoTIFF(item.assets.image.href, opts),
-      renderSource: (item, { source }) => {
+      // The mosaic's `opacity` reaches each item's COGLayer through
+      // `subLayerProps`
+      opacity,
+      renderSource: (item, { source, subLayerProps }) => {
         const url = item.assets.image.href;
         return new COGLayer<TextureDataT>({
+          ...subLayerProps,
           id: `cog-${url}`,
           source,
           getTileData,
@@ -495,6 +500,8 @@ export default function App() {
         stacItemCount={stacItems.length}
         renderMode={renderMode}
         onRenderModeChange={setRenderMode}
+        opacity={opacity}
+        onOpacityChange={setOpacity}
         colormapId={colormapId}
         onColormapIdChange={setColormapId}
         colormapChoice={colormapChoice}

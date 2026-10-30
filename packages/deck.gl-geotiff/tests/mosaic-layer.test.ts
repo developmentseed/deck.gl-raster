@@ -406,7 +406,7 @@ describe("MosaicLayer sources", () => {
     ]);
   });
 
-  it("gives renderSource only the source of an item whose aborted open finished anyway", async () => {
+  it("gives renderSource no signal for an item whose aborted open finished anyway", async () => {
     const { render, moveTo } = makeMosaicRenderer();
     const finish: Record<string, () => void> = {};
     const seen: Record<string, object> = {};
@@ -446,7 +446,8 @@ describe("MosaicLayer sources", () => {
     expect(errors).toEqual([]);
     const { signal } = seen.A as { signal?: AbortSignal };
     expect(signal?.aborted).not.toBe(true);
-    expect(seen.A).toEqual({ source: { of: "A" } });
+    expect(seen.A).toMatchObject({ source: { of: "A" } });
+    expect(seen.A).not.toHaveProperty("signal");
   });
 
   it("passes an evicted item's source to onSourceUnload", async () => {
@@ -558,10 +559,14 @@ function opacityOf(layers: Layer[], id: string): number | undefined {
   return layers.find((layer) => layer.id === id)?.props.opacity;
 }
 
-describe("MosaicLayer inherited props", () => {
-  const renderSource = (item: Item) => new ItemLayer({ id: item.id });
+describe("MosaicLayer sublayer props", () => {
+  // Spreads `subLayerProps` first, as apps do
+  const renderSource: MosaicLayerProps<Item, Marker>["renderSource"] = (
+    item,
+    { subLayerProps },
+  ) => new ItemLayer({ ...subLayerProps, id: item.id });
 
-  it("hands its opacity to the layers its items render", async () => {
+  it("hands its opacity to renderSource, for the layers its items render", async () => {
     const { render } = makeMosaicRenderer();
 
     const { layers, errors } = await render({
@@ -573,16 +578,23 @@ describe("MosaicLayer inherited props", () => {
     expect(opacityOf(layers, "A")).toBe(0.5);
   });
 
-  it("keeps the opacity an item's layer sets itself", async () => {
+  it("hands renderSource no per-layer id or updateTriggers", async () => {
     const { render } = makeMosaicRenderer();
+    let seen: object = {};
 
-    const { layers, errors } = await render({
+    const { errors } = await render({
       data: [A],
       opacity: 0.5,
-      renderSource: (item) => new ItemLayer({ id: item.id, opacity: 0.25 }),
+      updateTriggers: { all: [0] },
+      renderSource: (_item, { subLayerProps }) => {
+        seen = subLayerProps;
+        return null;
+      },
     });
     expect(errors).toEqual([]);
-    expect(opacityOf(layers, "A")).toBe(0.25);
+    expect(seen).toMatchObject({ opacity: 0.5 });
+    expect(seen).not.toHaveProperty("id");
+    expect(seen).not.toHaveProperty("updateTriggers");
   });
 
   it("hands a new opacity to items already loaded, without opening them again", async () => {
@@ -597,23 +609,6 @@ describe("MosaicLayer inherited props", () => {
     expect(errors).toEqual([]);
     expect(fetched).toEqual([]);
     expect(opacityOf(layers, "A")).toBe(0.8);
-  });
-
-  it("hands its opacity to each layer in nested arrays an item returns", async () => {
-    const { render } = makeMosaicRenderer();
-
-    const { layers, errors } = await render({
-      data: [A],
-      opacity: 0.5,
-      renderSource: (item) => [
-        [new ItemLayer({ id: `${item.id}-1` }), null],
-        false,
-        new ItemLayer({ id: `${item.id}-2` }),
-      ],
-    });
-    expect(errors).toEqual([]);
-    expect(opacityOf(layers, "A-1")).toBe(0.5);
-    expect(opacityOf(layers, "A-2")).toBe(0.5);
   });
 
   it("doesn't open its sources again through deck.gl's reload when updateTriggers.all changes", async () => {

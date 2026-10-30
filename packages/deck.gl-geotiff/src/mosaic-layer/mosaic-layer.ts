@@ -9,7 +9,6 @@ import type {
 import {
   _GlobeViewport,
   CompositeLayer,
-  _flatten as flatten,
   WebMercatorViewport,
 } from "@deck.gl/core";
 import type { TileLayerProps } from "@deck.gl/geo-layers";
@@ -125,14 +124,19 @@ export type MosaicLayerProps<
      * Render an item, with the `source` that `getSource` opened for it, or
      * `undefined` when no `getSource` was supplied.
      *
-     * The layers it returns inherit the props that deck.gl passes from a
-     * composite layer to its sublayers, such as `opacity`, `pickable` and
-     * `extensions`, except those they set themselves.
+     * `subLayerProps` holds the props deck.gl passes from a composite layer to
+     * its sublayers, such as `opacity`, `pickable` and `extensions`. Spread
+     * them into the layers it returns, before their own props:
+     * `new COGLayer({ ...subLayerProps, id, source })`.
      */
     renderSource: (
       item: ItemT,
       options: {
         source?: SourceT;
+        subLayerProps: Omit<
+          Partial<CompositeLayerProps>,
+          "id" | "data" | "updateTriggers"
+        >;
       },
     ) => Layer | LayersList | null;
 
@@ -219,7 +223,8 @@ function createGetPriorityCallback(
  *   id: "mosaic",
  *   data: items, // each with a unique `id`, a `bbox` and, here, a `url`
  *   getSource: (item, options) => COGSource.open(item.url, options),
- *   renderSource: (item, { source }) => new COGLayer({ id: item.url, source }),
+ *   renderSource: (item, { source, subLayerProps }) =>
+ *     new COGLayer({ ...subLayerProps, id: item.url, source }),
  * });
  * ```
  */
@@ -289,24 +294,21 @@ export class MosaicLayer<
     }
 
     // The props deck.gl passes from a composite layer to its sublayers, such
-    // as `opacity`. The inner TileLayer takes them below.
-    const subLayerProps = this.getSubLayerProps();
-    // An item's layers take them too, copied from the props TileLayer hands
-    // `renderSubLayers`. There, `id` is the tile's and `updateTriggers` are
-    // TileLayer's own, so an item's layers don't take those two.
-    const inheritedKeys = Object.keys(subLayerProps).filter(
-      (key) => key !== "id" && key !== "updateTriggers",
-    );
+    // as `opacity`, for the inner TileLayer and `renderSource`. Without the
+    // per-layer `id`, and without `updateTriggers`: its `all` would make
+    // deck.gl's TileLayer reload through `Tileset2D.reloadAll`, which leaks
+    // sources (see #816).
+    const {
+      id: _id,
+      updateTriggers: _updateTriggers,
+      ...subLayerProps
+    } = this.getSubLayerProps();
 
     return new TileLayer<{
       item: ItemT;
       source?: SourceT;
     }>(subLayerProps, {
       id: `mosaic-layer-${id}`,
-      // Not `updateTriggers.all`, which `getSubLayerProps` passes: deck.gl's
-      // TileLayer would reload through `Tileset2D.reloadAll`, which leaks
-      // sources. See #816.
-      updateTriggers: {},
       TilesetClass: MosaicTileset2DFactory,
       ...omitUndefined({
         minZoom,
@@ -340,8 +342,7 @@ export class MosaicLayer<
       },
       renderSubLayers: (props) => {
         const { item, source } = props.data;
-        const layers = renderSource(item, { source });
-        return withInheritedProps(layers, props, inheritedKeys);
+        return renderSource(item, { source, subLayerProps });
       },
       ...(onSourceLoad && {
         onTileLoad: (tile) => {
@@ -397,28 +398,6 @@ function toItems<ItemT>(data: unknown): ItemT[] {
     return [];
   }
   return Array.isArray(data) ? data : Array.from(data as Iterable<ItemT>);
-}
-
-/**
- * Clone each of `layers` with the `keys` of `props` that it didn't set itself,
- * so an item's layers inherit props such as `opacity` but can still set their
- * own. A layer's own props are the ones passed to its constructor: deck.gl
- * keeps defaults on the props prototype.
- */
-function withInheritedProps(
-  layers: Layer | LayersList | null,
-  props: Record<string, unknown>,
-  keys: string[],
-): Layer[] {
-  return (flatten(layers, Boolean) as Layer[]).map((layer) => {
-    const inheritedProps: Record<string, unknown> = {};
-    for (const key of keys) {
-      if (!Object.hasOwn(layer.props, key)) {
-        inheritedProps[key] = props[key];
-      }
-    }
-    return layer.clone(inheritedProps);
-  });
 }
 
 /**

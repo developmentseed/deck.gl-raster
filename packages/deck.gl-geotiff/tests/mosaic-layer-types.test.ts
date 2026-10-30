@@ -1,7 +1,7 @@
-import type { LayerDataSource } from "@deck.gl/core";
+import type { CompositeLayerProps, LayerDataSource } from "@deck.gl/core";
 import { describe, expectTypeOf, it } from "vitest";
 import type { COGSource, MosaicItem, MosaicLayerProps } from "../src/index.js";
-import { MosaicLayer } from "../src/index.js";
+import { COGLayer, MosaicLayer } from "../src/index.js";
 
 type Item = MosaicItem & { url: string };
 const item: Item = { bbox: [0, 0, 1, 1], url: "https://example.com/a.tif" };
@@ -26,10 +26,26 @@ describe("MosaicLayer props", () => {
     });
   });
 
-  it("gives renderSource no abort signal", () => {
+  it("gives renderSource the source and its sublayer props, and no abort signal", () => {
     expectTypeOf<
       Parameters<MosaicLayerProps<Item, COGSource>["renderSource"]>[1]
-    >().toEqualTypeOf<{ source?: COGSource }>();
+    >().toEqualTypeOf<{
+      source?: COGSource;
+      subLayerProps: Omit<
+        Partial<CompositeLayerProps>,
+        "id" | "data" | "updateTriggers"
+      >;
+    }>();
+  });
+
+  it("lets renderSource spread its sublayer props into a COGLayer", () => {
+    new MosaicLayer<Item, COGSource>({
+      data: [item],
+      renderSource: (renderedItem, { source, subLayerProps }) =>
+        source
+          ? new COGLayer({ ...subLayerProps, id: renderedItem.url, source })
+          : null,
+    });
   });
 
   it("reports each item with its source to onViewportLoad", () => {
