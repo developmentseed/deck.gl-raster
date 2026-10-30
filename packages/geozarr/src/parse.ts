@@ -12,6 +12,12 @@ import type { CRSInfo, GeoZarrMetadata, MultiscaleLevel } from "./types.js";
  * Zarr order, matching the multiscales layout array). Reverse to get
  * coarsest-first for `TilesetDescriptor`.
  *
+ * The Y and X axes are found by name when `spatial:dimensions` contains both
+ * a Y label ("y", "latitude" or "lat") and an X label ("x", "longitude" or
+ * "lon"), ignoring case. Otherwise they are the last two entries, following
+ * the convention's row-major order (`[y, x]` or `[z, y, x]`), whatever their
+ * names.
+ *
  * @param attrs  Raw group attributes object (e.g. from zarrita `group.attrs`).
  *
  * @throws If required conventions (spatial, geo-proj) are missing or invalid,
@@ -41,20 +47,18 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
 
   // --- Axes ---
   const axes = spatial["spatial:dimensions"];
-  // Accept the spec's "y"/"x" (case-insensitive) as well as the common
-  // CF-style names "latitude"/"longitude". Matching is purely label-based;
-  // positional inference is not used.
+  // The convention leaves dimension names free and identifies Y and X by
+  // position. Recognized labels still win when both are present, so data that
+  // lists them out of order, such as `["lon", "lat"]`, keeps working.
   const Y_LABELS = new Set(["y", "latitude", "lat"]);
   const X_LABELS = new Set(["x", "longitude", "lon"]);
-  const yAxisIndex = axes.findIndex((a) => Y_LABELS.has(a.toLowerCase()));
-  const xAxisIndex = axes.findIndex((a) => X_LABELS.has(a.toLowerCase()));
+  let yAxisIndex = axes.findIndex((a) => Y_LABELS.has(a.toLowerCase()));
+  let xAxisIndex = axes.findIndex((a) => X_LABELS.has(a.toLowerCase()));
 
   if (yAxisIndex === -1 || xAxisIndex === -1) {
-    throw new Error(
-      `spatial:dimensions must contain a Y axis ("y"/"latitude"/"lat") and ` +
-        `an X axis ("x"/"longitude"/"lon") (case-insensitive), got: ` +
-        `${JSON.stringify(axes)}`,
-    );
+    // The schema guarantees at least 2 entries.
+    yAxisIndex = axes.length - 2;
+    xAxisIndex = axes.length - 1;
   }
 
   // --- Levels ---
