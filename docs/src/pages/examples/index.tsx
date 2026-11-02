@@ -258,6 +258,23 @@ const experimentalExamples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/cog-terrain",
   },
+  {
+    title: "Hillshade from PMTiles",
+    description: (
+      <>
+        Shade Mapterhorn's global terrain on the GPU, read from one PMTiles
+        archive by{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-raster/classes/RasterTileLayer/">
+          RasterTileLayer
+        </Link>{" "}
+        with merged range requests.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/pmtiles-terrain/",
+    image: "/deck.gl-raster/img/pmtiles-terrain-example-card.jpg",
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/pmtiles-terrain",
+  },
 ];
 
 /**

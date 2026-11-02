@@ -91,12 +91,12 @@ Differences:
 - We cache the offset-0 OBB per `(zRange)` and translate from the cache
   rather than recomputing per offset.
 
-## Mosaic sources
+## Mosaic items
 
-`MosaicLayer` picks the sources to draw before any of them has a
-`RasterTileLayer`, so the traversal above never sees a source it didn't pick.
+`MosaicLayer` picks the items to draw before any of them has a
+`RasterTileLayer`, so the traversal above never sees an item it didn't pick.
 [`MosaicTileset2D`](../packages/deck.gl-geotiff/src/mosaic-layer/mosaic-tileset-2d.ts)
-picks them by searching a Flatbush index of source bboxes with
+picks them by searching a Flatbush index of item bboxes with
 `viewport.getBounds()`.
 
 The bboxes lie within [-180, 180] longitude, but near the antimeridian the
@@ -109,11 +109,11 @@ them in two at ±180° if they cross it
 Web Mercator without `repeat` draws nothing past ±180°, so its bounds are cut
 off there.
 
-The search doesn't walk world offsets like the traversal does. Every source
+The search doesn't walk world offsets like the traversal does. Every item
 lies in the primary world, so the moved bounds cover every copy the viewport
 shows.
 
-A source whose bbox crosses the antimeridian, written with `minX > maxX` as in
+An item whose bbox crosses the antimeridian, written with `minX > maxX` as in
 GeoJSON and STAC, is indexed as two boxes, one on each side of it.
 
 ## Root tiles

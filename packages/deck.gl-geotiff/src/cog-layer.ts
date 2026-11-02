@@ -1,33 +1,17 @@
-import type { LayerContext, UpdateParameters } from "@deck.gl/core";
 import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
   RasterTileLayerProps,
-  RasterTilesetDescriptor,
   RenderTileResult,
 } from "@developmentseed/deck.gl-raster";
 import { RasterTileLayer } from "@developmentseed/deck.gl-raster";
-import type {
-  ConcurrencyLimiter,
-  DecoderPool,
-  GeoTIFF,
-  Overview,
-} from "@developmentseed/geotiff";
+import type { DecoderPool, GeoTIFF, Overview } from "@developmentseed/geotiff";
 import { defaultDecoderPool } from "@developmentseed/geotiff";
-import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
-import {
-  epsgResolver,
-  makeClampedForwardTo3857,
-  metersPerUnit,
-  parseWkt,
-} from "@developmentseed/proj";
 import { Texture } from "@luma.gl/core";
-import proj4 from "proj4";
-import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
-import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
+import type { COGInput } from "./cog-source.js";
+import { COGSource } from "./cog-source.js";
 import type { TextureDataT } from "./geotiff/render-pipeline.js";
 import { inferRenderPipeline } from "./geotiff/render-pipeline.js";
-import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 
 /** Options passed to `getTileData`. */
 export type GetTileDataOptions = RasterTileGetTileDataOptions & {
@@ -49,6 +33,11 @@ type COGLayerDataProps<DataT extends MinimalTileData> =
        * Must be provided together with `renderTile`. If neither is provided,
        * the default pipeline is used, which fetches the tile, uploads it as a
        * GPU texture, and renders it using an inferred shader pipeline.
+       *
+       * To fetch the tiles again when something this function reads changes,
+       * change `updateTriggers.getTileData` (or `updateTriggers.all`).
+       * deck.gl compares each element of a trigger with `===`, so keep them
+       * the same across renders.
        */
       getTileData: (
         image: GeoTIFF | Overview,
@@ -78,240 +67,89 @@ export type COGLayerProps<DataT extends MinimalTileData = TextureDataT> = Omit<
 > &
   COGLayerDataProps<DataT> & {
     /**
-     * Cloud-optimized GeoTIFF input.
+     * The Cloud-Optimized GeoTIFF to draw: an opened {@link COGSource}, or one
+     * of these for the layer to open with the defaults of
+     * {@link COGSource.open}:
      *
-     * - {@link URL} or `string` pointing to a COG
-     * - {@link ArrayBuffer} containing the COG data
-     * - An instance of the {@link GeoTIFF} class.
+     * - a {@link URL} or `string` pointing to a COG
+     * - an {@link ArrayBuffer} containing the COG data
+     * - an opened {@link GeoTIFF}
+     *
+     * Open the COG yourself to change those defaults, such as the EPSG
+     * resolver or the request limiter, or to share one opened COG between
+     * layers.
+     *
+     * Keep the same object across renders: a new one starts the layer's tiles
+     * over.
      */
-    geotiff: GeoTIFF | string | URL | ArrayBuffer;
+    source: COGSource | COGInput;
 
     /**
-     * A function callback for parsing numeric EPSG codes to projection
-     * information (as returned by `wkt-parser`).
-     *
-     * The default implementation:
-     * - makes a request to epsg.io to resolve EPSG codes found in the GeoTIFF.
-     * - caches any previous requests
-     * - parses PROJJSON response with `wkt-parser`
+     * Called with the source the layer opened, when `source` isn't an opened
+     * {@link COGSource} already.
      */
-    epsgResolver?: EpsgResolver;
+    onSourceLoad?: (source: COGSource) => void;
 
     /**
-     * Worker pool for decoding image chunks.
-     *
-     * If none is provided, a default Pool will be created and shared between all
-     * COGLayer and GeoTIFFLayer instances.
+     * Worker pool for decoding image chunks. Without one, every layer shares a
+     * default pool.
      */
     pool?: DecoderPool;
-
-    /**
-     * Called when the GeoTIFF metadata has been loaded and parsed.
-     */
-    onGeoTIFFLoad?: (
-      geotiff: GeoTIFF,
-      options: {
-        projection: ProjectionDefinition;
-        /**
-         * Bounds of the image in geographic coordinates (WGS84) [minLon, minLat,
-         * maxLon, maxLat]
-         */
-        geographicBounds: {
-          west: number;
-          south: number;
-          east: number;
-          north: number;
-        };
-      },
-    ) => void;
-
-    /** A user-provided AbortSignal to cancel loading.
-     *
-     * This can be useful in combination with the MosaicLayer, so that when a
-     * mosaic source is out of the viewport, all of its tile requests are
-     * automatically aborted.
-     */
-    signal?: AbortSignal;
-
-    /**
-     * Caps concurrent HTTP requests for this layer's source fetches.
-     *
-     * Defaults to a maximum of 6 concurrent requests per origin, which aligns
-     * with browser limits of 6 HTTP/1.1 requests per origin. If your sources
-     * support HTTP/2 or HTTP/3, you may want to increase this limit or disable
-     * it entirely by passing `null`.
-     *
-     * Ignored when `geotiff` is a pre-opened `GeoTIFF` instance — wire the
-     * limiter via {@link GeoTIFF.fromUrl} at construction time instead.
-     */
-    concurrencyLimiter?: ConcurrencyLimiter | null;
   };
 
 /**
  * COGLayer renders a COG using a tiled approach with reprojection.
+ *
+ * Its `source` is an opened {@link COGSource}, or a COG for the layer to open.
+ * For the bands of one scene stored as separate files, use
+ * {@link MultiCOGLayer}.
  */
 export class COGLayer<
   DataT extends MinimalTileData = TextureDataT,
 > extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
   static override layerName = "COGLayer";
-  // COGLayer's getTileData signature differs from the base class's, so
-  // `DefaultProps<COGLayerProps>` is not assignable to
-  // `DefaultProps<RasterTileLayerProps>`. Cast to the base static-side type
-  // to keep inheritance happy. The only COG-specific default is
-  // `epsgResolver`; all behavior still flows from the base class.
+  // Release a whole selection to the range reader at once, which merges its
+  // reads; the per-origin limiter caps requests. Cast as in MultiCOGLayer.
   static override defaultProps = {
     ...RasterTileLayer.defaultProps,
-    epsgResolver,
-    concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
-  } as typeof RasterTileLayer.defaultProps;
+    maxRequests: 256,
+    debounceTime: 50,
+  } as unknown as typeof RasterTileLayer.defaultProps;
 
-  declare state: {
-    geotiff?: GeoTIFF;
-    tilesetDescriptor?: RasterTilesetDescriptor;
+  /** On: a tile that leaves the view must stop its stream. */
+  protected override _abortUnwantedLoads(): boolean {
+    return true;
+  }
+
+  declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
-    /** Aborts the in-flight header read when the `geotiff` prop changes or the
-     *  layer is removed
-     */
-    abortController?: AbortController;
-    /** True while `_parseGeoTIFF` is in flight. */
-    loadingMetadata?: boolean;
   };
 
-  override finalizeState(context: LayerContext): void {
-    this.state.abortController?.abort();
-    super.finalizeState(context);
+  /**
+   * Open the COG that `source` points to, with the defaults of
+   * {@link COGSource.open}.
+   */
+  protected override _openSource(
+    input: COGInput,
+    signal: AbortSignal,
+  ): Promise<COGSource> {
+    return COGSource.open(input, { signal });
   }
 
-  override updateState(params: UpdateParameters<this>) {
-    super.updateState(params);
-
-    const { props, oldProps, changeFlags } = params;
-
-    const needsUpdate =
-      Boolean(changeFlags.dataChanged) || props.geotiff !== oldProps.geotiff;
-
-    if (needsUpdate) {
-      // Abort the previous GeoTIFF's parse so it can't overwrite this one
-      this.state.abortController?.abort();
-      const abortController = new AbortController();
-      // Clear stale state so renderLayers returns null until the new GeoTIFF is
-      // ready
-      this.clearState();
-      this.setState({ abortController, loadingMetadata: true });
-      this._parseGeoTIFF()
-        .catch((error: Error) => this.raiseError(error, "loading GeoTIFF"))
-        .finally(() => {
-          // An aborted parse no longer owns `loadingMetadata`
-          if (!abortController.signal.aborted) {
-            this.setState({ loadingMetadata: false });
-          }
-        });
-    }
-  }
-
-  clearState() {
-    this.setState({
-      geotiff: undefined,
-      tilesetDescriptor: undefined,
-      defaultGetTileData: undefined,
-      defaultRenderTile: undefined,
-    });
-  }
-
-  async _parseGeoTIFF(): Promise<void> {
-    const signal = this.state.abortController?.signal;
-
-    let geotiff: GeoTIFF;
-    let sourceProjection: ProjectionDefinition;
-    try {
-      geotiff = await fetchGeoTIFF(this.props.geotiff, {
-        concurrencyLimiter: this.props.concurrencyLimiter,
-        signal,
-      });
-      const crs = geotiff.crs;
-      sourceProjection =
-        typeof crs === "number"
-          ? await this.props.epsgResolver!(crs)
-          : parseWkt(crs);
-    } catch (err) {
-      // `geotiff` changed or the layer was removed mid-open; drop it.
-      if (signal?.aborted) {
-        return;
-      }
-      throw err;
-    }
-
-    if (signal?.aborted) {
-      return;
-    }
-
-    // @ts-expect-error - proj4 typings are incomplete and don't support
-    // wkt-parser input
-    const converter4326 = proj4(sourceProjection, "EPSG:4326");
-    const projectTo4326 = (x: number, y: number) =>
-      converter4326.forward<[number, number]>([x, y], false);
-    const projectFrom4326 = (x: number, y: number) =>
-      converter4326.inverse<[number, number]>([x, y], false);
-
-    // @ts-expect-error - proj4 typings are incomplete and don't support
-    // wkt-parser input
-    const converter3857 = proj4(sourceProjection, "EPSG:3857");
-    const projectTo3857 = makeClampedForwardTo3857(
-      (x: number, y: number) =>
-        converter3857.forward<[number, number]>([x, y], false),
-      projectTo4326,
-    );
-    const projectFrom3857 = (x: number, y: number) =>
-      converter3857.inverse<[number, number]>([x, y], false);
-
-    const units = sourceProjection.units;
-    if (!units) {
-      throw new Error(
-        "Source projection is missing 'units' property, cannot compute meters per unit",
-      );
-    }
-    const mpu = metersPerUnit(units as Parameters<typeof metersPerUnit>[0], {
-      semiMajorAxis: sourceProjection.datum?.a ?? sourceProjection.a,
-    });
-
-    const tilesetDescriptor = geoTiffToDescriptor(geotiff, {
-      projectTo4326,
-      projectFrom4326,
-      projectTo3857,
-      projectFrom3857,
-      mpu,
-    });
-
-    if (this.props.onGeoTIFFLoad) {
-      const geographicBounds = getGeographicBounds(geotiff, converter4326);
-      this.props.onGeoTIFFLoad(geotiff, {
-        projection: sourceProjection,
-        geographicBounds,
-      });
-    }
-
+  /**
+   * The default pipeline for drawing `source`, unless the app passed both
+   * `getTileData` and `renderTile`.
+   */
+  protected override _sourceState(source: COGSource) {
     let defaultGetTileData: COGLayerProps<TextureDataT>["getTileData"];
     let defaultRenderTile: COGLayerProps<TextureDataT>["renderTile"];
     if (!this.props.getTileData || !this.props.renderTile) {
       ({ getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
-        inferRenderPipeline(geotiff, this.context.device));
+        inferRenderPipeline(source.geotiff, this.context.device));
     }
 
-    this.setState({
-      geotiff,
-      tilesetDescriptor,
-      defaultGetTileData,
-      defaultRenderTile,
-    });
-  }
-
-  protected override _tilesetDescriptor() {
-    return this.state.tilesetDescriptor;
-  }
-
-  protected override _isLoadingMetadata(): boolean {
-    return this.state.loadingMetadata === true;
+    return { defaultGetTileData, defaultRenderTile };
   }
 
   /**
@@ -319,7 +157,7 @@ export class COGLayer<
    * into RasterTileLayer's `(tile, { signal, device }) => Promise<DataT>`.
    */
   protected override _getTileDataCallback() {
-    const geotiff = this.state.geotiff;
+    const geotiff = this.state.source?.geotiff;
 
     if (!geotiff) {
       return undefined;

@@ -1,3 +1,4 @@
+import type { UpdateParameters } from "@deck.gl/core";
 import { CompositeLayer } from "@deck.gl/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RasterTileLayerProps } from "../../src/raster-tile-layer/index.js";
@@ -173,5 +174,249 @@ describe("RasterTileLayer world wrap", () => {
 
   it("doesn't wrap on the globe, which has no world edge", () => {
     expect(rasterLayerProps({}, { globe: true })._wrapX).toBeUndefined();
+  });
+});
+
+describe("RasterTileLayer.loadMetadata", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A promise with its `resolve` and `reject` exposed. */
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (error: Error) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  /** A load started by {@link MetadataTestLayer}, settled by the test. */
+  type Load = { signal: AbortSignal } & ReturnType<typeof deferred<string>>;
+
+  /** The test props {@link MetadataTestLayer} reads. */
+  type TestProps = { input: string; loads: Load[] };
+
+  /**
+   * Loads metadata as subclasses must. `shouldLoadMetadata` asks for a load
+   * when the `input` prop changes. `loadMetadata` pushes each load to the
+   * `loads` prop for the test to settle, then checks the signal after its last
+   * `await`, before `setState`.
+   */
+  class MetadataTestLayer extends RasterTileLayer {
+    declare state: RasterTileLayer["state"] & { result?: string };
+    static override layerName = "MetadataTestLayer";
+
+    override shouldLoadMetadata({
+      props,
+      oldProps,
+    }: UpdateParameters<this>): boolean {
+      const { input } = props as unknown as TestProps;
+      const { input: oldInput } = oldProps as unknown as TestProps;
+      return input !== oldInput;
+    }
+
+    override async loadMetadata(signal: AbortSignal): Promise<void> {
+      const load = { signal, ...deferred<string>() };
+      (this.props as unknown as TestProps).loads.push(load);
+      const result = await load.promise;
+      signal.throwIfAborted();
+      this.setState({ result });
+    }
+  }
+
+  /**
+   * Build a {@link MetadataTestLayer} ready for direct lifecycle calls: replace
+   * `state` and `setState` with a plain object + assign.
+   */
+  function makeBareLayer(props: Record<string, unknown>): MetadataTestLayer {
+    const layer = new MetadataTestLayer({ id: "test", ...props } as never);
+    const state: Record<string, unknown> = {};
+    Object.assign(layer as object, {
+      state,
+      setState: (updates: Record<string, unknown>) =>
+        Object.assign(state, updates),
+    });
+    return layer;
+  }
+
+  /**
+
+   * Run `updateState` as deck.gl does when the layer is first added: the old
+
+   * props are empty.
+
+   */
+  function runInitialUpdate(layer: MetadataTestLayer): void {
+    layer.updateState({
+      props: layer.props,
+      oldProps: {},
+      changeFlags: { dataChanged: "init" },
+    } as never);
+  }
+
+  /**
+   * Render a new instance with `props`, as apps do on every render: deck.gl
+   * hands it the old instance's `state`, then runs `updateState`.
+   */
+  function rerender(
+    layer: MetadataTestLayer,
+    props: Record<string, unknown>,
+  ): MetadataTestLayer {
+    const next = new MetadataTestLayer({ id: "test", ...props } as never);
+    Object.assign(next as object, {
+      state: layer.state,
+      setState: layer.setState,
+    });
+    next.updateState({
+      props: next.props,
+      oldProps: layer.props,
+      changeFlags: {},
+    } as never);
+    return next;
+  }
+
+  /** Let every settled promise run its handlers. */
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("keeps the latest load's result when an older load finishes last", async () => {
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads });
+    runInitialUpdate(layer);
+    const next = rerender(layer, { input: "b", loads });
+
+    loads[1]!.resolve("b");
+    await flush();
+    loads[0]!.resolve("a");
+    await flush();
+
+    expect(next.state.result).toBe("b");
+  });
+
+  it("doesn't load again when the input is unchanged", () => {
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads });
+    runInitialUpdate(layer);
+    rerender(layer, { input: "a", loads });
+
+    expect(loads).toHaveLength(1);
+  });
+
+  it("stays loading until the latest load settles", async () => {
+    vi.spyOn(CompositeLayer.prototype, "isLoaded", "get").mockReturnValue(true);
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads });
+    runInitialUpdate(layer);
+    const next = rerender(layer, { input: "b", loads });
+
+    loads[0]!.resolve("a");
+    await flush();
+    expect(next.isLoaded).toBe(false);
+
+    loads[1]!.resolve("b");
+    await flush();
+    expect(next.isLoaded).toBe(true);
+  });
+
+  it("raises only the latest load's error", async () => {
+    const onError = vi.fn((_error: Error) => true);
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads, onError });
+    runInitialUpdate(layer);
+    rerender(layer, { input: "b", loads, onError });
+
+    loads[0]!.reject(new Error("a"));
+    await flush();
+    expect(onError).not.toHaveBeenCalled();
+
+    loads[1]!.reject(new Error("boom"));
+    await flush();
+    expect(onError.mock.calls.map(([error]) => error.message)).toEqual([
+      "Metadata loading failed in MetadataTestLayer: boom",
+    ]);
+  });
+
+  it("stops loading when the latest load fails", async () => {
+    vi.spyOn(CompositeLayer.prototype, "isLoaded", "get").mockReturnValue(true);
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads, onError: () => true });
+    runInitialUpdate(layer);
+
+    loads[0]!.reject(new Error("boom"));
+    await flush();
+
+    expect(layer.isLoaded).toBe(true);
+  });
+
+  it("aborts the load in flight when the layer is removed", () => {
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads });
+    runInitialUpdate(layer);
+
+    layer.finalizeState({} as never);
+
+    expect(loads[0]!.signal.aborted).toBe(true);
+  });
+
+  it("aborts the previous load's signal when a new load starts", () => {
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads });
+    runInitialUpdate(layer);
+    rerender(layer, { input: "b", loads });
+
+    expect(loads.map((load) => load.signal.aborted)).toEqual([true, false]);
+  });
+
+  it("abortMetadataLoad aborts the load in flight and stops loading", async () => {
+    const onError = vi.fn();
+    const loads: Load[] = [];
+    const layer = makeBareLayer({ input: "a", loads, onError });
+    runInitialUpdate(layer);
+
+    (layer as unknown as { _abortMetadataLoad(): void })._abortMetadataLoad();
+    loads[0]!.reject(new Error("late"));
+    await flush();
+
+    expect(loads[0]!.signal.aborted).toBe(true);
+    expect(layer.state.loadingMetadata).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("abortMetadataLoad sets no state when no load is in flight", () => {
+    const layer = makeBareLayer({ input: undefined, loads: [] });
+    const setState = vi.spyOn(layer, "setState");
+
+    (layer as unknown as { _abortMetadataLoad(): void })._abortMetadataLoad();
+
+    expect(setState).not.toHaveBeenCalled();
+  });
+});
+
+describe("RasterTileLayer inner TileLayer", () => {
+  type Descriptor = RasterTileLayerProps["tilesetDescriptor"];
+
+  /** The id of the inner TileLayer that a render with `descriptor` returns. */
+  function innerTileLayerId(descriptor: Descriptor): string | undefined {
+    const layer = new RasterTileLayer({
+      id: "t",
+      tilesetDescriptor: descriptor,
+      getTileData: vi.fn(),
+      renderTile: vi.fn(),
+    });
+    Object.assign(layer as object, { context: { device: {} } });
+    return (layer.renderLayers() as { id: string } | null)?.id;
+  }
+
+  it("keeps its id across renders with the same tile grid", () => {
+    const descriptor = {} as Descriptor;
+    expect(innerTileLayerId(descriptor)).toBe(innerTileLayerId(descriptor));
+  });
+
+  it("gets a new id for a new tile grid, which a TileLayer builds only once", () => {
+    expect(innerTileLayerId({} as Descriptor)).not.toBe(
+      innerTileLayerId({} as Descriptor),
+    );
   });
 });

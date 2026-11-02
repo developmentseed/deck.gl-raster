@@ -5,9 +5,9 @@ import {
 } from "@deck.gl/core";
 import type { _Tileset2DProps as Tileset2DProps } from "@deck.gl/geo-layers";
 import { describe, expect, it } from "vitest";
-import type { MosaicSource } from "../src/mosaic-layer/mosaic-tileset-2d.js";
+import type { MosaicItem } from "../src/mosaic-layer/mosaic-tileset-2d.js";
 import {
-  buildSourceIndex,
+  buildItemIndex,
   MosaicTileset2D,
 } from "../src/mosaic-layer/mosaic-tileset-2d.js";
 
@@ -23,13 +23,13 @@ function makeViewport(
   } as unknown as Viewport;
 }
 
-function makeTileset<T extends MosaicSource>(
-  sources: T[],
+function makeTileset<T extends MosaicItem>(
+  items: T[],
   opts: { maxRequests?: number; extent?: number[] } = {},
 ): MosaicTileset2D<T> {
-  const index = buildSourceIndex(sources);
+  const index = buildItemIndex(items);
   return new MosaicTileset2D<T>(
-    () => sources,
+    () => items,
     () => index,
     {
       getTileData: () => new Promise(() => {}),
@@ -42,13 +42,13 @@ function makeTileset<T extends MosaicSource>(
   );
 }
 
-type Item = MosaicSource & { name: string };
+type Item = MosaicItem & { name: string };
 const A: Item = { name: "A", bbox: [0, 0, 10, 10] };
 const B: Item = { name: "B", bbox: [20, 0, 30, 10] };
 const C: Item = { name: "C", bbox: [40, 0, 50, 10] };
 
 describe("MosaicTileset2D viewport filtering", () => {
-  it("returns sources intersecting the viewport", () => {
+  it("returns items intersecting the viewport", () => {
     const tileset = makeTileset([A, B, C]);
     const result = tileset.getTileIndices({
       viewport: makeViewport([-1, -1, 11, 11]),
@@ -57,8 +57,8 @@ describe("MosaicTileset2D viewport filtering", () => {
     expect(result[0]?.name).toBe("A");
   });
 
-  it("excludes sources outside viewport bounds", () => {
-    const tileset = makeTileset<MosaicSource>([
+  it("excludes items outside viewport bounds", () => {
+    const tileset = makeTileset<MosaicItem>([
       { bbox: [0, 0, 1, 1] },
       { bbox: [100, 100, 101, 101] },
     ]);
@@ -96,7 +96,7 @@ describe("MosaicTileset2D tile metadata", () => {
 });
 
 describe("MosaicTileset2D tile ids", () => {
-  it("defaults each source's tile-cache id to its array position", () => {
+  it("defaults each item's tile-cache id to its array position", () => {
     const tileset = makeTileset([A, B, C]);
     const result = tileset.getTileIndices({
       viewport: makeViewport([-1, -1, 51, 11]),
@@ -107,7 +107,7 @@ describe("MosaicTileset2D tile ids", () => {
     expect(tileset.getTileId(byName.get("C")!)).toBe("2");
   });
 
-  it("respects an explicit `id` on a source", () => {
+  it("respects an explicit `id` on an item", () => {
     const explicit: Item = {
       name: "explicit",
       bbox: [0, 0, 10, 10],
@@ -123,10 +123,10 @@ describe("MosaicTileset2D tile ids", () => {
 });
 
 describe("MosaicTileset2D across the antimeridian", () => {
-  // One source on each side of the antimeridian, like scenes over Fiji.
+  // One item on each side of the antimeridian, like scenes over Fiji.
   const west: Item = { name: "west", bbox: [176, -20, 179, -17] };
   const east: Item = { name: "east", bbox: [-179, -20, -176, -17] };
-  const names = (sources: Item[]) => sources.map((s) => s.name).sort();
+  const names = (items: Item[]) => items.map((item) => item.name).sort();
   // About 9° of longitude wide.
   const view = { latitude: -18.5, zoom: 6, width: 800, height: 600 };
 
@@ -180,7 +180,7 @@ describe("MosaicTileset2D across the antimeridian", () => {
     ]);
   });
 
-  it("selects every source when the viewport shows more than one world", () => {
+  it("selects every item when the viewport shows more than one world", () => {
     const tileset = makeTileset([west, east, A]);
     const viewport = new WebMercatorViewport({
       longitude: 0,
@@ -197,7 +197,7 @@ describe("MosaicTileset2D across the antimeridian", () => {
     ]);
   });
 
-  it("selects a source on both sides of the antimeridian once", () => {
+  it("selects an item on both sides of the antimeridian once", () => {
     // A scene across the antimeridian, with a bbox spanning every longitude.
     const across: Item = { name: "across", bbox: [-180, -20, 180, -17] };
     const tileset = makeTileset([across]);
@@ -213,12 +213,12 @@ describe("MosaicTileset2D across the antimeridian", () => {
 describe("MosaicTileset2D with a bbox across the antimeridian", () => {
   // Written with minX > maxX, as GeoJSON and STAC do.
   const across: Item = { name: "across", bbox: [179, -20, -179, -17] };
-  const names = (sources: Item[]) => sources.map((s) => s.name).sort();
+  const names = (items: Item[]) => items.map((item) => item.name).sort();
   // About 9° of longitude wide.
   const view = { latitude: -18.5, zoom: 6, width: 800, height: 600 };
 
   it.each([179.9, -179.9])(
-    "selects the source in Web Mercator with repeat, centered at %s°",
+    "selects the item in Web Mercator with repeat, centered at %s°",
     (longitude) => {
       const tileset = makeTileset([across]);
       const viewport = new WebMercatorViewport({
@@ -231,7 +231,7 @@ describe("MosaicTileset2D with a bbox across the antimeridian", () => {
   );
 
   it.each([179.9, -179.9])(
-    "selects the source in Web Mercator without repeat, centered at %s°",
+    "selects the item in Web Mercator without repeat, centered at %s°",
     (longitude) => {
       // Only the half on the center's side of the antimeridian is in view.
       const tileset = makeTileset([across]);
@@ -241,7 +241,7 @@ describe("MosaicTileset2D with a bbox across the antimeridian", () => {
   );
 
   it.each([179.9, -179.9])(
-    "selects the source on a globe centered at %s°",
+    "selects the item on a globe centered at %s°",
     (longitude) => {
       const tileset = makeTileset([across]);
       const viewport = new GlobeViewport({ ...view, longitude });
@@ -249,7 +249,7 @@ describe("MosaicTileset2D with a bbox across the antimeridian", () => {
     },
   );
 
-  it("doesn't select the source far from the antimeridian", () => {
+  it("doesn't select the item far from the antimeridian", () => {
     const tileset = makeTileset([across]);
     const viewport = new WebMercatorViewport({
       ...view,
@@ -262,7 +262,7 @@ describe("MosaicTileset2D with a bbox across the antimeridian", () => {
   it.each([
     ["west", [178, -25, 179.5, -10]],
     ["east", [-179.5, -25, -178, -10]],
-  ])("keeps the source for an extent over its %s half", (_half, extent) => {
+  ])("keeps the item for an extent over its %s half", (_half, extent) => {
     const tileset = makeTileset([across], { extent });
     const viewport = new WebMercatorViewport({
       ...view,
@@ -272,7 +272,7 @@ describe("MosaicTileset2D with a bbox across the antimeridian", () => {
     expect(names(tileset.getTileIndices({ viewport }))).toEqual(["across"]);
   });
 
-  it("drops the source for an extent elsewhere", () => {
+  it("drops the item for an extent elsewhere", () => {
     const tileset = makeTileset([across], { extent: [0, -25, 10, -10] });
     const viewport = new WebMercatorViewport({
       ...view,
@@ -296,17 +296,17 @@ describe("MosaicTileset2D with a bbox across the antimeridian", () => {
 describe("MosaicTileset2D extent", () => {
   // Shows all of A, B and C.
   const viewport = makeViewport([-1, -1, 51, 11]);
-  const names = (sources: Item[]) => sources.map((s) => s.name).sort();
+  const names = (items: Item[]) => items.map((item) => item.name).sort();
 
-  it("selects only the sources that overlap the extent", () => {
+  it("selects only the items that overlap the extent", () => {
     // Covers part of A and part of B. Asymmetric, so reading it with swapped
     // axes would select only A.
     const tileset = makeTileset([A, B, C], { extent: [5, 2, 25, 8] });
     expect(names(tileset.getTileIndices({ viewport }))).toEqual(["A", "B"]);
   });
 
-  it("keeps array-position ids when the extent skips an earlier source", () => {
-    // Skips A. B and C still get ids from their positions in `sources`.
+  it("keeps array-position ids when the extent skips an earlier item", () => {
+    // Skips A. B and C still get ids from their positions in the items.
     const tileset = makeTileset([A, B, C], { extent: [25, 2, 45, 8] });
     const result = tileset.getTileIndices({ viewport });
     const ids = Object.fromEntries(
@@ -315,7 +315,7 @@ describe("MosaicTileset2D extent", () => {
     expect(ids).toEqual({ B: "1", C: "2" });
   });
 
-  it("skips sources that only touch the extent", () => {
+  it("skips items that only touch the extent", () => {
     // Shares A's east edge and B's west edge. deck.gl's TileLayer likewise
     // skips tiles that only touch its extent.
     const sideBySide = makeTileset([A, B, C], { extent: [10, 0, 20, 10] });
@@ -326,8 +326,8 @@ describe("MosaicTileset2D extent", () => {
     expect(names(above.getTileIndices({ viewport }))).toEqual([]);
   });
 
-  it("keeps a visible source whose overlap with the extent is off-screen", () => {
-    // `wide` reaches the extent off-screen to the east, and a source is drawn
+  it("keeps a visible item whose overlap with the extent is off-screen", () => {
+    // `wide` reaches the extent off-screen to the east, and an item is drawn
     // in full, so its west end stays on screen. `near` is on screen but
     // misses the extent.
     const wide: Item = { name: "wide", bbox: [0, 0, 100, 10] };

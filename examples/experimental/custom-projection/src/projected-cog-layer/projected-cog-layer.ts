@@ -213,8 +213,9 @@ export class ProjectedCOGLayer<
     return new TileLayer<DataT>({
       // deck.gl builds the tileset once per TileLayer, and the tileset bakes
       // in the projection, so a new projection gets a new TileLayer (as
-      // upstream recommends when switching projections).
-      id: `projected-tile-layer-${this.id}-${projection.signature}-${projection.fromBounds?.join(",") ?? "world"}`,
+      // upstream recommends when switching projections). So does each refetch
+      // (see `RasterTileLayer._refetchTiles`).
+      id: `projected-tile-layer-${this.id}-${projection.signature}-${projection.fromBounds?.join(",") ?? "world"}-${this.state.refetchCount ?? 0}`,
       TilesetClass: TilesetFactory,
       getTileData: (tile) => this._getProjectedTileData(tile, getTileData),
       renderSubLayers: (props) =>
