@@ -1,0 +1,20 @@
+{
+  "name": "vrt-mosaic-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@developmentseed/proj": "workspace:^"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
