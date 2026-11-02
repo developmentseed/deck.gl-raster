@@ -624,3 +624,31 @@ describe("MosaicLayer sublayer props", () => {
     expect(fetched).toEqual([]);
   });
 });
+
+describe("MosaicLayer with an item whose source fails to open", () => {
+  const props = {
+    // B's source fails to open, as it does for a COG that's missing.
+    getSource: async (item: Item): Promise<Marker> => {
+      if (item.id === "B") {
+        throw new Error("Not found");
+      }
+      return { of: item.id };
+    },
+    // Without it, deck.gl's TileLayer logs the failure to the console.
+    onSourceError: () => {},
+  };
+
+  it("updates without errors after the failure", async () => {
+    const { render } = makeMosaicRenderer();
+    const first = await render({ data: [A, B], ...props });
+    const second = await render({ data: [A, B], ...props });
+    expect([...first.errors, ...second.errors]).toEqual([]);
+  });
+
+  it("draws an item added after the failure", async () => {
+    const { render } = makeMosaicRenderer();
+    await render({ data: [B], ...props });
+    const { rendered } = await render({ data: [B, A], ...props });
+    expect(rendered).toEqual({ A: { of: "A" } });
+  });
+});
