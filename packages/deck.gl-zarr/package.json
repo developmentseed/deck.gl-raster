@@ -52,7 +52,7 @@
     "@developmentseed/proj": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "proj4": "^2.22.0",
-    "wkt-parser": "^1.5.6",
+    "wkt-parser": "^1.6.0",
     "zarrita": "^0.7.5"
   },
   "peerDependencies": {

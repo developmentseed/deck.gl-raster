@@ -12,12 +12,12 @@
   },
   "dependencies": {
     "@chakra-ui/react": "^3.37.0",
-    "@deck.gl/core": "^9.4.0",
-    "@deck.gl/geo-layers": "^9.4.0",
-    "@deck.gl/layers": "^9.4.0",
-    "@deck.gl/mesh-layers": "^9.4.0",
-    "@deck.gl/react": "^9.4.0",
-    "@deck.gl/widgets": "^9.4.0",
+    "@deck.gl/core": "^9.4.1",
+    "@deck.gl/geo-layers": "^9.4.1",
+    "@deck.gl/layers": "^9.4.1",
+    "@deck.gl/mesh-layers": "^9.4.1",
+    "@deck.gl/react": "^9.4.1",
+    "@deck.gl/widgets": "^9.4.1",
     "@developmentseed/deck.gl-geotiff": "workspace:^",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/geotiff": "workspace:^",
@@ -28,8 +28,8 @@
     "@math.gl/web-mercator": "^4.1.0",
     "deck.gl-raster-examples-shared": "workspace:*",
     "proj4": "^2.22.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

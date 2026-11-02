@@ -51,8 +51,8 @@
     "extends": "../../package.json"
   },
   "dependencies": {
-    "@chunkd/source": "^11.4.1",
-    "@chunkd/source-memory": "^11.2.1",
+    "@chunkd/source": "^11.4.2",
+    "@chunkd/source-memory": "^11.2.2",
     "@cogeotiff/core": "^9.5.0",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/proj": "workspace:^",
@@ -61,6 +61,6 @@
     "@developmentseed/morecantile": "workspace:^",
     "fzstd": "^0.1.1",
     "lerc": "^4.2.0",
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.3"
   }
 }
