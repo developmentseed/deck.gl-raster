@@ -1,3 +1,4 @@
+import type { LayerContext } from "@deck.gl/core";
 import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
@@ -124,6 +125,8 @@ export class COGLayer<
   declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
+    /** Destroys the default pipeline's shared textures. */
+    destroyDefaultPipeline?: () => void;
   };
 
   /**
@@ -139,17 +142,30 @@ export class COGLayer<
 
   /**
    * The default pipeline for drawing `source`, unless the app passed both
-   * `getTileData` and `renderTile`.
+   * `getTileData` and `renderTile`. It replaces, and destroys, the previous
+   * source's pipeline.
    */
   protected override _sourceState(source: COGSource) {
+    this.state.destroyDefaultPipeline?.();
+    this.setState({ destroyDefaultPipeline: undefined });
+
     let defaultGetTileData: COGLayerProps<TextureDataT>["getTileData"];
     let defaultRenderTile: COGLayerProps<TextureDataT>["renderTile"];
+    let destroyDefaultPipeline: (() => void) | undefined;
     if (!this.props.getTileData || !this.props.renderTile) {
-      ({ getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
-        inferRenderPipeline(source.geotiff, this.context.device));
+      ({
+        getTileData: defaultGetTileData,
+        renderTile: defaultRenderTile,
+        destroy: destroyDefaultPipeline,
+      } = inferRenderPipeline(source.geotiff, this.context.device));
     }
 
-    return { defaultGetTileData, defaultRenderTile };
+    return { defaultGetTileData, defaultRenderTile, destroyDefaultPipeline };
+  }
+
+  override finalizeState(context: LayerContext): void {
+    this.state.destroyDefaultPipeline?.();
+    super.finalizeState(context);
   }
 
   /**

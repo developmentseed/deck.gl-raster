@@ -366,6 +366,11 @@ export class MosaicLayer<
         return { item, source };
       },
       renderSubLayers: (props) => {
+        // deck.gl passes `null` for an item whose `getSource` rejected.
+        if (!props.data) {
+          return null;
+        }
+
         const { item, source } = props.data;
         return renderSource(item, {
           source,

@@ -11,24 +11,24 @@
   },
   "dependencies": {
     "@chakra-ui/react": "^3.37.0",
-    "@deck.gl/core": "^9.4.0",
-    "@deck.gl/geo-layers": "^9.4.0",
-    "@deck.gl/layers": "^9.4.0",
-    "@deck.gl/mesh-layers": "^9.4.0",
+    "@deck.gl/core": "^9.4.1",
+    "@deck.gl/geo-layers": "^9.4.1",
+    "@deck.gl/layers": "^9.4.1",
+    "@deck.gl/mesh-layers": "^9.4.1",
     "@developmentseed/deck.gl-raster": "workspace:^",
     "@developmentseed/geotiff": "workspace:^",
     "@developmentseed/morecantile": "workspace:^",
     "@luma.gl/core": "^9.4.2",
     "@luma.gl/shadertools": "^9.4.2",
     "deck.gl-raster-examples-shared": "workspace:*",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
-    "vite": "^8.3.1",
-    "vitest": "^5.0.2"
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   }
 }

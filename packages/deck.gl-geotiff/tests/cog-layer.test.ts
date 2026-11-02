@@ -513,3 +513,49 @@ describe("COGLayer refetching", () => {
     expect(refetched).toBe(first.length);
   });
 });
+
+describe("COGLayer colormap texture of a palette COG", () => {
+  /** Open the NLCD fixture, a palette COG, as a new source. */
+  async function openPalette(): Promise<COGSource> {
+    return openSource(await loadGeoTIFF("nlcd_landcover", "nlcd"));
+  }
+
+  /** A layer on a palette COG whose device records the textures it creates. */
+  async function makePaletteLayer() {
+    const textures: ReturnType<typeof fakeTexture>[] = [];
+    const layer = makeBareLayer({ source: await openPalette() });
+    Object.assign(layer.context, {
+      device: {
+        createTexture: () => {
+          const texture = fakeTexture();
+          textures.push(texture);
+          return texture.texture;
+        },
+      },
+      // Read by deck.gl's own `finalizeState`
+      resourceManager: { unsubscribe: () => {} },
+    });
+    runInitialUpdate(layer);
+    return { layer, textures };
+  }
+
+  it("destroys the old colormap texture when a new source replaces it", async () => {
+    const { layer, textures } = await makePaletteLayer();
+
+    rerender(layer, { source: await openPalette() });
+
+    expect(
+      textures.map((texture) => texture.destroy.mock.calls.length),
+    ).toEqual([1, 0]);
+  });
+
+  it("destroys its colormap texture when the layer is removed", async () => {
+    const { layer, textures } = await makePaletteLayer();
+
+    layer.finalizeState(layer.context);
+
+    expect(
+      textures.map((texture) => texture.destroy.mock.calls.length),
+    ).toEqual([1]);
+  });
+});
