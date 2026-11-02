@@ -47,10 +47,10 @@
   "devDependencies": {
     "@luma.gl/core": "^9.4.0",
     "@luma.gl/shadertools": "^9.4.0",
-    "@types/node": "^26.6.3",
-    "jsdom": "^30.1.1",
+    "@types/node": "^26.6.6",
+    "jsdom": "^30.1.3",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
   },
   "peerDependencies": {
     "@developmentseed/morecantile": "workspace:^",
