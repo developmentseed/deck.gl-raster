@@ -1,6 +1,14 @@
 import { CompositeLayer } from "@deck.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as zarr from "zarrita";
+import type { GetTileDataOptions } from "../src/zarr-layer.js";
 import { ZarrLayer } from "../src/zarr-layer.js";
+import { ZarrSource } from "../src/zarr-source.js";
+import { geoZarrStore } from "./helpers.js";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 /**
  * Build a {@link ZarrLayer} ready for direct lifecycle calls: bypasses deck.gl's
@@ -8,7 +16,12 @@ import { ZarrLayer } from "../src/zarr-layer.js";
  * assign, mirroring `makeBareLayer` in the deck.gl-raster tests.
  */
 function makeBareLayer(props: Record<string, unknown> = {}): ZarrLayer {
-  const layer = new ZarrLayer({ id: "zarr", node: {}, ...props } as never);
+  const layer = new ZarrLayer({
+    id: "zarr",
+    source: {},
+    selection: {},
+    ...props,
+  } as never);
   const state: Record<string, unknown> = {};
   Object.assign(layer as object, {
     state,
@@ -18,27 +31,320 @@ function makeBareLayer(props: Record<string, unknown> = {}): ZarrLayer {
   return layer;
 }
 
-/** Run `updateState` as deck.gl does when the layer is first added. */
+/**
+ * Run `updateState` as deck.gl does when the layer is first added: the old
+ * props are empty.
+ */
 function runInitialUpdate(layer: ZarrLayer): void {
   layer.updateState({
     props: layer.props,
-    oldProps: layer.props,
-    changeFlags: { dataChanged: true },
+    oldProps: {},
+    changeFlags: { dataChanged: "init" },
   } as never);
 }
 
-describe("ZarrLayer.updateState", () => {
-  it("raises a metadata load failure through onError", async () => {
+/**
+ * Render a new {@link ZarrLayer} with `props`, as apps do on every render:
+ * deck.gl hands the new instance the old one's `state`, then runs
+ * `updateState`.
+ */
+function rerender(layer: ZarrLayer, props: Record<string, unknown>): ZarrLayer {
+  const next = new ZarrLayer({ id: "zarr", ...props } as never);
+  Object.assign(next as object, {
+    state: layer.state,
+    setState: layer.setState,
+  });
+  next.updateState({
+    props: next.props,
+    oldProps: layer.props,
+    changeFlags: {},
+  } as never);
+  return next;
+}
+
+/** Let every settled promise run its handlers. */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** A promise with its `resolve` exposed. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+/** The opened group `name` of a {@link geoZarrStore}. */
+async function openGroup(name: string) {
+  const { store } = await geoZarrStore();
+  return zarr.open(zarr.root(store).resolve(name), { kind: "group" });
+}
+
+/** `ZarrSource.open` itself, kept from before any test mocks it. */
+const openSource = ZarrSource.open.bind(ZarrSource);
+
+/** A {@link ZarrSource} of the GeoZarr example's group `name`. */
+async function openFixture(name = "a") {
+  return openSource(await openGroup(name));
+}
+
+/** Tile callbacks for the layer to wrap. */
+const tileCallbacks = { getTileData: vi.fn(), renderTile: vi.fn() };
+
+/** The tile callback the layer gives its inner TileLayer, if any. */
+function tileCallback(layer: ZarrLayer): unknown {
+  return (
+    layer as unknown as { _getTileDataCallback(): unknown }
+  )._getTileDataCallback();
+}
+
+/** The messages of the errors `onError` got. */
+function errorMessages(onError: ReturnType<typeof vi.fn>): string[] {
+  return onError.mock.calls.map(([error]) => (error as Error).message);
+}
+
+describe("ZarrLayer source", () => {
+  it("draws an opened source without opening anything", async () => {
+    const source = await openFixture();
+    const open = vi.spyOn(ZarrSource, "open");
+    const layer = makeBareLayer({ source });
+
+    runInitialUpdate(layer);
+
+    expect(open).not.toHaveBeenCalled();
+    expect(layer.state.loadingMetadata).toBeUndefined();
+    expect(layer.state.source).toBe(source);
+  });
+
+  it("passes its load signal to ZarrSource.open", async () => {
+    const open = vi
+      .spyOn(ZarrSource, "open")
+      .mockReturnValue(new Promise(() => {}));
+    const groups = [await openGroup("a"), await openGroup("b")];
+
+    const layer = makeBareLayer({ source: groups[0] });
+    runInitialUpdate(layer);
+    rerender(layer, { source: groups[1], selection: {} });
+
+    // The first open's signal aborts when the second starts
+    expect(
+      open.mock.calls.map(([input, options]) => [
+        input,
+        options?.signal?.aborted,
+      ]),
+    ).toEqual([
+      [groups[0], true],
+      [groups[1], false],
+    ]);
+  });
+
+  it("keeps the new source when the old one finishes opening last", async () => {
+    const oldSource = await openFixture("a");
+    const newSource = await openFixture("b");
+    const opens = [deferred<ZarrSource>(), deferred<ZarrSource>()];
+    vi.spyOn(ZarrSource, "open")
+      .mockReturnValueOnce(opens[0]!.promise as never)
+      .mockReturnValueOnce(opens[1]!.promise as never);
+    const onSourceLoad = vi.fn();
+
+    const layer = makeBareLayer({ source: await openGroup("a"), onSourceLoad });
+    runInitialUpdate(layer);
+    const next = rerender(layer, {
+      source: await openGroup("b"),
+      selection: {},
+      onSourceLoad,
+    });
+    opens[1]!.resolve(newSource);
+    await flush();
+    opens[0]!.resolve(oldSource);
+    await flush();
+
+    expect(next.state.source).toBe(newSource);
+    expect(onSourceLoad.mock.calls).toEqual([[newSource]]);
+  });
+
+  it("raises a failed open through onError", async () => {
     const onError = vi.fn((_error: Error) => true);
     const layer = makeBareLayer({ onError });
-    vi.spyOn(layer, "_parseZarr").mockRejectedValue(new Error("boom"));
+    vi.spyOn(layer, "loadMetadata").mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
-    expect(onError.mock.calls[0]?.[0]?.message).toBe(
-      "loading Zarr metadata: boom",
+    expect(errorMessages(onError)).toEqual([
+      "Metadata loading failed in ZarrLayer: boom",
+    ]);
+  });
+});
+
+describe("ZarrLayer selection", () => {
+  it("reports a selection that doesn't fit the source, and draws nothing", async () => {
+    const source = await openFixture();
+    const onError = vi.fn((_error: Error) => true);
+    const layer = makeBareLayer({
+      source,
+      selection: { time: 0 },
+      onError,
+      ...tileCallbacks,
+    });
+
+    runInitialUpdate(layer);
+
+    expect(errorMessages(onError)).toEqual([
+      expect.stringMatching(
+        /^Can't draw the selection in ZarrLayer: ZarrLayer selection includes unknown dim "time"/,
+      ),
+    ]);
+    expect(tileCallback(layer)).toBeUndefined();
+  });
+
+  it("draws again once the selection is fixed, without opening the source again", async () => {
+    const source = await openFixture();
+    const open = vi.spyOn(ZarrSource, "open");
+    const props = { source, onError: () => true, ...tileCallbacks };
+    const layer = makeBareLayer({ ...props, selection: { time: 0 } });
+    runInitialUpdate(layer);
+
+    const next = rerender(layer, { ...props, selection: {} });
+
+    expect(tileCallback(next)).toBeTypeOf("function");
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("doesn't report an equal selection again on the next render", async () => {
+    const source = await openFixture();
+    const onError = vi.fn((_error: Error) => true);
+    const layer = makeBareLayer({ source, selection: { time: 0 }, onError });
+    runInitialUpdate(layer);
+
+    // A new object with the same contents, as an inline literal gives
+    rerender(layer, { source, selection: { time: 0 }, onError });
+
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it("checks the newest selection against a source opened from input", async () => {
+    const onError = vi.fn((_error: Error) => true);
+    const group = await openGroup("a");
+    const layer = makeBareLayer({ source: group, selection: {}, onError });
+    runInitialUpdate(layer);
+
+    // The selection changes while the group opens
+    const newest = { source: group, selection: { time: 0 }, onError };
+    const next = rerender(layer, newest);
+    await vi.waitFor(() =>
+      expect(next.state.source).toBeInstanceOf(ZarrSource),
     );
+    // deck.gl updates the layer after the open's `setState`, with the newest
+    // props
+    rerender(next, newest);
+
+    expect(errorMessages(onError)).toEqual([
+      expect.stringMatching(/unknown dim "time"/),
+    ]);
+  });
+
+  it("checks a selection that changed while there was no source", async () => {
+    const source = await openFixture();
+    vi.spyOn(ZarrSource, "open").mockReturnValue(new Promise(() => {}));
+    const onError = vi.fn((_error: Error) => true);
+    const props = { onError, ...tileCallbacks };
+    const layer = makeBareLayer({ ...props, source, selection: {} });
+    runInitialUpdate(layer);
+
+    // While a group opens, the selection changes. Then the first source
+    // comes back.
+    const opening = rerender(layer, {
+      ...props,
+      source: await openGroup("b"),
+      selection: { time: 0 },
+    });
+    const next = rerender(opening, {
+      ...props,
+      source,
+      selection: { time: 0 },
+    });
+
+    expect(errorMessages(onError)).toEqual([
+      expect.stringMatching(/unknown dim "time"/),
+    ]);
+    expect(tileCallback(next)).toBeUndefined();
+  });
+});
+
+describe("ZarrLayer refetching", () => {
+  /**
+   * The id of the inner TileLayer that `layer` renders. Each refetch gets a
+   * new one, which drops every tile of the old one.
+   */
+  function innerTileLayerId(layer: ZarrLayer): string | undefined {
+    Object.assign(layer as object, { context: { device: {} } });
+    return (layer.renderLayers() as { id: string } | null)?.id;
+  }
+
+  it("fetches its tiles again when the selection changes", async () => {
+    const source = await openFixture("timed");
+    const props = { source, ...tileCallbacks };
+    const layer = makeBareLayer({ ...props, selection: { time: 0 } });
+    runInitialUpdate(layer);
+    const before = innerTileLayerId(layer);
+
+    const next = rerender(layer, { ...props, selection: { time: 1 } });
+
+    expect(innerTileLayerId(next)).not.toBe(before);
+  });
+
+  it("keeps its tiles for an equal selection", async () => {
+    const source = await openFixture("timed");
+    const props = { source, ...tileCallbacks };
+    const layer = makeBareLayer({ ...props, selection: { time: 0 } });
+    runInitialUpdate(layer);
+    const before = innerTileLayerId(layer);
+
+    // A new object with the same contents, as an inline literal gives
+    const next = rerender(layer, { ...props, selection: { time: 0 } });
+
+    expect(innerTileLayerId(next)).toBe(before);
+  });
+});
+
+describe("ZarrLayer tiles", () => {
+  it("reads an edge tile of the finest level, at the selection", async () => {
+    const source = await openSource(await openGroup("timed"));
+    const getTileData = vi.fn(
+      async (_arr: zarr.Array<zarr.DataType>, _options: GetTileDataOptions) =>
+        null,
+    );
+    const layer = makeBareLayer({
+      source,
+      selection: { time: 1 },
+      getTileData,
+      renderTile: vi.fn(),
+    });
+    runInitialUpdate(layer);
+    const callback = tileCallback(layer) as (
+      tile: unknown,
+      options: unknown,
+    ) => Promise<unknown>;
+
+    // The finest level is the last of 3. r10m is 1200 pixels in 256-pixel
+    // tiles, so its last tile is 176 pixels across.
+    await callback({ index: { x: 4, y: 4, z: 2 } }, { device: {} });
+
+    const [arr, options] = getTileData.mock.calls[0]!;
+    expect(arr.path).toBe("/timed/r10m");
+    expect(options).toMatchObject({
+      x: 4,
+      y: 4,
+      z: 2,
+      width: 176,
+      height: 176,
+    });
+    expect(options.sliceSpec).toEqual([
+      1,
+      zarr.slice(1024, 1200),
+      zarr.slice(1024, 1200),
+    ]);
   });
 });
 
@@ -48,34 +354,49 @@ describe("ZarrLayer.isLoaded", () => {
     vi.spyOn(CompositeLayer.prototype, "isLoaded", "get").mockReturnValue(true);
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("is not loaded while the Zarr metadata is loading", () => {
+  it("is not loaded while the source is opening", () => {
     const layer = makeBareLayer();
-    vi.spyOn(layer, "_parseZarr").mockReturnValue(new Promise(() => {}));
+    vi.spyOn(layer, "loadMetadata").mockReturnValue(new Promise(() => {}));
 
     runInitialUpdate(layer);
 
     expect(layer.isLoaded).toBe(false);
   });
 
-  it("is loaded once the Zarr metadata has loaded", async () => {
+  it("is loaded once the source has opened", async () => {
     const layer = makeBareLayer();
-    vi.spyOn(layer, "_parseZarr").mockResolvedValue(undefined);
+    vi.spyOn(layer, "loadMetadata").mockResolvedValue(undefined);
 
     runInitialUpdate(layer);
 
     await vi.waitFor(() => expect(layer.isLoaded).toBe(true));
   });
 
-  it("is loaded after the Zarr metadata fails to load", async () => {
+  it("is loaded after the source fails to open", async () => {
     const layer = makeBareLayer({ onError: () => true });
-    vi.spyOn(layer, "_parseZarr").mockRejectedValue(new Error("boom"));
+    vi.spyOn(layer, "loadMetadata").mockRejectedValue(new Error("boom"));
 
     runInitialUpdate(layer);
 
     await vi.waitFor(() => expect(layer.isLoaded).toBe(true));
+  });
+
+  it("is not loaded when the old source finishes opening first", async () => {
+    let finishOld!: () => void;
+    vi.spyOn(ZarrLayer.prototype, "loadMetadata")
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishOld = resolve;
+        }),
+      )
+      .mockReturnValue(new Promise(() => {}));
+
+    const layer = makeBareLayer();
+    runInitialUpdate(layer);
+    const next = rerender(layer, { source: {}, selection: {} });
+    finishOld();
+    await flush();
+
+    expect(next.isLoaded).toBe(false);
   });
 });

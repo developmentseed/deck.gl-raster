@@ -9,7 +9,8 @@ const UTM_60N = "+proj=utm +zone=60 +datum=WGS84 +units=m +no_defs";
 /** The geographic bounds of a fixture in `crs`. */
 async function boundsOf(name: string, crs: string) {
   const geotiff = await loadGeoTIFF(name, "rasterio");
-  return getGeographicBounds(geotiff, proj4(crs, "EPSG:4326"));
+  const converter = proj4(crs, "EPSG:4326");
+  return getGeographicBounds(geotiff, (x, y) => converter.forward([x, y]));
 }
 
 describe("getGeographicBounds", () => {
@@ -46,7 +47,9 @@ describe("getGeographicBounds", () => {
     ].map((corner) => converter.forward(corner));
     const lons = corners.map(([lon]) => lon!);
     const lats = corners.map(([, lat]) => lat!);
-    expect(getGeographicBounds(geotiff, converter)).toEqual({
+    const projectTo4326 = (x: number, y: number) =>
+      converter.forward<[number, number]>([x, y]);
+    expect(getGeographicBounds(geotiff, projectTo4326)).toEqual({
       west: Math.min(...lons),
       south: Math.min(...lats),
       east: Math.max(...lons),

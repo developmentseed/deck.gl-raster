@@ -1,11 +1,12 @@
 import type {
   DefaultProps,
+  LayerContext,
   TextureSource,
   UpdateParameters,
 } from "@deck.gl/core";
 import type { SimpleMeshLayerProps } from "@deck.gl/mesh-layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
-import type { Texture } from "@luma.gl/core";
+import type { Texture, VertexArray } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
 import { CreateTexture } from "../gpu-modules/create-texture.js";
 import type { RasterModule } from "../gpu-modules/types.js";
@@ -59,6 +60,19 @@ const defaultProps: DefaultProps<
   _instanced: false,
   getPosition: { type: "accessor", value: [0, 0, 0] },
 };
+
+/**
+ * Destroys the vertex array of a model that has been destroyed.
+ *
+ * luma.gl's `Model.destroy()` doesn't destroy the model's `vertexArray` (as of
+ * `@luma.gl/engine` 9.4.2), which leaks one WebGL vertex array object per
+ * model. Remove this once luma.gl destroys it itself.
+ */
+function destroyVertexArray(model: { vertexArray: VertexArray }): void {
+  if (!model.vertexArray.destroyed) {
+    model.vertexArray.destroy();
+  }
+}
 
 /**
  * A specialized raster-rendering layer, spiritually based on deck.gl's
@@ -115,6 +129,10 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     return [...imageModule, ...(renderPipeline ?? [])];
   }
 
+  /**
+   * Rebuilds the model when the render pipeline changes, and destroys the
+   * vertex array of any model that {@link SimpleMeshLayer} replaces.
+   */
   override updateState(params: UpdateParameters<this>): void {
     // Ensure the SimpleMeshLayer rebuilds the model when the renderPipeline has
     // changed.
@@ -124,7 +142,21 @@ export class MeshTextureLayer extends SimpleMeshLayer<
       params.changeFlags.extensionsChanged = true;
     }
 
+    const oldModel = this.state.model;
     super.updateState(params);
+    // SimpleMeshLayer destroys the model it replaces
+    if (oldModel && oldModel !== this.state.model) {
+      destroyVertexArray(oldModel);
+    }
+  }
+
+  /** Destroys this layer's models along with their vertex arrays. */
+  override finalizeState(context: LayerContext): void {
+    const models = this.getModels();
+    super.finalizeState(context);
+    for (const model of models) {
+      destroyVertexArray(model);
+    }
   }
 
   /** Returns true if the render pipeline has changed between the old and new props. */
