@@ -3,9 +3,11 @@ export {
   splitAtAntimeridian,
   unwrapBbox,
 } from "./antimeridian.js";
+export { geographicBounds } from "./geographic-bounds.js";
 export { metersPerUnit } from "./meters-per-unit.js";
 export type { DatumDefinition, ProjectionDefinition } from "./parse-wkt.js";
 export { parseWkt } from "./parse-wkt.js";
+export { projectionFunctions } from "./projection-functions.js";
 export type {
   GeographicCRS,
   ProjectedCRS,

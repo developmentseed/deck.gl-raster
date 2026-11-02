@@ -18,14 +18,32 @@ import * as zarr from "zarrita";
 
 // The user creates the zarrita store; wrap it with middleware as needed
 const store = new zarr.FetchStore("https://example.com/my-dataset.zarr");
-const node = await zarr.open(store, { kind: "group" });
+const group = await zarr.open(store, { kind: "group" });
 
 const layer = new ZarrLayer({
   id: "zarr-layer",
-  node,
+  // A group or array for the layer to open, or an opened ZarrSource
+  source: group,
   // One entry per non-spatial dim. Use `null` for the default slice,
   // a number to pin to an index, or a `zarr.Slice` for a range.
   selection: { band: null },
+  getTileData,
+  renderTile,
+});
+```
+
+To change how the data opens, open it yourself with `ZarrSource.open`: pick a `variable` within the group, pass `geoZarrMetadata` for a store without GeoZarr metadata, or give an `epsgResolver`. An opened source also gives the data's bounds before any layer exists, and several layers can share it, such as two layers drawing different selections:
+
+```ts
+import { ZarrLayer, ZarrSource } from "@developmentseed/deck.gl-zarr";
+
+const source = await ZarrSource.open(group, { variable: "temperature" });
+const { west, south, east, north } = source.geographicBounds;
+
+const layer = new ZarrLayer({
+  id: "temperature",
+  source,
+  selection: { time: 0 },
   getTileData,
   renderTile,
 });
