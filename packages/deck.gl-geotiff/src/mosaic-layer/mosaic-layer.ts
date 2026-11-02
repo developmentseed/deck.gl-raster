@@ -370,6 +370,7 @@ export class MosaicLayer<
         if (!props.data) {
           return null;
         }
+
         const { item, source } = props.data;
         return renderSource(item, {
           source,
