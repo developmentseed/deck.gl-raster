@@ -1,3 +1,5 @@
+import type { Affine } from "@developmentseed/affine";
+import { apply, fromGDAL } from "@developmentseed/affine";
 import type { Point } from "@developmentseed/proj";
 import {
   geographicBounds,
@@ -5,9 +7,9 @@ import {
   projectionFunctions,
 } from "@developmentseed/proj";
 
-/** One source file of a VRT mosaic, as a `MosaicLayer` item. */
-export type VrtItem = {
-  /** The file's URL, which keys `MosaicLayer`'s cache of opened sources. */
+/** One source file of a GDAL VRT mosaic, as a {@link MosaicLayer} item. */
+export type VRTItem = {
+  /** The file's URL, which keys {@link MosaicLayer}'s cache of opened sources. */
   id: string;
   /** The file's URL. */
   url: string;
@@ -19,18 +21,20 @@ const VSICURL = "/vsicurl/";
 
 /**
  * Read the source files of a GDAL VRT mosaic, such as `gdalbuildvrt` writes,
- * in the order the VRT lists them.
+ * as {@link MosaicLayer} items, in the order the VRT lists them.
  *
  * A file listed under several bands is one item. Only each file's place in
  * the VRT (its `DstRect`) is read, since each file is drawn with its own
  * georeferencing; `SrcRect`, scaling and other per-source options are ignored.
  *
+ * Uses `DOMParser`, so it needs a browser or a DOM implementation.
+ *
  * @param xml The VRT's XML.
  * @param vrtUrl The VRT's URL, which `relativeToVRT` paths resolve against.
- * @throws If the VRT isn't a plain mosaic: a warped VRT, a derived band, a
- * rotated geotransform, or a source path that isn't a URL.
+ * @throws If the VRT is a warped VRT, has a derived band, or has a source
+ * path that is neither a URL, a `/vsicurl/` path, nor relative to the VRT.
  */
-export function parseVrt(xml: string, vrtUrl: string | URL): VrtItem[] {
+export function parseVRT(xml: string, vrtUrl: string | URL): VRTItem[] {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   const root = doc.documentElement;
   if (doc.getElementsByTagName("parsererror").length > 0) {
@@ -44,15 +48,12 @@ export function parseVrt(xml: string, vrtUrl: string | URL): VrtItem[] {
     throw new Error(`Unsupported VRT: ${subClass}`);
   }
 
-  const [x0, dx, rx, y0, ry, dy] = readGeoTransform(root);
-  if (rx !== 0 || ry !== 0) {
-    throw new Error("Unsupported VRT: rotated GeoTransform");
-  }
+  const transform = readGeoTransform(root);
   const { projectTo4326 } = projectionFunctions(
     parseWkt(childText(root, "SRS")),
   );
 
-  const items = new Map<string, VrtItem>();
+  const items = new Map<string, VRTItem>();
   for (const band of children(root, "VRTRasterBand")) {
     const bandSubClass = band.getAttribute("subClass");
     if (bandSubClass) {
@@ -74,15 +75,13 @@ export function parseVrt(xml: string, vrtUrl: string | URL): VrtItem[] {
       }
       const xOff = numberAttr(dst, "xOff");
       const yOff = numberAttr(dst, "yOff");
-      const left = x0 + xOff * dx;
-      const right = x0 + (xOff + numberAttr(dst, "xSize")) * dx;
-      const top = y0 + yOff * dy;
-      const bottom = y0 + (yOff + numberAttr(dst, "ySize")) * dy;
+      const xEnd = xOff + numberAttr(dst, "xSize");
+      const yEnd = yOff + numberAttr(dst, "ySize");
       const outline: Point[] = [
-        [left, top],
-        [right, top],
-        [right, bottom],
-        [left, bottom],
+        apply(transform, xOff, yOff),
+        apply(transform, xEnd, yOff),
+        apply(transform, xEnd, yEnd),
+        apply(transform, xOff, yEnd),
       ];
       const bbox = geographicBounds(outline, projectTo4326);
       items.set(url, { id: url, url, bbox });
@@ -104,15 +103,13 @@ function sourceUrl(filename: Element, vrtUrl: string | URL): string {
   return url;
 }
 
-/** The VRT's six `GeoTransform` coefficients, in GDAL's order. */
-function readGeoTransform(
-  root: Element,
-): [number, number, number, number, number, number] {
+/** The VRT's `GeoTransform`, from its pixels to its CRS. */
+function readGeoTransform(root: Element): Affine {
   const values = childText(root, "GeoTransform").split(",").map(Number);
   if (values.length !== 6 || values.some((v) => !Number.isFinite(v))) {
     throw new Error(`Invalid VRT GeoTransform: ${values.join(", ")}`);
   }
-  return values as [number, number, number, number, number, number];
+  return fromGDAL(values as [number, number, number, number, number, number]);
 }
 
 /** The direct children of `parent` named `name`. */

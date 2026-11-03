@@ -1,6 +1,5 @@
-// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { parseVrt } from "../src/vrt.js";
+import { parseVRT } from "../src/mosaic-layer/vrt.js";
 
 const VRT_URL = "https://example.com/mosaics/dem.vrt";
 
@@ -55,14 +54,14 @@ function vrt({
 </VRTDataset>`;
 }
 
-describe("parseVrt", () => {
+describe("parseVRT", () => {
   it("places each file by its DstRect and the VRT's GeoTransform", () => {
     const xml = vrt({
       bands: [
         [source("/vsicurl/https://data.example.com/a.tif", [4, 8, 4, 4])],
       ],
     });
-    const [item] = parseVrt(xml, VRT_URL);
+    const [item] = parseVRT(xml, VRT_URL);
     const [west, south, east, north] = item!.bbox;
     expect([west, south, east, north].map((v) => +v.toFixed(9))).toEqual([
       -109, 42, -108, 43,
@@ -75,7 +74,7 @@ describe("parseVrt", () => {
         [source("/vsicurl/https://data.example.com/a.tif", [0, 0, 4, 4])],
       ],
     });
-    expect(parseVrt(xml, VRT_URL)[0]!.url).toBe(
+    expect(parseVRT(xml, VRT_URL)[0]!.url).toBe(
       "https://data.example.com/a.tif",
     );
   });
@@ -84,7 +83,7 @@ describe("parseVrt", () => {
     const xml = vrt({
       bands: [[source("https://data.example.com/a.tif", [0, 0, 4, 4])]],
     });
-    const [item] = parseVrt(xml, VRT_URL);
+    const [item] = parseVRT(xml, VRT_URL);
     expect(item!.id).toBe(item!.url);
   });
 
@@ -92,7 +91,7 @@ describe("parseVrt", () => {
     const xml = vrt({
       bands: [[source("tiles/a.tif", [0, 0, 4, 4], { relativeToVRT: true })]],
     });
-    expect(parseVrt(xml, VRT_URL)[0]!.url).toBe(
+    expect(parseVRT(xml, VRT_URL)[0]!.url).toBe(
       "https://example.com/mosaics/tiles/a.tif",
     );
   });
@@ -106,7 +105,7 @@ describe("parseVrt", () => {
         ],
       ],
     });
-    expect(parseVrt(xml, VRT_URL).map((item) => item.url)).toEqual([
+    expect(parseVRT(xml, VRT_URL).map((item) => item.url)).toEqual([
       "https://data.example.com/b.tif",
       "https://data.example.com/a.tif",
     ]);
@@ -118,7 +117,7 @@ describe("parseVrt", () => {
       source("https://data.example.com/b.tif", [4, 0, 4, 4]),
     ];
     const xml = vrt({ bands: [sources, sources, sources] });
-    expect(parseVrt(xml, VRT_URL)).toHaveLength(2);
+    expect(parseVRT(xml, VRT_URL)).toHaveLength(2);
   });
 
   it("reprojects a projected VRT's bounds to WGS84", () => {
@@ -128,14 +127,14 @@ describe("parseVrt", () => {
       geoTransform: "500000, 100, 0, 4010000, 0, -100",
       bands: [[source("https://data.example.com/a.tif", [0, 0, 100, 100])]],
     });
-    expect(parseVrt(xml, VRT_URL)[0]!.bbox[0]).toBeCloseTo(15, 9);
+    expect(parseVRT(xml, VRT_URL)[0]!.bbox[0]).toBeCloseTo(15, 9);
   });
 
   it("rejects a source path that isn't a URL", () => {
     const xml = vrt({
       bands: [[source("/vsizip/archive.zip/a.tif", [0, 0, 4, 4])]],
     });
-    expect(() => parseVrt(xml, VRT_URL)).toThrow(/vsizip/);
+    expect(() => parseVRT(xml, VRT_URL)).toThrow(/vsizip/);
   });
 
   it("rejects a warped VRT", () => {
@@ -143,7 +142,7 @@ describe("parseVrt", () => {
       datasetAttrs: 'subClass="VRTWarpedDataset"',
       bands: [[]],
     });
-    expect(() => parseVrt(xml, VRT_URL)).toThrow(/VRTWarpedDataset/);
+    expect(() => parseVRT(xml, VRT_URL)).toThrow(/VRTWarpedDataset/);
   });
 
   it("rejects a derived band", () => {
@@ -151,18 +150,22 @@ describe("parseVrt", () => {
       bandAttrs: 'subClass="VRTDerivedRasterBand"',
       bands: [[source("https://data.example.com/a.tif", [0, 0, 4, 4])]],
     });
-    expect(() => parseVrt(xml, VRT_URL)).toThrow(/VRTDerivedRasterBand/);
+    expect(() => parseVRT(xml, VRT_URL)).toThrow(/VRTDerivedRasterBand/);
   });
 
-  it("rejects a rotated GeoTransform", () => {
+  it("places a file in a rotated VRT", () => {
+    // x = -110 + 0.25 * row, y = 45 + 0.25 * col
     const xml = vrt({
-      geoTransform: "-110, 0.25, 0.01, 45, 0.01, -0.25",
-      bands: [[source("https://data.example.com/a.tif", [0, 0, 4, 4])]],
+      geoTransform: "-110, 0, 0.25, 45, 0.25, 0",
+      bands: [[source("https://data.example.com/a.tif", [4, 8, 4, 4])]],
     });
-    expect(() => parseVrt(xml, VRT_URL)).toThrow(/rotat/i);
+    const [west, south, east, north] = parseVRT(xml, VRT_URL)[0]!.bbox;
+    expect([west, south, east, north].map((v) => +v.toFixed(9))).toEqual([
+      -108, 46, -107, 47,
+    ]);
   });
 
   it("rejects malformed XML", () => {
-    expect(() => parseVrt("<VRTDataset><SRS>", VRT_URL)).toThrow(/XML/);
+    expect(() => parseVRT("<VRTDataset><SRS>", VRT_URL)).toThrow(/XML/);
   });
 });

@@ -8,21 +8,9 @@ Deployed to <https://developmentseed.org/deck.gl-raster/examples/vrt-mosaic/>.
 
 ## How it works
 
-1. The app fetches the VRT's XML, and `parseVrt` ([`src/vrt.ts`](src/vrt.ts)) turns it into one `MosaicLayer` item per source file: the file's URL, and its WGS84 bounding box from its `DstRect` and the VRT's `GeoTransform` and `SRS`.
+1. The app fetches the VRT's XML, and [`parseVRT`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/functions/parseVRT/) turns it into one `MosaicLayer` item per source file: the file's URL, and its WGS84 bounding box from its `DstRect` and the VRT's `GeoTransform` and `SRS`.
 2. `MosaicLayer` opens a file with `COGSource.open` only once it is in view and the map is zoomed in past zoom 7, and draws it with a `COGLayer`.
 3. The elevation is Float32, which the COG layer's default pipeline doesn't render, so the example brings its own `getTileData` and `renderTile` ([`src/elevation.ts`](src/elevation.ts)).
-
-## What `parseVrt` reads
-
-It reads plain mosaics, such as `gdalbuildvrt` writes:
-
-- Any source element with a `SourceFilename` and a `DstRect`, in any band. A file listed under several bands is one item.
-- Source paths that are `/vsicurl/` URLs, plain HTTP(S) URLs, or paths relative to the VRT (`relativeToVRT="1"`).
-- Any `SRS` that `parseWkt` from `@developmentseed/proj` reads.
-
-Each file is drawn with its own georeferencing, so a source's `SrcRect`, scaling, lookup table, `NODATA` and band mapping are ignored.
-
-It throws on a warped VRT, a derived band, a rotated `GeoTransform`, or another kind of source path, such as `/vsis3/` or `/vsizip/`.
 
 Where files overlap, GDAL draws the later source over the earlier one; `MosaicLayer` doesn't draw overlapping items in a set order. The USGS files only overlap by a few pixels of the same data, so it doesn't show here.
 
@@ -45,5 +33,3 @@ Where files overlap, GDAL draws the later source over the earlier one; `MosaicLa
    ```
 
 4. Open your browser to http://localhost:3000
-
-Run the parser's tests with `pnpm test`.

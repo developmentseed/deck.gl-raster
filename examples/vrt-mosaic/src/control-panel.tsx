@@ -18,7 +18,7 @@ const COLORMAP_ROW_COUNT = Object.keys(COLORMAP_INDEX).length;
 const ELEVATION_LIMITS: [number, number] = [-100, 4500];
 
 /** How long loading the VRT took, and what it held. */
-export type VrtLoadStats = {
+export type VRTLoadStats = {
   /** Number of files in the VRT. */
   fileCount: number;
   /** Size of the VRT's XML, in bytes. */
@@ -31,7 +31,7 @@ export type VrtLoadStats = {
 
 export interface ControlPanelProps {
   /** The VRT's load stats, once it has loaded. */
-  stats: VrtLoadStats | null;
+  stats: VRTLoadStats | null;
   /** The VRT's load error message, if any. */
   error: string | null;
   /** Whether to draw each file's footprint. */

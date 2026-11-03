@@ -1,11 +1,15 @@
 import type { PickingInfo } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import { LoadingWidget } from "@deck.gl/widgets";
-import type { COGSourceOptions } from "@developmentseed/deck.gl-geotiff";
+import type {
+  COGSourceOptions,
+  VRTItem,
+} from "@developmentseed/deck.gl-geotiff";
 import {
   COGLayer,
   COGSource,
   MosaicLayer,
+  parseVRT,
 } from "@developmentseed/deck.gl-geotiff";
 import {
   createColormapTexture,
@@ -23,12 +27,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import type { ColormapId } from "./colormap-choices.js";
 import { COLORMAP_CHOICES } from "./colormap-choices.js";
-import type { VrtLoadStats } from "./control-panel.js";
+import type { VRTLoadStats } from "./control-panel.js";
 import { ControlPanel } from "./control-panel.js";
 import type { ElevationTileData } from "./elevation.js";
 import { getTileData, renderElevation } from "./elevation.js";
-import type { VrtItem } from "./vrt.js";
-import { parseVrt } from "./vrt.js";
 import { ZoomNotice } from "./zoom-notice.js";
 
 /** The USGS 3DEP 1 arc-second seamless elevation VRT. */
@@ -78,7 +80,7 @@ function getCachedSource(
 async function loadVrt(
   url: string,
   signal: AbortSignal,
-): Promise<{ items: VrtItem[]; stats: VrtLoadStats }> {
+): Promise<{ items: VRTItem[]; stats: VRTLoadStats }> {
   const start = performance.now();
   const response = await fetch(url, { signal });
   if (!response.ok) {
@@ -86,7 +88,7 @@ async function loadVrt(
   }
   const buffer = await response.arrayBuffer();
   const fetched = performance.now();
-  const items = parseVrt(new TextDecoder().decode(buffer), url);
+  const items = parseVRT(new TextDecoder().decode(buffer), url);
   const parsed = performance.now();
   return {
     items,
@@ -100,7 +102,7 @@ async function loadVrt(
 }
 
 /** The outline of an item's bbox. */
-function footprint({ bbox }: VrtItem): [number, number][] {
+function footprint({ bbox }: VRTItem): [number, number][] {
   const [west, south, east, north] = bbox;
   return [
     [west, south],
@@ -112,13 +114,13 @@ function footprint({ bbox }: VrtItem): [number, number][] {
 }
 
 /** The hovered footprint's file name. */
-function getTooltip({ object }: PickingInfo<VrtItem>) {
+function getTooltip({ object }: PickingInfo<VRTItem>) {
   return object ? { text: object.url.split("/").pop()! } : null;
 }
 
 export default function App() {
-  const [items, setItems] = useState<VrtItem[]>([]);
-  const [stats, setStats] = useState<VrtLoadStats | null>(null);
+  const [items, setItems] = useState<VRTItem[]>([]);
+  const [stats, setStats] = useState<VRTLoadStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [belowMinZoom, setBelowMinZoom] = useState(
     INITIAL_VIEW_STATE.zoom < MIN_ZOOM,
@@ -195,7 +197,7 @@ export default function App() {
       range: elevationRange,
     };
     layers.push(
-      new MosaicLayer<VrtItem, COGSource>({
+      new MosaicLayer<VRTItem, COGSource>({
         id: "vrt-mosaic",
         data: items,
         minZoom: MIN_ZOOM,
@@ -220,7 +222,7 @@ export default function App() {
 
   if (items.length > 0) {
     layers.push(
-      new PolygonLayer<VrtItem>({
+      new PolygonLayer<VRTItem>({
         id: "vrt-footprints",
         data: items,
         visible: showFootprints,
