@@ -13,6 +13,8 @@ export { createTextureProps, inferTextureFormat } from "./geotiff/texture.js";
 export type { MosaicLayerProps } from "./mosaic-layer/mosaic-layer.js";
 export { MosaicLayer } from "./mosaic-layer/mosaic-layer.js";
 export type { MosaicItem } from "./mosaic-layer/mosaic-tileset-2d.js";
+export type { VRTItem } from "./mosaic-layer/vrt.js";
+export { parseVRT } from "./mosaic-layer/vrt.js";
 export type { MultiCOGLayerProps } from "./multi-cog-layer.js";
 export { MultiCOGLayer } from "./multi-cog-layer.js";
 export { MultiCOGSource } from "./multi-cog-source.js";
