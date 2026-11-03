@@ -29,7 +29,7 @@ export function ZoomNotice() {
       </Text>
       <Text fontSize="xs" color="gray.500">
         Each file is a 1° tile, so this far out a view would open hundreds of
-        them at once. Only their footprints are drawn.
+        them at once.
       </Text>
     </Box>
   );
