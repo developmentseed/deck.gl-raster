@@ -43,6 +43,10 @@ const CT_POLYCONIC = 22;
 const CT_SINUSOIDAL = 24;
 const CT_NEW_ZEALAND_MAP_GRID = 26;
 const CT_TRANSVERSE_MERCATOR_SOUTH_ORIENTED = 27;
+// Not in the GeoTIFF spec: a libgeotiff extension that GDAL writes for
+// Cylindrical Equal Area CRSes without an EPSG code.
+// https://github.com/OSGeo/libgeotiff/blob/75cfca539667c6483e796b24b78ecef72e311a1a/libgeotiff/geo_ctrans.inc#L66-L67
+const CT_CYLINDRICAL_EQUAL_AREA = 28;
 
 const ANGULAR_UNIT_DEGREE = 9102;
 const ANGULAR_UNIT_RADIAN = 9101;
@@ -237,6 +241,10 @@ function _buildEllipsoid(gkd: GeoKeyDirectory): ProjJsonEllipsoid {
   return ellipsoid;
 }
 
+/**
+ * Build the PROJJSON conversion of a user-defined projected CRS from its
+ * coordinate transformation type (`ProjMethodGeoKey`) and parameter GeoKeys.
+ */
 function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
   const ct = gkd.projMethod;
   if (ct === null) {
@@ -574,6 +582,20 @@ function _buildConversion(gkd: GeoKeyDirectory): ProjJsonConversion {
         method: { name },
         parameters: [
           angular("Latitude of natural origin", originLat),
+          angular("Longitude of natural origin", originLong),
+          linear("False easting", falseEasting),
+          linear("False northing", falseNorthing),
+        ],
+      };
+    }
+
+    case CT_CYLINDRICAL_EQUAL_AREA: {
+      const name = "Lambert Cylindrical Equal Area";
+      return {
+        name,
+        method: { name },
+        parameters: [
+          angular("Latitude of 1st standard parallel", gkd.projStdParallel1),
           angular("Longitude of natural origin", originLong),
           linear("False easting", falseEasting),
           linear("False northing", falseNorthing),
