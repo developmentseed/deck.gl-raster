@@ -1,5 +1,8 @@
 import wktParser from "wkt-parser";
+import { registerCylindricalEqualArea } from "./cylindrical-equal-area.js";
 import type { ProjJson } from "./projjson.js";
+
+registerCylindricalEqualArea();
 
 export interface DatumDefinition {
   /** The type of datum. */
@@ -66,19 +69,6 @@ export function parseWkt(input: string | ProjJson): ProjectionDefinition {
   if (def.projName === "longlat" && (!def.units || def.units === "unknown")) {
     def.units = "degree";
     def.to_meter = undefined;
-  }
-
-  // wkt-parser keeps the method name of Cylindrical Equal Area ("Lambert
-  // Cylindrical Equal Area" in WKT2 and PROJJSON, "Cylindrical_Equal_Area" in
-  // WKT1) and puts its standard parallel in lat1. proj4 knows the projection
-  // only as "cea", which reads the standard parallel from lat_ts.
-  const method = def.projName?.toLowerCase().replace(/_/g, " ");
-  if (
-    method === "lambert cylindrical equal area" ||
-    method === "cylindrical equal area"
-  ) {
-    def.projName = "cea";
-    def.lat_ts = def.lat1 ?? 0;
   }
 
   return def;
