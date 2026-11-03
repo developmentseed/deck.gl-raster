@@ -17,6 +17,12 @@ export type VRTItem = {
   bbox: [number, number, number, number];
 };
 
+/**
+ * GDAL's prefix for a file read over HTTP(S), as in `/vsicurl/https://...`.
+ * Stripped to get the file's URL.
+ *
+ * See https://gdal.org/en/stable/user/virtual_file_systems.html.
+ */
 const VSICURL = "/vsicurl/";
 
 /**
@@ -29,8 +35,9 @@ const VSICURL = "/vsicurl/";
  *
  * Uses `DOMParser`, so it needs a browser or a DOM implementation.
  *
- * @param xml The VRT's XML.
- * @param vrtUrl The VRT's URL, which `relativeToVRT` paths resolve against.
+ * @param xml The VRT's XML body.
+ * @param vrtUrl The VRT's URL. Source paths marked `relativeToVRT="1"`, such
+ * as files next to the VRT, resolve against it.
  * @throws If the VRT is a warped VRT, has a derived band, or has a source
  * path that is neither a URL, a `/vsicurl/` path, nor relative to the VRT.
  */
