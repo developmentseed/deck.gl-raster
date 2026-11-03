@@ -125,7 +125,7 @@ export default function App() {
   const [showFootprints, setShowFootprints] = useState(true);
   const [colormapId, setColormapId] = useState<ColormapId>("terrain");
   const [elevationRange, setElevationRange] = useState<[number, number]>([
-    500, 3000,
+    0, 3000,
   ]);
   const [opacity, setOpacity] = useState(1);
   const [device, setDevice] = useState<Device | null>(null);
@@ -208,9 +208,10 @@ export default function App() {
             onTileUnload: (tile) => tile.content?.texture.destroy(),
           }),
         maxCacheSize: 0,
+        // Draw under the basemap's water, boundaries, roads and labels.
         // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
         // doesn't know about it.
-        beforeId: "boundary_country_outline",
+        beforeId: "waterway",
       }),
     );
   }
