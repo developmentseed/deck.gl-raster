@@ -18,28 +18,29 @@ function spatialAxes(meta: GeoZarrMetadata): { y?: string; x?: string } {
 }
 
 describe("parseGeoZarrMetadata spatial:dimensions", () => {
-  it("takes Y and X from the last two entries when the names are not recognized", () => {
+  it("takes Y from the first entry and X from the second, whatever their names", () => {
     const meta = parseGeoZarrMetadata(
       attrsWithDimensions(["northing", "easting"]),
     );
     expect(spatialAxes(meta)).toEqual({ y: "northing", x: "easting" });
   });
 
-  it("takes Y and X from the last two entries of a 3-entry list", () => {
-    const meta = parseGeoZarrMetadata(
-      attrsWithDimensions(["depth", "northing", "easting"]),
-    );
-    expect(spatialAxes(meta)).toEqual({ y: "northing", x: "easting" });
-  });
-
-  it("prefers recognized Y and X labels over position", () => {
+  it("takes Y and X by position even when their names suggest otherwise", () => {
     const meta = parseGeoZarrMetadata(attrsWithDimensions(["lon", "lat"]));
-    expect(spatialAxes(meta)).toEqual({ y: "lat", x: "lon" });
+    expect(spatialAxes(meta)).toEqual({ y: "lon", x: "lat" });
   });
 
   it("rejects fewer than 2 entries", () => {
     expect(() =>
       parseGeoZarrMetadata(attrsWithDimensions(["easting"])),
+    ).toThrow(/spatial:dimensions/);
+  });
+
+  it("rejects more than 2 entries", () => {
+    expect(() =>
+      parseGeoZarrMetadata(
+        attrsWithDimensions(["depth", "northing", "easting"]),
+      ),
     ).toThrow(/spatial:dimensions/);
   });
 });

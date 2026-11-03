@@ -12,11 +12,9 @@ import type { CRSInfo, GeoZarrMetadata, MultiscaleLevel } from "./types.js";
  * Zarr order, matching the multiscales layout array). Reverse to get
  * coarsest-first for `TilesetDescriptor`.
  *
- * The Y and X axes are found by name when `spatial:dimensions` contains both
- * a Y label ("y", "latitude" or "lat") and an X label ("x", "longitude" or
- * "lon"), ignoring case. Otherwise they are the last two entries, following
- * the convention's row-major order (`[y, x]` or `[z, y, x]`), whatever their
- * names.
+ * `spatial:dimensions` names the Y dimension, then the X dimension, whatever
+ * their names. See the
+ * [spatial convention](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md?plain=1#L94).
  *
  * @param attrs  Raw group attributes object (e.g. from zarrita `group.attrs`).
  *
@@ -47,19 +45,8 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
 
   // --- Axes ---
   const axes = spatial["spatial:dimensions"];
-  // The convention leaves dimension names free and identifies Y and X by
-  // position. Recognized labels still win when both are present, so data that
-  // lists them out of order, such as `["lon", "lat"]`, keeps working.
-  const Y_LABELS = new Set(["y", "latitude", "lat"]);
-  const X_LABELS = new Set(["x", "longitude", "lon"]);
-  let yAxisIndex = axes.findIndex((a) => Y_LABELS.has(a.toLowerCase()));
-  let xAxisIndex = axes.findIndex((a) => X_LABELS.has(a.toLowerCase()));
-
-  if (yAxisIndex === -1 || xAxisIndex === -1) {
-    // The schema guarantees at least 2 entries.
-    yAxisIndex = axes.length - 2;
-    xAxisIndex = axes.length - 1;
-  }
+  const yAxisIndex = 0;
+  const xAxisIndex = 1;
 
   // --- Levels ---
   const layout = spatial.multiscales?.layout;
