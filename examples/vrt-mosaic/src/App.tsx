@@ -29,15 +29,13 @@ import type { ElevationTileData } from "./elevation.js";
 import { getTileData, renderElevation } from "./elevation.js";
 import type { VrtItem } from "./vrt.js";
 import { parseVrt } from "./vrt.js";
+import { ZoomNotice } from "./zoom-notice.js";
 
 /** The USGS 3DEP 1 arc-second seamless elevation VRT. */
 const VRT_URL =
   "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1/TIFF/USGS_Seamless_DEM_1.vrt";
 
-/**
- * The map's minimum zoom. Each file is a 1° tile, so further out a view would
- * open hundreds of files at once.
- */
+/** Below this zoom, the mosaic opens no files and only footprints are drawn. */
 const MIN_ZOOM = 7;
 
 /** The Grand Canyon. */
@@ -122,6 +120,9 @@ export default function App() {
   const [items, setItems] = useState<VrtItem[]>([]);
   const [stats, setStats] = useState<VrtLoadStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [belowMinZoom, setBelowMinZoom] = useState(
+    INITIAL_VIEW_STATE.zoom < MIN_ZOOM,
+  );
   const [showFootprints, setShowFootprints] = useState(true);
   const [colormapId, setColormapId] = useState<ColormapId>("terrain");
   const [elevationRange, setElevationRange] = useState<[number, number]>([
@@ -197,6 +198,7 @@ export default function App() {
       new MosaicLayer<VrtItem, COGSource>({
         id: "vrt-mosaic",
         data: items,
+        minZoom: MIN_ZOOM,
         getSource: (item, options) => getCachedSource(item.url, options),
         opacity,
         renderSource: (_item, { source, subLayerProps }) =>
@@ -241,8 +243,8 @@ export default function App() {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
         initialViewState={INITIAL_VIEW_STATE}
-        minZoom={MIN_ZOOM}
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+        onZoom={(e) => setBelowMinZoom(e.viewState.zoom < MIN_ZOOM)}
       >
         <DeckGlOverlay
           layers={layers}
@@ -254,6 +256,8 @@ export default function App() {
           onDeviceInitialized={setDevice}
         />
       </MaplibreMap>
+
+      {belowMinZoom && <ZoomNotice />}
 
       <ControlPanel
         stats={stats}
