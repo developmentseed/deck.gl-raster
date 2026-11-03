@@ -9,7 +9,7 @@ Deployed to <https://developmentseed.org/deck.gl-raster/examples/vrt-mosaic/>.
 ## How it works
 
 1. The app fetches the VRT's XML, and `parseVrt` ([`src/vrt.ts`](src/vrt.ts)) turns it into one `MosaicLayer` item per source file: the file's URL, and its WGS84 bounding box from its `DstRect` and the VRT's `GeoTransform` and `SRS`.
-2. `MosaicLayer` opens a file with `COGSource.open` only once it is in view and the map is zoomed in past zoom 7, and draws it with a `COGLayer`.
+2. `MosaicLayer` opens a file with `COGSource.open` only once it is in view, and draws it with a `COGLayer`. The map can't zoom out past zoom 7, where a view would open hundreds of files at once.
 3. The elevation is Float32, which the COG layer's default pipeline doesn't render, so the example brings its own `getTileData` and `renderTile` ([`src/elevation.ts`](src/elevation.ts)).
 
 ## What `parseVrt` reads
