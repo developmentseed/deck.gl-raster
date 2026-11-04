@@ -53,7 +53,6 @@ export type GetTileDataOptions = RasterTileGetTileDataOptions & {
 export type ZarrLayerProps<
   DataT extends MinimalTileData = MinimalTileData,
   Dtype extends zarr.DataType = zarr.DataType,
-  Store extends zarr.Readable = zarr.Readable,
 > = Omit<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
@@ -72,13 +71,13 @@ export type ZarrLayerProps<
    * Keep the same object across renders: a new one starts the layer's tiles
    * over.
    */
-  source: ZarrSource<Dtype, Store> | ZarrInput<Dtype, Store>;
+  source: ZarrSource<Dtype> | ZarrInput<Dtype>;
 
   /**
    * Called with the source the layer opened, when `source` isn't an opened
    * {@link ZarrSource} already.
    */
-  onSourceLoad?: (source: ZarrSource<Dtype, Store>) => void;
+  onSourceLoad?: (source: ZarrSource<Dtype>) => void;
 
   /**
    * Selection for non-spatial dimensions. Must include exactly one entry
@@ -116,7 +115,7 @@ export type ZarrLayerProps<
    * `===`, so keep them the same across renders.
    */
   getTileData: (
-    arr: zarr.Array<Dtype, Store>,
+    arr: zarr.Array<Dtype>,
     options: GetTileDataOptions,
   ) => Promise<DataT>;
 
@@ -141,28 +140,19 @@ export type ZarrLayerProps<
 export class ZarrLayer<
   DataT extends MinimalTileData = MinimalTileData,
   Dtype extends zarr.DataType = zarr.DataType,
-  Store extends zarr.Readable = zarr.Readable,
-> extends RasterTileLayer<
-  DataT,
-  ZarrLayerProps<DataT, Dtype, Store>,
-  // The defaults can't split a generic `Store` out of `source`
-  ZarrSource<Dtype, Store>,
-  ZarrInput<Dtype, Store>
-> {
+> extends RasterTileLayer<DataT, ZarrLayerProps<DataT, Dtype>> {
   static override layerName = "ZarrLayer";
 
   declare state: RasterTileLayer<
     DataT,
-    ZarrLayerProps<DataT, Dtype, Store>,
-    ZarrSource<Dtype, Store>,
-    ZarrInput<Dtype, Store>
+    ZarrLayerProps<DataT, Dtype>
   >["state"] & {
     /**
      * The source and selection last checked against each other, and whether
      * the selection fits the source.
      */
     checked?: {
-      source: ZarrSource<Dtype, Store>;
+      source: ZarrSource<Dtype>;
       selection: Record<string, SliceInput>;
       fits: boolean;
     };
@@ -210,9 +200,9 @@ export class ZarrLayer<
    * {@link ZarrSource.open}.
    */
   protected override _openSource(
-    input: ZarrInput<Dtype, Store>,
+    input: ZarrInput<Dtype>,
     signal: AbortSignal,
-  ): Promise<ZarrSource<Dtype, Store>> {
+  ): Promise<ZarrSource<Dtype>> {
     return ZarrSource.open(input, { signal });
   }
 

@@ -26,10 +26,10 @@ import { geoZarrToDescriptor } from "./zarr-tileset.js";
  * Where {@link ZarrSource.open} finds GeoZarr data: a zarrita store, or an
  * opened group or array within one.
  */
-export type ZarrInput<
-  Dtype extends zarr.DataType = zarr.DataType,
-  Store extends zarr.Readable = zarr.Readable,
-> = Store | zarr.Group<Store> | zarr.Array<Dtype, Store>;
+export type ZarrInput<Dtype extends zarr.DataType = zarr.DataType> =
+  | zarr.Readable
+  | zarr.Group<zarr.Readable>
+  | zarr.Array<Dtype>;
 
 /** Options for {@link ZarrSource.open}. */
 export type ZarrSourceOptions = {
@@ -74,7 +74,6 @@ export type ZarrSourceOptions = {
  */
 export class ZarrSource<
   Dtype extends zarr.DataType = zarr.DataType,
-  Store extends zarr.Readable = zarr.Readable,
 > extends RasterSource {
   /**
    * The zarrita group or array drawn, at `path` from the input: the
@@ -85,10 +84,10 @@ export class ZarrSource<
    * zarr.open(zarr.root(source.node.store).resolve("band"), { kind: "array" });
    * ```
    */
-  readonly node: zarr.Group<Store> | zarr.Array<Dtype, Store>;
+  readonly node: zarr.Group<zarr.Readable> | zarr.Array<Dtype>;
 
   /** One opened array per level, finest first. */
-  readonly arrays: readonly zarr.Array<Dtype, Store>[];
+  readonly arrays: readonly zarr.Array<Dtype>[];
 
   /**
    * The names of the arrays' dimensions, in order, such as
@@ -107,8 +106,8 @@ export class ZarrSource<
   readonly projection: ProjectionDefinition;
 
   private constructor(options: {
-    node: zarr.Group<Store> | zarr.Array<Dtype, Store>;
-    arrays: readonly zarr.Array<Dtype, Store>[];
+    node: zarr.Group<zarr.Readable> | zarr.Array<Dtype>;
+    arrays: readonly zarr.Array<Dtype>[];
     dimensionNames: readonly string[];
     spatialDims: [y: string, x: string];
     projection: ProjectionDefinition;
@@ -148,13 +147,10 @@ export class ZarrSource<
    *   owns the store, so it can wrap it, for example with
    *   `withConsolidatedMetadata`.
    */
-  static async open<
-    Dtype extends zarr.DataType = zarr.DataType,
-    Store extends zarr.Readable = zarr.Readable,
-  >(
-    input: ZarrInput<Dtype, Store>,
+  static async open<Dtype extends zarr.DataType = zarr.DataType>(
+    input: ZarrInput<Dtype>,
     options: ZarrSourceOptions = {},
-  ): Promise<ZarrSource<Dtype, Store>> {
+  ): Promise<ZarrSource<Dtype>> {
     const {
       path,
       geoZarrMetadata,
@@ -164,8 +160,8 @@ export class ZarrSource<
     signal?.throwIfAborted();
 
     const target = (await openTarget(input, { path, signal })) as
-      | zarr.Group<Store>
-      | zarr.Array<Dtype, Store>;
+      | zarr.Group<zarr.Readable>
+      | zarr.Array<Dtype>;
     const metadata = parseGeoZarrMetadata(
       geoZarrMetadata ??
         (target.kind === "array"
@@ -191,7 +187,7 @@ export class ZarrSource<
             metadata.levels.map((level) =>
               openNode(target.resolve(level.path), { kind: "array", signal }),
             ),
-          )) as zarr.Array<Dtype, Store>[]);
+          )) as zarr.Array<Dtype>[]);
 
     // `metadata.axes` lists only the spatial dims (from the
     // `spatial:dimensions` convention). The full ordered list comes from the
@@ -252,20 +248,17 @@ export class ZarrSource<
  * Whether `input` is an opened zarrita group or array, rather than a store: it
  * has a `store`, as zarrita's own `open` checks, and a `kind`.
  */
-function isNode<Dtype extends zarr.DataType, Store extends zarr.Readable>(
-  input: ZarrInput<Dtype, Store>,
-): input is zarr.Group<Store> | zarr.Array<Dtype, Store> {
+function isNode<Dtype extends zarr.DataType>(
+  input: ZarrInput<Dtype>,
+): input is zarr.Group<zarr.Readable> | zarr.Array<Dtype> {
   return "store" in input && "kind" in input;
 }
 
 /** The group or array to draw: `input` itself, or the node at `path` in it. */
-async function openTarget<
-  Dtype extends zarr.DataType,
-  Store extends zarr.Readable,
->(
-  input: ZarrInput<Dtype, Store>,
+async function openTarget(
+  input: ZarrInput,
   options: { path?: string; signal?: AbortSignal },
-): Promise<zarr.Group<Store> | zarr.Array<zarr.DataType, Store>> {
+): Promise<zarr.Group<zarr.Readable> | zarr.Array<zarr.DataType>> {
   const { path, signal } = options;
   if (isNode(input)) {
     return path ? openNode(input.resolve(path), { signal }) : input;
@@ -278,10 +271,10 @@ async function openTarget<
  * Open the group or array at `location`: as Zarr v3, or as v2 when it has no v3
  * metadata. Unlike zarrita's `open`, it never tries v2 first. See #838.
  */
-async function openNode<Store extends zarr.Readable>(
-  location: zarr.Location<Store>,
+async function openNode(
+  location: zarr.Location<zarr.Readable>,
   options: { kind?: "group" | "array"; signal?: AbortSignal },
-): Promise<zarr.Group<Store> | zarr.Array<zarr.DataType, Store>> {
+): Promise<zarr.Group<zarr.Readable> | zarr.Array<zarr.DataType>> {
   try {
     return await zarr.open.v3(location, options);
   } catch (error) {
