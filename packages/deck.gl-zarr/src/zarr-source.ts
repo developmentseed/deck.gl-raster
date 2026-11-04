@@ -136,10 +136,7 @@ export class ZarrSource<
    *
    * An array inherits the `proj:` and `spatial:` attributes of the group it's
    * directly in: its own CRS replaces the group's, and each of its own
-   * `spatial:` attributes replaces the group's. See the
-   * [proj](https://github.com/zarr-conventions/geo-proj/blob/5ca5b2f92e5c7245f957d9128b289ee535f0720d/README.md#inheritance-model)
-   * and
-   * [spatial](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md#can-i-use-spatial-at-the-group-level)
+   * `spatial:` attributes replaces the group's. See the [proj] and [spatial]
    * conventions.
    *
    * Rejects when `signal` aborts before the source is ready, when the
@@ -147,6 +144,9 @@ export class ZarrSource<
    * when the levels' data types differ, when the CRS can't be resolved, and
    * when the arrays' dimensions aren't named, differ between levels, don't
    * include the y and x dimensions, or have x before y.
+   *
+   * [proj]: https://github.com/zarr-conventions/proj/blob/v0.1/README.md#inheritance-model
+   * [spatial]: https://github.com/zarr-conventions/spatial/blob/v0.1/README.md#can-i-use-spatial-at-the-group-level
    *
    * @param input A zarrita store, or an opened group or array within one.
    *   Pass a store, unless the app has opened the node already, for example
