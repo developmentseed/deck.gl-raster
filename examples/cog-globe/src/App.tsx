@@ -98,12 +98,12 @@ export default function App() {
 
   const cogLayer = new COGLayer({
     id: "cog-layer",
-    geotiff: selected.url,
+    source: selected.url,
     debug: debugState.debug,
     debugOpacity: debugState.debugOpacity,
-    onGeoTIFFLoad: (tiff, options) => {
-      (window as unknown as { tiff: unknown }).tiff = tiff;
-      const { west, south, east, north } = options.geographicBounds;
+    onSourceLoad: (source) => {
+      (window as unknown as { tiff: unknown }).tiff = source.geotiff;
+      const { west, south, east, north } = source.geographicBounds;
       mapRef.current?.fitBounds(
         [
           [west, south],

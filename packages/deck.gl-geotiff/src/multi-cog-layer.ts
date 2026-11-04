@@ -1,19 +1,12 @@
-import type {
-  CompositeLayerProps,
-  Layer,
-  LayerContext,
-  UpdateParameters,
-} from "@deck.gl/core";
+import type { Layer, UpdateParameters } from "@deck.gl/core";
 import type {
   _Tile2DHeader as Tile2DHeader,
-  TileLayerProps,
   _TileLoadProps as TileLoadProps,
 } from "@deck.gl/geo-layers";
 import { PathLayer, TextLayer } from "@deck.gl/layers";
 import type {
   Corners,
   GetTileDataOptions,
-  MultiRasterTilesetDescriptor,
   ProjectionFunction,
   RasterModule,
   RasterTileLayerProps,
@@ -23,7 +16,6 @@ import type {
   UvTransform,
 } from "@developmentseed/deck.gl-raster";
 import {
-  createMultiRasterTilesetDescriptor,
   RasterTileLayer,
   resolveSecondaryTiles,
   selectSecondaryLevel,
@@ -34,27 +26,18 @@ import {
   CompositeBands,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type {
-  ConcurrencyLimiter,
   DecoderPool,
   GeoTIFF,
   Overview,
   RasterArray,
 } from "@developmentseed/geotiff";
 import { assembleTiles, defaultDecoderPool } from "@developmentseed/geotiff";
-import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
-import {
-  epsgResolver as defaultEpsgResolver,
-  makeClampedForwardTo3857,
-  metersPerUnit,
-  parseWkt,
-} from "@developmentseed/proj";
 import type { Device, TextureFormat } from "@luma.gl/core";
 import { Texture } from "@luma.gl/core";
-import proj4 from "proj4";
-import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
-import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
+import type { COGLayerProps } from "./cog-layer.js";
+import type { COGInput } from "./cog-source.js";
 import { isFilterable, resolveTextureFormat } from "./geotiff/texture.js";
-import { geoTiffToDescriptor } from "./geotiff-tileset.js";
+import { MultiCOGSource } from "./multi-cog-source.js";
 
 /**
  * Color palette for debug overlays.
@@ -130,47 +113,36 @@ interface MultiTileResult {
 }
 
 /**
- * Configuration for a single COG source within a {@link MultiCOGLayer}.
+ * Props for the {@link MultiCOGLayer}: those of {@link COGLayerProps}, with the
+ * files of one scene as `source`, and band compositing in place of a custom
+ * `getTileData` and `renderTile`.
  */
-export interface MultiCOGSourceConfig {
-  /**
-   * URL or ArrayBuffer of the COG.
-   *
-   * @see {@link fetchGeoTIFF} for supported input types.
-   */
-  url: string | URL | ArrayBuffer;
-}
-
-/** Internal state for a single opened COG source. */
-interface SourceState {
-  geotiff: GeoTIFF;
-}
-
-/**
- * Props accepted by {@link MultiCOGLayer}.
- *
- * Extends {@link CompositeLayerProps} with multi-source COG configuration and
- * optional tile-layer tuning knobs forwarded to the underlying
- * {@link TileLayerProps | TileLayer}.
- *
- * @see {@link MultiCOGLayer}
- * @see {@link MultiCOGSourceConfig}
- */
-export type MultiCOGLayerProps = CompositeLayerProps &
-  Pick<
-    TileLayerProps,
-    | "debounceTime"
-    | "maxCacheSize"
-    | "maxCacheByteSize"
-    | "maxRequests"
-    | "refinementStrategy"
-  > & {
+export type MultiCOGLayerProps = Omit<
+  RasterTileLayerProps<MultiTileResult>,
+  "tilesetDescriptor" | "getTileData" | "renderTile"
+> &
+  Pick<COGLayerProps, "pool"> & {
     /**
-     * Named sources -- each key becomes a band name used when compositing.
+     * The files of one scene to draw: an opened {@link MultiCOGSource}, or a
+     * record of COGs for the layer to open with the defaults of
+     * {@link MultiCOGSource.open}, each a URL string, {@link URL},
+     * {@link ArrayBuffer} or opened {@link GeoTIFF}. An empty record draws
+     * nothing.
      *
-     * @see {@link MultiCOGSourceConfig}
+     * Each name is a band name for `composite`. Open the files yourself to
+     * change those defaults, such as the EPSG resolver or the request limiter,
+     * or to share them between layers.
+     *
+     * Keep the same object across renders: a new one starts the layer's tiles
+     * over.
      */
-    sources: Record<string, MultiCOGSourceConfig>;
+    source: MultiCOGSource | Record<string, COGInput>;
+
+    /**
+     * Called with the source the layer opened, when `source` isn't an opened
+     * {@link MultiCOGSource} already.
+     */
+    onSourceLoad?: (source: MultiCOGSource) => void;
 
     /**
      * Map source bands to RGB(A) output channels.
@@ -222,77 +194,8 @@ export type MultiCOGLayerProps = CompositeLayerProps &
     resampling?: "linear" | "nearest";
 
     /**
-     * EPSG code resolver used to look up projection definitions for numeric
-     * CRS codes found in GeoTIFF metadata.
-     *
-     * @default defaultEpsgResolver
-     * @see {@link EpsgResolver}
-     */
-    epsgResolver?: EpsgResolver;
-
-    /**
-     * Decoder pool for parallel image chunk decompression.
-     *
-     * @see {@link DecoderPool}
-     */
-    pool?: DecoderPool;
-
-    /**
-     * Maximum reprojection error for mesh refinement: how far a tile's mesh
-     * may draw a point from where it belongs on the map, in output pixels
-     * (one input pixel's size on the map, normally at the center of the
-     * meshed area).
-     * Lower values create denser meshes with higher accuracy.
-     *
-     * @default 0.125
-     */
-    maxError?: number;
-
-    /**
-     * AbortSignal to cancel loading of all sources.
-     */
-    signal?: AbortSignal;
-
-    /**
-     * Called once all configured sources have been opened and the
-     * {@link MultiRasterTilesetDescriptor} has been built.
-     *
-     * `geographicBounds` is computed from the primary (finest-resolution)
-     * source and reprojected to WGS84; it matches the shape returned by
-     * {@link COGLayerProps.onGeoTIFFLoad} and is suitable for passing to
-     * MapLibre's `fitBounds`.
-     */
-    onGeoTIFFLoad?: (
-      sources: Map<string, GeoTIFF>,
-      options: {
-        primaryKey: string;
-        geographicBounds: {
-          west: number;
-          south: number;
-          east: number;
-          north: number;
-        };
-      },
-    ) => void;
-
-    /**
-     * Enable debug overlay showing tile boundaries and metadata labels
-     * for all tilesets.
-     *
-     * @default false
-     */
-    debug?: boolean;
-
-    /**
-     * Opacity of the reprojection mesh debug overlay. Only used when
-     * `debug` is `true`. Forwarded to the underlying {@link RasterLayer}.
-     *
-     * @default 0.5
-     */
-    debugOpacity?: number;
-
-    /**
-     * Controls how much detail is shown in debug text labels.
+     * How much the debug labels show, with `debug` on. They label the primary
+     * tile and each band read at another resolution.
      *
      * - `1`: tile index and resolution only
      * - `2`: adds UV transform and tile count
@@ -301,85 +204,32 @@ export type MultiCOGLayerProps = CompositeLayerProps &
      * @default 1
      */
     debugLevel?: 1 | 2 | 3;
-
-    /**
-     * Caps concurrent HTTP requests for this layer's source fetches.
-     *
-     * Defaults to a maximum of 6 concurrent requests per origin, which aligns
-     * with browser limits of 6 HTTP/1.1 requests per origin. If your sources
-     * support HTTP/2 or HTTP/3, you may want to increase this limit or disable
-     * it entirely by passing `null`.
-     */
-    concurrencyLimiter?: ConcurrencyLimiter | null;
   };
 
 const defaultProps = {
   ...RasterTileLayer.defaultProps,
-  epsgResolver: { type: "accessor" as const, value: defaultEpsgResolver },
+  // See COGLayer: a whole selection goes to the range reader in one task.
+  maxRequests: 256,
+  debounceTime: 50,
   debugLevel: { type: "number" as const, value: 1 },
-  concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
-};
-
-/** A source's opened GeoTIFF paired with its resolved projection. */
-type OpenedCogSource = {
-  name: string;
-  geotiff: GeoTIFF;
-  sourceProjection: ProjectionDefinition;
 };
 
 /**
- * Open every configured source's GeoTIFF in parallel and resolve each one's
- * projection. Returns `null` when `signal` aborts mid-open (the layer was
- * removed), so the caller can bail without applying stale state.
- */
-async function openCogSources(
-  entries: [string, MultiCOGSourceConfig][],
-  options: {
-    concurrencyLimiter?: ConcurrencyLimiter | null;
-    epsgResolver: EpsgResolver;
-    signal?: AbortSignal;
-  },
-): Promise<OpenedCogSource[] | null> {
-  const { concurrencyLimiter, epsgResolver, signal } = options;
-  try {
-    return await Promise.all(
-      entries.map(async ([name, config]) => {
-        const geotiff = await fetchGeoTIFF(config.url, {
-          concurrencyLimiter,
-          signal,
-        });
-        const crs = geotiff.crs;
-        const sourceProjection =
-          typeof crs === "number" ? await epsgResolver(crs) : parseWkt(crs);
-        return { name, geotiff, sourceProjection };
-      }),
-    );
-  } catch (err) {
-    // `sources` changed or the layer was removed mid-open; bail.
-    if (signal?.aborted) {
-      return null;
-    }
-    throw err;
-  }
-}
-
-/**
- * A deck.gl {@link CompositeLayer} that opens multiple Cloud-Optimized GeoTIFFs
- * (COGs) in parallel, builds a {@link RasterTilesetDescriptor} for each, and groups
- * them into a single {@link MultiRasterTilesetDescriptor}.
+ * A deck.gl {@link CompositeLayer} that draws several Cloud-Optimized GeoTIFFs
+ * (COGs) as the bands of one image: an opened {@link MultiCOGSource}, or a
+ * record of COGs for the layer to open.
  *
  * Use this layer when the COGs are separate files of **one** composite image:
  * the same scene with the same spatial extent, such as the per-band files of
- * one Sentinel-2 scene. To render multiple images as a mosaic, use
- * {@link MosaicLayer}.
+ * one Sentinel-2 scene. {@link MultiCOGSource.open} rejects files that aren't.
+ * To render multiple images as a mosaic, use {@link MosaicLayer}.
  *
  * The finest-resolution source is automatically selected as the primary
  * tileset, which drives the tile grid. Secondary sources are sampled at the
  * closest matching resolution.
  *
  * @see {@link MultiCOGLayerProps} for accepted props.
- * @see {@link createMultiRasterTilesetDescriptor} for the grouping logic.
- * @see {@link geoTiffToDescriptor} for the per-source tileset descriptor.
+ * @see {@link MultiCOGSource} for how the files are opened and grouped.
  */
 export class MultiCOGLayer extends RasterTileLayer<
   MultiTileResult,
@@ -392,161 +242,28 @@ export class MultiCOGLayer extends RasterTileLayer<
   static override defaultProps =
     defaultProps as unknown as typeof RasterTileLayer.defaultProps;
 
-  declare state: {
-    sources: Map<string, SourceState> | null;
-    multiDescriptor: MultiRasterTilesetDescriptor | null;
-    /** Aborts the in-flight header reads when `sources` changes or the layer
-     *  is removed, freeing their limiter slots for fresh work. */
-    abortController?: AbortController;
-    /** True while `_parseAllSources` is in flight. */
-    loadingMetadata?: boolean;
-  };
-
-  override initializeState(): void {
-    this.setState({
-      sources: null,
-      multiDescriptor: null,
-    });
+  /** On: a tile that leaves the view must stop its stream. */
+  protected override _abortUnwantedLoads(): boolean {
+    return true;
   }
 
-  override finalizeState(context: LayerContext): void {
-    this.state.abortController?.abort();
-    super.finalizeState(context);
-  }
-
-  override updateState({
-    changeFlags,
-    props,
-    oldProps,
-  }: UpdateParameters<this>): void {
-    if (changeFlags.dataChanged || props.sources !== oldProps.sources) {
-      // Abort the previous sources' parse so it can't overwrite these
-      this.state.abortController?.abort();
-      const abortController = new AbortController();
-      // Reset state so renderLayers() returns null while we re-open COGs.
-      // Without this, the TileLayer renders with new props but stale state,
-      // caching tiles with the wrong bands.
-      this.setState({
-        sources: null,
-        multiDescriptor: null,
-        abortController,
-        loadingMetadata: true,
-      });
-      this._parseAllSources()
-        .catch((error: Error) => this.raiseError(error, "loading COG sources"))
-        .finally(() => {
-          // An aborted parse no longer owns `loadingMetadata`
-          if (!abortController.signal.aborted) {
-            this.setState({ loadingMetadata: false });
-          }
-        });
-    }
+  override shouldLoadMetadata(params: UpdateParameters<this>): boolean {
+    // An empty record names no files, so the layer draws nothing
+    return (
+      super.shouldLoadMetadata(params) &&
+      Object.keys(params.props.source).length > 0
+    );
   }
 
   /**
-   * Open all configured COG sources in parallel, compute shared projection
-   * functions, and build the {@link MultiRasterTilesetDescriptor}.
-   *
-   * All sources are assumed to share the same CRS; the projection of the
-   * first source is used for the shared coordinate converters.
-   *
-   * @returns Resolves when all sources have been opened and state has been set.
+   * Open the files that `source` names, with the defaults of
+   * {@link MultiCOGSource.open}.
    */
-  async _parseAllSources(): Promise<void> {
-    const { sources } = this.props;
-    const entries = Object.entries(sources);
-
-    if (entries.length === 0) {
-      return;
-    }
-
-    const signal = this.state.abortController?.signal;
-
-    const cogSources = await openCogSources(entries, {
-      concurrencyLimiter: this.props.concurrencyLimiter,
-      epsgResolver: this.props.epsgResolver!,
-      signal,
-    });
-    if (cogSources === null) {
-      return;
-    }
-
-    // Use the first source's projection for shared projection functions
-    // (all sources must share the same CRS)
-    const firstCogSource = cogSources[0]!;
-    const sourceProjection = firstCogSource.sourceProjection;
-
-    // @ts-expect-error - proj4 typings are incomplete and don't support
-    // wkt-parser input
-    const converter4326 = proj4(sourceProjection, "EPSG:4326");
-    const forwardTo4326 = (x: number, y: number) =>
-      converter4326.forward<[number, number]>([x, y], false);
-    const inverseFrom4326 = (x: number, y: number) =>
-      converter4326.inverse<[number, number]>([x, y], false);
-
-    // @ts-expect-error - proj4 typings are incomplete and don't support
-    // wkt-parser input
-    const converter3857 = proj4(sourceProjection, "EPSG:3857");
-    const forwardTo3857 = makeClampedForwardTo3857(
-      (x: number, y: number) =>
-        converter3857.forward<[number, number]>([x, y], false),
-      forwardTo4326,
-    );
-    const inverseFrom3857 = (x: number, y: number) =>
-      converter3857.inverse<[number, number]>([x, y], false);
-
-    const units = sourceProjection.units;
-    if (!units) {
-      throw new Error(
-        "Source projection is missing 'units' property, cannot compute meters per unit",
-      );
-    }
-    const mpu = metersPerUnit(units as Parameters<typeof metersPerUnit>[0], {
-      semiMajorAxis: sourceProjection.datum?.a ?? sourceProjection.a,
-    });
-
-    // Build TilesetDescriptors
-    const tilesetMap = new Map<string, RasterTilesetDescriptor>();
-    const sourceMap = new Map<string, SourceState>();
-
-    for (const cogSource of cogSources) {
-      const descriptor = geoTiffToDescriptor(cogSource.geotiff, {
-        projectTo4326: forwardTo4326,
-        projectFrom4326: inverseFrom4326,
-        projectTo3857: forwardTo3857,
-        projectFrom3857: inverseFrom3857,
-        mpu,
-      });
-      tilesetMap.set(cogSource.name, descriptor);
-      sourceMap.set(cogSource.name, { geotiff: cogSource.geotiff });
-    }
-
-    const multiDescriptor = createMultiRasterTilesetDescriptor(tilesetMap);
-
-    // `sources` changed or the layer was removed while we resolved
-    // projections; drop the result.
-    if (signal?.aborted) {
-      return;
-    }
-
-    this.setState({
-      sources: sourceMap,
-      multiDescriptor,
-    });
-
-    if (this.props.onGeoTIFFLoad) {
-      const primaryKey = multiDescriptor.primaryKey;
-      const primaryGeotiff = sourceMap.get(primaryKey)!.geotiff;
-      const geographicBounds = getGeographicBounds(
-        primaryGeotiff,
-        converter4326,
-      );
-      const geotiffMap = new Map<string, GeoTIFF>();
-      for (const [name, state] of sourceMap) {
-        geotiffMap.set(name, state.geotiff);
-      }
-      this.props.onGeoTIFFLoad(geotiffMap, { primaryKey, geographicBounds });
-    }
+  protected override _openSource(
+    input: Record<string, COGInput>,
+    signal: AbortSignal,
+  ): Promise<MultiCOGSource> {
+    return MultiCOGSource.open(input, { signal });
   }
 
   /**
@@ -565,13 +282,14 @@ export class MultiCOGLayer extends RasterTileLayer<
     options: GetTileDataOptions,
   ): Promise<MultiTileResult> {
     const { x, y, z } = tile.index;
-    const { multiDescriptor, sources } = this.state;
+    const { multiTilesetDescriptor: multiDescriptor, geotiffs } =
+      this.state.source!;
     const pool = this.props.pool ?? defaultDecoderPool();
     const { device, signal: combinedSignal } = options;
 
     // Compute per-tile reprojection transforms from the primary descriptor
-    const primaryKey = multiDescriptor!.primaryKey;
-    const primaryLevel = multiDescriptor!.primary.levels[z]!;
+    const primaryKey = multiDescriptor.primaryKey;
+    const primaryLevel = multiDescriptor.primary.levels[z]!;
     const { forwardTransform, inverseTransform } = primaryLevel.tileTransform(
       x,
       y,
@@ -582,11 +300,11 @@ export class MultiCOGLayer extends RasterTileLayer<
       Promise<[string, BandTileData, BandDebugInfo | null]>
     > = [];
 
-    for (const [name, sourceState] of sources!) {
+    for (const [name, geotiff] of geotiffs) {
       const descriptor =
         name === primaryKey
-          ? multiDescriptor!.primary
-          : multiDescriptor!.secondaries.get(name)!;
+          ? multiDescriptor.primary
+          : multiDescriptor.secondaries.get(name)!;
 
       const isPrimary =
         name === primaryKey ||
@@ -598,7 +316,7 @@ export class MultiCOGLayer extends RasterTileLayer<
       if (isPrimary) {
         // Primary-grid source: fetch tile directly with identity UV transform
         bandPromises.push(
-          this._fetchPrimaryBand(name, sourceState, {
+          this._fetchPrimaryBand(name, geotiff, {
             x,
             y,
             z,
@@ -610,7 +328,7 @@ export class MultiCOGLayer extends RasterTileLayer<
       } else {
         // Secondary source: resolve covering tiles and fetch
         bandPromises.push(
-          this._fetchSecondaryBand(name, sourceState, {
+          this._fetchSecondaryBand(name, geotiff, {
             descriptor,
             primaryLevel,
             primaryCol: x,
@@ -659,16 +377,8 @@ export class MultiCOGLayer extends RasterTileLayer<
     };
   }
 
-  protected override _tilesetDescriptor(): RasterTilesetDescriptor | undefined {
-    return this.state.multiDescriptor?.primary;
-  }
-
-  protected override _isLoadingMetadata(): boolean {
-    return this.state.loadingMetadata === true;
-  }
-
   protected override _getTileDataCallback() {
-    if (!this.state.multiDescriptor || !this.state.sources) {
+    if (!this.state.source) {
       return undefined;
     }
     return (
@@ -678,7 +388,7 @@ export class MultiCOGLayer extends RasterTileLayer<
   }
 
   protected override _renderTileCallback() {
-    if (!this.state.multiDescriptor) {
+    if (!this.state.source) {
       return undefined;
     }
     return (data: MultiTileResult): RenderTileResult | null =>
@@ -710,7 +420,7 @@ export class MultiCOGLayer extends RasterTileLayer<
     if (!data?.debugInfo) {
       return super._renderDebug(tile, data);
     }
-    const projectTo4326 = this.state.multiDescriptor?.primary.projectTo4326;
+    const projectTo4326 = this.state.source?.tilesetDescriptor.projectTo4326;
     if (!projectTo4326) {
       return super._renderDebug(tile, data);
     }
@@ -784,7 +494,7 @@ export class MultiCOGLayer extends RasterTileLayer<
    */
   private async _fetchPrimaryBand(
     name: string,
-    sourceState: SourceState,
+    geotiff: GeoTIFF,
     opts: {
       x: number;
       y: number;
@@ -795,7 +505,7 @@ export class MultiCOGLayer extends RasterTileLayer<
     },
   ): Promise<[string, BandTileData, BandDebugInfo | null]> {
     const { x, y, z, pool, signal, device } = opts;
-    const image = selectImage(sourceState.geotiff, z);
+    const image = selectImage(geotiff, z);
 
     const tile = await image.fetchTile(x, y, {
       boundless: false,
@@ -828,7 +538,7 @@ export class MultiCOGLayer extends RasterTileLayer<
    */
   private async _fetchSecondaryBand(
     name: string,
-    sourceState: SourceState,
+    geotiff: GeoTIFF,
     opts: {
       descriptor: RasterTilesetDescriptor;
       primaryLevel: RasterTilesetLevel;
@@ -854,7 +564,8 @@ export class MultiCOGLayer extends RasterTileLayer<
 
     // Select the best secondary level
     const primaryMpp =
-      this.state.multiDescriptor!.primary.levels[primaryZ]!.metersPerPixel;
+      this.state.source!.multiTilesetDescriptor.primary.levels[primaryZ]!
+        .metersPerPixel;
     const secondaryLevel = selectSecondaryLevel(descriptor.levels, primaryMpp);
     const secondaryZ = descriptor.levels.indexOf(secondaryLevel);
 
@@ -885,7 +596,7 @@ export class MultiCOGLayer extends RasterTileLayer<
     }
 
     // Fetch all covering tiles via fetchTiles
-    const image = selectImage(sourceState.geotiff, secondaryZ);
+    const image = selectImage(geotiff, secondaryZ);
     const xy: Array<[number, number]> = resolution.tileIndices.map((idx) => [
       idx.x,
       idx.y,
@@ -939,7 +650,7 @@ export class MultiCOGLayer extends RasterTileLayer<
   ): Layer[] {
     const layers: Layer[] = [];
     const debugLevel = this.props.debugLevel ?? 1;
-    const { multiDescriptor } = this.state;
+    const multiDescriptor = this.state.source?.multiTilesetDescriptor;
     if (!multiDescriptor) {
       return layers;
     }

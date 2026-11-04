@@ -77,7 +77,8 @@ export type MultiscalesAttrs = z.infer<typeof MultiscalesAttrsSchema>;
 // ---------------------------------------------------------------------------
 
 const SpatialAttrsBaseSchema = z.object({
-  "spatial:dimensions": z.array(z.string()).min(2).max(3),
+  // The Y dimension, then the X dimension
+  "spatial:dimensions": z.array(z.string()).length(2),
   "spatial:transform": Affine2dSchema.optional(),
   "spatial:shape": SpatialShape2dSchema.optional(),
   "spatial:bbox": z

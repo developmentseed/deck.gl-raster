@@ -5,11 +5,14 @@
  * tiles: right edge is 9px wide (265 % 128), bottom edge is 10px tall (266 % 128).
  */
 
+import { readFileSync } from "node:fs";
 import { SourceFile } from "@chunkd/source-file";
 import type { Source } from "@cogeotiff/core";
+import { RangeReader } from "@developmentseed/range-reader";
 import { describe, expect, it } from "vitest";
 import { GeoTIFF } from "../src/geotiff.js";
 import { fixturePath, loadGeoTIFF } from "./helpers.js";
+import { fixtureServer } from "./utils/fixture-server.js";
 
 /** A `dataSource` wrapper that records every `fetch` call (offset + length). */
 class RecordingDataSource implements Pick<Source, "fetch"> {
@@ -175,23 +178,30 @@ describe("fetchTiles", () => {
     [1, 1],
   ];
 
-  it("coalesces a contiguous grid into fewer reads than per-tile fetches (pixel-interleaved)", async () => {
-    const perTile = await loadGeoTIFFRecordingData(
-      "uint8_rgb_deflate_block64_cog",
-      "rasterio",
+  it("lets the reader merge a grid into fewer requests than per-tile fetches", async () => {
+    const file = new Uint8Array(
+      readFileSync(fixturePath("uint8_rgb_deflate_block64_cog", "rasterio")),
     );
-    for (const [x, y] of GRID) {
-      await perTile.tiff.fetchTile(x, y);
-    }
-    // One data read per tile when fetched individually.
-    expect(perTile.dataSource.calls).toHaveLength(GRID.length);
+    const server = fixtureServer(file, { chunkBytes: 4096 });
+    const reader = new RangeReader({
+      fetch: server.fetch,
+      minMetadataReadBytes: 1024,
+    });
+    const tiff = await GeoTIFF.fromUrl("https://example.test/cog.tif", {
+      reader,
+    });
+    const before = reader.stats.requests;
+    const batched = await tiff.fetchTiles(GRID);
+    expect(reader.stats.requests - before).toBeLessThan(GRID.length);
 
-    const batched = await loadGeoTIFFRecordingData(
+    const plain = await loadGeoTIFF(
       "uint8_rgb_deflate_block64_cog",
       "rasterio",
     );
-    await batched.tiff.fetchTiles(GRID);
-    expect(batched.dataSource.calls.length).toBeLessThan(GRID.length);
+    const individual = await Promise.all(
+      GRID.map(([x, y]) => plain.fetchTile(x, y)),
+    );
+    expect(batched).toEqual(individual);
   });
 
   it("returns the same tiles as per-tile fetchTile (pixel-interleaved)", async () => {
@@ -259,23 +269,28 @@ describe("fetchTiles", () => {
     expect(batched[1]!.array.height).toBe(tiff.height % tiff.tileHeight);
   });
 
-  it("coalesces band-separate tiles across bands and tiles", async () => {
-    const perTile = await loadGeoTIFFRecordingData(
-      "int8_3band_zstd_block64",
-      "rasterio",
+  it("lets the reader merge band-separate tiles across bands and tiles", async () => {
+    const file = new Uint8Array(
+      readFileSync(fixturePath("int8_3band_zstd_block64", "rasterio")),
     );
-    for (const [x, y] of GRID) {
-      await perTile.tiff.fetchTile(x, y);
-    }
-    // 4 tiles × 3 bands = 12 independent reads via repeated fetchTile.
-    expect(perTile.dataSource.calls).toHaveLength(GRID.length * 3);
+    const server = fixtureServer(file, { chunkBytes: 4096 });
+    const reader = new RangeReader({
+      fetch: server.fetch,
+      minMetadataReadBytes: 1024,
+    });
+    const tiff = await GeoTIFF.fromUrl("https://example.test/bands.tif", {
+      reader,
+    });
+    const before = reader.stats.requests;
+    const batched = await tiff.fetchTiles(GRID);
+    // 4 tiles x 3 bands = 12 reads, merged by the reader.
+    expect(reader.stats.requests - before).toBeLessThan(GRID.length * 3);
 
-    const batched = await loadGeoTIFFRecordingData(
-      "int8_3band_zstd_block64",
-      "rasterio",
+    const plain = await loadGeoTIFF("int8_3band_zstd_block64", "rasterio");
+    const individual = await Promise.all(
+      GRID.map(([x, y]) => plain.fetchTile(x, y)),
     );
-    await batched.tiff.fetchTiles(GRID);
-    expect(batched.dataSource.calls.length).toBeLessThan(GRID.length * 3);
+    expect(batched).toEqual(individual);
   });
 
   it("returns [] for an empty request without any reads", async () => {

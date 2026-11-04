@@ -12,6 +12,10 @@ import type { CRSInfo, GeoZarrMetadata, MultiscaleLevel } from "./types.js";
  * Zarr order, matching the multiscales layout array). Reverse to get
  * coarsest-first for `TilesetDescriptor`.
  *
+ * `spatial:dimensions` names the Y dimension, then the X dimension, whatever
+ * their names. See the
+ * [spatial convention](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md?plain=1#L94).
+ *
  * @param attrs  Raw group attributes object (e.g. from zarrita `group.attrs`).
  *
  * @throws If required conventions (spatial, geo-proj) are missing or invalid,
@@ -41,21 +45,8 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
 
   // --- Axes ---
   const axes = spatial["spatial:dimensions"];
-  // Accept the spec's "y"/"x" (case-insensitive) as well as the common
-  // CF-style names "latitude"/"longitude". Matching is purely label-based;
-  // positional inference is not used.
-  const Y_LABELS = new Set(["y", "latitude", "lat"]);
-  const X_LABELS = new Set(["x", "longitude", "lon"]);
-  const yAxisIndex = axes.findIndex((a) => Y_LABELS.has(a.toLowerCase()));
-  const xAxisIndex = axes.findIndex((a) => X_LABELS.has(a.toLowerCase()));
-
-  if (yAxisIndex === -1 || xAxisIndex === -1) {
-    throw new Error(
-      `spatial:dimensions must contain a Y axis ("y"/"latitude"/"lat") and ` +
-        `an X axis ("x"/"longitude"/"lon") (case-insensitive), got: ` +
-        `${JSON.stringify(axes)}`,
-    );
-  }
+  const yAxisIndex = 0;
+  const xAxisIndex = 1;
 
   // --- Levels ---
   const layout = spatial.multiscales?.layout;
