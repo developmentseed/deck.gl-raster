@@ -19,6 +19,7 @@ type GroupSpec = {
  * - `a` and `b`: the example as it is.
  * - `bare`: no GeoZarr attributes.
  * - `unnamed`: arrays whose dimensions have no names.
+ * - `transposed`: arrays with x before y.
  * - `timed`: arrays with a leading `time` dimension of 4, in chunks of 1.
  *
  * It records each read's key and abort signal.
@@ -39,6 +40,7 @@ export async function geoZarrStore() {
     b: { attributes, dimensionNames: dimensions },
     bare: { attributes: {}, dimensionNames: dimensions },
     unnamed: { attributes, dimensionNames: [null, null] },
+    transposed: { attributes, dimensionNames: [...dimensions].reverse() },
     timed: { attributes, dimensionNames: ["time", ...dimensions], times: 4 },
   };
 

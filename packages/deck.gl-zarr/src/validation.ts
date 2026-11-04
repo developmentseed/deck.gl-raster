@@ -62,12 +62,14 @@ export type FindSpatialDimIndicesArgs = {
 
 /**
  * Find the positions of the declared spatial dims in a zarr array's dimension
- * names. They may sit anywhere and in either order, such as `[band, y, x]`,
- * `[y, x, band]` or `[x, y]`. See the
- * [spatial convention](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md?plain=1#L94-L98).
+ * names, by name, as the
+ * [spatial convention](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md?plain=1#L94-L98)
+ * says. Y must come before x, and other dims may sit anywhere, such as
+ * `[band, y, x]` or `[y, x, band]`.
  *
  * @returns The positions of the y and x dims, as `[yIndex, xIndex]`.
- * @throws if a declared spatial dim is missing from the array.
+ * @throws if a declared spatial dim is missing from the array, or if x comes
+ *   before y, which needs a transpose that is not implemented.
  */
 export function findSpatialDimIndices(
   args: FindSpatialDimIndicesArgs,
@@ -88,5 +90,14 @@ export function findSpatialDimIndices(
     );
   }
 
-  return [dimensionNames.indexOf(y), dimensionNames.indexOf(x)];
+  const yIndex = dimensionNames.indexOf(y);
+  const xIndex = dimensionNames.indexOf(x);
+  if (xIndex < yIndex) {
+    throw new Error(
+      `Spatial dim order is swapped: x dim "${x}" comes before y dim "${y}" ` +
+        `in zarr array dims [${dimensionNames.join(", ")}]. Arrays with x ` +
+        `before y need a transpose, which is not implemented.`,
+    );
+  }
+  return [yIndex, xIndex];
 }

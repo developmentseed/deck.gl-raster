@@ -380,12 +380,6 @@ describe("ZarrLayer tiles", () => {
       selection: { band: 2 },
       sliceSpec: [rows, cols, 2],
     },
-    {
-      name: "x-before-y [lon, lat]",
-      dimensionNames: ["lon", "lat"],
-      selection: {},
-      sliceSpec: [cols, rows],
-    },
   ])(
     "slices each dim of a $name array at its position",
     async ({ dimensionNames, selection, sliceSpec }) => {

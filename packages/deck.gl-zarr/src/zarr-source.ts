@@ -75,9 +75,9 @@ export class ZarrSource<
   readonly dimensionNames: readonly string[];
 
   /**
-   * The names of the y and x dimensions, from `spatial:dimensions`. They may
-   * sit anywhere in {@link ZarrSource.dimensionNames}, such as
-   * `["y", "x", "band"]` or `["x", "y"]`.
+   * The names of the y and x dimensions, from `spatial:dimensions`. In
+   * {@link ZarrSource.dimensionNames}, y comes before x, and other dimensions
+   * may sit anywhere, such as `["band", "y", "x"]` or `["y", "x", "band"]`.
    */
   readonly spatialDims: [y: string, x: string];
 
@@ -106,7 +106,7 @@ export class ZarrSource<
    * Rejects when `signal` aborts before the source is ready, when the
    * metadata is missing or invalid, when a level's array can't be opened,
    * when the CRS can't be resolved, and when the arrays' dimensions aren't
-   * named or don't include the y and x dimensions.
+   * named, don't include the y and x dimensions, or have x before y.
    *
    * @param node A zarrita group, whose attributes hold the GeoZarr metadata,
    *   or an array to draw as a single level. The caller owns the store, so it

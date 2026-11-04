@@ -107,9 +107,9 @@ export type ZarrLayerProps<
    * `zarr.get(arr, sliceSpec)` and convert the result to whatever format your
    * `renderTile` callback expects.
    *
-   * The spatial dims may sit anywhere in the array's `dimension_names`, and
-   * `zarr.get` returns the chunk in the array's own dim order, such as
-   * `[y, x, band]` for a channel-last array.
+   * In the array's `dimension_names`, the y dim comes before the x dim, and
+   * other dims may sit anywhere. `zarr.get` returns the chunk in the array's
+   * own dim order, such as `[y, x, band]` for a channel-last array.
    *
    * A new `selection` fetches the tiles again. For anything else this
    * function reads, change `updateTriggers.getTileData` (or

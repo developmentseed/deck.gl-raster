@@ -170,6 +170,12 @@ describe("ZarrSource.open", () => {
     );
   });
 
+  it("rejects arrays with x before y", async () => {
+    const { group } = await openGroup("transposed");
+
+    await expect(ZarrSource.open(group)).rejects.toThrow(/swapped/);
+  });
+
   it.each<{ name: string; dimensionNames: SpatialArrayDim[] }>([
     { name: "[lat, lon]", dimensionNames: ["lat", "lon"] },
     { name: "[band, lat, lon]", dimensionNames: ["band", "lat", "lon"] },
@@ -177,7 +183,6 @@ describe("ZarrSource.open", () => {
       name: "channel-last [lat, lon, band]",
       dimensionNames: ["lat", "lon", "band"],
     },
-    { name: "x-before-y [lon, lat]", dimensionNames: ["lon", "lat"] },
   ])(
     "sizes tiles by the chunks of the y and x dims of a $name array",
     async ({ dimensionNames }) => {

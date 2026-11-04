@@ -62,13 +62,22 @@ describe("findSpatialDimIndices", () => {
     ).toEqual([0, 1]);
   });
 
-  it("finds spatial dims stored x before y", () => {
+  it("finds spatial dims with another dim between them", () => {
     expect(
+      findSpatialDimIndices({
+        dimensionNames: ["latitude", "band", "longitude"],
+        spatialDims: ["latitude", "longitude"],
+      }),
+    ).toEqual([0, 2]);
+  });
+
+  it("throws when y and x are swapped", () => {
+    expect(() =>
       findSpatialDimIndices({
         dimensionNames: ["init_time", "longitude", "latitude"],
         spatialDims: ["latitude", "longitude"],
       }),
-    ).toEqual([2, 1]);
+    ).toThrow(/transpose/);
   });
 
   it("throws when a declared spatial dim is missing from the array", () => {
