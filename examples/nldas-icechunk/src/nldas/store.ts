@@ -5,7 +5,6 @@ import {
   ReadSession,
   Repository,
 } from "icechunk-js";
-import * as zarr from "zarrita";
 import {
   BRANCH,
   NLDAS_GEOZARR_ATTRS,
@@ -43,17 +42,13 @@ export async function openSurfaceTemp(): Promise<SurfaceTemp> {
   });
   const store = await IcechunkStore.open(session);
 
-  const node = await zarr.open(store.resolve(SURFACE_TEMP_PATH), {
-    kind: "array",
+  const source = await ZarrSource.open<"float32">(store, {
+    path: SURFACE_TEMP_PATH,
+    geoZarrMetadata: NLDAS_GEOZARR_ATTRS,
   });
-  if (!node.is("float32")) {
-    throw new Error(
-      `Expected ${SURFACE_TEMP_PATH} to be float32, got ${node.dtype}`,
-    );
-  }
 
   // Read the fill sentinel from the array's attrs rather than hard-coding it.
-  const missingValue = node.attrs.missing_value;
+  const missingValue = source.node.attrs.missing_value;
   if (typeof missingValue !== "number") {
     throw new Error(
       `Expected ${SURFACE_TEMP_PATH} to have a numeric "missing_value" attr, ` +
@@ -61,8 +56,5 @@ export async function openSurfaceTemp(): Promise<SurfaceTemp> {
     );
   }
 
-  const source = await ZarrSource.open(node, {
-    geoZarrMetadata: NLDAS_GEOZARR_ATTRS,
-  });
   return { source, noDataValue: missingValue };
 }

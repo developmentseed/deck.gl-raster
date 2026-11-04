@@ -9,7 +9,7 @@ export const BRANCH = "main";
  * Path to the near-surface air temperature array within the store. `Tair` is
  * the array's name in the NLDAS-3 store, so the literal path can't change.
  */
-export const SURFACE_TEMP_PATH = "/Tair";
+export const SURFACE_TEMP_PATH = "Tair";
 
 /**
  * Virtual chunk containers authorizing the browser to resolve the store's

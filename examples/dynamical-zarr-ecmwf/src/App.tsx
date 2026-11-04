@@ -111,8 +111,8 @@ export default function App() {
 
   // Open the Zarr store + variable once. The Dynamical.org ECMWF store uses
   // Zarr v3 with consolidated metadata (the full hierarchy is inlined in the
-  // root `zarr.json`). Both are forced explicitly so auto-detection doesn't
-  // silently fall back to v2.
+  // root `zarr.json`). Its format is forced explicitly so auto-detection
+  // doesn't silently fall back to v2.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -120,16 +120,8 @@ export default function App() {
         new zarr.FetchStore(ZARR_URL),
         { format: "v3" },
       );
-      const root = await zarr.open.v3(store, { kind: "group" });
-      const opened = await zarr.open.v3(root.resolve(VARIABLE), {
-        kind: "array",
-      });
-      if (!opened.is("float32")) {
-        throw new Error(
-          `Expected ${VARIABLE} to be float32, got ${opened.dtype}`,
-        );
-      }
-      const source = await ZarrSource.open(opened, {
+      const source = await ZarrSource.open<"float32">(store, {
+        path: VARIABLE,
         geoZarrMetadata: ECMWF_GEOZARR_ATTRS,
       });
       if (cancelled) {
@@ -137,7 +129,7 @@ export default function App() {
       }
       setSource(source);
       // Default to the latest available forecast run.
-      setInitTimeIdx(opened.shape[0]! - 1);
+      setInitTimeIdx(source.arrays[0]!.shape[0]! - 1);
     })();
     return () => {
       cancelled = true;
