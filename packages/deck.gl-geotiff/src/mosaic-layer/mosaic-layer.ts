@@ -237,11 +237,38 @@ function createGetPriorityCallback(
 }
 
 /**
+ * deck.gl's TileLayer, rendering layers only for the items in view.
+ *
+ * deck.gl's TileLayer keeps the layers of every cached tile and only hides
+ * those out of view, so each cached item would keep its layers and their GPU
+ * memory. Here an item out of view keeps only its opened source. See #803.
+ */
+class MosaicTileLayer<DataT> extends TileLayer<DataT> {
+  static override layerName = "MosaicTileLayer";
+
+  override renderLayers(): Layer | null | LayersList {
+    const hidden = this.state.tileset!.tiles.filter((tile) => !tile.isVisible);
+    // With an empty list, deck.gl's `renderLayers` renders no layers for a
+    // hidden item, and deck.gl finalizes the ones it had
+    for (const tile of hidden) {
+      tile.layers = [];
+    }
+    const layers = super.renderLayers();
+    // Render the item's layers again once it's back in view
+    for (const tile of hidden) {
+      tile.layers = null;
+    }
+    return layers;
+  }
+}
+
+/**
  * A deck.gl layer for rendering a mosaic of raster sources, such as the COGs
  * of a STAC search.
  *
  * Only the items in view are opened and drawn: `getSource` opens an item's
- * source, and `renderSource` draws the item with it.
+ * source, and `renderSource` draws the item with it. An item that leaves the
+ * view keeps its source in the layer's cache, but not its layers.
  *
  * ```ts
  * new MosaicLayer({
@@ -329,7 +356,7 @@ export class MosaicLayer<
       ...subLayerProps
     } = this.getSubLayerProps();
 
-    return new TileLayer<{
+    return new MosaicTileLayer<{
       item: ItemT;
       source?: SourceT;
     }>(subLayerProps, {

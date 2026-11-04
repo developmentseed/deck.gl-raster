@@ -1,4 +1,4 @@
-import type { Layer } from "@deck.gl/core";
+import type { Layer, LayerContext } from "@deck.gl/core";
 import {
   CompositeLayer,
   LayerManager,
@@ -183,7 +183,9 @@ function newRecords() {
  *
  * `getSource` opens `{ of: item.id }` for each item. `wait` lets pending loads
  * finish without rendering, and reports the same way. `moveTo` moves the view
- * without rendering, as panning does.
+ * for the next render. `pan` moves it as panning does, and reports the same
+ * way: deck.gl hands each layer the new viewport as it draws, and the app
+ * doesn't render the layer again.
  */
 function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
   // deck.gl ignores errors thrown in `updateState` when there is no device.
@@ -254,6 +256,15 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
     layerManager.activateViewport(next);
   };
 
+  const pan = async (next: WebMercatorViewport) => {
+    layerManager.activateViewport(next);
+    for (const layer of layerManager.getLayers()) {
+      layer.activateViewport(next);
+    }
+    await settle(layerManager);
+    return report();
+  };
+
   /** Remove the layer, as an app does by no longer rendering it. */
   const remove = async () => {
     layerManager.setLayers([]);
@@ -261,7 +272,7 @@ function makeMosaicRenderer(viewport: WebMercatorViewport = VIEWPORT) {
     return report();
   };
 
-  return { render, wait, moveTo, remove };
+  return { render, wait, moveTo, pan, remove };
 }
 
 // The tests above reuse one layer instance. Apps create a new MosaicLayer on
@@ -622,6 +633,110 @@ describe("MosaicLayer sublayer props", () => {
     });
     expect(errors).toEqual([]);
     expect(fetched).toEqual([]);
+  });
+});
+
+/** An item's layer that logs when deck.gl initializes and finalizes it. */
+class LoggedItemLayer extends CompositeLayer<{ log: string[] }> {
+  static override layerName = "LoggedItemLayer";
+
+  override initializeState() {
+    this.props.log.push(`initialize ${this.id}`);
+  }
+
+  override finalizeState(context: LayerContext) {
+    this.props.log.push(`finalize ${this.id}`);
+    super.finalizeState(context);
+  }
+
+  override renderLayers() {
+    return null;
+  }
+}
+
+describe("MosaicLayer items out of view", () => {
+  // Shows F, and none of the items that VIEWPORT shows
+  const FAR = new WebMercatorViewport({
+    width: 512,
+    height: 512,
+    longitude: 105,
+    latitude: 5,
+    zoom: 3,
+  });
+
+  /** A `renderSource` that draws each item with a {@link LoggedItemLayer}. */
+  function loggedRenderSource() {
+    const log: string[] = [];
+    const renderSource: MosaicLayerProps<Item, Marker>["renderSource"] = (
+      _item,
+      { subLayerProps },
+    ) => new LoggedItemLayer({ ...subLayerProps, log });
+    return { log, renderSource };
+  }
+
+  it("finalizes the layers of an item that leaves the view, and keeps its source", async () => {
+    const { render, pan } = makeMosaicRenderer();
+    const { log, renderSource } = loggedRenderSource();
+    await render({ data: [A, F], renderSource });
+
+    const { unloaded, errors } = await pan(FAR);
+    expect(errors).toEqual([]);
+    expect(log).toEqual([
+      "initialize mosaic-A",
+      "finalize mosaic-A",
+      "initialize mosaic-F",
+    ]);
+    expect(unloaded).toEqual({});
+  });
+
+  it("finalizes them too when the app renders the layer again after the view moves", async () => {
+    const { render, moveTo } = makeMosaicRenderer();
+    const { log, renderSource } = loggedRenderSource();
+    await render({ data: [A, F], renderSource });
+
+    moveTo(FAR);
+    const { errors } = await render({ data: [A, F], renderSource });
+    expect(errors).toEqual([]);
+    expect(log).toEqual([
+      "initialize mosaic-A",
+      "finalize mosaic-A",
+      "initialize mosaic-F",
+    ]);
+  });
+
+  it("draws an item again when it comes back into view, without opening its source again", async () => {
+    const { render, pan } = makeMosaicRenderer();
+    const { log, renderSource } = loggedRenderSource();
+    await render({ data: [A, F], renderSource });
+
+    await pan(FAR);
+    const { fetched, errors } = await pan(VIEWPORT);
+    expect(errors).toEqual([]);
+    expect(fetched).toEqual(["A", "F"]);
+    expect(log.filter((entry) => entry.endsWith(" mosaic-A"))).toEqual([
+      "initialize mosaic-A",
+      "finalize mosaic-A",
+      "initialize mosaic-A",
+    ]);
+  });
+
+  it("keeps the layers of an item while it stays in view", async () => {
+    const { render, pan } = makeMosaicRenderer();
+    const { log, renderSource } = loggedRenderSource();
+    await render({ data: [A], renderSource });
+
+    // VIEWPORT, moved a little: A still shows
+    const { errors } = await pan(
+      new WebMercatorViewport({
+        width: 512,
+        height: 512,
+        longitude: 26,
+        latitude: 0,
+        zoom: 3,
+      }),
+    );
+    expect(errors).toEqual([]);
+    expect(log).toEqual(["initialize mosaic-A"]);
   });
 });
 
