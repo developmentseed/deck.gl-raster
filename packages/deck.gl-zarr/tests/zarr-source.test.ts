@@ -2,7 +2,12 @@ import proj4 from "proj4";
 import { describe, expect, it } from "vitest";
 import * as zarr from "zarrita";
 import { ZarrSource } from "../src/index.js";
-import { geoZarrStore } from "./helpers.js";
+import type { SpatialArrayDim } from "./helpers.js";
+import {
+  geoZarrStore,
+  openSpatialArray,
+  spatialArrayMetadata,
+} from "./helpers.js";
 
 /** The opened root group of a {@link geoZarrStore}, and the store's reads. */
 async function openRoot() {
@@ -170,4 +175,44 @@ describe("ZarrSource.open", () => {
 
     await expect(ZarrSource.open(group)).rejects.toThrow(/swapped/);
   });
+
+  it("rejects levels whose dimensions differ", async () => {
+    const { root, attributes } = await openRoot();
+    // r10m from group `a`, and r20m from group `timed`, with a time dimension
+    const [r10m, r20m] = attributes.multiscales.layout;
+    const geoZarrMetadata = {
+      ...attributes,
+      multiscales: {
+        layout: [
+          { ...r10m, asset: "a/r10m" },
+          { ...r20m, asset: "timed/r20m" },
+        ],
+      },
+    };
+
+    await expect(ZarrSource.open(root, { geoZarrMetadata })).rejects.toThrow(
+      '/timed/r20m has ["time","Y","X"], but /a/r10m has ["Y","X"]',
+    );
+  });
+
+  it.each<{ name: string; dimensionNames: SpatialArrayDim[] }>([
+    { name: "[lat, lon]", dimensionNames: ["lat", "lon"] },
+    { name: "[band, lat, lon]", dimensionNames: ["band", "lat", "lon"] },
+    {
+      name: "channel-last [lat, lon, band]",
+      dimensionNames: ["lat", "lon", "band"],
+    },
+  ])(
+    "sizes tiles by the chunks of the y and x dims of a $name array",
+    async ({ dimensionNames }) => {
+      const array = await openSpatialArray(dimensionNames);
+
+      const source = await ZarrSource.open(array, {
+        geoZarrMetadata: spatialArrayMetadata,
+      });
+
+      const level = source.tilesetDescriptor.levels[0]!;
+      expect([level.tileWidth, level.tileHeight]).toEqual([512, 256]);
+    },
+  );
 });

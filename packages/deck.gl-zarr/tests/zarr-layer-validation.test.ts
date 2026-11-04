@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  validateSelection,
-  validateSpatialDimOrder,
-} from "../src/validation.js";
+import { findSpatialDimIndices, validateSelection } from "../src/validation.js";
 
 describe("validateSelection", () => {
   it("accepts a selection with all non-spatial dims specified", () => {
@@ -46,37 +43,46 @@ describe("validateSelection", () => {
   });
 });
 
-describe("validateSpatialDimOrder", () => {
-  it("accepts spatial dims at the last two positions in y,x order", () => {
-    expect(() =>
-      validateSpatialDimOrder({
+describe("findSpatialDimIndices", () => {
+  it("finds spatial dims at the last two positions", () => {
+    expect(
+      findSpatialDimIndices({
         dimensionNames: ["init_time", "lead_time", "latitude", "longitude"],
         spatialDims: ["latitude", "longitude"],
       }),
-    ).not.toThrow();
+    ).toEqual([2, 3]);
   });
 
-  it("throws when spatial dims are not last", () => {
-    expect(() =>
-      validateSpatialDimOrder({
+  it("finds spatial dims before a trailing band dim", () => {
+    expect(
+      findSpatialDimIndices({
         dimensionNames: ["latitude", "longitude", "band"],
         spatialDims: ["latitude", "longitude"],
       }),
-    ).toThrow(/last two/);
+    ).toEqual([0, 1]);
+  });
+
+  it("finds spatial dims with another dim between them", () => {
+    expect(
+      findSpatialDimIndices({
+        dimensionNames: ["latitude", "band", "longitude"],
+        spatialDims: ["latitude", "longitude"],
+      }),
+    ).toEqual([0, 2]);
   });
 
   it("throws when y and x are swapped", () => {
     expect(() =>
-      validateSpatialDimOrder({
+      findSpatialDimIndices({
         dimensionNames: ["init_time", "longitude", "latitude"],
         spatialDims: ["latitude", "longitude"],
       }),
-    ).toThrow(/order/);
+    ).toThrow(/transpose/);
   });
 
   it("throws when a declared spatial dim is missing from the array", () => {
     expect(() =>
-      validateSpatialDimOrder({
+      findSpatialDimIndices({
         dimensionNames: ["init_time", "lat", "lon"],
         spatialDims: ["latitude", "longitude"],
       }),
