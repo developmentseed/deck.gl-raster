@@ -71,10 +71,10 @@ export type FindSpatialDimIndicesArgs = {
  * @throws if a declared spatial dim is missing from the array, or if x comes
  *   before y, which needs a transpose that is not implemented.
  */
-export function findSpatialDimIndices(
-  args: FindSpatialDimIndicesArgs,
-): [yIndex: number, xIndex: number] {
-  const { dimensionNames, spatialDims } = args;
+export function findSpatialDimIndices({
+  dimensionNames,
+  spatialDims,
+}: FindSpatialDimIndicesArgs): [yIndex: number, xIndex: number] {
   const [y, x] = spatialDims;
 
   if (!dimensionNames.includes(y)) {
