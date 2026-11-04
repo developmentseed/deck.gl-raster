@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
+import { DEFAULT_RANGE_READER } from "@developmentseed/deck.gl-raster";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import { epsgResolver } from "@developmentseed/proj";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { COGSource } from "../src/cog-source.js";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../src/default-concurrency-limiter.js";
-import { DEFAULT_RANGE_READER } from "../src/default-range-reader.js";
 import { fixturePath, loadGeoTIFF } from "./helpers.js";
 
 describe("COGSource.open", () => {

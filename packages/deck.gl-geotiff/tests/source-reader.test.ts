@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
+import { DEFAULT_RANGE_READER } from "@developmentseed/deck.gl-raster";
 import { RangeReader } from "@developmentseed/range-reader";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { COGSource } from "../src/cog-source.js";
-import { DEFAULT_RANGE_READER } from "../src/default-range-reader.js";
+import * as deckGlGeotiff from "../src/index.js";
 import { MultiCOGSource } from "../src/multi-cog-source.js";
 import { fixturePath, loadGeoTIFF } from "./helpers.js";
 import { fixtureServer } from "./utils/fixture-server.js";
@@ -108,5 +109,11 @@ describe("COGSource.open with a range reader", () => {
     for (const headers of server.headers) {
       expect(headers.get("authorization")).toBe("Bearer t");
     }
+  });
+});
+
+describe("DEFAULT_RANGE_READER", () => {
+  it("is not exported from deck.gl-geotiff", () => {
+    expect(deckGlGeotiff).not.toHaveProperty("DEFAULT_RANGE_READER");
   });
 });
