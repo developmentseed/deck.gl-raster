@@ -116,6 +116,26 @@ describe("ZarrLayer source", () => {
     expect(layer.state.source).toBe(source);
   });
 
+  it("opens a store passed as source", async () => {
+    const { store } = await geoZarrStore();
+    // A store whose root is the multiscales group `a`
+    const storeOfA = {
+      get: (key: string, options?: { signal?: AbortSignal }) =>
+        store.get(`/a${key}`, options),
+    };
+    const layer = makeBareLayer({ source: storeOfA });
+
+    runInitialUpdate(layer);
+
+    await vi.waitFor(() =>
+      expect(layer.state.source?.arrays.map((arr) => arr.path)).toEqual([
+        "/r10m",
+        "/r20m",
+        "/r60m",
+      ]),
+    );
+  });
+
   it("passes its load signal to ZarrSource.open", async () => {
     const open = vi
       .spyOn(ZarrSource, "open")

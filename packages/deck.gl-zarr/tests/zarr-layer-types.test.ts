@@ -16,9 +16,12 @@ const tileCallbacks = {
 // These assertions are checked by `tsc` (the package's `typecheck` script),
 // not at runtime.
 describe("ZarrLayer source props", () => {
-  it("takes an opened ZarrSource, or a group or array to open, as source", () => {
+  it("takes an opened ZarrSource, or a store, group or array to open, as source", () => {
     expectTypeOf<ZarrLayerProps["source"]>().toEqualTypeOf<
-      ZarrSource | zarr.Group<zarr.Readable> | zarr.Array<zarr.DataType>
+      | ZarrSource
+      | zarr.Readable
+      | zarr.Group<zarr.Readable>
+      | zarr.Array<zarr.DataType>
     >();
   });
 
@@ -56,8 +59,8 @@ describe("ZarrLayer source props", () => {
         source: group,
         selection: {},
         ...tileCallbacks,
-        // @ts-expect-error variable is a ZarrSource.open option
-        variable: "temperature",
+        // @ts-expect-error path is a ZarrSource.open option
+        path: "temperature",
       });
     () =>
       new ZarrLayer({
@@ -79,7 +82,7 @@ describe("ZarrLayer source props", () => {
 
   it("takes nothing else as source", () => {
     () =>
-      // @ts-expect-error a string is neither a ZarrSource nor a zarrita node
+      // @ts-expect-error a string is neither a ZarrSource nor a zarrita store or node
       new ZarrLayer({ source: "x.zarr", selection: {}, ...tileCallbacks });
   });
 });
