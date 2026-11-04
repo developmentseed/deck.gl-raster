@@ -26,10 +26,10 @@ import { geoZarrToDescriptor } from "./zarr-tileset.js";
  * Where {@link ZarrSource.open} finds GeoZarr data: a zarrita store, or an
  * opened group or array within one.
  */
-export type ZarrInput<Dtype extends zarr.DataType = zarr.DataType> =
+export type ZarrInput =
   | zarr.Readable
   | zarr.Group<zarr.Readable>
-  | zarr.Array<Dtype>;
+  | zarr.Array<zarr.DataType>;
 
 /** Options for {@link ZarrSource.open}. */
 export type ZarrSourceOptions = {
@@ -123,6 +123,14 @@ export class ZarrSource<
   }
 
   /**
+   * Whether the arrays' data type is `dtype`, narrowing the source to it, as
+   * zarrita's `Array.is` does for an array.
+   */
+  is<D extends zarr.DataType>(dtype: D): this is ZarrSource<D> {
+    return this.arrays[0]!.is(dtype);
+  }
+
+  /**
    * Open GeoZarr data: read its metadata, open the array of each level,
    * resolve its CRS, and build its tile grid.
    *
@@ -136,9 +144,9 @@ export class ZarrSource<
    *
    * Rejects when `signal` aborts before the source is ready, when the
    * metadata is missing or invalid, when a level's array can't be opened,
-   * when the CRS can't be resolved, and when the arrays' dimensions aren't
-   * named, differ between levels, don't include the y and x dimensions, or
-   * have x before y.
+   * when the levels' data types differ, when the CRS can't be resolved, and
+   * when the arrays' dimensions aren't named, differ between levels, don't
+   * include the y and x dimensions, or have x before y.
    *
    * @param input A zarrita store, or an opened group or array within one.
    *   Pass a store, unless the app has opened the node already, for example
@@ -147,10 +155,10 @@ export class ZarrSource<
    *   owns the store, so it can wrap it, for example with
    *   `withConsolidatedMetadata`.
    */
-  static async open<Dtype extends zarr.DataType = zarr.DataType>(
-    input: ZarrInput<Dtype>,
+  static async open(
+    input: ZarrInput,
     options: ZarrSourceOptions = {},
-  ): Promise<ZarrSource<Dtype>> {
+  ): Promise<ZarrSource> {
     const {
       path,
       geoZarrMetadata,
@@ -159,9 +167,7 @@ export class ZarrSource<
     } = options;
     signal?.throwIfAborted();
 
-    const target = (await openTarget(input, { path, signal })) as
-      | zarr.Group<zarr.Readable>
-      | zarr.Array<Dtype>;
+    const target = await openTarget(input, { path, signal });
     const metadata = parseGeoZarrMetadata(
       geoZarrMetadata ??
         (target.kind === "array"
@@ -182,12 +188,12 @@ export class ZarrSource<
     const arrays =
       target.kind === "array" && metadata.levels.length === 1
         ? [target]
-        : // A pyramid's levels share their data type
+        : // `kind: "array"` opens only arrays
           ((await Promise.all(
             metadata.levels.map((level) =>
               openNode(target.resolve(level.path), { kind: "array", signal }),
             ),
-          )) as zarr.Array<Dtype>[]);
+          )) as zarr.Array<zarr.DataType>[]);
 
     // `metadata.axes` lists only the spatial dims (from the
     // `spatial:dimensions` convention). The full ordered list comes from the
@@ -204,6 +210,7 @@ export class ZarrSource<
     ];
 
     checkSameDimensionNames(arrays);
+    checkSameDataType(arrays);
 
     // Every level of a multiscale pyramid has the same dim names
     const arrDimNames: (string | null)[] = arrays[0]?.dimensionNames ?? [];
@@ -248,9 +255,9 @@ export class ZarrSource<
  * Whether `input` is an opened zarrita group or array, rather than a store: it
  * has a `store`, as zarrita's own `open` checks, and a `kind`.
  */
-function isNode<Dtype extends zarr.DataType>(
-  input: ZarrInput<Dtype>,
-): input is zarr.Group<zarr.Readable> | zarr.Array<Dtype> {
+function isNode(
+  input: ZarrInput,
+): input is zarr.Group<zarr.Readable> | zarr.Array<zarr.DataType> {
   return "store" in input && "kind" in input;
 }
 
@@ -392,6 +399,22 @@ function finestLevelBounds(
   ].map(([col, row]) => affine.apply(transform, col!, row!));
   const [west, south, east, north] = geographicBounds(outline, projectTo4326);
   return { west, south, east, north };
+}
+
+/**
+ * Throw unless every level's array has the first level's data type, which
+ * {@link ZarrSource.is} checks for all of them.
+ */
+function checkSameDataType(arrays: readonly zarr.Array<zarr.DataType>[]): void {
+  const [first, ...rest] = arrays;
+  for (const arr of rest) {
+    if (arr.dtype !== first!.dtype) {
+      throw new Error(
+        "ZarrSource requires every level to have the same data_type: " +
+          `${arr.path} has ${arr.dtype}, but ${first!.path} has ${first!.dtype}.`,
+      );
+    }
+  }
 }
 
 /**

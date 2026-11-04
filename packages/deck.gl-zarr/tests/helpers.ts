@@ -9,6 +9,8 @@ type GroupSpec = {
   dimensionNames: (string | null)[];
   /** The length of a leading time dimension, for arrays that have one. */
   times?: number;
+  /** The `data_type` of the group's arrays, if not uint16. */
+  dataType?: string;
 };
 
 /**
@@ -21,6 +23,7 @@ type GroupSpec = {
  * - `unnamed`: arrays whose dimensions have no names.
  * - `transposed`: arrays with x before y.
  * - `timed`: arrays with a leading `time` dimension of 4, in chunks of 1.
+ * - `bytes`: uint8 arrays.
  *
  * It also has a group `flat`, whose attributes describe `r10m` as one level
  * (`proj:code` and `spatial:` attributes), with these arrays:
@@ -53,22 +56,24 @@ export async function geoZarrStore() {
     unnamed: { attributes, dimensionNames: [null, null] },
     transposed: { attributes, dimensionNames: [...dimensions].reverse() },
     timed: { attributes, dimensionNames: ["time", ...dimensions], times: 4 },
+    bytes: { attributes, dimensionNames: dimensions, dataType: "uint8" },
   };
 
   const encode = (json: unknown) =>
     new TextEncoder().encode(JSON.stringify(json));
-  /** The `zarr.json` of an empty uint16 array. */
+  /** The `zarr.json` of an empty array, of uint16 unless `dataType` says. */
   const encodeArray = (array: {
     shape: number[];
     chunkShape: number[];
     dimensionNames: (string | null)[];
+    dataType?: string;
     attributes?: Record<string, unknown>;
   }) =>
     encode({
       zarr_format: 3,
       node_type: "array",
       shape: array.shape,
-      data_type: "uint16",
+      data_type: array.dataType ?? "uint16",
       chunk_grid: {
         name: "regular",
         configuration: { chunk_shape: array.chunkShape },
@@ -105,6 +110,7 @@ export async function geoZarrStore() {
             : level["spatial:shape"],
           chunkShape: group.times ? [1, 256, 256] : [256, 256],
           dimensionNames: group.dimensionNames,
+          dataType: group.dataType,
         }),
       );
     }

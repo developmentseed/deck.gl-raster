@@ -68,10 +68,13 @@ export type ZarrLayerProps<
    * configure the store either way, for example to wrap a
    * {@link zarr.FetchStore} with `withConsolidatedMetadata`.
    *
+   * The layer doesn't check the data type of data it opens. To check it, open
+   * the data yourself and narrow it with {@link ZarrSource.is}.
+   *
    * Keep the same object across renders: a new one starts the layer's tiles
    * over.
    */
-  source: ZarrSource<Dtype> | ZarrInput<Dtype>;
+  source: ZarrSource<Dtype> | ZarrInput;
 
   /**
    * Called with the source the layer opened, when `source` isn't an opened
@@ -200,10 +203,11 @@ export class ZarrLayer<
    * {@link ZarrSource.open}.
    */
   protected override _openSource(
-    input: ZarrInput<Dtype>,
+    input: ZarrInput,
     signal: AbortSignal,
   ): Promise<ZarrSource<Dtype>> {
-    return ZarrSource.open(input, { signal });
+    // `Dtype` is unchecked, as `source` says
+    return ZarrSource.open(input, { signal }) as Promise<ZarrSource<Dtype>>;
   }
 
   /**

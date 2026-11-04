@@ -120,10 +120,15 @@ export default function App() {
         new zarr.FetchStore(ZARR_URL),
         { format: "v3" },
       );
-      const source = await ZarrSource.open<"float32">(store, {
+      const source = await ZarrSource.open(store, {
         path: VARIABLE,
         geoZarrMetadata: ECMWF_GEOZARR_ATTRS,
       });
+      if (!source.is("float32")) {
+        throw new Error(
+          `Expected ${VARIABLE} to be float32, got ${source.arrays[0]!.dtype}`,
+        );
+      }
       if (cancelled) {
         return;
       }

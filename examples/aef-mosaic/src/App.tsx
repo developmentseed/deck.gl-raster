@@ -48,10 +48,14 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const source = await ZarrSource.open<"int8">(
-        new zarr.FetchStore(ZARR_URL),
-        { path: VARIABLE },
-      );
+      const source = await ZarrSource.open(new zarr.FetchStore(ZARR_URL), {
+        path: VARIABLE,
+      });
+      if (!source.is("int8")) {
+        throw new Error(
+          `Expected AEF embeddings to be int8, got ${source.arrays[0]!.dtype}`,
+        );
+      }
       const labels = await fetchBandLabels(zarr.root(source.node.store));
       if (cancelled) {
         return;

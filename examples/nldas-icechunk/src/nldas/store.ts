@@ -42,10 +42,15 @@ export async function openSurfaceTemp(): Promise<SurfaceTemp> {
   });
   const store = await IcechunkStore.open(session);
 
-  const source = await ZarrSource.open<"float32">(store, {
+  const source = await ZarrSource.open(store, {
     path: SURFACE_TEMP_PATH,
     geoZarrMetadata: NLDAS_GEOZARR_ATTRS,
   });
+  if (!source.is("float32")) {
+    throw new Error(
+      `Expected ${SURFACE_TEMP_PATH} to be float32, got ${source.arrays[0]!.dtype}`,
+    );
+  }
 
   // Read the fill sentinel from the array's attrs rather than hard-coding it.
   const missingValue = source.node.attrs.missing_value;

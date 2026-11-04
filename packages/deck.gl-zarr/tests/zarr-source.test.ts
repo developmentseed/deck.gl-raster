@@ -1,6 +1,6 @@
 import { epsgResolver as defaultEpsgResolver } from "@developmentseed/proj";
 import proj4 from "proj4";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import * as zarr from "zarrita";
 import { ZarrSource } from "../src/index.js";
 import type { SpatialArrayDim } from "./helpers.js";
@@ -78,6 +78,31 @@ describe("ZarrSource.open", () => {
     const source = await ZarrSource.open(wrapper, { path: "b" });
 
     expect(source.arrays[0]!.path).toBe("/b/r10m");
+  });
+
+  it.each([
+    { dtype: "uint16", expected: true },
+    { dtype: "int8", expected: false },
+  ] as const)(
+    "checks that its levels are $dtype with is",
+    async ({ dtype, expected }) => {
+      const { store } = await geoZarrStore();
+      const source = await ZarrSource.open(store, { path: "a" });
+
+      expect(source.is(dtype)).toBe(expected);
+    },
+  );
+
+  it("narrows its data type with is", async () => {
+    const { store } = await geoZarrStore();
+    const source = await ZarrSource.open(store, { path: "a" });
+    expectTypeOf(source).toEqualTypeOf<ZarrSource>();
+
+    if (!source.is("uint16")) {
+      throw new Error("Expected uint16");
+    }
+
+    expectTypeOf(source).toEqualTypeOf<ZarrSource<"uint16">>();
   });
 
   it("keeps the group at path as node", async () => {
@@ -378,6 +403,25 @@ describe("ZarrSource.open", () => {
     const { group } = await openGroup("transposed");
 
     await expect(ZarrSource.open(group)).rejects.toThrow(/swapped/);
+  });
+
+  it("rejects levels whose data types differ", async () => {
+    const { root, attributes } = await openRoot();
+    // r10m from group `a`, and r20m from group `bytes`, of uint8
+    const [r10m, r20m] = attributes.multiscales.layout;
+    const geoZarrMetadata = {
+      ...attributes,
+      multiscales: {
+        layout: [
+          { ...r10m, asset: "a/r10m" },
+          { ...r20m, asset: "bytes/r20m" },
+        ],
+      },
+    };
+
+    await expect(ZarrSource.open(root, { geoZarrMetadata })).rejects.toThrow(
+      "/bytes/r20m has uint8, but /a/r10m has uint16",
+    );
   });
 
   it("rejects levels whose dimensions differ", async () => {
