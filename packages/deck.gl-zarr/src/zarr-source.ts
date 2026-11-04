@@ -106,7 +106,8 @@ export class ZarrSource<
    * Rejects when `signal` aborts before the source is ready, when the
    * metadata is missing or invalid, when a level's array can't be opened,
    * when the CRS can't be resolved, and when the arrays' dimensions aren't
-   * named, don't include the y and x dimensions, or have x before y.
+   * named, differ between levels, don't include the y and x dimensions, or
+   * have x before y.
    *
    * @param node A zarrita group, whose attributes hold the GeoZarr metadata,
    *   or an array to draw as a single level. The caller owns the store, so it
@@ -157,6 +158,8 @@ export class ZarrSource<
       metadata.axes[metadata.yAxisIndex]!,
       metadata.axes[metadata.xAxisIndex]!,
     ];
+
+    checkSameDimensionNames(arrays);
 
     // Every level of a multiscale pyramid has the same dim names
     const arrDimNames: (string | null)[] = arrays[0]?.dimensionNames ?? [];
@@ -248,4 +251,24 @@ function finestLevelBounds(
   ].map(([col, row]) => affine.apply(transform, col!, row!));
   const [west, south, east, north] = geographicBounds(outline, projectTo4326);
   return { west, south, east, north };
+}
+
+/**
+ * Throw unless every level's array has the first level's `dimension_names`,
+ * which {@link ZarrSource.dimensionNames} holds for all of them.
+ */
+function checkSameDimensionNames(
+  arrays: readonly zarr.Array<zarr.DataType, zarr.Readable>[],
+): void {
+  const [first, ...rest] = arrays;
+  const names = JSON.stringify(first?.dimensionNames ?? []);
+  for (const arr of rest) {
+    const other = JSON.stringify(arr.dimensionNames ?? []);
+    if (other !== names) {
+      throw new Error(
+        "ZarrSource requires every level to have the same dimension_names: " +
+          `${arr.path} has ${other}, but ${first!.path} has ${names}.`,
+      );
+    }
+  }
 }

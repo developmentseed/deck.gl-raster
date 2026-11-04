@@ -176,6 +176,25 @@ describe("ZarrSource.open", () => {
     await expect(ZarrSource.open(group)).rejects.toThrow(/swapped/);
   });
 
+  it("rejects levels whose dimensions differ", async () => {
+    const { root, attributes } = await openRoot();
+    // r10m from group `a`, and r20m from group `timed`, with a time dimension
+    const [r10m, r20m] = attributes.multiscales.layout;
+    const geoZarrMetadata = {
+      ...attributes,
+      multiscales: {
+        layout: [
+          { ...r10m, asset: "a/r10m" },
+          { ...r20m, asset: "timed/r20m" },
+        ],
+      },
+    };
+
+    await expect(ZarrSource.open(root, { geoZarrMetadata })).rejects.toThrow(
+      '/timed/r20m has ["time","Y","X"], but /a/r10m has ["Y","X"]',
+    );
+  });
+
   it.each<{ name: string; dimensionNames: SpatialArrayDim[] }>([
     { name: "[lat, lon]", dimensionNames: ["lat", "lon"] },
     { name: "[band, lat, lon]", dimensionNames: ["band", "lat", "lon"] },

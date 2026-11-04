@@ -238,6 +238,7 @@ export class ZarrLayer<
       // The tile grid's levels are coarsest-first, and `arrays` finest-first
       const arr = arrays[arrays.length - 1 - z]!;
 
+      // Every level has the same dims, as ZarrSource.open checks
       const tileWidth = arr.chunks[xIndex]!;
       const tileHeight = arr.chunks[yIndex]!;
       const arrayWidth = arr.shape[xIndex]!;
