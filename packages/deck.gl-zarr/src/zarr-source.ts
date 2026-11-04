@@ -34,10 +34,11 @@ export type ZarrInput =
 /** Options for {@link ZarrSource.open}. */
 export type ZarrSourceOptions = {
   /**
-   * Path from the input to the array or multiscales group to draw: relative,
-   * and separated by `/`, such as `"temperature"` or
-   * `"measurements/reflectance"`. If omitted, the input itself is drawn: the
-   * store's root, or the group or array passed in.
+   * Path to the array or multiscales group to draw, separated by `/`, such as
+   * `"temperature"` or `"measurements/reflectance"`. A relative path starts
+   * at the input, and an absolute one, such as `"/temperature"`, at the
+   * store's root. If omitted, the input itself is drawn: the store's root, or
+   * the group or array passed in.
    */
   path?: string;
 

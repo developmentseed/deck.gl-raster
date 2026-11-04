@@ -55,6 +55,18 @@ describe("ZarrSource.open", () => {
     expect(source.arrays[0]!.path).toBe("/b/r10m");
   });
 
+  it.each(["group", "store"] as const)(
+    "resolves an absolute path from the store's root, from a %s",
+    async (kind) => {
+      const { group } = await openGroup("a");
+      const input = kind === "group" ? group : group.store;
+
+      const source = await ZarrSource.open(input, { path: "/b" });
+
+      expect(source.arrays[0]!.path).toBe("/b/r10m");
+    },
+  );
+
   it("opens the group at path in a store", async () => {
     const { store } = await geoZarrStore();
 
