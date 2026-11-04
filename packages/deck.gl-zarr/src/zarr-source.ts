@@ -22,26 +22,29 @@ import * as zarr from "zarrita";
 import { validateSpatialDimOrder } from "./validation.js";
 import { geoZarrToDescriptor } from "./zarr-tileset.js";
 
+/**
+ * Where {@link ZarrSource.open} finds GeoZarr data: a zarrita store, or an
+ * opened group or array within one.
+ */
+export type ZarrInput<
+  Dtype extends zarr.DataType = zarr.DataType,
+  Store extends zarr.Readable = zarr.Readable,
+> = Store | zarr.Group<Store> | zarr.Array<Dtype, Store>;
+
 /** Options for {@link ZarrSource.open}. */
 export type ZarrSourceOptions = {
   /**
-   * Path within the node to the group or array to draw. If omitted, the node
-   * itself is used.
-   *
-   * An array inherits the `proj:` and `spatial:` attributes of the group it's
-   * in: its own CRS replaces the group's, and each of its own `spatial:`
-   * attributes replaces the group's. See the
-   * [proj](https://github.com/zarr-conventions/geo-proj/blob/5ca5b2f92e5c7245f957d9128b289ee535f0720d/README.md#inheritance-model)
-   * and
-   * [spatial](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md#can-i-use-spatial-at-the-group-level)
-   * conventions.
+   * Path from the input to the array or multiscales group to draw: relative,
+   * and separated by `/`, such as `"temperature"` or
+   * `"measurements/reflectance"`. If omitted, the input itself is drawn: the
+   * store's root, or the group or array passed in.
    */
-  variable?: string;
+  path?: string;
 
   /**
-   * GeoZarr metadata to read instead of the node's or the variable's: an
+   * GeoZarr metadata to read instead of the data's own attributes: an
    * attributes object in the GeoZarr conventions (`spatial:*`, `proj:*` and
-   * `multiscales`). Pass it when the node has none, such as another group's
+   * `multiscales`). Pass it when the data has none, such as another group's
    * `attrs`, or a hand-written object for a store without GeoZarr metadata.
    */
   geoZarrMetadata?: unknown;
@@ -73,6 +76,17 @@ export class ZarrSource<
   Dtype extends zarr.DataType = zarr.DataType,
   Store extends zarr.Readable = zarr.Readable,
 > extends RasterSource {
+  /**
+   * The zarrita group or array drawn, at `path` from the input: the
+   * multiscales group of a pyramid, or the array of a single level. Its store
+   * holds other arrays, such as coordinates:
+   *
+   * ```ts
+   * zarr.open(zarr.root(source.node.store).resolve("band"), { kind: "array" });
+   * ```
+   */
+  readonly node: zarr.Group<Store> | zarr.Array<Dtype, Store>;
+
   /** One opened array per level, finest first. */
   readonly arrays: readonly zarr.Array<Dtype, Store>[];
 
@@ -89,6 +103,7 @@ export class ZarrSource<
   readonly projection: ProjectionDefinition;
 
   private constructor(options: {
+    node: zarr.Group<Store> | zarr.Array<Dtype, Store>;
     arrays: readonly zarr.Array<Dtype, Store>[];
     dimensionNames: readonly string[];
     spatialDims: [y: string, x: string];
@@ -97,6 +112,7 @@ export class ZarrSource<
     geographicBounds: GeographicBounds;
   }) {
     super(options);
+    this.node = options.node;
     this.arrays = options.arrays;
     this.dimensionNames = options.dimensionNames;
     this.spatialDims = options.spatialDims;
@@ -107,59 +123,68 @@ export class ZarrSource<
    * Open GeoZarr data: read its metadata, open the array of each level,
    * resolve its CRS, and build its tile grid.
    *
+   * An array inherits the `proj:` and `spatial:` attributes of the group it's
+   * directly in: its own CRS replaces the group's, and each of its own
+   * `spatial:` attributes replaces the group's. See the
+   * [proj](https://github.com/zarr-conventions/geo-proj/blob/5ca5b2f92e5c7245f957d9128b289ee535f0720d/README.md#inheritance-model)
+   * and
+   * [spatial](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md#can-i-use-spatial-at-the-group-level)
+   * conventions.
+   *
    * Rejects when `signal` aborts before the source is ready, when the
    * metadata is missing or invalid, when a level's array can't be opened,
    * when the CRS can't be resolved, and when the arrays' dimensions aren't
    * named or aren't in y, x order at the end.
    *
-   * @param node A zarrita group, whose attributes hold the GeoZarr metadata,
-   *   or an array to draw as a single level. The caller owns the store, so it
-   *   can wrap it, for example with `withConsolidatedMetadata`.
+   * @param input A zarrita store, or an opened group or array within one.
+   *   Pass a store, unless the app has opened the node already, for example
+   *   to read coordinate or label arrays or to browse the hierarchy, or needs
+   *   to control how it was opened: `open` tries Zarr v3, then v2. The caller
+   *   owns the store, so it can wrap it, for example with
+   *   `withConsolidatedMetadata`.
    */
   static async open<
     Dtype extends zarr.DataType = zarr.DataType,
     Store extends zarr.Readable = zarr.Readable,
   >(
-    node: zarr.Group<Store> | zarr.Array<Dtype, Store>,
+    input: ZarrInput<Dtype, Store>,
     options: ZarrSourceOptions = {},
   ): Promise<ZarrSource<Dtype, Store>> {
     const {
-      variable,
+      path,
       geoZarrMetadata,
       epsgResolver = defaultEpsgResolver,
       signal,
     } = options;
     signal?.throwIfAborted();
 
-    const target = variable
-      ? ((await zarr.open(node.resolve(variable), { signal })) as
-          | zarr.Group<Store>
-          | zarr.Array<Dtype, Store>)
-      : node;
+    const target = (await openTarget(input, { path, signal })) as
+      | zarr.Group<Store>
+      | zarr.Array<Dtype, Store>;
     const metadata = parseGeoZarrMetadata(
       geoZarrMetadata ??
-        (target !== node && "shape" in target
-          ? await inheritGeoZarrAttrs({ array: target, node, signal })
+        (target.kind === "array"
+          ? await inheritGeoZarrAttrs({ array: target, input, signal })
           : target.attrs),
     );
 
     // Metadata without `multiscales` describes one array, at path "."
-    if (!("shape" in target) && metadata.levels[0]?.path === ".") {
+    if (target.kind === "group" && metadata.levels[0]?.path === ".") {
       throw new Error(
         "GeoZarr metadata without multiscales describes an array, not the " +
-          `group "${target.path}". Name the array with \`variable\`.`,
+          `group "${target.path}". Name the array with \`path\`.`,
       );
     }
 
-    // Open each level's array once. An array passed in or named by
-    // `variable` is reused when the metadata describes a single level.
+    // Open each level's array once. The array to draw is reused when the
+    // metadata describes a single level.
     const arrays =
-      "shape" in target && metadata.levels.length === 1
+      target.kind === "array" && metadata.levels.length === 1
         ? [target]
         : // A pyramid's levels share their data type
           ((await Promise.all(
             metadata.levels.map((level) =>
-              zarr.open(target.resolve(level.path), { kind: "array", signal }),
+              openNode(target.resolve(level.path), { kind: "array", signal }),
             ),
           )) as zarr.Array<Dtype, Store>[]);
 
@@ -199,6 +224,7 @@ export class ZarrSource<
       height: arr.chunks[arr.chunks.length - 2]!,
     }));
     return new ZarrSource({
+      node: target,
       arrays,
       dimensionNames,
       spatialDims,
@@ -213,30 +239,102 @@ export class ZarrSource<
 }
 
 /**
- * The attributes of `array`, within `node`, with those it inherits from the
- * group it's in, as described for {@link ZarrSourceOptions.variable}.
+ * Whether `input` is an opened zarrita group or array, rather than a store: it
+ * has a `store`, as zarrita's own `open` checks, and a `kind`.
+ */
+function isNode<Dtype extends zarr.DataType, Store extends zarr.Readable>(
+  input: ZarrInput<Dtype, Store>,
+): input is zarr.Group<Store> | zarr.Array<Dtype, Store> {
+  return "store" in input && "kind" in input;
+}
+
+/** The group or array to draw: `input` itself, or the node at `path` in it. */
+async function openTarget<
+  Dtype extends zarr.DataType,
+  Store extends zarr.Readable,
+>(
+  input: ZarrInput<Dtype, Store>,
+  options: { path?: string; signal?: AbortSignal },
+): Promise<zarr.Group<Store> | zarr.Array<zarr.DataType, Store>> {
+  const { path, signal } = options;
+  if (isNode(input)) {
+    return path ? openNode(input.resolve(path), { signal }) : input;
+  }
+  const root = zarr.root(input);
+  return openNode(path ? root.resolve(path) : root, { signal });
+}
+
+/**
+ * Open the group or array at `location`: as Zarr v3, or as v2 when it has no v3
+ * metadata. Unlike zarrita's `open`, it never tries v2 first. See #838.
+ */
+async function openNode<Store extends zarr.Readable>(
+  location: zarr.Location<Store>,
+  options: { kind?: "group" | "array"; signal?: AbortSignal },
+): Promise<zarr.Group<Store> | zarr.Array<zarr.DataType, Store>> {
+  try {
+    return await zarr.open.v3(location, options);
+  } catch (error) {
+    // zarrita sets `found` when the node is v3, but not of `kind`
+    if (!zarr.isZarritaError(error, "NotFoundError") || error.found) {
+      throw error;
+    }
+  }
+  return zarr.open.v2(location, options);
+}
+
+/**
+ * The attributes of `array`, with the `proj:` and `spatial:` attributes it
+ * inherits from the group it's directly in, as described for
+ * {@link ZarrSource.open}.
  */
 async function inheritGeoZarrAttrs(options: {
   array: zarr.Array<zarr.DataType>;
-  node: zarr.Group<zarr.Readable> | zarr.Array<zarr.DataType>;
+  input: ZarrInput;
   signal?: AbortSignal;
 }): Promise<zarr.Attributes> {
-  const { array, node, signal } = options;
-  // An array directly in `node` inherits from `node`, already open. `resolve`
-  // ends both paths with "/".
-  const parent = array.resolve("..");
-  const group =
-    parent.path === node.resolve(".").path
-      ? node
-      : await zarr.open(parent, { kind: "group", signal });
+  const { array } = options;
+  const groupAttrs = await readGroupAttrs(options);
+  if (!groupAttrs) {
+    return array.attrs;
+  }
   const hasCrs = Object.keys(array.attrs).some((key) =>
     key.startsWith("proj:"),
   );
-  const inherited = Object.entries(group.attrs).filter(
+  const inherited = Object.entries(groupAttrs).filter(
     ([key]) =>
       key.startsWith("spatial:") || (!hasCrs && key.startsWith("proj:")),
   );
   return { ...Object.fromEntries(inherited), ...array.attrs };
+}
+
+/**
+ * The attributes of the group that `array` is directly in: `input`'s when
+ * `input` is that group. `undefined` for an array at the root of its store, or
+ * in a group that can't be found.
+ */
+async function readGroupAttrs(options: {
+  array: zarr.Array<zarr.DataType>;
+  input: ZarrInput;
+  signal?: AbortSignal;
+}): Promise<zarr.Attributes | undefined> {
+  const { array, input, signal } = options;
+  if (array.path === "/") {
+    return undefined;
+  }
+  // `resolve` ends both paths with "/"
+  const location = array.resolve("..");
+  if (isNode(input) && input.resolve(".").path === location.path) {
+    return input.attrs;
+  }
+  try {
+    return (await openNode(location, { kind: "group", signal })).attrs;
+  } catch (error) {
+    if (zarr.isZarritaError(error, "NotFoundError")) {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 /**

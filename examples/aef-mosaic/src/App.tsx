@@ -48,12 +48,11 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const store = new zarr.FetchStore(ZARR_URL);
-      const root = await zarr.open.v3(store, { kind: "group" });
-      const source = await ZarrSource.open<"int8">(root, {
-        variable: VARIABLE,
-      });
-      const labels = await fetchBandLabels(root);
+      const source = await ZarrSource.open<"int8">(
+        new zarr.FetchStore(ZARR_URL),
+        { path: VARIABLE },
+      );
+      const labels = await fetchBandLabels(zarr.root(source.node.store));
       if (cancelled) {
         return;
       }
