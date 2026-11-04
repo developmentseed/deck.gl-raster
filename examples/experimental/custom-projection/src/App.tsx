@@ -206,7 +206,7 @@ export default function App() {
   const rasterLayer = useMemo(() => {
     const common = {
       id: `cog-${dataset.id}`,
-      geotiff: dataset.url,
+      source: dataset.url,
       // Upstream's viewport doesn't expose its domain, so the layer gets it
       // explicitly (the shim's viewport would also provide it).
       fromBounds: preset.fromBounds,
@@ -233,7 +233,7 @@ export default function App() {
     }
     return new ProjectedCOGLayer<VelocityTileData>({
       id: `overlay-${overlay.id}`,
-      geotiff: overlay.url,
+      source: overlay.url,
       fromBounds: preset.fromBounds,
       getTileData: getVelocityTileData,
       renderTile: makeRenderVelocityTile(colormapTexture),

@@ -1,4 +1,9 @@
 export type {
+  ConcurrencyLimiter,
+  Priority,
+} from "@developmentseed/range-reader";
+export { PerOriginSemaphore } from "@developmentseed/range-reader";
+export type {
   RasterArray,
   RasterArrayBandSeparate,
   RasterArrayBase,
@@ -25,8 +30,6 @@ export type {
   CachedSubImageTags,
   GeoKeyDirectory,
 } from "./ifd.js";
-export type { ConcurrencyLimiter, Priority } from "./limiter.js";
-export { PerOriginSemaphore } from "./limiter.js";
 export { Overview } from "./overview.js";
 export type { DecoderPoolOptions } from "./pool/pool.js";
 export { DecoderPool, defaultDecoderPool } from "./pool/pool.js";

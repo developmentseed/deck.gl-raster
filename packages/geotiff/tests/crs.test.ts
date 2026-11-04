@@ -1,6 +1,8 @@
+import { TiffTagGeo } from "@cogeotiff/core";
 import { parseWkt } from "@developmentseed/proj";
 import { describe, expect, it } from "vitest";
 import { crsFromGeoKeys } from "../src/crs.js";
+import { extractGeoKeyDirectory } from "../src/ifd.js";
 import { loadGeoTIFF } from "./helpers.js";
 
 describe("test CRS", () => {
@@ -183,5 +185,72 @@ describe("user-defined projection parameters", () => {
         parameters: NEW_BRUNSWICK_STEREOGRAPHIC_PARAMETERS,
       },
     });
+  });
+});
+
+/**
+ * GeoKeys of the World Cylindrical Equal Area (ESRI:54034) COG from
+ * https://github.com/developmentseed/deck.gl-raster/issues/649. GDAL writes
+ * the same keys for any Cylindrical Equal Area CRS without an EPSG code;
+ * ProjMethodGeoKey 28 is libgeotiff's CT_CylindricalEqualArea.
+ */
+const WORLD_CYLINDRICAL_EQUAL_AREA_GEO_KEYS = new Map<TiffTagGeo, unknown>([
+  [TiffTagGeo.GTModelTypeGeoKey, 1],
+  [TiffTagGeo.GTRasterTypeGeoKey, 1],
+  [TiffTagGeo.GTCitationGeoKey, "World_Cylindrical_Equal_Area"],
+  [TiffTagGeo.GeodeticCRSGeoKey, 32767],
+  [TiffTagGeo.GeodeticCitationGeoKey, "GCS Name = WGS 84|Primem = Greenwich|"],
+  [TiffTagGeo.GeodeticDatumGeoKey, 6326],
+  [TiffTagGeo.GeogAngularUnitsGeoKey, 9102],
+  [TiffTagGeo.EllipsoidSemiMajorAxisGeoKey, 6378137],
+  [TiffTagGeo.EllipsoidInvFlatteningGeoKey, 298.257223563],
+  [TiffTagGeo.PrimeMeridianLongitudeGeoKey, 0],
+  [TiffTagGeo.ProjectedCRSGeoKey, 32767],
+  [TiffTagGeo.ProjectionGeoKey, 32767],
+  [TiffTagGeo.ProjMethodGeoKey, 28],
+  [TiffTagGeo.ProjLinearUnitsGeoKey, 9001],
+  [TiffTagGeo.ProjStdParallel1GeoKey, 0],
+  [TiffTagGeo.ProjNatOriginLongGeoKey, 0],
+  [TiffTagGeo.ProjFalseEastingGeoKey, 0],
+  [TiffTagGeo.ProjFalseNorthingGeoKey, 0],
+]);
+
+describe("Cylindrical Equal Area", () => {
+  // A stand-in TIFF image that only answers GeoKey lookups.
+  const gkd = extractGeoKeyDirectory({
+    valueGeo: (key: TiffTagGeo) =>
+      WORLD_CYLINDRICAL_EQUAL_AREA_GEO_KEYS.get(key),
+  } as any);
+
+  it.each([
+    { name: "World Cylindrical Equal Area", projStdParallel1: 0 },
+    // ESRI:54017, which GDAL writes with the same keys apart from this one.
+    { name: "World Behrmann", projStdParallel1: 30 },
+  ])(
+    "builds a Lambert Cylindrical Equal Area conversion for $name",
+    ({ projStdParallel1 }) => {
+      expect(crsFromGeoKeys({ ...gkd, projStdParallel1 })).toMatchObject({
+        conversion: {
+          method: { name: "Lambert Cylindrical Equal Area" },
+          parameters: [
+            {
+              name: "Latitude of 1st standard parallel",
+              value: projStdParallel1,
+              unit: "degree",
+            },
+            { name: "Longitude of natural origin", value: 0, unit: "degree" },
+            { name: "False easting", value: 0, unit: "metre" },
+            { name: "False northing", value: 0, unit: "metre" },
+          ],
+        },
+      });
+    },
+  );
+
+  it("still rejects a coordinate transformation type it can't map", () => {
+    // 19 is CT_Gnomonic.
+    expect(() => crsFromGeoKeys({ ...gkd, projMethod: 19 })).toThrow(
+      "Unsupported coordinate transformation type: 19",
+    );
   });
 });

@@ -252,3 +252,129 @@ describe("decode big endian tiles", () => {
     expect(big).toEqual(expected);
   });
 });
+
+describe("decode LERC tiles with NaN pixels", () => {
+  // LERC data of 4x4 float strips that GDAL 3.12.1 wrote with COMPRESS=LERC,
+  // MAX_Z_ERROR=0 and INTERLEAVE=PIXEL. Band b, pixel i holds b * 16 + i + 1.
+
+  // One band, NaN at pixels 1, 7 and 10.
+  const ONE_BAND_F32 =
+    "TGVyYzIgBAAAAPThprgEAAAABAAAAAEAAAANAAAACAAAAIkAAAAGAAAAAAAAAAAAAAAAAAAAAADwPwAAAAAAADBABgAAAAIAvt8AgAAAgD8AAIBBAQAAgD8AAEBAAACAQAAAoEAAAMBAAADgQAAAEEEAACBBAABAQQAAUEEAAGBBAABwQQAAgEE=";
+  // Same as ONE_BAND_F32, as float64.
+  const ONE_BAND_F64 =
+    "TGVyYzIgBAAAANY0cgoEAAAABAAAAAEAAAANAAAACAAAAMUAAAAHAAAAAAAAAAAAAAAAAAAAAADwPwAAAAAAADBABgAAAAIAvt8AgAAAAAAAAPA/AAAAAAAAMEABAAAAAAAA8D8AAAAAAAAIQAAAAAAAABBAAAAAAAAAFEAAAAAAAAAYQAAAAAAAABxAAAAAAAAAIkAAAAAAAAAkQAAAAAAAAChAAAAAAAAAKkAAAAAAAAAsQAAAAAAAAC5AAAAAAAAAMEA=";
+  // Two bands, NaN in both samples of pixels 2 and 13.
+  const TWO_BANDS_SHARED_NAN =
+    "TGVyYzIgBAAAAOC6EjQEAAAABAAAAAIAAAAOAAAACAAAAM0AAAAGAAAAAAAAAAAAAAAAAAAAAADwPwAAAAAAAEBABgAAAAIA3/sAgAAAgD8AAIhBAACAQQAAAEIBAACAPwAAiEEAAABAAACQQQAAgEAAAKBBAACgQAAAqEEAAMBAAACwQQAA4EAAALhBAAAAQQAAwEEAABBBAADIQQAAIEEAANBBAAAwQQAA2EEAAEBBAADgQQAAUEEAAOhBAABwQQAA+EEAAIBBAAAAQg==";
+  // Two bands, NaN at pixels 0 and 5 of band 0 and pixels 5 and 15 of band 1.
+  const TWO_BANDS_SEPARATE_NAN =
+    "TGVyYzIgBAAAAAV2O2oEAAAABAAAAAEAAAAOAAAACAAAAI0AAAAGAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAADBABgAAAAIAe/8AgAAAAEAAAIBBAQAAAEAAAEBAAACAQAAAoEAAAOBAAAAAQQAAEEEAACBBAAAwQQAAQEEAAFBBAABgQQAAcEEAAIBBTGVyYzIgBAAAABdBhD8EAAAABAAAAAEAAAAOAAAACAAAAI0AAAAGAAAAAAAAAAAAAAAAAAAAAAAxQAAAAAAAAD9ABgAAAAIA+/4AgAAAiEEAAPhBAQAAiEEAAJBBAACYQQAAoEEAAKhBAAC4QQAAwEEAAMhBAADQQQAA2EEAAOBBAADoQQAA8EEAAPhB";
+  // One band, every pixel NaN.
+  const ALL_NAN =
+    "TGVyYzIgBAAAAABdBtwEAAAABAAAAAEAAAAAAAAACAAAAEYAAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+
+  /** Decode one of the base64 LERC strips above. */
+  function decodeStrip(
+    base64: string,
+    { bitsPerSample = 32, samplesPerPixel = 1, littleEndian = true } = {},
+  ) {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    return decode(bytes.buffer, Compression.Lerc, {
+      sampleFormat: SampleFormat.Float,
+      bitsPerSample,
+      samplesPerPixel,
+      width: 4,
+      height: 4,
+      predictor: Predictor.None,
+      planarConfiguration: PlanarConfiguration.Contig,
+      littleEndian,
+    });
+  }
+
+  /**
+   * All decoded samples in band-major order. LERC returns the samples of a
+   * pixel either as separate bands or as one depth-major array.
+   */
+  function bandMajor(result: Awaited<ReturnType<typeof decode>>): number[] {
+    if (result.layout !== "band-separate") {
+      throw new Error("expected band-separate output");
+    }
+    return result.bands.flatMap((band) => Array.from(band));
+  }
+
+  it.each([
+    { name: "float32", base64: ONE_BAND_F32, bitsPerSample: 32 },
+    { name: "float64", base64: ONE_BAND_F64, bitsPerSample: 64 },
+  ])("sets invalid $name pixels to NaN", async ({ base64, bitsPerSample }) => {
+    const result = await decodeStrip(base64, { bitsPerSample });
+    // biome-ignore format: array
+    const expected = [
+      1, NaN, 3, 4,
+      5, 6, 7, NaN,
+      9, 10, NaN, 12,
+      13, 14, 15, 16,
+    ];
+    expect(bandMajor(result)).toEqual(expected);
+  });
+
+  it("sets every sample of an invalid pixel to NaN", async () => {
+    // GDAL writes one mask for all samples when no pixel is NaN in only some.
+    const result = await decodeStrip(TWO_BANDS_SHARED_NAN, {
+      samplesPerPixel: 2,
+    });
+    // biome-ignore format: array
+    const expected = [
+      // band 0
+      1, 2, NaN, 4,
+      5, 6, 7, 8,
+      9, 10, 11, 12,
+      13, NaN, 15, 16,
+      // band 1
+      17, 18, NaN, 20,
+      21, 22, 23, 24,
+      25, 26, 27, 28,
+      29, NaN, 31, 32,
+    ];
+    expect(bandMajor(result)).toEqual(expected);
+  });
+
+  it("applies each band's own mask", async () => {
+    // GDAL writes one mask per band when a pixel is NaN in only some samples.
+    const result = await decodeStrip(TWO_BANDS_SEPARATE_NAN, {
+      samplesPerPixel: 2,
+    });
+    // biome-ignore format: array
+    const expected = [
+      // band 0
+      NaN, 2, 3, 4,
+      5, NaN, 7, 8,
+      9, 10, 11, 12,
+      13, 14, 15, 16,
+      // band 1
+      17, 18, 19, 20,
+      21, NaN, 23, 24,
+      25, 26, 27, 28,
+      29, 30, 31, NaN,
+    ];
+    expect(bandMajor(result)).toEqual(expected);
+  });
+
+  it("sets every pixel of an all-NaN tile to NaN", async () => {
+    const result = await decodeStrip(ALL_NAN);
+    expect(bandMajor(result)).toEqual(new Array(16).fill(NaN));
+  });
+
+  it("fills NaN before swapping big endian samples, as libtiff does", async () => {
+    // GDAL reads these pixels of a big endian file as NaN with its bytes
+    // reversed: libtiff fills NaN in the file's byte order, then swaps.
+    const result = await decodeStrip(ONE_BAND_F32, { littleEndian: false });
+    const nanBytes = new Uint8Array([0x7f, 0xc0, 0x00, 0x00]);
+    const swappedNaN = new DataView(nanBytes.buffer).getFloat32(0, true);
+    const values = bandMajor(result);
+    expect([values[1], values[7], values[10]]).toEqual([
+      swappedNaN,
+      swappedNaN,
+      swappedNaN,
+    ]);
+  });
+});

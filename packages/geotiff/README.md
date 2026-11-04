@@ -158,32 +158,32 @@ A decoder is a function that takes an `ArrayBuffer` and a `DecoderMetadata` obje
 
 [`Decoder`]: https://developmentseed.org/deck.gl-raster/api/geotiff/type-aliases/Decoder/
 
-### Full user control over caching and chunking
+### Bring your own source
 
-There are a lot of great utilities in [`chunkd`](https://github.com/blacha/chunkd) that work out of the box here.
+`GeoTIFF.open` takes any [`chunkd`](https://github.com/blacha/chunkd)
+`Source`, so a file on disk, in memory, or behind a custom transport can be
+opened by composing one; the chunkd packages are separate installs. Give the
+header source chunking and caching, since cogeotiff reads offset-table
+entries one at a time.
 
 ```ts
-import { SourceCache, SourceChunk } from '@chunkd/middleware';
-import { SourceView } from '@chunkd/source';
-import { SourceHttp } from '@chunkd/source-http';
-import { GeoTIFF } from '@developmentseed/geotiff';
+import { SourceCache, SourceChunk } from "@chunkd/middleware";
+import { SourceView } from "@chunkd/source";
+import { SourceFile } from "@chunkd/source-file";
+import { GeoTIFF } from "@developmentseed/geotiff";
 
-// 16MB Cache
-const cache = new SourceCache({ size: 16 * 1024 * 1024 });
-
-// Chunk requests into 16KB fetches
-const chunk = new SourceChunk({ size: 16 * 1024 });
-
-// Raw source to HTTP file
-const httpSource = new SourceHttp('https://blayne.chard.com/world.webp.google.cog.tiff');
-
-// HTTP source with chunking and caching, for reading the TIFF header
-const headerSource = new SourceView(httpSource, [chunk, cache]);
-
-// Tile data is fetched directly from the raw HTTP source
-const geotiff = await GeoTIFF.open({ headerSource, dataSource: httpSource });
+const file = new SourceFile("/data/scene.tif");
+const headerSource = new SourceView(file, [
+  new SourceChunk({ size: 64 * 1024 }),
+  new SourceCache({ size: 16 * 1024 * 1024 }),
+]);
+const geotiff = await GeoTIFF.open({ headerSource, dataSource: file });
 const tile = await geotiff.fetchTile(0, 0);
 ```
+
+For HTTP, use `GeoTIFF.fromUrl` (next section): it reads through a
+`RangeReader`, which merges, streams and caches reads in a way a chunkd
+stack cannot.
 
 ### Nearly-identical API to Python `async-geotiff`
 
@@ -192,6 +192,52 @@ The TypeScript API is nearly identical to our Python project [`async-geotiff`].
 This is extremely useful for us as we build visualization projects for both Python and the browser.
 
 [`async-geotiff`]: https://github.com/developmentseed/async-geotiff
+
+## Reading over HTTP
+
+`GeoTIFF.fromUrl` reads through a
+[`RangeReader`](../range-reader/README.md): the reads cogeotiff makes for the
+header (IFDs, then one offset-table entry per tile) and the reads for tile
+bytes are merged into few streamed range requests, each tile resolves as its
+bytes arrive, and everything received is cached, so a pan back over tiles
+that were already downloaded costs no request.
+
+```ts
+import { GeoTIFF } from "@developmentseed/geotiff";
+import { PerOriginSemaphore, RangeReader } from "@developmentseed/range-reader";
+
+// One reader per page: files that share it share its cache and its batching
+// window. (The deck.gl layers do this for you.)
+const reader = new RangeReader();
+const concurrencyLimiter = new PerOriginSemaphore({ maxRequests: 6 });
+
+const tiff = await GeoTIFF.fromUrl("https://example.com/scene.tif", {
+  reader,
+  concurrencyLimiter,
+  // Headers, credentials and mode for every request of this file.
+  requestInit: { headers: { authorization: "Bearer ..." } },
+});
+
+// Reads issued together are merged: these four tiles become one or two
+// range requests, not four.
+const tiles = await tiff.fetchTiles([
+  [0, 0],
+  [1, 0],
+  [0, 1],
+  [1, 1],
+]);
+```
+
+Tune the reader, not the file: `maxGap`, `maxOverfetchBytes`,
+`maxRequestBytes`, `minMetadataReadBytes` and the cache budgets are
+`RangeReader` options (the former `chunkSize` and `cacheSize` options of
+`fromUrl` are `minMetadataReadBytes` and `cache.metadataBytes` there).
+`reader.stats` counts requests, bytes and cache hits. Without a
+`concurrencyLimiter`, every merged request goes out at once; the deck.gl
+layers pass a shared per-origin limiter, and so should a page that opens
+many files itself. A file replaced in place while open fails its next read
+with an `ETag conflict` error, as it did through chunkd, because the parsed
+layout no longer applies; open it again.
 
 ## Why not build on top of geotiff.js?
 

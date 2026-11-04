@@ -62,13 +62,9 @@ export type FindSpatialDimIndicesArgs = {
 
 /**
  * Find the positions of the declared spatial dims in a zarr array's dimension
- * names.
- *
- * The spatial dims may sit anywhere and in either order: `[band, y, x]`,
- * channel-last `[y, x, band]` and `[x, y]` are all accepted. `zarr.get`
- * returns each chunk in the array's own dim order, so for layouts other than
- * `[..., y, x]` the caller's `getTileData` and `renderTile` must expect that
- * order.
+ * names. They may sit anywhere and in either order, such as `[band, y, x]`,
+ * `[y, x, band]` or `[x, y]`. See the
+ * [spatial convention](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md?plain=1#L94-L98).
  *
  * @returns The positions of the y and x dims, as `[yIndex, xIndex]`.
  * @throws if a declared spatial dim is missing from the array.
