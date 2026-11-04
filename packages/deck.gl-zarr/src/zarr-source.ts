@@ -25,13 +25,21 @@ import { geoZarrToDescriptor } from "./zarr-tileset.js";
 /** Options for {@link ZarrSource.open}. */
 export type ZarrSourceOptions = {
   /**
-   * Path within the node to the group of the variable to draw. If omitted,
-   * the node itself is used.
+   * Path within the node to the group or array to draw. If omitted, the node
+   * itself is used.
+   *
+   * An array inherits the `proj:` and `spatial:` attributes of the group it's
+   * in: its own CRS replaces the group's, and each of its own `spatial:`
+   * attributes replaces the group's. See the
+   * [proj](https://github.com/zarr-conventions/geo-proj/blob/5ca5b2f92e5c7245f957d9128b289ee535f0720d/README.md#inheritance-model)
+   * and
+   * [spatial](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md#can-i-use-spatial-at-the-group-level)
+   * conventions.
    */
   variable?: string;
 
   /**
-   * GeoZarr metadata to read instead of the node's own attributes: an
+   * GeoZarr metadata to read instead of the node's or the variable's: an
    * attributes object in the GeoZarr conventions (`spatial:*`, `proj:*` and
    * `multiscales`). Pass it when the node has none, such as another group's
    * `attrs`, or a hand-written object for a store without GeoZarr metadata.
@@ -123,20 +131,35 @@ export class ZarrSource<
     } = options;
     signal?.throwIfAborted();
 
-    const group = variable
-      ? await zarr.open(node.resolve(variable), { kind: "group", signal })
+    const target = variable
+      ? ((await zarr.open(node.resolve(variable), { signal })) as
+          | zarr.Group<Store>
+          | zarr.Array<Dtype, Store>)
       : node;
-    const metadata = parseGeoZarrMetadata(geoZarrMetadata ?? group.attrs);
+    const metadata = parseGeoZarrMetadata(
+      geoZarrMetadata ??
+        (target !== node && "shape" in target
+          ? await inheritGeoZarrAttrs({ array: target, node, signal })
+          : target.attrs),
+    );
 
-    // Open each level's array once. An array passed in is reused when the
-    // metadata describes a single level.
+    // Metadata without `multiscales` describes one array, at path "."
+    if (!("shape" in target) && metadata.levels[0]?.path === ".") {
+      throw new Error(
+        "GeoZarr metadata without multiscales describes an array, not the " +
+          `group "${target.path}". Name the array with \`variable\`.`,
+      );
+    }
+
+    // Open each level's array once. An array passed in or named by
+    // `variable` is reused when the metadata describes a single level.
     const arrays =
-      "shape" in node && metadata.levels.length === 1
-        ? [node]
+      "shape" in target && metadata.levels.length === 1
+        ? [target]
         : // A pyramid's levels share their data type
           ((await Promise.all(
             metadata.levels.map((level) =>
-              zarr.open(group.resolve(level.path), { kind: "array", signal }),
+              zarr.open(target.resolve(level.path), { kind: "array", signal }),
             ),
           )) as zarr.Array<Dtype, Store>[]);
 
@@ -187,6 +210,33 @@ export class ZarrSource<
       geographicBounds: finestLevelBounds(metadata, functions.projectTo4326),
     });
   }
+}
+
+/**
+ * The attributes of `array`, within `node`, with those it inherits from the
+ * group it's in, as described for {@link ZarrSourceOptions.variable}.
+ */
+async function inheritGeoZarrAttrs(options: {
+  array: zarr.Array<zarr.DataType>;
+  node: zarr.Group<zarr.Readable> | zarr.Array<zarr.DataType>;
+  signal?: AbortSignal;
+}): Promise<zarr.Attributes> {
+  const { array, node, signal } = options;
+  // An array directly in `node` inherits from `node`, already open. `resolve`
+  // ends both paths with "/".
+  const parent = array.resolve("..");
+  const group =
+    parent.path === node.resolve(".").path
+      ? node
+      : await zarr.open(parent, { kind: "group", signal });
+  const hasCrs = Object.keys(array.attrs).some((key) =>
+    key.startsWith("proj:"),
+  );
+  const inherited = Object.entries(group.attrs).filter(
+    ([key]) =>
+      key.startsWith("spatial:") || (!hasCrs && key.startsWith("proj:")),
+  );
+  return { ...Object.fromEntries(inherited), ...array.attrs };
 }
 
 /**

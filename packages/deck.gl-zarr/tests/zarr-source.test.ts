@@ -1,5 +1,6 @@
+import { epsgResolver as defaultEpsgResolver } from "@developmentseed/proj";
 import proj4 from "proj4";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as zarr from "zarrita";
 import { ZarrSource } from "../src/index.js";
 import { geoZarrStore } from "./helpers.js";
@@ -37,6 +38,76 @@ describe("ZarrSource.open", () => {
     const source = await ZarrSource.open(root, { variable: "b" });
 
     expect(source.arrays[0]!.path).toBe("/b/r10m");
+  });
+
+  it("opens an array named by variable with its group's GeoZarr metadata", async () => {
+    const { group } = await openGroup("flat");
+
+    const source = await ZarrSource.open(group, { variable: "data" });
+
+    expect(source.arrays.map((arr) => arr.path)).toEqual(["/flat/data"]);
+  });
+
+  it("doesn't read the group of an array named by variable again", async () => {
+    const { group, reads } = await openGroup("flat");
+    reads.length = 0;
+
+    await ZarrSource.open(group, { variable: "data" });
+
+    expect(reads.map((read) => read.key)).toEqual(["/flat/data/zarr.json"]);
+  });
+
+  it("reads the GeoZarr metadata of the group an array is in", async () => {
+    const { root } = await openRoot();
+
+    const source = await ZarrSource.open(root, { variable: "flat/data" });
+
+    expect(source.arrays.map((arr) => arr.path)).toEqual(["/flat/data"]);
+  });
+
+  it("doesn't read GeoZarr metadata from groups above an array's own", async () => {
+    const { group } = await openGroup("flat");
+
+    await expect(
+      ZarrSource.open(group, { variable: "sub/data" }),
+    ).rejects.toThrow(/spatial:dimensions/);
+  });
+
+  it("doesn't read the multiscales of an array's group", async () => {
+    const { group } = await openGroup("a");
+
+    // The group's levels have their transforms in `multiscales` only
+    await expect(ZarrSource.open(group, { variable: "r10m" })).rejects.toThrow(
+      /spatial:transform is required/,
+    );
+  });
+
+  it("reads an array's CRS instead of its group's", async () => {
+    const { group } = await openGroup("flat");
+    const epsgResolver = vi.fn(defaultEpsgResolver);
+
+    await ZarrSource.open(group, { variable: "wkt2", epsgResolver });
+
+    // The group's CRS is a `proj:code`, and the array's a `proj:wkt2`
+    expect(epsgResolver).not.toHaveBeenCalled();
+  });
+
+  it("reads each of an array's spatial: attributes instead of its group's", async () => {
+    const { group } = await openGroup("flat");
+
+    // `half` has its own shape and transform, and its group's dimensions
+    const source = await ZarrSource.open(group, { variable: "half" });
+
+    // 600 pixels in chunks of 256
+    expect(
+      source.tilesetDescriptor.levels.map((level) => level.matrixWidth),
+    ).toEqual([3]);
+  });
+
+  it("asks for variable when a group's metadata describes one array", async () => {
+    const { group } = await openGroup("flat");
+
+    await expect(ZarrSource.open(group)).rejects.toThrow(/`variable`/);
   });
 
   it("reads geoZarrMetadata instead of the group's attrs", async () => {
@@ -145,6 +216,17 @@ describe("ZarrSource.open", () => {
     await ZarrSource.open(root, { variable: "a", signal });
 
     expect(reads.map((read) => read.key)).toContain("/a/r60m/zarr.json");
+    expect(reads.every((read) => read.signal === signal)).toBe(true);
+  });
+
+  it("passes its signal to the read of an array's group", async () => {
+    const { root, reads } = await openRoot();
+    reads.length = 0;
+    const { signal } = new AbortController();
+
+    await ZarrSource.open(root, { variable: "flat/data", signal });
+
+    expect(reads.map((read) => read.key)).toContain("/flat/zarr.json");
     expect(reads.every((read) => read.signal === signal)).toBe(true);
   });
 

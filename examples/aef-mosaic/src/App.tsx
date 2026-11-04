@@ -50,17 +50,8 @@ export default function App() {
     (async () => {
       const store = new zarr.FetchStore(ZARR_URL);
       const root = await zarr.open.v3(store, { kind: "group" });
-      const opened = await zarr.open.v3(root.resolve(VARIABLE), {
-        kind: "array",
-      });
-      if (!opened.is("int8")) {
-        throw new Error(
-          `Expected AEF embeddings to be int8, got ${opened.dtype}`,
-        );
-      }
-      // The GeoZarr metadata is on the root group, not on the array
-      const source = await ZarrSource.open(opened, {
-        geoZarrMetadata: root.attrs,
+      const source = await ZarrSource.open<"int8">(root, {
+        variable: VARIABLE,
       });
       const labels = await fetchBandLabels(root);
       if (cancelled) {
