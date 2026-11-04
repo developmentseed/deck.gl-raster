@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import * as zarr from "zarrita";
 
 /** A group in {@link geoZarrStore}. */
 type GroupSpec = {
@@ -160,4 +161,61 @@ export async function geoZarrStore() {
     },
   };
   return { store, reads, attributes };
+}
+
+/** The length and chunk length of each dimension {@link openSpatialArray} knows. */
+const SPATIAL_ARRAY_DIMS = {
+  lat: { length: 1000, chunk: 256 },
+  lon: { length: 2000, chunk: 512 },
+  band: { length: 4, chunk: 4 },
+};
+
+/** A dimension of an {@link openSpatialArray} array. */
+export type SpatialArrayDim = keyof typeof SPATIAL_ARRAY_DIMS;
+
+/**
+ * GeoZarr metadata for an {@link openSpatialArray} array: a single-level
+ * EPSG:4326 raster of 1000 rows (`lat`) by 2000 columns (`lon`).
+ */
+export const spatialArrayMetadata = {
+  "proj:code": "EPSG:4326",
+  "spatial:dimensions": ["lat", "lon"],
+  "spatial:shape": [1000, 2000],
+  "spatial:transform": [0.01, 0, 0, 0, -0.01, 10],
+};
+
+/**
+ * Open an empty in-memory uint8 array with the dimensions `dimensionNames`, in
+ * that order: `lat` (1000 rows in chunks of 256), `lon` (2000 columns in
+ * chunks of 512) and `band` (4, in one chunk). Rows and columns differ in
+ * length and chunk length, so a swap of y and x shows.
+ */
+export async function openSpatialArray(dimensionNames: SpatialArrayDim[]) {
+  const dims = dimensionNames.map((name) => SPATIAL_ARRAY_DIMS[name]);
+  const metadata = {
+    zarr_format: 3,
+    node_type: "array",
+    shape: dims.map((dim) => dim.length),
+    data_type: "uint8",
+    chunk_grid: {
+      name: "regular",
+      configuration: { chunk_shape: dims.map((dim) => dim.chunk) },
+    },
+    chunk_key_encoding: {
+      name: "default",
+      configuration: { separator: "/" },
+    },
+    codecs: [{ name: "bytes", configuration: { endian: "little" } }],
+    fill_value: 0,
+    dimension_names: dimensionNames,
+    attributes: {},
+  };
+  const store = {
+    async get(key: string) {
+      return key === "/zarr.json"
+        ? new TextEncoder().encode(JSON.stringify(metadata))
+        : undefined;
+    },
+  };
+  return zarr.open.v3(store, { kind: "array" });
 }

@@ -19,7 +19,7 @@ import {
   projectionFunctions,
 } from "@developmentseed/proj";
 import * as zarr from "zarrita";
-import { validateSpatialDimOrder } from "./validation.js";
+import { findSpatialDimIndices } from "./validation.js";
 import { geoZarrToDescriptor } from "./zarr-tileset.js";
 
 /**
@@ -96,7 +96,11 @@ export class ZarrSource<
    */
   readonly dimensionNames: readonly string[];
 
-  /** The names of the y and x dimensions: the last two dimensions. */
+  /**
+   * The names of the y and x dimensions, from `spatial:dimensions`. In
+   * {@link ZarrSource.dimensionNames}, y comes before x, and other dimensions
+   * may sit anywhere, such as `["band", "y", "x"]` or `["y", "x", "band"]`.
+   */
   readonly spatialDims: [y: string, x: string];
 
   /** The data's CRS, resolved once. */
@@ -134,7 +138,8 @@ export class ZarrSource<
    * Rejects when `signal` aborts before the source is ready, when the
    * metadata is missing or invalid, when a level's array can't be opened,
    * when the CRS can't be resolved, and when the arrays' dimensions aren't
-   * named or aren't in y, x order at the end.
+   * named, differ between levels, don't include the y and x dimensions, or
+   * have x before y.
    *
    * @param input A zarrita store, or an opened group or array within one.
    *   Pass a store, unless the app has opened the node already, for example
@@ -202,6 +207,8 @@ export class ZarrSource<
       metadata.axes[metadata.xAxisIndex]!,
     ];
 
+    checkSameDimensionNames(arrays);
+
     // Every level of a multiscale pyramid has the same dim names
     const arrDimNames: (string | null)[] = arrays[0]?.dimensionNames ?? [];
     const dimensionNames = arrDimNames.filter((d): d is string => d !== null);
@@ -211,7 +218,10 @@ export class ZarrSource<
           `Got dimension_names = ${JSON.stringify(arrDimNames)}.`,
       );
     }
-    validateSpatialDimOrder({ dimensionNames, spatialDims });
+    const [yIndex, xIndex] = findSpatialDimIndices({
+      dimensionNames,
+      spatialDims,
+    });
 
     const projection = await resolveCrs(metadata.crs, epsgResolver);
 
@@ -220,8 +230,8 @@ export class ZarrSource<
 
     const functions = projectionFunctions(projection);
     const chunkSizes = arrays.map((arr) => ({
-      width: arr.chunks[arr.chunks.length - 1]!,
-      height: arr.chunks[arr.chunks.length - 2]!,
+      width: arr.chunks[xIndex]!,
+      height: arr.chunks[yIndex]!,
     }));
     return new ZarrSource({
       node: target,
@@ -389,4 +399,24 @@ function finestLevelBounds(
   ].map(([col, row]) => affine.apply(transform, col!, row!));
   const [west, south, east, north] = geographicBounds(outline, projectTo4326);
   return { west, south, east, north };
+}
+
+/**
+ * Throw unless every level's array has the first level's `dimension_names`,
+ * which {@link ZarrSource.dimensionNames} holds for all of them.
+ */
+function checkSameDimensionNames(
+  arrays: readonly zarr.Array<zarr.DataType, zarr.Readable>[],
+): void {
+  const [first, ...rest] = arrays;
+  const names = JSON.stringify(first?.dimensionNames ?? []);
+  for (const arr of rest) {
+    const other = JSON.stringify(arr.dimensionNames ?? []);
+    if (other !== names) {
+      throw new Error(
+        "ZarrSource requires every level to have the same dimension_names: " +
+          `${arr.path} has ${other}, but ${first!.path} has ${names}.`,
+      );
+    }
+  }
 }
