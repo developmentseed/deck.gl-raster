@@ -69,3 +69,70 @@ describe("RasterTileset2D.getParentIndex with rounded scale denominators", () =>
     }
   });
 });
+
+// A COG whose overviews GDAL sized by halving and rounding down (from
+// wrc-2-pa-buildingcount-conus-cog.tif, 512px tiles). Every level spans the
+// same extent, so when a width is odd the next level is slightly more than 2x
+// coarser: 1543 -> 771 px gives a decimation of 1543 / 771 = 2.0013, far
+// beyond what TILE_EDGE_TOLERANCE absorbs.
+const OVERVIEW_WIDTHS = [
+  385, 771, 1543, 3086, 6172, 12344, 24689, 49378, 98757, 197514,
+];
+const TILE_SIZE = 512;
+const EXTENT_M = 7_150_000; // ~64.3 degrees of longitude at this latitude
+const SCREEN_PIXEL_SIZE = 0.00028;
+
+const ROUNDED_OVERVIEWS: TileMatrixSet = {
+  id: "rounded-overviews",
+  crs: { uri: "http://www.opengis.net/def/crs/EPSG/0/3857" },
+  boundingBox: { lowerLeft: [0, -EXTENT_M], upperRight: [EXTENT_M, 0] },
+  tileMatrices: OVERVIEW_WIDTHS.map((width, z) => {
+    const cellSize = EXTENT_M / width;
+    return {
+      id: String(z),
+      scaleDenominator: cellSize / SCREEN_PIXEL_SIZE,
+      cellSize,
+      cornerOfOrigin: "topLeft" as const,
+      pointOfOrigin: [0, 0],
+      tileWidth: TILE_SIZE,
+      tileHeight: TILE_SIZE,
+      matrixWidth: Math.ceil(width / TILE_SIZE),
+      matrixHeight: Math.ceil(width / TILE_SIZE),
+    };
+  }),
+};
+
+describe("RasterTileset2D.getParentIndex with rounded-down overview sizes", () => {
+  const tileset = new RasterTileset2D(
+    { getTileData: () => new Promise(() => {}) } as Tileset2DProps,
+    new TileMatrixSetAdaptor(ROUNDED_OVERVIEWS, {
+      projectTo4326: identity,
+      projectFrom4326: identity,
+      projectTo3857: identity,
+      projectFrom3857: identity,
+    }),
+  );
+
+  it("maps 2/2/2 (1543px level) to 1/1/1 (771px level), not its neighbour", () => {
+    expect(tileset.getParentIndex({ x: 2, y: 2, z: 2 })).toEqual({
+      x: 1,
+      y: 1,
+      z: 1,
+    });
+  });
+
+  it("maps every tile to the parent that covers most of it", () => {
+    for (let z = 1; z < OVERVIEW_WIDTHS.length; z++) {
+      const childSpan = (TILE_SIZE * EXTENT_M) / OVERVIEW_WIDTHS[z]!;
+      const parentSpan = (TILE_SIZE * EXTENT_M) / OVERVIEW_WIDTHS[z - 1]!;
+      for (const i of edgeIndices(Math.ceil(OVERVIEW_WIDTHS[z]! / TILE_SIZE))) {
+        // The parent containing the child's centre covers most of the child.
+        const parent = Math.floor(((i + 0.5) * childSpan) / parentSpan);
+        expect(
+          tileset.getParentIndex({ x: i, y: i, z }),
+          `z=${z} index=${i}`,
+        ).toEqual({ x: parent, y: parent, z: z - 1 });
+      }
+    }
+  });
+});
