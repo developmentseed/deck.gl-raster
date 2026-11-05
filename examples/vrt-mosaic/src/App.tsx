@@ -171,8 +171,9 @@ export default function App() {
         id: "vrt-mosaic",
         data: items,
         minZoom: MIN_ZOOM,
-        // MosaicLayer keeps each opened source in its cache, so an item that
-        // comes back into view isn't opened again
+        // MosaicLayer's cache keeps the opened sources of up to `maxCacheSize`
+        // items, by default five times the items in view. An item that comes
+        // back into view while still cached isn't opened again.
         getSource: (item, options) => COGSource.open(item.url, options),
         opacity,
         renderSource: (_item, { source, subLayerProps }) =>
