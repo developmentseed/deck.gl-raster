@@ -1,10 +1,15 @@
 import { CompositeLayer } from "@deck.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as zarr from "zarrita";
-import type { GetTileDataOptions } from "../src/zarr-layer.js";
+import type { GetTileDataOptions, SliceInput } from "../src/zarr-layer.js";
 import { ZarrLayer } from "../src/zarr-layer.js";
 import { ZarrSource } from "../src/zarr-source.js";
-import { geoZarrStore } from "./helpers.js";
+import type { SpatialArrayDim } from "./helpers.js";
+import {
+  geoZarrStore,
+  openSpatialArray,
+  spatialArrayMetadata,
+} from "./helpers.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -346,6 +351,64 @@ describe("ZarrLayer tiles", () => {
       zarr.slice(1024, 1200),
     ]);
   });
+
+  // The last tile of 1000 rows by 2000 columns, in chunks of 256 by 512
+  const rows = zarr.slice(768, 1000);
+  const cols = zarr.slice(1536, 2000);
+
+  it.each<{
+    name: string;
+    dimensionNames: SpatialArrayDim[];
+    selection: Record<string, SliceInput>;
+    sliceSpec: SliceInput[];
+  }>([
+    {
+      name: "[lat, lon]",
+      dimensionNames: ["lat", "lon"],
+      selection: {},
+      sliceSpec: [rows, cols],
+    },
+    {
+      name: "[band, lat, lon]",
+      dimensionNames: ["band", "lat", "lon"],
+      selection: { band: 2 },
+      sliceSpec: [2, rows, cols],
+    },
+    {
+      name: "channel-last [lat, lon, band]",
+      dimensionNames: ["lat", "lon", "band"],
+      selection: { band: 2 },
+      sliceSpec: [rows, cols, 2],
+    },
+  ])(
+    "slices each dim of a $name array at its position",
+    async ({ dimensionNames, selection, sliceSpec }) => {
+      const source = await openSource(await openSpatialArray(dimensionNames), {
+        geoZarrMetadata: spatialArrayMetadata,
+      });
+      const getTileData = vi.fn(
+        async (_arr: zarr.Array<zarr.DataType>, _options: GetTileDataOptions) =>
+          null,
+      );
+      const layer = makeBareLayer({
+        source,
+        selection,
+        getTileData,
+        renderTile: vi.fn(),
+      });
+      runInitialUpdate(layer);
+      const callback = tileCallback(layer) as (
+        tile: unknown,
+        options: unknown,
+      ) => Promise<unknown>;
+
+      await callback({ index: { x: 3, y: 3, z: 0 } }, { device: {} });
+
+      const [, options] = getTileData.mock.calls[0]!;
+      expect(options.sliceSpec).toEqual(sliceSpec);
+      expect([options.width, options.height]).toEqual([464, 232]);
+    },
+  );
 });
 
 describe("ZarrLayer.isLoaded", () => {

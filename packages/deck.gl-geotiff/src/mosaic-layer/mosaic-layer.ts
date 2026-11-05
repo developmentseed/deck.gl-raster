@@ -59,7 +59,9 @@ export type MosaicLayerProps<
     TileLayerProps,
     // NOTE: `debounceTime` is intentionally not exposed.
     // See https://github.com/developmentseed/deck.gl-raster/issues/562
-    "maxCacheByteSize" | "maxCacheSize" | "maxRequests" | "maxZoom" | "minZoom"
+    // `maxCacheByteSize` isn't either: the cache holds only opened sources.
+    // See https://github.com/developmentseed/deck.gl-raster/issues/803
+    "maxCacheSize" | "maxRequests" | "maxZoom" | "minZoom"
   > & {
     /**
      * The items of the mosaic, each with a WGS84 `bbox`.
@@ -121,6 +123,10 @@ export type MosaicLayerProps<
      * It's called only for items in view. deck.gl aborts `signal` when it
      * cancels the open: when the layer is removed, or, for an item no longer
      * in view, when more than `maxRequests` opens are in flight.
+     *
+     * When something it reads changes, change `updateTriggers.getSource` (or
+     * `updateTriggers.all`). The layer then drops every source at once,
+     * passing each to `onSourceUnload`, and opens the sources in view again.
      */
     getSource?: (
       item: ItemT,
@@ -237,11 +243,38 @@ function createGetPriorityCallback(
 }
 
 /**
+ * deck.gl's TileLayer, rendering layers only for the items in view.
+ *
+ * deck.gl's TileLayer keeps the layers of every cached tile and only hides
+ * those out of view, so each cached item would keep its layers and their GPU
+ * memory. Here an item out of view keeps only its opened source. See #803.
+ */
+class MosaicTileLayer<DataT> extends TileLayer<DataT> {
+  static override layerName = "MosaicTileLayer";
+
+  override renderLayers(): Layer | null | LayersList {
+    const hidden = this.state.tileset!.tiles.filter((tile) => !tile.isVisible);
+    // With an empty list, deck.gl's `renderLayers` renders no layers for a
+    // hidden item, and deck.gl finalizes the ones it had
+    for (const tile of hidden) {
+      tile.layers = [];
+    }
+    const layers = super.renderLayers();
+    // Render the item's layers again once it's back in view
+    for (const tile of hidden) {
+      tile.layers = null;
+    }
+    return layers;
+  }
+}
+
+/**
  * A deck.gl layer for rendering a mosaic of raster sources, such as the COGs
  * of a STAC search.
  *
  * Only the items in view are opened and drawn: `getSource` opens an item's
- * source, and `renderSource` draws the item with it.
+ * source, and `renderSource` draws the item with it. An item that leaves the
+ * view keeps its source in the layer's cache, but not its layers.
  *
  * ```ts
  * new MosaicLayer({
@@ -291,7 +324,6 @@ export class MosaicLayer<
       reader,
       requestInit,
       extent,
-      maxCacheByteSize,
       maxCacheSize,
       maxRequests,
       maxZoom,
@@ -320,26 +352,30 @@ export class MosaicLayer<
 
     // The props deck.gl passes from a composite layer to its sublayers, such
     // as `opacity`, for the inner TileLayer and `renderSource`. The `id` is
-    // set for each, and `updateTriggers` dropped: its `all` would make
-    // deck.gl's TileLayer reload through `Tileset2D.reloadAll`, which leaks
-    // sources (see #816).
+    // set for each, and `updateTriggers` replaced: the inner TileLayer gets
+    // only the triggers below.
     const {
       id: _id,
       updateTriggers: _updateTriggers,
       ...subLayerProps
     } = this.getSubLayerProps();
 
-    return new TileLayer<{
+    return new MosaicTileLayer<{
       item: ItemT;
       source?: SourceT;
     }>(subLayerProps, {
       id: `mosaic-layer-${id}`,
+      // deck.gl's TileLayer calls the tileset's `reloadAll` when these
+      // change, which opens every source again
+      updateTriggers: {
+        getTileData: this.props.updateTriggers?.getSource,
+        all: this.props.updateTriggers?.all,
+      },
       TilesetClass: MosaicTileset2DFactory,
       ...omitUndefined({
         minZoom,
         maxZoom,
         extent,
-        maxCacheByteSize,
         maxCacheSize,
         maxRequests,
       }),

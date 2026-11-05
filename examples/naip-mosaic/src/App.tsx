@@ -1,5 +1,4 @@
 import { LoadingWidget } from "@deck.gl/widgets";
-import type { COGSourceOptions } from "@developmentseed/deck.gl-geotiff";
 import {
   COGLayer,
   COGSource,
@@ -67,51 +66,6 @@ type TextureDataT = {
   width: number;
   texture: Texture;
 };
-
-/**
- * Module-level cache of opened COG sources keyed by URL.
- *
- * Header reads are small and the resulting `COGSource` can be reused
- * across the example's lifetime. MosaicLayer's own cache can't hold them
- * cheaply: deck.gl's TileLayer keeps the sublayer of every cached item alive,
- * and a COGLayer out of view keeps all its tiles. So each cached item would
- * keep a whole COGLayer and its GPU textures. Instead, the MosaicLayer cache
- * is off (`maxCacheSize: 0`), and only the opened sources are kept here. See
- * https://github.com/developmentseed/deck.gl-raster/issues/803.
- *
- * We cache the `Promise<COGSource>` rather than the resolved `COGSource` so
- * that concurrent callers for the same URL share one in-flight fetch instead
- * of each kicking off a duplicate request before any of them sets the cache.
- *
- * The caller's signal is forwarded into `COGSource.open` so an in-flight
- * header read can be aborted when the parent tile leaves view. On any
- * rejection (including `AbortError`) the entry is evicted, so a later visit
- * to the same source restarts the fetch rather than reusing a failed promise.
- *
- * Caveat: this assumes at most one interested caller per URL at a time. If a
- * second caller joined an in-flight fetch and the first caller aborted, the
- * second would see an `AbortError` even though it never wanted to abort. In
- * this example each STAC item maps to a unique parent tile so the assumption
- * holds; promoting this pattern into library code would want refcounted
- * cancellation (one underlying `AbortController`, abort only when all callers
- * have signalled).
- */
-const geotiffCache = new Map<string, Promise<COGSource>>();
-
-function getCachedGeoTIFF(
-  url: string,
-  opts: COGSourceOptions,
-): Promise<COGSource> {
-  let promise = geotiffCache.get(url);
-  if (!promise) {
-    promise = COGSource.open(url, { ...opts, epsgResolver }).catch((err) => {
-      geotiffCache.delete(url);
-      throw err;
-    });
-    geotiffCache.set(url, promise);
-  }
-  return promise;
-}
 
 /** Custom tile loader that creates a GPU texture from the GeoTIFF image data. */
 async function getTileData(
@@ -430,13 +384,11 @@ export default function App() {
       // `data` could also be the STAC search URL that `fetchSTACItems` builds,
       // with `dataTransform: (fc: any) => fc.features`
       data: stacItems,
-      // For each item, fetch the opened COGSource from a module-level cache
-      // (see `geotiffCache` above). The cache is intentionally separate from
-      // the MosaicLayer's TileLayer cache so we can keep cheap header metadata
-      // around indefinitely without pinning every cached item's COGLayer, and
-      // its tiles, in memory.
-      getSource: async (item, opts) =>
-        getCachedGeoTIFF(item.assets.image.href, opts),
+      // MosaicLayer's cache keeps the opened sources of up to `maxCacheSize`
+      // items, by default five times the items in view. An item that comes
+      // back into view while still cached isn't opened again.
+      getSource: (item, options) =>
+        COGSource.open(item.assets.image.href, { ...options, epsgResolver }),
       // The mosaic's `opacity` reaches each item's COGLayer through
       // `subLayerProps`
       opacity,
@@ -460,10 +412,6 @@ export default function App() {
           onTileUnload: (tile) => tile.content?.texture.destroy(),
         });
       },
-      // Disable the MosaicLayer tile cache: each cached tile is a full
-      // COGLayer instance, and opened sources are already kept in the
-      // module-level `geotiffCache`, so there's nothing cheap to retain here.
-      maxCacheSize: 0,
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.
       beforeId: "boundary_country_outline",

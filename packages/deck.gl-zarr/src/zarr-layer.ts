@@ -7,7 +7,7 @@ import type {
 } from "@developmentseed/deck.gl-raster";
 import { RasterTileLayer } from "@developmentseed/deck.gl-raster";
 import * as zarr from "zarrita";
-import { validateSelection } from "./validation.js";
+import { findSpatialDimIndices, validateSelection } from "./validation.js";
 import { ZarrSource } from "./zarr-source.js";
 
 /**
@@ -106,6 +106,10 @@ export type ZarrLayerProps<
    * along with a pre-built `sliceSpec` (one entry per array dim). Call
    * `zarr.get(arr, sliceSpec)` and convert the result to whatever format your
    * `renderTile` callback expects.
+   *
+   * In the array's `dimension_names`, the y dim comes before the x dim, and
+   * other dims may sit anywhere. `zarr.get` returns the chunk in the array's
+   * own dim order, such as `[y, x, band]` for a channel-last array.
    *
    * A new `selection` fetches the tiles again. For anything else this
    * function reads, change `updateTriggers.getTileData` (or
@@ -222,6 +226,10 @@ export class ZarrLayer<
 
     const { arrays, dimensionNames, spatialDims } = source;
     const { selection } = checked;
+    const [yIndex, xIndex] = findSpatialDimIndices({
+      dimensionNames,
+      spatialDims,
+    });
     type RasterGetTileData = NonNullable<
       RasterTileLayerProps<DataT>["getTileData"]
     >;
@@ -230,11 +238,11 @@ export class ZarrLayer<
       // The tile grid's levels are coarsest-first, and `arrays` finest-first
       const arr = arrays[arrays.length - 1 - z]!;
 
-      // The spatial dims are the last two
-      const tileWidth = arr.chunks[arr.chunks.length - 1]!;
-      const tileHeight = arr.chunks[arr.chunks.length - 2]!;
-      const arrayWidth = arr.shape[arr.shape.length - 1]!;
-      const arrayHeight = arr.shape[arr.shape.length - 2]!;
+      // Every level has the same dims, as ZarrSource.open checks
+      const tileWidth = arr.chunks[xIndex]!;
+      const tileHeight = arr.chunks[yIndex]!;
+      const arrayWidth = arr.shape[xIndex]!;
+      const arrayHeight = arr.shape[yIndex]!;
 
       const rowStart = y * tileHeight;
       const rowEnd = Math.min((y + 1) * tileHeight, arrayHeight);

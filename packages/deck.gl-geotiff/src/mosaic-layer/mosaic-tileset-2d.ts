@@ -102,6 +102,17 @@ export class MosaicTileset2D<ItemT extends MosaicItem> extends Tileset2D {
     super.finalize();
   }
 
+  /**
+   * Unloads every item, and opens the sources in view again on the next
+   * update. deck.gl's `reloadAll` drops items without unloading them, and
+   * keeps drawing the old ones (see #816).
+   */
+  override reloadAll(): void {
+    this.finalize();
+    // `setOptions` makes the next update select the items in view again
+    this.setOptions(this.opts);
+  }
+
   /** The Tileset2D cache key for an item. */
   override getTileId(tileIndex: TileIndex): string {
     // `getTileIndices` always returns `ResolvedItem`s, so an `id` is

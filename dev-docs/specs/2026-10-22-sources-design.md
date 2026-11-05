@@ -144,19 +144,24 @@ These were settled on 2026-10-26, for stage 3:
     callbacks get the opened source as `{ source }`, `onViewportLoad`'s
     entries are `{ item, source }`, and `MosaicSource` is `MosaicItem`. The
     source type stays unconstrained, so a mosaic of plain images still works.
-16. **naip-mosaic keeps its own source cache.** MosaicLayer's cache can't hold
-    sources cheaply yet. deck.gl's TileLayer keeps the sublayers of every
-    cached tile, out of view ones included, and a COGLayer out of view keeps
-    all its tiles, since a tileset evicts only after it adds a tile. So
-    naip-mosaic turns MosaicLayer's cache off (`maxCacheSize: 0`) and keeps
-    the opened sources itself. *Proposal, for its own PR:* MosaicLayer
-    creates sublayers only for items in view, so its cache holds only
-    sources.
-17. **`maxCacheByteSize` doesn't bound MosaicLayer's cache**
-    ([#803](https://github.com/developmentseed/deck.gl-raster/issues/803)):
-    its tiles report no `byteLength`, so deck.gl's byte count becomes NaN. It
-    gets fixed with decision 16's proposal, once sources report an
-    approximate `byteLength`.
+16. **MosaicLayer's cache holds only sources** (as built for
+    [#803](https://github.com/developmentseed/deck.gl-raster/issues/803)).
+    deck.gl's TileLayer keeps the sublayers of every cached tile, out of view
+    ones included, and a COGLayer out of view keeps all its tiles, since a
+    tileset evicts only after it adds a tile. So MosaicLayer renders layers
+    only for the items in view: an item out of view keeps its opened source,
+    and draws again from it once back in view. naip-mosaic and vrt-mosaic
+    rely on that cache, and keep no sources of their own.
+17. **MosaicLayer has no `maxCacheByteSize`** (as built for
+    [#803](https://github.com/developmentseed/deck.gl-raster/issues/803)).
+    In deck.gl's TileLayer, `maxCacheSize` and `maxCacheByteSize` bound the
+    same cache. In MosaicLayer, a byte budget reads as the memory of the
+    items' layers, but their tiles live in those layers' own caches, and only
+    for items in view, so MosaicLayer's cache of sources can't bound it.
+    `maxCacheSize` sets how many items keep their opened source. A budget
+    across the items' layers needs one tile cache that they share
+    ([#516](https://github.com/developmentseed/deck.gl-raster/issues/516)).
+    Until then, an app can set `maxCacheByteSize` on each item's layer.
 
 These were settled on 2026-10-26, for stage 4:
 
@@ -236,6 +241,41 @@ This was settled on 2026-10-29, replacing stage 5's plan:
       callbacks typed for the wrong data.
     - **Mosaics:** `renderSource` returns the layer for each item's source,
       as it already can.
+
+This was settled on 2026-11-05, for MosaicLayer
+([#816](https://github.com/developmentseed/deck.gl-raster/issues/816)):
+
+26. **MosaicLayer opens its sources again through `reloadAll`.**
+    - **The mechanism:** MosaicLayer hands `updateTriggers.getSource` to its
+      inner TileLayer as `updateTriggers.getTileData`, and `all` as `all`.
+      When either changes, deck.gl's TileLayer calls the tileset's
+      `reloadAll`, as it does upstream. `MosaicTileset2D` overrides it to
+      unload every source (`finalize`) and select the items in view again,
+      which open with the current `getSource`.
+    - **Not a new id, as in decision 24:** that stores a count in
+      MosaicLayer's state. Kyle preferred keeping the triggers on deck.gl's
+      path.
+    - **RasterTileLayer keeps decision 24's count.** Its inner TileLayer's id
+      changes with the tile grid anyway, and ZarrLayer refetches by itself
+      when `selection` changes, with no app trigger to hand to deck.gl. A
+      `reloadAll` override would still need a stored value, and its inner
+      TileLayer never calls deck.gl's `reloadAll`.
+    - **Until deck.gl v10:** deck.gl 9.4's `reloadAll` doesn't unload the
+      tiles it drops or the data it replaces, and keeps the old tiles drawn
+      until new ones load. The override stays until we adopt v10's shared
+      `Tileset2D`
+      ([#846](https://github.com/developmentseed/deck.gl-raster/issues/846)),
+      whose `reloadAll` unloads the tiles it drops, though still not the data
+      a reload replaces.
+    - **The old items go at once,** as in decision 24.
+    - **A new `getSource` function alone opens nothing again,** as with
+      deck.gl's accessors.
+    - **No `renderSource` trigger.** MosaicLayer builds a new tileset class
+      on every render, so every render draws the loaded items again with the
+      current `renderSource`. RasterTileLayer does the same
+      ([#734](https://github.com/developmentseed/deck.gl-raster/pull/734)),
+      and a test pins it
+      ([#844](https://github.com/developmentseed/deck.gl-raster/pull/844)).
 
 ## Goals
 
@@ -487,12 +527,10 @@ new MosaicLayer({
   cancels the open: when the layer is removed, or, for an item no longer in
   view, when more than `maxRequests` opens are in flight. Sublayers never
   re-open a file or re-resolve its CRS.
-- An opened source lives as long as its item stays in MosaicLayer's cache, and
-  so does the layer drawn for it, with all its tiles (decision 16). The tileset
-  doesn't count a source's size either: `maxCacheByteSize` leaves the cache
-  unbounded (decision 17). *Proposal:* MosaicLayer creates sublayers only for
-  items in view, and sources expose an approximate `byteLength`, mostly the
-  header byte cache, so `maxCacheByteSize` can bound them.
+- An opened source lives as long as its item stays in MosaicLayer's cache,
+  which `maxCacheSize` bounds. The layer drawn for it lives only while the
+  item is in view (decision 16). MosaicLayer has no `maxCacheByteSize`
+  (decision 17).
 - A scene stored as one file per band is a record:
   `getSource: (item) => MultiCOGSource.open({ red: ..., nir: ... })`. That's
   the Sentinel-2 mosaic, drawn by MultiCOGLayer (decision 25).
@@ -633,8 +671,9 @@ Each stage is one PR.
        id. A change to `updateTriggers.getTileData` or `updateTriggers.all`
        calls it. That closes
        [#797](https://github.com/developmentseed/deck.gl-raster/issues/797)
-       for COGLayer, MultiCOGLayer and ZarrLayer; MosaicLayer's part is
-       [#816](https://github.com/developmentseed/deck.gl-raster/issues/816).
+       for COGLayer, MultiCOGLayer and ZarrLayer. MosaicLayer's part,
+       [#816](https://github.com/developmentseed/deck.gl-raster/issues/816),
+       works the same way (decision 26).
      - **ZarrLayer** calls it when it checks a new source and selection pair,
        so an inline `{ time: t }` with the same contents fetches nothing.
      - **The old tiles go at once.**
