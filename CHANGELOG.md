@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.10.0-beta.3 - 2026-11-05
+
+### What's Changed
+
+* feat(deck.gl-geotiff): give renderSource the props MosaicLayer passes to sublayers by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/789
+* chore(deps-dev): bump tsup from 8.5.1 to 9.0.0 by @dependabot[bot] in https://github.com/developmentseed/deck.gl-raster/pull/832
+* chore(deps): bump the github-actions group with 2 updates by @dependabot[bot] in https://github.com/developmentseed/deck.gl-raster/pull/828
+* chore(deps): bump the prod-dependencies group across 1 directory with 18 updates by @dependabot[bot] in https://github.com/developmentseed/deck.gl-raster/pull/831
+* fix(deck.gl-geotiff): free a palette COG's colormap texture by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/834
+* chore(deps-dev): bump the dev-dependencies group across 1 directory with 10 updates by @dependabot[bot] in https://github.com/developmentseed/deck.gl-raster/pull/830
+* fix(deck.gl-geotiff): keep MosaicLayer drawing after an item's source fails to open by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/833
+* fix(geotiff): decode NaN pixels in LERC tiles as NaN by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/790
+* fix(geozarr): read Y and X from `spatial:dimensions` by position by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/785
+* fix: support Cylindrical Equal Area CRSes by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/791
+* feat(deck.gl-geotiff): add parseVRT to load GDAL VRT mosaics by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/835
+* feat(deck.gl-zarr): render arrays whose spatial dims aren't last, such as [y, x, band] by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/788
+* fix(deck.gl-geotiff): free the layers of MosaicLayer items out of view by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/839
+* refactor(examples): drop the source caches MosaicLayer no longer needs by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/842
+* fix(deck.gl-geotiff)!: remove maxCacheByteSize from MosaicLayer by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/843
+* fix(deck.gl-raster): pick parent tile by centre in RasterTileset2D.getParentIndex by @alukach in https://github.com/developmentseed/deck.gl-raster/pull/841
+* test(deck.gl-geotiff): check that a new renderSource reaches loaded MosaicLayer items by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/844
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.10.0-beta.2...v0.10.0-beta.3
+
 ## v0.10.0-beta.2 - 2026-10-30
 
 ### What's Changed
