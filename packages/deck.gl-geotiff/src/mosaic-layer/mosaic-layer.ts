@@ -298,8 +298,6 @@ export class MosaicLayer<
     index: ItemIndex | null;
     // The items the index was built from
     items: ItemT[];
-    // How many times the sources were opened again, in the inner TileLayer's id
-    refetchCount?: number;
   };
 
   override updateState(params: UpdateParameters<this>): void {
@@ -309,17 +307,6 @@ export class MosaicLayer<
     // `data` changes or finishes loading
     if (params.changeFlags.dataChanged) {
       this._buildSpatialIndex();
-    }
-
-    // Open every source again through a new inner TileLayer: deck.gl removes
-    // the old one at once, and its tileset unloads every source. deck.gl's
-    // own `reloadAll` would keep drawing the old ones (see #818).
-    const { updateTriggersChanged } = params.changeFlags;
-    if (
-      updateTriggersChanged &&
-      (updateTriggersChanged.all || updateTriggersChanged.getSource)
-    ) {
-      this.setState({ refetchCount: (this.state.refetchCount ?? 0) + 1 });
     }
   }
 
@@ -365,9 +352,8 @@ export class MosaicLayer<
 
     // The props deck.gl passes from a composite layer to its sublayers, such
     // as `opacity`, for the inner TileLayer and `renderSource`. The `id` is
-    // set for each, and `updateTriggers` dropped: its `all` would make
-    // deck.gl's TileLayer reload through `Tileset2D.reloadAll`, which leaks
-    // sources (see #816).
+    // set for each, and `updateTriggers` replaced: the inner TileLayer gets
+    // only the triggers below.
     const {
       id: _id,
       updateTriggers: _updateTriggers,
@@ -378,7 +364,13 @@ export class MosaicLayer<
       item: ItemT;
       source?: SourceT;
     }>(subLayerProps, {
-      id: `mosaic-layer-${id}-${this.state.refetchCount ?? 0}`,
+      id: `mosaic-layer-${id}`,
+      // deck.gl's TileLayer calls the tileset's `reloadAll` when these
+      // change, which opens every source again
+      updateTriggers: {
+        getTileData: this.props.updateTriggers?.getSource,
+        all: this.props.updateTriggers?.all,
+      },
       TilesetClass: MosaicTileset2DFactory,
       ...omitUndefined({
         minZoom,
