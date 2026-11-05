@@ -118,5 +118,5 @@ request.
 The design in `dev-docs/specs/2026-10-26-range-reader-design.md`, all
 three stages: `@developmentseed/geotiff` reads every COG through it
 (`GeoTIFF.fromUrl`), and the deck.gl COG layers share one reader by default
-(`DEFAULT_RANGE_READER` in `@developmentseed/deck.gl-geotiff`). Sharded Zarr
+(`DEFAULT_RANGE_READER` in `@developmentseed/deck.gl-raster`). Sharded Zarr
 is next.

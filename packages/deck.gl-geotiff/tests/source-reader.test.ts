@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
+import { DEFAULT_RANGE_READER } from "@developmentseed/deck.gl-raster";
 import { RangeReader } from "@developmentseed/range-reader";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { COGSource } from "../src/cog-source.js";
-import { DEFAULT_RANGE_READER } from "../src/default-range-reader.js";
 import { MultiCOGSource } from "../src/multi-cog-source.js";
 import { fixturePath, loadGeoTIFF } from "./helpers.js";
 import { fixtureServer } from "./utils/fixture-server.js";
