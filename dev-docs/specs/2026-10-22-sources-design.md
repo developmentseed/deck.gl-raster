@@ -152,11 +152,16 @@ These were settled on 2026-10-26, for stage 3:
     only for the items in view: an item out of view keeps its opened source,
     and draws again from it once back in view. naip-mosaic and vrt-mosaic
     rely on that cache, and keep no sources of their own.
-17. **`maxCacheByteSize` doesn't bound MosaicLayer's cache**
-    ([#803](https://github.com/developmentseed/deck.gl-raster/issues/803)):
-    its tiles report no `byteLength`, so deck.gl's byte count becomes NaN. It
-    gets fixed once sources report an approximate `byteLength`, since the
-    cache holds only sources (decision 16).
+17. **MosaicLayer has no `maxCacheByteSize`** (as built for
+    [#803](https://github.com/developmentseed/deck.gl-raster/issues/803)).
+    In deck.gl's TileLayer, `maxCacheSize` and `maxCacheByteSize` bound the
+    same cache. In MosaicLayer, a byte budget reads as the memory of the
+    items' layers, but their tiles live in those layers' own caches, and only
+    for items in view, so MosaicLayer's cache of sources can't bound it.
+    `maxCacheSize` sets how many items keep their opened source. A budget
+    across the items' layers needs one tile cache that they share
+    ([#516](https://github.com/developmentseed/deck.gl-raster/issues/516)).
+    Until then, an app can set `maxCacheByteSize` on each item's layer.
 
 These were settled on 2026-10-26, for stage 4:
 
@@ -487,12 +492,10 @@ new MosaicLayer({
   cancels the open: when the layer is removed, or, for an item no longer in
   view, when more than `maxRequests` opens are in flight. Sublayers never
   re-open a file or re-resolve its CRS.
-- An opened source lives as long as its item stays in MosaicLayer's cache. The
-  layer drawn for it lives only while the item is in view (decision 16). The
-  tileset doesn't count a source's size: `maxCacheByteSize` leaves the cache
-  unbounded (decision 17). *Proposal:* sources expose an approximate
-  `byteLength`, mostly the header byte cache, so `maxCacheByteSize` can bound
-  them.
+- An opened source lives as long as its item stays in MosaicLayer's cache,
+  which `maxCacheSize` bounds. The layer drawn for it lives only while the
+  item is in view (decision 16). MosaicLayer has no `maxCacheByteSize`
+  (decision 17).
 - A scene stored as one file per band is a record:
   `getSource: (item) => MultiCOGSource.open({ red: ..., nir: ... })`. That's
   the Sentinel-2 mosaic, drawn by MultiCOGLayer (decision 25).
