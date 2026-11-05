@@ -91,4 +91,12 @@ describe("MosaicLayer props", () => {
       renderSource: () => null,
     });
   });
+
+  it("doesn't take maxCacheByteSize", () => {
+    new MosaicLayer<Item>({
+      // @ts-expect-error its cache holds only sources, bounded by maxCacheSize
+      maxCacheByteSize: 2 ** 20,
+      renderSource: () => null,
+    });
+  });
 });

@@ -59,7 +59,9 @@ export type MosaicLayerProps<
     TileLayerProps,
     // NOTE: `debounceTime` is intentionally not exposed.
     // See https://github.com/developmentseed/deck.gl-raster/issues/562
-    "maxCacheByteSize" | "maxCacheSize" | "maxRequests" | "maxZoom" | "minZoom"
+    // `maxCacheByteSize` isn't either: the cache holds only opened sources.
+    // See https://github.com/developmentseed/deck.gl-raster/issues/803
+    "maxCacheSize" | "maxRequests" | "maxZoom" | "minZoom"
   > & {
     /**
      * The items of the mosaic, each with a WGS84 `bbox`.
@@ -318,7 +320,6 @@ export class MosaicLayer<
       reader,
       requestInit,
       extent,
-      maxCacheByteSize,
       maxCacheSize,
       maxRequests,
       maxZoom,
@@ -366,7 +367,6 @@ export class MosaicLayer<
         minZoom,
         maxZoom,
         extent,
-        maxCacheByteSize,
         maxCacheSize,
         maxRequests,
       }),
