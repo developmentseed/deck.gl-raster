@@ -97,6 +97,9 @@ export function ControlPanel({
   onFrameDurationMsChange,
 }: ControlPanelProps) {
   const hours = ECMWF_LEAD_TIME_HOURS[leadTimeIdx] ?? 0;
+  const runHour = String(
+    dateFromInitTimeIdx(initTimeIdx).getUTCHours(),
+  ).padStart(2, "0");
   const selectedChoice =
     COLORMAP_CHOICES.find((c) => c.id === colormapId) ?? COLORMAP_CHOICES[0];
 
@@ -107,11 +110,11 @@ export function ControlPanel({
     >
       <Stack gap="3">
         <Text color="gray.600">
-          Animates the ECMWF IFS ENS 2 m temperature forecast from a{" "}
+          Animates the ECMWF AIFS Single 2 m temperature forecast from a{" "}
           <ExternalLink href="https://zarr.dev">Zarr</ExternalLink> store on a
           3D globe (MapLibre globe projection, deck.gl interleaved).
         </Text>
-        <Field label="Forecast date">
+        <Field label={`Forecast date (${runHour} UTC run)`}>
           <Input
             type="date"
             size="sm"
@@ -150,10 +153,7 @@ export function ControlPanel({
                 h
               </Text>
               <HelpTooltip label="Lead time resolution info">
-                Forecast steps are 3-hourly from +0 h to +144 h (48 steps), then
-                6-hourly from +150 h to +360 h (37 steps). 6 h steps dwell twice
-                as long during animation so the simulated-time pacing stays
-                constant.
+                Forecast steps are 6-hourly from +0 h to +360 h (61 steps).
               </HelpTooltip>
             </Text>
           }
@@ -265,10 +265,7 @@ export function ControlPanel({
           />
         </Field>
 
-        <Field
-          label={<Text as="span">3 h step: {frameDurationMs} ms</Text>}
-          helperText="6 h steps (after +144 h) dwell twice as long."
-        >
+        <Field label={<Text as="span">6 h step: {frameDurationMs} ms</Text>}>
           <Slider.Root
             size="sm"
             width="full"
@@ -299,8 +296,8 @@ export function ControlPanel({
           borderTopWidth="1px"
           borderColor="gray.200"
         >
-          <ExternalLink href="https://dynamical.org/catalog/ecmwf-ifs-ens-forecast-15-day-0-25-degree/">
-            ECMWF IFS ENS Forecast data
+          <ExternalLink href="https://dynamical.org/catalog/ecmwf-aifs-single-forecast/">
+            ECMWF AIFS Single Forecast data
           </ExternalLink>{" "}
           processed by dynamical.org from ECMWF Open Data.
         </Text>

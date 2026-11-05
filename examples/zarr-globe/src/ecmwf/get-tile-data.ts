@@ -5,7 +5,7 @@ import * as zarr from "zarrita";
 import { ECMWF_LEAD_TIME_COUNT } from "./metadata.js";
 
 /**
- * Per-tile data for the ECMWF example: a Texture2DArray stacking all 85
+ * Per-tile data for the ECMWF example: a Texture2DArray stacking all 61
  * lead_time frames for one spatial chunk.
  */
 export type EcmwfTileData = MinimalTileData & {

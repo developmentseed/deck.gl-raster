@@ -12,7 +12,7 @@ import {
 } from "deck.gl-raster-examples-shared";
 import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
 import type { ColormapId } from "./ecmwf/colormap-choices.js";
@@ -25,29 +25,25 @@ import { getTileData } from "./ecmwf/get-tile-data.js";
 import {
   ECMWF_GEOZARR_ATTRS,
   ECMWF_LEAD_TIME_COUNT,
-  ECMWF_LEAD_TIME_STEP_HOURS,
 } from "./ecmwf/metadata.js";
 import { makeRenderTile } from "./ecmwf/render-tile.js";
 import { buildSelection } from "./ecmwf/selection.js";
 import { ControlPanel } from "./ui/control-panel.js";
 
-/** Base step (hours) that `frameDurationMs` applies to. 3-hour steps dwell
- *  for `frameDurationMs`; 6-hour steps dwell for 2x that. */
-const BASE_STEP_HOURS = 3;
-
-// Fetched straight from the source.coop S3 bucket via the path-style S3
-// endpoint. The source.coop HTTP gateway (data.source.coop) no longer serves
-// this store's original layout, but the underlying bucket still holds it with
-// public CORS. Path-style is required because the bucket name contains dots,
-// which break the TLS wildcard cert used by virtual-hosted-style URLs.
+// Fetched straight from the source.coop S3 bucket, which allows CORS, via the
+// path-style S3 endpoint. Path-style is required because the bucket name
+// contains dots, which break the TLS wildcard cert used by virtual-hosted-style
+// URLs.
+//
+// Each chunk of this store holds 61 lead times for 60° x 60°, so the whole
+// globe is 18 requests.
 const ZARR_URL =
-  "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/dynamical/ecmwf-ifs-ens-forecast-15-day-0-25-degree/v0.1.0.zarr";
+  "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/dynamical/ecmwf-aifs-single-forecast/v0.1.0.zarr";
 
 const VARIABLE = "temperature_2m";
-const ENSEMBLE_MEMBER_IDX = 0; // control run
 const INITIAL_RESCALE_MIN = -40; // °C
 const INITIAL_RESCALE_MAX = 50; // °C
-const INITIAL_FRAME_DURATION_MS = 100;
+const INITIAL_FRAME_DURATION_MS = 200;
 
 export default function App() {
   const [leadTimeIdx, setLeadTimeIdx] = useState(0);
@@ -140,18 +136,8 @@ export default function App() {
     };
   }, []);
 
-  // Animation loop: advance leadTimeIdx at a rate proportional to each
-  // frame's lead-time step, so a 3 h step dwells for `frameDurationMs` and a
-  // 6 h step dwells for 2x that. Keeps simulated-time pacing constant across
-  // the 3 h -> 6 h regime shift at t=144 h. Uses requestAnimationFrame so it
-  // auto-pauses when the tab is hidden.
-  //
-  // Reads current leadTimeIdx from a ref so the loop doesn't need to resubscribe
-  // on every tick.
-  const leadTimeIdxRef = useRef(leadTimeIdx);
-  useEffect(() => {
-    leadTimeIdxRef.current = leadTimeIdx;
-  }, [leadTimeIdx]);
+  // Animation loop: advance leadTimeIdx every `frameDurationMs`. Uses
+  // requestAnimationFrame so it auto-pauses when the tab is hidden.
   useEffect(() => {
     if (!isPlaying) {
       return;
@@ -159,11 +145,7 @@ export default function App() {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number) => {
-      const curIdx = leadTimeIdxRef.current;
-      const curStepHours =
-        ECMWF_LEAD_TIME_STEP_HOURS[curIdx] ?? BASE_STEP_HOURS;
-      const dwell = frameDurationMs * (curStepHours / BASE_STEP_HOURS);
-      if (now - last >= dwell) {
+      if (now - last >= frameDurationMs) {
         setLeadTimeIdx((i) => (i + 1) % ECMWF_LEAD_TIME_COUNT);
         last = now;
       }
@@ -174,11 +156,7 @@ export default function App() {
   }, [isPlaying, frameDurationMs]);
 
   const selection = useMemo(
-    () =>
-      buildSelection({
-        initTimeIdx,
-        ensembleMemberIdx: ENSEMBLE_MEMBER_IDX,
-      }),
+    () => buildSelection({ initTimeIdx }),
     [initTimeIdx],
   );
 
@@ -220,8 +198,6 @@ export default function App() {
             getTileData,
             renderTile,
             onTileUnload: (tile) => tile.content?.texture.destroy(),
-            // Tiles are heavy, so limit GPU pressure with small cache size
-            maxCacheSize: 10,
             updateTriggers: {
               renderTile: [
                 leadTimeIdx,
