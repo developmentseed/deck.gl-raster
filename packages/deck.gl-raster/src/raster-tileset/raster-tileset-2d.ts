@@ -388,16 +388,19 @@ export class RasterTileset2D extends Tileset2D {
     const decimationX = parentFootprintX / currentFootprintX;
     const decimationY = parentFootprintY / currentFootprintY;
 
-    // Map the child's centre, not its top-left corner. Decimation is often not
-    // a whole number: rounded scale denominators give e.g. 2.000000000000004,
-    // and overviews sized by halving and rounding down (1543 -> 771 px) give
-    // 2.0013. Flooring the corner then lands in the left/top neighbour, so the
-    // placeholder is drawn over the wrong tile. The centre is half a tile from
-    // any edge, so it picks the parent covering most of the child, and the
-    // result is unchanged for whole-number decimation.
+    // Pick the parent containing the child's center: decimation is often a
+    // little off a whole number, so the child's corner can fall in a
+    // neighboring parent. A last tile holding a sliver of data can have its
+    // center past the parent level's edge, hence the clamp. See #841.
     return {
-      x: Math.floor((index.x + 0.5) / decimationX),
-      y: Math.floor((index.y + 0.5) / decimationY),
+      x: Math.min(
+        Math.floor((index.x + 0.5) / decimationX),
+        parentOverview.matrixWidth - 1,
+      ),
+      y: Math.min(
+        Math.floor((index.y + 0.5) / decimationY),
+        parentOverview.matrixHeight - 1,
+      ),
       z: index.z - 1,
     };
   }
