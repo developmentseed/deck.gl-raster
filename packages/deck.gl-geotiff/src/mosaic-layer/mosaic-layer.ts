@@ -123,6 +123,10 @@ export type MosaicLayerProps<
      * It's called only for items in view. deck.gl aborts `signal` when it
      * cancels the open: when the layer is removed, or, for an item no longer
      * in view, when more than `maxRequests` opens are in flight.
+     *
+     * When something it reads changes, change `updateTriggers.getSource` (or
+     * `updateTriggers.all`). The layer then drops every source at once,
+     * passing each to `onSourceUnload`, and opens the sources in view again.
      */
     getSource?: (
       item: ItemT,
@@ -294,6 +298,8 @@ export class MosaicLayer<
     index: ItemIndex | null;
     // The items the index was built from
     items: ItemT[];
+    // How many times the sources were opened again, in the inner TileLayer's id
+    refetchCount?: number;
   };
 
   override updateState(params: UpdateParameters<this>): void {
@@ -303,6 +309,17 @@ export class MosaicLayer<
     // `data` changes or finishes loading
     if (params.changeFlags.dataChanged) {
       this._buildSpatialIndex();
+    }
+
+    // Open every source again through a new inner TileLayer: deck.gl removes
+    // the old one at once, and its tileset unloads every source. deck.gl's
+    // own `reloadAll` would keep drawing the old ones (see #818).
+    const { updateTriggersChanged } = params.changeFlags;
+    if (
+      updateTriggersChanged &&
+      (updateTriggersChanged.all || updateTriggersChanged.getSource)
+    ) {
+      this.setState({ refetchCount: (this.state.refetchCount ?? 0) + 1 });
     }
   }
 
@@ -361,7 +378,7 @@ export class MosaicLayer<
       item: ItemT;
       source?: SourceT;
     }>(subLayerProps, {
-      id: `mosaic-layer-${id}`,
+      id: `mosaic-layer-${id}-${this.state.refetchCount ?? 0}`,
       TilesetClass: MosaicTileset2DFactory,
       ...omitUndefined({
         minZoom,
