@@ -255,10 +255,13 @@ This was settled on 2026-11-05, for MosaicLayer
     - **Not a new id, as in decision 24:** that stores a count in
       MosaicLayer's state. Kyle preferred keeping the triggers on deck.gl's
       path. *Planned:* RasterTileLayer moves to the same override.
-    - **Upstream:** deck.gl's `reloadAll` doesn't unload the tiles it drops
-      or the data it replaces. *Planned:* an upstream PR to fix that. Our
-      override stays even then, because deck.gl's keeps the old tiles drawn
-      until new ones load.
+    - **Until deck.gl v10:** deck.gl 9.4's `reloadAll` doesn't unload the
+      tiles it drops or the data it replaces, and keeps the old tiles drawn
+      until new ones load. The override stays until we adopt v10's shared
+      `Tileset2D`
+      ([#846](https://github.com/developmentseed/deck.gl-raster/issues/846)),
+      whose `reloadAll` unloads the tiles it drops, though still not the data
+      a reload replaces.
     - **The old items go at once,** as in decision 24.
     - **A new `getSource` function alone opens nothing again,** as with
       deck.gl's accessors.
