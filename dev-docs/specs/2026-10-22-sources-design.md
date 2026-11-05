@@ -151,8 +151,7 @@ These were settled on 2026-10-26, for stage 3:
     tileset evicts only after it adds a tile. So MosaicLayer renders layers
     only for the items in view: an item out of view keeps its opened source,
     and draws again from it once back in view. naip-mosaic and vrt-mosaic
-    still turn MosaicLayer's cache off (`maxCacheSize: 0`) and keep the
-    opened sources themselves, which they no longer need.
+    rely on that cache, and keep no sources of their own.
 17. **`maxCacheByteSize` doesn't bound MosaicLayer's cache**
     ([#803](https://github.com/developmentseed/deck.gl-raster/issues/803)):
     its tiles report no `byteLength`, so deck.gl's byte count becomes NaN. It

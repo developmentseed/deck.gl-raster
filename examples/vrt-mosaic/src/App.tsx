@@ -1,10 +1,7 @@
 import type { PickingInfo } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import { LoadingWidget } from "@deck.gl/widgets";
-import type {
-  COGSourceOptions,
-  VRTItem,
-} from "@developmentseed/deck.gl-geotiff";
+import type { VRTItem } from "@developmentseed/deck.gl-geotiff";
 import {
   COGLayer,
   COGSource,
@@ -48,33 +45,6 @@ const INITIAL_VIEW_STATE = {
   pitch: 0,
   bearing: 0,
 };
-
-/**
- * Opened COG sources, by URL.
- *
- * The MosaicLayer's own cache is off (`maxCacheSize: 0`), since each cached
- * item would keep its whole COGLayer and textures alive. Only the cheap opened
- * sources are kept, here. See
- * https://github.com/developmentseed/deck.gl-raster/issues/803.
- *
- * A failed or aborted open is evicted, so the next visit retries it.
- */
-const sourceCache = new Map<string, Promise<COGSource>>();
-
-function getCachedSource(
-  url: string,
-  options: COGSourceOptions,
-): Promise<COGSource> {
-  let promise = sourceCache.get(url);
-  if (!promise) {
-    promise = COGSource.open(url, options).catch((err) => {
-      sourceCache.delete(url);
-      throw err;
-    });
-    sourceCache.set(url, promise);
-  }
-  return promise;
-}
 
 /** Fetch and parse a VRT, timing each step. */
 async function loadVrt(
@@ -201,7 +171,9 @@ export default function App() {
         id: "vrt-mosaic",
         data: items,
         minZoom: MIN_ZOOM,
-        getSource: (item, options) => getCachedSource(item.url, options),
+        // MosaicLayer keeps each opened source in its cache, so an item that
+        // comes back into view isn't opened again
+        getSource: (item, options) => COGSource.open(item.url, options),
         opacity,
         renderSource: (_item, { source, subLayerProps }) =>
           new COGLayer<ElevationTileData>({
@@ -211,7 +183,6 @@ export default function App() {
             renderTile: (data) => renderElevation(data, style),
             onTileUnload: (tile) => tile.content?.texture.destroy(),
           }),
-        maxCacheSize: 0,
         // Draw under the basemap's water, boundaries, roads and labels.
         // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
         // doesn't know about it.
