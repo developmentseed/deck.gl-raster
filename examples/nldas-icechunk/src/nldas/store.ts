@@ -48,7 +48,7 @@ export async function openSurfaceTemp(): Promise<SurfaceTemp> {
   });
   if (!source.is("float32")) {
     throw new Error(
-      `Expected ${SURFACE_TEMP_PATH} to be float32, got ${source.arrays[0]!.dtype}`,
+      `Expected ${SURFACE_TEMP_PATH} to be float32, got ${source.levels[0]!.dtype}`,
     );
   }
 

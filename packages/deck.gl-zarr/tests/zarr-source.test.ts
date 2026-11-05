@@ -40,7 +40,7 @@ describe("ZarrSource.open", () => {
 
     const source = await ZarrSource.open(group);
 
-    expect(source.arrays.map((arr) => arr.path)).toEqual([
+    expect(source.levels.map((arr) => arr.path)).toEqual([
       "/a/r10m",
       "/a/r20m",
       "/a/r60m",
@@ -52,7 +52,7 @@ describe("ZarrSource.open", () => {
 
     const source = await ZarrSource.open(root, { path: "b" });
 
-    expect(source.arrays[0]!.path).toBe("/b/r10m");
+    expect(source.levels[0]!.path).toBe("/b/r10m");
   });
 
   it.each(["group", "store"] as const)(
@@ -63,7 +63,7 @@ describe("ZarrSource.open", () => {
 
       const source = await ZarrSource.open(input, { path: "/b" });
 
-      expect(source.arrays[0]!.path).toBe("/b/r10m");
+      expect(source.levels[0]!.path).toBe("/b/r10m");
     },
   );
 
@@ -72,7 +72,7 @@ describe("ZarrSource.open", () => {
 
     const source = await ZarrSource.open(store, { path: "a" });
 
-    expect(source.arrays.map((arr) => arr.path)).toEqual([
+    expect(source.levels.map((arr) => arr.path)).toEqual([
       "/a/r10m",
       "/a/r20m",
       "/a/r60m",
@@ -89,7 +89,7 @@ describe("ZarrSource.open", () => {
 
     const source = await ZarrSource.open(wrapper, { path: "b" });
 
-    expect(source.arrays[0]!.path).toBe("/b/r10m");
+    expect(source.levels[0]!.path).toBe("/b/r10m");
   });
 
   it.each([
@@ -130,7 +130,7 @@ describe("ZarrSource.open", () => {
 
     const source = await ZarrSource.open(store, { path: "flat/data" });
 
-    expect(source.node).toBe(source.arrays[0]);
+    expect(source.node).toBe(source.levels[0]);
   });
 
   it("keeps the group passed in as node", async () => {
@@ -160,7 +160,7 @@ describe("ZarrSource.open", () => {
 
     const source = await ZarrSource.open(store, { path: "flat/data" });
 
-    expect(source.arrays.map((arr) => arr.path)).toEqual(["/flat/data"]);
+    expect(source.levels.map((arr) => arr.path)).toEqual(["/flat/data"]);
   });
 
   it("opens an array passed in with its group's GeoZarr metadata", async () => {
@@ -169,7 +169,7 @@ describe("ZarrSource.open", () => {
 
     const source = await ZarrSource.open(array);
 
-    expect(source.arrays[0]).toBe(array);
+    expect(source.levels[0]).toBe(array);
   });
 
   it("doesn't read the group passed in again for an array in it", async () => {
@@ -194,7 +194,7 @@ describe("ZarrSource.open", () => {
 
     const source = await ZarrSource.open(store, { path: "loose/data" });
 
-    expect(source.arrays.map((arr) => arr.path)).toEqual(["/loose/data"]);
+    expect(source.levels.map((arr) => arr.path)).toEqual(["/loose/data"]);
   });
 
   it("reads no group when given geoZarrMetadata", async () => {
@@ -282,7 +282,7 @@ describe("ZarrSource.open", () => {
       geoZarrMetadata: attributes,
     });
 
-    expect(source.arrays.map((arr) => arr.path)).toEqual([
+    expect(source.levels.map((arr) => arr.path)).toEqual([
       "/bare/r10m",
       "/bare/r20m",
       "/bare/r60m",

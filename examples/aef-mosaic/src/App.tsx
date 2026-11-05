@@ -53,7 +53,7 @@ export default function App() {
       });
       if (!source.is("int8")) {
         throw new Error(
-          `Expected AEF embeddings to be int8, got ${source.arrays[0]!.dtype}`,
+          `Expected AEF embeddings to be int8, got ${source.levels[0]!.dtype}`,
         );
       }
       const labels = await fetchBandLabels(zarr.root(source.node.store));

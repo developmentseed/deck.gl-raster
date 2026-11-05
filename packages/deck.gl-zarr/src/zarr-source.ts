@@ -87,8 +87,11 @@ export class ZarrSource<
    */
   readonly node: zarr.Group<zarr.Readable> | zarr.Array<Dtype>;
 
-  /** One opened array per level, finest first. */
-  readonly arrays: readonly zarr.Array<Dtype>[];
+  /**
+   * One opened array per resolution level, finest first. Single-resolution
+   * data has one.
+   */
+  readonly levels: readonly zarr.Array<Dtype>[];
 
   /**
    * The names of the arrays' dimensions, in order, such as
@@ -108,7 +111,7 @@ export class ZarrSource<
 
   private constructor(options: {
     node: zarr.Group<zarr.Readable> | zarr.Array<Dtype>;
-    arrays: readonly zarr.Array<Dtype>[];
+    levels: readonly zarr.Array<Dtype>[];
     dimensionNames: readonly string[];
     spatialDims: [y: string, x: string];
     projection: ProjectionDefinition;
@@ -117,18 +120,18 @@ export class ZarrSource<
   }) {
     super(options);
     this.node = options.node;
-    this.arrays = options.arrays;
+    this.levels = options.levels;
     this.dimensionNames = options.dimensionNames;
     this.spatialDims = options.spatialDims;
     this.projection = options.projection;
   }
 
   /**
-   * Whether the arrays' data type is `dtype`, narrowing the source to it, as
+   * Whether the levels' data type is `dtype`, narrowing the source to it, as
    * zarrita's `Array.is` does for an array.
    */
   is<D extends zarr.DataType>(dtype: D): this is ZarrSource<D> {
-    return this.arrays[0]!.is(dtype);
+    return this.levels[0]!.is(dtype);
   }
 
   /**
@@ -239,7 +242,7 @@ export class ZarrSource<
     }));
     return new ZarrSource({
       node: target,
-      arrays,
+      levels: arrays,
       dimensionNames,
       spatialDims,
       projection,

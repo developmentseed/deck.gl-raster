@@ -225,7 +225,7 @@ export class ZarrLayer<
       return undefined;
     }
 
-    const { arrays, dimensionNames, spatialDims } = source;
+    const { levels, dimensionNames, spatialDims } = source;
     const { selection } = checked;
     const [yIndex, xIndex] = findSpatialDimIndices({
       dimensionNames,
@@ -236,8 +236,8 @@ export class ZarrLayer<
     >;
     const wrapped: RasterGetTileData = async (tile, options) => {
       const { x, y, z } = tile.index;
-      // The tile grid's levels are coarsest-first, and `arrays` finest-first
-      const arr = arrays[arrays.length - 1 - z]!;
+      // The tile grid's levels are coarsest-first, and `levels` finest-first
+      const arr = levels[levels.length - 1 - z]!;
 
       // Every level has the same dims, as ZarrSource.open checks
       const tileWidth = arr.chunks[xIndex]!;

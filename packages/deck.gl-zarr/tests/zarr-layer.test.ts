@@ -133,7 +133,7 @@ describe("ZarrLayer source", () => {
     runInitialUpdate(layer);
 
     await vi.waitFor(() =>
-      expect(layer.state.source?.arrays.map((arr) => arr.path)).toEqual([
+      expect(layer.state.source?.levels.map((arr) => arr.path)).toEqual([
         "/r10m",
         "/r20m",
         "/r60m",

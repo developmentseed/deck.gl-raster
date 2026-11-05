@@ -60,7 +60,7 @@ export default function App() {
   const [source, setSource] = useState<ZarrSource<"float32"> | null>(null);
   // Number of init_time values in the dataset (= first dim of the array),
   // known once the zarr array is opened.
-  const initTimeCount = source ? source.arrays[0]!.shape[0]! : 0;
+  const initTimeCount = source ? source.levels[0]!.shape[0]! : 0;
   const [colormapId, setColormapId] = useState<ColormapId>(DEFAULT_COLORMAP_ID);
   const [rescaleMin, setRescaleMin] = useState(INITIAL_RESCALE_MIN);
   const [rescaleMax, setRescaleMax] = useState(INITIAL_RESCALE_MAX);
@@ -126,7 +126,7 @@ export default function App() {
       });
       if (!source.is("float32")) {
         throw new Error(
-          `Expected ${VARIABLE} to be float32, got ${source.arrays[0]!.dtype}`,
+          `Expected ${VARIABLE} to be float32, got ${source.levels[0]!.dtype}`,
         );
       }
       if (cancelled) {
@@ -134,7 +134,7 @@ export default function App() {
       }
       setSource(source);
       // Default to the latest available forecast run.
-      setInitTimeIdx(source.arrays[0]!.shape[0]! - 1);
+      setInitTimeIdx(source.levels[0]!.shape[0]! - 1);
     })();
     return () => {
       cancelled = true;
