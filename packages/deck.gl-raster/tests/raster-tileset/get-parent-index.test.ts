@@ -70,16 +70,14 @@ describe("RasterTileset2D.getParentIndex with rounded scale denominators", () =>
   });
 });
 
-// A COG whose overviews GDAL sized by halving and rounding down (from
-// wrc-2-pa-buildingcount-conus-cog.tif, 512px tiles). Every level spans the
-// same extent, so when a width is odd the next level is slightly more than 2x
-// coarser: 1543 -> 771 px gives a decimation of 1543 / 771 = 2.0013, far
-// beyond what TILE_EDGE_TOLERANCE absorbs.
-const OVERVIEW_WIDTHS = [
-  385, 771, 1543, 3086, 6172, 12344, 24689, 49378, 98757, 197514,
-];
+// The overview widths of the "Umbra Port of Rotterdam" COG in
+// examples/cog-basic (512px tiles), which GDAL sized by halving and rounding
+// down. Every level spans the same extent, so when a width is odd the next
+// level is slightly more than 2x coarser: 2857 -> 1428 px gives a decimation
+// of 2857 / 1428 = 2.0007, far beyond what TILE_EDGE_TOLERANCE absorbs.
+const OVERVIEW_WIDTHS = [357, 714, 1428, 2857, 5714, 11429, 22859];
 const TILE_SIZE = 512;
-const EXTENT_M = 7_150_000; // ~64.3 degrees of longitude at this latitude
+const EXTENT_M = 22_859; // arbitrary: 1m pixels at full resolution
 const SCREEN_PIXEL_SIZE = 0.00028;
 
 const ROUNDED_OVERVIEWS: TileMatrixSet = {
@@ -113,11 +111,11 @@ describe("RasterTileset2D.getParentIndex with rounded-down overview sizes", () =
     }),
   );
 
-  it("maps 2/2/2 (1543px level) to 1/1/1 (771px level), not its neighbour", () => {
-    expect(tileset.getParentIndex({ x: 2, y: 2, z: 2 })).toEqual({
+  it("maps 3/2/2 (2857px level) to 2/1/1 (1428px level), not its neighbour", () => {
+    expect(tileset.getParentIndex({ x: 2, y: 2, z: 3 })).toEqual({
       x: 1,
       y: 1,
-      z: 1,
+      z: 2,
     });
   });
 
