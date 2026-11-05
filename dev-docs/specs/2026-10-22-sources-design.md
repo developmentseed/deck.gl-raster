@@ -144,19 +144,20 @@ These were settled on 2026-10-26, for stage 3:
     callbacks get the opened source as `{ source }`, `onViewportLoad`'s
     entries are `{ item, source }`, and `MosaicSource` is `MosaicItem`. The
     source type stays unconstrained, so a mosaic of plain images still works.
-16. **naip-mosaic keeps its own source cache.** MosaicLayer's cache can't hold
-    sources cheaply yet. deck.gl's TileLayer keeps the sublayers of every
-    cached tile, out of view ones included, and a COGLayer out of view keeps
-    all its tiles, since a tileset evicts only after it adds a tile. So
-    naip-mosaic turns MosaicLayer's cache off (`maxCacheSize: 0`) and keeps
-    the opened sources itself. *Proposal, for its own PR:* MosaicLayer
-    creates sublayers only for items in view, so its cache holds only
-    sources.
+16. **MosaicLayer's cache holds only sources** (as built for
+    [#803](https://github.com/developmentseed/deck.gl-raster/issues/803)).
+    deck.gl's TileLayer keeps the sublayers of every cached tile, out of view
+    ones included, and a COGLayer out of view keeps all its tiles, since a
+    tileset evicts only after it adds a tile. So MosaicLayer renders layers
+    only for the items in view: an item out of view keeps its opened source,
+    and draws again from it once back in view. naip-mosaic and vrt-mosaic
+    still turn MosaicLayer's cache off (`maxCacheSize: 0`) and keep the
+    opened sources themselves, which they no longer need.
 17. **`maxCacheByteSize` doesn't bound MosaicLayer's cache**
     ([#803](https://github.com/developmentseed/deck.gl-raster/issues/803)):
     its tiles report no `byteLength`, so deck.gl's byte count becomes NaN. It
-    gets fixed with decision 16's proposal, once sources report an
-    approximate `byteLength`.
+    gets fixed once sources report an approximate `byteLength`, since the
+    cache holds only sources (decision 16).
 
 These were settled on 2026-10-26, for stage 4:
 
@@ -487,12 +488,12 @@ new MosaicLayer({
   cancels the open: when the layer is removed, or, for an item no longer in
   view, when more than `maxRequests` opens are in flight. Sublayers never
   re-open a file or re-resolve its CRS.
-- An opened source lives as long as its item stays in MosaicLayer's cache, and
-  so does the layer drawn for it, with all its tiles (decision 16). The tileset
-  doesn't count a source's size either: `maxCacheByteSize` leaves the cache
-  unbounded (decision 17). *Proposal:* MosaicLayer creates sublayers only for
-  items in view, and sources expose an approximate `byteLength`, mostly the
-  header byte cache, so `maxCacheByteSize` can bound them.
+- An opened source lives as long as its item stays in MosaicLayer's cache. The
+  layer drawn for it lives only while the item is in view (decision 16). The
+  tileset doesn't count a source's size: `maxCacheByteSize` leaves the cache
+  unbounded (decision 17). *Proposal:* sources expose an approximate
+  `byteLength`, mostly the header byte cache, so `maxCacheByteSize` can bound
+  them.
 - A scene stored as one file per band is a record:
   `getSource: (item) => MultiCOGSource.open({ red: ..., nir: ... })`. That's
   the Sentinel-2 mosaic, drawn by MultiCOGLayer (decision 25).
