@@ -37,6 +37,9 @@ To change how the data opens, open it yourself with `ZarrSource.open`: give the 
 import { ZarrLayer, ZarrSource } from "@developmentseed/deck.gl-zarr";
 
 const source = await ZarrSource.open(store, { path: "temperature" });
+if (!source.is("float32")) {
+  throw new Error(`Expected float32 data, got ${source.levels[0]!.dtype}`);
+}
 const { west, south, east, north } = source.geographicBounds;
 
 const layer = new ZarrLayer({
@@ -47,6 +50,8 @@ const layer = new ZarrLayer({
   renderTile,
 });
 ```
+
+`source.is(dtype)` checks the data type at run time and narrows the source's type to it, as zarrita's `Array.is` does for an array.
 
 An array inherits the `proj:` and `spatial:` attributes of the group it's in, so `path` can name an array whose GeoZarr metadata is on its group.
 
