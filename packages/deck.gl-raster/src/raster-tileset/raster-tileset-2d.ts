@@ -23,7 +23,6 @@ import {
   rescaleCommonSpaceToEPSG3857,
   rescaleEPSG3857ToCommonSpace,
 } from "./raster-tile-traversal.js";
-import { TILE_EDGE_TOLERANCE } from "./tile-span.js";
 import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -389,13 +388,19 @@ export class RasterTileset2D extends Tileset2D {
     const decimationX = parentFootprintX / currentFootprintX;
     const decimationY = parentFootprintY / currentFootprintY;
 
-    // Footprints derived from rounded scale denominators can give a decimation
-    // a hair above a whole number (e.g. 2.000000000000004), which would floor
-    // an exact multiple like 2 / 2.000000000000004 down to the wrong parent.
-    // Add the same tolerance the traversal uses at tile edges before flooring.
+    // Pick the parent containing the child's center: decimation is often a
+    // little off a whole number, so the child's corner can fall in a
+    // neighboring parent. A last tile holding a sliver of data can have its
+    // center past the parent level's edge, hence the clamp. See #841.
     return {
-      x: Math.floor(index.x / decimationX + TILE_EDGE_TOLERANCE),
-      y: Math.floor(index.y / decimationY + TILE_EDGE_TOLERANCE),
+      x: Math.min(
+        Math.floor((index.x + 0.5) / decimationX),
+        parentOverview.matrixWidth - 1,
+      ),
+      y: Math.min(
+        Math.floor((index.y + 0.5) / decimationY),
+        parentOverview.matrixHeight - 1,
+      ),
       z: index.z - 1,
     };
   }
