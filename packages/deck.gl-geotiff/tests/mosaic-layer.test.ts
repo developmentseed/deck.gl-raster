@@ -406,6 +406,30 @@ describe("MosaicLayer sources", () => {
     expect(loadedSources).toEqual({ A: { of: "A" }, B: { of: "B" } });
   });
 
+  it("draws loaded items with a new renderSource, without opening them again", async () => {
+    const { render } = makeMosaicRenderer();
+    const data = [A];
+    const drawn: string[] = [];
+    await render({
+      data,
+      renderSource: (item) => {
+        drawn.push(`first ${item.id}`);
+        return null;
+      },
+    });
+
+    const { fetched, errors } = await render({
+      data,
+      renderSource: (item) => {
+        drawn.push(`second ${item.id}`);
+        return null;
+      },
+    });
+    expect(errors).toEqual([]);
+    expect(fetched).toEqual([]);
+    expect(drawn.at(-1)).toBe("second A");
+  });
+
   it("reports each item with its source to onViewportLoad", async () => {
     const { render } = makeMosaicRenderer();
 
