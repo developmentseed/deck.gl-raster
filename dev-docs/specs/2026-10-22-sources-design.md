@@ -242,6 +242,25 @@ This was settled on 2026-10-29, replacing stage 5's plan:
     - **Mosaics:** `renderSource` returns the layer for each item's source,
       as it already can.
 
+This was settled on 2026-11-05, for MosaicLayer
+([#816](https://github.com/developmentseed/deck.gl-raster/issues/816)):
+
+26. **MosaicLayer opens its sources again the way a refetch works.**
+    - **The mechanism:** a change to `updateTriggers.getSource` or
+      `updateTriggers.all` puts a new count in the inner TileLayer's id, as
+      decision 24 does for tiles. deck.gl removes the old TileLayer at once,
+      its tileset passes every source to `onSourceUnload`, and the sources in
+      view open again.
+    - **The old items go at once,** as in decision 24.
+    - **A new `getSource` function alone opens nothing again,** as with
+      deck.gl's accessors.
+    - **No `renderSource` trigger.** MosaicLayer builds a new tileset class
+      on every render, so every render draws the loaded items again with the
+      current `renderSource`. RasterTileLayer does the same
+      ([#734](https://github.com/developmentseed/deck.gl-raster/pull/734)),
+      and a test pins it
+      ([#844](https://github.com/developmentseed/deck.gl-raster/pull/844)).
+
 ## Goals
 
 - `COGSource` (one file), `MultiCOGSource` (several files of one scene) and
@@ -636,8 +655,9 @@ Each stage is one PR.
        id. A change to `updateTriggers.getTileData` or `updateTriggers.all`
        calls it. That closes
        [#797](https://github.com/developmentseed/deck.gl-raster/issues/797)
-       for COGLayer, MultiCOGLayer and ZarrLayer; MosaicLayer's part is
-       [#816](https://github.com/developmentseed/deck.gl-raster/issues/816).
+       for COGLayer, MultiCOGLayer and ZarrLayer. MosaicLayer's part,
+       [#816](https://github.com/developmentseed/deck.gl-raster/issues/816),
+       works the same way (decision 26).
      - **ZarrLayer** calls it when it checks a new source and selection pair,
        so an inline `{ time: t }` with the same contents fetches nothing.
      - **The old tiles go at once.**
