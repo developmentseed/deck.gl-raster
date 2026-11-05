@@ -645,18 +645,95 @@ describe("MosaicLayer sublayer props", () => {
     expect(fetched).toEqual([]);
     expect(opacityOf(layers, "mosaic-A")).toBe(0.8);
   });
+});
 
-  it("doesn't open its sources again through deck.gl's reload when updateTriggers.all changes", async () => {
-    const { render } = makeMosaicRenderer();
-    const data = [A, B];
-    await render({ data, updateTriggers: { all: [0] } });
+describe("MosaicLayer update triggers", () => {
+  const data = [A, B];
 
-    const { fetched, errors } = await render({
+  /**
+   * Props whose `getSource` opens `{ of: "<id> <version>" }`, with `version`
+   * as the value of the given trigger. Each open and unload is logged.
+   */
+  function versionProps(
+    trigger: "getSource" | "all",
+    version: number,
+    log: string[],
+  ): Partial<MosaicLayerProps<Item, Marker>> {
+    return {
       data,
-      updateTriggers: { all: [1] },
-    });
+      updateTriggers: { [trigger]: version },
+      getSource: async (item) => {
+        log.push(`open ${item.id} ${version}`);
+        return { of: `${item.id} ${version}` };
+      },
+      onSourceUnload: (_item, { source }) => {
+        log.push(`unload ${source?.of}`);
+      },
+    };
+  }
+
+  it.each(["getSource", "all"] as const)(
+    "opens every source again when updateTriggers.%s changes",
+    async (trigger) => {
+      const { render } = makeMosaicRenderer();
+      const log: string[] = [];
+      await render(versionProps(trigger, 1, log));
+      log.length = 0;
+
+      const { rendered, errors } = await render(versionProps(trigger, 2, log));
+      expect(errors).toEqual([]);
+      expect(log.sort()).toEqual([
+        "open A 2",
+        "open B 2",
+        "unload A 1",
+        "unload B 1",
+      ]);
+      expect(rendered).toEqual({ A: { of: "A 2" }, B: { of: "B 2" } });
+    },
+  );
+
+  it("opens nothing again while its triggers stay the same", async () => {
+    const { render } = makeMosaicRenderer();
+    const log: string[] = [];
+    await render(versionProps("getSource", 1, log));
+    log.length = 0;
+
+    // A new `getSource` function, with the same trigger
+    const { errors } = await render(versionProps("getSource", 1, log));
     expect(errors).toEqual([]);
-    expect(fetched).toEqual([]);
+    expect(log).toEqual([]);
+  });
+
+  it("stops drawing the old sources at once, before the new ones open", async () => {
+    const { render, wait } = makeMosaicRenderer();
+    const items = [A];
+    const renderSource: MosaicLayerProps<Item, Marker>["renderSource"] = (
+      _item,
+      { subLayerProps },
+    ) => new ItemLayer({ ...subLayerProps });
+    await render({
+      data: items,
+      renderSource,
+      updateTriggers: { getSource: 1 },
+    });
+
+    let finish!: () => void;
+    const reopening = await render({
+      data: items,
+      renderSource,
+      updateTriggers: { getSource: 2 },
+      // Holds the new open until `finish` is called
+      getSource: (item) =>
+        new Promise((resolve) => {
+          finish = () => resolve({ of: item.id });
+        }),
+    });
+    expect(reopening.errors).toEqual([]);
+    expect(reopening.layers.map((layer) => layer.id)).not.toContain("mosaic-A");
+
+    finish();
+    const { layers } = await wait();
+    expect(layers.map((layer) => layer.id)).toContain("mosaic-A");
   });
 });
 

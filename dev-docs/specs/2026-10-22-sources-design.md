@@ -242,6 +242,36 @@ This was settled on 2026-10-29, replacing stage 5's plan:
     - **Mosaics:** `renderSource` returns the layer for each item's source,
       as it already can.
 
+This was settled on 2026-11-05, for MosaicLayer
+([#816](https://github.com/developmentseed/deck.gl-raster/issues/816)):
+
+26. **MosaicLayer opens its sources again through `reloadAll`.**
+    - **The mechanism:** MosaicLayer hands `updateTriggers.getSource` to its
+      inner TileLayer as `updateTriggers.getTileData`, and `all` as `all`.
+      When either changes, deck.gl's TileLayer calls the tileset's
+      `reloadAll`, as it does upstream. `MosaicTileset2D` overrides it to
+      unload every source (`finalize`) and select the items in view again,
+      which open with the current `getSource`.
+    - **Not a new id, as in decision 24:** that stores a count in
+      MosaicLayer's state. Kyle preferred keeping the triggers on deck.gl's
+      path. *Planned:* RasterTileLayer moves to the same override.
+    - **Until deck.gl v10:** deck.gl 9.4's `reloadAll` doesn't unload the
+      tiles it drops or the data it replaces, and keeps the old tiles drawn
+      until new ones load. The override stays until we adopt v10's shared
+      `Tileset2D`
+      ([#846](https://github.com/developmentseed/deck.gl-raster/issues/846)),
+      whose `reloadAll` unloads the tiles it drops, though still not the data
+      a reload replaces.
+    - **The old items go at once,** as in decision 24.
+    - **A new `getSource` function alone opens nothing again,** as with
+      deck.gl's accessors.
+    - **No `renderSource` trigger.** MosaicLayer builds a new tileset class
+      on every render, so every render draws the loaded items again with the
+      current `renderSource`. RasterTileLayer does the same
+      ([#734](https://github.com/developmentseed/deck.gl-raster/pull/734)),
+      and a test pins it
+      ([#844](https://github.com/developmentseed/deck.gl-raster/pull/844)).
+
 ## Goals
 
 - `COGSource` (one file), `MultiCOGSource` (several files of one scene) and
@@ -636,8 +666,9 @@ Each stage is one PR.
        id. A change to `updateTriggers.getTileData` or `updateTriggers.all`
        calls it. That closes
        [#797](https://github.com/developmentseed/deck.gl-raster/issues/797)
-       for COGLayer, MultiCOGLayer and ZarrLayer; MosaicLayer's part is
-       [#816](https://github.com/developmentseed/deck.gl-raster/issues/816).
+       for COGLayer, MultiCOGLayer and ZarrLayer. MosaicLayer's part,
+       [#816](https://github.com/developmentseed/deck.gl-raster/issues/816),
+       works the same way (decision 26).
      - **ZarrLayer** calls it when it checks a new source and selection pair,
        so an inline `{ time: t }` with the same contents fetches nothing.
      - **The old tiles go at once.**

@@ -123,6 +123,10 @@ export type MosaicLayerProps<
      * It's called only for items in view. deck.gl aborts `signal` when it
      * cancels the open: when the layer is removed, or, for an item no longer
      * in view, when more than `maxRequests` opens are in flight.
+     *
+     * When something it reads changes, change `updateTriggers.getSource` (or
+     * `updateTriggers.all`). The layer then drops every source at once,
+     * passing each to `onSourceUnload`, and opens the sources in view again.
      */
     getSource?: (
       item: ItemT,
@@ -348,9 +352,8 @@ export class MosaicLayer<
 
     // The props deck.gl passes from a composite layer to its sublayers, such
     // as `opacity`, for the inner TileLayer and `renderSource`. The `id` is
-    // set for each, and `updateTriggers` dropped: its `all` would make
-    // deck.gl's TileLayer reload through `Tileset2D.reloadAll`, which leaks
-    // sources (see #816).
+    // set for each, and `updateTriggers` replaced: the inner TileLayer gets
+    // only the triggers below.
     const {
       id: _id,
       updateTriggers: _updateTriggers,
@@ -362,6 +365,12 @@ export class MosaicLayer<
       source?: SourceT;
     }>(subLayerProps, {
       id: `mosaic-layer-${id}`,
+      // deck.gl's TileLayer calls the tileset's `reloadAll` when these
+      // change, which opens every source again
+      updateTriggers: {
+        getTileData: this.props.updateTriggers?.getSource,
+        all: this.props.updateTriggers?.all,
+      },
       TilesetClass: MosaicTileset2DFactory,
       ...omitUndefined({
         minZoom,

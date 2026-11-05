@@ -355,3 +355,40 @@ describe("MosaicTileset2D extent", () => {
     ]);
   });
 });
+
+describe("MosaicTileset2D reloadAll", () => {
+  it("unloads every item, and selects the items in view again on the next update", async () => {
+    const items = [A, B];
+    const index = buildItemIndex(items);
+    const unloaded: string[] = [];
+    const tileset = new MosaicTileset2D<Item>(
+      () => items,
+      () => index,
+      {
+        getTileData: async () => ({}),
+        onTileUnload: (tile: { id: string }) => unloaded.push(tile.id),
+        extent: null,
+      } as unknown as Tileset2DProps,
+    );
+    // A real viewport, which equals itself, so an update with it selects
+    // again only when the tileset is told to
+    const viewport = new WebMercatorViewport({
+      width: 512,
+      height: 512,
+      longitude: 15,
+      latitude: 5,
+      zoom: 3,
+    });
+    tileset.update(viewport);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const loaded = tileset.selectedTiles ?? [];
+
+    tileset.reloadAll();
+    tileset.update(viewport);
+
+    expect(unloaded.sort()).toEqual(["0", "1"]);
+    const reselected = tileset.selectedTiles ?? [];
+    expect(reselected.map((tile) => tile.id).sort()).toEqual(["0", "1"]);
+    expect(reselected.some((tile) => loaded.includes(tile))).toBe(false);
+  });
+});
