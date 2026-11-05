@@ -254,7 +254,12 @@ This was settled on 2026-11-05, for MosaicLayer
       which open with the current `getSource`.
     - **Not a new id, as in decision 24:** that stores a count in
       MosaicLayer's state. Kyle preferred keeping the triggers on deck.gl's
-      path. *Planned:* RasterTileLayer moves to the same override.
+      path.
+    - **RasterTileLayer keeps decision 24's count.** Its inner TileLayer's id
+      changes with the tile grid anyway, and ZarrLayer refetches by itself
+      when `selection` changes, with no app trigger to hand to deck.gl. A
+      `reloadAll` override would still need a stored value, and its inner
+      TileLayer never calls deck.gl's `reloadAll`.
     - **Until deck.gl v10:** deck.gl 9.4's `reloadAll` doesn't unload the
       tiles it drops or the data it replaces, and keeps the old tiles drawn
       until new ones load. The override stays until we adopt v10's shared
