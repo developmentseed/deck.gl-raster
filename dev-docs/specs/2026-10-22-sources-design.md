@@ -245,12 +245,20 @@ This was settled on 2026-10-29, replacing stage 5's plan:
 This was settled on 2026-11-05, for MosaicLayer
 ([#816](https://github.com/developmentseed/deck.gl-raster/issues/816)):
 
-26. **MosaicLayer opens its sources again the way a refetch works.**
-    - **The mechanism:** a change to `updateTriggers.getSource` or
-      `updateTriggers.all` puts a new count in the inner TileLayer's id, as
-      decision 24 does for tiles. deck.gl removes the old TileLayer at once,
-      its tileset passes every source to `onSourceUnload`, and the sources in
-      view open again.
+26. **MosaicLayer opens its sources again through `reloadAll`.**
+    - **The mechanism:** MosaicLayer hands `updateTriggers.getSource` to its
+      inner TileLayer as `updateTriggers.getTileData`, and `all` as `all`.
+      When either changes, deck.gl's TileLayer calls the tileset's
+      `reloadAll`, as it does upstream. `MosaicTileset2D` overrides it to
+      unload every source (`finalize`) and select the items in view again,
+      which open with the current `getSource`.
+    - **Not a new id, as in decision 24:** that stores a count in
+      MosaicLayer's state. Kyle preferred keeping the triggers on deck.gl's
+      path. *Planned:* RasterTileLayer moves to the same override.
+    - **Upstream:** deck.gl's `reloadAll` doesn't unload the tiles it drops
+      or the data it replaces. *Planned:* an upstream PR to fix that. Our
+      override stays even then, because deck.gl's keeps the old tiles drawn
+      until new ones load.
     - **The old items go at once,** as in decision 24.
     - **A new `getSource` function alone opens nothing again,** as with
       deck.gl's accessors.
