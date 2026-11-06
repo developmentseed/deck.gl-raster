@@ -101,7 +101,10 @@ describe("RangeStream", () => {
       await body.close();
       await done;
       expect(await d.promise).toEqual({ kind: "bytes", bytes: pattern(5, 95) });
-      expect(stream.attach(member(0, 1))).toBe(false);
+      // A finished stream still serves the bytes it received.
+      const late = member(0, 1);
+      expect(stream.attach(late)).toBe(true);
+      expect(await late.promise).toEqual({ kind: "bytes", bytes: pattern(1) });
     });
 
     it("sends no Range header for a whole-object request and resolves its member at the end", async () => {
@@ -259,6 +262,30 @@ describe("RangeStream cancellation", () => {
     expect(outcome.end).toEqual({ kind: "cancelled" });
     expect(outcome.bytes).toEqual(pattern(30));
     expect(stream.active).toBe(false);
+  });
+
+  it("serves only received bytes once cancelled", async () => {
+    const { fetch, next } = fakeFetch();
+    const ac = new AbortController();
+    const stream = new RangeStream(
+      file(),
+      { offset: 0, length: 100 },
+      [member(60, 20, { signal: ac.signal })],
+      { fetch, maxRequestBytes: MAX },
+    );
+    const done = stream.run();
+    const body = (await next()).reply({
+      status: 206,
+      headers: { "content-length": "100" },
+    });
+    await body.push(pattern(30));
+    ac.abort("gone");
+    await done;
+    const inside = member(0, 10);
+    expect(stream.attach(inside)).toBe(true);
+    expect(await inside.promise).toEqual({ kind: "bytes", bytes: pattern(10) });
+    // Never arrived, and never will: the reader must request it.
+    expect(stream.attach(member(25, 10))).toBe(false);
   });
 
   it("does not keep a request alive for members that already resolved", async () => {

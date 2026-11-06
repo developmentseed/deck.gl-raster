@@ -103,6 +103,8 @@ export class RangeReader {
    * cache never combines ranges with different validators.
    */
   private readonly validators = new Map<FileKey, string>();
+  /** Streams that have finished, so a lookup can tell its cache miss may be stale. */
+  private finishedStreams = 0;
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: RangeReaderOptions = {}) {
@@ -160,25 +162,17 @@ export class RangeReader {
     if (size !== undefined && range.offset >= size) {
       return { kind: "bytes", bytes: new Uint8Array(0) };
     }
-    const hit = await this.cache.get(file, range, options.purpose);
-    const { signal } = options;
-    if (signal?.aborted) {
-      throw signal.reason;
-    }
+    const finishedBefore = this.finishedStreams;
+    const hit = await this.fromCache(file, range, options);
     if (hit !== undefined) {
-      this.stats.cacheHits += 1;
-      this.stats.cacheHitBytes += range.length;
-      const validator = this.validators.get(file.key);
-      return validator === undefined
-        ? { kind: "bytes", bytes: hit }
-        : { kind: "bytes", bytes: hit, validator };
+      return hit;
     }
     return new Promise((resolve, reject) => {
       const member: StreamMember = {
         ...range,
         resolve,
         reject,
-        signal,
+        signal: options.signal,
         getPriority: options.getPriority,
       };
       for (const stream of this.inflight.get(file.key) ?? []) {
@@ -187,8 +181,41 @@ export class RangeReader {
           return;
         }
       }
-      this.enqueue(groupKey(file, options.purpose), file, options, member);
+      const queue = () =>
+        this.enqueue(groupKey(file, options.purpose), file, options, member);
+      if (this.finishedStreams === finishedBefore) {
+        queue();
+        return;
+      }
+      // A stream finished during the lookup, and may have stored these bytes
+      // after the cache was read. See #826.
+      this.fromCache(file, range, options).then(
+        (late) => (late === undefined ? queue() : resolve(late)),
+        reject,
+      );
     });
+  }
+
+  /** A cache hit, or undefined. Throws the signal's reason once it has aborted. */
+  private async fromCache(
+    file: FileIdentity,
+    range: ByteRange,
+    options: ResolvedReadOptions,
+  ): Promise<ReadResult | undefined> {
+    const hit = await this.cache.get(file, range, options.purpose);
+    const { signal } = options;
+    if (signal?.aborted) {
+      throw signal.reason;
+    }
+    if (hit === undefined) {
+      return undefined;
+    }
+    this.stats.cacheHits += 1;
+    this.stats.cacheHitBytes += range.length;
+    const validator = this.validators.get(file.key);
+    return validator === undefined
+      ? { kind: "bytes", bytes: hit }
+      : { kind: "bytes", bytes: hit, validator };
   }
 
   /** One read, one request: suffix and whole-object reads never merge. */
@@ -351,6 +378,7 @@ export class RangeReader {
       if (streams.size === 0) {
         this.inflight.delete(file.key);
       }
+      this.finishedStreams += 1;
     };
     void stream.run().then(
       (outcome) => {
