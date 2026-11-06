@@ -186,7 +186,7 @@ export class Overview {
    *
    * @param options Optional parameters for reading.
    * @param options.window The {@link Window} of pixels to read, in this overview's pixels. Defaults to the whole overview.
-   * @param options.pool An optional {@link DecoderPool} for decoding the tile data. If not provided, a new decoder will be created for each tile.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tiles off the main thread, such as the one {@link defaultDecoderPool} returns. If not provided, the tiles are decoded on the main thread.
    * @param options.signal An optional {@link AbortSignal} to cancel the fetch requests.
    * @returns A {@link RasterArray} of the window's pixels, with a mask if the overview has a mask IFD.
    * @throws A `WindowError` if the window is invalid or extends outside the overview.

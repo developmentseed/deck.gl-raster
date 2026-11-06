@@ -137,7 +137,7 @@ If you have an image where the CRS fails to parse, please create an issue.
 
 ### Configurable Web Worker pool for image decoding
 
-A `DecoderPool` decodes image data in Web Workers, off the main thread. Pass one to `fetchTile` or `fetchTiles`:
+A `DecoderPool` decodes image data in Web Workers, off the main thread. Pass one to `fetchTile`, `fetchTiles` or `read`:
 
 ```ts
 import { defaultDecoderPool, GeoTIFF } from "@developmentseed/geotiff";
