@@ -34,6 +34,48 @@ The {@link COGLayer} is the recommended layer for rendering Cloud-Optimized GeoT
 
 [`TileLayer`]: https://deck.gl/docs/api-reference/geo-layers/tile-layer
 
+## Layers and sources
+
+Each layer takes its data as `source`: an opened source, or the input to open one from, such as a URL.
+
+| Layer | Source | Draws |
+| --- | --- | --- |
+| {@link COGLayer} | {@link COGSource} | One COG. |
+| {@link MultiCOGLayer} | {@link MultiCOGSource} | The bands of one scene stored as separate COGs, such as a Sentinel-2 scene's band files. |
+| {@link MosaicLayer} | Whatever its `getSource` opens | Many images, such as the COGs of a STAC search or a GDAL VRT. It opens only the items in view. |
+
+Open a source yourself to read its bounds before drawing, to pass options such as an `epsgResolver`, or to share it between layers:
+
+```ts
+import { COGLayer, COGSource } from "@developmentseed/deck.gl-geotiff";
+
+const source = await COGSource.open("https://example.com/my-cog.tif");
+const { west, south, east, north } = source.geographicBounds;
+new COGLayer({ id: "cog", source });
+```
+
+`MosaicLayer` takes its items as `data`, each with a WGS84 `bbox` and a unique `id`. {@link parseVRT} reads the files of a GDAL VRT mosaic as items:
+
+```ts
+import {
+  COGLayer,
+  COGSource,
+  MosaicLayer,
+  parseVRT,
+} from "@developmentseed/deck.gl-geotiff";
+
+const response = await fetch(vrtUrl);
+const items = parseVRT(await response.text(), vrtUrl);
+
+new MosaicLayer({
+  id: "mosaic",
+  data: items,
+  getSource: (item, options) => COGSource.open(item.url, options),
+  renderSource: (item, { source, subLayerProps }) =>
+    new COGLayer({ ...subLayerProps, source }),
+});
+```
+
 ## Using Vite
 
 This package decodes image tiles in a Web Worker. The worker uses top-level await and dynamic imports, which Vite's default worker format (`iife`) doesn't support, so `vite build` fails with an error such as `Top-level await is currently not supported with the 'iife' output format` (Vite 8) or `Invalid value "iife" for option "worker.format"` (Vite 7). Set [`worker.format`][vite-worker-format] to `"es"`:
@@ -54,7 +96,7 @@ export default defineConfig({
 ## Requests, caching and authentication
 
 The COG layers read through one shared
-[`RangeReader`](../range-reader/README.md): the reads a selection of tiles
+[`RangeReader`](https://developmentseed.org/deck.gl-raster/api/range-reader/): the reads a selection of tiles
 needs are issued together and merged into few streamed HTTP range requests,
 each tile resolves as its bytes arrive, a request is cancelled as soon as
 its tiles leave the view, and everything received is cached, so a pan back

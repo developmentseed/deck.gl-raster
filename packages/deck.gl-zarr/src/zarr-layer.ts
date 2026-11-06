@@ -18,7 +18,7 @@ import { ZarrSource } from "./zarr-source.js";
 export type SliceInput = number | zarr.Slice | null;
 
 /**
- * Options bag passed to the user's {@link ZarrLayerProps.getTileData} callback.
+ * Options bag passed to the user's `getTileData` callback ({@link ZarrLayerProps}).
  */
 export type GetTileDataOptions = RasterTileGetTileDataOptions & {
   /** Tile column index. */

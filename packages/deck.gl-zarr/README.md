@@ -77,7 +77,7 @@ This split keeps {@link ZarrLayer} agnostic about data type and rendering pipeli
 ## Features
 
 - **GeoZarr-aware**: Reads the `spatial`, `multiscales`, and `geo-proj` conventions to derive the level pyramid, per-level affine transforms, and CRS.
-- **Single- and multi-resolution support**: A plain `[H, W]` or `[bands, H, W]` Zarr array works as a single-level source; a multiscale group is rendered as a pyramid.
+- **Single- and multi-resolution support**: A 2-D array, or one with other dimensions in any position, such as `[band, y, x]` or `[y, x, band]`, works as a single-level source, as long as y comes before x; a multiscale group is rendered as a pyramid.
 - **On-the-fly reprojection**: Source CRS → Web Mercator using [`@developmentseed/raster-reproject`], with no server-side tile service.
 - **Caller-owned store**: You create the zarrita store, so you control consolidation, range coalescing, and authentication. Pass an opened `zarr.Group` or `zarr.Array` to also control how it's opened.
 
