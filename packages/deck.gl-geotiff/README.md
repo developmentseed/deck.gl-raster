@@ -99,3 +99,8 @@ batching window by default.
   whose load is no longer wanted is aborted as soon as it leaves the view.
   `MosaicLayer`'s own `maxRequests` still caps how many sources open at
   once.
+- **Mirror hostnames.** When an HTTP/1.1 host answers at several hostnames,
+  such as an S3 bucket's regional endpoints, a reader with `mirrors`
+  spreads files over them, so the browser opens six connections to each
+  instead of six in all; see
+  [Mirror hostnames](../range-reader/README.md#mirror-hostnames).
