@@ -5,7 +5,7 @@ import {
   WebMercatorViewport,
 } from "@deck.gl/core";
 import type { Device } from "@luma.gl/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { MosaicLayerProps } from "../src/mosaic-layer/mosaic-layer.js";
 import { MosaicLayer } from "../src/mosaic-layer/mosaic-layer.js";
 import type {
@@ -866,5 +866,49 @@ describe("MosaicLayer with an item whose source fails to open", () => {
     await render({ data: [B], ...props });
     const { rendered } = await render({ data: [B, A], ...props });
     expect(rendered).toEqual({ A: { of: "A" } });
+  });
+
+  it("passes the item and the error to onSourceError, without logging", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const failures: string[] = [];
+    const { render } = makeMosaicRenderer();
+    const { errors } = await render({
+      data: [A, B],
+      ...props,
+      onSourceError: (item, { error }) => {
+        failures.push(`${item.id}: ${error.message}`);
+      },
+    });
+    consoleError.mockRestore();
+    expect(errors).toEqual([]);
+    expect(failures).toEqual(["B: Not found"]);
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("doesn't call onSourceError for an open aborted by removing the layer", async () => {
+    const aborted: string[] = [];
+    const failures: string[] = [];
+    const { render, remove, wait } = makeMosaicRenderer();
+    await render({
+      data: [A],
+      // Rejects with the abort's reason, as fetch does
+      getSource: (item, { signal }) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener("abort", () => {
+            aborted.push(item.id);
+            reject(signal.reason);
+          });
+        }),
+      onSourceError: (item, { error }) => {
+        failures.push(`${item.id}: ${error.message}`);
+      },
+    });
+
+    await remove();
+    await wait();
+    expect(aborted).toEqual(["A"]);
+    expect(failures).toEqual([]);
   });
 });

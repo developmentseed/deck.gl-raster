@@ -179,7 +179,8 @@ export type MosaicLayerProps<
     onSourceLoad?: (item: ItemT, info: { source?: SourceT }) => void;
 
     /**
-     * Called when opening an item's source fails.
+     * Called when opening an item's source fails, but not when the open was
+     * aborted. Supplying it stops deck.gl from logging the error.
      */
     onSourceError?: (item: ItemT, info: { error: Error }) => void;
 
@@ -389,17 +390,26 @@ export class MosaicLayer<
           item.bbox,
           () => this.context.viewport,
         );
-        const source =
-          this.props.getSource &&
-          (await this.props.getSource(item, {
-            signal,
-            concurrencyLimiter,
-            reader,
-            requestInit,
-            getPriority,
-          }));
+        try {
+          const source =
+            this.props.getSource &&
+            (await this.props.getSource(item, {
+              signal,
+              concurrencyLimiter,
+              reader,
+              requestInit,
+              getPriority,
+            }));
 
-        return { item, source };
+          return { item, source };
+        } catch (error) {
+          // Reported here: deck.gl passes `onTileError` only the error, not
+          // the tile. Like deck.gl, ignore an aborted open.
+          if (!signal?.aborted) {
+            onSourceError?.(item, { error: error as Error });
+          }
+          throw error;
+        }
       },
       renderSubLayers: (props) => {
         // deck.gl passes `null` for an item whose `getSource` rejected.
@@ -422,15 +432,9 @@ export class MosaicLayer<
           onSourceLoad(item, { source: tile.content?.source });
         },
       }),
-      ...(onSourceError && {
-        onTileError: (error, tile) => {
-          if (!tile) {
-            return;
-          }
-          const item = tile.index as unknown as ItemT;
-          onSourceError(item, { error });
-        },
-      }),
+      // `getTileData` reports the error to `onSourceError`, so deck.gl
+      // shouldn't also log it
+      ...(onSourceError && { onTileError: () => {} }),
       ...(onSourceUnload && {
         onTileUnload: (tile) => {
           const item = tile.index as unknown as ItemT;
