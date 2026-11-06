@@ -95,6 +95,10 @@ export function SidePanel({ open, onOpenChange }: SidePanelProps) {
           <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
             <Section title="Keys">
               <KeyList />
+              <p style={{ margin: "10px 0 0", lineHeight: 1.5, color: MUTED }}>
+                On a touchscreen, tap the right half of the screen to go forward
+                (→), or the left half to go back (←).
+              </p>
             </Section>
             <Section title="See also">
               <p style={{ margin: "0 0 8px", lineHeight: 1.5 }}>

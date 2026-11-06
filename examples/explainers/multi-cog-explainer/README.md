@@ -58,6 +58,9 @@ screen while presenting from the keyboard.
 | D | Show or hide the step descriptions |
 | P | Open or collapse the side panel (keys and links) |
 
+On a touchscreen, tap the right half of the screen to go forward, like →, or
+the left half to go back, like ←.
+
 ## Data
 
 The Sentinel-2 L2A scene `S2C_18FXJ_20260406_0_L2A` (Torres del Paine, Chile,

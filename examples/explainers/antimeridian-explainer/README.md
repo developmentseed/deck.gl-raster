@@ -62,6 +62,9 @@ screen while presenting from the keyboard.
 | D | Show or hide the step descriptions |
 | P | Open or collapse the side panel (keys, links and data) |
 
+On a touchscreen, tap the right half of the screen to go forward, like →, or
+the left half to go back, like ←.
+
 ## Data
 
 `antimeridian_UTM_60N.tif` from
