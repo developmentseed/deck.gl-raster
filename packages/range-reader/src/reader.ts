@@ -106,6 +106,8 @@ export class RangeReader {
    * cache never combines ranges with different validators.
    */
   private readonly validators = new Map<FileKey, string>();
+  /** Streams that have finished, so a lookup can tell its cache miss may be stale. */
+  private finishedStreams = 0;
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: RangeReaderOptions = {}) {
@@ -164,18 +166,14 @@ export class RangeReader {
     if (size !== undefined && range.offset >= size) {
       return { kind: "bytes", bytes: new Uint8Array(0) };
     }
+    const finishedBefore = this.finishedStreams;
     const hit = await this.cache.get(file, range, options.purpose);
     const { signal } = options;
     if (signal?.aborted) {
       throw signal.reason;
     }
     if (hit !== undefined) {
-      this.stats.cacheHits += 1;
-      this.stats.cacheHitBytes += range.length;
-      const validator = this.validators.get(file.key);
-      return validator === undefined
-        ? { kind: "bytes", bytes: hit }
-        : { kind: "bytes", bytes: hit, validator };
+      return this.cacheHit(file, range, hit);
     }
     return new Promise((resolve, reject) => {
       const member: StreamMember = {
@@ -191,8 +189,38 @@ export class RangeReader {
           return;
         }
       }
-      this.enqueue(groupKey(file, options.purpose), file, options, member);
+      const queue = () =>
+        this.enqueue(groupKey(file, options.purpose), file, options, member);
+      if (this.finishedStreams === finishedBefore) {
+        queue();
+        return;
+      }
+      // A stream finished during the lookup, and may have stored these bytes
+      // after the cache was read. See #826.
+      this.cache.get(file, range, options.purpose).then((late) => {
+        if (signal?.aborted) {
+          reject(signal.reason);
+        } else if (late === undefined) {
+          queue();
+        } else {
+          resolve(this.cacheHit(file, range, late));
+        }
+      }, reject);
     });
+  }
+
+  /** A cache hit as a result, counted in the stats. */
+  private cacheHit(
+    file: FileIdentity,
+    range: ByteRange,
+    bytes: Uint8Array,
+  ): ReadResult {
+    this.stats.cacheHits += 1;
+    this.stats.cacheHitBytes += range.length;
+    const validator = this.validators.get(file.key);
+    return validator === undefined
+      ? { kind: "bytes", bytes }
+      : { kind: "bytes", bytes, validator };
   }
 
   /** One read, one request: suffix and whole-object reads never merge. */
@@ -355,6 +383,7 @@ export class RangeReader {
       if (streams.size === 0) {
         this.inflight.delete(file.key);
       }
+      this.finishedStreams += 1;
     };
     void stream.run().then(
       (outcome) => {

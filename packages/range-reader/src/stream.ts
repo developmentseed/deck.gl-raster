@@ -128,13 +128,14 @@ export class RangeStream {
   }
 
   /**
-   * Add a read inside this stream's absolute range while it is active. A
-   * read whose bytes have already arrived resolves at once. Returns false
-   * when the stream is done, has no absolute range, or does not cover the
-   * read.
+   * Add a read inside this stream's absolute range. A read whose bytes have
+   * already arrived resolves at once, even once the stream is done (see
+   * #826); any other read joins only while it is active. Returns false when
+   * the stream has no absolute range, does not cover the read, or is done
+   * without its bytes.
    */
   attach(member: StreamMember): boolean {
-    if (!this.isActive || this.base === undefined) {
+    if (this.base === undefined) {
       return false;
     }
     const end = member.offset + member.length;
@@ -144,9 +145,13 @@ export class RangeStream {
     ) {
       return false;
     }
+    const arrived = end - this.base.offset <= this.receivedBytes;
+    if (!this.isActive && !arrived) {
+      return false;
+    }
     if (member.signal?.aborted) {
       member.reject(member.signal.reason);
-    } else if (end - this.base.offset <= this.receivedBytes) {
+    } else if (arrived) {
       member.resolve(this.bytes(this.view(member)));
     } else {
       this.insert(member);

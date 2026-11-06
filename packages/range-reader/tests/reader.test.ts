@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConcurrencyLimiter, Priority } from "../src/limiter.js";
 import { PerOriginSemaphore } from "../src/limiter.js";
+import { MemoryByteCache } from "../src/memory-cache.js";
 import { RangeReader } from "../src/reader.js";
 import type { ByteCache, FileIdentity, ReadOptions } from "../src/types.js";
 import type { FakeFetch } from "./helpers.js";
@@ -455,6 +456,66 @@ describe("RangeReader cache and in-flight reads", () => {
     await expect(p).rejects.toBe("gone");
     await flush();
     expect(fake.calls).toHaveLength(0);
+  });
+
+  it("sends one request when a read arrives as the stream holding its bytes finishes", async () => {
+    // A metadata read issued from the previous one's continuation, as
+    // cogeotiff's header reads are, while the block's last chunk lands.
+    const second = reader
+      .read(f, { offset: 0, length: 16384 }, METADATA)
+      .then(() => reader.read(f, { offset: 40000, length: 8 }, METADATA));
+    await flush();
+    const body = fake.calls[0]!.reply({
+      status: 206,
+      headers: { "content-length": "65536" },
+    });
+    // The whole block in one chunk, then the end of the body.
+    void body.push(pattern(65536));
+    await body.close();
+    await microtasks();
+    await flush();
+    expect(fake.calls).toHaveLength(1);
+    expect(await second).toEqual({ kind: "bytes", bytes: pattern(8, 40000) });
+  });
+
+  it("looks in the cache again when the stream holding a read finishes during its lookup", async () => {
+    // A cache whose next lookup answers late, with what it held when asked.
+    const memory = new MemoryByteCache();
+    let holdNext = false;
+    let release: (() => void) | undefined;
+    const cache: ByteCache = {
+      get(file, range, purpose) {
+        const result = memory.get(file, range, purpose);
+        if (!holdNext) {
+          return result;
+        }
+        holdNext = false;
+        return new Promise((resolve) => {
+          release = () => resolve(result);
+        });
+      },
+      put: (file, offset, bytes, purpose) =>
+        memory.put(file, offset, bytes, purpose),
+    };
+    const reader = new RangeReader({ fetch: fake.fetch, cache });
+    const first = reader.read(f, { offset: 0, length: 100 }, DATA);
+    await flush();
+    const body = fake.calls[0]!.reply({
+      status: 206,
+      headers: { "content-length": "100" },
+    });
+    await body.push(pattern(100));
+    await first;
+    // Asked before the stream stores its bytes; answers after it has left.
+    holdNext = true;
+    const second = reader.read(f, { offset: 10, length: 10 }, DATA);
+    await body.close();
+    await microtasks();
+    release!();
+    await microtasks();
+    await flush();
+    expect(fake.calls).toHaveLength(1);
+    expect(await second).toEqual({ kind: "bytes", bytes: pattern(10, 10) });
   });
 
   it("does not cache a not-found response", async () => {
