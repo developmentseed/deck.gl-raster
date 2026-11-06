@@ -48,6 +48,8 @@ export interface RangeStreamOptions {
   limiter?: ConcurrencyLimiter | null;
   /** Largest whole object accepted from a server that answers a range with 200. */
   maxRequestBytes: number;
+  /** The URL to request and take the limiter slot for; defaults to the file's. */
+  url?: URL;
 }
 
 const CONTENT_RANGE = /^bytes (\d+)-(\d+)\/(\d+|\*)$/;
@@ -67,6 +69,8 @@ export class RangeStream {
   /** Undefined for a whole-object request. */
   private readonly request: ReadRange | undefined;
   private readonly options: RangeStreamOptions;
+  /** Where the request goes: {@link RangeStreamOptions.url}, or the file's. */
+  private readonly url: URL;
   private readonly controller = new AbortController();
   /** Members not yet settled, ordered by their end offset. */
   private readonly live: StreamMember[] = [];
@@ -99,6 +103,7 @@ export class RangeStream {
     this.file = file;
     this.request = request;
     this.options = options;
+    this.url = options.url ?? file.url;
     this.range =
       request !== undefined && "offset" in request ? request : undefined;
     this.base = this.range;
@@ -163,7 +168,7 @@ export class RangeStream {
       if (limiter) {
         try {
           release = await limiter.acquire(
-            this.file.url,
+            this.url,
             this.controller.signal,
             () => this.bestPriority(),
           );
@@ -193,7 +198,7 @@ export class RangeStream {
       let response: Response;
       try {
         response = await this.untilCancelled(
-          this.options.fetch(this.file.url, init),
+          this.options.fetch(this.url, init),
         );
       } catch (error) {
         return this.cancelled
@@ -233,7 +238,7 @@ export class RangeStream {
     }
     if (status !== 206 && status !== 200) {
       void response.body?.cancel().catch(() => {});
-      return this.fail(new Error(`${this.file.url.href} answered ${status}`));
+      return this.fail(new Error(`${this.url.href} answered ${status}`));
     }
     this.validator =
       response.headers.get("etag") ??
@@ -253,7 +258,7 @@ export class RangeStream {
             : `${contentLength} bytes`;
         return this.fail(
           new Error(
-            `Range request to ${this.file.url.href} answered 200 with ${length}`,
+            `Range request to ${this.url.href} answered 200 with ${length}`,
           ),
         );
       }
@@ -325,7 +330,7 @@ export class RangeStream {
         return this.settle(bytes, { kind: "eof", size: this.size });
       }
       const error = new Error(
-        `Short read from ${this.file.url.href}: wanted ${expected} bytes at ${this.base?.offset ?? 0}, got ${this.receivedBytes}`,
+        `Short read from ${this.url.href}: wanted ${expected} bytes at ${this.base?.offset ?? 0}, got ${this.receivedBytes}`,
       );
       for (const member of this.live.splice(0)) {
         this.rejectMember(member, error);
