@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/affine",
-  "version": "0.9.0",
+  "version": "0.10.0-beta.3",
   "description": "Port of Python `affine` package for working with affine transformations in JavaScript.",
   "type": "module",
   "main": "./dist/index.js",
@@ -39,10 +39,10 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
-    "jsdom": "^30.1.1",
+    "@types/node": "^26.6.6",
+    "jsdom": "^30.1.3",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
   },
   "dependencies": {},
   "peerDependencies": {},

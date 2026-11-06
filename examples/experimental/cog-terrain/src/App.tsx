@@ -396,7 +396,7 @@ export default function App() {
       // `terrainDrawMode`. Build the props separately.
       const props = {
         id: `cog-${url}`,
-        geotiff: url,
+        source: url,
         extensions: [new TerrainExtension()],
         // Required. Left unset, the extension picks "offset" for
         // deck.gl-raster's mesh layer, which lifts only the reprojection
@@ -409,10 +409,7 @@ export default function App() {
         // Re-render the tiles when only their colors change, as between the
         // two NAIP options.
         updateTriggers: { renderTile: dataset.id },
-        onGeoTIFFLoad: (
-          _,
-          { geographicBounds: { west, south, east, north } },
-        ) =>
+        onSourceLoad: ({ geographicBounds: { west, south, east, north } }) =>
           setCogBounds((bounds) =>
             bounds[url]
               ? bounds

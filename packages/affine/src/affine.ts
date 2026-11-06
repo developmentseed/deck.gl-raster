@@ -31,6 +31,27 @@ export function identity(): Affine {
 }
 
 /**
+ * Create a transform from a GDAL geotransform, which orders the coefficients
+ * `[c, a, b, f, d, e]`. Equivalent to `Affine.from_gdal` in Python's `affine`.
+ *
+ * See https://gdal.org/en/stable/tutorials/geotransforms_tut.html.
+ *
+ * @param geoTransform  The GDAL geotransform.
+ *
+ * @return The transform, as `[a, b, c, d, e, f]`.
+ */
+export function fromGDAL([c, a, b, f, d, e]: readonly [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+]): Affine {
+  return [a, b, c, d, e, f];
+}
+
+/**
  * Create a translation transform from an offset vector.
  *
  * @param xoff  Translation offset in x direction.

@@ -51,9 +51,9 @@ export function validateSelection(args: ValidateSelectionArgs): void {
 }
 
 /**
- * Arguments for {@link validateSpatialDimOrder}.
+ * Arguments for {@link findSpatialDimIndices}.
  */
-export type ValidateSpatialDimOrderArgs = {
+export type FindSpatialDimIndicesArgs = {
   /** Ordered dimension names of the zarr array. */
   dimensionNames: readonly string[];
   /** Declared spatial dim names in [y, x] order. */
@@ -61,17 +61,20 @@ export type ValidateSpatialDimOrderArgs = {
 };
 
 /**
- * Validate that the zarr array's dimension names place the spatial dims as
- * the last two entries, in [y, x] order. Transpose is not implemented yet —
- * arrays with a different layout are rejected.
+ * Find the positions of the declared spatial dims in a zarr array's dimension
+ * names, by name, as the [spatial convention] says. Y must come before x, and
+ * other dims may sit anywhere, such as `[band, y, x]` or `[y, x, band]`.
  *
- * @throws if the declared spatial dims are missing from the array, not the
- *         last two positions, or in swapped order.
+ * [spatial convention]: https://github.com/zarr-conventions/spatial/blob/v0.1/README.md?plain=1#L94-L98
+ *
+ * @returns The positions of the y and x dims, as `[yIndex, xIndex]`.
+ * @throws if a declared spatial dim is missing from the array, or if x comes
+ *   before y, which needs a transpose that is not implemented.
  */
-export function validateSpatialDimOrder(
-  args: ValidateSpatialDimOrderArgs,
-): void {
-  const { dimensionNames, spatialDims } = args;
+export function findSpatialDimIndices({
+  dimensionNames,
+  spatialDims,
+}: FindSpatialDimIndicesArgs): [yIndex: number, xIndex: number] {
   const [y, x] = spatialDims;
 
   if (!dimensionNames.includes(y)) {
@@ -87,22 +90,14 @@ export function validateSpatialDimOrder(
     );
   }
 
-  const n = dimensionNames.length;
-  const yPos = dimensionNames[n - 2];
-  const xPos = dimensionNames[n - 1];
-
-  if (yPos !== y || xPos !== x) {
-    if (yPos === x && xPos === y) {
-      throw new Error(
-        `Spatial dim order is swapped: expected ["${y}", "${x}"] at the ` +
-          `last two positions, got ["${yPos}", "${xPos}"]. Transpose is ` +
-          `not implemented yet.`,
-      );
-    }
+  const yIndex = dimensionNames.indexOf(y);
+  const xIndex = dimensionNames.indexOf(x);
+  if (xIndex < yIndex) {
     throw new Error(
-      `Spatial dims must be the last two entries in dimension_names: ` +
-        `expected ["${y}", "${x}"] at positions [${n - 2}, ${n - 1}], got ` +
-        `["${yPos}", "${xPos}"]. Transpose is not implemented yet.`,
+      `Spatial dim order is swapped: x dim "${x}" comes before y dim "${y}" ` +
+        `in zarr array dims [${dimensionNames.join(", ")}]. Arrays with x ` +
+        `before y need a transpose, which is not implemented.`,
     );
   }
+  return [yIndex, xIndex];
 }

@@ -19,7 +19,8 @@ import {
   parseColormap,
   toPixelInterleaved,
 } from "@developmentseed/geotiff";
-import type { Device, SamplerProps, Texture } from "@luma.gl/core";
+import type { Device, SamplerProps } from "@luma.gl/core";
+import { Texture } from "@luma.gl/core";
 import type { GetTileDataOptions } from "../cog-layer.js";
 import { addAlphaChannel } from "./geotiff.js";
 import {
@@ -73,6 +74,8 @@ export function inferRenderPipeline(
     options: GetTileDataOptions,
   ) => Promise<TextureDataT>;
   renderTile: (data: TextureDataT) => RenderTileResult;
+  /** Destroy the textures the pipeline shares across tiles. */
+  destroy: () => void;
 } {
   const { sampleFormat } = geotiff.cachedPrimaryImageTags;
   if (sampleFormat === null) {
@@ -102,6 +105,7 @@ function createUnormPipeline(
     options: GetTileDataOptions,
   ) => Promise<TextureDataT>;
   renderTile: (data: TextureDataT) => RenderTileResult;
+  destroy: () => void;
 } {
   const {
     bitsPerSample,
@@ -245,7 +249,15 @@ function createUnormPipeline(
     };
   };
 
-  return { getTileData, renderTile };
+  // A palette image's colormap texture is shared by every tile
+  const colormapTexture = toRGBModule?.props?.colormapTexture;
+  const destroy = () => {
+    if (colormapTexture instanceof Texture) {
+      colormapTexture.destroy();
+    }
+  };
+
+  return { getTileData, renderTile, destroy };
 }
 
 /**

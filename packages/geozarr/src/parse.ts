@@ -1,3 +1,5 @@
+import type { Affine } from "@developmentseed/affine";
+import * as affine from "@developmentseed/affine";
 import { GeoProjAttrsSchema, SpatialAttrsSchema } from "./schemas.js";
 import type { CRSInfo, GeoZarrMetadata, MultiscaleLevel } from "./types.js";
 
@@ -8,9 +10,13 @@ import type { CRSInfo, GeoZarrMetadata, MultiscaleLevel } from "./types.js";
  * Array sizes are read from `spatial:shape` in the attributes (either at the
  * top level for single-resolution, or per layout item for multiscales).
  *
- * Levels in the returned `GeoZarrMetadata` are ordered finest-first (natural
- * Zarr order, matching the multiscales layout array). Reverse to get
+ * Levels in the returned `GeoZarrMetadata` are ordered finest-first by pixel
+ * size, whatever the order of the multiscales layout array. Reverse to get
  * coarsest-first for `TilesetDescriptor`.
+ *
+ * `spatial:dimensions` names the Y dimension, then the X dimension, whatever
+ * their names. See the
+ * [spatial convention](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md?plain=1#L94).
  *
  * @param attrs  Raw group attributes object (e.g. from zarrita `group.attrs`).
  *
@@ -41,21 +47,8 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
 
   // --- Axes ---
   const axes = spatial["spatial:dimensions"];
-  // Accept the spec's "y"/"x" (case-insensitive) as well as the common
-  // CF-style names "latitude"/"longitude". Matching is purely label-based;
-  // positional inference is not used.
-  const Y_LABELS = new Set(["y", "latitude", "lat"]);
-  const X_LABELS = new Set(["x", "longitude", "lon"]);
-  const yAxisIndex = axes.findIndex((a) => Y_LABELS.has(a.toLowerCase()));
-  const xAxisIndex = axes.findIndex((a) => X_LABELS.has(a.toLowerCase()));
-
-  if (yAxisIndex === -1 || xAxisIndex === -1) {
-    throw new Error(
-      `spatial:dimensions must contain a Y axis ("y"/"latitude"/"lat") and ` +
-        `an X axis ("x"/"longitude"/"lon") (case-insensitive), got: ` +
-        `${JSON.stringify(axes)}`,
-    );
-  }
+  const yAxisIndex = 0;
+  const xAxisIndex = 1;
 
   // --- Levels ---
   const layout = spatial.multiscales?.layout;
@@ -88,6 +81,9 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
         arrayHeight: shape[0],
       };
     });
+    // The layout may list levels in any order. Levels of the same pixel size
+    // keep it. See https://github.com/zarr-conventions/multiscales/issues/31
+    levels.sort((x, y) => pixelSize(x.affine) - pixelSize(y.affine));
   } else {
     // Single-resolution
     const transform = spatial["spatial:transform"];
@@ -120,4 +116,9 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
     yAxisIndex,
     xAxisIndex,
   };
+}
+
+/** The geometric mean of a level's pixel width and height, in CRS units. */
+function pixelSize(transform: Affine): number {
+  return Math.sqrt(Math.abs(affine.a(transform) * affine.e(transform)));
 }

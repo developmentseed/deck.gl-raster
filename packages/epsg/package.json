@@ -1,6 +1,6 @@
 {
   "name": "@developmentseed/epsg",
-  "version": "0.9.0",
+  "version": "0.10.0-beta.3",
   "description": "The full EPSG projection database, compressed to 309kb for the web.",
   "type": "module",
   "exports": {
@@ -39,11 +39,11 @@
     "url": "git+https://github.com/developmentseed/deck.gl-raster.git"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
-    "jsdom": "^30.1.1",
+    "@types/node": "^26.6.6",
+    "jsdom": "^30.1.3",
     "proj4": "^2.22.0",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
   },
   "volta": {
     "extends": "../../package.json"

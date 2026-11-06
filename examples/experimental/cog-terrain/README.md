@@ -48,7 +48,7 @@ const terrain = new TerrainLayer({
 
 const cogProps: COGLayerProps & TerrainExtensionProps = {
   id: "cog",
-  geotiff: "https://example.com/image.tif",
+  source: "https://example.com/image.tif",
   extensions: [new TerrainExtension()],
   terrainDrawMode: "drape",
   zRange: [500, 2100], // meters; the example measures it from the terrain
@@ -75,7 +75,7 @@ const cog = new COGLayer(cogProps);
   terrain. It finds the ground by picking, so the `TerrainLayer` must be
   pickable.
 - The `TerrainLayer`'s `extent` is the union of the COGs' WGS84 bounds, which
-  `COGLayer`'s `onGeoTIFFLoad` reports once a COG's header loads. Terrain
+  `COGLayer`'s `onSourceLoad` reports once a COG's header loads. Terrain
   tiles then load only where they overlap the COGs' bounds. The example
   doesn't create the `TerrainLayer` until the first COG reports its bounds.
 - Tiles load whole, so a `ClipExtension` on the `TerrainLayer` also stops it

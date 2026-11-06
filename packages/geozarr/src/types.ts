@@ -30,7 +30,7 @@ export interface CRSInfo {
 /**
  * Parsed GeoZarr metadata, ready for use by ZarrLayer.
  *
- * Levels are ordered finest-first (natural Zarr order).
+ * Levels are ordered finest-first, by pixel size.
  * Length 1 for single-resolution datasets.
  */
 export interface GeoZarrMetadata {
