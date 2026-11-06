@@ -11,11 +11,13 @@ export const ECMWF_GEOZARR_ATTRS = {
   // Affine [a, b, c, d, e, f] in this repo's convention (see @developmentseed/affine):
   //   x_out = a*col + b*row + c
   //   y_out = d*col + e*row + f
-  // For ECMWF: top-left corner at (lon=-180, lat=90); step (0.25°, -0.25°).
-  //   x_out = 0.25*col +  0*row + (-180)  → [-180, 180]
-  //   y_out =   0*col + (-0.25)*row + 90  → [90, -90.25]
+  // For ECMWF: top-left grid point at (lon=-180, lat=90); step (0.25°, -0.25°).
+  //   x_out = 0.25*col +  0*row + (-180)  → [-180, 179.75]
+  //   y_out =   0*col + (-0.25)*row + 90  → [90, -90]
   "spatial:transform": [0.25, 0, -180, 0, -0.25, 90],
   "spatial:shape": [721, 1440], // [height, width]
+  // The transform gives each value's grid point, the centre of its cell
+  "spatial:registration": "node",
   "proj:code": "EPSG:4326",
 } as const;
 
