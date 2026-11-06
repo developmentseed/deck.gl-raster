@@ -157,8 +157,8 @@ export interface RangeReaderOptions {
    * such as a bucket's other S3 hostnames. Each file under a prefix is
    * requested from the prefix or one of its mirrors, picked by a hash of its
    * URL, and cached under its own URL. Prefixes end in `/`; the longest
-   * match wins. Use it only for HTTP/1.1 hosts, where browsers cap
-   * connections per hostname. See #825.
+   * match wins. It helps only on HTTP/1.1 hosts, and only when requests
+   * wait for a connection rather than for bandwidth. See #825.
    */
   mirrors?: Record<string, readonly string[]>;
 }

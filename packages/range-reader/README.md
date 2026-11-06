@@ -105,9 +105,13 @@ they still merge and reuse its connections. A `PerOriginSemaphore` gives
 each mirror its own slots, while the cache, the requests in flight and the
 validators stay keyed by the file's own URL. Prefixes end in `/`, and the
 longest matching key wins. A request to a mirror that fails is not retried
-elsewhere, so every mirror must serve the same objects. On an HTTP/2 or
-HTTP/3 host, which shares one connection anyway, mirrors only add
-handshakes.
+elsewhere, so every mirror must serve the same objects.
+
+Mirrors help only when requests wait for a free connection while the link
+has bandwidth to spare. When six connections already fill the link, mirrors
+split the same bandwidth over more requests, and every read arrives later.
+On an HTTP/2 or HTTP/3 host, which shares one connection anyway, they only
+add handshakes. Measure before turning them on.
 
 ## Bring your own cache
 

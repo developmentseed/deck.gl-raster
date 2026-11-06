@@ -101,6 +101,7 @@ batching window by default.
   once.
 - **Mirror hostnames.** When an HTTP/1.1 host answers at several hostnames,
   such as an S3 bucket's regional endpoints, a reader with `mirrors`
-  spreads files over them, so the browser opens six connections to each
-  instead of six in all; see
+  spreads files over them, so the browser can open six connections to each
+  instead of six in all. That's faster only when requests wait for a
+  connection rather than for bandwidth; see
   [Mirror hostnames](../range-reader/README.md#mirror-hostnames).
