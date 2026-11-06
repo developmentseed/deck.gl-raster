@@ -28,8 +28,8 @@ describe("buildUniformGridMesh", () => {
     const n = 2;
     const { positions64High, texCoords } = buildUniformGridMesh(
       identityFns,
-      257,
-      257,
+      81,
+      81,
       n,
     );
 
@@ -39,11 +39,26 @@ describe("buildUniformGridMesh", () => {
     expect(positions64High[0]).toBeCloseTo(0);
     expect(positions64High[1]).toBeCloseTo(0);
 
-    // Last vertex: u=1, v=1 → pixel (256,256) → identity → (256,256).
+    // Last vertex: u=1, v=1 → pixel (80,80) → identity → (80,80).
     const last = (n + 1) * (n + 1) - 1;
     expect(texCoords[last * 2]).toBeCloseTo(1);
     expect(texCoords[last * 2 + 1]).toBeCloseTo(1);
-    expect(positions64High[last * 3]).toBeCloseTo(256);
-    expect(positions64High[last * 3 + 1]).toBeCloseTo(256);
+    expect(positions64High[last * 3]).toBeCloseTo(80);
+    expect(positions64High[last * 3 + 1]).toBeCloseTo(80);
+  });
+
+  it("clamps latitudes past a pole to the pole", () => {
+    // Rows of vertices at 100°, 0° and -100° latitude
+    const fns: ReprojectionFns = {
+      ...identityFns,
+      forwardTransform: (x, y) => [x, 100 - 100 * y],
+    };
+    const { positions64High } = buildUniformGridMesh(fns, 3, 3, 2);
+
+    const latitudes = Array.from(
+      { length: 9 },
+      (_, i) => positions64High[i * 3 + 1],
+    );
+    expect(latitudes).toEqual([90, 90, 90, 0, 0, 0, -90, -90, -90]);
   });
 });
