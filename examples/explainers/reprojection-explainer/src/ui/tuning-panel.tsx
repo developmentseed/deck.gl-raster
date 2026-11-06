@@ -206,6 +206,10 @@ export function TuningPanel({
             </Section>
             <Section title="Keys">
               <KeyList />
+              <p style={{ margin: "10px 0 0", lineHeight: 1.5, color: MUTED }}>
+                On a touchscreen, tap the right half of the screen to go forward
+                (→), or the left half to go back (←).
+              </p>
             </Section>
           </div>
           <footer
