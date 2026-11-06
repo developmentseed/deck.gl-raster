@@ -1,6 +1,7 @@
 import { describe, expectTypeOf, it } from "vitest";
 import type {
   COGInput,
+  COGLayerProps,
   MultiCOGLayerProps,
   MultiCOGSource,
 } from "../src/index.js";
@@ -22,6 +23,26 @@ describe("MultiCOGLayer source props", () => {
         expectTypeOf(source).toEqualTypeOf<MultiCOGSource>();
       },
     });
+  });
+
+  it("takes every COGLayer prop except the custom pipeline", () => {
+    expectTypeOf<
+      Exclude<keyof COGLayerProps, keyof MultiCOGLayerProps>
+    >().toEqualTypeOf<"getTileData" | "renderTile">();
+  });
+
+  it("adds only its band props to COGLayer's", () => {
+    expectTypeOf<
+      Exclude<keyof MultiCOGLayerProps, keyof COGLayerProps>
+    >().toEqualTypeOf<
+      "composite" | "renderPipeline" | "resampling" | "debugLevel"
+    >();
+  });
+
+  it("draws the MultiCOGSource that its source prop takes", () => {
+    expectTypeOf<MultiCOGLayer["state"]["source"]>().toEqualTypeOf<
+      MultiCOGSource | undefined
+    >();
   });
 
   it("no longer takes the props that source and MultiCOGSource.open replaced", () => {

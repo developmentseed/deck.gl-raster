@@ -1,5 +1,5 @@
 import { LoadingWidget } from "@deck.gl/widgets";
-import { ZarrLayer } from "@developmentseed/deck.gl-zarr";
+import { ZarrLayer, ZarrSource } from "@developmentseed/deck.gl-zarr";
 import {
   DeckGlOverlay,
   loadingWidgetProps,
@@ -31,10 +31,7 @@ const DEFAULT_RESCALE_MAX = 0.3;
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
-  const [arr, setArr] = useState<zarr.Array<"int8", zarr.Readable> | null>(
-    null,
-  );
-  const [rootAttrs, setRootAttrs] = useState<unknown>(null);
+  const [source, setSource] = useState<ZarrSource<"int8"> | null>(null);
   const [bandLabels, setBandLabels] = useState<string[] | null>(null);
 
   const [locationId, setLocationId] = useState(DEFAULT_LOCATION.id);
@@ -51,22 +48,19 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const store = new zarr.FetchStore(ZARR_URL);
-      const root = await zarr.open.v3(store, { kind: "group" });
-      const opened = await zarr.open.v3(root.resolve(VARIABLE), {
-        kind: "array",
+      const source = await ZarrSource.open(new zarr.FetchStore(ZARR_URL), {
+        path: VARIABLE,
       });
-      if (!opened.is("int8")) {
+      if (!source.is("int8")) {
         throw new Error(
-          `Expected AEF embeddings to be int8, got ${opened.dtype}`,
+          `Expected AEF embeddings to be int8, got ${source.levels[0]!.dtype}`,
         );
       }
-      const labels = await fetchBandLabels(root);
+      const labels = await fetchBandLabels(zarr.root(source.node.store));
       if (cancelled) {
         return;
       }
-      setArr(opened);
-      setRootAttrs(root.attrs);
+      setSource(source);
       setBandLabels(labels);
     })();
     return () => {
@@ -95,35 +89,27 @@ export default function App() {
     });
   }, []);
 
-  const layers =
-    arr && rootAttrs
-      ? [
-          new ZarrLayer<zarr.Readable, "int8", AefTileData>({
-            id: `aef-zarr-layer-${yearIdx}`,
-            node: arr,
-            metadata: rootAttrs,
-            selection,
-            getTileData,
-            renderTile,
-            onTileUnload: (tile) => tile.content?.texture.destroy(),
-            minZoom: MIN_ZOOM,
-            // Tiles are heavy, so limit GPU pressure with small cache size
-            maxCacheSize: 10,
-            updateTriggers: {
-              renderTile: [
-                rBandIdx,
-                gBandIdx,
-                bBandIdx,
-                rescaleMin,
-                rescaleMax,
-              ],
-            },
-            // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
-            // doesn't know about it.
-            beforeId: "boundary_country_outline",
-          }),
-        ]
-      : [];
+  const layers = source
+    ? [
+        new ZarrLayer<AefTileData, "int8">({
+          id: "aef-zarr-layer",
+          source,
+          selection,
+          getTileData,
+          renderTile,
+          onTileUnload: (tile) => tile.content?.texture.destroy(),
+          minZoom: MIN_ZOOM,
+          // Tiles are heavy, so limit GPU pressure with small cache size
+          maxCacheSize: 10,
+          updateTriggers: {
+            renderTile: [rBandIdx, gBandIdx, bBandIdx, rescaleMin, rescaleMax],
+          },
+          // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+          // doesn't know about it.
+          beforeId: "boundary_country_outline",
+        }),
+      ]
+    : [];
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

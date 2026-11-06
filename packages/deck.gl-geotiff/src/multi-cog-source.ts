@@ -4,16 +4,20 @@ import type {
 } from "@developmentseed/deck.gl-raster";
 import {
   createMultiRasterTilesetDescriptor,
+  DEFAULT_RANGE_READER,
   RasterSource,
 } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF } from "@developmentseed/geotiff";
 import type { ProjectionDefinition } from "@developmentseed/proj";
-import { epsgResolver as defaultEpsgResolver } from "@developmentseed/proj";
+import {
+  epsgResolver as defaultEpsgResolver,
+  projectionFunctions,
+} from "@developmentseed/proj";
 import type { COGInput, COGSourceOptions } from "./cog-source.js";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
-import { projectionFunctions, resolveProjection } from "./projection.js";
+import { resolveProjection } from "./projection.js";
 
 /** The parts of a GeoTIFF that {@link checkSameScene} compares. */
 export type SceneFile = Pick<GeoTIFF, "crs" | "bbox" | "transform">;
@@ -139,6 +143,8 @@ export class MultiCOGSource extends RasterSource {
       epsgResolver = defaultEpsgResolver,
       concurrencyLimiter = DEFAULT_CONCURRENCY_LIMITER,
       getPriority,
+      reader = DEFAULT_RANGE_READER,
+      requestInit,
     } = options;
     signal?.throwIfAborted();
 
@@ -153,6 +159,8 @@ export class MultiCOGSource extends RasterSource {
           const geotiff = await fetchGeoTIFF(input, {
             concurrencyLimiter,
             getPriority,
+            reader,
+            requestInit,
             signal,
           });
           return [name, geotiff] as const;
@@ -176,7 +184,7 @@ export class MultiCOGSource extends RasterSource {
     // The open was aborted while we waited
     signal?.throwIfAborted();
 
-    const { converter4326, ...functions } = projectionFunctions(projection);
+    const functions = projectionFunctions(projection);
     const multiTilesetDescriptor = createMultiRasterTilesetDescriptor(
       new Map(
         opened.map(([name, geotiff]) => [
@@ -191,7 +199,7 @@ export class MultiCOGSource extends RasterSource {
       geotiffs,
       projection,
       multiTilesetDescriptor,
-      geographicBounds: getGeographicBounds(primary, converter4326),
+      geographicBounds: getGeographicBounds(primary, functions.projectTo4326),
     });
   }
 }

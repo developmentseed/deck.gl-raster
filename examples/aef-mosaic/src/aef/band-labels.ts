@@ -2,15 +2,15 @@ import * as zarr from "zarrita";
 import { NUM_BANDS } from "./constants.js";
 
 /**
- * Open and fully read the `band` coordinate array from the AEF root group.
- * The `band` array is a length-64 vlen-utf8 string array; the resolved
+ * Open and fully read the `band` coordinate array at the root of the AEF
+ * store. The `band` array is a length-64 vlen-utf8 string array; the resolved
  * value is the list of band labels in order.
  *
- * @param root - An already-opened AEF root group.
+ * @param root - The root of the AEF store.
  * @returns Promise resolving to 64 band labels.
  */
 export async function fetchBandLabels(
-  root: zarr.Group<zarr.Readable>,
+  root: zarr.Location<zarr.Readable>,
 ): Promise<string[]> {
   const bandArr = await zarr.open.v3(root.resolve("band"), { kind: "array" });
   if (!bandArr.is("string")) {

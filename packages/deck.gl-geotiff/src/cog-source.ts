@@ -2,18 +2,25 @@ import type {
   GeographicBounds,
   RasterTilesetDescriptor,
 } from "@developmentseed/deck.gl-raster";
-import { RasterSource } from "@developmentseed/deck.gl-raster";
+import {
+  DEFAULT_RANGE_READER,
+  RasterSource,
+} from "@developmentseed/deck.gl-raster";
 import type {
   ConcurrencyLimiter,
   GeoTIFF,
   Priority,
 } from "@developmentseed/geotiff";
 import type { EpsgResolver, ProjectionDefinition } from "@developmentseed/proj";
-import { epsgResolver as defaultEpsgResolver } from "@developmentseed/proj";
+import {
+  epsgResolver as defaultEpsgResolver,
+  projectionFunctions,
+} from "@developmentseed/proj";
+import type { RangeReader } from "@developmentseed/range-reader";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
-import { projectionFunctions, resolveProjection } from "./projection.js";
+import { resolveProjection } from "./projection.js";
 
 /**
  * A Cloud-Optimized GeoTIFF to open:
@@ -59,6 +66,19 @@ export type COGSourceOptions = {
    * Only used with a `concurrencyLimiter`.
    */
   getPriority?: () => Priority;
+
+  /**
+   * The {@link RangeReader} this COG reads through; defaults to the shared
+   * {@link DEFAULT_RANGE_READER}. Ignored for an opened `GeoTIFF` or an
+   * `ArrayBuffer`.
+   */
+  reader?: RangeReader;
+
+  /**
+   * Headers, credentials and mode sent with every request for this COG.
+   * Ignored for an opened `GeoTIFF` or an `ArrayBuffer`.
+   */
+  requestInit?: RequestInit;
 };
 
 /**
@@ -100,12 +120,16 @@ export class COGSource extends RasterSource {
       epsgResolver = defaultEpsgResolver,
       concurrencyLimiter = DEFAULT_CONCURRENCY_LIMITER,
       getPriority,
+      reader = DEFAULT_RANGE_READER,
+      requestInit,
     } = options;
     signal?.throwIfAborted();
 
     const geotiff = await fetchGeoTIFF(input, {
       concurrencyLimiter,
       getPriority,
+      reader,
+      requestInit,
       signal,
     });
     const projection = await resolveProjection(geotiff.crs, epsgResolver);
@@ -113,12 +137,12 @@ export class COGSource extends RasterSource {
     // The open was aborted while we waited
     signal?.throwIfAborted();
 
-    const { converter4326, ...functions } = projectionFunctions(projection);
+    const functions = projectionFunctions(projection);
     return new COGSource({
       geotiff,
       projection,
       tilesetDescriptor: geoTiffToDescriptor(geotiff, functions),
-      geographicBounds: getGeographicBounds(geotiff, converter4326),
+      geographicBounds: getGeographicBounds(geotiff, functions.projectTo4326),
     });
   }
 }

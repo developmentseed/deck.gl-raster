@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { DEFAULT_RANGE_READER } from "@developmentseed/deck.gl-raster";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import { epsgResolver } from "@developmentseed/proj";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -76,6 +77,8 @@ describe("COGSource.open", () => {
         "https://example.com/a.tif",
         {
           concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
+          reader: DEFAULT_RANGE_READER,
+          requestInit: undefined,
           getPriority,
           signal,
         },
@@ -84,6 +87,8 @@ describe("COGSource.open", () => {
         url,
         {
           concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
+          reader: DEFAULT_RANGE_READER,
+          requestInit: undefined,
           getPriority: undefined,
           signal: undefined,
         },

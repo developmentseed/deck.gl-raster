@@ -23,7 +23,6 @@ import {
   rescaleCommonSpaceToEPSG3857,
   rescaleEPSG3857ToCommonSpace,
 } from "./raster-tile-traversal.js";
-import { TILE_EDGE_TOLERANCE } from "./tile-span.js";
 import type { RasterTilesetDescriptor } from "./tileset-interface.js";
 import type {
   Bounds,
@@ -140,6 +139,16 @@ export interface RasterTileset2DOptions {
    * @default 65536
    */
   maxBoundingVolumeCacheSize?: number;
+
+  /**
+   * Abort a tile's load as soon as the tile is neither selected nor visible,
+   * not only while more than `maxRequests` loads are in flight as deck.gl
+   * does. Needed by layers that hand a whole selection to a range reader at
+   * once; deck.gl requests an aborted tile again when it is selected again.
+   *
+   * @default false
+   */
+  abortUnwantedLoads?: boolean;
 }
 
 /**
@@ -153,6 +162,7 @@ export class RasterTileset2D extends Tileset2D {
   private descriptor: RasterTilesetDescriptor;
   private wgs84Bounds: Bounds;
   private getPixelRatio: () => number;
+  private abortUnwantedLoads: boolean;
   private boundingVolumeCache: BoundingVolumeCache;
   private projectPosition: ProjectionFunction;
   private unprojectPosition: ProjectionFunction;
@@ -166,11 +176,16 @@ export class RasterTileset2D extends Tileset2D {
   constructor(
     opts: Tileset2DProps,
     descriptor: RasterTilesetDescriptor,
-    { getPixelRatio, maxBoundingVolumeCacheSize }: RasterTileset2DOptions = {},
+    {
+      getPixelRatio,
+      maxBoundingVolumeCacheSize,
+      abortUnwantedLoads = false,
+    }: RasterTileset2DOptions = {},
   ) {
     super(opts);
     this.descriptor = descriptor;
     this.getPixelRatio = getPixelRatio ?? (() => 1);
+    this.abortUnwantedLoads = abortUnwantedLoads;
     this.boundingVolumeCache = new BoundingVolumeCache({
       maxEntries: maxBoundingVolumeCacheSize,
     });
@@ -207,11 +222,48 @@ export class RasterTileset2D extends Tileset2D {
   }
 
   /**
+   * deck.gl's options, with `onTileUnload` wrapped to abort a still-loading
+   * tile first when {@link RasterTileset2DOptions.abortUnwantedLoads} is on:
+   * deck.gl evicts such tiles inside `update`, before {@link update}'s own
+   * pass sees them.
+   */
+  override setOptions(opts: Tileset2DProps): void {
+    const { onTileUnload } = opts;
+    super.setOptions({
+      ...opts,
+      onTileUnload: (tile) => {
+        if (this.abortUnwantedLoads && tile.isLoading) {
+          tile.abort();
+        }
+        onTileUnload?.(tile);
+      },
+    });
+  }
+
+  /**
+   * deck.gl's update, then the abort of every loading tile that is neither
+   * selected nor visible, when
+   * {@link RasterTileset2DOptions.abortUnwantedLoads} is on.
+   */
+  override update(...args: Parameters<Tileset2D["update"]>): number {
+    const frame = super.update(...args);
+    if (this.abortUnwantedLoads) {
+      for (const tile of this.tiles) {
+        if (tile.isLoading && !tile.isSelected && !tile.isVisible) {
+          tile.abort();
+        }
+      }
+    }
+    return frame;
+  }
+
+  /**
    * Unloads every cached tile. deck.gl's `Tileset2D.finalize` clears its cache
    * without calling `onTileUnload`, so GPU resources that `getTileData` made
    * for those tiles, like textures, would be freed only by garbage collection.
    * A tile still loading is unloaded once its load finishes, since deck.gl
-   * keeps the data that `getTileData` returns after an abort.
+   * keeps the data that `getTileData` returns after an abort. Not needed once
+   * https://github.com/visgl/deck.gl/pull/10883 lands.
    */
   override finalize(): void {
     const { onTileUnload } = this.opts;
@@ -336,13 +388,19 @@ export class RasterTileset2D extends Tileset2D {
     const decimationX = parentFootprintX / currentFootprintX;
     const decimationY = parentFootprintY / currentFootprintY;
 
-    // Footprints derived from rounded scale denominators can give a decimation
-    // a hair above a whole number (e.g. 2.000000000000004), which would floor
-    // an exact multiple like 2 / 2.000000000000004 down to the wrong parent.
-    // Add the same tolerance the traversal uses at tile edges before flooring.
+    // Pick the parent containing the child's center: decimation is often a
+    // little off a whole number, so the child's corner can fall in a
+    // neighboring parent. A last tile holding a sliver of data can have its
+    // center past the parent level's edge, hence the clamp. See #841.
     return {
-      x: Math.floor(index.x / decimationX + TILE_EDGE_TOLERANCE),
-      y: Math.floor(index.y / decimationY + TILE_EDGE_TOLERANCE),
+      x: Math.min(
+        Math.floor((index.x + 0.5) / decimationX),
+        parentOverview.matrixWidth - 1,
+      ),
+      y: Math.min(
+        Math.floor((index.y + 0.5) / decimationY),
+        parentOverview.matrixHeight - 1,
+      ),
       z: index.z - 1,
     };
   }

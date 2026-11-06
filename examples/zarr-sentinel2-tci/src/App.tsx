@@ -12,7 +12,7 @@ import {
 } from "deck.gl-raster-examples-shared";
 import "@deck.gl/widgets/stylesheet.css";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap } from "react-map-gl/maplibre";
 import * as zarr from "zarrita";
@@ -20,6 +20,9 @@ import * as zarr from "zarrita";
 // Currently generated locally from
 // https://github.com/developmentseed/geozarr-examples/pull/36
 const ZARR_URL = "http://localhost:8080/TCI.zarr";
+
+// One store across renders, so the layer opens it once
+const STORE = new zarr.FetchStore(ZARR_URL);
 
 type SentinelTileData = MinimalTileData & {
   image: ImageData;
@@ -97,38 +100,18 @@ export default function App() {
     debug: false,
     debugOpacity: 0.25,
   });
-  const [node, setNode] = useState<zarr.Group<zarr.Readable> | null>(null);
 
-  // Open the store ourselves so we own version/consolidation decisions,
-  // then hand the Group to the layer.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const store = new zarr.FetchStore(ZARR_URL);
-      const group = await zarr.open(store, { kind: "group" });
-      if (cancelled) {
-        return;
-      }
-      setNode(group);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const zarrLayer = node
-    ? new ZarrLayer<zarr.Readable, zarr.DataType, SentinelTileData>({
-        id: "zarr-layer",
-        node,
-        // Keep all 3 bands; `toImageData` consumes the band-planar RGB and
-        // packs it into RGBA ImageData.
-        selection: { band: null },
-        getTileData,
-        renderTile,
-        debug: debugState.debug,
-        debugOpacity: debugState.debugOpacity,
-      })
-    : null;
+  const zarrLayer = new ZarrLayer<SentinelTileData>({
+    id: "zarr-layer",
+    source: STORE,
+    // Keep all 3 bands; `toImageData` consumes the band-planar RGB and
+    // packs it into RGBA ImageData.
+    selection: { band: null },
+    getTileData,
+    renderTile,
+    debug: debugState.debug,
+    debugOpacity: debugState.debugOpacity,
+  });
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -142,7 +125,7 @@ export default function App() {
         mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
       >
         <DeckGlOverlay
-          layers={zarrLayer ? [zarrLayer] : []}
+          layers={[zarrLayer]}
           widgets={[new LoadingWidget(loadingWidgetProps)]}
           interleaved
         />

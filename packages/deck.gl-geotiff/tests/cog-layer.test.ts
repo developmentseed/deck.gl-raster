@@ -1,5 +1,12 @@
-import { CompositeLayer } from "@deck.gl/core";
+import {
+  CompositeLayer,
+  LayerManager,
+  WebMercatorViewport,
+} from "@deck.gl/core";
+import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
+import type { DecoderPool } from "@developmentseed/geotiff";
 import { GeoTIFF } from "@developmentseed/geotiff";
+import type { Device } from "@luma.gl/core";
 import { Texture } from "@luma.gl/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { COGLayer } from "../src/cog-layer.js";
@@ -352,14 +359,20 @@ describe("COGLayer source", () => {
     expect(next.renderLayers()).toBeNull();
   });
 
-  it("throws from updateState for a source the default pipeline can't draw", async () => {
+  it("reports a source the default pipeline can't draw through onError", async () => {
     const source = await openFixture(
       "float32_1band_deflate_block64_predictor3",
     );
-    const layer = makeBareLayer({ source });
+    const onError = vi.fn((_error: Error) => true);
+    const layer = makeBareLayer({ source, onError });
 
-    // deck.gl's LayerManager reports this through `onError`
-    expect(() => runInitialUpdate(layer)).toThrow(/non-unsigned integers/);
+    runInitialUpdate(layer);
+
+    expect(onError.mock.calls.map(([error]) => error.message)).toEqual([
+      expect.stringMatching(
+        /^Can't draw the source in COGLayer: .*non-unsigned integers/,
+      ),
+    ]);
   });
 
   it("draws nothing, not the old source, after switching to a source the default pipeline can't draw", async () => {
@@ -367,12 +380,11 @@ describe("COGLayer source", () => {
     const undrawable = await openFixture(
       "float32_1band_deflate_block64_predictor3",
     );
-    const layer = makeBareLayer({ source: drawable });
+    const onError = vi.fn((_error: Error) => true);
+    const layer = makeBareLayer({ source: drawable, onError });
     runInitialUpdate(layer);
 
-    expect(() => rerender(layer, { source: undrawable })).toThrow(
-      /non-unsigned integers/,
-    );
+    rerender(layer, { source: undrawable, onError });
 
     // Every instance shares this state
     expect(layer.state.source).toBeUndefined();
@@ -434,5 +446,116 @@ describe("COGLayer.isLoaded", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(next.isLoaded).toBe(false);
+  });
+});
+
+describe("COGLayer refetching", () => {
+  it("fetches its tiles again when updateTriggers.getTileData changes", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const { west, south, east, north } = source.geographicBounds;
+    const viewport = new WebMercatorViewport({
+      width: 100,
+      height: 100,
+    }).fitBounds([
+      [west, south],
+      [east, north],
+    ]);
+    // A device that draws nothing. The layer reads only its canvas sizes.
+    const device = {
+      getDefaultCanvasContext: () => ({
+        getDrawingBufferSize: () => [100, 100],
+        getCSSSize: () => [100, 100],
+      }),
+    } as unknown as Device;
+    const errors: Error[] = [];
+    const layerManager = new LayerManager(device, {});
+    layerManager.setProps({ onError: (error: Error) => errors.push(error) });
+    layerManager.activateViewport(viewport);
+    const signals: AbortSignal[] = [];
+    const onTileUnload = vi.fn();
+    const render = (trigger: number) =>
+      layerManager.setLayers([
+        new COGLayer<MinimalTileData>({
+          id: "cog",
+          source,
+          // Each load settles only when aborted
+          getTileData: (_image, { signal }) => {
+            signals.push(signal!);
+            return new Promise<never>((_resolve, reject) => {
+              signal?.addEventListener("abort", () => reject(signal.reason));
+            });
+          },
+          renderTile: () => null,
+          onTileUnload,
+          pool: {} as DecoderPool,
+          // Start every load at once, without COGLayer's default debounce
+          maxRequests: 0,
+          debounceTime: 0,
+          updateTriggers: { getTileData: [trigger] },
+        }),
+      ]);
+
+    render(0);
+    await flush();
+    const first = [...signals];
+    render(1);
+    await flush();
+    // Read these before finalize, which aborts and unloads every tile
+    const aborted = first.filter((signal) => signal.aborted).length;
+    const unloaded = onTileUnload.mock.calls.length;
+    const refetched = signals.length - first.length;
+    layerManager.finalize();
+
+    expect(errors).toEqual([]);
+    expect(first.length).toBeGreaterThan(0);
+    expect(aborted).toBe(first.length);
+    expect(unloaded).toBe(first.length);
+    expect(refetched).toBe(first.length);
+  });
+});
+
+describe("COGLayer colormap texture of a palette COG", () => {
+  /** Open the NLCD fixture, a palette COG, as a new source. */
+  async function openPalette(): Promise<COGSource> {
+    return openSource(await loadGeoTIFF("nlcd_landcover", "nlcd"));
+  }
+
+  /** A layer on a palette COG whose device records the textures it creates. */
+  async function makePaletteLayer() {
+    const textures: ReturnType<typeof fakeTexture>[] = [];
+    const layer = makeBareLayer({ source: await openPalette() });
+    Object.assign(layer.context, {
+      device: {
+        createTexture: () => {
+          const texture = fakeTexture();
+          textures.push(texture);
+          return texture.texture;
+        },
+      },
+      // Read by deck.gl's own `finalizeState`
+      resourceManager: { unsubscribe: () => {} },
+    });
+    runInitialUpdate(layer);
+    return { layer, textures };
+  }
+
+  it("destroys the old colormap texture when a new source replaces it", async () => {
+    const { layer, textures } = await makePaletteLayer();
+
+    rerender(layer, { source: await openPalette() });
+
+    expect(
+      textures.map((texture) => texture.destroy.mock.calls.length),
+    ).toEqual([1, 0]);
+  });
+
+  it("destroys its colormap texture when the layer is removed", async () => {
+    const { layer, textures } = await makePaletteLayer();
+
+    layer.finalizeState(layer.context);
+
+    expect(
+      textures.map((texture) => texture.destroy.mock.calls.length),
+    ).toEqual([1]);
   });
 });

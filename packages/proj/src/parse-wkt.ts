@@ -1,5 +1,8 @@
 import wktParser from "wkt-parser";
+import { registerCylindricalEqualArea } from "./cylindrical-equal-area.js";
 import type { ProjJson } from "./projjson.js";
+
+registerCylindricalEqualArea();
 
 export interface DatumDefinition {
   /** The type of datum. */

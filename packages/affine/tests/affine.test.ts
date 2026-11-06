@@ -3,6 +3,7 @@ import type { Affine } from "../src/affine.js";
 import {
   apply,
   compose,
+  fromGDAL,
   identity,
   invert,
   pixelIsPointToArea,
@@ -135,5 +136,14 @@ describe("rotation", () => {
     const [x, y] = apply(r, ...pivot);
     expect(x).toBeCloseTo(pivot[0], 10);
     expect(y).toBeCloseTo(pivot[1], 10);
+  });
+});
+
+describe("fromGDAL", () => {
+  it("reorders a GDAL geotransform to [a, b, c, d, e, f]", () => {
+    // GDAL order: [c, a, b, f, d, e]
+    expect(fromGDAL([100, 0.5, 0.1, 200, 0.2, -0.5])).toEqual([
+      0.5, 0.1, 100, 0.2, -0.5, 200,
+    ]);
   });
 });

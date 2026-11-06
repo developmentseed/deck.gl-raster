@@ -73,7 +73,7 @@ describe("getMultipleBytes", () => {
     expect(ds.fetches.length).toBe(0);
   });
 
-  it("returns bytes in input order, coalescing nearby ranges", async () => {
+  it("returns bytes in input order, one read per range", async () => {
     const ds = recordingDataSource(makeBuffer(256));
     const image = mockImage({
       tileCount: { x: 2, y: 1 },
@@ -91,8 +91,12 @@ describe("getMultipleBytes", () => {
       { imageTags: NO_JPEG_TABLES },
     );
 
-    // gap (120 - 110 = 10) is well under the 1 MiB default → one fetch.
-    expect(ds.fetches.length).toBe(1);
+    // Merging is the range reader's job now: one read per range, in input
+    // order, for the data source to merge or not.
+    expect(ds.fetches).toEqual([
+      { offset: 120, length: 10 },
+      { offset: 100, length: 10 },
+    ]);
     expect(result[0]!.compression).toBe(Compression.None);
     expect(new Uint8Array(result[0]!.bytes)).toEqual(
       makeBuffer(256).slice(120, 130),

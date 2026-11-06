@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { DEFAULT_RANGE_READER } from "@developmentseed/deck.gl-raster";
 import { GeoTIFF } from "@developmentseed/geotiff";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../src/default-concurrency-limiter.js";
@@ -201,6 +202,8 @@ describe("MultiCOGSource.open", () => {
     expect(fromUrl).toHaveBeenCalledWith("https://example.com/a.tif", {
       concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
       getPriority,
+      reader: DEFAULT_RANGE_READER,
+      requestInit: undefined,
       signal,
     });
   });

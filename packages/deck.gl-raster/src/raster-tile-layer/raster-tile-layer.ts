@@ -19,6 +19,7 @@ import type { Device } from "@luma.gl/core";
 import { renderDebugTileOutline } from "../layer-utils.js";
 import type { RenderTileResult } from "../raster-layer.js";
 import { RasterLayer } from "../raster-layer.js";
+import { RasterSource } from "../raster-source.js";
 import type { RasterTilesetDescriptor } from "../raster-tileset/index.js";
 import { RasterTileset2D } from "../raster-tileset/index.js";
 import { TILE_SIZE } from "../raster-tileset/raster-tile-traversal.js";
@@ -86,8 +87,7 @@ export type RasterTileLayerProps<
      * Keep the same object across renders: a new descriptor starts the layer's
      * tiles over.
      *
-     * Subclasses may supply this via state by overriding the protected
-     * `_tilesetDescriptor()` method.
+     * Layers that take a `source` take the descriptor from it instead.
      */
     tilesetDescriptor?: RasterTilesetDescriptor;
 
@@ -104,6 +104,11 @@ export type RasterTileLayerProps<
     /**
      * Load data for one tile. Runs once per (x, y, z); the resulting `DataT`
      * is cached by the underlying TileLayer.
+     *
+     * To fetch the tiles again when something this function reads changes,
+     * change `updateTriggers.getTileData` (or `updateTriggers.all`). deck.gl
+     * compares each element of a trigger with `===`, so keep them the same
+     * across renders.
      *
      * Subclasses may supply this via state by overriding
      * `_getTileDataCallback()`.
@@ -149,7 +154,8 @@ export type RasterTileLayerProps<
 
     /**
      * AbortSignal applied to every tile fetch, composed with TileLayer's
-     * per-tile signal.
+     * per-tile signal. It doesn't abort opening `source`: the layer aborts
+     * that itself when `source` changes or the layer is removed.
      */
     signal?: AbortSignal;
 
@@ -204,6 +210,32 @@ function descriptorId(descriptor: RasterTilesetDescriptor): number {
 }
 
 /**
+ * The props of a layer that takes a `source`: the opened source it draws, of
+ * type `SourceT`, or input of type `InputT` for it to open.
+ *
+ * {@link RasterTileLayer} reads them with these types. Each such layer
+ * declares `source` itself, to document its inputs, and the types come from
+ * that declaration.
+ */
+type SourceProps<SourceT extends RasterSource, InputT> = {
+  /** An opened source, or input for the layer to open. */
+  source?: SourceT | InputT | null;
+  /** Called with the source the layer opened from input. */
+  onSourceLoad?: (source: SourceT) => void;
+};
+
+/**
+ * The type of the `source` prop in a layer's props, without `null` and
+ * `undefined`. For COGLayerProps, that's `COGSource | COGInput`.
+ *
+ * Props without a `source` give `never`; that's what the `keyof` check is for.
+ * Indexing with `"source" & keyof PropsT` only tells TypeScript the key exists.
+ */
+type SourcePropOf<PropsT> = "source" extends keyof PropsT
+  ? NonNullable<PropsT["source" & keyof PropsT]>
+  : never;
+
+/**
  * Base-class prop shape that excludes the overridable fields.
  *
  * The three overridable fields (`tilesetDescriptor`, `getTileData`,
@@ -235,14 +267,35 @@ type RasterTileLayerDefaultExtraProps<DataT extends MinimalTileData> = Pick<
  * `_getTileDataCallback`, `_renderTileCallback` accessors to source them from
  * state).
  *
- * The generic `ExtraProps` parameter lets a subclass redeclare any of the
- * overridable fields with a domain-specific signature (e.g. `COGLayer`'s
- * `getTileData(image, options)`).
+ * A subclass that draws a {@link RasterSource} declares `source` and
+ * `onSourceLoad` props, and overrides {@link RasterTileLayer._openSource} to
+ * open its other inputs, such as a URL. The base layer draws an opened source
+ * at once, opens other input in {@link RasterTileLayer.loadMetadata}, and takes
+ * the tile grid from the source.
+ *
+ * The generic parameters:
+ * - `ExtraProps` lets a subclass redeclare any of the overridable fields with
+ *   a domain-specific signature (e.g. `COGLayer`'s
+ *   `getTileData(image, options)`).
+ * - `SourceT` and `InputT` type a subclass's `source`: the opened source it
+ *   draws and the input it opens. They default to what the `source` prop in
+ *   `ExtraProps` takes, so a subclass doesn't pass them: COGLayer's
+ *   `source: COGSource | COGInput` makes them `COGSource` and `COGInput`. A
+ *   layer without a `source` gets `never`.
  */
 export class RasterTileLayer<
   DataT extends MinimalTileData = MinimalTileData,
   ExtraProps extends object = RasterTileLayerDefaultExtraProps<DataT>,
-> extends CompositeLayer<RasterTileLayerBaseProps<DataT> & ExtraProps> {
+  // The opened sources in `source`: COGSource for COGLayer
+  SourceT extends RasterSource = Extract<
+    SourcePropOf<ExtraProps>,
+    RasterSource
+  >,
+  // The rest of `source`, which the layer opens: COGInput for COGLayer
+  InputT = Exclude<SourcePropOf<ExtraProps>, RasterSource>,
+> extends CompositeLayer<
+  RasterTileLayerBaseProps<DataT> & SourceProps<SourceT, InputT> & ExtraProps
+> {
   static override layerName = "RasterTileLayer";
   static override defaultProps = defaultProps;
 
@@ -252,12 +305,30 @@ export class RasterTileLayer<
     metadataAbortController?: AbortController;
     /** True while the latest metadata load is in flight. */
     loadingMetadata?: boolean;
+    /** The source the layer draws: `source` itself, or the one opened from it. */
+    source?: SourceT;
+    /** The number of refetches, part of the inner TileLayer's id. */
+    refetchCount?: number;
   };
 
   override updateState(params: UpdateParameters<this>): void {
     super.updateState(params);
+    const { source } = params.props;
+    if (source !== params.oldProps.source) {
+      // A new `source` replaces the old one, and any open still in flight.
+      // Input draws nothing until it opens.
+      this._abortMetadataLoad();
+      this._setSource(this._isOpened(source) ? source : undefined);
+    }
     if (this.shouldLoadMetadata(params)) {
       this._loadMetadata();
+    }
+    const { updateTriggersChanged } = params.changeFlags;
+    if (
+      updateTriggersChanged &&
+      (updateTriggersChanged.all || updateTriggersChanged.getTileData)
+    ) {
+      this._refetchTiles();
     }
   }
 
@@ -270,12 +341,16 @@ export class RasterTileLayer<
    * Whether `updateState` should load this layer's metadata again, like
    * deck.gl's `shouldUpdateState`.
    *
-   * Subclasses that load metadata return `true` when a prop it depends on has
-   * changed. The base layer takes its descriptor from props, so it returns
-   * `false`.
+   * By default, the layer loads when `source` changes to input it has to open,
+   * such as a URL. An opened {@link RasterSource} needs no loading, and
+   * neither does `undefined` or `null`, which draw nothing. Subclasses that
+   * load other metadata return `true` when a prop it depends on has changed.
    */
-  shouldLoadMetadata(_params: UpdateParameters<this>): boolean {
-    return false;
+  shouldLoadMetadata({ props, oldProps }: UpdateParameters<this>): boolean {
+    const { source } = props;
+    return (
+      source !== oldProps.source && source != null && !this._isOpened(source)
+    );
   }
 
   /**
@@ -289,9 +364,84 @@ export class RasterTileLayer<
    * call `signal.throwIfAborted()` after the last `await`, before `setState` or
    * callbacks.
    *
-   * The base layer takes its descriptor from props, so it loads nothing.
+   * By default, it opens `source` with {@link RasterTileLayer._openSource},
+   * calls `onSourceLoad` with the opened source, and draws it.
    */
-  async loadMetadata(_signal: AbortSignal): Promise<void> {}
+  async loadMetadata(signal: AbortSignal): Promise<void> {
+    const input = this.props.source;
+    // An opened source, or none, needs no opening
+    if (input == null || this._isOpened(input)) {
+      return;
+    }
+    const source = await this._openSource(input, signal);
+
+    // `source` changed or the layer was removed while we waited
+    signal.throwIfAborted();
+
+    this.props.onSourceLoad?.(source);
+    this._setSource(source);
+  }
+
+  /**
+   * Open `input`, a `source` that isn't an opened {@link RasterSource}, such as
+   * a URL.
+   *
+   * Layers that take a `source` override this, as COGLayer does with
+   * `COGSource.open`. Pass `signal` on to the open: it aborts when `source`
+   * changes or the layer is removed. The base layer can't open anything, so it
+   * rejects.
+   */
+  protected _openSource(
+    _input: InputT,
+    _signal: AbortSignal,
+  ): Promise<SourceT> {
+    const { layerName } = this.constructor as typeof RasterTileLayer;
+    return Promise.reject(new Error(`${layerName} can't open a source`));
+  }
+
+  /**
+   * More state to store with `source` when the layer starts drawing it, such
+   * as a default render pipeline.
+   *
+   * Throw if the layer can't draw `source`: it then draws nothing, and the
+   * error reaches `onError`. The base layer stores nothing more.
+   */
+  protected _sourceState(_source: SourceT): object {
+    return {};
+  }
+
+  /**
+   * Whether `source` is an opened source, rather than input for the layer to
+   * open: every opened source is a {@link RasterSource}.
+   */
+  private _isOpened(
+    source: SourceT | InputT | null | undefined,
+  ): source is SourceT {
+    return source instanceof RasterSource;
+  }
+
+  /** Draw `source`, or nothing when it's `undefined`. */
+  private _setSource(source: SourceT | undefined): void {
+    // Clear the old source first, so that if `_sourceState` throws for the new
+    // one, the layer draws nothing rather than the old source
+    this.setState({ source: undefined });
+    if (!source) {
+      return;
+    }
+
+    let sourceState: object;
+    try {
+      sourceState = this._sourceState(source);
+    } catch (error) {
+      // Report the error rather than throw it: after a throw from
+      // `updateState`, deck.gl skips `renderLayers` and keeps drawing the old
+      // source's sublayers
+      const { layerName } = this.constructor as typeof RasterTileLayer;
+      this.raiseError(error as Error, `Can't draw the source in ${layerName}`);
+      return;
+    }
+    this.setState({ ...sourceState, source });
+  }
 
   /**
    * Run {@link RasterTileLayer.loadMetadata}, replacing any load still in
@@ -341,21 +491,37 @@ export class RasterTileLayer<
   }
 
   /**
-   * The currently effective {@link RasterTilesetDescriptor}.
+   * Drop every tile and fetch the visible ones again, through a new inner
+   * TileLayer. It doesn't use deck.gl's `reloadAll`, which keeps drawing old
+   * tiles (see #818).
    *
-   * Subclasses override this to return a descriptor built from their own
-   * async-parsed state. Returns `undefined` while the source is still
-   * loading; `renderLayers()` returns `null` in that case.
+   * Subclasses call this when something their `getTileData` reads changes. A
+   * subclass that renders its own TileLayer puts `state.refetchCount` in its
+   * id.
+   */
+  protected _refetchTiles(): void {
+    this.setState({ refetchCount: (this.state.refetchCount ?? 0) + 1 });
+  }
+
+  /**
+   * The currently effective {@link RasterTilesetDescriptor}: the tile grid of
+   * the source the layer draws, or else the `tilesetDescriptor` prop.
+   *
+   * Returns `undefined` while the source is still opening; `renderLayers()`
+   * returns `null` in that case. Subclasses that build a descriptor some other
+   * way override this.
    *
    * The inline cast to `RasterTileLayerProps<DataT>` is required because
    * `tilesetDescriptor` is declared on `ExtraProps`, not on the base's
    * `RasterTileLayerBaseProps`. For direct use the default `ExtraProps`
-   * brings it in; for subclass use this method is overridden and the cast
-   * is never reached.
+   * brings it in; layers that take a `source` don't declare it.
    */
   protected _tilesetDescriptor(): RasterTilesetDescriptor | undefined {
-    return (this.props as unknown as RasterTileLayerProps<DataT>)
-      .tilesetDescriptor;
+    // `state` is unset until deck.gl initializes the layer
+    return (
+      this.state?.source?.tilesetDescriptor ??
+      (this.props as unknown as RasterTileLayerProps<DataT>).tilesetDescriptor
+    );
   }
 
   /**
@@ -365,8 +531,8 @@ export class RasterTileLayer<
    * is in flight. Subclasses that load metadata some other way can override
    * this.
    *
-   * The base layer takes its descriptor from props, so on its own it never
-   * waits on metadata.
+   * A layer given an opened source, or its descriptor as a prop, never waits
+   * on metadata.
    */
   protected _isLoadingMetadata(): boolean {
     // `state` is unset until deck.gl initializes the layer
@@ -412,6 +578,14 @@ export class RasterTileLayer<
    */
   protected _onTileUnloadCallback(): RasterTileLayerProps<DataT>["onTileUnload"] {
     return this.props.onTileUnload;
+  }
+
+  /**
+   * Whether the tileset aborts a tile's load once the tile is neither
+   * selected nor visible. Off here; the COG layers turn it on.
+   */
+  protected _abortUnwantedLoads(): boolean {
+    return false;
   }
 
   /**
@@ -480,9 +654,11 @@ export class RasterTileLayer<
     // because deck.gl compares `TilesetClass` by identity: the new class makes
     // the inner `TileLayer` re-render loaded tiles with the current props.
     // See #710.
+    const abortUnwantedLoads = this._abortUnwantedLoads();
     class TilesetFactory extends RasterTileset2D {
       constructor(opts: Tileset2DProps) {
         super(opts, descriptor, {
+          abortUnwantedLoads,
           getPixelRatio: () => {
             const ctx = device.getDefaultCanvasContext();
             const [drawingBufferWidth] = ctx.getDrawingBufferSize();
@@ -513,8 +689,8 @@ export class RasterTileLayer<
 
     return new TileLayer<DataT>({
       // A TileLayer builds its tile grid once, from its first descriptor, so a
-      // new descriptor needs a new TileLayer
-      id: `raster-tile-layer-${this.id}-${descriptorId(descriptor)}`,
+      // new descriptor needs a new TileLayer. So does each refetch.
+      id: `raster-tile-layer-${this.id}-${descriptorId(descriptor)}-${this.state?.refetchCount ?? 0}`,
       TilesetClass: TilesetFactory,
       getTileData: (tile) => this._wrapGetTileData(tile, getTileData),
       renderSubLayers: (props) =>

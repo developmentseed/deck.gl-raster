@@ -280,6 +280,35 @@ describe("MultiCOGLayer source", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(layer.renderLayers()).toBeNull();
   });
+
+  it("draws nothing when an empty record replaces an opened source", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const open = vi.spyOn(MultiCOGSource, "open");
+    const onError = vi.fn();
+    const layer = makeBareLayer({ source, onError });
+    runInitialUpdate(layer);
+
+    const next = rerender(layer, { source: {}, onError });
+    await flush();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(next.state.source).toBeUndefined();
+    expect(next.renderLayers()).toBeNull();
+  });
+
+  it("draws nothing for a null source, without an error", async () => {
+    const source = await openFixture("cog_uint8_rgba");
+    const onError = vi.fn();
+    const layer = makeBareLayer({ source, onError });
+    runInitialUpdate(layer);
+
+    const next = rerender(layer, { source: null, onError });
+    await flush();
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(next.renderLayers()).toBeNull();
+  });
 });
 
 describe("MultiCOGLayer.isLoaded", () => {

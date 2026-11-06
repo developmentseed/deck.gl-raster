@@ -1,4 +1,4 @@
-import type { UpdateParameters } from "@deck.gl/core";
+import type { LayerContext } from "@deck.gl/core";
 import type {
   MinimalTileData,
   GetTileDataOptions as RasterTileGetTileDataOptions,
@@ -34,6 +34,11 @@ type COGLayerDataProps<DataT extends MinimalTileData> =
        * Must be provided together with `renderTile`. If neither is provided,
        * the default pipeline is used, which fetches the tile, uploads it as a
        * GPU texture, and renders it using an inferred shader pipeline.
+       *
+       * To fetch the tiles again when something this function reads changes,
+       * change `updateTriggers.getTileData` (or `updateTriggers.all`).
+       * deck.gl compares each element of a trigger with `===`, so keep them
+       * the same across renders.
        */
       getTileData: (
         image: GeoTIFF | Overview,
@@ -87,109 +92,80 @@ export type COGLayerProps<DataT extends MinimalTileData = TextureDataT> = Omit<
     onSourceLoad?: (source: COGSource) => void;
 
     /**
-     * Worker pool for decoding image chunks.
-     *
-     * If none is provided, the layer uses `defaultDecoderPool()`, a single pool
-     * shared by every COGLayer and MultiCOGLayer.
+     * Worker pool for decoding image chunks. Without one, every layer shares a
+     * default pool.
      */
     pool?: DecoderPool;
-
-    /** A user-provided AbortSignal to cancel tile requests. It doesn't abort
-     * opening `source`: the layer aborts that itself when `source` changes or
-     * the layer is removed.
-     *
-     * This can be useful in combination with the MosaicLayer, so that when a
-     * mosaic source is out of the viewport, all of its tile requests are
-     * automatically aborted.
-     */
-    signal?: AbortSignal;
   };
 
 /**
  * COGLayer renders a COG using a tiled approach with reprojection.
  *
  * Its `source` is an opened {@link COGSource}, or a COG for the layer to open.
+ * For the bands of one scene stored as separate files, use
+ * {@link MultiCOGLayer}.
  */
 export class COGLayer<
   DataT extends MinimalTileData = TextureDataT,
 > extends RasterTileLayer<DataT, COGLayerProps<DataT>> {
   static override layerName = "COGLayer";
+  // Release a whole selection to the range reader at once, which merges its
+  // reads; the per-origin limiter caps requests. Cast as in MultiCOGLayer.
+  static override defaultProps = {
+    ...RasterTileLayer.defaultProps,
+    maxRequests: 256,
+    debounceTime: 50,
+  } as unknown as typeof RasterTileLayer.defaultProps;
+
+  /** On: a tile that leaves the view must stop its stream. */
+  protected override _abortUnwantedLoads(): boolean {
+    return true;
+  }
 
   declare state: RasterTileLayer<DataT, COGLayerProps<DataT>>["state"] & {
-    /** The source the layer draws: `source` itself, or the one opened from it. */
-    source?: COGSource;
     defaultGetTileData?: COGLayerProps<TextureDataT>["getTileData"];
     defaultRenderTile?: COGLayerProps<TextureDataT>["renderTile"];
+    /** Destroys the default pipeline's shared textures. */
+    destroyDefaultPipeline?: () => void;
   };
 
-  override shouldLoadMetadata({
-    props,
-    oldProps,
-  }: UpdateParameters<this>): boolean {
-    // An opened source needs no loading
-    return (
-      props.source !== oldProps.source && !(props.source instanceof COGSource)
-    );
-  }
-
-  override updateState(params: UpdateParameters<this>): void {
-    super.updateState(params);
-    const { props, oldProps } = params;
-    if (props.source instanceof COGSource && props.source !== oldProps.source) {
-      // An opened source replaces any open still in flight
-      this._abortMetadataLoad();
-      // If the default pipeline can't draw the new source, draw nothing rather
-      // than the old one
-      this.clearState();
-      this.setState(this._sourceState(props.source));
-    }
-  }
-
-  clearState() {
-    this.setState({
-      source: undefined,
-      defaultGetTileData: undefined,
-      defaultRenderTile: undefined,
-    });
-  }
-
-  /** Open `source`, when it isn't an opened source already. */
-  override async loadMetadata(signal: AbortSignal): Promise<void> {
-    // Clear stale state so renderLayers returns null until the new source is
-    // ready
-    this.clearState();
-
-    const input = this.props.source;
-    // `source` was removed. An opened source never loads.
-    if (input === undefined || input instanceof COGSource) {
-      return;
-    }
-    const source = await COGSource.open(input, { signal });
-
-    // `source` changed or the layer was removed while we waited
-    signal.throwIfAborted();
-
-    this.props.onSourceLoad?.(source);
-    this.setState(this._sourceState(source));
+  /**
+   * Open the COG that `source` points to, with the defaults of
+   * {@link COGSource.open}.
+   */
+  protected override _openSource(
+    input: COGInput,
+    signal: AbortSignal,
+  ): Promise<COGSource> {
+    return COGSource.open(input, { signal });
   }
 
   /**
-   * The state for drawing `source`, with the default pipeline unless the app
-   * passed both `getTileData` and `renderTile`.
+   * The default pipeline for drawing `source`, unless the app passed both
+   * `getTileData` and `renderTile`. It replaces, and destroys, the previous
+   * source's pipeline.
    */
-  private _sourceState(source: COGSource) {
+  protected override _sourceState(source: COGSource) {
+    this.state.destroyDefaultPipeline?.();
+    this.setState({ destroyDefaultPipeline: undefined });
+
     let defaultGetTileData: COGLayerProps<TextureDataT>["getTileData"];
     let defaultRenderTile: COGLayerProps<TextureDataT>["renderTile"];
+    let destroyDefaultPipeline: (() => void) | undefined;
     if (!this.props.getTileData || !this.props.renderTile) {
-      ({ getTileData: defaultGetTileData, renderTile: defaultRenderTile } =
-        inferRenderPipeline(source.geotiff, this.context.device));
+      ({
+        getTileData: defaultGetTileData,
+        renderTile: defaultRenderTile,
+        destroy: destroyDefaultPipeline,
+      } = inferRenderPipeline(source.geotiff, this.context.device));
     }
 
-    return { source, defaultGetTileData, defaultRenderTile };
+    return { defaultGetTileData, defaultRenderTile, destroyDefaultPipeline };
   }
 
-  protected override _tilesetDescriptor() {
-    return this.state.source?.tilesetDescriptor;
+  override finalizeState(context: LayerContext): void {
+    this.state.destroyDefaultPipeline?.();
+    super.finalizeState(context);
   }
 
   /**
