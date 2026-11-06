@@ -1,4 +1,4 @@
-import { NativeSelect, Slider, Text } from "@chakra-ui/react";
+import { Checkbox, NativeSelect, Slider, Text } from "@chakra-ui/react";
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import {
@@ -39,6 +39,10 @@ export interface ControlPanelProps {
   opacity: number;
   /** Called with the next opacity. */
   onOpacityChange: (opacity: number) => void;
+  /** Whether to outline each COG in view. */
+  showOutlines: boolean;
+  /** Called with the next `showOutlines`. */
+  onShowOutlinesChange: (show: boolean) => void;
   /** Active colormap id (NDVI mode only). */
   colormapId: ColormapId;
   /** Called with the next colormap id. */
@@ -52,8 +56,9 @@ export interface ControlPanelProps {
 }
 
 /**
- * NAIP mosaic control panel: render-mode picker and opacity slider plus, in
- * NDVI mode, a colormap picker with preview and an NDVI-range filter slider.
+ * NAIP mosaic control panel: render-mode picker, opacity slider and COG
+ * outline toggle plus, in NDVI mode, a colormap picker with preview and an
+ * NDVI-range filter slider.
  */
 export function ControlPanel({
   loading,
@@ -63,6 +68,8 @@ export function ControlPanel({
   onRenderModeChange,
   opacity,
   onOpacityChange,
+  showOutlines,
+  onShowOutlinesChange,
   colormapId,
   onColormapIdChange,
   colormapChoice,
@@ -126,6 +133,18 @@ export function ControlPanel({
           </Slider.Control>
         </Slider.Root>
       </Field>
+
+      <Checkbox.Root
+        mb="3"
+        checked={showOutlines}
+        onCheckedChange={(details) =>
+          onShowOutlinesChange(details.checked === true)
+        }
+      >
+        <Checkbox.HiddenInput />
+        <Checkbox.Control />
+        <Checkbox.Label>Outline each COG</Checkbox.Label>
+      </Checkbox.Root>
 
       {renderMode === "ndvi" ? (
         <>

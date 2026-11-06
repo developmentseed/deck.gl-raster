@@ -1,3 +1,4 @@
+import { PathLayer } from "@deck.gl/layers";
 import { LoadingWidget } from "@deck.gl/widgets";
 import {
   COGLayer,
@@ -94,6 +95,19 @@ async function getTileData(
     height: height,
     width: width,
   };
+}
+
+/** The outline of a COG's image, in WGS84. */
+function cogOutline(source: COGSource): [number, number][] {
+  const { projectedBounds, projectTo4326 } = source.tilesetDescriptor;
+  const [minX, minY, maxX, maxY] = projectedBounds;
+  return [
+    projectTo4326(minX, minY),
+    projectTo4326(maxX, minY),
+    projectTo4326(maxX, maxY),
+    projectTo4326(minX, maxY),
+    projectTo4326(minX, minY),
+  ];
 }
 
 /** Shader module that sets alpha channel to 1.0.
@@ -305,6 +319,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [renderMode, setRenderMode] = useState<RenderMode>("trueColor");
   const [opacity, setOpacity] = useState(1);
+  const [showOutlines, setShowOutlines] = useState(false);
   const [ndviRange, setNdviRange] = useState<[number, number]>([-1, 1]);
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
@@ -393,7 +408,7 @@ export default function App() {
       // `subLayerProps`
       opacity,
       renderSource: (_item, { source, subLayerProps }) => {
-        return new COGLayer<TextureDataT>({
+        const cogLayer = new COGLayer<TextureDataT>({
           ...subLayerProps,
           source,
           getTileData,
@@ -411,6 +426,21 @@ export default function App() {
                     }),
           onTileUnload: (tile) => tile.content?.texture.destroy(),
         });
+        if (!showOutlines || !source) {
+          return cogLayer;
+        }
+        return [
+          cogLayer,
+          new PathLayer<[number, number][]>({
+            ...subLayerProps,
+            id: `${subLayerProps.id}-outline`,
+            data: [cogOutline(source)],
+            getPath: (path) => path,
+            getColor: [255, 255, 0],
+            widthUnits: "pixels",
+            getWidth: 2,
+          }),
+        ];
       },
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.
@@ -457,6 +487,8 @@ export default function App() {
         onRenderModeChange={setRenderMode}
         opacity={opacity}
         onOpacityChange={setOpacity}
+        showOutlines={showOutlines}
+        onShowOutlinesChange={setShowOutlines}
         colormapId={colormapId}
         onColormapIdChange={setColormapId}
         colormapChoice={colormapChoice}
