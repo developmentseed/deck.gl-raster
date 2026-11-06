@@ -5,7 +5,7 @@ import {
   WebMercatorViewport,
 } from "@deck.gl/core";
 import type { Device } from "@luma.gl/core";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import type { MosaicLayerProps } from "../src/mosaic-layer/mosaic-layer.js";
 import { MosaicLayer } from "../src/mosaic-layer/mosaic-layer.js";
 import type {
@@ -872,6 +872,7 @@ describe("MosaicLayer with an item whose source fails to open", () => {
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
+    onTestFinished(() => consoleError.mockRestore());
     const failures: string[] = [];
     const { render } = makeMosaicRenderer();
     const { errors } = await render({
@@ -881,7 +882,6 @@ describe("MosaicLayer with an item whose source fails to open", () => {
         failures.push(`${item.id}: ${error.message}`);
       },
     });
-    consoleError.mockRestore();
     expect(errors).toEqual([]);
     expect(failures).toEqual(["B: Not found"]);
     expect(consoleError).not.toHaveBeenCalled();
