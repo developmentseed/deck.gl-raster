@@ -5,7 +5,7 @@ slug: /intro
 
 # Introduction
 
-deck.gl-raster is a collection of TypeScript modules to enable loading [GeoTIFF][geotiff] and [Cloud-Optimized GeoTIFF][cogeo] (COG) data in the browser and interactively visualizing it in [deck.gl].
+deck.gl-raster is a collection of TypeScript modules to enable loading [GeoTIFF][geotiff], [Cloud-Optimized GeoTIFF][cogeo] (COG) and [Zarr] data in the browser and interactively visualizing it in [deck.gl].
 
 [geotiff]: https://en.wikipedia.org/wiki/GeoTIFF
 [cogeo]: https://cogeo.org/
@@ -19,12 +19,14 @@ deck.gl-raster is a collection of TypeScript modules to enable loading [GeoTIFF]
   - Converting color spaces (CMYK, YCbCr, CIELAB to RGB)
   - Filtering out nodata values
   - Applying colormaps for paletted images
-  - _Soon_: color correction, nodata masks, spectral band math, pixel filtering
+  - Applying nodata masks
+  - _Soon_: color correction, spectral band math, pixel filtering
 - **Intelligent rendering**: Automatically infers default render behavior from GeoTIFF metadata
   - Alternatively, fully-customizable rendering with no GPU knowledge required
 - **Native tiling**: Renders tiled data sources _in their native tiling scheme_, without translating to a Web Mercator tiling grid.
 - **Flexible reprojection**: GPU-based raster reprojection from most projections[^1]
-- **Efficient streaming**: Intelligent COG rendering fetches only visible image portions
+- **Efficient streaming**: Intelligent COG rendering fetches only visible image portions, merging nearby reads into few HTTP range requests
+- **Shared sources**: Open a dataset once with `COGSource`, `MultiCOGSource` or `ZarrSource`, and draw it with any number of layers
 - **Multi-resolution support**: Automatic overview selection based on zoom level
 
 [^1]: The raster reprojection has not been tested on polar projections.
@@ -44,6 +46,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 | [`geozarr`]          | Validation and parsing for [GeoZarr] metadata                   | [![npm][geozarr-npm-badge]][geozarr-npm]                   |
 | [`morecantile`]      | Port of [Morecantile] for working with OGC [TileMatrixSets]     | [![npm][morecantile-npm-badge]][morecantile-npm]           |
 | [`proj`]             | Utilities for coordinate reprojections                          | [![npm][proj-npm-badge]][proj-npm]                         |
+| [`range-reader`]     | Streamed, merged HTTP byte-range reads with a byte cache        | [![npm][range-reader-npm-badge]][range-reader-npm]         |
 | [`raster-reproject`] | Standalone mesh-based image reprojection utilities              | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
 
 [`affine`]: /deck.gl-raster/api/affine
@@ -55,6 +58,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 [`geozarr`]: /deck.gl-raster/api/geozarr
 [`morecantile`]: /deck.gl-raster/api/morecantile
 [`proj`]: /deck.gl-raster/api/proj
+[`range-reader`]: /deck.gl-raster/api/range-reader
 [`raster-reproject`]: /deck.gl-raster/api/raster-reproject
 
 [`rasterio/affine`]: https://github.com/rasterio/affine
@@ -71,6 +75,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 [geozarr-npm-badge]: https://img.shields.io/npm/v/@developmentseed/geozarr
 [morecantile-npm-badge]: https://img.shields.io/npm/v/@developmentseed/morecantile
 [proj-npm-badge]: https://img.shields.io/npm/v/@developmentseed/proj
+[range-reader-npm-badge]: https://img.shields.io/npm/v/@developmentseed/range-reader
 [raster-reproject-npm-badge]: https://img.shields.io/npm/v/@developmentseed/raster-reproject
 
 [affine-npm]: https://www.npmjs.com/package/@developmentseed/affine
@@ -82,6 +87,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 [geozarr-npm]: https://www.npmjs.com/package/@developmentseed/geozarr
 [morecantile-npm]: https://www.npmjs.com/package/@developmentseed/morecantile
 [proj-npm]: https://www.npmjs.com/package/@developmentseed/proj
+[range-reader-npm]: https://www.npmjs.com/package/@developmentseed/range-reader
 [raster-reproject-npm]: https://www.npmjs.com/package/@developmentseed/raster-reproject
 
 
@@ -90,12 +96,14 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Application Layer                                          │
-│  ├─ COGLayer / GeoTIFFLayer                                 │
+│  ├─ COGLayer / MultiCOGLayer / MosaicLayer / ZarrLayer      │
+│  ├─ COGSource / MultiCOGSource / ZarrSource (opened data)   │
 │  └─ Custom visualization layers                             │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
 │  Raster Processing Layer                                    │
+│  ├─ RasterTileLayer (tiling and sources)                    │
 │  ├─ RasterLayer (core rendering)                            │
 │  ├─ RasterTileset2D (tile management)                       │
 │  └─ GPU Modules (color space, filters, colormaps)           │
@@ -109,15 +117,18 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
 │  Data Layer                                                 │
-│  ├─ @developmentseed/geotiff (COG parsing & streaming).     │
-│  └─ HTTP range requests                                     │
+│  ├─ @developmentseed/geotiff (COG parsing)                  │
+│  ├─ @developmentseed/range-reader (merged range requests)   │
+│  └─ zarrita (Zarr store access)                             │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**Sources**: A source opens a dataset once: `COGSource` and `MultiCOGSource` read the GeoTIFF headers, `ZarrSource` reads the GeoZarr metadata, and each resolves the CRS. Pass one to a layer's `source` prop to share it between layers, or pass the layer a URL or store and it opens its own.
 
 **Render Pipeline**: A composable sequence of GPU modules that transform raw raster data into displayable imagery. Pipelines are automatically inferred from GeoTIFF metadata or can be customized.
 
 **Adaptive Mesh Reprojection**: Instead of per-pixel transformation, the library generates an adaptive triangular mesh that warps texture coordinates. This enables efficient GPU-based reprojection with minimal distortion.
 
-**Tile Streaming**: For COGs, only the tiles visible in the current viewport are fetched. As you zoom, higher-resolution overviews are automatically loaded.
+**Tile Streaming**: For COGs, only the tiles visible in the current viewport are fetched. As you zoom, higher-resolution overviews are automatically loaded. The range reader merges the reads of nearby tiles into few HTTP range requests and caches what arrives, so a pan back over tiles already downloaded costs no request.
 
 **Zero-Copy Texture Upload**: Raw raster data is uploaded directly to GPU textures, minimizing CPU-GPU transfer overhead.
