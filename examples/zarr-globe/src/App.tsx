@@ -41,8 +41,10 @@ const ZARR_URL =
   "https://s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop/dynamical/ecmwf-aifs-single-forecast/v0.1.0.zarr";
 
 const VARIABLE = "temperature_2m";
-const INITIAL_RESCALE_MIN = -40; // °C
-const INITIAL_RESCALE_MAX = 50; // °C
+const INITIAL_RESCALE_MIN = -20; // °C
+const INITIAL_RESCALE_MAX = 40; // °C
+const INITIAL_FILTER_MIN = -40; // °C
+const INITIAL_FILTER_MAX = 50; // °C
 const INITIAL_FRAME_DURATION_MS = 200;
 
 export default function App() {
@@ -58,8 +60,8 @@ export default function App() {
   const [rescaleMax, setRescaleMax] = useState(INITIAL_RESCALE_MAX);
   // Filter range - independent of rescale. Starts wide open so nothing is
   // filtered until the user narrows it.
-  const [filterMin, setFilterMin] = useState(INITIAL_RESCALE_MIN);
-  const [filterMax, setFilterMax] = useState(INITIAL_RESCALE_MAX);
+  const [filterMin, setFilterMin] = useState(INITIAL_FILTER_MIN);
+  const [filterMax, setFilterMax] = useState(INITIAL_FILTER_MAX);
   const [frameDurationMs, setFrameDurationMs] = useState(
     INITIAL_FRAME_DURATION_MS,
   );
