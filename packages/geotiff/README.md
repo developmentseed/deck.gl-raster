@@ -91,6 +91,25 @@ const overview = geotiff.overviews[0];
 const tile = await overview.fetchTile(0, 0);
 ```
 
+### Read any pixel window
+
+Use `GeoTIFF.read` to read a rectangle of pixels without handling tiles yourself. It fetches every tile that the window touches and stitches them into one `RasterArray` covering exactly the window. Omit `window` to read the whole image. Overviews have the same method.
+
+```ts
+const geotiff = await GeoTIFF.fromUrl("https://example.com/image.tif");
+
+// Read a 512x512 window, starting at column 1024 and row 2048
+const array = await geotiff.read({
+  window: { colOff: 1024, rowOff: 2048, width: 512, height: 512 },
+});
+
+// Read a whole overview
+const overview = geotiff.overviews[0];
+const overviewArray = await overview.read();
+```
+
+A window that doesn't fit inside the image throws a `WindowError`.
+
 ### Affine transformation handling
 
 Integrates with [`@developmentseed/affine`] for easy handling of image transforms, associating pixel positions to spatial coordinates.
