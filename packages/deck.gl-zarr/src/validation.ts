@@ -62,10 +62,10 @@ export type FindSpatialDimIndicesArgs = {
 
 /**
  * Find the positions of the declared spatial dims in a zarr array's dimension
- * names, by name, as the
- * [spatial convention](https://github.com/zarr-conventions/spatial/blob/54d81b7ced0376e63ee10f34db31db7d08dcc28d/README.md?plain=1#L94-L98)
- * says. Y must come before x, and other dims may sit anywhere, such as
- * `[band, y, x]` or `[y, x, band]`.
+ * names, by name, as the [spatial convention] says. Y must come before x, and
+ * other dims may sit anywhere, such as `[band, y, x]` or `[y, x, band]`.
+ *
+ * [spatial convention]: https://github.com/zarr-conventions/spatial/blob/v0.1/README.md?plain=1#L94-L98
  *
  * @returns The positions of the y and x dims, as `[yIndex, xIndex]`.
  * @throws if a declared spatial dim is missing from the array, or if x comes

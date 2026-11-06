@@ -48,21 +48,15 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const store = new zarr.FetchStore(ZARR_URL);
-      const root = await zarr.open.v3(store, { kind: "group" });
-      const opened = await zarr.open.v3(root.resolve(VARIABLE), {
-        kind: "array",
+      const source = await ZarrSource.open(new zarr.FetchStore(ZARR_URL), {
+        path: VARIABLE,
       });
-      if (!opened.is("int8")) {
+      if (!source.is("int8")) {
         throw new Error(
-          `Expected AEF embeddings to be int8, got ${opened.dtype}`,
+          `Expected AEF embeddings to be int8, got ${source.levels[0]!.dtype}`,
         );
       }
-      // The GeoZarr metadata is on the root group, not on the array
-      const source = await ZarrSource.open(opened, {
-        geoZarrMetadata: root.attrs,
-      });
-      const labels = await fetchBandLabels(root);
+      const labels = await fetchBandLabels(zarr.root(source.node.store));
       if (cancelled) {
         return;
       }

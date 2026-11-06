@@ -8,6 +8,7 @@ import type {
 import { RasterTileLayer } from "@developmentseed/deck.gl-raster";
 import * as zarr from "zarrita";
 import { findSpatialDimIndices, validateSelection } from "./validation.js";
+import type { ZarrInput } from "./zarr-source.js";
 import { ZarrSource } from "./zarr-source.js";
 
 /**
@@ -52,34 +53,34 @@ export type GetTileDataOptions = RasterTileGetTileDataOptions & {
 export type ZarrLayerProps<
   DataT extends MinimalTileData = MinimalTileData,
   Dtype extends zarr.DataType = zarr.DataType,
-  Store extends zarr.Readable = zarr.Readable,
 > = Omit<
   RasterTileLayerProps<DataT>,
   "tilesetDescriptor" | "getTileData" | "renderTile"
 > & {
   /**
    * The GeoZarr data to draw: an opened {@link ZarrSource}, or a zarrita
-   * {@link zarr.Group} or {@link zarr.Array} for the layer to open with the
-   * defaults of {@link ZarrSource.open}.
+   * store, group or array for the layer to open with the defaults of
+   * {@link ZarrSource.open}. The layer draws a store's root, since it can't
+   * pass a `path`.
    *
-   * Open the data yourself to change those defaults, such as the variable or
-   * the GeoZarr metadata, or to share it between layers. Callers build and
+   * Open the data yourself to change those defaults, such as the path or the
+   * GeoZarr metadata, or to share it between layers. Callers build and
    * configure the store either way, for example to wrap a
    * {@link zarr.FetchStore} with `withConsolidatedMetadata`.
+   *
+   * The layer doesn't check the data type of data it opens. To check it, open
+   * the data yourself and narrow it with {@link ZarrSource.is}.
    *
    * Keep the same object across renders: a new one starts the layer's tiles
    * over.
    */
-  source:
-    | ZarrSource<Dtype, Store>
-    | zarr.Group<Store>
-    | zarr.Array<Dtype, Store>;
+  source: ZarrSource<Dtype> | ZarrInput;
 
   /**
    * Called with the source the layer opened, when `source` isn't an opened
    * {@link ZarrSource} already.
    */
-  onSourceLoad?: (source: ZarrSource<Dtype, Store>) => void;
+  onSourceLoad?: (source: ZarrSource<Dtype>) => void;
 
   /**
    * Selection for non-spatial dimensions. Must include exactly one entry
@@ -117,7 +118,7 @@ export type ZarrLayerProps<
    * `===`, so keep them the same across renders.
    */
   getTileData: (
-    arr: zarr.Array<Dtype, Store>,
+    arr: zarr.Array<Dtype>,
     options: GetTileDataOptions,
   ) => Promise<DataT>;
 
@@ -133,8 +134,8 @@ export type ZarrLayerProps<
 /**
  * ZarrLayer renders a GeoZarr dataset using a tiled approach with reprojection.
  *
- * Its `source` is an opened {@link ZarrSource}, or a zarrita group or array
- * for the layer to open. The caller is responsible for supplying `getTileData`
+ * Its `source` is an opened {@link ZarrSource}, or a zarrita store, group or
+ * array for the layer to open. The caller is responsible for supplying `getTileData`
  * (which fetches and converts the zarr chunk) and `renderTile` (which converts
  * the result into a {@link RenderTileResult} for the GPU). This keeps the
  * layer agnostic about data format and rendering pipeline.
@@ -142,20 +143,19 @@ export type ZarrLayerProps<
 export class ZarrLayer<
   DataT extends MinimalTileData = MinimalTileData,
   Dtype extends zarr.DataType = zarr.DataType,
-  Store extends zarr.Readable = zarr.Readable,
-> extends RasterTileLayer<DataT, ZarrLayerProps<DataT, Dtype, Store>> {
+> extends RasterTileLayer<DataT, ZarrLayerProps<DataT, Dtype>> {
   static override layerName = "ZarrLayer";
 
   declare state: RasterTileLayer<
     DataT,
-    ZarrLayerProps<DataT, Dtype, Store>
+    ZarrLayerProps<DataT, Dtype>
   >["state"] & {
     /**
      * The source and selection last checked against each other, and whether
      * the selection fits the source.
      */
     checked?: {
-      source: ZarrSource<Dtype, Store>;
+      source: ZarrSource<Dtype>;
       selection: Record<string, SliceInput>;
       fits: boolean;
     };
@@ -199,14 +199,15 @@ export class ZarrLayer<
   }
 
   /**
-   * Open the group or array that `source` names, with the defaults of
+   * Open the store, group or array that `source` names, with the defaults of
    * {@link ZarrSource.open}.
    */
   protected override _openSource(
-    input: zarr.Group<Store> | zarr.Array<Dtype, Store>,
+    input: ZarrInput,
     signal: AbortSignal,
-  ): Promise<ZarrSource<Dtype, Store>> {
-    return ZarrSource.open(input, { signal });
+  ): Promise<ZarrSource<Dtype>> {
+    // `Dtype` is unchecked, as `source` says
+    return ZarrSource.open(input, { signal }) as Promise<ZarrSource<Dtype>>;
   }
 
   /**
@@ -224,7 +225,7 @@ export class ZarrLayer<
       return undefined;
     }
 
-    const { arrays, dimensionNames, spatialDims } = source;
+    const { levels, dimensionNames, spatialDims } = source;
     const { selection } = checked;
     const [yIndex, xIndex] = findSpatialDimIndices({
       dimensionNames,
@@ -235,8 +236,8 @@ export class ZarrLayer<
     >;
     const wrapped: RasterGetTileData = async (tile, options) => {
       const { x, y, z } = tile.index;
-      // The tile grid's levels are coarsest-first, and `arrays` finest-first
-      const arr = arrays[arrays.length - 1 - z]!;
+      // The tile grid's levels are coarsest-first, and `levels` finest-first
+      const arr = levels[levels.length - 1 - z]!;
 
       // Every level has the same dims, as ZarrSource.open checks
       const tileWidth = arr.chunks[xIndex]!;
