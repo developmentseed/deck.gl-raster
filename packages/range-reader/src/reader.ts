@@ -163,16 +163,20 @@ export class RangeReader {
       return { kind: "bytes", bytes: new Uint8Array(0) };
     }
     const finishedBefore = this.finishedStreams;
-    const hit = await this.fromCache(file, range, options);
+    const hit = await this.cache.get(file, range, options.purpose);
+    const { signal } = options;
+    if (signal?.aborted) {
+      throw signal.reason;
+    }
     if (hit !== undefined) {
-      return hit;
+      return this.cacheHit(file, range, hit);
     }
     return new Promise((resolve, reject) => {
       const member: StreamMember = {
         ...range,
         resolve,
         reject,
-        signal: options.signal,
+        signal,
         getPriority: options.getPriority,
       };
       for (const stream of this.inflight.get(file.key) ?? []) {
@@ -189,33 +193,30 @@ export class RangeReader {
       }
       // A stream finished during the lookup, and may have stored these bytes
       // after the cache was read. See #826.
-      this.fromCache(file, range, options).then(
-        (late) => (late === undefined ? queue() : resolve(late)),
-        reject,
-      );
+      this.cache.get(file, range, options.purpose).then((late) => {
+        if (signal?.aborted) {
+          reject(signal.reason);
+        } else if (late === undefined) {
+          queue();
+        } else {
+          resolve(this.cacheHit(file, range, late));
+        }
+      }, reject);
     });
   }
 
-  /** A cache hit, or undefined. Throws the signal's reason once it has aborted. */
-  private async fromCache(
+  /** A cache hit as a result, counted in the stats. */
+  private cacheHit(
     file: FileIdentity,
     range: ByteRange,
-    options: ResolvedReadOptions,
-  ): Promise<ReadResult | undefined> {
-    const hit = await this.cache.get(file, range, options.purpose);
-    const { signal } = options;
-    if (signal?.aborted) {
-      throw signal.reason;
-    }
-    if (hit === undefined) {
-      return undefined;
-    }
+    bytes: Uint8Array,
+  ): ReadResult {
     this.stats.cacheHits += 1;
     this.stats.cacheHitBytes += range.length;
     const validator = this.validators.get(file.key);
     return validator === undefined
-      ? { kind: "bytes", bytes: hit }
-      : { kind: "bytes", bytes: hit, validator };
+      ? { kind: "bytes", bytes }
+      : { kind: "bytes", bytes, validator };
   }
 
   /** One read, one request: suffix and whole-object reads never merge. */
