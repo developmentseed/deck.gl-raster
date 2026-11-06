@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.10.0-beta.4 - 2026-11-06
+
+### What's Changed
+
+* feat(deck.gl-geotiff): open MosaicLayer's sources again when updateTriggers.getSource changes by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/848
+* docs(spec): say why RasterTileLayer keeps its refetch count by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/849
+* refactor!: move DEFAULT_RANGE_READER to @developmentseed/deck.gl-raster by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/837
+* feat(deck.gl-zarr)!: open ZarrSource from a store with a path, and inherit a group's GeoZarr metadata by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/838
+* fix(geozarr): order multiscales levels finest first by pixel size by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/851
+* feat(geotiff): add a read method for arbitrary pixel windows by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/792
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.10.0-beta.3...v0.10.0-beta.4
+
 ## v0.10.0-beta.3 - 2026-11-05
 
 ### What's Changed

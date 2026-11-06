@@ -80,6 +80,9 @@ screen while presenting from the keyboard.
 | M | Switch where the error is measured (input pixels, or the map) |
 | P | Open or collapse the tuning panel (the sidebar on the left) |
 
+On a touchscreen, tap the right half of the screen to go forward, like →, or
+the left half to go back, like ←.
+
 The scenario and the error metric are kept in the URL, so a view can be
 linked.
 

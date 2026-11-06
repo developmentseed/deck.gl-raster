@@ -37,6 +37,19 @@ const CONTROLS_IDLE_MS = 2500;
 /** Clicks this soon after a touch revealed the controls are ignored, in ms. */
 const TOUCH_REVEAL_MS = 500;
 
+/** Elements that keep a tap for themselves: links and controls. */
+const TAP_TARGETS = "a, button, input, label, select, [data-control-bar]";
+
+/**
+ * A touch that lifts within this many ms is a tap. Shorter than
+ * {@link TOUCH_REVEAL_MS}, so a tap on the hidden control bar can't also press
+ * the button that appears under it.
+ */
+const TAP_MS = 400;
+
+/** A touch that moves farther than this, in CSS px, is a drag, not a tap. */
+const TAP_SLOP_PX = 10;
+
 /** localStorage key remembering whether descriptions are shown. */
 const DESCRIPTIONS_KEY = "reprojection-explainer:descriptions";
 
@@ -470,6 +483,61 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // On a touchscreen, a tap on the right half of the stage acts like →, and
+  // one on the left half like ←. Pointer events, not click: iOS Safari sends
+  // no click for a tap that makes the hidden controls appear.
+  useEffect(() => {
+    const root = rootRef.current!;
+    /** The touch that may be a tap: where and when it went down. */
+    let down: { id: number; x: number; y: number; time: number } | null = null;
+    const onPointerDown = (event: PointerEvent) => {
+      const onControl =
+        event.target instanceof Element && event.target.closest(TAP_TARGETS);
+      // A second finger makes it a pinch, not a tap.
+      down =
+        event.pointerType === "touch" && event.isPrimary && !onControl
+          ? {
+              id: event.pointerId,
+              x: event.clientX,
+              y: event.clientY,
+              time: event.timeStamp,
+            }
+          : null;
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      const start = down;
+      down = null;
+      const player = playerRef.current;
+      if (
+        !player ||
+        !start ||
+        event.pointerId !== start.id ||
+        event.timeStamp - start.time > TAP_MS ||
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) >
+          TAP_SLOP_PX
+      ) {
+        return;
+      }
+      const { left, width } = root.getBoundingClientRect();
+      if (event.clientX < left + width / 2) {
+        player.previous();
+      } else {
+        player.next();
+      }
+    };
+    const onPointerCancel = () => {
+      down = null;
+    };
+    root.addEventListener("pointerdown", onPointerDown);
+    root.addEventListener("pointerup", onPointerUp);
+    root.addEventListener("pointercancel", onPointerCancel);
+    return () => {
+      root.removeEventListener("pointerdown", onPointerDown);
+      root.removeEventListener("pointerup", onPointerUp);
+      root.removeEventListener("pointercancel", onPointerCancel);
+    };
   }, []);
 
   return (

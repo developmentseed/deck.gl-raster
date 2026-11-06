@@ -91,6 +91,25 @@ const overview = geotiff.overviews[0];
 const tile = await overview.fetchTile(0, 0);
 ```
 
+### Read any pixel window
+
+Use `GeoTIFF.read` to read a rectangle of pixels without handling tiles yourself. It fetches every tile that the window touches and stitches them into one `RasterArray` covering exactly the window. Omit `window` to read the whole image. Overviews have the same method.
+
+```ts
+const geotiff = await GeoTIFF.fromUrl("https://example.com/image.tif");
+
+// Read a 512x512 window, starting at column 1024 and row 2048
+const array = await geotiff.read({
+  window: { colOff: 1024, rowOff: 2048, width: 512, height: 512 },
+});
+
+// Read a whole overview
+const overview = geotiff.overviews[0];
+const overviewArray = await overview.read();
+```
+
+A window that doesn't fit inside the image throws a `WindowError`.
+
 ### Affine transformation handling
 
 Integrates with [`@developmentseed/affine`] for easy handling of image transforms, associating pixel positions to spatial coordinates.
@@ -118,9 +137,18 @@ If you have an image where the CRS fails to parse, please create an issue.
 
 ### Configurable Web Worker pool for image decoding
 
-The `DecoderPool` allows for decoding image data off the main thread.
+A `DecoderPool` decodes image data in Web Workers, off the main thread. Pass one to `fetchTile`, `fetchTiles` or `read`:
 
-By default workers are created up to `navigator.hardwareConcurrency`, but you can customize how large the web worker pool is by passing options to the `DecoderPool` constructor.
+```ts
+import { defaultDecoderPool, GeoTIFF } from "@developmentseed/geotiff";
+
+const geotiff = await GeoTIFF.fromUrl("https://example.com/image.tif");
+const tile = await geotiff.fetchTile(0, 0, { pool: defaultDecoderPool() });
+```
+
+Without a pool, tiles are decoded on the main thread.
+
+`defaultDecoderPool()` returns a single shared pool of `navigator.hardwareConcurrency` built-in workers. To set the number of workers or use your own worker script, pass `size` and `createWorker` to the `DecoderPool` constructor. A `DecoderPool` without `createWorker` has no workers, so it decodes on the main thread too.
 
 If you bundle with Vite, set [`worker.format`][vite-worker-format] to `"es"`. The decoder worker uses top-level await and dynamic imports, which Vite's default `iife` worker format doesn't support, so `vite build` fails without it:
 

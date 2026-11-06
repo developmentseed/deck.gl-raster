@@ -9,6 +9,7 @@ import type {
   Priority,
 } from "@developmentseed/range-reader";
 import { RangeReader } from "@developmentseed/range-reader";
+import type { RasterArray } from "./array.js";
 import { ByteSource } from "./byte-source.js";
 import type { ColorInterp } from "./colorinterp.js";
 import { inferColorInterpretation } from "./colorinterp.js";
@@ -28,8 +29,10 @@ import {
 } from "./ifd.js";
 import { Overview } from "./overview.js";
 import type { DecoderPool } from "./pool/pool.js";
+import { read } from "./read.js";
 import type { Tile } from "./tile.js";
 import { createTransform, index, xy } from "./transform.js";
+import type { Window } from "./window.js";
 
 /** Options for {@link GeoTIFF.fromUrl}. */
 export interface GeoTIFFFromUrlOptions {
@@ -502,7 +505,7 @@ export class GeoTIFF {
    * @param y The tile row index (0-based).
    * @param options Optional parameters for fetching the tile.
    * @param options.boundless Whether to clip tiles that are partially outside the image bounds. When `true`, no clipping is applied and edge tiles are returned at the full nominal tile size. Defaults to `true`.
-   * @param options.pool An optional {@link DecoderPool} for decoding the tile data. If not provided, a new decoder will be created for each tile.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tile data off the main thread, such as the one {@link defaultDecoderPool} returns. If not provided, the tile is decoded on the main thread.
    * @param options.signal An optional {@link AbortSignal} to cancel the fetch request.
    */
   async fetchTile(
@@ -546,6 +549,25 @@ export class GeoTIFF {
       imageTags: this.cachedPrimaryImageTags,
       maskImageTags: this.cachedMaskImageTags,
     });
+  }
+
+  /**
+   * Read the pixels of a window of the full-resolution image.
+   *
+   * Fetches every tile that the window touches, stitches them together, and
+   * keeps only the pixels inside the window.
+   *
+   * @param options Optional parameters for reading.
+   * @param options.window The {@link Window} of pixels to read. Defaults to the whole image.
+   * @param options.pool An optional {@link DecoderPool} for decoding the tiles off the main thread, such as the one {@link defaultDecoderPool} returns. If not provided, the tiles are decoded on the main thread.
+   * @param options.signal An optional {@link AbortSignal} to cancel the fetch requests.
+   * @returns A {@link RasterArray} of the window's pixels, with a mask if the image has a mask IFD.
+   * @throws A `WindowError` if the window is invalid or extends outside the image.
+   */
+  async read(
+    options: { window?: Window; pool?: DecoderPool; signal?: AbortSignal } = {},
+  ): Promise<RasterArray> {
+    return await read(this, options);
   }
 
   // Transform mixin

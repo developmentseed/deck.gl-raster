@@ -1,3 +1,5 @@
+import type { Affine } from "@developmentseed/affine";
+import * as affine from "@developmentseed/affine";
 import { GeoProjAttrsSchema, SpatialAttrsSchema } from "./schemas.js";
 import type { CRSInfo, GeoZarrMetadata, MultiscaleLevel } from "./types.js";
 
@@ -8,8 +10,8 @@ import type { CRSInfo, GeoZarrMetadata, MultiscaleLevel } from "./types.js";
  * Array sizes are read from `spatial:shape` in the attributes (either at the
  * top level for single-resolution, or per layout item for multiscales).
  *
- * Levels in the returned `GeoZarrMetadata` are ordered finest-first (natural
- * Zarr order, matching the multiscales layout array). Reverse to get
+ * Levels in the returned `GeoZarrMetadata` are ordered finest-first by pixel
+ * size, whatever the order of the multiscales layout array. Reverse to get
  * coarsest-first for `TilesetDescriptor`.
  *
  * `spatial:dimensions` names the Y dimension, then the X dimension, whatever
@@ -79,6 +81,9 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
         arrayHeight: shape[0],
       };
     });
+    // The layout may list levels in any order. Levels of the same pixel size
+    // keep it. See https://github.com/zarr-conventions/multiscales/issues/31
+    levels.sort((x, y) => pixelSize(x.affine) - pixelSize(y.affine));
   } else {
     // Single-resolution
     const transform = spatial["spatial:transform"];
@@ -111,4 +116,9 @@ export function parseGeoZarrMetadata(attrs: unknown): GeoZarrMetadata {
     yAxisIndex,
     xAxisIndex,
   };
+}
+
+/** The geometric mean of a level's pixel width and height, in CRS units. */
+function pixelSize(transform: Affine): number {
+  return Math.sqrt(Math.abs(affine.a(transform) * affine.e(transform)));
 }

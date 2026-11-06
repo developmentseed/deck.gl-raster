@@ -53,7 +53,9 @@ export function buildUniformGridMesh(
       const [inputX, inputY] = forwardTransform(pixelX, pixelY);
       const [outX, outY] = forwardReproject(inputX, inputY);
       positions[vi * 3] = outX;
-      positions[vi * 3 + 1] = outY;
+      // Past a pole, the globe projection folds the mesh over it, and the
+      // folded part shows through from the far side of the globe
+      positions[vi * 3 + 1] = Math.max(-90, Math.min(90, outY));
       positions[vi * 3 + 2] = 0;
       texCoords[vi * 2] = u;
       texCoords[vi * 2 + 1] = v;
