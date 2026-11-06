@@ -299,7 +299,11 @@ export function ControlPanel({
           <ExternalLink href="https://dynamical.org/catalog/ecmwf-aifs-single-forecast/">
             ECMWF AIFS Single Forecast data
           </ExternalLink>{" "}
-          processed by dynamical.org from ECMWF Open Data.
+          processed by{" "}
+          <ExternalLink href="https://dynamical.org">
+            dynamical.org
+          </ExternalLink>{" "}
+          from ECMWF Open Data.
         </Text>
       </Stack>
     </SharedControlPanel>
