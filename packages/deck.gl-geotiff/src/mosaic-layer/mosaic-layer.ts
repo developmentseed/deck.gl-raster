@@ -14,11 +14,11 @@ import {
 } from "@deck.gl/core";
 import type { TileLayerProps } from "@deck.gl/geo-layers";
 import { TileLayer } from "@deck.gl/geo-layers";
+import { DEFAULT_RANGE_READER } from "@developmentseed/deck.gl-raster";
 import type { ConcurrencyLimiter, Priority } from "@developmentseed/geotiff";
 import { nearestCopy, unwrapBbox } from "@developmentseed/proj";
 import type { RangeReader } from "@developmentseed/range-reader";
 import { DEFAULT_CONCURRENCY_LIMITER } from "../default-concurrency-limiter.js";
-import { DEFAULT_RANGE_READER } from "../default-range-reader.js";
 import type { ItemIndex, MosaicItem } from "./mosaic-tileset-2d.js";
 import { buildItemIndex, MosaicTileset2D } from "./mosaic-tileset-2d.js";
 

@@ -1,3 +1,4 @@
+export { DEFAULT_RANGE_READER } from "./default-range-reader.js";
 export type { RasterModule } from "./gpu-modules/types.js";
 // Not a public API; exported for use in COGLayer and ZarrLayer
 export { renderDebugTileOutline as _renderDebugTileOutline } from "./layer-utils.js";

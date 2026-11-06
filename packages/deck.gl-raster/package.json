@@ -64,6 +64,7 @@
   "dependencies": {
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/proj": "workspace:^",
+    "@developmentseed/range-reader": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "@math.gl/core": "^4.1.0",
     "@math.gl/culling": "^4.1.0",

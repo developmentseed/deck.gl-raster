@@ -10,6 +10,7 @@
   "references": [
     { "path": "../morecantile/tsconfig.build.json" },
     { "path": "../proj/tsconfig.build.json" },
+    { "path": "../range-reader/tsconfig.build.json" },
     { "path": "../raster-reproject/tsconfig.build.json" }
   ]
 }

@@ -4,6 +4,7 @@ import type {
 } from "@developmentseed/deck.gl-raster";
 import {
   createMultiRasterTilesetDescriptor,
+  DEFAULT_RANGE_READER,
   RasterSource,
 } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF } from "@developmentseed/geotiff";
@@ -14,7 +15,6 @@ import {
 } from "@developmentseed/proj";
 import type { COGInput, COGSourceOptions } from "./cog-source.js";
 import { DEFAULT_CONCURRENCY_LIMITER } from "./default-concurrency-limiter.js";
-import { DEFAULT_RANGE_READER } from "./default-range-reader.js";
 import { fetchGeoTIFF, getGeographicBounds } from "./geotiff/geotiff.js";
 import { geoTiffToDescriptor } from "./geotiff-tileset.js";
 import { resolveProjection } from "./projection.js";
