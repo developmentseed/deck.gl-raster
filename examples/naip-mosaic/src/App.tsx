@@ -320,6 +320,9 @@ export default function App() {
   const [renderMode, setRenderMode] = useState<RenderMode>("trueColor");
   const [opacity, setOpacity] = useState(1);
   const [showOutlines, setShowOutlines] = useState(false);
+  const [outlines, setOutlines] = useState<
+    ReadonlyMap<string, [number, number][]>
+  >(new Map());
   const [ndviRange, setNdviRange] = useState<[number, number]>([-1, 1]);
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
@@ -331,6 +334,8 @@ export default function App() {
       COLORMAP_CHOICES.find((c) => c.id === colormapId) ?? COLORMAP_CHOICES[0],
     [colormapId],
   );
+
+  const outlinePaths = useMemo(() => [...outlines.values()], [outlines]);
 
   // Fetch STAC items on mount
   useEffect(() => {
@@ -408,7 +413,7 @@ export default function App() {
       // `subLayerProps`
       opacity,
       renderSource: (_item, { source, subLayerProps }) => {
-        const cogLayer = new COGLayer<TextureDataT>({
+        return new COGLayer<TextureDataT>({
           ...subLayerProps,
           source,
           getTileData,
@@ -426,27 +431,38 @@ export default function App() {
                     }),
           onTileUnload: (tile) => tile.content?.texture.destroy(),
         });
-        if (!showOutlines || !source) {
-          return cogLayer;
-        }
-        return [
-          cogLayer,
-          new PathLayer<[number, number][]>({
-            ...subLayerProps,
-            id: `${subLayerProps.id}-outline`,
-            data: [cogOutline(source)],
-            getPath: (path) => path,
-            getColor: [255, 255, 0],
-            widthUnits: "pixels",
-            getWidth: 2,
-          }),
-        ];
       },
+      // Keep the outline of each opened COG, keyed by the item's URL
+      onSourceLoad: (item, { source }) =>
+        setOutlines((prev) => new Map(prev).set(item.id!, cogOutline(source!))),
+      onSourceUnload: (item) =>
+        setOutlines((prev) => {
+          const next = new Map(prev);
+          next.delete(item.id!);
+          return next;
+        }),
       // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
       // doesn't know about it.
       beforeId: "boundary_country_outline",
     });
     layers.push(mosaicLayer);
+  }
+
+  if (showOutlines) {
+    layers.push(
+      new PathLayer<[number, number][]>({
+        id: "naip-cog-outlines",
+        data: outlinePaths,
+        getPath: (path) => path,
+        getColor: [190, 70, 70],
+        widthUnits: "pixels",
+        getWidth: 2,
+        // Over the mosaic, under the basemap's boundaries and labels
+        // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+        // doesn't know about it.
+        beforeId: "boundary_country_outline",
+      }),
+    );
   }
 
   return (

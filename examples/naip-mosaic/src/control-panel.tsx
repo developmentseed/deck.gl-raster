@@ -39,7 +39,7 @@ export interface ControlPanelProps {
   opacity: number;
   /** Called with the next opacity. */
   onOpacityChange: (opacity: number) => void;
-  /** Whether to outline each COG in view. */
+  /** Whether to outline each opened COG. */
   showOutlines: boolean;
   /** Called with the next `showOutlines`. */
   onShowOutlinesChange: (show: boolean) => void;
@@ -145,6 +145,12 @@ export function ControlPanel({
         <Checkbox.Control />
         <Checkbox.Label>Outline each COG</Checkbox.Label>
       </Checkbox.Root>
+      {showOutlines ? (
+        <Text mt="-2" mb="3" fontSize="xs" color="gray.600">
+          Neighboring images overlap a little, so each boundary shows as a pair
+          of lines.
+        </Text>
+      ) : null}
 
       {renderMode === "ndvi" ? (
         <>
