@@ -2,6 +2,8 @@ import type { ConcurrencyLimiter } from "./limiter.js";
 import { MemoryByteCache } from "./memory-cache.js";
 import type { MergedRange } from "./merge.js";
 import { mergeReads, widenRead } from "./merge.js";
+import type { MirrorRule } from "./mirrors.js";
+import { mirrorUrl, parseMirrors } from "./mirrors.js";
 import type {
   RangeStreamOptions,
   StreamMember,
@@ -85,6 +87,7 @@ export class RangeReader {
   private readonly maxRequestBytes: number;
   private readonly minMetadataReadBytes: number;
   private readonly cacheMode: RequestCache | undefined;
+  private readonly mirrors: MirrorRule[];
   /** Queued reads by file key and purpose, flushed once per task. */
   private readonly pending = new Map<string, PendingGroup>();
   /**
@@ -120,6 +123,7 @@ export class RangeReader {
     this.minMetadataReadBytes =
       options.minMetadataReadBytes ?? DEFAULT_MIN_METADATA_READ_BYTES;
     this.cacheMode = options.cacheMode;
+    this.mirrors = parseMirrors(options.mirrors ?? {});
   }
 
   /**
@@ -238,7 +242,7 @@ export class RangeReader {
         file,
         request,
         [member],
-        this.streamOptions(options.limiter),
+        this.streamOptions(file, options.limiter),
       );
       const requested =
         request !== undefined && "suffixLength" in request
@@ -354,7 +358,7 @@ export class RangeReader {
       file,
       { offset: range.offset, length: range.length },
       members,
-      this.streamOptions(group.reads[0]!.limiter),
+      this.streamOptions(file, group.reads[0]!.limiter),
     );
     this.stats.bytesOverfetched += range.overfetch;
     this.launch(file, purpose, stream, range.length);
@@ -427,6 +431,7 @@ export class RangeReader {
   }
 
   private streamOptions(
+    file: FileIdentity,
     limiter: ConcurrencyLimiter | null | undefined,
   ): RangeStreamOptions {
     return {
@@ -434,6 +439,7 @@ export class RangeReader {
       cacheMode: this.cacheMode,
       limiter,
       maxRequestBytes: this.maxRequestBytes,
+      url: mirrorUrl(file.url, this.mirrors),
     };
   }
 }

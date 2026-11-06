@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConcurrencyLimiter, Priority } from "../src/limiter.js";
+import { PerOriginSemaphore } from "../src/limiter.js";
 import { MemoryByteCache } from "../src/memory-cache.js";
 import { RangeReader } from "../src/reader.js";
-import type { ByteCache } from "../src/types.js";
+import type { ByteCache, FileIdentity, ReadOptions } from "../src/types.js";
 import type { FakeFetch } from "./helpers.js";
 import { fakeFetch, file, pattern } from "./helpers.js";
 
@@ -660,5 +661,197 @@ describe("RangeReader after a request fails mid-body", () => {
     void reader.read(f, { offset: 0, length: 100 }, DATA);
     await flush();
     expect(fake.calls).toHaveLength(2);
+  });
+});
+
+describe("RangeReader mirrors", () => {
+  const KEY = "https://bucket.s3.test/";
+  const MIRRORS = {
+    [KEY]: ["https://bucket.s3.west.test/", "https://s3.west.test/bucket/"],
+  };
+  const PREFIXES = [KEY, ...MIRRORS[KEY]];
+
+  let fake: FakeFetch;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    fake = fakeFetch();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Files named like USGS 3DEP tiles, each name repeated in its path. */
+  function tiles(prefix: string, count: number): FileIdentity[] {
+    return Array.from({ length: count }, (_, i) => {
+      const name = `n${30 + i}w112`;
+      return file(`${prefix}current/${name}/USGS_1_${name}.tif`);
+    });
+  }
+
+  /** The prefix a requested URL is under, and its path below that prefix. */
+  function split(url: string, prefixes: readonly string[]) {
+    const prefix = prefixes.find((each) => url.startsWith(each));
+    if (prefix === undefined) {
+      throw new Error(`${url} is under none of ${prefixes.join(", ")}`);
+    }
+    return { prefix, path: url.slice(prefix.length) };
+  }
+
+  /** Read the first 10 bytes of each file, then run the task window. */
+  async function readAll(
+    reader: RangeReader,
+    files: FileIdentity[],
+    options: ReadOptions = DATA,
+  ): Promise<void> {
+    for (const each of files) {
+      void reader.read(each, { offset: 0, length: 10 }, options);
+    }
+    await flush();
+  }
+
+  it("reads each file at its own path under the prefix or a mirror", async () => {
+    const files = tiles(KEY, 12);
+    await readAll(
+      new RangeReader({ fetch: fake.fetch, mirrors: MIRRORS }),
+      files,
+    );
+    const paths = fake.calls.map((call) => split(call.url, PREFIXES).path);
+    expect(paths.sort()).toEqual(
+      files.map((each) => each.url.href.slice(KEY.length)).sort(),
+    );
+  });
+
+  it("spreads files over the prefix and every mirror", async () => {
+    await readAll(
+      new RangeReader({ fetch: fake.fetch, mirrors: MIRRORS }),
+      tiles(KEY, 12),
+    );
+    const used = new Set(
+      fake.calls.map((call) => split(call.url, PREFIXES).prefix),
+    );
+    expect(used).toEqual(new Set(PREFIXES));
+  });
+
+  it("spreads files over two hosts though each name repeats in its path", async () => {
+    const prefixes = [KEY, "https://bucket.s3.west.test/"];
+    await readAll(
+      new RangeReader({
+        fetch: fake.fetch,
+        mirrors: { [KEY]: prefixes.slice(1) },
+      }),
+      tiles(KEY, 8),
+    );
+    const used = new Set(
+      fake.calls.map((call) => split(call.url, prefixes).prefix),
+    );
+    expect(used).toEqual(new Set(prefixes));
+  });
+
+  it("reads every range of a file from one host", async () => {
+    const reader = new RangeReader({ fetch: fake.fetch, mirrors: MIRRORS });
+    const files = tiles(KEY, 12);
+    await readAll(reader, files);
+    for (const each of files) {
+      void reader.read(each, { offset: 5000, length: 10 }, DATA);
+      void reader.read(each, { suffixLength: 10 }, DATA);
+    }
+    await flush();
+    expect(fake.calls).toHaveLength(36);
+    const hostsByPath = new Map<string, Set<string>>();
+    for (const call of fake.calls) {
+      const { prefix, path } = split(call.url, PREFIXES);
+      hostsByPath.set(path, (hostsByPath.get(path) ?? new Set()).add(prefix));
+    }
+    expect([...hostsByPath.values()].map((hosts) => hosts.size)).toEqual(
+      new Array(12).fill(1),
+    );
+  });
+
+  it("gives each mirror its own limiter slots", async () => {
+    const limiter = new PerOriginSemaphore({ maxRequests: 1 });
+    await readAll(
+      new RangeReader({ fetch: fake.fetch, mirrors: MIRRORS }),
+      tiles(KEY, 12),
+      { ...DATA, limiter },
+    );
+    await microtasks();
+    // One slot per origin: the bucket's and each mirror's.
+    expect(fake.calls).toHaveLength(3);
+  });
+
+  it("caches a file's bytes under its own URL, whichever host sent them", async () => {
+    const stored: string[] = [];
+    const cache: ByteCache = {
+      get: () => Promise.resolve(undefined),
+      put: (each) => {
+        stored.push(each.url.href);
+        return Promise.resolve();
+      },
+    };
+    const files = tiles(KEY, 12);
+    await readAll(
+      new RangeReader({ fetch: fake.fetch, mirrors: MIRRORS, cache }),
+      files,
+    );
+    for (const call of fake.calls) {
+      const body = call.reply({
+        status: 206,
+        headers: { "content-length": "10" },
+      });
+      await body.push(pattern(10));
+      await body.close();
+    }
+    await microtasks();
+    expect(stored.sort()).toEqual(files.map((each) => each.url.href).sort());
+  });
+
+  it("uses the longest matching prefix, so an empty list keeps a path on its host", async () => {
+    await readAll(
+      new RangeReader({
+        fetch: fake.fetch,
+        mirrors: {
+          "https://a.test/": ["https://b.test/"],
+          "https://a.test/private/": [],
+        },
+      }),
+      tiles("https://a.test/private/", 8),
+    );
+    const origins = new Set(fake.calls.map((call) => new URL(call.url).origin));
+    expect(origins).toEqual(new Set(["https://a.test"]));
+  });
+
+  it("accepts origins without a trailing slash", async () => {
+    const prefixes = [KEY, "https://bucket.s3.west.test/"];
+    await readAll(
+      new RangeReader({
+        fetch: fake.fetch,
+        mirrors: { "https://bucket.s3.test": ["https://bucket.s3.west.test"] },
+      }),
+      tiles(KEY, 8),
+    );
+    const used = new Set(
+      fake.calls.map((call) => split(call.url, prefixes).prefix),
+    );
+    expect(used).toEqual(new Set(prefixes));
+  });
+
+  it.each<{ what: string; mirrors: Record<string, string[]> }>([
+    { what: "prefix", mirrors: { "https://s3.west.test/bucket": [KEY] } },
+    { what: "mirror", mirrors: { [KEY]: ["https://s3.west.test/bucket"] } },
+  ])("rejects a $what that does not end with a slash", ({ mirrors }) => {
+    expect(() => new RangeReader({ mirrors })).toThrow(
+      "https://s3.west.test/bucket",
+    );
+  });
+
+  it("reads a URL under no prefix as it is", async () => {
+    await readAll(new RangeReader({ fetch: fake.fetch, mirrors: MIRRORS }), [
+      file("https://other.test/a.tif"),
+    ]);
+    expect(fake.calls.map((call) => call.url)).toEqual([
+      "https://other.test/a.tif",
+    ]);
   });
 });

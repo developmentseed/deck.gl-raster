@@ -424,6 +424,27 @@ describe("RangeStream cancellation", () => {
       expect((await next()).range).toBe("bytes=0-9");
     }
   });
+
+  it("requests the url option instead of the file's own and takes its slot for it", async () => {
+    const { fetch, next } = fakeFetch();
+    const limiter = fakeLimiter();
+    const stream = new RangeStream(
+      file("https://x.test/a.tif"),
+      { offset: 0, length: 10 },
+      [member(0, 10)],
+      {
+        fetch,
+        maxRequestBytes: MAX,
+        limiter: limiter.limiter,
+        url: new URL("https://mirror.test/a.tif"),
+      },
+    );
+    void stream.run();
+    expect((await next()).url).toBe("https://mirror.test/a.tif");
+    expect(limiter.acquires.map((a) => a.url.href)).toEqual([
+      "https://mirror.test/a.tif",
+    ]);
+  });
 });
 
 describe("RangeStream responses", () => {
@@ -573,6 +594,24 @@ describe("RangeStream responses", () => {
       await expect(a.promise).rejects.toThrow(new RegExp(`answered ${status}`));
       expect((await done).end.kind).toBe("failed");
     }
+  });
+
+  it("names the URL it requested in a failure", async () => {
+    const { fetch, next } = fakeFetch();
+    const a = member(0, 10);
+    const stream = new RangeStream(
+      file("https://x.test/a.tif"),
+      { offset: 0, length: 10 },
+      [a],
+      {
+        fetch,
+        maxRequestBytes: MAX,
+        url: new URL("https://mirror.test/a.tif"),
+      },
+    );
+    void stream.run();
+    (await next()).reply({ status: 403 });
+    await expect(a.promise).rejects.toThrow("https://mirror.test/a.tif");
   });
 
   it("records the object size from Content-Range", async () => {

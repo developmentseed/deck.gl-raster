@@ -70,6 +70,7 @@ cancelled, keeping what arrived, when the last one leaves.
 | `maxRequestBytes` | 1 MiB | Largest merged request; also the largest whole object accepted from a server that ignores `Range`. |
 | `minMetadataReadBytes` | 64 KiB | Metadata reads shorter than this are widened to an aligned block of this size, read to its end. |
 | `cacheMode` | the browser's default | `RequestInit.cache` for every request. |
+| `mirrors` | none | Other URL prefixes that serve the same files, by the prefix they mirror; see [Mirror hostnames](#mirror-hostnames). |
 
 A read may name its `purpose`: `"data"`, the default, for payload such as
 tiles and chunks, or `"metadata"` for the structural bytes a format reads
@@ -80,6 +81,37 @@ against their own cache budget, so data churn never evicts them. A read is
 served from any cached span that contains it, and attaches to any request in
 flight that covers it, whichever purpose fetched it: the first tiles of a COG
 often arrive inside its first metadata block.
+
+## Mirror hostnames
+
+A browser opens at most six HTTP/1.1 connections per hostname, not per
+server, and many buckets answer at several hostnames. `mirrors` maps a URL
+prefix to other prefixes that serve the same files:
+
+```ts
+const reader = new RangeReader({
+  mirrors: {
+    "https://prd-tnm.s3.amazonaws.com/": [
+      "https://prd-tnm.s3.us-west-2.amazonaws.com/",
+      "https://s3.us-west-2.amazonaws.com/prd-tnm/",
+    ],
+  },
+});
+```
+
+Each file under a key is requested from the key or one of its mirrors,
+picked by a hash of its URL, so all of a file's reads go to one host, where
+they still merge and reuse its connections. A `PerOriginSemaphore` gives
+each mirror its own slots, while the cache, the requests in flight and the
+validators stay keyed by the file's own URL. Prefixes end in `/`, and the
+longest matching key wins. A request to a mirror that fails is not retried
+elsewhere, so every mirror must serve the same objects.
+
+Mirrors help only when requests wait for a free connection while the link
+has bandwidth to spare. When six connections already fill the link, mirrors
+split the same bandwidth over more requests, and every read arrives later.
+On an HTTP/2 or HTTP/3 host, which shares one connection anyway, they only
+add handshakes. Measure before turning them on.
 
 ## Bring your own cache
 
