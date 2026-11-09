@@ -1,7 +1,7 @@
 name: PR
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - edited
@@ -10,9 +10,11 @@ on:
 
 jobs:
   lint:
-    name: Lint
+    name: PR title
     runs-on: ubuntu-latest
     steps:
       - uses: ytanikin/pr-conventional-commits@639145d78959c53c43112365837e3abd21ed67c1 # 1.5.2
         with:
           task_types: '["feat","fix","docs","test","ci","refactor","perf","chore","revert"]'
+          # Fork PRs get a read-only token, so labeling would fail the check.
+          add_label: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
