@@ -108,7 +108,7 @@ export default function App() {
           [west, south],
           [east, north],
         ],
-        { padding: 40, duration: 1000 },
+        { padding: 40, animate: false },
       );
     },
   });
