@@ -10,12 +10,14 @@ import type { Viewport } from "@deck.gl/core";
 import { _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import type {
   GeoBoundingBox,
+  _Tile2DHeader as Tile2DHeader,
   _Tileset2DProps as Tileset2DProps,
 } from "@deck.gl/geo-layers";
 import { _Tileset2D as Tileset2D } from "@deck.gl/geo-layers";
 import { transformBounds } from "@developmentseed/proj";
 import type { InitialTriangulation } from "@developmentseed/raster-reproject";
 import type { Matrix4 } from "@math.gl/core";
+import { updateTileStateBestAvailable } from "./best-available.js";
 import { BoundingVolumeCache } from "./bounding-volume-cache.js";
 import { intersectBounds } from "./bounds.js";
 import {
@@ -23,7 +25,11 @@ import {
   rescaleCommonSpaceToEPSG3857,
   rescaleEPSG3857ToCommonSpace,
 } from "./raster-tile-traversal.js";
-import type { RasterTilesetDescriptor } from "./tileset-interface.js";
+import { overlappingTileSpan, TILE_EDGE_TOLERANCE } from "./tile-span.js";
+import type {
+  RasterTilesetDescriptor,
+  RasterTilesetLevel,
+} from "./tileset-interface.js";
 import type {
   Bounds,
   Corners,
@@ -152,6 +158,35 @@ export interface RasterTileset2DOptions {
 }
 
 /**
+ * How many tiles of `level` fit across one tile of `coarser`, the next coarser
+ * level, as `[x, y]`, from their tiles' sizes on the ground.
+ */
+function decimation(
+  level: RasterTilesetLevel,
+  coarser: RasterTilesetLevel,
+): [number, number] {
+  return [
+    (coarser.metersPerPixel * coarser.tileWidth) /
+      (level.metersPerPixel * level.tileWidth),
+    (coarser.metersPerPixel * coarser.tileHeight) /
+      (level.metersPerPixel * level.tileHeight),
+  ];
+}
+
+/**
+ * Whether `level`'s tiles are larger than those of `coarser`, the next coarser
+ * level, so that each covers several of them. COGs whose overviews use smaller
+ * tiles than the full-resolution image have such a level. See #873.
+ */
+function hasLargerTiles(
+  level: RasterTilesetLevel,
+  coarser: RasterTilesetLevel,
+): boolean {
+  const [x, y] = decimation(level, coarser);
+  return x < 1 - TILE_EDGE_TOLERANCE || y < 1 - TILE_EDGE_TOLERANCE;
+}
+
+/**
  * A generic tileset implementation organized according to the OGC
  * [TileMatrixSet](https://docs.ogc.org/is/17-083r4/17-083r4.html)
  * specification.
@@ -172,6 +207,14 @@ export class RasterTileset2D extends Tileset2D {
    * on a globe↔mercator switch (volumes are not valid across projection modes).
    */
   private lastViewportIsGlobe?: boolean;
+  /**
+   * The first level whose tiles are larger than the next coarser level's, or
+   * `Infinity`. Below it, deck.gl's tile tree, which gives each tile one
+   * parent, holds.
+   */
+  private firstLargerTileLevel: number;
+  /** Each tile's {@link _parentIndices}, which don't change. */
+  private tileParentIndices: WeakMap<Tile2DHeader, TileIndex[]>;
 
   constructor(
     opts: Tileset2DProps,
@@ -189,6 +232,12 @@ export class RasterTileset2D extends Tileset2D {
     this.boundingVolumeCache = new BoundingVolumeCache({
       maxEntries: maxBoundingVolumeCacheSize,
     });
+    const largerTileLevel = descriptor.levels.findIndex(
+      (level, z) => z > 0 && hasLargerTiles(level, descriptor.levels[z - 1]!),
+    );
+    this.firstLargerTileLevel =
+      largerTileLevel === -1 ? Infinity : largerTileLevel;
+    this.tileParentIndices = new WeakMap();
 
     // Source-CRS ↔ deck.gl common-space projection, built once here so the
     // closures are reference-stable for the tileset's lifetime. Exposed on
@@ -225,10 +274,11 @@ export class RasterTileset2D extends Tileset2D {
    * deck.gl's options, with `onTileUnload` wrapped to abort a still-loading
    * tile first when {@link RasterTileset2DOptions.abortUnwantedLoads} is on:
    * deck.gl evicts such tiles inside `update`, before {@link update}'s own
-   * pass sees them.
+   * pass sees them, and with the `best-available` refinement strategy
+   * replaced by {@link _bestAvailable}.
    */
   override setOptions(opts: Tileset2DProps): void {
-    const { onTileUnload } = opts;
+    const { onTileUnload, refinementStrategy } = opts;
     super.setOptions({
       ...opts,
       onTileUnload: (tile) => {
@@ -237,6 +287,33 @@ export class RasterTileset2D extends Tileset2D {
         }
         onTileUnload?.(tile);
       },
+      // deck.gl takes a missing strategy as `best-available`.
+      ...("refinementStrategy" in opts &&
+        (refinementStrategy ?? "best-available") === "best-available" && {
+          refinementStrategy: (tiles: Tile2DHeader[]) =>
+            this._bestAvailable(tiles),
+        }),
+    });
+  }
+
+  /**
+   * deck.gl's `best-available` refinement, except that from
+   * {@link firstLargerTileLevel} up, a tile's parents are all the cached tiles
+   * it covers of the next coarser level, rather than one of them. See #873.
+   */
+  private _bestAvailable(tiles: Tile2DHeader[]): void {
+    let byId: Map<string, Tile2DHeader> | undefined;
+    updateTileStateBestAvailable(tiles, (tile) => {
+      if (tile.index.z < this.firstLargerTileLevel) {
+        return tile.parent ? [tile.parent] : [];
+      }
+      let parentIndices = this.tileParentIndices.get(tile);
+      if (!parentIndices) {
+        parentIndices = this._parentIndices(tile.index);
+        this.tileParentIndices.set(tile, parentIndices);
+      }
+      byId ??= new Map(tiles.map((t) => [t.id, t]));
+      return this._cachedTiles(parentIndices, byId);
     });
   }
 
@@ -376,17 +453,10 @@ export class RasterTileset2D extends Tileset2D {
     // because tileWidth can change between levels (e.g. the last Sentinel-2
     // overview doubles tileWidth while halving cellSize, giving a 1:1 spatial
     // mapping where decimation = 1).
-    const parentFootprintX =
-      parentOverview.metersPerPixel * parentOverview.tileWidth;
-    const parentFootprintY =
-      parentOverview.metersPerPixel * parentOverview.tileHeight;
-    const currentFootprintX =
-      currentOverview.metersPerPixel * currentOverview.tileWidth;
-    const currentFootprintY =
-      currentOverview.metersPerPixel * currentOverview.tileHeight;
-
-    const decimationX = parentFootprintX / currentFootprintX;
-    const decimationY = parentFootprintY / currentFootprintY;
+    const [decimationX, decimationY] = decimation(
+      currentOverview,
+      parentOverview,
+    );
 
     // Pick the parent containing the child's center: decimation is often a
     // little off a whole number, so the child's corner can fall in a
@@ -403,6 +473,69 @@ export class RasterTileset2D extends Tileset2D {
       ),
       z: index.z - 1,
     };
+  }
+
+  /**
+   * The tiles of the next coarser level that the tile at `index` overlaps:
+   * the one {@link getParentIndex} picks, unless its level has larger tiles.
+   */
+  private _parentIndices(index: TileIndex): TileIndex[] {
+    const { x, y, z } = index;
+    if (z === 0) {
+      return [];
+    }
+    const level = this.descriptor.levels[z]!;
+    const coarser = this.descriptor.levels[z - 1]!;
+    if (!hasLargerTiles(level, coarser)) {
+      return [this.getParentIndex(index)];
+    }
+    // Overview sizes are rounded to whole pixels, so the two levels' tile
+    // edges drift apart by up to a pixel of the coarser level. Within a pixel
+    // of an edge counts as on it.
+    const [decimationX, decimationY] = decimation(level, coarser);
+    const [minCol, lastCol] = overlappingTileSpan(
+      x / decimationX,
+      (x + 1) / decimationX,
+      1 / coarser.tileWidth,
+    );
+    const [minRow, lastRow] = overlappingTileSpan(
+      y / decimationY,
+      (y + 1) / decimationY,
+      1 / coarser.tileHeight,
+    );
+    // The last tile of a level can reach past the coarser level's last tile.
+    const maxCol = Math.min(lastCol, coarser.matrixWidth - 1);
+    const maxRow = Math.min(lastRow, coarser.matrixHeight - 1);
+    const indices: TileIndex[] = [];
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        indices.push({ x: col, y: row, z: z - 1 });
+      }
+    }
+    return indices;
+  }
+
+  /**
+   * The cached tiles at `indices`, with each one that isn't cached replaced
+   * by the cached tiles nearest above it.
+   */
+  private _cachedTiles(
+    indices: TileIndex[],
+    byId: Map<string, Tile2DHeader>,
+  ): Tile2DHeader[] {
+    const found = new Set<Tile2DHeader>();
+    for (const index of indices) {
+      const tile = byId.get(this.getTileId(index));
+      if (tile) {
+        found.add(tile);
+      } else {
+        const parents = this._parentIndices(index);
+        for (const ancestor of this._cachedTiles(parents, byId)) {
+          found.add(ancestor);
+        }
+      }
+    }
+    return [...found];
   }
 
   override getTileZoom(index: TileIndex): number {
