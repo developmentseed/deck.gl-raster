@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.10.0 - 2026-11-09
+
+### What's Changed
+
+* docs: say that tiles decode on the main thread without a decoder pool by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/802
+* feat(examples): turn explainer slides with a tap on either half of the screen by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/856
+* fix(deck.gl-raster): clamp globe mesh latitudes to the poles by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/858
+* chore: drop dependencies that deck.gl-geotiff, deck.gl-zarr and geozarr don't import by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/859
+* fix(deck.gl-geotiff): call MosaicLayer's onSourceError when getSource rejects by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/860
+* fix(range-reader): serve reads that arrive as their stream finishes by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/861
+* fix(examples): declare the ECMWF grid node-registered by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/862
+* feat(examples): add a zarr-globe example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/794
+* feat(examples): outline each COG in the naip-mosaic example by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/864
+* docs: update the guides and READMEs for 0.10 by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/865
+* feat(examples): jump to the selected topo map instead of flying by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/868
+* docs: v0.10 release blog post by @kylebarron in https://github.com/developmentseed/deck.gl-raster/pull/869
+
+**Full Changelog**: https://github.com/developmentseed/deck.gl-raster/compare/v0.10.0-beta.4...v0.10.0
+
 ## v0.10.0-beta.4 - 2026-11-06
 
 ### What's Changed
