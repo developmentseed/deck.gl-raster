@@ -129,6 +129,6 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 
 **Adaptive Mesh Reprojection**: Instead of per-pixel transformation, the library generates an adaptive triangular mesh that warps texture coordinates. This enables efficient GPU-based reprojection with minimal distortion.
 
-**Tile Streaming**: For COGs, only the tiles visible in the current viewport are fetched. As you zoom, higher-resolution overviews are automatically loaded. The range reader merges the reads of nearby tiles into few HTTP range requests and caches what arrives, so a pan back over tiles already downloaded costs no request.
+**Tile Streaming**: Only the tiles visible in the current viewport are fetched. As you zoom, higher-resolution overviews are automatically loaded. The range reader coalesces the reads of nearby tiles into few HTTP range requests and caches what arrives, so a pan back over tiles already downloaded costs no request.
 
 **Zero-Copy Texture Upload**: Raw raster data is uploaded directly to GPU textures, minimizing CPU-GPU transfer overhead.
