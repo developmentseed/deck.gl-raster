@@ -118,7 +118,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 ┌─────────────────────────────────────────────────────────────┐
 │  Data Layer                                                 │
 │  ├─ @developmentseed/geotiff (COG parsing)                  │
-│  ├─ @developmentseed/range-reader (coalesced range requests)│
+│  ├─ @developmentseed/range-reader (coalesced range reads)   │
 │  └─ zarrita (Zarr store access)                             │
 └─────────────────────────────────────────────────────────────┘
 ```
