@@ -30,9 +30,51 @@ new Deck({
 });
 ```
 
-The {@link COGLayer} is the recommended layer for rendering Cloud-Optimized GeoTIFFs. It leverages deck.gl's [`TileLayer`] to match the internal COG structure, automatically fetching appropriate overviews based on zoom level.
+The [`COGLayer`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/COGLayer/) is the recommended layer for rendering Cloud-Optimized GeoTIFFs. It leverages deck.gl's [`TileLayer`] to match the internal COG structure, automatically fetching appropriate overviews based on zoom level.
 
 [`TileLayer`]: https://deck.gl/docs/api-reference/geo-layers/tile-layer
+
+## Layers and sources
+
+Each layer takes its data as `source`: an opened source, or the input to open one from, such as a URL.
+
+| Layer | Source | Draws |
+| --- | --- | --- |
+| [`COGLayer`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/COGLayer/) | [`COGSource`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/COGSource/) | One COG. |
+| [`MultiCOGLayer`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGLayer/) | [`MultiCOGSource`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGSource/) | The bands of one scene stored as separate COGs, such as a Sentinel-2 scene's band files. |
+| [`MosaicLayer`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MosaicLayer/) | Whatever its `getSource` opens | Many images, such as the COGs of a STAC search or a GDAL VRT. It opens only the items in view. |
+
+Open a source yourself to read its bounds before drawing, to pass options such as an `epsgResolver`, or to share it between layers:
+
+```ts
+import { COGLayer, COGSource } from "@developmentseed/deck.gl-geotiff";
+
+const source = await COGSource.open("https://example.com/my-cog.tif");
+const { west, south, east, north } = source.geographicBounds;
+new COGLayer({ id: "cog", source });
+```
+
+`MosaicLayer` takes its items as `data`, each with a WGS84 `bbox` and a unique `id`. [`parseVRT`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/functions/parseVRT/) reads the files of a GDAL VRT mosaic as items:
+
+```ts
+import {
+  COGLayer,
+  COGSource,
+  MosaicLayer,
+  parseVRT,
+} from "@developmentseed/deck.gl-geotiff";
+
+const response = await fetch(vrtUrl);
+const items = parseVRT(await response.text(), vrtUrl);
+
+new MosaicLayer({
+  id: "mosaic",
+  data: items,
+  getSource: (item, options) => COGSource.open(item.url, options),
+  renderSource: (item, { source, subLayerProps }) =>
+    new COGLayer({ ...subLayerProps, source }),
+});
+```
 
 ## Using Vite
 
@@ -54,7 +96,7 @@ export default defineConfig({
 ## Requests, caching and authentication
 
 The COG layers read through one shared
-[`RangeReader`](../range-reader/README.md): the reads a selection of tiles
+[`RangeReader`](https://developmentseed.org/deck.gl-raster/api/range-reader/): the reads a selection of tiles
 needs are issued together and merged into few streamed HTTP range requests,
 each tile resolves as its bytes arrive, a request is cancelled as soon as
 its tiles leave the view, and everything received is cached, so a pan back

@@ -95,6 +95,8 @@ const BASE_DECK_GL_ZARR = `${BASE}/api/deck-gl-zarr`;
 const BASE_GEOTIFF = `${BASE}/api/geotiff`;
 const BASE_GEOZARR = `${BASE}/api/geozarr`;
 const BASE_MORECANTILE = `${BASE}/api/morecantile`;
+const BASE_PROJ = `${BASE}/api/proj`;
+const BASE_RANGE_READER = `${BASE}/api/range-reader`;
 const BASE_RASTER_REPROJECT = `${BASE}/api/raster-reproject`;
 const BASE_LUMA_GL = "https://luma.gl/docs/api-reference";
 
@@ -108,13 +110,21 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     Affine: `${BASE_AFFINE}/type-aliases/Affine/`,
   },
   "@developmentseed/deck.gl-geotiff": {
+    COGInput: `${BASE_DECK_GL_GEOTIFF}/type-aliases/COGInput/`,
     COGLayer: `${BASE_DECK_GL_GEOTIFF}/classes/COGLayer/`,
+    COGSource: `${BASE_DECK_GL_GEOTIFF}/classes/COGSource/`,
+    COGSourceOptions: `${BASE_DECK_GL_GEOTIFF}/type-aliases/COGSourceOptions/`,
     MosaicLayer: `${BASE_DECK_GL_GEOTIFF}/classes/MosaicLayer/`,
     MosaicTileset2D: `${BASE_DECK_GL_GEOTIFF}/classes/MosaicTileset2D/`,
     MultiCOGLayer: `${BASE_DECK_GL_GEOTIFF}/classes/MultiCOGLayer/`,
+    MultiCOGSource: `${BASE_DECK_GL_GEOTIFF}/classes/MultiCOGSource/`,
   },
   "@developmentseed/deck.gl-raster": {
+    DEFAULT_RANGE_READER: `${BASE_DECK_GL_RASTER}/variables/DEFAULT_RANGE_READER/`,
+    MinimalTileData: `${BASE_DECK_GL_RASTER}/type-aliases/MinimalTileData/`,
+    MultiRasterTilesetDescriptor: `${BASE_DECK_GL_RASTER}/interfaces/MultiRasterTilesetDescriptor/`,
     RasterLayer: `${BASE_DECK_GL_RASTER}/classes/RasterLayer/`,
+    RasterSource: `${BASE_DECK_GL_RASTER}/classes/RasterSource/`,
     RasterTileLayer: `${BASE_DECK_GL_RASTER}/classes/RasterTileLayer/`,
     RasterTileLayerProps: `${BASE_DECK_GL_RASTER}/type-aliases/RasterTileLayerProps/`,
     RenderTileResult: `${BASE_DECK_GL_RASTER}/type-aliases/RenderTileResult/`,
@@ -148,12 +158,15 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
   "@developmentseed/deck.gl-zarr": {
     ZarrLayer: `${BASE_DECK_GL_ZARR}/classes/ZarrLayer/`,
     ZarrLayerProps: `${BASE_DECK_GL_ZARR}/type-aliases/ZarrLayerProps/`,
+    ZarrSource: `${BASE_DECK_GL_ZARR}/classes/ZarrSource/`,
   },
   "@developmentseed/geotiff": {
     GeoTIFF: `${BASE_GEOTIFF}/classes/GeoTIFF/`,
     Overview: `${BASE_GEOTIFF}/classes/Overview/`,
     DecoderPool: `${BASE_GEOTIFF}/classes/DecoderPool/`,
     RasterArray: `${BASE_GEOTIFF}/type-aliases/RasterArray/`,
+    RasterArrayBandSeparate: `${BASE_GEOTIFF}/type-aliases/RasterArrayBandSeparate/`,
+    RasterArrayPixelInterleaved: `${BASE_GEOTIFF}/type-aliases/RasterArrayPixelInterleaved/`,
     RasterTypedArray: `${BASE_GEOTIFF}/type-aliases/RasterTypedArray/`,
     Tile: `${BASE_GEOTIFF}/type-aliases/Tile/`,
     Decoder: `${BASE_GEOTIFF}/type-aliases/Decoder/`,
@@ -172,6 +185,22 @@ const crossPackageLinks: Record<string, Record<string, string>> = {
     TileMatrix: `${BASE_MORECANTILE}/interfaces/TileMatrix/`,
     BoundingBox: `${BASE_MORECANTILE}/interfaces/BoundingBox/`,
     CRS: `${BASE_MORECANTILE}/type-aliases/CRS/`,
+  },
+  "@developmentseed/proj": {
+    EpsgResolver: `${BASE_PROJ}/type-aliases/EpsgResolver/`,
+    Point: `${BASE_PROJ}/type-aliases/Point/`,
+    ProjectionDefinition: `${BASE_PROJ}/interfaces/ProjectionDefinition/`,
+    ProjJson: `${BASE_PROJ}/type-aliases/ProjJson/`,
+  },
+  "@developmentseed/range-reader": {
+    ByteCache: `${BASE_RANGE_READER}/interfaces/ByteCache/`,
+    ConcurrencyLimiter: `${BASE_RANGE_READER}/interfaces/ConcurrencyLimiter/`,
+    FileIdentity: `${BASE_RANGE_READER}/interfaces/FileIdentity/`,
+    PerOriginSemaphore: `${BASE_RANGE_READER}/classes/PerOriginSemaphore/`,
+    Priority: `${BASE_RANGE_READER}/type-aliases/Priority/`,
+    Purpose: `${BASE_RANGE_READER}/type-aliases/Purpose/`,
+    RangeReader: `${BASE_RANGE_READER}/classes/RangeReader/`,
+    RangeReaderOptions: `${BASE_RANGE_READER}/interfaces/RangeReaderOptions/`,
   },
   "@developmentseed/raster-reproject": {
     RasterReprojector: `${BASE_RASTER_REPROJECT}/classes/RasterReprojector/`,

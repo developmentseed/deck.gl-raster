@@ -114,7 +114,7 @@ A window that doesn't fit inside the image throws a `WindowError`.
 
 Integrates with [`@developmentseed/affine`] for easy handling of image transforms, associating pixel positions to spatial coordinates.
 
-All loaded {@link RasterArray} instances contain an [`Affine`], tracking the relative image transform of that specific image window.
+All loaded [`RasterArray`](https://developmentseed.org/deck.gl-raster/api/geotiff/type-aliases/RasterArray/) instances contain an [`Affine`], tracking the relative image transform of that specific image window.
 
 [`Affine`]: https://developmentseed.org/deck.gl-raster/api/affine/type-aliases/Affine/
 [`@developmentseed/affine`]: https://developmentseed.org/deck.gl-raster/api/affine/
@@ -224,7 +224,7 @@ This is extremely useful for us as we build visualization projects for both Pyth
 ## Reading over HTTP
 
 `GeoTIFF.fromUrl` reads through a
-[`RangeReader`](../range-reader/README.md): the reads cogeotiff makes for the
+[`RangeReader`](https://developmentseed.org/deck.gl-raster/api/range-reader/): the reads cogeotiff makes for the
 header (IFDs, then one offset-table entry per tile) and the reads for tile
 bytes are merged into few streamed range requests, each tile resolves as its
 bytes arrive, and everything received is cached, so a pan back over tiles
