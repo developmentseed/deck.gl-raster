@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="232" viewBox="0 0 900 232" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6b7280"/></marker></defs>
+<rect x="0.5" y="0.5" width="899" height="231" rx="12" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+<text x="32" y="40" font-size="17" fill="#111827" font-weight="600" text-anchor="start">One request per map tile</text>
+<text x="32" y="62" font-size="13" fill="#6b7280" font-weight="400" text-anchor="start">Server-side rendering with a tile server</text>
+<rect x="32" y="92" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1"/>
+<rect x="72" y="92" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1"/>
+<rect x="112" y="92" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1"/>
+<rect x="152" y="92" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1"/>
+<rect x="32" y="132" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1"/>
+<rect x="72" y="132" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1"/>
+<rect x="112" y="132" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1"/>
+<rect x="152" y="132" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1"/>
+<rect x="29" y="89" width="166" height="86" rx="0" fill="none" stroke="#111827" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="32" y="194" font-size="12" fill="#6b7280" font-weight="400" text-anchor="start">map tiles in view</text>
+<line x1="206" y1="98.0" x2="428" y2="98.0" stroke="#6b7280" stroke-width="1.25" marker-end="url(#arrow)"/>
+<line x1="206" y1="107.7" x2="428" y2="107.7" stroke="#6b7280" stroke-width="1.25" marker-end="url(#arrow)"/>
+<line x1="206" y1="117.4" x2="428" y2="117.4" stroke="#6b7280" stroke-width="1.25" marker-end="url(#arrow)"/>
+<line x1="206" y1="127.1" x2="428" y2="127.1" stroke="#6b7280" stroke-width="1.25" marker-end="url(#arrow)"/>
+<line x1="206" y1="136.9" x2="428" y2="136.9" stroke="#6b7280" stroke-width="1.25" marker-end="url(#arrow)"/>
+<line x1="206" y1="146.6" x2="428" y2="146.6" stroke="#6b7280" stroke-width="1.25" marker-end="url(#arrow)"/>
+<line x1="206" y1="156.3" x2="428" y2="156.3" stroke="#6b7280" stroke-width="1.25" marker-end="url(#arrow)"/>
+<line x1="206" y1="166.0" x2="428" y2="166.0" stroke="#6b7280" stroke-width="1.25" marker-end="url(#arrow)"/>
+<rect x="430" y="88" width="150" height="88" rx="8" fill="#f9fafb" stroke="#9ca3af" stroke-width="1"/>
+<text x="505.0" y="137.0" font-size="14" fill="#111827" font-weight="400" text-anchor="middle">tile server</text>
+<text x="505.0" y="196" font-size="14" fill="#111827" font-weight="600" text-anchor="middle">8 tiles in view, 8 requests</text>
+<line x1="580" y1="132.0" x2="688" y2="132.0" stroke="#6b7280" stroke-width="1.25" marker-end="url(#arrow)"/>
+<rect x="690" y="88" width="150" height="88" rx="8" fill="#f9fafb" stroke="#9ca3af" stroke-width="1"/>
+<text x="765" y="137.0" font-size="14" fill="#111827" font-weight="400" text-anchor="middle">COG</text>
+<text x="765" y="196" font-size="12" fill="#6b7280" font-weight="400" text-anchor="middle">layout unknown to the browser</text>
+</svg>

@@ -179,7 +179,7 @@ const zarrExamples: Example[] = [
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/zarr-globe/",
-    image: "/deck.gl-raster/img/zarr-globe-example-card.jpg",
+    image: "/deck.gl-raster/img/zarr-globe.gif",
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/zarr-globe",
   },
