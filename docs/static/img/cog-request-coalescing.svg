@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="452" viewBox="0 0 900 452" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6b7280"/></marker></defs>
+<rect x="0.5" y="0.5" width="899" height="451" rx="12" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+<text x="32" y="40" font-size="17" fill="#111827" font-weight="600" text-anchor="start">Coalesced tile requests</text>
+<text x="32" y="62" font-size="13" fill="#6b7280" font-weight="400" text-anchor="start">Client-side rendering with deck.gl-raster</text>
+<rect x="32" y="88" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="52.0" y="112.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">0</text>
+<rect x="72" y="88" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="92.0" y="112.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">1</text>
+<rect x="112" y="88" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="132.0" y="112.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">2</text>
+<rect x="152" y="88" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="172.0" y="112.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">3</text>
+<rect x="192" y="88" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="212.0" y="112.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">4</text>
+<rect x="232" y="88" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="252.0" y="112.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">5</text>
+<rect x="32" y="128" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="52.0" y="152.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">6</text>
+<rect x="232" y="128" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="252.0" y="152.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">11</text>
+<rect x="32" y="168" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="52.0" y="192.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">12</text>
+<rect x="232" y="168" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="252.0" y="192.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">17</text>
+<rect x="32" y="208" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="52.0" y="232.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">18</text>
+<rect x="72" y="208" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="92.0" y="232.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">19</text>
+<rect x="112" y="208" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="132.0" y="232.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">20</text>
+<rect x="152" y="208" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="172.0" y="232.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">21</text>
+<rect x="192" y="208" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="212.0" y="232.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">22</text>
+<rect x="232" y="208" width="40" height="40" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="252.0" y="232.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">23</text>
+<rect x="72" y="128" width="40" height="40" rx="0" fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>
+<text x="92.0" y="152.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">7</text>
+<rect x="112" y="128" width="40" height="40" rx="0" fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>
+<text x="132.0" y="152.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">8</text>
+<rect x="152" y="128" width="40" height="40" rx="0" fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>
+<text x="172.0" y="152.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">9</text>
+<rect x="192" y="128" width="40" height="40" rx="0" fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>
+<text x="212.0" y="152.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">10</text>
+<rect x="72" y="168" width="40" height="40" rx="0" fill="#ffedd5" stroke="#ea580c" stroke-width="1"/>
+<text x="92.0" y="192.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">13</text>
+<rect x="112" y="168" width="40" height="40" rx="0" fill="#ffedd5" stroke="#ea580c" stroke-width="1"/>
+<text x="132.0" y="192.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">14</text>
+<rect x="152" y="168" width="40" height="40" rx="0" fill="#ffedd5" stroke="#ea580c" stroke-width="1"/>
+<text x="172.0" y="192.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">15</text>
+<rect x="192" y="168" width="40" height="40" rx="0" fill="#ffedd5" stroke="#ea580c" stroke-width="1"/>
+<text x="212.0" y="192.0" font-size="12" fill="#374151" font-weight="400" text-anchor="middle">16</text>
+<rect x="69" y="125" width="166" height="86" rx="0" fill="none" stroke="#111827" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="32" y="268" font-size="12" fill="#6b7280" font-weight="400" text-anchor="start">COG tiles, numbered in file order</text>
+<text x="340" y="128" font-size="20" fill="#111827" font-weight="600" text-anchor="start">8 tiles in view, 2 requests</text>
+<rect x="341" y="152" width="14" height="14" rx="0" fill="none" stroke="#111827" stroke-width="2" stroke-dasharray="3 2"/>
+<text x="366" y="164" font-size="14" fill="#111827" font-weight="600" text-anchor="start">in view</text>
+<rect x="340" y="181" width="16" height="16" rx="0" fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>
+<text x="366" y="194" font-size="14" fill="#2563eb" font-weight="600" text-anchor="start">request 1: tiles 7-10</text>
+<rect x="340" y="211" width="16" height="16" rx="0" fill="#ffedd5" stroke="#ea580c" stroke-width="1"/>
+<text x="366" y="224" font-size="14" fill="#ea580c" font-weight="600" text-anchor="start">request 2: tiles 13-16</text>
+<text x="32" y="302" font-size="13" fill="#111827" font-weight="600" text-anchor="start">COG file bytes</text>
+<rect x="32" y="354" width="80" height="36" rx="0" fill="#e5e7eb" stroke="#d1d5db" stroke-width="1"/>
+<text x="72" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">header, IFDs</text>
+<rect x="112" y="354" width="96" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="160" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">overview tiles</text>
+<rect x="208.0" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="221.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">0</text>
+<rect x="235.5" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="249.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">1</text>
+<rect x="263.0" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="276.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">2</text>
+<rect x="290.5" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="304.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">3</text>
+<rect x="318.0" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="331.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">4</text>
+<rect x="345.5" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="359.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">5</text>
+<rect x="373.0" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="386.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">6</text>
+<rect x="510.5" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="524.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">11</text>
+<rect x="538.0" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="551.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">12</text>
+<rect x="675.5" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="689.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">17</text>
+<rect x="703.0" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="716.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">18</text>
+<rect x="730.5" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="744.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">19</text>
+<rect x="758.0" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="771.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">20</text>
+<rect x="785.5" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="799.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">21</text>
+<rect x="813.0" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="826.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">22</text>
+<rect x="840.5" y="354" width="27.5" height="36" rx="0" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+<text x="854.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">23</text>
+<rect x="400.5" y="354" width="27.5" height="36" rx="0" fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>
+<text x="414.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">7</text>
+<rect x="428.0" y="354" width="27.5" height="36" rx="0" fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>
+<text x="441.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">8</text>
+<rect x="455.5" y="354" width="27.5" height="36" rx="0" fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>
+<text x="469.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">9</text>
+<rect x="483.0" y="354" width="27.5" height="36" rx="0" fill="#dbeafe" stroke="#2563eb" stroke-width="1"/>
+<text x="496.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">10</text>
+<rect x="565.5" y="354" width="27.5" height="36" rx="0" fill="#ffedd5" stroke="#ea580c" stroke-width="1"/>
+<text x="579.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">13</text>
+<rect x="593.0" y="354" width="27.5" height="36" rx="0" fill="#ffedd5" stroke="#ea580c" stroke-width="1"/>
+<text x="606.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">14</text>
+<rect x="620.5" y="354" width="27.5" height="36" rx="0" fill="#ffedd5" stroke="#ea580c" stroke-width="1"/>
+<text x="634.25" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">15</text>
+<rect x="648.0" y="354" width="27.5" height="36" rx="0" fill="#ffedd5" stroke="#ea580c" stroke-width="1"/>
+<text x="661.75" y="376.0" font-size="11" fill="#374151" font-weight="400" text-anchor="middle">16</text>
+<path d="M 34.00 350 Q 34.00 344 40.00 344 L 66.00 344 Q 72.00 344 72.00 338 Q 72.00 344 78.00 344 L 104.00 344 Q 110.00 344 110.00 350" fill="none" stroke="#6b7280" stroke-width="1.5"/>
+<text x="72.0" y="332" font-size="12" fill="#6b7280" font-weight="600" text-anchor="middle">metadata</text>
+<path d="M 114.00 350 Q 114.00 344 120.00 344 L 484.00 344 Q 490.00 344 490.00 338 Q 490.00 344 496.00 344 L 860.00 344 Q 866.00 344 866.00 350" fill="none" stroke="#6b7280" stroke-width="1.5"/>
+<text x="490.0" y="332" font-size="12" fill="#6b7280" font-weight="600" text-anchor="middle">image data</text>
+<path d="M 402.50 396 v 8 H 508.50 v -8" fill="none" stroke="#2563eb" stroke-width="2"/>
+<text x="455.5" y="422" font-size="12" fill="#2563eb" font-weight="600" text-anchor="middle">request 1</text>
+<path d="M 567.50 396 v 8 H 673.50 v -8" fill="none" stroke="#ea580c" stroke-width="2"/>
+<text x="620.5" y="422" font-size="12" fill="#ea580c" font-weight="600" text-anchor="middle">request 2</text>
+</svg>
