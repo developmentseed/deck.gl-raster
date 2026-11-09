@@ -25,7 +25,7 @@ deck.gl-raster is a collection of TypeScript modules to enable loading [GeoTIFF]
   - Alternatively, fully-customizable rendering with no GPU knowledge required
 - **Native tiling**: Renders tiled data sources _in their native tiling scheme_, without translating to a Web Mercator tiling grid.
 - **Flexible reprojection**: GPU-based raster reprojection from most projections[^1]
-- **Efficient streaming**: Intelligent COG rendering fetches only visible image portions, merging nearby reads into few HTTP range requests
+- **Efficient streaming**: Intelligent COG rendering fetches only visible image portions, coalescing nearby reads into few HTTP range requests
 - **Shared sources**: Open a dataset once with `COGSource`, `MultiCOGSource` or `ZarrSource`, and draw it with any number of layers
 - **Multi-resolution support**: Automatic overview selection based on zoom level
 
@@ -46,7 +46,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 | [`geozarr`]          | Validation and parsing for [GeoZarr] metadata                   | [![npm][geozarr-npm-badge]][geozarr-npm]                   |
 | [`morecantile`]      | Port of [Morecantile] for working with OGC [TileMatrixSets]     | [![npm][morecantile-npm-badge]][morecantile-npm]           |
 | [`proj`]             | Utilities for coordinate reprojections                          | [![npm][proj-npm-badge]][proj-npm]                         |
-| [`range-reader`]     | Streamed, merged HTTP byte-range reads with a byte cache        | [![npm][range-reader-npm-badge]][range-reader-npm]         |
+| [`range-reader`]     | Streamed, coalesced HTTP byte-range reads with a byte cache     | [![npm][range-reader-npm-badge]][range-reader-npm]         |
 | [`raster-reproject`] | Standalone mesh-based image reprojection utilities              | [![npm][raster-reproject-npm-badge]][raster-reproject-npm] |
 
 [`affine`]: /deck.gl-raster/api/affine
@@ -118,7 +118,7 @@ We're building a new, modular raster data ecosystem for the web; this monorepo c
 ┌─────────────────────────────────────────────────────────────┐
 │  Data Layer                                                 │
 │  ├─ @developmentseed/geotiff (COG parsing)                  │
-│  ├─ @developmentseed/range-reader (merged range requests)   │
+│  ├─ @developmentseed/range-reader (coalesced range requests)│
 │  └─ zarrita (Zarr store access)                             │
 └─────────────────────────────────────────────────────────────┘
 ```
