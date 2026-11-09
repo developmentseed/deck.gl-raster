@@ -72,7 +72,7 @@ The caller supplies two callbacks:
 
 [`RenderTileResult`]: https://developmentseed.org/deck.gl-raster/api/deck-gl-raster/type-aliases/RenderTileResult/
 
-This split keeps {@link ZarrLayer} agnostic about data type and rendering pipeline — the layer handles tiling, level selection, and reprojection; you decide how chunks become pixels.
+This split keeps [`ZarrLayer`](https://developmentseed.org/deck.gl-raster/api/deck-gl-zarr/classes/ZarrLayer/) agnostic about data type and rendering pipeline — the layer handles tiling, level selection, and reprojection; you decide how chunks become pixels.
 
 ## Features
 

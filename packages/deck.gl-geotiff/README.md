@@ -30,7 +30,7 @@ new Deck({
 });
 ```
 
-The {@link COGLayer} is the recommended layer for rendering Cloud-Optimized GeoTIFFs. It leverages deck.gl's [`TileLayer`] to match the internal COG structure, automatically fetching appropriate overviews based on zoom level.
+The [`COGLayer`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/COGLayer/) is the recommended layer for rendering Cloud-Optimized GeoTIFFs. It leverages deck.gl's [`TileLayer`] to match the internal COG structure, automatically fetching appropriate overviews based on zoom level.
 
 [`TileLayer`]: https://deck.gl/docs/api-reference/geo-layers/tile-layer
 
@@ -40,9 +40,9 @@ Each layer takes its data as `source`: an opened source, or the input to open on
 
 | Layer | Source | Draws |
 | --- | --- | --- |
-| {@link COGLayer} | {@link COGSource} | One COG. |
-| {@link MultiCOGLayer} | {@link MultiCOGSource} | The bands of one scene stored as separate COGs, such as a Sentinel-2 scene's band files. |
-| {@link MosaicLayer} | Whatever its `getSource` opens | Many images, such as the COGs of a STAC search or a GDAL VRT. It opens only the items in view. |
+| [`COGLayer`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/COGLayer/) | [`COGSource`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/COGSource/) | One COG. |
+| [`MultiCOGLayer`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGLayer/) | [`MultiCOGSource`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MultiCOGSource/) | The bands of one scene stored as separate COGs, such as a Sentinel-2 scene's band files. |
+| [`MosaicLayer`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/classes/MosaicLayer/) | Whatever its `getSource` opens | Many images, such as the COGs of a STAC search or a GDAL VRT. It opens only the items in view. |
 
 Open a source yourself to read its bounds before drawing, to pass options such as an `epsgResolver`, or to share it between layers:
 
@@ -54,7 +54,7 @@ const { west, south, east, north } = source.geographicBounds;
 new COGLayer({ id: "cog", source });
 ```
 
-`MosaicLayer` takes its items as `data`, each with a WGS84 `bbox` and a unique `id`. {@link parseVRT} reads the files of a GDAL VRT mosaic as items:
+`MosaicLayer` takes its items as `data`, each with a WGS84 `bbox` and a unique `id`. [`parseVRT`](https://developmentseed.org/deck.gl-raster/api/deck-gl-geotiff/functions/parseVRT/) reads the files of a GDAL VRT mosaic as items:
 
 ```ts
 import {
