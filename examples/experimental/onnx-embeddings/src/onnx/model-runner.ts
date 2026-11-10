@@ -65,6 +65,8 @@ export type GpuEmbeddings = {
   tensor: Tensor;
   /** Size of the GPU buffer in bytes. */
   byteLength: number;
+  /** The runner that made the buffer, on its sessions' device. */
+  owner: ModelRunner;
   /** Free the GPU buffer. */
   destroy: () => void;
 };
@@ -192,9 +194,17 @@ export class ModelRunner {
           this.dequantize(embeddings),
           dims,
         );
-      case "gpu":
-        input.gpuEmbeddings ??= await this.uploadEmbeddings(input);
-        return input.gpuEmbeddings.tensor;
+      case "gpu": {
+        const stale = input.gpuEmbeddings;
+        if (stale?.owner !== this) {
+          // A buffer from an earlier runner is on that runner's device
+          if (stale) {
+            void stale.owner.idle().then(() => stale.destroy());
+          }
+          input.gpuEmbeddings = await this.uploadEmbeddings(input);
+        }
+        return input.gpuEmbeddings!.tensor;
+      }
     }
   }
 
@@ -225,6 +235,7 @@ export class ModelRunner {
     return {
       tensor,
       byteLength: values.byteLength,
+      owner: this,
       destroy: () => buffer.destroy(),
     };
   }

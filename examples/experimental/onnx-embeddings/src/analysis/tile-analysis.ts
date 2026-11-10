@@ -103,7 +103,7 @@ export class TileAnalysis {
   async addTile(tile: AefTileData, signal?: AbortSignal): Promise<void> {
     const task = this.task;
     const generation = this.generation;
-    if (task) {
+    if (task && !signal?.aborted) {
       try {
         const runner = await this.getRunner();
         const output = await runner.run(task, tile);
@@ -119,7 +119,12 @@ export class TileAnalysis {
       destroyTile(tile);
       throw signal.reason;
     }
+    const previous = this.tiles.get(tile.key);
     this.tiles.set(tile.key, tile);
+    if (previous && previous !== tile) {
+      // deck.gl replaced the tile's content without unloading it
+      void this.destroyAfterRuns([previous]);
+    }
     this.update({});
     if (this.hasStaleTiles()) {
       this.schedulePass();
@@ -183,11 +188,10 @@ export class TileAnalysis {
       void previous
         .then(async (runner) => {
           await runner.idle();
-          // Only the gpu path makes buffers; the new runner may be making its
-          // own already
-          if (runner.inputPath === "gpu") {
-            for (const tile of this.tiles.values()) {
-              tile.gpuEmbeddings?.destroy();
+          // Free only this runner's buffers: a new runner may have made its own
+          for (const tile of this.tiles.values()) {
+            if (tile.gpuEmbeddings?.owner === runner) {
+              tile.gpuEmbeddings.destroy();
               tile.gpuEmbeddings = undefined;
             }
           }
