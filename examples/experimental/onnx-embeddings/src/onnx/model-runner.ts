@@ -91,8 +91,8 @@ const GPU_BUFFER_USAGE_STORAGE = 0x0080;
 /**
  * Runs this example's ONNX models on tiles, one run at a time.
  *
- * ONNX Runtime Web does not support concurrent `run` calls on one session,
- * so every run goes through one queue.
+ * With the WebGPU provider, two `run` calls in flight on one session never
+ * resolve, so every run goes through one queue.
  */
 export class ModelRunner {
   /** The input path this runner feeds models with. */
@@ -150,10 +150,12 @@ export class ModelRunner {
     return this.ort.InferenceSession.create(bytes, {
       executionProviders: ["webgpu"],
       // The float32 models must run every node on WebGPU: fail rather than
-      // fall back to the CPU. The int8 models need the CPU for `Cast`.
+      // fall back to the CPU. The int8 models need the CPU for `Cast`, which
+      // ONNX Runtime reports as a warning through `console.error`, so only
+      // log errors for them.
       ...(dtype === "float32"
         ? { extra: { session: { disable_cpu_ep_fallback: "1" } } }
-        : {}),
+        : { logSeverityLevel: 3 as const }),
     });
   }
 

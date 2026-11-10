@@ -186,39 +186,32 @@ export class TileAnalysis {
 
   /** Load ONNX Runtime and the model for `model` ahead of the first task. */
   async prepare(model: ModelName): Promise<void> {
+    const start = performance.now();
+    this.update({ busy: true });
     try {
       const runner = await this.getRunner();
       await runner.prepare(model);
+      if (this.status.firstSessionMs === null) {
+        this.update({ firstSessionMs: performance.now() - start });
+      }
     } catch (error) {
       this.reportError(error);
+    } finally {
+      this.update({ busy: this.passRunning });
     }
   }
 
   private getRunner(): Promise<ModelRunner> {
     if (!this.runner) {
-      const start = performance.now();
       const inputPath = this.inputPath;
-      this.update({ busy: true });
-      const runner = (async () => {
-        const ort = await loadOrt();
-        return new ModelRunner(ort, inputPath);
-      })();
+      const runner = loadOrt().then((ort) => new ModelRunner(ort, inputPath));
       this.runner = runner;
-      runner
-        .then((created) =>
-          created.prepare(this.task?.model ?? "similarity").then(() => {
-            if (this.status.firstSessionMs === null) {
-              this.update({ firstSessionMs: performance.now() - start });
-            }
-          }),
-        )
-        .catch((error) => {
-          if (this.runner === runner) {
-            this.runner = null;
-          }
-          this.reportError(error);
-        })
-        .finally(() => this.update({ busy: this.passRunning }));
+      runner.catch(() => {
+        // Let the next call try again
+        if (this.runner === runner) {
+          this.runner = null;
+        }
+      });
     }
     return this.runner;
   }
