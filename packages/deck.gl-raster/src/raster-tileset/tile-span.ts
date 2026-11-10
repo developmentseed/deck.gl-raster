@@ -23,18 +23,19 @@ export const TILE_EDGE_TOLERANCE = 1e-6;
  * excluded: a parent whose edges sit on child tile edges overlaps exactly the
  * children it contains, not the neighbors that share those edges.
  *
- * @param start      Start of the span, in tiles from the grid origin.
- * @param end        End of the span, in tiles from the grid origin. Must not
- *                   be less than `start`.
- * @param tolerance  How close, in tiles, a bound must be to a tile edge to
- *                   count as lying on it.
+ * @param start              Start of the span, in tiles from the grid origin.
+ * @param end                End of the span, in tiles from the grid origin.
+ *                           Must not be less than `start`.
+ * @param options.tolerance  How close, in tiles, a bound must be to a tile
+ *                           edge to count as lying on it. Defaults to
+ *                           {@link TILE_EDGE_TOLERANCE}.
  * @returns The inclusive, unclamped index range `[first, last]`. A span
  *          narrower than the tolerance still returns one tile.
  */
 export function overlappingTileSpan(
   start: number,
   end: number,
-  tolerance: number = TILE_EDGE_TOLERANCE,
+  { tolerance = TILE_EDGE_TOLERANCE }: { tolerance?: number } = {},
 ): [first: number, last: number] {
   const first = Math.floor(start + tolerance);
   const last = Math.ceil(end - tolerance) - 1;

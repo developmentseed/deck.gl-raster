@@ -496,12 +496,12 @@ export class RasterTileset2D extends Tileset2D {
     const [minCol, lastCol] = overlappingTileSpan(
       x / decimationX,
       (x + 1) / decimationX,
-      1 / coarser.tileWidth,
+      { tolerance: 1 / coarser.tileWidth },
     );
     const [minRow, lastRow] = overlappingTileSpan(
       y / decimationY,
       (y + 1) / decimationY,
-      1 / coarser.tileHeight,
+      { tolerance: 1 / coarser.tileHeight },
     );
     // The last tile of a level can reach past the coarser level's last tile.
     const maxCol = Math.min(lastCol, coarser.matrixWidth - 1);
