@@ -10,7 +10,7 @@ export type Location = {
   longitude: number;
   /** Map latitude for `flyTo`. */
   latitude: number;
-  /** Zoom level (must be ≥ MIN_VISIBLE_ZOOM for the layer to render). */
+  /** Zoom level (must be ≥ `MIN_ZOOM` for the layer to render). */
   zoom: number;
 };
 
@@ -40,21 +40,21 @@ export const LOCATIONS: readonly Location[] = [
     label: "Amazon deforestation frontier (Rondônia)",
     longitude: -62.2,
     latitude: -9.5,
-    zoom: 12,
+    zoom: 13,
   },
   {
     id: "nile-delta",
     label: "Nile delta (irrigation mosaic)",
     longitude: 31.2,
     latitude: 30.8,
-    zoom: 12,
+    zoom: 13,
   },
   {
     id: "alaska-north-slope",
     label: "Alaska North Slope (tundra)",
     longitude: -150.0,
     latitude: 69.5,
-    zoom: 12,
+    zoom: 13,
   },
   {
     id: "kansas-pivots",
@@ -78,10 +78,10 @@ export const LOCATIONS: readonly Location[] = [
     zoom: 13,
   },
   {
-    id: "atacama-lithium",
-    label: "Salar de Atacama (lithium evaporation ponds)",
-    longitude: -68.36,
-    latitude: -23.52,
+    id: "almeria-greenhouses",
+    label: "Almería, Spain (sea of greenhouses)",
+    longitude: -2.75,
+    latitude: 36.75,
     zoom: 13,
   },
   {

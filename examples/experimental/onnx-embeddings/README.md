@@ -19,6 +19,11 @@ A new query, new centroids or new examples run the models again on the tiles
 already loaded, without fetching them again. The query also carries across
 years: pick a pixel in 2025, then switch the year to compare.
 
+Similarity starts with a query of its own, the pixel in the middle of the map,
+and picks a new one when you change location. "Show embeddings underneath"
+draws the RGB composite, dimmed, under the results of the other modes, so you
+can see where data has loaded; turn it off to see results over the basemap.
+
 > [!WARNING]
 > This example is experimental. Its code is LLM-generated and unreviewed, and
 > it may change substantially or be withdrawn.

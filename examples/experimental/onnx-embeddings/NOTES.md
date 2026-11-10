@@ -34,7 +34,8 @@ works well. Details below.
   `[9, 64, 1859584, 4009984]`, sharded with 256 × 256 inner chunks. One tile is
   one inner chunk of all 64 bands: 4 MiB of int8.
 - Viewport 1280 × 800. The default view (San Francisco, zoom 13) loads
-  **15 tiles**; the Nile delta preset (zoom 12) loads **60 tiles**.
+  **15 tiles**. The measurements below at 60 tiles used the Nile delta at
+  zoom 12, before the minimum zoom was raised to 12.5.
 
 The chrome-devtools browser was not available to this session (another
 session's MCP server held its profile), so every browser check ran in headless
@@ -341,6 +342,18 @@ Every awkward API and wrong assumption, in the order I hit them.
     negative example did nothing until the map got `boxZoom={false}`.
 18. luma.gl warns `Binding sampler not set: Not found in shader layout.`; the
     `aef-mosaic` example logs the same warning.
+19. **deck.gl trims its tile cache only when a tile is created.** The layer
+    sets `maxCacheSize: 10`, but an animated `flyTo` between locations passes
+    through wide views at the minimum zoom, and as the camera zooms in every
+    tile it needs already exists, so nothing is created and nothing is
+    trimmed. After one flight on a 2400 x 1300 window the cache held about
+    2,200 tiles, and every one that had finished loading stayed: a few hundred
+    tiles and over 1 GB of embeddings on a large window. None were orphaned;
+    deck.gl still held them all. The example now jumps between locations
+    instead of flying, and its minimum zoom is 12.5 instead of `aef-mosaic`'s
+    10, which keeps the count at what is in view (50 tiles on that window).
+    Zooming out to the minimum and back in can still leave more tiles loaded
+    than are in view, until the next pan creates a tile.
 
 ### The data
 
@@ -412,7 +425,7 @@ already has.
 - The WebAssembly download over a real network.
 - GPU memory, other than by adding up buffer sizes; ONNX Runtime's buffer
   cache; how accurate `performance.memory` is for array buffers.
-- Zoom levels below 12, where the tile count grows about four times per level;
+- Zoom levels below 12, which the example no longer allows;
   tiles narrower than 256 pixels at the edges of the mosaic.
 - Whether ONNX Runtime keeps one device as long as one session stays alive.
   The app keeps its sessions and the gpu path kept working across passes, but

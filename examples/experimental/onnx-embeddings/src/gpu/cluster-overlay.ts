@@ -31,6 +31,8 @@ export type ClusterOverlayProps = {
   clusterTex: Texture;
   /** Opacity of the cluster colors, 0 to 1. */
   opacity: number;
+  /** Brightness of the color already there, or 0 to draw over nothing. */
+  backdrop: number;
 };
 
 const MODULE_NAME = "clusterOverlay";
@@ -41,14 +43,16 @@ const PALETTE_GLSL = CLUSTER_COLORS.map(
 ).join(",\n  ");
 
 /**
- * A shader module that replaces the tile's color with the color of each
- * pixel's cluster index, at `opacity`.
+ * A shader module that draws the color of each pixel's cluster index, at
+ * `opacity`. With `backdrop` above 0, the color already there is dimmed to
+ * that brightness and stays underneath.
  */
 export const ClusterOverlay = {
   name: MODULE_NAME,
   fs: `\
 uniform ${MODULE_NAME}Uniforms {
   float opacity;
+  float backdrop;
 } ${MODULE_NAME};
 `,
   inject: {
@@ -64,18 +68,26 @@ const vec3 CLUSTER_PALETTE[${MAX_CLUSTERS}] = vec3[${MAX_CLUSTERS}](
         0,
         ${MAX_CLUSTERS - 1}
       );
-      color = vec4(
-        CLUSTER_PALETTE[clusterOverlay_index],
-        ${MODULE_NAME}.opacity
-      );
+      color = ${MODULE_NAME}.backdrop > 0.0
+        ? vec4(
+            mix(
+              color.rgb * ${MODULE_NAME}.backdrop,
+              CLUSTER_PALETTE[clusterOverlay_index],
+              ${MODULE_NAME}.opacity
+            ),
+            1.0
+          )
+        : vec4(CLUSTER_PALETTE[clusterOverlay_index], ${MODULE_NAME}.opacity);
     `,
   },
   uniformTypes: {
     opacity: "f32",
+    backdrop: "f32",
   },
   getUniforms: (props: Partial<ClusterOverlayProps>) => {
     return {
       opacity: props.opacity ?? 0.8,
+      backdrop: props.backdrop ?? 0,
       clusterTex: props.clusterTex,
     };
   },

@@ -1,5 +1,6 @@
 import {
   Button,
+  Checkbox,
   chakra,
   HStack,
   NativeSelect,
@@ -81,7 +82,7 @@ const INPUT_PATHS: {
     value: "int8",
     label: "Raw int8, converted by the model",
     description:
-      "Sends the stored bytes, 4 MB per tile, on every run. The model converts them to float, and that one step runs on the CPU. Uses no extra memory.",
+      "Sends the stored bytes, 4 MB per tile, on every run. The model's first step turns them into float32, and ONNX Runtime has no GPU version of that step for int8, so it runs on the CPU before the rest runs on the GPU. Uses no extra memory.",
   },
   {
     value: "float32",
@@ -109,6 +110,7 @@ export type ControlPanelProps = {
   inputPath: InputPath;
   colormapName: ColormapName;
   opacity: number;
+  showBackdrop: boolean;
   notice: string | null;
   query: LabeledPoint | null;
   similarityRange: [number, number];
@@ -126,6 +128,7 @@ export type ControlPanelProps = {
   onInputPathChange: (inputPath: InputPath) => void;
   onColormapNameChange: (name: ColormapName) => void;
   onOpacityChange: (value: number) => void;
+  onShowBackdropChange: (show: boolean) => void;
   onSimilarityRangeChange: (range: [number, number]) => void;
   onSimilarityThresholdChange: (value: number) => void;
   onClusterCountChange: (k: number) => void;
@@ -212,6 +215,7 @@ export function ControlPanel(props: ControlPanelProps) {
           </Text>
         )}
 
+        {mode !== "rgb" && <BackdropToggle {...props} />}
         {mode !== "rgb" && <EngineControls {...props} />}
 
         {mode === "rgb" && <RgbControls {...props} />}
@@ -476,6 +480,32 @@ function ColormapAndOpacity({
         onChange={onOpacityChange}
       />
     </HStack>
+  );
+}
+
+function BackdropToggle({
+  showBackdrop,
+  onShowBackdropChange,
+}: ControlPanelProps) {
+  return (
+    <Checkbox.Root
+      size="sm"
+      checked={showBackdrop}
+      onCheckedChange={(details) =>
+        onShowBackdropChange(details.checked === true)
+      }
+    >
+      <Checkbox.HiddenInput />
+      <Checkbox.Control />
+      <Checkbox.Label>
+        <LabelWithHelp label="Show embeddings underneath">
+          Draws three of the embedding bands as a dim color image under the
+          results, wherever a tile has loaded. It shows where there is data to
+          click on. Turn it off to see the results over the plain basemap. The
+          three bands are chosen in RGB mode.
+        </LabelWithHelp>
+      </Checkbox.Label>
+    </Checkbox.Root>
   );
 }
 

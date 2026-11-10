@@ -28,7 +28,7 @@ import { locatePixel } from "./aef/locate-pixel.js";
 import type { Location } from "./aef/locations.js";
 import { LOCATIONS } from "./aef/locations.js";
 import type { RgbSettings, TileView } from "./aef/render-tile.js";
-import { makeRenderTile } from "./aef/render-tile.js";
+import { BACKDROP_BRIGHTNESS, makeRenderTile } from "./aef/render-tile.js";
 import { buildSelection } from "./aef/selection.js";
 import { sphericalKMeans } from "./analysis/kmeans.js";
 import { fitLogistic } from "./analysis/logistic.js";
@@ -51,6 +51,24 @@ const DEFAULT_RGB: RgbSettings = {
 };
 const DEFAULT_INPUT_PATH: InputPath = "int8";
 /** Pixels sampled from the loaded tiles to fit k-means. */
+/**
+ * Where similarity looks for its first query, as fractions of the map's width
+ * and height: the middle, then points around it.
+ */
+const AUTO_QUERY_POINTS: readonly [number, number][] = [
+  [0.5, 0.5],
+  [0.4, 0.5],
+  [0.6, 0.5],
+  [0.5, 0.4],
+  [0.5, 0.6],
+  [0.3, 0.3],
+  [0.7, 0.3],
+  [0.3, 0.7],
+  [0.7, 0.7],
+];
+/** Tiles to load before the first query may come from outside the middle. */
+const AUTO_QUERY_MIN_TILES = 6;
+
 const KMEANS_SAMPLES = 20_000;
 const KMEANS_ITERATIONS = 25;
 const KMEANS_SEED = 7;
@@ -74,9 +92,12 @@ export default function App() {
   const [colormapName, setColormapName] =
     useState<keyof typeof COLORMAP_INDEX>("magma");
   const [opacity, setOpacity] = useState(0.85);
+  const [showBackdrop, setShowBackdrop] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [query, setQuery] = useState<LabeledPoint | null>(null);
+  // Whether similarity still picks its own query, near the middle of the map
+  const [autoQuery, setAutoQuery] = useState(true);
   const [similarityRange, setSimilarityRange] = useState<[number, number]>([
     0.5, 1,
   ]);
@@ -221,32 +242,76 @@ export default function App() {
     }
   }, [mode, tileCount, clusterFit, clusterCount, fitClusters]);
 
+  /** The embedding of the loaded pixel at a position, or why there is none. */
+  const pixelAt = useCallback(
+    (
+      longitude: number,
+      latitude: number,
+    ): Float32Array | "not-loaded" | "no-data" => {
+      const location = source && locatePixel(source, longitude, latitude);
+      const tile = location ? analysis.getTile(location.key) : undefined;
+      if (!location || !tile) {
+        return "not-loaded";
+      }
+      return (
+        readPixelVector(
+          tile.embeddings,
+          tile.width,
+          tile.height,
+          location.col,
+          location.row,
+        ) ?? "no-data"
+      );
+    },
+    [analysis, source],
+  );
+
+  // Until the user clicks, similarity searches for a pixel near the middle of
+  // the map, so the mode opens with something to look at. `status` changes
+  // whenever a tile loads, which runs this again.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!autoQuery || mode !== "similarity" || !map || tileCount === 0) {
+      return;
+    }
+    const { clientWidth, clientHeight } = map.getContainer();
+    // The middle first. The other points wait for a few tiles, in case the
+    // middle one is still loading.
+    const points =
+      tileCount < AUTO_QUERY_MIN_TILES
+        ? AUTO_QUERY_POINTS.slice(0, 1)
+        : AUTO_QUERY_POINTS;
+    for (const [x, y] of points) {
+      const { lng, lat } = map.unproject([x * clientWidth, y * clientHeight]);
+      const vector = pixelAt(lng, lat);
+      if (typeof vector !== "string") {
+        setQuery({ longitude: lng, latitude: lat, vector, label: 1 });
+        setAutoQuery(false);
+        return;
+      }
+    }
+  }, [autoQuery, mode, tileCount, status, pixelAt]);
+
   const handleClick = useCallback(
     (event: MapLayerMouseEvent) => {
-      if (!source || (mode !== "similarity" && mode !== "classifier")) {
+      if (mode !== "similarity" && mode !== "classifier") {
         return;
       }
       const { lng: longitude, lat: latitude } = event.lngLat;
-      const location = locatePixel(source, longitude, latitude);
-      const tile = location ? analysis.getTile(location.key) : undefined;
-      if (!location || !tile) {
-        setNotice("No data loaded there yet.");
-        return;
-      }
-      const vector = readPixelVector(
-        tile.embeddings,
-        tile.width,
-        tile.height,
-        location.col,
-        location.row,
-      );
-      if (!vector) {
-        setNotice("That pixel has no data.");
+      const vector = pixelAt(longitude, latitude);
+      if (typeof vector === "string") {
+        setNotice(
+          vector === "no-data"
+            ? "That pixel has no data."
+            : "No data loaded there yet.",
+        );
         return;
       }
       setNotice(null);
       if (mode === "similarity") {
         setQuery({ longitude, latitude, vector, label: 1 });
+        setAutoQuery(false);
         return;
       }
       const label = event.originalEvent.shiftKey ? 0 : nextLabel;
@@ -255,7 +320,7 @@ export default function App() {
         { longitude, latitude, vector, label },
       ]);
     },
-    [analysis, mode, nextLabel, source],
+    [mode, nextLabel, pixelAt],
   );
 
   const selection = useMemo(() => buildSelection({ yearIdx }), [yearIdx]);
@@ -310,14 +375,23 @@ export default function App() {
     probabilityThreshold,
   ]);
 
-  const renderTile = useMemo(() => makeRenderTile(rgb, view), [rgb, view]);
+  const backdrop = showBackdrop ? BACKDROP_BRIGHTNESS : 0;
+  const renderTile = useMemo(
+    () => makeRenderTile(rgb, view, backdrop),
+    [rgb, view, backdrop],
+  );
 
   const handleLocationChange = useCallback((location: Location) => {
     setLocationId(location.id);
-    mapRef.current?.flyTo({
+    // A jump, not a flight: an animated flight passes through wide views that
+    // each select hundreds of tiles, and deck.gl keeps the ones that load
+    mapRef.current?.jumpTo({
       center: [location.longitude, location.latitude],
       zoom: location.zoom,
     });
+    // Search for a pixel of the new place
+    setQuery(null);
+    setAutoQuery(true);
   }, []);
 
   const markers: LabeledPoint[] =
@@ -344,7 +418,7 @@ export default function App() {
           // Tiles are heavy, so limit memory with a small cache
           maxCacheSize: 10,
           updateTriggers: {
-            renderTile: [rgb, view, status?.renderVersion],
+            renderTile: [rgb, view, backdrop, status?.renderVersion],
           },
           // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
           // doesn't know about it.
@@ -405,6 +479,7 @@ export default function App() {
         inputPath={inputPath}
         colormapName={colormapName}
         opacity={opacity}
+        showBackdrop={showBackdrop}
         notice={notice}
         query={query}
         similarityRange={similarityRange}
@@ -422,6 +497,7 @@ export default function App() {
         onInputPathChange={setInputPath}
         onColormapNameChange={setColormapName}
         onOpacityChange={setOpacity}
+        onShowBackdropChange={setShowBackdrop}
         onSimilarityRangeChange={setSimilarityRange}
         onSimilarityThresholdChange={setSimilarityThreshold}
         onClusterCountChange={setClusterCount}

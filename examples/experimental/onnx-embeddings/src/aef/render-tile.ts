@@ -55,21 +55,44 @@ export type TileView =
       opacity: number;
     };
 
+/** Brightness of the RGB composite when it is drawn under model output. */
+export const BACKDROP_BRIGHTNESS = 0.45;
+
 /** A shader module that draws nothing. */
 const Hidden = {
   name: "hidden",
   inject: { "fs:DECKGL_FILTER_COLOR": "discard;" },
 } as const satisfies ShaderModule;
 
+/** A shader module that darkens the color to `brightness`, 0 to 1. */
+const Dim = {
+  name: "dim",
+  fs: `\
+uniform dimUniforms {
+  float brightness;
+} dim;
+`,
+  inject: { "fs:DECKGL_FILTER_COLOR": "color.rgb *= dim.brightness;" },
+  uniformTypes: { brightness: "f32" },
+  getUniforms: (props: { brightness?: number }) => ({
+    brightness: props.brightness ?? 1,
+  }),
+} as const satisfies ShaderModule<{ brightness: number }>;
+
 /**
  * Build a `renderTile` callback for `view`.
  *
- * Model output replaces the tile's color, so the basemap shows wherever a
- * pixel isn't drawn. A tile whose texture doesn't hold output of the view's
- * model yet draws nothing. The RGB composite still runs first in every
- * pipeline, because it discards nodata pixels.
+ * `backdrop` is the brightness of the RGB composite under model output, 0 to
+ * 1. At 0 the composite is not drawn: the basemap shows wherever a pixel has
+ * no output, and a tile whose texture doesn't hold output of the view's model
+ * yet draws nothing. The composite still runs first in every pipeline,
+ * because it discards nodata pixels.
  */
-export function makeRenderTile(rgb: RgbSettings, view: TileView) {
+export function makeRenderTile(
+  rgb: RgbSettings,
+  view: TileView,
+  backdrop: number,
+) {
   return function renderTile(data: AefTileData): RenderTileResult {
     const composite = {
       module: SampleAefRgb,
@@ -78,13 +101,16 @@ export function makeRenderTile(rgb: RgbSettings, view: TileView) {
     if (view.kind === "rgb") {
       return { renderPipeline: [composite] };
     }
-    const hidden = { module: Hidden, props: {} };
+    const noOutput =
+      backdrop > 0
+        ? { module: Dim, props: { brightness: backdrop } }
+        : { module: Hidden, props: {} };
     if (view.kind === "none") {
-      return { renderPipeline: [composite, hidden] };
+      return { renderPipeline: [composite, noOutput] };
     }
     const model = view.kind === "clusters" ? "clusters" : view.model;
     if (data.result?.model !== model) {
-      return { renderPipeline: [composite, hidden] };
+      return { renderPipeline: [composite, noOutput] };
     }
     if (view.kind === "clusters") {
       return {
@@ -92,7 +118,11 @@ export function makeRenderTile(rgb: RgbSettings, view: TileView) {
           composite,
           {
             module: ClusterOverlay,
-            props: { clusterTex: data.valueTexture, opacity: view.opacity },
+            props: {
+              clusterTex: data.valueTexture,
+              opacity: view.opacity,
+              backdrop,
+            },
           },
         ],
       };
@@ -110,6 +140,7 @@ export function makeRenderTile(rgb: RgbSettings, view: TileView) {
             rangeMax: view.rangeMax,
             threshold: view.threshold,
             opacity: view.opacity,
+            backdrop,
           },
         },
       ],

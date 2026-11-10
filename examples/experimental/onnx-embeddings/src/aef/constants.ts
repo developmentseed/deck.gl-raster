@@ -31,8 +31,9 @@ export const DEQUANT_DIVISOR = 127.5;
  *
  * The AEF source is a single-level zarr at ~10 m/px with no overviews, so
  * lowering this value increases the number of native-resolution tiles fetched
- * per viewport (roughly 4× per step) and shrinks their on-screen footprint.
- * Empirically, zoom 10 is the point where the tile count stays manageable and
- * tiles are still large enough to be legible.
+ * per viewport (roughly 4× per step). Every loaded tile keeps 4 MB of
+ * embeddings on the CPU and as much again on the GPU, and each model pass
+ * runs on all of them, so this is higher than in `aef-mosaic`: a large window
+ * shows a few hundred tiles at this zoom.
  */
-export const MIN_ZOOM = 10;
+export const MIN_ZOOM = 12.5;
