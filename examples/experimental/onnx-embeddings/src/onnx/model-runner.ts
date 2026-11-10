@@ -135,7 +135,8 @@ export class ModelRunner {
     const sessions = [...this.sessions.values()];
     this.sessions.clear();
     for (const session of sessions) {
-      await (await session).release();
+      // A session that failed to load has nothing to release
+      await (await session.catch(() => null))?.release();
     }
   }
 

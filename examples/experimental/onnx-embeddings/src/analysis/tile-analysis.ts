@@ -180,14 +180,20 @@ export class TileAnalysis {
     this.runner = null;
     if (previous) {
       // Wait for the queue: a run may still use these buffers and sessions
-      void previous.then(async (runner) => {
-        await runner.idle();
-        for (const tile of this.tiles.values()) {
-          tile.gpuEmbeddings?.destroy();
-          tile.gpuEmbeddings = undefined;
-        }
-        await runner.release();
-      });
+      void previous
+        .then(async (runner) => {
+          await runner.idle();
+          // Only the gpu path makes buffers; the new runner may be making its
+          // own already
+          if (runner.inputPath === "gpu") {
+            for (const tile of this.tiles.values()) {
+              tile.gpuEmbeddings?.destroy();
+              tile.gpuEmbeddings = undefined;
+            }
+          }
+          await runner.release();
+        })
+        .catch((error) => this.reportError(error));
     }
     this.setTask(this.task);
   }

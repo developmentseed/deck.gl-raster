@@ -18,8 +18,8 @@ export function samplePixels(
   for (const tile of tiles) {
     const { embeddings, width, height } = tile;
     const planeSize = width * height;
-    // A grid of about `perTile` pixels
-    const step = Math.max(1, Math.floor(Math.sqrt(planeSize / perTile)));
+    // A grid of at most `perTile` pixels
+    const step = Math.max(1, Math.ceil(Math.sqrt(planeSize / perTile)));
     for (let row = Math.floor(step / 2); row < height; row += step) {
       for (let col = Math.floor(step / 2); col < width; col += step) {
         const offset = row * width + col;

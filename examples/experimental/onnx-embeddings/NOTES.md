@@ -196,9 +196,9 @@ its shaders.
 
 | View | Model | int8 (default) | float32 | gpu |
 | --- | --- | --- | --- | --- |
-| 15 tiles | similarity | **115–129** (7.6–8.6 per tile) | 173–190 (11.5–12.6) | **54–64** (3.5–4.2) |
-| 15 tiles | clusters, k = 6 | 124–133 (8.2–8.8) | not measured | 57–70 (3.8–4.7) |
-| 15 tiles | classifier | 118–127 (7.8–8.4) | not measured | 53–58 (3.5–3.8) |
+| 15 tiles | similarity | **115–129** (7.6–8.6 per tile) | 165–190 (11.0–12.6) | **54–64** (3.5–4.2) |
+| 15 tiles | clusters, k = 6 | 117–136 (7.8–9.0) | not measured | 57–70 (3.8–4.7) |
+| 15 tiles | classifier | 117–127 (7.8–8.4) | not measured | 53–58 (3.5–3.9) |
 | 60 tiles | similarity | **408–446** (6.7–7.2) | 577–678 (9.6–10.6) | **125–143** (2.1–2.4) |
 
 The first pass on the gpu path also dequantizes and uploads every tile: 223 ms
@@ -211,8 +211,8 @@ before the next starts. I did not profile the gap further.
 
 Other timings:
 
-- k-means on 20,535 sampled pixels, k = 6, at most 25 iterations: **170–290 ms**
-  on the main thread.
+- k-means on 15,360 sampled pixels (1,024 per tile), k = 6, at most 25
+  iterations: **205–222 ms** on the main thread.
 - The logistic regression fit on a handful of points was not timed separately;
   by operation count it is a few milliseconds.
 
