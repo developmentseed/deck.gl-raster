@@ -309,16 +309,6 @@ export default function App() {
     [rgb, overlay],
   );
 
-  // A new year replaces the inner TileLayer, which drops its tiles without
-  // calling `onTileUnload`
-  const handleYearIdxChange = useCallback(
-    (idx: number) => {
-      analysis.clearTiles();
-      setYearIdx(idx);
-    },
-    [analysis],
-  );
-
   const handleLocationChange = useCallback((location: Location) => {
     setLocationId(location.id);
     mapRef.current?.flyTo({
@@ -424,7 +414,7 @@ export default function App() {
         probabilityThreshold={probabilityThreshold}
         status={status}
         onLocationChange={handleLocationChange}
-        onYearIdxChange={handleYearIdxChange}
+        onYearIdxChange={setYearIdx}
         onRgbChange={setRgb}
         onModeChange={setMode}
         onInputPathChange={setInputPath}

@@ -141,20 +141,6 @@ export class TileAnalysis {
   }
 
   /**
-   * Unregister every tile and free their resources after `delayMs`.
-   *
-   * deck.gl does not call `onTileUnload` when a `TileLayer` is replaced, as
-   * deck.gl-raster does when the selection changes, so the layer's tiles
-   * would leak. The delay lets deck.gl draw without them first.
-   */
-  clearTiles(delayMs = 1000): void {
-    const tiles = this.residentTiles();
-    this.tiles.clear();
-    this.update({});
-    setTimeout(() => void this.destroyAfterRuns(tiles), delayMs);
-  }
-
-  /**
    * Free tiles once the runs already queued are done, since one of them may
    * read a tile's GPU buffer. Passes only queue runs for registered tiles.
    */

@@ -321,13 +321,18 @@ Every awkward API and wrong assumption, in the order I hit them.
     data in place. The example keeps its own registry and bumps
     `updateTriggers.renderTile` after writing into existing textures. It works,
     but every "re-run an analysis on loaded tiles" use needs the same code.
-15. **`onTileUnload` is not called when the inner `TileLayer` is replaced.**
-    deck.gl-raster replaces it when the selection changes (the year here), and
-    deck.gl's `Tileset2D.finalize()` drops its tiles without calling
-    `onTileUnload`, so per-tile GPU resources leak. `aef-mosaic`, which frees
-    its textures in `onTileUnload`, should leak the same way (read from the
-    source, not measured). This example clears its registry on a year change
-    and frees the old tiles a second later.
+15. **A year change needs no cleanup of its own.** deck.gl-raster replaces
+    the inner `TileLayer` when the selection changes, and
+    `RasterTileset2D.finalize()` calls `onTileUnload` for every cached tile,
+    so the old tiles are freed. An earlier version of this example cleared
+    its registry by hand on a year change, which freed each tile twice.
+    Measured on `aef-mosaic`: ten year changes left no orphaned textures. A
+    different leak does apply with deck.gl 9.4.1: a tile evicted from the
+    cache while it is still loading keeps its texture (see
+    [#876](https://github.com/developmentseed/deck.gl-raster/issues/876) and
+    [visgl/deck.gl#10883](https://github.com/visgl/deck.gl/pull/10883)). This
+    example and `aef-mosaic` set `maxCacheSize: 10` with about 15 tiles in
+    view, which makes that eviction common on short pans.
 16. **No helper for "the pixel under the cursor".** The example projects the
     click with `tilesetDescriptor.projectFrom4326`, then inverts tile (0, 0)'s
     affine transform to get a pixel in the whole level. That assumes an affine
