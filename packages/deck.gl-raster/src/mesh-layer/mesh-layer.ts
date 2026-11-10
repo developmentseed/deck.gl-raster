@@ -186,7 +186,11 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     // shaders.
     const { source: _wgslSource, ...upstreamShaders } = super.getShaders();
 
-    const modules: ShaderModule[] = upstreamShaders.modules;
+    // Drop upstream's `phongMaterial` (and its `lighting` dependency): the
+    // fragment shader applies no lighting.
+    const modules: ShaderModule[] = upstreamShaders.modules.filter(
+      (m: ShaderModule) => m.name !== "phongMaterial",
+    );
     for (const m of this._resolveRenderPipeline()) {
       modules.push(m.module);
     }
