@@ -131,8 +131,8 @@ export class TileAnalysis {
     if (this.tiles.get(tile.key) === tile) {
       this.tiles.delete(tile.key);
     }
-    destroyTile(tile);
     this.update({});
+    void this.destroyAfterRuns([tile]);
   }
 
   /**
@@ -146,11 +146,19 @@ export class TileAnalysis {
     const tiles = this.residentTiles();
     this.tiles.clear();
     this.update({});
-    setTimeout(() => {
-      for (const tile of tiles) {
-        destroyTile(tile);
-      }
-    }, delayMs);
+    setTimeout(() => void this.destroyAfterRuns(tiles), delayMs);
+  }
+
+  /**
+   * Free tiles once the runs already queued are done, since one of them may
+   * read a tile's GPU buffer. Passes only queue runs for registered tiles.
+   */
+  private async destroyAfterRuns(tiles: AefTileData[]): Promise<void> {
+    const runner = await this.runner?.catch(() => null);
+    await runner?.idle();
+    for (const tile of tiles) {
+      destroyTile(tile);
+    }
   }
 
   /** Set the task to run on every tile, or `null` to stop running models. */
@@ -270,7 +278,11 @@ export class TileAnalysis {
       if (generation !== this.generation) {
         return;
       }
-      if (tile.result?.generation === generation) {
+      // Skip tiles done already, or unloaded since the pass started
+      if (
+        tile.result?.generation === generation ||
+        this.tiles.get(tile.key) !== tile
+      ) {
         continue;
       }
       try {

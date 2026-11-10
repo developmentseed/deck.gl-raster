@@ -70,9 +70,9 @@ const MODES: { value: Mode; label: string }[] = [
 ];
 
 const INPUT_PATHS: { value: InputPath; label: string }[] = [
-  { value: "int8", label: "int8, dequantized in the model (Cast on CPU)" },
-  { value: "float32", label: "float32, dequantized in JS (all on GPU)" },
-  { value: "gpu", label: "float32 kept on the GPU per tile (16 MB each)" },
+  { value: "int8", label: "int8 tensor, model dequantizes" },
+  { value: "float32", label: "float32 tensor, JS dequantizes" },
+  { value: "gpu", label: "float32 buffer kept on the GPU" },
 ];
 
 /**
@@ -461,8 +461,10 @@ function EngineControls({
             <HelpTooltip label="Model input info">
               How each tile's int8 embeddings reach the model. ONNX Runtime
               Web's WebGPU provider has no int8 Cast, so the int8 model runs
-              that node on the CPU. The GPU option dequantizes each tile once
-              and keeps it in a buffer on ONNX Runtime's own WebGPU device.
+              that node on the CPU. The float32 option dequantizes in JavaScript
+              and runs every node on WebGPU. The GPU option dequantizes each
+              tile once and keeps it in a 16 MB buffer on ONNX Runtime's own
+              WebGPU device: the fastest per query, and the most memory.
             </HelpTooltip>
           </Text>
         }
