@@ -15,18 +15,18 @@ export type ValueOverlayProps = {
   rangeMin: number;
   /** Value drawn with the last colormap color. */
   rangeMax: number;
-  /** Values below this keep the dimmed RGB composite instead. */
+  /** Pixels with a value below this are not drawn. */
   threshold: number;
-  /** Brightness of the RGB composite below the threshold, 0 to 1. */
-  backdrop: number;
+  /** Opacity of the drawn pixels, 0 to 1. */
+  opacity: number;
 };
 
 const MODULE_NAME = "valueOverlay";
 
 /**
- * A shader module that runs after the RGB composite: pixels whose model value
- * is at least `threshold` take the colormap color of the value rescaled from
- * `[rangeMin, rangeMax]`; the rest keep the composite, dimmed by `backdrop`.
+ * A shader module that replaces the tile's color: pixels whose model value is
+ * at least `threshold` take the colormap color of the value rescaled from
+ * `[rangeMin, rangeMax]`, at `opacity`. The rest are not drawn.
  */
 export const ValueOverlay = {
   name: MODULE_NAME,
@@ -35,7 +35,7 @@ uniform ${MODULE_NAME}Uniforms {
   float rangeMin;
   float rangeMax;
   float threshold;
-  float backdrop;
+  float opacity;
   int colormapIndex;
 } ${MODULE_NAME};
 `,
@@ -47,27 +47,29 @@ uniform sampler2DArray valueColormapTex;
 `,
     "fs:DECKGL_FILTER_COLOR": /* glsl */ `
       float valueOverlay_value = texture(valueTex, geometry.uv).r;
-      if (valueOverlay_value >= ${MODULE_NAME}.threshold) {
-        float valueOverlay_t = clamp(
-          (valueOverlay_value - ${MODULE_NAME}.rangeMin) /
-            (${MODULE_NAME}.rangeMax - ${MODULE_NAME}.rangeMin),
-          0.0,
-          1.0
-        );
-        color = texture(
+      if (valueOverlay_value < ${MODULE_NAME}.threshold) {
+        discard;
+      }
+      float valueOverlay_t = clamp(
+        (valueOverlay_value - ${MODULE_NAME}.rangeMin) /
+          (${MODULE_NAME}.rangeMax - ${MODULE_NAME}.rangeMin),
+        0.0,
+        1.0
+      );
+      color = vec4(
+        texture(
           valueColormapTex,
           vec3(valueOverlay_t, 0.5, float(${MODULE_NAME}.colormapIndex))
-        );
-      } else {
-        color.rgb *= ${MODULE_NAME}.backdrop;
-      }
+        ).rgb,
+        ${MODULE_NAME}.opacity
+      );
     `,
   },
   uniformTypes: {
     rangeMin: "f32",
     rangeMax: "f32",
     threshold: "f32",
-    backdrop: "f32",
+    opacity: "f32",
     colormapIndex: "i32",
   },
   getUniforms: (props: Partial<ValueOverlayProps>) => {
@@ -75,7 +77,7 @@ uniform sampler2DArray valueColormapTex;
       rangeMin: props.rangeMin ?? 0,
       rangeMax: props.rangeMax ?? 1,
       threshold: props.threshold ?? 0,
-      backdrop: props.backdrop ?? 0.4,
+      opacity: props.opacity ?? 1,
       colormapIndex: props.colormapIndex ?? 0,
       valueTex: props.valueTex,
       valueColormapTex: props.colormapTexture,

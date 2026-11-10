@@ -69,9 +69,9 @@ there.
    and queues every `run` call, because two runs in flight on one session never
    resolve (see the friction log).
 6. Results come back to the CPU (`await tensor.getData()`, 256 KiB per tile)
-   and go into WebGL2 textures. `renderTile` draws the RGB composite, then a
-   shader module (`src/gpu/value-overlay.ts` or `src/gpu/cluster-overlay.ts`)
-   colors the output. Threshold, color range, colormap and opacity are
+   and go into WebGL2 textures. A shader module (`src/gpu/value-overlay.ts`
+   or `src/gpu/cluster-overlay.ts`) colors the output over the basemap, and
+   pixels below the threshold are not drawn. Threshold, color range, colormap and opacity are
    uniforms, so dragging those sliders runs no model.
 
 ### Models

@@ -29,7 +29,7 @@ export const MAX_CLUSTERS = CLUSTER_COLORS.length;
 export type ClusterOverlayProps = {
   /** r32float texture with one cluster index per pixel. */
   clusterTex: Texture;
-  /** How much the cluster color covers the RGB composite, 0 to 1. */
+  /** Opacity of the cluster colors, 0 to 1. */
   opacity: number;
 };
 
@@ -41,8 +41,8 @@ const PALETTE_GLSL = CLUSTER_COLORS.map(
 ).join(",\n  ");
 
 /**
- * A shader module that runs after the RGB composite and blends in the color
- * of each pixel's cluster index.
+ * A shader module that replaces the tile's color with the color of each
+ * pixel's cluster index, at `opacity`.
  */
 export const ClusterOverlay = {
   name: MODULE_NAME,
@@ -64,8 +64,7 @@ const vec3 CLUSTER_PALETTE[${MAX_CLUSTERS}] = vec3[${MAX_CLUSTERS}](
         0,
         ${MAX_CLUSTERS - 1}
       );
-      color.rgb = mix(
-        color.rgb,
+      color = vec4(
         CLUSTER_PALETTE[clusterOverlay_index],
         ${MODULE_NAME}.opacity
       );

@@ -13,8 +13,7 @@ loaded tile:
 - **Classifier**: click a few examples of what you are looking for, and
   shift-click a few of what you are not. A logistic regression fit in
   JavaScript gives every pixel a probability.
-- **RGB**: the three-band composite of `aef-mosaic`, also drawn under the other
-  modes so you can orient yourself.
+- **RGB**: the three-band composite of `aef-mosaic`.
 
 A new query, new centroids or new examples run the models again on the tiles
 already loaded, without fetching them again. The query also carries across
@@ -60,9 +59,10 @@ pnpm dev
 4. ONNX Runtime Web creates and owns its own WebGPU device, while deck.gl draws
    with WebGL2, so each output (256 KB per tile) comes back to the CPU and is
    written into the tile's WebGL2 texture.
-5. `renderTile` draws the RGB composite, then a shader module colors the model
-   output: a colormap above a threshold for similarity and probability, or
-   categorical colors for clusters.
+5. A shader module colors the model output over the basemap: a colormap above
+   a threshold for similarity and probability, or categorical colors for
+   clusters. Pixels below the threshold are not drawn, and neither is a mode
+   with nothing to show yet, such as a classifier with no examples.
 
 ONNX Runtime's JavaScript is a dynamic import, and its 29 MB WebAssembly binary
 (7 MB compressed) is fetched when a model is first needed. The app starts in

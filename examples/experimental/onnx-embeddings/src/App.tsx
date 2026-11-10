@@ -27,7 +27,7 @@ import { loadTile } from "./aef/get-tile-data.js";
 import { locatePixel } from "./aef/locate-pixel.js";
 import type { Location } from "./aef/locations.js";
 import { LOCATIONS } from "./aef/locations.js";
-import type { OverlaySettings, RgbSettings } from "./aef/render-tile.js";
+import type { RgbSettings, TileView } from "./aef/render-tile.js";
 import { makeRenderTile } from "./aef/render-tile.js";
 import { buildSelection } from "./aef/selection.js";
 import { sphericalKMeans } from "./analysis/kmeans.js";
@@ -73,7 +73,7 @@ export default function App() {
   const [inputPath, setInputPath] = useState<InputPath>(DEFAULT_INPUT_PATH);
   const [colormapName, setColormapName] =
     useState<keyof typeof COLORMAP_INDEX>("magma");
-  const [backdrop, setBackdrop] = useState(0.45);
+  const [opacity, setOpacity] = useState(0.85);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [query, setQuery] = useState<LabeledPoint | null>(null);
@@ -84,7 +84,6 @@ export default function App() {
 
   const [clusterCount, setClusterCount] = useState(6);
   const [clusterFit, setClusterFit] = useState<ClusterFit | null>(null);
-  const [clusterOpacity, setClusterOpacity] = useState(0.75);
 
   const [points, setPoints] = useState<LabeledPoint[]>([]);
   const [nextLabel, setNextLabel] = useState<0 | 1>(1);
@@ -273,41 +272,45 @@ export default function App() {
     [analysis],
   );
 
-  const overlay = useMemo<OverlaySettings>(() => {
+  const view = useMemo<TileView>(() => {
+    if (mode === "rgb") {
+      return { kind: "rgb" };
+    }
+    // Nothing to draw until the mode has a query, a fit or a classifier
+    if (!task) {
+      return { kind: "none" };
+    }
     if (mode === "clusters") {
-      return { kind: "clusters", opacity: clusterOpacity };
+      return { kind: "clusters", opacity };
     }
-    if ((mode === "similarity" || mode === "classifier") && colormapTexture) {
-      const [rangeMin, rangeMax] =
-        mode === "similarity" ? similarityRange : [probabilityThreshold, 1];
-      return {
-        kind: "value",
-        model: mode,
-        colormapTexture,
-        colormapIndex: COLORMAP_INDEX[colormapName],
-        rangeMin,
-        rangeMax,
-        threshold:
-          mode === "similarity" ? similarityThreshold : probabilityThreshold,
-        backdrop,
-      };
+    if (!colormapTexture) {
+      return { kind: "none" };
     }
-    return { kind: "none" };
+    const [rangeMin, rangeMax] =
+      mode === "similarity" ? similarityRange : [probabilityThreshold, 1];
+    return {
+      kind: "value",
+      model: mode,
+      colormapTexture,
+      colormapIndex: COLORMAP_INDEX[colormapName],
+      rangeMin,
+      rangeMax,
+      threshold:
+        mode === "similarity" ? similarityThreshold : probabilityThreshold,
+      opacity,
+    };
   }, [
     mode,
-    clusterOpacity,
+    task,
+    opacity,
     colormapTexture,
     colormapName,
     similarityRange,
     similarityThreshold,
     probabilityThreshold,
-    backdrop,
   ]);
 
-  const renderTile = useMemo(
-    () => makeRenderTile(rgb, overlay),
-    [rgb, overlay],
-  );
+  const renderTile = useMemo(() => makeRenderTile(rgb, view), [rgb, view]);
 
   const handleLocationChange = useCallback((location: Location) => {
     setLocationId(location.id);
@@ -341,7 +344,7 @@ export default function App() {
           // Tiles are heavy, so limit memory with a small cache
           maxCacheSize: 10,
           updateTriggers: {
-            renderTile: [rgb, overlay, status?.renderVersion],
+            renderTile: [rgb, view, status?.renderVersion],
           },
           // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
           // doesn't know about it.
@@ -401,14 +404,13 @@ export default function App() {
         mode={mode}
         inputPath={inputPath}
         colormapName={colormapName}
-        backdrop={backdrop}
+        opacity={opacity}
         notice={notice}
         query={query}
         similarityRange={similarityRange}
         similarityThreshold={similarityThreshold}
         clusterCount={clusterCount}
         clusterFit={clusterFit}
-        clusterOpacity={clusterOpacity}
         points={points}
         nextLabel={nextLabel}
         probabilityThreshold={probabilityThreshold}
@@ -419,12 +421,11 @@ export default function App() {
         onModeChange={setMode}
         onInputPathChange={setInputPath}
         onColormapNameChange={setColormapName}
-        onBackdropChange={setBackdrop}
+        onOpacityChange={setOpacity}
         onSimilarityRangeChange={setSimilarityRange}
         onSimilarityThresholdChange={setSimilarityThreshold}
         onClusterCountChange={setClusterCount}
         onRefitClusters={fitClusters}
-        onClusterOpacityChange={setClusterOpacity}
         onNextLabelChange={setNextLabel}
         onClearPoints={() => setPoints([])}
         onProbabilityThresholdChange={setProbabilityThreshold}

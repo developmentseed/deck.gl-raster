@@ -16,6 +16,7 @@ import {
   RangeSlider,
   ControlPanel as SharedControlPanel,
 } from "deck.gl-raster-examples-shared";
+import type { ReactNode } from "react";
 import { NUM_BANDS, NUM_YEARS, YEAR_ORIGIN } from "../aef/constants.js";
 import type { Location } from "../aef/locations.js";
 import { LOCATIONS } from "../aef/locations.js";
@@ -69,10 +70,31 @@ const MODES: { value: Mode; label: string }[] = [
   { value: "classifier", label: "Classifier" },
 ];
 
-const INPUT_PATHS: { value: InputPath; label: string }[] = [
-  { value: "int8", label: "int8 tensor, model dequantizes" },
-  { value: "float32", label: "float32 tensor, JS dequantizes" },
-  { value: "gpu", label: "float32 buffer kept on the GPU" },
+/** The ways a tile's int8 embeddings can reach the model. */
+const INPUT_PATHS: {
+  value: InputPath;
+  label: string;
+  /** What the option costs, shown under the select. */
+  description: string;
+}[] = [
+  {
+    value: "int8",
+    label: "Raw int8, converted by the model",
+    description:
+      "Sends the stored bytes, 4 MB per tile, on every run. The model converts them to float, and that one step runs on the CPU. Uses no extra memory.",
+  },
+  {
+    value: "float32",
+    label: "float32, converted in JavaScript",
+    description:
+      "JavaScript converts each tile to float first, then sends 16 MB per tile on every run. The whole model runs on the GPU, but the larger upload makes this the slowest.",
+  },
+  {
+    value: "gpu",
+    label: "float32, kept on the GPU",
+    description:
+      "Converts each tile once and leaves the float copy on the GPU, so a run uploads nothing. The fastest per run, at 16 MB of GPU memory per tile.",
+  },
 ];
 
 /**
@@ -86,14 +108,13 @@ export type ControlPanelProps = {
   mode: Mode;
   inputPath: InputPath;
   colormapName: ColormapName;
-  backdrop: number;
+  opacity: number;
   notice: string | null;
   query: LabeledPoint | null;
   similarityRange: [number, number];
   similarityThreshold: number;
   clusterCount: number;
   clusterFit: ClusterFit | null;
-  clusterOpacity: number;
   points: readonly LabeledPoint[];
   nextLabel: 0 | 1;
   probabilityThreshold: number;
@@ -104,20 +125,19 @@ export type ControlPanelProps = {
   onModeChange: (mode: Mode) => void;
   onInputPathChange: (inputPath: InputPath) => void;
   onColormapNameChange: (name: ColormapName) => void;
-  onBackdropChange: (value: number) => void;
+  onOpacityChange: (value: number) => void;
   onSimilarityRangeChange: (range: [number, number]) => void;
   onSimilarityThresholdChange: (value: number) => void;
   onClusterCountChange: (k: number) => void;
   onRefitClusters: () => void;
-  onClusterOpacityChange: (value: number) => void;
   onNextLabelChange: (label: 0 | 1) => void;
   onClearPoints: () => void;
   onProbabilityThresholdChange: (value: number) => void;
 };
 
 /**
- * Overlay control panel: location and year, the analysis mode and its
- * settings, the ONNX Runtime input path and timings, and the RGB composite.
+ * Overlay control panel: location and year, the mode and its settings, and
+ * the ONNX Runtime input path and timings.
  */
 export function ControlPanel(props: ControlPanelProps) {
   const { mode, onModeChange } = props;
@@ -158,7 +178,17 @@ export function ControlPanel(props: ControlPanelProps) {
 
         <LocationAndYear {...props} />
 
-        <Field label="Mode">
+        <Field
+          label={
+            <LabelWithHelp label="Mode">
+              {"What is drawn over the basemap.\n\n" +
+                "• RGB: three of the 64 embedding bands as red, green and blue.\n" +
+                "• Similarity: how close each pixel is to one you click.\n" +
+                "• Clusters: pixels grouped by how alike they are.\n" +
+                "• Classifier: a model trained on the points you click."}
+            </LabelWithHelp>
+          }
+        >
           <SegmentGroup.Root
             size="sm"
             value={mode}
@@ -184,7 +214,7 @@ export function ControlPanel(props: ControlPanelProps) {
 
         {mode !== "rgb" && <EngineControls {...props} />}
 
-        <RgbControls {...props} />
+        {mode === "rgb" && <RgbControls {...props} />}
 
         <Text
           fontSize="xs"
@@ -270,6 +300,7 @@ function SimilarityControls({
       </Text>
       <ValueSlider
         label={`Threshold: ${similarityThreshold.toFixed(2)}`}
+        help="Pixels less similar than this are not drawn. Similarity runs from -1 (opposite) to 1 (identical)."
         min={-1}
         max={1}
         step={0.01}
@@ -277,7 +308,14 @@ function SimilarityControls({
         onChange={onSimilarityThresholdChange}
       />
       <Field
-        label={`Color range: ${similarityRange[0].toFixed(2)} – ${similarityRange[1].toFixed(2)}`}
+        label={
+          <LabelWithHelp
+            label={`Color range: ${similarityRange[0].toFixed(2)} – ${similarityRange[1].toFixed(2)}`}
+          >
+            The similarity values that map to the two ends of the colormap.
+            Narrow it to bring out differences among the most similar pixels.
+          </LabelWithHelp>
+        }
       >
         <RangeSlider
           min={-1}
@@ -288,7 +326,7 @@ function SimilarityControls({
           thumbLabels={["Range min", "Range max"]}
         />
       </Field>
-      <ColormapAndBackdrop {...rest} />
+      <ColormapAndOpacity {...rest} />
     </Stack>
   );
 }
@@ -296,10 +334,10 @@ function SimilarityControls({
 function ClusterControls({
   clusterCount,
   clusterFit,
-  clusterOpacity,
+  opacity,
   onClusterCountChange,
   onRefitClusters,
-  onClusterOpacityChange,
+  onOpacityChange,
 }: ControlPanelProps) {
   return (
     <Stack gap="3">
@@ -309,6 +347,7 @@ function ClusterControls({
       </Text>
       <ValueSlider
         label={`Clusters: ${clusterCount}`}
+        help="How many groups to split the pixels into. The groups are fitted on the tiles loaded now, so press the fit button again after moving the map."
         min={2}
         max={MAX_CLUSTERS}
         step={1}
@@ -326,12 +365,12 @@ function ClusterControls({
         </Button>
       </HStack>
       <ValueSlider
-        label={`Opacity: ${clusterOpacity.toFixed(2)}`}
+        label={`Opacity: ${opacity.toFixed(2)}`}
         min={0}
         max={1}
         step={0.05}
-        value={clusterOpacity}
-        onChange={onClusterOpacityChange}
+        value={opacity}
+        onChange={onOpacityChange}
       />
     </Stack>
   );
@@ -388,25 +427,26 @@ function ClassifierControls({
       </Text>
       <ValueSlider
         label={`Probability threshold: ${probabilityThreshold.toFixed(2)}`}
+        help="Pixels the classifier rates below this are not drawn. 0.5 means more likely a match than not."
         min={0}
         max={1}
         step={0.01}
         value={probabilityThreshold}
         onChange={onProbabilityThresholdChange}
       />
-      <ColormapAndBackdrop {...rest} />
+      <ColormapAndOpacity {...rest} />
     </Stack>
   );
 }
 
-function ColormapAndBackdrop({
+function ColormapAndOpacity({
   colormapName,
-  backdrop,
+  opacity,
   onColormapNameChange,
-  onBackdropChange,
+  onOpacityChange,
 }: Pick<
   ControlPanelProps,
-  "colormapName" | "backdrop" | "onColormapNameChange" | "onBackdropChange"
+  "colormapName" | "opacity" | "onColormapNameChange" | "onOpacityChange"
 >) {
   return (
     <HStack gap="2" align="end">
@@ -428,12 +468,12 @@ function ColormapAndBackdrop({
         </NativeSelect.Root>
       </Field>
       <ValueSlider
-        label={`Backdrop: ${backdrop.toFixed(2)}`}
+        label={`Opacity: ${opacity.toFixed(2)}`}
         min={0}
         max={1}
         step={0.05}
-        value={backdrop}
-        onChange={onBackdropChange}
+        value={opacity}
+        onChange={onOpacityChange}
       />
     </HStack>
   );
@@ -456,17 +496,15 @@ function EngineControls({
     >
       <Field
         label={
-          <Text as="span" display="inline-flex" alignItems="center" gap="1">
-            Model input
-            <HelpTooltip label="Model input info">
-              How each tile's int8 embeddings reach the model. ONNX Runtime
-              Web's WebGPU provider has no int8 Cast, so the int8 model runs
-              that node on the CPU. The float32 option dequantizes in JavaScript
-              and runs every node on WebGPU. The GPU option dequantizes each
-              tile once and keeps it in a 16 MB buffer on ONNX Runtime's own
-              WebGPU device: the fastest per query, and the most memory.
-            </HelpTooltip>
-          </Text>
+          <LabelWithHelp label="Model input">
+            {"The embeddings are stored as int8 and the models compute in float32. This picks where that conversion happens.\n\n" +
+              INPUT_PATHS.map(
+                ({ label, description }) => `• ${label}: ${description}`,
+              ).join("\n\n")}
+          </LabelWithHelp>
+        }
+        helperText={
+          INPUT_PATHS.find(({ value }) => value === inputPath)?.description
         }
       >
         <NativeSelect.Root size="sm">
@@ -549,12 +587,32 @@ function RgbControls({ rgb, bandLabels, onRgbChange }: ControlPanelProps) {
   );
 }
 
+/** A field label with a "?" tooltip beside it. */
+function LabelWithHelp({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <Text as="span" display="inline-flex" alignItems="center" gap="1">
+      {label}
+      <HelpTooltip label={`About ${label.split(":")[0]}`}>
+        {children}
+      </HelpTooltip>
+    </Text>
+  );
+}
+
 function megabytes(bytes: number | undefined): string {
   return ((bytes ?? 0) / 2 ** 20).toFixed(0);
 }
 
 type ValueSliderProps = {
   label: string;
+  /** Explanation shown in a tooltip beside the label. */
+  help?: string;
   min: number;
   max: number;
   step: number;
@@ -564,6 +622,7 @@ type ValueSliderProps = {
 
 function ValueSlider({
   label,
+  help,
   min,
   max,
   step,
@@ -571,7 +630,9 @@ function ValueSlider({
   onChange,
 }: ValueSliderProps) {
   return (
-    <Field label={label}>
+    <Field
+      label={help ? <LabelWithHelp label={label}>{help}</LabelWithHelp> : label}
+    >
       <Slider.Root
         size="sm"
         width="full"
