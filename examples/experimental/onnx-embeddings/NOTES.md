@@ -38,28 +38,10 @@ works well. Details below.
 
 The chrome-devtools browser was not available to this session (another
 session's MCP server held its profile), so every browser check ran in headless
-Chromium through Playwright. The screenshots in `notes/` come from there.
+Chromium through Playwright. The screenshots in the pull request come from
+there.
 
 [AEF GeoZarr mosaic]: https://source.coop/tge-labs/aef-mosaic
-
-## Screenshots
-
-From headless Chromium at 1280 × 800, resized:
-
-- [`notes/00-rgb.jpg`](notes/00-rgb.jpg): the RGB composite (bands A00, A16,
-  A32), as in `aef-mosaic`.
-- [`notes/02-similarity.jpg`](notes/02-similarity.jpg): similarity to a pixel
-  in a park; Golden Gate Park, the Presidio and other parks light up.
-- [`notes/03-similarity-second-query.jpg`](notes/03-similarity-second-query.jpg):
-  a second query, run on the same 15 tiles with no refetch.
-- [`notes/07-similarity-2017.jpg`](notes/07-similarity-2017.jpg): the 2025
-  query on 2017 tiles, after switching the year.
-- [`notes/04-clusters.jpg`](notes/04-clusters.jpg): six k-means clusters over
-  the loaded tiles.
-- [`notes/05-classifier.jpg`](notes/05-classifier.jpg): a logistic regression
-  from two positive (green) and two negative (red) clicks.
-- [`notes/06-scale-nile-delta.jpg`](notes/06-scale-nile-delta.jpg): similarity
-  over 60 tiles of fields in the Nile delta.
 
 ## Design
 
@@ -94,8 +76,9 @@ From headless Chromium at 1280 × 800, resized:
 
 ### Models
 
-`models/make_models.py` builds six graphs with `onnx.helper` and checks them
-against NumPy with Python's `onnxruntime` (max error 1.4e-6). Each reshapes the
+`models/make_models.py` builds six graphs with onnxscript, each written as a
+Python function, and checks them against NumPy with Python's `onnxruntime`
+(max error 1.4e-6). Each reshapes the
 `[1, 64, h, w]` tile to a `[64, pixels]` matrix and multiplies it by a matrix
 that is a model input:
 
@@ -311,7 +294,7 @@ Every awkward API and wrong assumption, in the order I hit them.
 7. **No interop with deck.gl's device.** deck.gl draws with WebGL2 here, and
    ONNX Runtime runs on its own WebGPU device, so every output goes through the
    CPU. Outputs are small (256 KiB per tile); the inputs are the problem.
-8. **The binary is 29 MB** for models of a few hundred bytes. The
+8. **The binary is 29 MB** for models of about a kilobyte. The
    `onnxruntime-web/webgpu` bundle loads `ort-wasm-simd-threaded.asyncify.wasm`
    (not the `jsep` build); the package exports that path, so a Vite `?url`
    import plus `env.wasm.wasmPaths = { wasm: url }` serves it with no CDN. I
@@ -320,7 +303,8 @@ Every awkward API and wrong assumption, in the order I hit them.
    3.3 ms for the lookup-table loop, while the int8 path's whole run is 5.7 ms.
    I expected the float32 path to win.
 10. **Graphs come from Python.** There is no graph builder in the JavaScript
-    package; I wrote the models with `onnx.helper` and committed the bytes. A
+    package; the models are written in Python with onnxscript and the bytes
+    are committed. A
     tool that builds graphs from user expressions in the browser would have to
     encode ONNX protobuf itself.
 11. **Errors are opaque.** A wrong-device buffer surfaces as `failed to call

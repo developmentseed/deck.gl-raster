@@ -50,9 +50,9 @@ pnpm dev
    all the outputs into the tiles' existing `r32float` textures at once, and
    bumps `updateTriggers.renderTile`. A tile that loads later runs the model
    in `getTileData`, before it is first drawn.
-3. The models are tiny ONNX graphs of a few hundred bytes, built by
-   [`models/make_models.py`](models/make_models.py) and served from
-   `public/models/`. Each reshapes the `[1, 64, h, w]` tile to a
+3. The models are tiny ONNX graphs of about a kilobyte, written as Python
+   functions in [`models/make_models.py`](models/make_models.py) and served
+   from `public/models/`. Each reshapes the `[1, 64, h, w]` tile to a
    `[64, pixels]` matrix and multiplies it by the query, the centroids or the
    classifier weights. Those are model inputs, so changing them needs no new
    model. The cluster model picks the nearest centroid with float operations
@@ -75,6 +75,5 @@ example taught us about ONNX Runtime Web as an engine.
 To rebuild the models, and check them against NumPy:
 
 ```bash
-uv run --no-project --python 3.13 --with onnx --with numpy --with onnxruntime \
-  python models/make_models.py public/models --check
+uv run models/make_models.py public/models
 ```
