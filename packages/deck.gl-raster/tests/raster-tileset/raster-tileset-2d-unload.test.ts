@@ -7,6 +7,7 @@ import { compose, scale, translation } from "@developmentseed/affine";
 import { describe, expect, it, vi } from "vitest";
 import { AffineTileset } from "../../src/raster-tileset/affine-tileset.js";
 import { AffineTilesetLevel } from "../../src/raster-tileset/affine-tileset-level.js";
+import type { RasterTileset2DOptions } from "../../src/raster-tileset/raster-tileset-2d.js";
 import { RasterTileset2D } from "../../src/raster-tileset/raster-tileset-2d.js";
 
 const identity = (x: number, y: number): [number, number] => [x, y];
@@ -48,14 +49,33 @@ function settle(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/** A tileset with a spied `onTileUnload` and no request throttling. */
-function makeTileset(getTileData: Tileset2DProps["getTileData"]) {
+/** A viewport inside one finest-level tile: the one east or west of the origin. */
+function viewportOverOneTile(side: "west" | "east"): WebMercatorViewport {
+  // About 8 m from the origin along both axes, in degrees.
+  const offset = 7e-5;
+  return new WebMercatorViewport({
+    longitude: side === "west" ? -offset : offset,
+    latitude: offset,
+    zoom: 18,
+    width: 8,
+    height: 8,
+  });
+}
+
+/** A tileset with spied `onTileLoad` and `onTileUnload`, and no request throttling. */
+function makeTileset(
+  getTileData: Tileset2DProps["getTileData"],
+  options: Partial<Tileset2DProps> = {},
+  rasterOptions: RasterTileset2DOptions = {},
+) {
+  const onTileLoad = vi.fn();
   const onTileUnload = vi.fn();
   const tileset = new RasterTileset2D(
-    { getTileData, onTileUnload, maxRequests: 0 },
+    { getTileData, onTileLoad, onTileUnload, maxRequests: 0, ...options },
     descriptor,
+    rasterOptions,
   );
-  return { tileset, onTileUnload };
+  return { tileset, onTileLoad, onTileUnload };
 }
 
 /** `getTileData` that returns data only when the test resolves it. */
@@ -69,6 +89,11 @@ function deferredTileData() {
     }
   };
   return { getTileData, pending, resolveAll };
+}
+
+/** The tiles that `onTileLoad` was called with. */
+function loadedTiles(onTileLoad: ReturnType<typeof vi.fn>): Tile2DHeader[] {
+  return onTileLoad.mock.calls.map(([tile]) => tile as Tile2DHeader);
 }
 
 /** The tiles that `onTileUnload` was called with. */
@@ -111,6 +136,38 @@ describe("RasterTileset2D tile unloading", () => {
     expect(tiles.every((tile) => unloaded.includes(tile))).toBe(true);
     expect(unloaded.every((tile) => tile.content !== null)).toBe(true);
   });
+
+  it.each([false, true])(
+    "unloads a tile evicted while loading once its data arrives (abortUnwantedLoads: %s)",
+    async (abortUnwantedLoads) => {
+      const { getTileData, resolveAll } = deferredTileData();
+      const { tileset, onTileLoad, onTileUnload } = makeTileset(
+        getTileData,
+        { maxCacheSize: 0 },
+        { abortUnwantedLoads },
+      );
+      tileset.update(viewportOverOneTile("west"));
+      await settle();
+      const tiles = [...tileset.tiles];
+      expect(tiles.length).toBeGreaterThan(0);
+
+      // Loading another tile evicts the first ones, which are still loading.
+      tileset.update(viewportOverOneTile("east"));
+      await settle();
+      expect(unloadedTiles(onTileUnload)).toEqual(tiles);
+      expect(tiles.every((tile) => tile.content === null)).toBe(true);
+      onTileUnload.mockClear();
+      // getTileData ignores the abort and returns data anyway.
+      resolveAll();
+      await settle();
+
+      expect(unloadedTiles(onTileUnload)).toEqual(tiles);
+      expect(tiles.every((tile) => tile.content !== null)).toBe(true);
+      expect(loadedTiles(onTileLoad).some((tile) => tiles.includes(tile))).toBe(
+        false,
+      );
+    },
+  );
 
   it("unloads a tile whose load stops at the abort", async () => {
     const { tileset, onTileUnload } = makeTileset(
