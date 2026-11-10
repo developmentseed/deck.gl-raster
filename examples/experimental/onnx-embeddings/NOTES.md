@@ -19,7 +19,7 @@ The compute itself is fast: about **1 ms** per 256 × 256 × 64 tile once the
 data is on ONNX Runtime's GPU device. Everything around it is the cost: the
 29 MB WebAssembly binary, a WebGPU device that ONNX Runtime owns apart from
 deck.gl's WebGL2 context, int8 data that the WebGPU provider cannot cast, and a
-16 MiB float32 upload per tile per run. As the engine for a raster expression tool,
+16 MiB float32 upload per tile per run. As a general engine for per-pixel band math,
 it is heavy and leaky; as a way to run a small trained model per pixel, it
 works well. Details below.
 
@@ -361,7 +361,7 @@ Every awkward API and wrong assumption, in the order I hit them.
 
 ## What this says about ONNX Runtime Web as an engine
 
-For someone deciding whether to build a raster expression tool on it.
+For someone deciding whether to build per-pixel raster math on it.
 
 ### Pros
 
@@ -408,7 +408,7 @@ For someone deciding whether to build a raster expression tool on it.
 
 ONNX Runtime Web is a good fit for applying a small trained model to every
 pixel of float data that can stay on its device, and for prototyping per-pixel
-linear algebra quickly. As the core of a raster expression engine, where most
+linear algebra quickly. As the core of a per-pixel band math engine, where most
 work is elementwise math on integer rasters that already sit in the renderer's
 GPU memory, it adds a 29 MB runtime, a second GPU device and a CPU round trip
 per tile, and its per-tile time is dominated by moving data the renderer
