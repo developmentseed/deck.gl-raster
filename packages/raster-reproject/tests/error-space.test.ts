@@ -160,7 +160,7 @@ describe("RasterReprojector _errorSpace", () => {
     expect(r.getMaxError()).toBeCloseTo((dx * dx) / 4 / pixelSize, 9);
   });
 
-  it("makes one forward projection per test point, plus eight", () => {
+  it("projects each measured triangle's centroid, and each edge midpoint once", () => {
     let forwardCalls = 0;
     const counting: ReprojectionFns = {
       ...curved,
@@ -179,9 +179,13 @@ describe("RasterReprojector _errorSpace", () => {
       _errorSpace: "output",
     });
     r.run(0.125);
-    // 4 seed corners + 4 for the pixel size + 4 test points per measured
-    // triangle; new vertices reuse their test point's projection.
-    expect(forwardCalls).toBe(8 + 4 * measured.mock.calls.length);
+    // 4 seed corners + 4 for the pixel size + the centroid of every measured
+    // triangle, plus each edge midpoint the first time an edge is measured
+    // (the memo serves it to the triangle on the other side and to rebuilds
+    // after a flip); new vertices reuse their test point's projection.
+    const measuredTriangles = measured.mock.calls.length;
+    expect(forwardCalls).toBeGreaterThanOrEqual(8 + measuredTriangles);
+    expect(forwardCalls).toBeLessThan(8 + 4 * measuredTriangles);
     measured.mockRestore();
   });
 
