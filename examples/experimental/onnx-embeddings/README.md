@@ -57,8 +57,9 @@ pnpm dev
    in `getTileData`, before it is first drawn.
 3. The models are tiny ONNX graphs of about a kilobyte, written as Python
    functions in [`models/make_models.py`](models/make_models.py) and served
-   from `public/models/`. Each reshapes the `[1, 64, height, width]` tile to a
-   `[64, pixels]` matrix and multiplies it by the query, the centroids or the
+   from `public/models/`. Each takes the raw int8 `[1, 64, height, width]`
+   tile, dequantizes it on the GPU, reshapes it to a `[64, pixels]` matrix and
+   multiplies it by the query, the centroids or the
    classifier weights. Those are model inputs, so changing them needs no new
    model. The cluster model picks the nearest centroid with float operations
    only, which keeps it on the GPU.
@@ -74,9 +75,8 @@ ONNX Runtime's JavaScript is a dynamic import, and its 29 MB WebAssembly binary
 (7 MB compressed) is fetched when a model is first needed. The app starts in
 Similarity mode, so that is right away.
 
-The "Model input" control switches how the int8 embeddings reach the model.
-[`NOTES.md`](NOTES.md) has what each option costs, measurements, and what this
-example taught us about ONNX Runtime Web as an engine.
+[`NOTES.md`](NOTES.md) has the design, measurements, and what this example
+taught us about ONNX Runtime Web as an engine.
 
 To rebuild the models, and check them against NumPy:
 

@@ -1,18 +1,6 @@
 import type { InferenceSession, Tensor } from "onnxruntime-web/webgpu";
 import { NUM_BANDS } from "../aef/constants.js";
-import { dequantizeInto } from "../aef/dequantize.js";
 import type { Ort } from "./runtime.js";
-
-/**
- * How a tile's embeddings reach the model.
- *
- * - `int8`: the raw int8 array, as a CPU tensor. The model dequantizes on
- *   WebGPU; the 4 MB tensor is uploaded per run.
- * - `gpu`: dequantized once per tile into a buffer on ONNX Runtime's WebGPU
- *   device, which stays there until the tile unloads. 16 MB of GPU memory per
- *   256 × 256 tile.
- */
-export type InputPath = "int8" | "gpu";
 
 /** Work for one model run: the model and its weights. */
 export type AnalysisTask =
@@ -50,23 +38,6 @@ export type ModelInput = {
   height: number;
   /** Tile width in pixels. */
   width: number;
-  /**
-   * The tile's dequantized embeddings on ONNX Runtime's device, for the `gpu`
-   * input path. Created on the first run; the owner destroys it.
-   */
-  gpuEmbeddings?: GpuEmbeddings;
-};
-
-/** A tile's dequantized embeddings in a GPU buffer. */
-export type GpuEmbeddings = {
-  /** A float32 tensor that wraps the GPU buffer. */
-  tensor: Tensor;
-  /** Size of the GPU buffer in bytes. */
-  byteLength: number;
-  /** The runner that made the buffer, on its sessions' device. */
-  owner: ModelRunner;
-  /** Free the GPU buffer. */
-  destroy: () => void;
 };
 
 /** One model output and how long the run took. */
@@ -83,11 +54,6 @@ const OUTPUT_NAMES: Record<ModelName, string> = {
   classifier: "probability",
 };
 
-// `GPUBufferUsage` flags; TypeScript's DOM lib types the interfaces only
-const GPU_BUFFER_USAGE_COPY_SRC = 0x0004;
-const GPU_BUFFER_USAGE_COPY_DST = 0x0008;
-const GPU_BUFFER_USAGE_STORAGE = 0x0080;
-
 /**
  * Runs this example's ONNX models on tiles, one run at a time.
  *
@@ -95,16 +61,12 @@ const GPU_BUFFER_USAGE_STORAGE = 0x0080;
  * resolve, so every run goes through one queue.
  */
 export class ModelRunner {
-  /** The input path this runner feeds models with. */
-  readonly inputPath: InputPath;
   private readonly ort: Ort;
   private readonly sessions = new Map<ModelName, Promise<InferenceSession>>();
   private queue: Promise<unknown> = Promise.resolve();
-  private scratch: Float32Array | null = null;
 
-  constructor(ort: Ort, inputPath: InputPath) {
+  constructor(ort: Ort) {
     this.ort = ort;
-    this.inputPath = inputPath;
   }
 
   /** Create the session for `model` now, rather than on its first run. */
@@ -125,24 +87,8 @@ export class ModelRunner {
     return result;
   }
 
-  /** Resolves once every queued run has finished. */
-  idle(): Promise<unknown> {
-    return this.queue;
-  }
-
-  /** Release every session. */
-  async release(): Promise<void> {
-    const sessions = [...this.sessions.values()];
-    this.sessions.clear();
-    for (const session of sessions) {
-      // A session that failed to load has nothing to release
-      await (await session.catch(() => null))?.release();
-    }
-  }
-
   private async createSession(model: ModelName): Promise<InferenceSession> {
-    const dtype = this.inputPath === "int8" ? "int8" : "float32";
-    const url = `${import.meta.env.BASE_URL}models/${model}_${dtype}.onnx`;
+    const url = `${import.meta.env.BASE_URL}models/${model}.onnx`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch ${url}: ${response.status}`);
@@ -162,7 +108,13 @@ export class ModelRunner {
     const session = await this.prepare(task.model);
     const start = performance.now();
     const feeds: Record<string, Tensor> = {
-      embeddings: await this.embeddingsTensor(input),
+      // The model dequantizes the raw int8 values on WebGPU
+      embeddings: new this.ort.Tensor("int8", input.embeddings, [
+        1,
+        NUM_BANDS,
+        input.height,
+        input.width,
+      ]),
       ...this.taskFeeds(task),
     };
     const results = await session.run(feeds);
@@ -173,58 +125,6 @@ export class ModelRunner {
     const values = (await output.getData()) as Float32Array;
     output.dispose();
     return { values, ms: performance.now() - start };
-  }
-
-  private async embeddingsTensor(input: ModelInput): Promise<Tensor> {
-    const { embeddings, height, width } = input;
-    const dims = [1, NUM_BANDS, height, width];
-    switch (this.inputPath) {
-      case "int8":
-        return new this.ort.Tensor("int8", embeddings, dims);
-      case "gpu": {
-        const stale = input.gpuEmbeddings;
-        if (stale?.owner !== this) {
-          // A buffer from an earlier runner is on that runner's device
-          if (stale) {
-            void stale.owner.idle().then(() => stale.destroy());
-          }
-          input.gpuEmbeddings = await this.uploadEmbeddings(input);
-        }
-        return input.gpuEmbeddings!.tensor;
-      }
-    }
-  }
-
-  /** Dequantize into the reused scratch buffer. */
-  private dequantize(embeddings: Int8Array): Float32Array {
-    if (this.scratch?.length !== embeddings.length) {
-      this.scratch = new Float32Array(embeddings.length);
-    }
-    dequantizeInto(embeddings, this.scratch);
-    return this.scratch;
-  }
-
-  private async uploadEmbeddings(input: ModelInput): Promise<GpuEmbeddings> {
-    const device = await this.ort.env.webgpu.device;
-    const values = this.dequantize(input.embeddings);
-    const buffer = device.createBuffer({
-      size: values.byteLength,
-      usage:
-        GPU_BUFFER_USAGE_STORAGE |
-        GPU_BUFFER_USAGE_COPY_SRC |
-        GPU_BUFFER_USAGE_COPY_DST,
-    });
-    device.queue.writeBuffer(buffer, 0, values);
-    const tensor = this.ort.Tensor.fromGpuBuffer(buffer, {
-      dataType: "float32",
-      dims: [1, NUM_BANDS, input.height, input.width],
-    });
-    return {
-      tensor,
-      byteLength: values.byteLength,
-      owner: this,
-      destroy: () => buffer.destroy(),
-    };
   }
 
   private taskFeeds(task: AnalysisTask): Record<string, Tensor> {

@@ -25,7 +25,6 @@ import type { RgbSettings } from "../aef/render-tile.js";
 import type { LogisticOptions } from "../analysis/logistic.js";
 import type { AnalysisStatus } from "../analysis/tile-analysis.js";
 import { MAX_CLUSTERS } from "../gpu/cluster-overlay.js";
-import type { InputPath } from "../onnx/model-runner.js";
 
 /** What the map shows. */
 export type Mode = "rgb" | "similarity" | "clusters" | "classifier";
@@ -101,27 +100,6 @@ const LOGISTIC_CHOICES: {
   },
 ];
 
-/** The ways a tile's int8 embeddings can reach the model. */
-const INPUT_PATHS: {
-  value: InputPath;
-  label: string;
-  /** What the option costs, shown under the select. */
-  description: string;
-}[] = [
-  {
-    value: "int8",
-    label: "Raw int8, converted by the model",
-    description:
-      "Sends the stored bytes, 4 MB per tile, on every run. The model's first step turns them into float32 on the GPU. Uses no extra memory.",
-  },
-  {
-    value: "gpu",
-    label: "float32, kept on the GPU",
-    description:
-      "Converts each tile once and leaves the float copy on the GPU, so a run uploads nothing. The fastest per run, at 16 MB of GPU memory per tile.",
-  },
-];
-
 /**
  * Props for {@link ControlPanel}.
  */
@@ -131,7 +109,6 @@ export type ControlPanelProps = {
   bandLabels: readonly string[] | null;
   rgb: RgbSettings;
   mode: Mode;
-  inputPath: InputPath;
   colormapName: ColormapName;
   opacity: number;
   showBackdrop: boolean;
@@ -150,7 +127,6 @@ export type ControlPanelProps = {
   onYearIdxChange: (idx: number) => void;
   onRgbChange: (rgb: RgbSettings) => void;
   onModeChange: (mode: Mode) => void;
-  onInputPathChange: (inputPath: InputPath) => void;
   onColormapNameChange: (name: ColormapName) => void;
   onOpacityChange: (value: number) => void;
   onShowBackdropChange: (show: boolean) => void;
@@ -166,7 +142,7 @@ export type ControlPanelProps = {
 
 /**
  * Overlay control panel: location and year, the mode and its settings, and
- * the ONNX Runtime input path and timings.
+ * the ONNX Runtime timings.
  */
 export function ControlPanel(props: ControlPanelProps) {
   const { mode, onModeChange } = props;
@@ -564,11 +540,7 @@ function BackdropToggle({
   );
 }
 
-function EngineControls({
-  inputPath,
-  status,
-  onInputPathChange,
-}: ControlPanelProps) {
+function EngineControls({ status }: ControlPanelProps) {
   const lastPass = status?.lastPass;
   const tileCount = status?.tileCount ?? 0;
   return (
@@ -579,33 +551,6 @@ function EngineControls({
       borderColor="gray.200"
       fontSize="xs"
     >
-      <Field
-        label={
-          <LabelWithHelp label="Model input">
-            {"The embeddings are stored as int8 and the models compute in float32. This picks where that conversion happens.\n\n" +
-              INPUT_PATHS.map(
-                ({ label, description }) => `• ${label}: ${description}`,
-              ).join("\n\n")}
-          </LabelWithHelp>
-        }
-        helperText={
-          INPUT_PATHS.find(({ value }) => value === inputPath)?.description
-        }
-      >
-        <NativeSelect.Root size="sm">
-          <NativeSelect.Field
-            value={inputPath}
-            onChange={(e) => onInputPathChange(e.target.value as InputPath)}
-          >
-            {INPUT_PATHS.map(({ value, label }) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </NativeSelect.Field>
-          <NativeSelect.Indicator />
-        </NativeSelect.Root>
-      </Field>
       <Text color="gray.600" data-testid="engine-status">
         {status?.busy ? "Running… " : ""}
         {lastPass
@@ -618,9 +563,6 @@ function EngineControls({
       <Text color="gray.500">
         {tileCount} tiles loaded: {megabytes(status?.embeddingBytes)} MB of int8
         embeddings on the CPU
-        {status?.gpuBytes
-          ? `, ${megabytes(status.gpuBytes)} MB of float32 on the GPU`
-          : ""}
         {status?.firstSessionMs != null
           ? `; ONNX Runtime ready in ${status.firstSessionMs.toFixed(0)} ms`
           : ""}

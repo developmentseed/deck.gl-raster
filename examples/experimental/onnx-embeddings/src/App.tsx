@@ -36,7 +36,7 @@ import { DEFAULT_LOGISTIC_OPTIONS, fitLogistic } from "./analysis/logistic.js";
 import { samplePixels } from "./analysis/sample-pixels.js";
 import type { AnalysisStatus } from "./analysis/tile-analysis.js";
 import { TileAnalysis } from "./analysis/tile-analysis.js";
-import type { AnalysisTask, InputPath } from "./onnx/model-runner.js";
+import type { AnalysisTask } from "./onnx/model-runner.js";
 import type { ClusterFit, LabeledPoint, Mode } from "./ui/control-panel.js";
 import { ControlPanel } from "./ui/control-panel.js";
 import { ZoomNotice } from "./ui/zoom-notice.js";
@@ -50,7 +50,6 @@ const DEFAULT_RGB: RgbSettings = {
   rescaleMin: -0.3,
   rescaleMax: 0.3,
 };
-const DEFAULT_INPUT_PATH: InputPath = "int8";
 /** Pixels sampled from the loaded tiles to fit k-means. */
 /**
  * Where similarity looks for its first query, as fractions of the map's width
@@ -89,7 +88,6 @@ export default function App() {
   );
 
   const [mode, setMode] = useState<Mode>("similarity");
-  const [inputPath, setInputPath] = useState<InputPath>(DEFAULT_INPUT_PATH);
   const [colormapName, setColormapName] =
     useState<keyof typeof COLORMAP_INDEX>("magma");
   const [opacity, setOpacity] = useState(0.85);
@@ -115,9 +113,7 @@ export default function App() {
   );
 
   const [status, setStatus] = useState<AnalysisStatus | null>(null);
-  const [analysis] = useState(
-    () => new TileAnalysis(DEFAULT_INPUT_PATH, setStatus),
-  );
+  const [analysis] = useState(() => new TileAnalysis(setStatus));
 
   useEffect(() => {
     let cancelled = false;
@@ -159,10 +155,6 @@ export default function App() {
       cancelled = true;
     };
   }, [device]);
-
-  useEffect(() => {
-    analysis.setInputPath(inputPath);
-  }, [analysis, inputPath]);
 
   // Load ONNX Runtime and the mode's model as soon as the mode is picked
   useEffect(() => {
@@ -480,7 +472,6 @@ export default function App() {
         bandLabels={bandLabels}
         rgb={rgb}
         mode={mode}
-        inputPath={inputPath}
         colormapName={colormapName}
         opacity={opacity}
         showBackdrop={showBackdrop}
@@ -499,7 +490,6 @@ export default function App() {
         onYearIdxChange={setYearIdx}
         onRgbChange={setRgb}
         onModeChange={setMode}
-        onInputPathChange={setInputPath}
         onColormapNameChange={setColormapName}
         onOpacityChange={setOpacity}
         onShowBackdropChange={setShowBackdrop}

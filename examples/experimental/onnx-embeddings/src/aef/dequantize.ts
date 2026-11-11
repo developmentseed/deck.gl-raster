@@ -18,26 +18,6 @@ export function dequantize(value: number): number {
 }
 
 /**
- * Dequantize a whole `[64, height, width]` tile into `out`, which must have
- * the same length.
- */
-export function dequantizeInto(embeddings: Int8Array, out: Float32Array): void {
-  if (out.length !== embeddings.length) {
-    throw new Error(
-      `Expected an output of length ${embeddings.length}, got ${out.length}`,
-    );
-  }
-  const bytes = new Uint8Array(
-    embeddings.buffer,
-    embeddings.byteOffset,
-    embeddings.length,
-  );
-  for (let i = 0; i < bytes.length; i++) {
-    out[i] = DEQUANT_LUT[bytes[i]!]!;
-  }
-}
-
-/**
  * Read the dequantized 64-band vector of one pixel from a
  * `[64, height, width]` tile, or `null` if the pixel is nodata.
  */

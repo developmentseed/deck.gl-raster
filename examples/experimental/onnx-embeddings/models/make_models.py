@@ -13,18 +13,13 @@ Each model is a Python function that onnxscript translates into an ONNX graph.
 After writing the models, the script runs each one with ONNX Runtime and
 compares it with NumPy.
 
-A model takes one tile as `embeddings` of shape `[1, 64, height, width]`, the
-layout zarrita returns, and reshapes it to a `[64, pixels]` matrix. A matrix
+A model takes one tile as `embeddings`, the raw AlphaEarth int8 values in the
+`[1, 64, height, width]` layout zarrita returns. It dequantizes them and
+reshapes them to a `[64, pixels]` matrix. A matrix
 product with a `[n, 64]` matrix is then a per-pixel linear map over the band
 axis. That matrix is a model input, so the query vector, the centroids or the
 classifier weights change per run without a new model. Every output is
 `[1, pixels]`, row-major like the tile.
-
-Every model comes in two variants:
-
-- `*_int8.onnx` takes the raw AlphaEarth int8 values and dequantizes them in
-  the graph.
-- `*_float32.onnx` takes values that are already dequantized.
 """
 
 import pathlib
@@ -49,7 +44,6 @@ ARGMAX_GAIN = 1.0e7
 PIXELS_SHAPE = [NUM_BANDS, -1]
 
 Int8Tile = INT8[1, NUM_BANDS, "height", "width"]
-FloatTile = FLOAT[1, NUM_BANDS, "height", "width"]
 Pixels = FLOAT[NUM_BANDS, "pixels"]
 PerPixel = FLOAT[1, "pixels"]
 
@@ -69,12 +63,6 @@ def pixels_from_int8(tile: Int8Tile) -> Pixels:
 
 
 @script(default_opset=op)
-def pixels_from_float32(tile: FloatTile) -> Pixels:
-    """Flatten an already dequantized tile to one column per pixel."""
-    return op.Reshape(tile, PIXELS_SHAPE)
-
-
-@script(default_opset=op)
 def nearest_centroid(
     pixels: Pixels, centroids: FLOAT["clusters", NUM_BANDS], cluster_ids: FLOAT[1, "clusters"]
 ) -> PerPixel:
@@ -91,21 +79,14 @@ def nearest_centroid(
 
 
 @script(default_opset=op)
-def similarity_int8(embeddings: Int8Tile, query: FLOAT[1, NUM_BANDS]) -> PerPixel:
+def similarity(embeddings: Int8Tile, query: FLOAT[1, NUM_BANDS]) -> PerPixel:
     """Dot product of every pixel with `query`: a cosine similarity for unit vectors."""
     similarity = query @ pixels_from_int8(embeddings)
     return similarity
 
 
 @script(default_opset=op)
-def similarity_float32(embeddings: FloatTile, query: FLOAT[1, NUM_BANDS]) -> PerPixel:
-    """Dot product of every pixel with `query`: a cosine similarity for unit vectors."""
-    similarity = query @ pixels_from_float32(embeddings)
-    return similarity
-
-
-@script(default_opset=op)
-def clusters_int8(
+def clusters(
     embeddings: Int8Tile, centroids: FLOAT["clusters", NUM_BANDS], cluster_ids: FLOAT[1, "clusters"]
 ) -> PerPixel:
     """Index of each pixel's nearest centroid."""
@@ -114,16 +95,7 @@ def clusters_int8(
 
 
 @script(default_opset=op)
-def clusters_float32(
-    embeddings: FloatTile, centroids: FLOAT["clusters", NUM_BANDS], cluster_ids: FLOAT[1, "clusters"]
-) -> PerPixel:
-    """Index of each pixel's nearest centroid."""
-    cluster = nearest_centroid(pixels_from_float32(embeddings), centroids, cluster_ids)
-    return cluster
-
-
-@script(default_opset=op)
-def classifier_int8(
+def classifier(
     embeddings: Int8Tile, weights: FLOAT[1, NUM_BANDS], bias: FLOAT[1]
 ) -> PerPixel:
     """Logistic regression: `sigmoid(weights . pixel + bias)`."""
@@ -131,23 +103,7 @@ def classifier_int8(
     return probability
 
 
-@script(default_opset=op)
-def classifier_float32(
-    embeddings: FloatTile, weights: FLOAT[1, NUM_BANDS], bias: FLOAT[1]
-) -> PerPixel:
-    """Logistic regression: `sigmoid(weights . pixel + bias)`."""
-    probability = op.Sigmoid(weights @ pixels_from_float32(embeddings) + bias)
-    return probability
-
-
-MODELS = [
-    similarity_int8,
-    similarity_float32,
-    clusters_int8,
-    clusters_float32,
-    classifier_int8,
-    classifier_float32,
-]
+MODELS = [similarity, clusters, classifier]
 
 
 def to_model(function) -> onnx.ModelProto:
@@ -167,7 +123,6 @@ def check(out_dir: pathlib.Path) -> None:
     value = raw.astype(np.float32)
     scaled = value * np.float32(DEQUANT_SCALE)
     dequantized = scaled * np.abs(scaled)
-    tiles = {"int8": raw, "float32": dequantized}
     pixels = dequantized.reshape(NUM_BANDS, -1)
 
     k = 5
@@ -188,13 +143,12 @@ def check(out_dir: pathlib.Path) -> None:
         ),
     }
     for name, (inputs, expected) in cases.items():
-        for label, embeddings in tiles.items():
-            session = ort.InferenceSession(str(out_dir / f"{name}_{label}.onnx"))
-            (result,) = session.run(None, {"embeddings": embeddings, **inputs})
-            error = np.abs(result.reshape(-1) - expected.reshape(-1)).max()
-            if error > 1e-4:
-                raise AssertionError(f"{name}_{label}: max error {error}")
-            print(f"{name}_{label}: max error {error:.2e}")
+        session = ort.InferenceSession(str(out_dir / f"{name}.onnx"))
+        (result,) = session.run(None, {"embeddings": raw, **inputs})
+        error = np.abs(result.reshape(-1) - expected.reshape(-1)).max()
+        if error > 1e-4:
+            raise AssertionError(f"{name}: max error {error}")
+        print(f"{name}: max error {error:.2e}")
 
 
 def main() -> None:

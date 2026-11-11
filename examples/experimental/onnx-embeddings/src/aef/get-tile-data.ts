@@ -2,7 +2,7 @@ import type { MinimalTileData } from "@developmentseed/deck.gl-raster";
 import type { GetTileDataOptions } from "@developmentseed/deck.gl-zarr";
 import type { Texture } from "@luma.gl/core";
 import * as zarr from "zarrita";
-import type { GpuEmbeddings, ModelName } from "../onnx/model-runner.js";
+import type { ModelName } from "../onnx/model-runner.js";
 import { NUM_BANDS } from "./constants.js";
 
 /** Which model output a tile's `valueTexture` holds. */
@@ -28,8 +28,6 @@ export type AefTileData = MinimalTileData & {
   valueTexture: Texture;
   /** What `valueTexture` holds, or `null` before the first model run. */
   result: TileResult | null;
-  /** The embeddings on ONNX Runtime's device, for the `gpu` input path. */
-  gpuEmbeddings?: GpuEmbeddings;
 };
 
 /**
@@ -102,10 +100,8 @@ export function tileKey(z: number, x: number, y: number): string {
   return `${z}/${x}/${y}`;
 }
 
-/** Free a tile's textures and GPU buffer. */
+/** Free a tile's textures. */
 export function destroyTile(tile: AefTileData): void {
   tile.bandTexture.destroy();
   tile.valueTexture.destroy();
-  tile.gpuEmbeddings?.destroy();
-  tile.gpuEmbeddings = undefined;
 }

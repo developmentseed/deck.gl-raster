@@ -1,10 +1,6 @@
 import type { AefTileData } from "../aef/get-tile-data.js";
 import { destroyTile } from "../aef/get-tile-data.js";
-import type {
-  AnalysisTask,
-  InputPath,
-  ModelName,
-} from "../onnx/model-runner.js";
+import type { AnalysisTask, ModelName } from "../onnx/model-runner.js";
 import { ModelRunner } from "../onnx/model-runner.js";
 import { loadOrt } from "../onnx/runtime.js";
 
@@ -12,8 +8,6 @@ import { loadOrt } from "../onnx/runtime.js";
 export type PassStats = {
   /** The model that ran. */
   model: ModelName;
-  /** How embeddings reached the model. */
-  inputPath: InputPath;
   /** Number of tiles the pass ran the model on. */
   tiles: number;
   /** Wall time from the start of the pass to the texture writes. */
@@ -41,8 +35,6 @@ export type AnalysisStatus = {
   tileCount: number;
   /** Bytes of int8 embeddings held on the CPU by resident tiles. */
   embeddingBytes: number;
-  /** Bytes of float32 embeddings held on ONNX Runtime's GPU device. */
-  gpuBytes: number;
 };
 
 /**
@@ -61,7 +53,6 @@ export class TileAnalysis {
   /** The generation each tile last failed in, so a pass does not retry it. */
   private readonly failedGeneration = new WeakMap<AefTileData, number>();
   private readonly onStatus: (status: AnalysisStatus) => void;
-  private inputPath: InputPath;
   private runner: Promise<ModelRunner> | null = null;
   private task: AnalysisTask | null = null;
   private generation = 0;
@@ -75,14 +66,9 @@ export class TileAnalysis {
     error: null,
     tileCount: 0,
     embeddingBytes: 0,
-    gpuBytes: 0,
   };
 
-  constructor(
-    inputPath: InputPath,
-    onStatus: (status: AnalysisStatus) => void,
-  ) {
-    this.inputPath = inputPath;
+  constructor(onStatus: (status: AnalysisStatus) => void) {
     this.onStatus = onStatus;
   }
 
@@ -123,7 +109,7 @@ export class TileAnalysis {
     this.tiles.set(tile.key, tile);
     if (previous && previous !== tile) {
       // deck.gl replaced the tile's content without unloading it
-      void this.destroyAfterRuns([previous]);
+      destroyTile(previous);
     }
     this.update({});
     if (this.hasStaleTiles()) {
@@ -137,19 +123,7 @@ export class TileAnalysis {
       this.tiles.delete(tile.key);
     }
     this.update({});
-    void this.destroyAfterRuns([tile]);
-  }
-
-  /**
-   * Free tiles once the runs already queued are done, since one of them may
-   * read a tile's GPU buffer. Passes only queue runs for registered tiles.
-   */
-  private async destroyAfterRuns(tiles: AefTileData[]): Promise<void> {
-    const runner = await this.runner?.catch(() => null);
-    await runner?.idle();
-    for (const tile of tiles) {
-      destroyTile(tile);
-    }
+    destroyTile(tile);
   }
 
   /** Set the task to run on every tile, or `null` to stop running models. */
@@ -159,33 +133,6 @@ export class TileAnalysis {
     if (task) {
       this.schedulePass();
     }
-  }
-
-  /** Change how embeddings reach the model, and run the task again. */
-  setInputPath(inputPath: InputPath): void {
-    if (inputPath === this.inputPath) {
-      return;
-    }
-    this.inputPath = inputPath;
-    const previous = this.runner;
-    this.runner = null;
-    if (previous) {
-      // Wait for the queue: a run may still use these buffers and sessions
-      void previous
-        .then(async (runner) => {
-          await runner.idle();
-          // Free only this runner's buffers: a new runner may have made its own
-          for (const tile of this.tiles.values()) {
-            if (tile.gpuEmbeddings?.owner === runner) {
-              tile.gpuEmbeddings.destroy();
-              tile.gpuEmbeddings = undefined;
-            }
-          }
-          await runner.release();
-        })
-        .catch((error) => this.reportError(error));
-    }
-    this.setTask(this.task);
   }
 
   /** Load ONNX Runtime and the model for `model` ahead of the first task. */
@@ -207,8 +154,7 @@ export class TileAnalysis {
 
   private getRunner(): Promise<ModelRunner> {
     if (!this.runner) {
-      const inputPath = this.inputPath;
-      const runner = loadOrt().then((ort) => new ModelRunner(ort, inputPath));
+      const runner = loadOrt().then((ort) => new ModelRunner(ort));
       this.runner = runner;
       runner.catch(() => {
         // Let the next call try again
@@ -304,7 +250,6 @@ export class TileAnalysis {
       renderVersion: this.status.renderVersion + 1,
       lastPass: {
         model: task.model,
-        inputPath: runner.inputPath,
         tiles: outputs.length,
         ms: performance.now() - start,
         runMs,
@@ -321,17 +266,14 @@ export class TileAnalysis {
 
   private update(changes: Partial<AnalysisStatus>): void {
     let embeddingBytes = 0;
-    let gpuBytes = 0;
     for (const tile of this.tiles.values()) {
       embeddingBytes += tile.embeddings.byteLength;
-      gpuBytes += tile.gpuEmbeddings?.byteLength ?? 0;
     }
     this.status = {
       ...this.status,
       ...changes,
       tileCount: this.tiles.size,
       embeddingBytes,
-      gpuBytes,
     };
     this.onStatus(this.status);
   }

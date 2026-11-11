@@ -12,8 +12,10 @@ ONNX Runtime Web as an engine for per-pixel raster work?
 Yes. Similarity search, k-means clusters and a click-trained logistic
 regression all run as tiny ONNX models on WebGPU over every loaded tile of the
 AlphaEarth Foundations mosaic, and update in place when the query changes. A
-query change over the 15 tiles of the default view takes about **110 ms**
-(7 ms per tile), or about **75 ms** if each tile's embeddings stay on the GPU.
+query change over the 15 tiles of the default view takes **65 to 120 ms**
+(4 to 8 ms per tile). Keeping a float32 copy of every tile on ONNX Runtime's
+device roughly halved that, at 16 MiB of GPU memory per tile, which is too
+much for a demo: that option was built, measured and removed.
 
 The compute itself is fast: about **1 ms** per 256 × 256 × 64 tile once the
 data is on ONNX Runtime's GPU device. Everything around it is the cost: the
@@ -77,23 +79,22 @@ there.
 
 ### Models
 
-`models/make_models.py` builds six graphs with onnxscript, each written as a
+`models/make_models.py` builds three graphs with onnxscript, each written as a
 Python function, and checks them against NumPy with Python's `onnxruntime`
-(max error 1.4e-6). Each reshapes the
-`[1, 64, h, w]` tile to a `[64, pixels]` matrix and multiplies it by a matrix
-that is a model input:
+(max error 1.2e-6). Each takes the raw int8 `[1, 64, height, width]` tile,
+dequantizes it, reshapes it to a `[64, pixels]` matrix and multiplies it by a
+matrix that is a model input:
 
-| Model | Inputs besides `embeddings` | Output per pixel | Size (int8 / float32) |
+| Model | Inputs besides `embeddings` | Output per pixel | Size |
 | --- | --- | --- | --- |
-| similarity | `query` `[1, 64]` | dot product (a cosine, as embeddings are unit length) | 622 / 397 B |
-| clusters | `centroids` `[k, 64]`, `cluster_ids` `[1, k]` | index of the best centroid, as a float | 1,296 / 1,071 B |
-| classifier | `weights` `[1, 64]`, `bias` `[1]` | `sigmoid(w · x + b)` | 685 / 460 B |
+| similarity | `query` `[1, 64]` | dot product (a cosine, as embeddings are unit length) | 617 B |
+| clusters | `centroids` `[k, 64]`, `cluster_ids` `[1, k]` | index of the best centroid, as a float | 1,291 B |
+| classifier | `weights` `[1, 64]`, `bias` `[1]` | `sigmoid(w · x + b)` | 680 B |
 
-The int8 variants dequantize in the graph: `DequantizeLinear` with a scale of
+The models dequantize in the graph: `DequantizeLinear` with a scale of
 1 / 127.5, then `x * |x|`. `Cast` from int8 and `Sign` would both run on the
-CPU. The float32 variants take values dequantized in JavaScript with a
-256-entry lookup table. The models use opset 23, the highest at which
-`DequantizeLinear` runs on WebGPU (see friction item 2).
+CPU. The models use opset 23, the highest at which `DequantizeLinear` runs on
+WebGPU (see friction item 2).
 
 **Clusters avoid `ArgMax`**, whose int64 output sends it to the CPU. The graph
 takes the argmax with float operations only: `ReduceMax` over the clusters,
@@ -106,24 +107,23 @@ k-means itself (spherical, k-means++ seeding) and the logistic regression
 (full-batch gradient descent with an L2 penalty, classes weighted equally) run
 in plain JavaScript on the main thread.
 
-### Model input paths
+### Model input
 
-The "Model input" control switches how a tile reaches the model:
+A run sends the tile's raw `Int8Array` as a CPU tensor. ONNX Runtime uploads
+its 4 MiB and the model dequantizes on the GPU. Every session sets
+`disable_cpu_ep_fallback`, so a node that would run on the CPU is an error.
 
-- **int8 (default)**: the raw `Int8Array` as a CPU tensor. ONNX Runtime
-  uploads its 4 MiB and dequantizes on the GPU. Fastest of the paths that keep
-  no extra copy.
+Two other ways to feed the models were built behind a "Model input" control,
+measured, and removed. Each used a float32 variant of the models with no
+dequantization in the graph. The measurements below still include them:
+
+- **float32**: dequantized in JavaScript into one reused 16 MiB buffer and
+  sent as a CPU tensor on every run. Slower than int8, with no memory saved.
 - **gpu**: dequantized once per tile into a buffer on ONNX Runtime's device,
-  wrapped with `Tensor.fromGpuBuffer`, kept until the tile unloads. 16 MiB of
-  GPU memory per tile.
-
-Every session sets `disable_cpu_ep_fallback`, so a node that would run on the
-CPU is an error.
-
-An earlier version had a third path, **float32**: dequantized in JavaScript
-into one reused 16 MiB buffer and sent as a CPU tensor on every run. It was
-slower than the int8 path and saved no memory, so it was removed. The
-measurements below still include it.
+  wrapped with `Tensor.fromGpuBuffer`, kept until the tile unloads. About
+  three times faster per run, at 16 MiB of GPU memory per tile: 432 MiB for
+  27 tiles. `Tensor.fromGpuBuffer` accepts no int8, so the 4 MiB int8 data
+  could not be kept there instead.
 
 ### Alternatives rejected
 
@@ -137,9 +137,9 @@ measurements below still include it.
   120 ms per pass, committing once is fine.
 - **Keep a float32 copy per tile on the CPU**: 16 MiB per tile instead of 4,
   to save about 3 ms of dequantization per tile per run.
-- **GPU-resident input as the default**: 2 to 4 times faster per query, but
-  960 MiB of extra GPU memory at 60 tiles, on a second GPU device. Kept as an
-  option.
+- **GPU-resident float32 input**: 2 to 4 times faster per query, but
+  960 MiB of extra GPU memory at 60 tiles, on a second GPU device. Built as
+  an option, then removed.
 - **1 × 1 `Conv`** (the first formulation): ONNX Runtime wraps it in two
   NCHW ↔ NHWC transposes of the whole tile; see the measurements.
 - **Threshold and colormap in the model**: then every slider move would be a
@@ -222,12 +222,12 @@ Other timings:
 | int8 embeddings | 4 MiB | CPU (JavaScript) |
 | `r8sint` band texture | 4 MiB | deck.gl's WebGL2 device |
 | `r32float` output texture | 256 KiB | deck.gl's WebGL2 device |
-| int8 input, int8 path | 4 MiB, per run | uploaded each run into ONNX Runtime's GPU buffers |
+| int8 input | 4 MiB, per run | uploaded each run into ONNX Runtime's GPU buffers |
 | float32 input, float32 path (removed) | 16 MiB, per run | uploaded each run into ONNX Runtime's GPU buffers |
-| float32 input, gpu path | **16 MiB, kept** | ONNX Runtime's WebGPU device |
+| float32 input, gpu path (removed) | **16 MiB, kept** | ONNX Runtime's WebGPU device |
 
-So 15 tiles hold 60 MiB of embeddings on the CPU, and the gpu path adds
-**240 MiB** of GPU memory; 60 tiles hold 240 MiB, and the gpu path adds
+So 15 tiles hold 60 MiB of embeddings on the CPU, and the gpu path added
+**240 MiB** of GPU memory; 60 tiles hold 240 MiB, and the gpu path added
 **960 MiB**. The JavaScript heap reported by `performance.memory` was 200 to
 270 MB at 15 tiles and 415 MB at 60. GPU memory is computed from buffer sizes,
 not measured; ONNX Runtime's own buffer cache is not included.
@@ -239,7 +239,7 @@ not measured; ONNX Runtime's own buffer cache is not included.
 | ONNX Runtime JavaScript, a lazy chunk | 120 kB (39 kB gzip) |
 | ONNX Runtime WebAssembly (`ort-wasm-simd-threaded.asyncify.wasm`) | **28.7 MB (7.3 MB gzip)** |
 | This example's code, beyond `aef-mosaic` | +37 kB (+12 kB gzip) |
-| Models | 397 to 1,296 bytes each |
+| Models | 617 to 1,291 bytes each |
 | Page load to first tiles drawn | 2.5–5.1 s (S3 reads) |
 | First mode to ONNX Runtime ready (import, WebAssembly compile, device, first session), served from localhost | **0.40–0.45 s** built; 1.7–2.6 s on a cold Vite dev server |
 
@@ -252,7 +252,7 @@ From ONNX Runtime's verbose session log (`logSeverityLevel: 0`, which prints
 the node placements), and from creating each session with
 `disable_cpu_ep_fallback`:
 
-- **float32 models: every node on WebGPU** (`Reshape`, `MatMul`, `ReduceMax`,
+- **float32 models (removed): every node on WebGPU** (`Reshape`, `MatMul`, `ReduceMax`,
   `Sub`, `Mul`, `Add`, `Floor`, `Relu`, `Sigmoid`).
 - **int8 models: every node on WebGPU**, `DequantizeLinear` and `Abs`
   included. Their first version put **`Cast` on the CPU provider**, with a
@@ -266,8 +266,8 @@ the node placements), and from creating each session with
   run on the CPU; uint16 graphs fail to load. See friction item 2.
 
 For clusters I chose the float-only argmax over `ArgMax` with CPU fallback:
-it keeps the whole graph on the GPU, so the gpu input path reads back one
-float per pixel instead of `k`.
+it keeps the whole graph on the GPU, and a run reads back one float per pixel
+instead of `k`.
 
 ## Friction log
 
