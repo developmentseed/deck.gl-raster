@@ -38,6 +38,7 @@ import type { AnalysisStatus } from "./analysis/tile-analysis.js";
 import { TileAnalysis } from "./analysis/tile-analysis.js";
 import type { AnalysisTask } from "./onnx/model-runner.js";
 import { supportsWebGpu } from "./onnx/runtime.js";
+import { ClassifierNotice } from "./ui/classifier-notice.js";
 import type { ClusterFit, LabeledPoint, Mode } from "./ui/control-panel.js";
 import { ControlPanel } from "./ui/control-panel.js";
 import { WebGpuNotice } from "./ui/webgpu-notice.js";
@@ -474,6 +475,12 @@ export default function App() {
         />
       </MaplibreMap>
       {belowMinZoom && <ZoomNotice />}
+      {mode === "classifier" && !classifier && webGpu !== false && (
+        <ClassifierNotice
+          positives={points.filter((point) => point.label === 1).length}
+          negatives={points.filter((point) => point.label === 0).length}
+        />
+      )}
       {webGpu === false && mode !== "rgb" && (
         <WebGpuNotice onDismiss={() => setMode("rgb")} />
       )}
