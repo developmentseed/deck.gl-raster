@@ -15,6 +15,9 @@ export type KMeansOptions = {
  * the largest dot product, then set each centroid to the normalized mean of
  * its samples. Seeded with k-means++ on the cosine distance.
  *
+ * This only finds the centroids, on the CPU, from a sample of pixels. The
+ * `clusters` model then assigns every pixel to a centroid on the GPU.
+ *
  * @param samples - `n` row-major vectors of length `dims`.
  * @returns `k` row-major unit centroids of length `dims`.
  */

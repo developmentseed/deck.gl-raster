@@ -37,8 +37,10 @@ import { samplePixels } from "./analysis/sample-pixels.js";
 import type { AnalysisStatus } from "./analysis/tile-analysis.js";
 import { TileAnalysis } from "./analysis/tile-analysis.js";
 import type { AnalysisTask } from "./onnx/model-runner.js";
+import { supportsWebGpu } from "./onnx/runtime.js";
 import type { ClusterFit, LabeledPoint, Mode } from "./ui/control-panel.js";
 import { ControlPanel } from "./ui/control-panel.js";
+import { WebGpuNotice } from "./ui/webgpu-notice.js";
 import { ZoomNotice } from "./ui/zoom-notice.js";
 
 const DEFAULT_LOCATION = LOCATIONS[0]!;
@@ -88,6 +90,8 @@ export default function App() {
   );
 
   const [mode, setMode] = useState<Mode>("similarity");
+  // Whether the browser can run the models; `null` until that is known
+  const [webGpu, setWebGpu] = useState<boolean | null>(null);
   const [colormapName, setColormapName] =
     useState<keyof typeof COLORMAP_INDEX>("magma");
   const [opacity, setOpacity] = useState(0.85);
@@ -156,12 +160,16 @@ export default function App() {
     };
   }, [device]);
 
+  useEffect(() => {
+    void supportsWebGpu().then(setWebGpu);
+  }, []);
+
   // Load ONNX Runtime and the mode's model as soon as the mode is picked
   useEffect(() => {
-    if (mode !== "rgb") {
+    if (mode !== "rgb" && webGpu) {
       void analysis.prepare(mode);
     }
-  }, [analysis, mode]);
+  }, [analysis, mode, webGpu]);
 
   const classifier = useMemo(() => {
     const labels = Uint8Array.from(points, (point) => point.label);
@@ -202,8 +210,8 @@ export default function App() {
   }, [mode, query, clusterFit, classifier]);
 
   useEffect(() => {
-    analysis.setTask(task);
-  }, [analysis, task]);
+    analysis.setTask(webGpu ? task : null);
+  }, [analysis, task, webGpu]);
 
   const fitClusters = useCallback(() => {
     const start = performance.now();
@@ -466,6 +474,9 @@ export default function App() {
         />
       </MaplibreMap>
       {belowMinZoom && <ZoomNotice />}
+      {webGpu === false && mode !== "rgb" && (
+        <WebGpuNotice onDismiss={() => setMode("rgb")} />
+      )}
       <ControlPanel
         locationId={locationId}
         yearIdx={yearIdx}

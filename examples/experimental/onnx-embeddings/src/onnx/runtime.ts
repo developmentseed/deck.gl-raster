@@ -5,6 +5,18 @@ export type Ort = typeof import("onnxruntime-web/webgpu");
 
 let ortPromise: Promise<Ort> | null = null;
 
+/** Whether this browser offers WebGPU with a usable adapter. */
+export async function supportsWebGpu(): Promise<boolean> {
+  if (!("gpu" in navigator)) {
+    return false;
+  }
+  try {
+    return (await navigator.gpu.requestAdapter()) !== null;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Load ONNX Runtime Web with its WebGPU execution provider, once.
  *

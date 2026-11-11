@@ -20,7 +20,7 @@ export type TileResult = {
 export type AefTileData = MinimalTileData & {
   /** `z/x/y` of the tile in the source's tile grid. */
   key: string;
-  /** Raw int8 embeddings, `[64, height, width]`, row-major. */
+  /** Raw int8 embeddings, `[64, height, width]` in C order (row-major). */
   embeddings: Int8Array;
   /** r8sint 2D array texture; layer `i` is band `i`. Draws the RGB composite. */
   bandTexture: Texture;

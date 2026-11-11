@@ -29,7 +29,8 @@ can see where data has loaded; turn it off to see results over the basemap.
 > This example is experimental. Its code is LLM-generated and unreviewed, and
 > it may change substantially or be withdrawn.
 
-It needs a browser with WebGPU, such as a recent Chrome or Edge.
+It needs a browser with WebGPU, such as a recent Chrome or Edge. In a browser
+without it, a dialog says so, and only the RGB mode works.
 
 [ONNX Runtime Web]: https://onnxruntime.ai/docs/tutorials/web/
 [AEF GeoZarr mosaic]: https://source.coop/tge-labs/aef-mosaic
