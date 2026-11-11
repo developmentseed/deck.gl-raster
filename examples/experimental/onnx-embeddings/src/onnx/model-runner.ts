@@ -8,13 +8,11 @@ import type { Ort } from "./runtime.js";
  *
  * - `int8`: the raw int8 array, as a CPU tensor. The model dequantizes on
  *   WebGPU; the 4 MB tensor is uploaded per run.
- * - `float32`: dequantized in JavaScript into one reused buffer, as a CPU
- *   tensor. The 16 MB tensor is uploaded per run.
  * - `gpu`: dequantized once per tile into a buffer on ONNX Runtime's WebGPU
  *   device, which stays there until the tile unloads. 16 MB of GPU memory per
  *   256 × 256 tile.
  */
-export type InputPath = "int8" | "float32" | "gpu";
+export type InputPath = "int8" | "gpu";
 
 /** Work for one model run: the model and its weights. */
 export type AnalysisTask =
@@ -183,12 +181,6 @@ export class ModelRunner {
     switch (this.inputPath) {
       case "int8":
         return new this.ort.Tensor("int8", embeddings, dims);
-      case "float32":
-        return new this.ort.Tensor(
-          "float32",
-          this.dequantize(embeddings),
-          dims,
-        );
       case "gpu": {
         const stale = input.gpuEmbeddings;
         if (stale?.owner !== this) {

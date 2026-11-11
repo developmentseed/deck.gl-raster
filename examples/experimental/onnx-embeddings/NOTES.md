@@ -113,14 +113,17 @@ The "Model input" control switches how a tile reaches the model:
 - **int8 (default)**: the raw `Int8Array` as a CPU tensor. ONNX Runtime
   uploads its 4 MiB and dequantizes on the GPU. Fastest of the paths that keep
   no extra copy.
-- **float32**: dequantized in JavaScript into one reused 16 MiB buffer, then a
-  CPU tensor.
 - **gpu**: dequantized once per tile into a buffer on ONNX Runtime's device,
   wrapped with `Tensor.fromGpuBuffer`, kept until the tile unloads. 16 MiB of
   GPU memory per tile.
 
 Every session sets `disable_cpu_ep_fallback`, so a node that would run on the
 CPU is an error.
+
+An earlier version had a third path, **float32**: dequantized in JavaScript
+into one reused 16 MiB buffer and sent as a CPU tensor on every run. It was
+slower than the int8 path and saved no memory, so it was removed. The
+measurements below still include it.
 
 ### Alternatives rejected
 
@@ -220,7 +223,7 @@ Other timings:
 | `r8sint` band texture | 4 MiB | deck.gl's WebGL2 device |
 | `r32float` output texture | 256 KiB | deck.gl's WebGL2 device |
 | int8 input, int8 path | 4 MiB, per run | uploaded each run into ONNX Runtime's GPU buffers |
-| float32 input, float32 path | 16 MiB, per run | uploaded each run into ONNX Runtime's GPU buffers |
+| float32 input, float32 path (removed) | 16 MiB, per run | uploaded each run into ONNX Runtime's GPU buffers |
 | float32 input, gpu path | **16 MiB, kept** | ONNX Runtime's WebGPU device |
 
 So 15 tiles hold 60 MiB of embeddings on the CPU, and the gpu path adds

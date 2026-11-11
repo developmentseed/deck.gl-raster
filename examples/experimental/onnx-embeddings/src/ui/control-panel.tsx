@@ -115,12 +115,6 @@ const INPUT_PATHS: {
       "Sends the stored bytes, 4 MB per tile, on every run. The model's first step turns them into float32 on the GPU. Uses no extra memory.",
   },
   {
-    value: "float32",
-    label: "float32, converted in JavaScript",
-    description:
-      "JavaScript converts each tile to float first, then sends 16 MB per tile on every run. The conversion and the larger upload make this the slowest.",
-  },
-  {
     value: "gpu",
     label: "float32, kept on the GPU",
     description:
