@@ -9,8 +9,10 @@ import {
   Stack,
   Text,
 } from "@chakra-ui/react";
-import type { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
+import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
+import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import {
+  ColormapPreview,
   ExternalLink,
   Field,
   HelpTooltip,
@@ -54,6 +56,8 @@ export type ClusterFit = {
 };
 
 type ColormapName = keyof typeof COLORMAP_INDEX;
+
+const COLORMAP_ROW_COUNT = Object.keys(COLORMAP_INDEX).length;
 
 const COLORMAPS: readonly ColormapName[] = [
   "magma",
@@ -484,33 +488,41 @@ function ColormapAndOpacity({
   "colormapName" | "opacity" | "onColormapNameChange" | "onOpacityChange"
 >) {
   return (
-    <HStack gap="2" align="end">
-      <Field label="Colormap">
-        <NativeSelect.Root size="sm">
-          <NativeSelect.Field
-            value={colormapName}
-            onChange={(e) =>
-              onColormapNameChange(e.target.value as ColormapName)
-            }
-          >
-            {COLORMAPS.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </NativeSelect.Field>
-          <NativeSelect.Indicator />
-        </NativeSelect.Root>
-      </Field>
-      <ValueSlider
-        label={`Opacity: ${opacity.toFixed(2)}`}
-        min={0}
-        max={1}
-        step={0.05}
-        value={opacity}
-        onChange={onOpacityChange}
+    <Stack gap="2">
+      <HStack gap="2" align="end">
+        <Field label="Colormap">
+          <NativeSelect.Root size="sm">
+            <NativeSelect.Field
+              value={colormapName}
+              onChange={(e) =>
+                onColormapNameChange(e.target.value as ColormapName)
+              }
+            >
+              {COLORMAPS.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </NativeSelect.Field>
+            <NativeSelect.Indicator />
+          </NativeSelect.Root>
+        </Field>
+        <ValueSlider
+          label={`Opacity: ${opacity.toFixed(2)}`}
+          min={0}
+          max={1}
+          step={0.05}
+          value={opacity}
+          onChange={onOpacityChange}
+        />
+      </HStack>
+      <ColormapPreview
+        spriteUrl={colormapsPngUrl}
+        rowCount={COLORMAP_ROW_COUNT}
+        rowIndex={COLORMAP_INDEX[colormapName]}
+        label={colormapName}
       />
-    </HStack>
+    </Stack>
   );
 }
 
