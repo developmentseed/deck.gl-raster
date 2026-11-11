@@ -18,8 +18,8 @@ export function dequantize(value: number): number {
 }
 
 /**
- * Dequantize a whole `[64, h, w]` tile into `out`, which must have the same
- * length.
+ * Dequantize a whole `[64, height, width]` tile into `out`, which must have
+ * the same length.
  */
 export function dequantizeInto(embeddings: Int8Array, out: Float32Array): void {
   if (out.length !== embeddings.length) {
@@ -38,17 +38,17 @@ export function dequantizeInto(embeddings: Int8Array, out: Float32Array): void {
 }
 
 /**
- * Read the dequantized 64-band vector of one pixel from a `[64, h, w]` tile,
- * or `null` if the pixel is nodata.
+ * Read the dequantized 64-band vector of one pixel from a
+ * `[64, height, width]` tile, or `null` if the pixel is nodata.
  */
 export function readPixelVector(
   embeddings: Int8Array,
-  width: number,
   height: number,
-  col: number,
+  width: number,
   row: number,
+  col: number,
 ): Float32Array | null {
-  const planeSize = width * height;
+  const planeSize = height * width;
   const offset = row * width + col;
   if (embeddings[offset] === NODATA_INT8) {
     return null;

@@ -42,7 +42,7 @@ export async function loadTile(
   arr: zarr.Array<"int8", zarr.Readable>,
   options: GetTileDataOptions,
 ): Promise<AefTileData> {
-  const { device, sliceSpec, width, height, signal, x, y, z } = options;
+  const { device, sliceSpec, height, width, signal, x, y, z } = options;
 
   const chunk = await zarr.get(arr, sliceSpec, { signal });
   const { data } = chunk;

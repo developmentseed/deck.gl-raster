@@ -12,14 +12,14 @@ ONNX Runtime Web as an engine for per-pixel raster work?
 Yes. Similarity search, k-means clusters and a click-trained logistic
 regression all run as tiny ONNX models on WebGPU over every loaded tile of the
 AlphaEarth Foundations mosaic, and update in place when the query changes. A
-query change over the 15 tiles of the default view takes about **120 ms**
-(8 ms per tile), or about **60 ms** if each tile's embeddings stay on the GPU.
+query change over the 15 tiles of the default view takes about **110 ms**
+(7 ms per tile), or about **75 ms** if each tile's embeddings stay on the GPU.
 
 The compute itself is fast: about **1 ms** per 256 × 256 × 64 tile once the
 data is on ONNX Runtime's GPU device. Everything around it is the cost: the
 29 MB WebAssembly binary, a WebGPU device that ONNX Runtime owns apart from
-deck.gl's WebGL2 context, int8 data that the WebGPU provider cannot cast, and a
-16 MiB float32 upload per tile per run. As a general engine for per-pixel band math,
+deck.gl's WebGL2 context, patchy support for integer data, and an upload of
+every tile on every run. As a general engine for per-pixel band math,
 it is heavy and leaky; as a way to run a small trained model per pixel, it
 works well. Details below.
 
@@ -49,7 +49,7 @@ there.
 ### Data flow
 
 1. `getTileData` (`src/aef/get-tile-data.ts`, `loadTile`) reads one chunk with
-   `zarr.get`, keeps the `Int8Array` of shape `[64, h, w]`, uploads it as an
+   `zarr.get`, keeps the `Int8Array` of shape `[64, height, width]`, uploads it as an
    `r8sint` 2D array texture (the RGB composite and nodata mask read it), and
    creates an empty `r32float` texture for model output.
 2. `TileAnalysis` (`src/analysis/tile-analysis.ts`) is the bridge between
@@ -85,13 +85,15 @@ that is a model input:
 
 | Model | Inputs besides `embeddings` | Output per pixel | Size (int8 / float32) |
 | --- | --- | --- | --- |
-| similarity | `query` `[1, 64]` | dot product (a cosine, as embeddings are unit length) | 403 / 238 B |
-| clusters | `centroids` `[k, 64]`, `cluster_ids` `[1, k]` | index of the best centroid, as a float | 774 / 609 B |
-| classifier | `weights` `[1, 64]`, `bias` `[1]` | `sigmoid(w · x + b)` | 487 / 322 B |
+| similarity | `query` `[1, 64]` | dot product (a cosine, as embeddings are unit length) | 622 / 397 B |
+| clusters | `centroids` `[k, 64]`, `cluster_ids` `[1, k]` | index of the best centroid, as a float | 1,296 / 1,071 B |
+| classifier | `weights` `[1, 64]`, `bias` `[1]` | `sigmoid(w · x + b)` | 685 / 460 B |
 
-The int8 variants dequantize in the graph (`Cast`, then `v * |v| / 127.5²`;
-`Sign` would run on the CPU). The float32 variants take values dequantized in
-JavaScript with a 256-entry lookup table.
+The int8 variants dequantize in the graph: `DequantizeLinear` with a scale of
+1 / 127.5, then `x * |x|`. `Cast` from int8 and `Sign` would both run on the
+CPU. The float32 variants take values dequantized in JavaScript with a
+256-entry lookup table. The models use opset 23, the highest at which
+`DequantizeLinear` runs on WebGPU (see friction item 2).
 
 **Clusters avoid `ArgMax`**, whose int64 output sends it to the CPU. The graph
 takes the argmax with float operations only: `ReduceMax` over the clusters,
@@ -108,15 +110,17 @@ in plain JavaScript on the main thread.
 
 The "Model input" control switches how a tile reaches the model:
 
-- **int8 (default)**: the raw `Int8Array` as a CPU tensor. ONNX Runtime runs
-  `Cast` on its CPU provider, copies the 16 MiB float32 result to the GPU, and
-  runs the rest there. Fastest of the paths that keep no extra copy.
+- **int8 (default)**: the raw `Int8Array` as a CPU tensor. ONNX Runtime
+  uploads its 4 MiB and dequantizes on the GPU. Fastest of the paths that keep
+  no extra copy.
 - **float32**: dequantized in JavaScript into one reused 16 MiB buffer, then a
-  CPU tensor. Every node runs on WebGPU (the session sets
-  `disable_cpu_ep_fallback`, so a fallback would be an error).
+  CPU tensor.
 - **gpu**: dequantized once per tile into a buffer on ONNX Runtime's device,
   wrapped with `Tensor.fromGpuBuffer`, kept until the tile unloads. 16 MiB of
   GPU memory per tile.
+
+Every session sets `disable_cpu_ep_fallback`, so a node that would run on the
+CPU is an error.
 
 ### Alternatives rejected
 
@@ -158,18 +162,20 @@ three formulations:
 | 1 × 1 `Conv`, `preferredLayout: "NCHW"` | 6.0 | 4.8 | 6.8 | 1.1 |
 | `Reshape` + `MatMul` (shipped) | **5.7** | 4.5 | 6.6 | **1.0** |
 
-Then the three shipped models, from a second run on the committed files (the
-first table's `MatMul` row used a copy with the same nodes):
+That table used the first version of the int8 models, which began with a
+`Cast`. The three shipped models, whose int8 variants begin with
+`DequantizeLinear`, from a later run on the committed files:
 
-| Model | int8 input (`Cast` on CPU) | float32 from CPU | float32, JS dequantization included | float32 already on the GPU |
+| Model | int8 input (dequantized on the GPU) | float32 from CPU | float32, JS dequantization included | float32 already on the GPU |
 | --- | --- | --- | --- | --- |
-| similarity | 5.7 | 4.6 | 6.7 | **1.1** |
-| clusters, k = 8 | 6.7 | 5.2 | 7.2 | **1.5** |
-| classifier | 5.6 | 4.4 | 6.5 | **1.0** |
+| similarity | **3.3** | 5.0 | 7.2 | **1.2** |
+| clusters, k = 8 | **4.1** | 5.5 | 7.6 | **2.0** |
+| classifier | **3.5** | 4.9 | 7.1 | **1.1** |
 
-JavaScript dequantization through the lookup table takes **3.2–3.3 ms** per
-tile, so ONNX Runtime's CPU `Cast` plus a GPU dequantization (5.7 ms in total)
-beats dequantizing in JavaScript and sending float32 (6.6–6.7 ms).
+With `Cast` the int8 column was 5.7, 6.7 and 5.6: the cast ran on the CPU and
+its 16 MiB float32 result was copied to the GPU. JavaScript dequantization
+through the lookup table takes **3.2–3.3 ms** per tile, as long as a whole
+int8 run.
 
 ### One query change over all loaded tiles, in the app
 
@@ -180,16 +186,22 @@ its shaders.
 
 | View | Model | int8 (default) | float32 | gpu |
 | --- | --- | --- | --- | --- |
-| 15 tiles | similarity | **115–129** (7.6–8.6 per tile) | 165–190 (11.0–12.6) | **54–64** (3.5–4.2) |
-| 15 tiles | clusters, k = 6 | 117–136 (7.8–9.0) | not measured | 57–70 (3.8–4.7) |
-| 15 tiles | classifier | 117–127 (7.8–8.4) | not measured | 53–58 (3.5–3.9) |
-| 60 tiles | similarity | **408–446** (6.7–7.2) | 577–678 (9.6–10.6) | **125–143** (2.1–2.4) |
+| 15 tiles | similarity | **101–120** (6.7–8.0 per tile) | 191–219 (12.7–14.6) | **66–96** (4.4–6.3) |
+| 15 tiles | clusters, k = 6 | 91–102 (6.0–6.7) | not measured | 57–70 (3.8–4.6) |
+| 15 tiles | classifier | 87–113 (5.8–7.5) | not measured | 57–66 (3.8–4.4) |
 
-The first pass on the gpu path also dequantizes and uploads every tile: 223 ms
-for 15 tiles, 608 ms for 60.
+These vary from run to run more than the paths differ: a second run of the
+similarity row gave 62–119 for int8 and 35–49 for gpu. With the first version
+of the int8 models (`Cast` on the CPU), the same script gave 115–129 for int8
+on a day when float32 took 165–190 and gpu 54–64. At 60 tiles, measured with
+that version only and before the minimum zoom was raised, a pass took 408–446
+for int8, 577–678 for float32 and 125–143 for gpu.
 
-Per tile, the app is slower than the isolated test, about 8 ms against 5.7 for
-int8 and 2 to 4 ms against 1.0 for gpu input. The app shares the main thread
+The first pass on the gpu path also dequantizes and uploads every tile: 222 ms
+for 15 tiles.
+
+Per tile, the app is slower than the isolated test, about 7 ms against 3.3 for
+int8 and 4 to 6 ms against 1.2 for gpu input. The app shares the main thread
 and the GPU with MapLibre and deck.gl, and every run awaits its readback
 before the next starts. I did not profile the gap further.
 
@@ -197,8 +209,8 @@ Other timings:
 
 - k-means on 15,360 sampled pixels (1,024 per tile), k = 6, at most 25
   iterations: **205–222 ms** on the main thread.
-- The logistic regression fit on a handful of points was not timed separately;
-  by operation count it is a few milliseconds.
+- The logistic regression fit on 12 points, timed in Node on the same
+  machine: 4–6 ms at the default 2,000 steps, 18 ms at 10,000.
 
 ### Memory
 
@@ -207,7 +219,8 @@ Other timings:
 | int8 embeddings | 4 MiB | CPU (JavaScript) |
 | `r8sint` band texture | 4 MiB | deck.gl's WebGL2 device |
 | `r32float` output texture | 256 KiB | deck.gl's WebGL2 device |
-| float32 input, int8 and float32 paths | 16 MiB, per run | uploaded each run into ONNX Runtime's GPU buffers |
+| int8 input, int8 path | 4 MiB, per run | uploaded each run into ONNX Runtime's GPU buffers |
+| float32 input, float32 path | 16 MiB, per run | uploaded each run into ONNX Runtime's GPU buffers |
 | float32 input, gpu path | **16 MiB, kept** | ONNX Runtime's WebGPU device |
 
 So 15 tiles hold 60 MiB of embeddings on the CPU, and the gpu path adds
@@ -223,7 +236,7 @@ not measured; ONNX Runtime's own buffer cache is not included.
 | ONNX Runtime JavaScript, a lazy chunk | 120 kB (39 kB gzip) |
 | ONNX Runtime WebAssembly (`ort-wasm-simd-threaded.asyncify.wasm`) | **28.7 MB (7.3 MB gzip)** |
 | This example's code, beyond `aef-mosaic` | +37 kB (+12 kB gzip) |
-| Models | 238 to 774 bytes each |
+| Models | 397 to 1,296 bytes each |
 | Page load to first tiles drawn | 2.5–5.1 s (S3 reads) |
 | First mode to ONNX Runtime ready (import, WebAssembly compile, device, first session), served from localhost | **0.40–0.45 s** built; 1.7–2.6 s on a cold Vite dev server |
 
@@ -237,10 +250,12 @@ the node placements), and from creating each session with
 `disable_cpu_ep_fallback`:
 
 - **float32 models: every node on WebGPU** (`Reshape`, `MatMul`, `ReduceMax`,
-  `Sub`, `Mul`, `Add`, `Floor`, `Relu`, `Sigmoid`). The app creates these
-  sessions with fallback disabled, so this holds for every run.
-- **int8 models: `Cast` on the CPU provider**, everything else on WebGPU, with
-  a `MemcpyFromHost` of the 16 MiB float32 tensor that `Cast` produces.
+  `Sub`, `Mul`, `Add`, `Floor`, `Relu`, `Sigmoid`).
+- **int8 models: every node on WebGPU**, `DequantizeLinear` and `Abs`
+  included. Their first version put **`Cast` on the CPU provider**, with a
+  `MemcpyFromHost` of the 16 MiB float32 tensor that `Cast` produced.
+- The app creates every session with fallback disabled, so this holds for
+  every run.
 - 1 × 1 `Conv`: WebGPU, plus two `Transpose` nodes that ONNX Runtime inserts,
   since the provider prefers NHWC.
 - From earlier single-op probes with the same runtime: `ArgMax` (int64
@@ -265,8 +280,11 @@ Every awkward API and wrong assumption, in the order I hit them.
    `session.disable_cpu_ep_fallback`, passed through
    `extra: { session: { disable_cpu_ep_fallback: "1" } }`.
 2. **Integer support is patchy.** `Cast` from int8 has no WebGPU kernel, so
-   every int8 run pays a CPU cast and a float32 upload four times the size of
-   the data. The provider has int64 off by default (its log prints
+   the first version of the int8 models paid a CPU cast and a float32 upload
+   four times the size of the data on every run. `DequantizeLinear` from int8
+   does run on WebGPU, but only up to opset 23: in a model at opset 24, 25 or
+   26 the same node runs on the CPU, and ONNX Runtime 1.31.1 does not load
+   opset 27 or 28. The provider has int64 off by default (its log prints
    `WebGPU EP enable int64: 0`), which sends `ArgMax` to the CPU. An earlier
    single-op probe on the same machine and runtime, which I did not re-run,
    found more: uint8 `Cast` to float runs on WebGPU but uint8 `Add`, `Div`,
@@ -301,8 +319,9 @@ Every awkward API and wrong assumption, in the order I hit them.
    import plus `env.wasm.wasmPaths = { wasm: url }` serves it with no CDN. I
    did not test whether Vite resolves it without `wasmPaths`.
 9. **My JavaScript dequantization lost to ONNX Runtime's CPU `Cast`**: 3.2 to
-   3.3 ms for the lookup-table loop, while the int8 path's whole run is 5.7 ms.
-   I expected the float32 path to win.
+   3.3 ms for the lookup-table loop, while the int8 path's whole run was
+   5.7 ms. I expected the float32 path to win. With `DequantizeLinear` on the
+   GPU the whole run is 3.3 ms.
 10. **Graphs come from Python.** There is no graph builder in the JavaScript
     package; the models are written in Python with onnxscript and the bytes
     are committed. A
@@ -369,7 +388,7 @@ For someone deciding whether to build per-pixel raster math on it.
 
 - **The compute is fast.** A 64-band dot product over a 256 × 256 tile takes
   about 1 ms when the input is already on the GPU, and the cluster model with
-  its extra reductions takes 1.5 ms.
+  its extra reductions takes 1.5 to 2 ms.
 - **Parameters are inputs.** Queries, centroids and weights change per run with
   no new session and no shader compile; a query change is just a pass.
 - **A standard, testable format.** The same `.onnx` files run in Python, where I
@@ -385,11 +404,13 @@ For someone deciding whether to build per-pixel raster math on it.
 ### Cons
 
 - **Data movement dominates.** With float32 input from the CPU a run takes
-  4.4 to 5.2 ms per tile, against 1.0 to 1.5 ms when the same tensor is
-  already on the GPU: most of every run is the 16 MiB upload. Avoiding it means keeping float32
+  4.9 to 5.5 ms per tile, against 1.1 to 2.0 ms when the same tensor is
+  already on the GPU: most of every run is the 16 MiB upload. Sending int8
+  and dequantizing on the GPU brings the upload down to 4 MiB and the run to
+  3.3 to 4.1 ms. Avoiding the upload means keeping float32
   copies on ONNX Runtime's device: 16 MiB per tile, 4 times the int8 data, on
   a second GPU device next to the renderer's.
-- **Integer rasters are second-class.** int8 casts on the CPU, uint8
+- **Integer rasters are second-class.** int8 `Cast` runs on the CPU, uint8
   arithmetic falls back, uint16 graphs (Sentinel-2, Landsat) did not load at
   all, and int64 is off by default. Most raster sources are integers, so a
   tool would widen them to float32 or int32 before the runtime sees them.
@@ -433,5 +454,5 @@ already has.
 - Not tried: a shared device with a WebGPU deck.gl, float16 inputs (half the
   memory of float32), several tiles batched into one run, multi-threaded
   WebAssembly (needs cross-origin isolation), and ONNX Runtime's worker proxy
-  (`env.wasm.proxy`) to take the CPU `Cast` off the main thread.
+  (`env.wasm.proxy`).
 - The quality of the clusters and the classifier beyond looking at the map.

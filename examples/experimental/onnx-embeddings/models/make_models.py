@@ -35,10 +35,14 @@ import onnx
 import onnx.inliner
 import onnxruntime as ort
 from onnxscript import FLOAT, INT8, script
-from onnxscript import opset20 as op
+
+# The highest opset at which ONNX Runtime Web 1.31 runs `DequantizeLinear` on
+# WebGPU.
+from onnxscript import opset23 as op
 
 NUM_BANDS = 64
-DEQUANT_SCALE = 1.0 / (127.5 * 127.5)
+# AlphaEarth's quantization: a stored int8 `v` stands for `(v / 127.5)^2 * sign(v)`.
+DEQUANT_SCALE = 1.0 / 127.5
 # Score gaps larger than 1 / ARGMAX_GAIN select a single cluster.
 ARGMAX_GAIN = 1.0e7
 # Shape of one tile as a matrix with a column per pixel.
@@ -54,11 +58,13 @@ PerPixel = FLOAT[1, "pixels"]
 def pixels_from_int8(tile: Int8Tile) -> Pixels:
     """Dequantize a tile and flatten it to one column per pixel.
 
-    AlphaEarth's `(v / 127.5)^2 * sign(v)` is written as `v * |v| / 127.5^2`,
-    because ONNX Runtime Web's WebGPU provider runs `Sign` on the CPU.
+    `DequantizeLinear` turns the int8 values into `v / 127.5` as float32. A
+    plain `Cast` would do the same, but ONNX Runtime Web's WebGPU provider
+    runs `Cast` from int8 on the CPU. `(v / 127.5)^2 * sign(v)` is then written
+    as `x * |x|`, because the provider also runs `Sign` on the CPU.
     """
-    value = op.Cast(tile, to=FLOAT.dtype)
-    dequantized = value * op.Abs(value) * DEQUANT_SCALE
+    scaled = op.DequantizeLinear(tile, DEQUANT_SCALE)
+    dequantized = scaled * op.Abs(scaled)
     return op.Reshape(dequantized, PIXELS_SHAPE)
 
 
@@ -159,7 +165,8 @@ def check(out_dir: pathlib.Path) -> None:
     rng = np.random.default_rng(0)
     raw = rng.integers(-127, 128, size=(1, NUM_BANDS, 37, 53), dtype=np.int8)
     value = raw.astype(np.float32)
-    dequantized = value * np.abs(value) * np.float32(DEQUANT_SCALE)
+    scaled = value * np.float32(DEQUANT_SCALE)
+    dequantized = scaled * np.abs(scaled)
     tiles = {"int8": raw, "float32": dequantized}
     pixels = dequantized.reshape(NUM_BANDS, -1)
 

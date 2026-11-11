@@ -31,7 +31,8 @@ import type { RgbSettings, TileView } from "./aef/render-tile.js";
 import { BACKDROP_BRIGHTNESS, makeRenderTile } from "./aef/render-tile.js";
 import { buildSelection } from "./aef/selection.js";
 import { sphericalKMeans } from "./analysis/kmeans.js";
-import { fitLogistic } from "./analysis/logistic.js";
+import type { LogisticOptions } from "./analysis/logistic.js";
+import { DEFAULT_LOGISTIC_OPTIONS, fitLogistic } from "./analysis/logistic.js";
 import { samplePixels } from "./analysis/sample-pixels.js";
 import type { AnalysisStatus } from "./analysis/tile-analysis.js";
 import { TileAnalysis } from "./analysis/tile-analysis.js";
@@ -109,6 +110,9 @@ export default function App() {
   const [points, setPoints] = useState<LabeledPoint[]>([]);
   const [nextLabel, setNextLabel] = useState<0 | 1>(1);
   const [probabilityThreshold, setProbabilityThreshold] = useState(0.5);
+  const [logisticOptions, setLogisticOptions] = useState<LogisticOptions>(
+    DEFAULT_LOGISTIC_OPTIONS,
+  );
 
   const [status, setStatus] = useState<AnalysisStatus | null>(null);
   const [analysis] = useState(
@@ -177,8 +181,8 @@ export default function App() {
     for (const [i, point] of points.entries()) {
       samples.set(point.vector, i * NUM_BANDS);
     }
-    return fitLogistic(samples, labels, NUM_BANDS);
-  }, [points]);
+    return fitLogistic(samples, labels, NUM_BANDS, logisticOptions);
+  }, [points, logisticOptions]);
 
   const task = useMemo<AnalysisTask | null>(() => {
     switch (mode) {
@@ -256,10 +260,10 @@ export default function App() {
       return (
         readPixelVector(
           tile.embeddings,
-          tile.width,
           tile.height,
-          location.col,
+          tile.width,
           location.row,
+          location.col,
         ) ?? "no-data"
       );
     },
@@ -489,6 +493,7 @@ export default function App() {
         points={points}
         nextLabel={nextLabel}
         probabilityThreshold={probabilityThreshold}
+        logisticOptions={logisticOptions}
         status={status}
         onLocationChange={handleLocationChange}
         onYearIdxChange={setYearIdx}
@@ -505,6 +510,7 @@ export default function App() {
         onNextLabelChange={setNextLabel}
         onClearPoints={() => setPoints([])}
         onProbabilityThresholdChange={setProbabilityThreshold}
+        onLogisticOptionsChange={setLogisticOptions}
       />
     </div>
   );

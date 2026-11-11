@@ -22,6 +22,7 @@ import { NUM_BANDS, NUM_YEARS, YEAR_ORIGIN } from "../aef/constants.js";
 import type { Location } from "../aef/locations.js";
 import { LOCATIONS } from "../aef/locations.js";
 import type { RgbSettings } from "../aef/render-tile.js";
+import type { LogisticOptions } from "../analysis/logistic.js";
 import type { AnalysisStatus } from "../analysis/tile-analysis.js";
 import { MAX_CLUSTERS } from "../gpu/cluster-overlay.js";
 import type { InputPath } from "../onnx/model-runner.js";
@@ -71,6 +72,35 @@ const MODES: { value: Mode; label: string }[] = [
   { value: "classifier", label: "Classifier" },
 ];
 
+/** The choices for each setting of the classifier's training. */
+const LOGISTIC_CHOICES: {
+  key: keyof LogisticOptions;
+  label: string;
+  /** Explanation shown in a tooltip beside the label. */
+  help: string;
+  /** The values offered in the select. */
+  values: readonly number[];
+}[] = [
+  {
+    key: "learningRate",
+    label: "Learning rate",
+    help: "How far each training step moves the weights. The embeddings are unit-length vectors and the loss is averaged over the points, so steps this large are stable. A small rate needs more steps to get anywhere.",
+    values: [0.01, 0.1, 0.5, 1, 2],
+  },
+  {
+    key: "iterations",
+    label: "Steps",
+    help: "How many training steps to take. Each step uses every labeled point.",
+    values: [100, 500, 2000, 10000],
+  },
+  {
+    key: "l2",
+    label: "L2 penalty",
+    help: "How strongly large weights are discouraged. More gives a smoother, less confident classifier. Less fits the labeled points more closely.",
+    values: [0, 0.0001, 0.001, 0.01, 0.1],
+  },
+];
+
 /** The ways a tile's int8 embeddings can reach the model. */
 const INPUT_PATHS: {
   value: InputPath;
@@ -82,13 +112,13 @@ const INPUT_PATHS: {
     value: "int8",
     label: "Raw int8, converted by the model",
     description:
-      "Sends the stored bytes, 4 MB per tile, on every run. The model's first step turns them into float32, and ONNX Runtime has no GPU version of that step for int8, so it runs on the CPU before the rest runs on the GPU. Uses no extra memory.",
+      "Sends the stored bytes, 4 MB per tile, on every run. The model's first step turns them into float32 on the GPU. Uses no extra memory.",
   },
   {
     value: "float32",
     label: "float32, converted in JavaScript",
     description:
-      "JavaScript converts each tile to float first, then sends 16 MB per tile on every run. The whole model runs on the GPU, but the larger upload makes this the slowest.",
+      "JavaScript converts each tile to float first, then sends 16 MB per tile on every run. The conversion and the larger upload make this the slowest.",
   },
   {
     value: "gpu",
@@ -120,6 +150,7 @@ export type ControlPanelProps = {
   points: readonly LabeledPoint[];
   nextLabel: 0 | 1;
   probabilityThreshold: number;
+  logisticOptions: LogisticOptions;
   status: AnalysisStatus | null;
   onLocationChange: (location: Location) => void;
   onYearIdxChange: (idx: number) => void;
@@ -136,6 +167,7 @@ export type ControlPanelProps = {
   onNextLabelChange: (label: 0 | 1) => void;
   onClearPoints: () => void;
   onProbabilityThresholdChange: (value: number) => void;
+  onLogisticOptionsChange: (options: LogisticOptions) => void;
 };
 
 /**
@@ -384,9 +416,11 @@ function ClassifierControls({
   points,
   nextLabel,
   probabilityThreshold,
+  logisticOptions,
   onNextLabelChange,
   onClearPoints,
   onProbabilityThresholdChange,
+  onLogisticOptionsChange,
   ...rest
 }: ControlPanelProps) {
   const positives = points.filter((point) => point.label === 1).length;
@@ -438,6 +472,33 @@ function ClassifierControls({
         value={probabilityThreshold}
         onChange={onProbabilityThresholdChange}
       />
+      <HStack gap="2" align="end">
+        {LOGISTIC_CHOICES.map(({ key, label, help, values }) => (
+          <Field
+            key={key}
+            label={<LabelWithHelp label={label}>{help}</LabelWithHelp>}
+          >
+            <NativeSelect.Root size="sm">
+              <NativeSelect.Field
+                value={logisticOptions[key]}
+                onChange={(e) =>
+                  onLogisticOptionsChange({
+                    ...logisticOptions,
+                    [key]: Number(e.target.value),
+                  })
+                }
+              >
+                {values.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </NativeSelect.Field>
+              <NativeSelect.Indicator />
+            </NativeSelect.Root>
+          </Field>
+        ))}
+      </HStack>
       <ColormapAndOpacity {...rest} />
     </Stack>
   );

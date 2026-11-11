@@ -12,7 +12,8 @@ loaded tile:
   gives `k` centroids, and every pixel gets the color of its nearest one.
 - **Classifier**: click a few examples of what you are looking for, and
   shift-click a few of what you are not. A logistic regression fit in
-  JavaScript gives every pixel a probability.
+  JavaScript gives every pixel a probability. Its learning rate, number of
+  steps and L2 penalty are in the panel.
 - **RGB**: the three-band composite of `aef-mosaic`.
 
 A new query, new centroids or new examples run the models again on the tiles
@@ -56,7 +57,7 @@ pnpm dev
    in `getTileData`, before it is first drawn.
 3. The models are tiny ONNX graphs of about a kilobyte, written as Python
    functions in [`models/make_models.py`](models/make_models.py) and served
-   from `public/models/`. Each reshapes the `[1, 64, h, w]` tile to a
+   from `public/models/`. Each reshapes the `[1, 64, height, width]` tile to a
    `[64, pixels]` matrix and multiplies it by the query, the centroids or the
    classifier weights. Those are model inputs, so changing them needs no new
    model. The cluster model picks the nearest centroid with float operations

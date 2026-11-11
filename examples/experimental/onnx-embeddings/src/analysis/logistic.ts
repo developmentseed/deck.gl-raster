@@ -8,6 +8,26 @@ export type LogisticModel = {
   bias: number;
 };
 
+/** Settings of {@link fitLogistic}. */
+export type LogisticOptions = {
+  /**
+   * Step size of each update. The loss is a weighted mean over the samples,
+   * so for unit-length vectors any step below `2 / (0.5 + l2)` is stable.
+   */
+  learningRate: number;
+  /** Number of gradient descent updates. */
+  iterations: number;
+  /** Strength of the L2 penalty on the weights. */
+  l2: number;
+};
+
+/** The settings {@link fitLogistic} uses when none are given. */
+export const DEFAULT_LOGISTIC_OPTIONS: LogisticOptions = {
+  learningRate: 2,
+  iterations: 2000,
+  l2: 1e-3,
+};
+
 /**
  * Fit a logistic regression with an L2 penalty by full-batch gradient
  * descent. Each class is weighted equally, whatever its number of samples.
@@ -19,7 +39,7 @@ export function fitLogistic(
   samples: Float32Array,
   labels: Uint8Array,
   dims: number,
-  { l2 = 1e-3, iterations = 2000, learningRate = 2 } = {},
+  { learningRate, iterations, l2 }: LogisticOptions = DEFAULT_LOGISTIC_OPTIONS,
 ): LogisticModel {
   const n = labels.length;
   if (samples.length !== n * dims) {

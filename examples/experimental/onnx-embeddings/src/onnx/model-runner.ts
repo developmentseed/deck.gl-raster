@@ -6,10 +6,10 @@ import type { Ort } from "./runtime.js";
 /**
  * How a tile's embeddings reach the model.
  *
- * - `int8`: the raw int8 array, as a CPU tensor. The model dequantizes. Its
- *   `Cast` from int8 has no WebGPU kernel, so it runs on the CPU provider.
+ * - `int8`: the raw int8 array, as a CPU tensor. The model dequantizes on
+ *   WebGPU; the 4 MB tensor is uploaded per run.
  * - `float32`: dequantized in JavaScript into one reused buffer, as a CPU
- *   tensor. Every node runs on WebGPU; the 16 MB tensor is uploaded per run.
+ *   tensor. The 16 MB tensor is uploaded per run.
  * - `gpu`: dequantized once per tile into a buffer on ONNX Runtime's WebGPU
  *   device, which stays there until the tile unloads. 16 MB of GPU memory per
  *   256 × 256 tile.
@@ -48,10 +48,10 @@ export type ModelName = AnalysisTask["model"];
 export type ModelInput = {
   /** The tile's raw `[64, height, width]` embeddings. */
   embeddings: Int8Array;
-  /** Tile width in pixels. */
-  width: number;
   /** Tile height in pixels. */
   height: number;
+  /** Tile width in pixels. */
+  width: number;
   /**
    * The tile's dequantized embeddings on ONNX Runtime's device, for the `gpu`
    * input path. Created on the first run; the owner destroys it.
@@ -73,7 +73,7 @@ export type GpuEmbeddings = {
 
 /** One model output and how long the run took. */
 export type ModelOutput = {
-  /** One value per pixel, row-major, `width × height`. */
+  /** One value per pixel, row-major, `height × width`. */
   values: Float32Array;
   /** Wall time of the run, including upload and readback. */
   ms: number;
@@ -152,13 +152,8 @@ export class ModelRunner {
     const bytes = new Uint8Array(await response.arrayBuffer());
     return this.ort.InferenceSession.create(bytes, {
       executionProviders: ["webgpu"],
-      // The float32 models must run every node on WebGPU: fail rather than
-      // fall back to the CPU. The int8 models need the CPU for `Cast`, which
-      // ONNX Runtime reports as a warning through `console.error`, so only
-      // log errors for them.
-      ...(dtype === "float32"
-        ? { extra: { session: { disable_cpu_ep_fallback: "1" } } }
-        : { logSeverityLevel: 3 as const }),
+      // Every node must run on WebGPU: fail rather than fall back to the CPU
+      extra: { session: { disable_cpu_ep_fallback: "1" } },
     });
   }
 
@@ -183,7 +178,7 @@ export class ModelRunner {
   }
 
   private async embeddingsTensor(input: ModelInput): Promise<Tensor> {
-    const { embeddings, width, height } = input;
+    const { embeddings, height, width } = input;
     const dims = [1, NUM_BANDS, height, width];
     switch (this.inputPath) {
       case "int8":

@@ -16,8 +16,8 @@ export function samplePixels(
   const perTile = Math.max(1, Math.floor(maxSamples / tiles.length));
   const vectors: number[] = [];
   for (const tile of tiles) {
-    const { embeddings, width, height } = tile;
-    const planeSize = width * height;
+    const { embeddings, height, width } = tile;
+    const planeSize = height * width;
     // A grid of at most `perTile` pixels
     const step = Math.max(1, Math.ceil(Math.sqrt(planeSize / perTile)));
     for (let row = Math.floor(step / 2); row < height; row += step) {

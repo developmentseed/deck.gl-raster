@@ -5,10 +5,10 @@ import { tileKey } from "./get-tile-data.js";
 export type PixelLocation = {
   /** Key of the tile that holds the pixel, as in {@link tileKey}. */
   key: string;
-  /** Column of the pixel within the tile. */
-  col: number;
   /** Row of the pixel within the tile. */
   row: number;
+  /** Column of the pixel within the tile. */
+  col: number;
 };
 
 /**
@@ -40,7 +40,7 @@ export function locatePixel(
   }
   return {
     key: tileKey(z, tileX, tileY),
-    col: Math.floor(px) - tileX * level.tileWidth,
     row: Math.floor(py) - tileY * level.tileHeight,
+    col: Math.floor(px) - tileX * level.tileWidth,
   };
 }
