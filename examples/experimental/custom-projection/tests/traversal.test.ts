@@ -46,7 +46,6 @@ const CRS = new Map(
 );
 
 function select(presetId: string, center: number[], zoom: number) {
-  const preset = PROJECTIONS.find((p) => p.id === presetId)!;
   const viewport = new CustomProjectionViewport({
     crs: CRS.get(presetId)!,
     width: 1440,
@@ -58,7 +57,7 @@ function select(presetId: string, center: number[], zoom: number) {
   const tileset = new CustomProjectionTileset2D(
     { getTileData: () => null } as never,
     descriptor,
-    createProjectionContext(viewport, descriptor, preset.fromBounds),
+    createProjectionContext(viewport, descriptor),
     { getPixelRatio: () => 2 },
   );
   const indices = tileset.getTileIndices({
@@ -119,7 +118,7 @@ describe("pole guard", () => {
         (lng / 40) * 512,
         ((90 - lat) / 40) * 512,
       ],
-      fromBounds: undefined,
+      domain: undefined,
     });
     // Meshing stops at 89.5°: half a degree of the tile's 40° over 512 rows.
     expect(rect?.[1]).toBeCloseTo(6.4, 9);

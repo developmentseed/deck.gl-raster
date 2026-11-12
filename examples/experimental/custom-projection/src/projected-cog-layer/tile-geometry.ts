@@ -176,7 +176,7 @@ export interface DomainPixelRectOptions {
    * The projection's domain `[minLng, minLat, maxLng, maxLat]`. Defaults to
    * the whole globe, which still keeps tiles off the poles.
    */
-  fromBounds: Bounds | undefined;
+  domain: Bounds | undefined;
 }
 
 /**
@@ -217,7 +217,7 @@ export function computeDomainPixelRect(
     sourceToLngLat,
     lngLatToSource,
     inverseTransform,
-    fromBounds = WORLD_BOUNDS,
+    domain = WORLD_BOUNDS,
   } = options;
 
   const lngLatCorners = cornersToLngLat(corners, sourceToLngLat);
@@ -226,7 +226,7 @@ export function computeDomainPixelRect(
   }
   const { topLeft, topRight, bottomLeft } = lngLatCorners;
 
-  const [minLng, minLat, maxLng, maxLat] = fromBounds;
+  const [minLng, minLat, maxLng, maxLat] = domain;
   const rowDegrees = Math.abs(topLeft[1] - bottomLeft[1]) / tileHeight;
   const poleGuard = Math.min(90 - rowDegrees, MAX_MESH_LATITUDE);
   const latLow = Math.max(minLat, -poleGuard);

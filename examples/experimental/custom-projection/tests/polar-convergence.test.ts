@@ -62,11 +62,7 @@ describe("geographic tiles in polar views", () => {
       });
       const sizes = levelSizes(4);
       const descriptor = globalGeographicDescriptor(sizes);
-      const projection = createProjectionContext(
-        viewport,
-        descriptor,
-        preset.fromBounds,
-      );
+      const projection = createProjectionContext(viewport, descriptor);
       const tileset = new CustomProjectionTileset2D(
         { getTileData: () => null } as never,
         descriptor,

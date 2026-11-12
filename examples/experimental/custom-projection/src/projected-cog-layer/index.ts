@@ -6,4 +6,7 @@ export type {
   CustomProjectionViewportLike,
   ProjectionContext,
 } from "./projection-context.js";
-export { isCustomProjectionViewport } from "./projection-context.js";
+export {
+  isCustomProjectionViewport,
+  lngLatDomain,
+} from "./projection-context.js";

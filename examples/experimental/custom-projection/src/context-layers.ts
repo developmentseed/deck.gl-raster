@@ -267,8 +267,8 @@ export function projectLines(
 export interface ContextLayerOptions {
   /** Prefix for layer ids; change it when the projection changes. */
   idPrefix: string;
-  /** The projection's domain. */
-  fromBounds: Bounds;
+  /** The projection's domain in lng/lat. */
+  domain: Bounds;
   /** `[lng, lat]` → map meters. */
   project: Project;
   /** Graticule spacing in degrees. */
@@ -298,7 +298,7 @@ export function renderContextLayers(options: ContextLayerOptions): {
 } {
   const {
     idPrefix,
-    fromBounds,
+    domain,
     project,
     graticuleStep,
     coastlines,
@@ -309,7 +309,7 @@ export function renderContextLayers(options: ContextLayerOptions): {
   const below: Layer[] = [
     new SolidPolygonLayer<XY[]>({
       id: `${idPrefix}-ocean`,
-      data: [domainPolygon(fromBounds, project)],
+      data: [domainPolygon(domain, project)],
       getPolygon: (ring) => ring,
       getFillColor: [18, 32, 52],
       coordinateSystem: "cartesian",
@@ -321,11 +321,7 @@ export function renderContextLayers(options: ContextLayerOptions): {
     above.push(
       new PathLayer<XY[]>({
         id: `${idPrefix}-graticule`,
-        data: projectLines(
-          graticule(fromBounds, graticuleStep),
-          fromBounds,
-          project,
-        ),
+        data: projectLines(graticule(domain, graticuleStep), domain, project),
         getPath: (path) => path,
         getColor: [255, 255, 255, 60],
         getWidth: 1,
@@ -335,7 +331,7 @@ export function renderContextLayers(options: ContextLayerOptions): {
     );
   }
   if (showCoastlines && coastlines) {
-    const paths = projectLines(coastlines, fromBounds, project);
+    const paths = projectLines(coastlines, domain, project);
     // A light line over a dark casing reads on both pale and dark rasters.
     above.push(
       new PathLayer<XY[]>({
@@ -361,7 +357,7 @@ export function renderContextLayers(options: ContextLayerOptions): {
   above.push(
     new PathLayer<XY[]>({
       id: `${idPrefix}-outline`,
-      data: domainOutline(fromBounds, project),
+      data: domainOutline(domain, project),
       getPath: (path) => path,
       getColor: [150, 170, 200],
       getWidth: 1.5,

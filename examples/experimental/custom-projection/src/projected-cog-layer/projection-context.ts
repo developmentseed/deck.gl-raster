@@ -69,11 +69,22 @@ export interface ProjectionContext {
    * camera) in both the shim and upstream.
    */
   mapToCommon: ProjectionFunction;
-  /**
-   * The projection's domain in lng/lat. Without it, tiles are only kept off
-   * the poles: none are culled or trimmed for lying outside the domain.
-   */
-  fromBounds: Bounds | undefined;
+  /** The projection's domain in lng/lat; see {@link lngLatDomain}. */
+  domain: Bounds;
+}
+
+/**
+ * The lng/lat box that a CRS's `normalize` clamps positions into: its
+ * latitude limits (`normalize` caps north polar stereographic at 60°S, for
+ * example), with every longitude.
+ *
+ * Assumes the clamp is a latitude band, which holds for polar, cylindrical
+ * and pseudo-cylindrical projections.
+ */
+export function lngLatDomain(converter: CRSConverter): Bounds {
+  const south = converter.normalize([0, -90, 0])[1]!;
+  const north = converter.normalize([0, 90, 0])[1]!;
+  return [-180, south, 180, north];
 }
 
 /**
@@ -82,14 +93,10 @@ export interface ProjectionContext {
  *
  * Going through lng/lat means the layer never needs its own definition of
  * the map CRS, only the view's converter.
- *
- * @param fromBounds The projection's domain in lng/lat (see
- *   {@link ProjectionContext.fromBounds}).
  */
 export function createProjectionContext(
   viewport: CustomProjectionViewportLike,
   descriptor: RasterTilesetDescriptor,
-  fromBounds: Bounds | undefined,
 ): ProjectionContext {
   const { projectTo4326, projectFrom4326 } = descriptor;
   const converter = viewport.crs.converter.WGS84;
@@ -100,9 +107,7 @@ export function createProjectionContext(
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
       return [Number.NaN, Number.NaN];
     }
-    const projected = converter.from(
-      converter.normalize(clampToBounds([lng, lat, 0], fromBounds)),
-    );
+    const projected = converter.from(converter.normalize([lng, lat, 0]));
     return [projected[0]!, projected[1]!];
   };
 
@@ -126,9 +131,7 @@ export function createProjectionContext(
     if (!(Math.hypot(rx! - cx!, ry! - cy!) <= ROUND_TRIP_TOLERANCE)) {
       return null;
     }
-    const bounded = converter.normalize(
-      clampToBounds([world[0]!, world[1]!, 0], fromBounds),
-    );
+    const bounded = converter.normalize([world[0]!, world[1]!, 0]);
     return [bounded[0]!, bounded[1]!];
   };
 
@@ -148,21 +151,6 @@ export function createProjectionContext(
       const common = projectFlat([x, y]);
       return [common[0]!, common[1]!];
     },
-    fromBounds,
+    domain: lngLatDomain(converter),
   };
-}
-
-/** Clamp `[lng, lat, z]` to `bounds`, if any. */
-function clampToBounds(
-  position: number[],
-  bounds: Bounds | undefined,
-): number[] {
-  if (!bounds) {
-    return position;
-  }
-  return [
-    Math.max(bounds[0], Math.min(bounds[2], position[0]!)),
-    Math.max(bounds[1], Math.min(bounds[3], position[1]!)),
-    position[2] ?? 0,
-  ];
 }

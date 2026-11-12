@@ -48,11 +48,7 @@ describe("polar-native tiles in their own projection", () => {
       center: preset.initialViewState.center,
       zoom: preset.initialViewState.zoom,
     });
-    const projection = createProjectionContext(
-      viewport,
-      descriptor,
-      preset.fromBounds,
-    );
+    const projection = createProjectionContext(viewport, descriptor);
     const tileset = new CustomProjectionTileset2D(
       { getTileData: () => null } as never,
       descriptor,

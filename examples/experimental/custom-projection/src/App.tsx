@@ -51,7 +51,10 @@ import {
   makeRenderVelocityTile,
   OVERLAYS,
 } from "./overlays.js";
-import { ProjectedCOGLayer } from "./projected-cog-layer/index.js";
+import {
+  lngLatDomain,
+  ProjectedCOGLayer,
+} from "./projected-cog-layer/index.js";
 import type { ProjectionPreset } from "./projections.js";
 import { PROJECTIONS } from "./projections.js";
 
@@ -215,7 +218,7 @@ export default function App() {
     const converter = crs.converter.WGS84;
     return renderContextLayers({
       idPrefix: projection.id,
-      fromBounds: projection.fromBounds,
+      domain: lngLatDomain(converter),
       project: (position) => converter.from(converter.normalize(position)),
       graticuleStep: projection.graticuleStep,
       coastlines,
@@ -228,9 +231,6 @@ export default function App() {
     const common = {
       id: `cog-${dataset.id}`,
       source: dataset.url,
-      // Upstream's viewport doesn't expose a domain, so the layer gets it
-      // explicitly.
-      fromBounds: drawn?.fromBounds,
       debug: debugState.debug,
       debugOpacity: debugState.debugOpacity,
     };
@@ -246,7 +246,7 @@ export default function App() {
       renderTile: makeRenderElevationTile(colormapTexture),
       onTileUnload: (tile) => tile.content?.texture.destroy(),
     });
-  }, [dataset, drawn, colormapTexture, debugState]);
+  }, [dataset, colormapTexture, debugState]);
 
   const overlayLayer = useMemo(() => {
     if (!overlay || !colormapTexture) {
@@ -255,13 +255,12 @@ export default function App() {
     return new ProjectedCOGLayer<VelocityTileData>({
       id: `overlay-${overlay.id}`,
       source: overlay.url,
-      fromBounds: drawn?.fromBounds,
       getTileData: getVelocityTileData,
       renderTile: makeRenderVelocityTile(colormapTexture),
       onTileUnload: (tile) => tile.content?.texture.destroy(),
       opacity: 0.9,
     });
-  }, [overlay, drawn, colormapTexture]);
+  }, [overlay, colormapTexture]);
 
   const layers = [
     ...context.below,
