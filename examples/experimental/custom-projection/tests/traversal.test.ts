@@ -3,9 +3,11 @@ import {
   AffineTileset,
   AffineTilesetLevel,
 } from "@developmentseed/deck.gl-raster";
-import proj4 from "proj4";
 import { describe, expect, it } from "vitest";
-import { CustomProjectionViewport } from "../src/custom-projection/index.js";
+import {
+  CustomProjectionViewport,
+  resolveCRS,
+} from "../src/custom-projection/index.js";
 import type { TileIndex } from "../src/projected-cog-layer/custom-projection-tileset-2d.js";
 import { CustomProjectionTileset2D } from "../src/projected-cog-layer/custom-projection-tileset-2d.js";
 import { createProjectionContext } from "../src/projected-cog-layer/projection-context.js";
@@ -36,13 +38,17 @@ function globalDescriptor(levels: number) {
   });
 }
 
+/** Each preset's CRS, resolved once. */
+const CRS = new Map(
+  await Promise.all(
+    PROJECTIONS.map(async (p) => [p.id, await resolveCRS(p.crs)] as const),
+  ),
+);
+
 function select(presetId: string, center: number[], zoom: number) {
   const preset = PROJECTIONS.find((p) => p.id === presetId)!;
   const viewport = new CustomProjectionViewport({
-    projection: proj4("EPSG:4326", preset.toCrs),
-    fromCrs: "EPSG:4326",
-    toCrs: preset.toCrs,
-    fromBounds: preset.fromBounds,
+    crs: CRS.get(presetId)!,
     width: 1440,
     height: 900,
     center,

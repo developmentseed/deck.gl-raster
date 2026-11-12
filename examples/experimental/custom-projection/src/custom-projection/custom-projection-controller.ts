@@ -14,8 +14,8 @@ const KEYBOARD_PAN_SPEED = 100;
  * `_CustomProjectionController`: pan and zoom over the projected map plane.
  *
  * It wraps `OrthographicController`, translating between the upstream-style
- * view state (`center` in `fromCrs`, e.g. `[lng, lat]`) and the orthographic
- * controller's `target` (map meters):
+ * view state (`center` in WGS84 longitude/latitude) and the orthographic
+ * controller's `target` (map units):
  *
  * - Incoming view states that carry `center` but no `target` get a `target`
  *   computed from `center`. When both are present, `target` wins — it is what

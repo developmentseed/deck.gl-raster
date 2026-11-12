@@ -39,12 +39,10 @@ export type ProjectedCOGLayerProps<
   DataT extends MinimalTileData = DefaultDataT,
 > = COGLayerProps<DataT> & {
   /**
-   * The view's projection domain in lng/lat (the view's `fromBounds`). Tiles
-   * outside it are skipped, and geographic tiles crossing its edge are
-   * trimmed; without a domain, polar views fetch tiles from the wrong
-   * hemisphere and draw them clamped onto the map's rim. Defaults to the
-   * viewport's `fromBounds`, which only this example's shim exposes:
-   * upstream's viewport keeps it private, so pass it explicitly there.
+   * The view's projection domain in lng/lat. Tiles outside it are skipped,
+   * and geographic tiles crossing its edge are trimmed; without a domain,
+   * polar views fetch tiles from the wrong hemisphere and draw them clamped
+   * onto the map's rim.
    */
   fromBounds?: Bounds;
 };
@@ -150,9 +148,7 @@ export class ProjectedCOGLayer<
     viewport: Viewport & CustomProjectionViewportLike,
     descriptor: RasterTilesetDescriptor,
   ): ProjectionContext {
-    const fromBounds =
-      (this.props as ProjectedCOGLayerProps<DataT>).fromBounds ??
-      viewport.fromBounds;
+    const { fromBounds } = this.props as ProjectedCOGLayerProps<DataT>;
     const cached = this.state.projectionContext;
     if (
       cached &&

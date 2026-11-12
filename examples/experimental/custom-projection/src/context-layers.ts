@@ -1,6 +1,6 @@
 import type { Layer } from "@deck.gl/core";
 import { PathLayer, SolidPolygonLayer } from "@deck.gl/layers";
-import type { FromBounds } from "./custom-projection/index.js";
+import type { Bounds } from "@developmentseed/deck.gl-raster";
 
 /** `[longitude, latitude]` in degrees. */
 export type LngLat = [number, number];
@@ -48,7 +48,7 @@ export function densify(path: LngLat[], maxStep: number): LngLat[] {
  * re-enters. Crossings are interpolated onto the boundary, so clipped lines
  * end exactly at the edge of the projection's domain.
  */
-export function clipPath(path: LngLat[], bounds: FromBounds): LngLat[][] {
+export function clipPath(path: LngLat[], bounds: Bounds): LngLat[][] {
   const parts: LngLat[][] = [];
   let current: LngLat[] = [];
   for (let i = 1; i < path.length; i++) {
@@ -80,7 +80,7 @@ export function clipPath(path: LngLat[], bounds: FromBounds): LngLat[][] {
 function clipSegment(
   a: LngLat,
   b: LngLat,
-  [minX, minY, maxX, maxY]: FromBounds,
+  [minX, minY, maxX, maxY]: Bounds,
 ): [LngLat, LngLat] | null {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
@@ -141,7 +141,7 @@ export function projectPath(path: LngLat[], project: Project): XY[][] {
 
 /** Meridians and parallels at multiples of `step` within `bounds`. */
 export function graticule(
-  [minLng, minLat, maxLng, maxLat]: FromBounds,
+  [minLng, minLat, maxLng, maxLat]: Bounds,
   step: { lng: number; lat: number },
 ): LngLat[][] {
   const lines: LngLat[][] = [];
@@ -181,7 +181,7 @@ export function graticule(
  * to a point, or the ±180° meridians of an azimuthal projection, which
  * coincide inside the map.
  */
-export function domainOutline(bounds: FromBounds, project: Project): XY[][] {
+export function domainOutline(bounds: Bounds, project: Project): XY[][] {
   const [minLng, minLat, maxLng, maxLat] = bounds;
   const edge = (from: LngLat, to: LngLat) =>
     projectPath(densify([from, to], DENSIFY_STEP), project).flat();
@@ -218,7 +218,7 @@ export function domainOutline(bounds: FromBounds, project: Project): XY[][] {
 }
 
 /** The projection's domain as one polygon ring in map meters (the "ocean"). */
-export function domainPolygon(bounds: FromBounds, project: Project): XY[] {
+export function domainPolygon(bounds: Bounds, project: Project): XY[] {
   const [minLng, minLat, maxLng, maxLat] = bounds;
   const ring = densify(
     [
@@ -251,7 +251,7 @@ export function geojsonLines(geojson: {
 /** Clip lng/lat lines to the domain, densify, and project them. */
 export function projectLines(
   lines: LngLat[][],
-  bounds: FromBounds,
+  bounds: Bounds,
   project: Project,
 ): XY[][] {
   const projected: XY[][] = [];
@@ -268,7 +268,7 @@ export interface ContextLayerOptions {
   /** Prefix for layer ids; change it when the projection changes. */
   idPrefix: string;
   /** The projection's domain. */
-  fromBounds: FromBounds;
+  fromBounds: Bounds;
   /** `[lng, lat]` → map meters. */
   project: Project;
   /** Graticule spacing in degrees. */
@@ -285,9 +285,10 @@ export interface ContextLayerOptions {
  * Vector context for the map, preprojected on the CPU into map meters and
  * drawn with `coordinateSystem: "cartesian"`.
  *
- * Upstream's view preprojects lng/lat positions itself (with `resolution` for
- * curve subdivision) once visgl/deck.gl#10742 lands; cartesian map-meter
- * positions work in both the shim and upstream.
+ * Upstream's view also preprojects lng/lat positions itself (with
+ * `resolution` for curve subdivision; visgl/deck.gl#10742, in
+ * v10.0.0-alpha.1); cartesian map-meter positions work in both the shim and
+ * upstream.
  *
  * Returns the layers to draw below the raster and above it.
  */
