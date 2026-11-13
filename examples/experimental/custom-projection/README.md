@@ -27,7 +27,8 @@ To move to deck.gl v10:
    stand-in's `CustomProjectionView`.
 2. Resolve CRSs with math.gl's `projectionEngine.getCRS` in place of the
    stand-in's `resolveCRS`.
-3. Delete `src/custom-projection/`.
+3. Move `pixelToWorld` out of `src/custom-projection/` (it works with
+   upstream's viewport too), then delete the directory.
 
 To view locally:
 

@@ -67,8 +67,9 @@ Within option 3, there were two ways to resolve `crs`:
   sends cartesian positions through `projectPosition`.
 - The rest of the example (the app, `ProjectedCOGLayer` and the context
   layers) uses only members that alpha.1's viewport has. Moving to v10 is
-  then an import swap, plus deleting the stand-in and the app's wait on
-  `initialize()`.
+  then an import swap: math.gl's `projectionEngine.getCRS` in place of the
+  stand-in's `resolveCRS`, then deleting the stand-in, keeping
+  `pixelToWorld`.
 - Projection behavior comes from `@math.gl/geospatial` `5.0.0-beta.8`, the
   version deck.gl `10.0.0-alpha.1` pins.
 - `ProjectedCOGLayer` takes no projection props: its domain comes from the
@@ -88,16 +89,22 @@ Within option 3, there were two ways to resolve `crs`:
 
 **Stand-in** ([`src/custom-projection/`](https://github.com/developmentseed/deck.gl-raster/tree/5b55894f3306867f2ae77166f6b71d2d8f6535f9/examples/experimental/custom-projection/src/custom-projection)):
 
-- The view takes `crs`, and accepts `resolution` and `orthographic` for
-  parity. `initialize()` resolves `crs` through a module-level cache around
-  `projectionEngine.getCRS`, keyed like upstream's `resolveCRS`, and rejects a
-  CRS that isn't projected. `makeViewport` returns `null` until then. `equals`
-  compares `crs` by content.
-- The viewport takes `crs: CRSDescriptor`. Its world-to-common scale per axis
-  is `metersPerUnit * NORMALIZATION_SCALE`, its camera target is
-  `from(normalize(center))`, and its signature is
-  `[crs.signature, resolution]`. `projection`, `fromCrs`, `toCrs`,
-  `fromBounds`, `preproject` and `postUnproject` go away.
+- The view takes `crs` and `resolution`. `initialize()` resolves `crs`
+  through a module-level cache around `projectionEngine.getCRS`, keyed like
+  upstream's `resolveCRS`, and rejects a CRS that isn't projected.
+  `makeViewport` returns `null` until then, and calls `initialize()` itself,
+  because deck.gl 9.4 never does. Left out of upstream's API: `orthographic`,
+  and `equals` comparing structured `crs` objects by content (every preset is
+  a string).
+- The viewport takes `crs: CRSDescriptor`. Its scale is the constant
+  `NORMALIZATION_SCALE`, so it accepts meter-based CRSs only: deck.gl 9.4's
+  `Viewport` constructor calls `projectFlat` before a subclass can store a
+  per-CRS scale. Its camera target is `from(normalize(center))`, and its
+  signature is `[crs.signature, resolution]`. `projection`, `fromCrs`,
+  `toCrs`, `fromBounds`, `preproject` and `postUnproject` go away.
+- Beside some maps math.gl's inverse returns a wrapped longitude instead of
+  throwing, so `pixelToWorld` and the camera's world center keep the old
+  stand-in's round-trip check.
 - The controller still wraps `OrthographicController`. It converts between
   `center` and `target` through the descriptor.
 
@@ -118,8 +125,10 @@ Within option 3, there were two ways to resolve `crs`:
 - Presets carry `crs` instead of `toCrs` and `fromBounds`. Web Mercator uses
   `EPSG:3857`, as upstream's test app does. The others keep their PROJ
   strings, because math.gl only knows a few EPSG codes (4326, 3857, UTM, UPS).
-- The app waits for `view.initialize()` before handing the view to `DeckGL`.
-  Only the stand-in needs this: v10's `Deck` does it itself.
+- The app resolves the preset's CRS with `resolveCRS` before handing the
+  view to `DeckGL`, and keeps the previous projection on screen meanwhile.
+  The context layers need the descriptor too, so this wait stays after the
+  move to v10, through math.gl's `projectionEngine.getCRS`.
 - The context layers project through the descriptor. The domain outline and
   the graticule follow the derived domain.
 - `proj4` moves to `devDependencies`: after this change only the tests use
