@@ -127,6 +127,31 @@ describe("CustomProjectionViewport", () => {
     expect(pixelToWorld(viewport, [400, 10])).toBeNull();
   });
 
+  it("returns null for pixels beside the map, whose inverse wraps around", () => {
+    // 300 px right of the center is about 23,500 km east: past Equal Earth's
+    // right edge (about 17,240 km), where math.gl's inverse returns a
+    // wrapped longitude instead of throwing.
+    const viewport = new CustomProjectionViewport({
+      crs: EQUAL_EARTH_CRS,
+      width: 800,
+      height: 600,
+      center: [0, 0, 0],
+      zoom: 0,
+    });
+    expect(pixelToWorld(viewport, [700, 300])).toBeNull();
+  });
+
+  it("has no world center when the camera is beside the map", () => {
+    const viewport = new CustomProjectionViewport({
+      crs: EQUAL_EARTH_CRS,
+      width: 800,
+      height: 600,
+      target: [2.5e7, 0, 0],
+      zoom: 0,
+    });
+    expect(viewport.getCenterInWorld()).toBeNull();
+  });
+
   it("signs projections with the CRS signature and resolution", () => {
     expect(arcticViewport().projectionSignature).toBe(
       JSON.stringify([ARCTIC, 0]),

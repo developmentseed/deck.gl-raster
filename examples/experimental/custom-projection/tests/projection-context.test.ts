@@ -63,6 +63,14 @@ describe("createProjectionContext", () => {
     expect(lngLat?.[1]).toBeCloseTo(-60, 6);
   });
 
+  it("rejects an inverse that doesn't round-trip", async () => {
+    // Beside Equal Earth's right edge, math.gl's inverse returns a wrapped
+    // longitude (about -99°) instead of throwing.
+    expect(
+      (await presetContext("equal-earth")).mapToLngLat(2.5e7, 0),
+    ).toBeNull();
+  });
+
   it("rejects an inverse that throws", async () => {
     // Above Equal Earth's top edge, where math.gl's inverse throws.
     expect(

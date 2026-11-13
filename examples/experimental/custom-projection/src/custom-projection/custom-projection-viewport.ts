@@ -56,6 +56,12 @@ const EC = 40075016.6855;
 export const NORMALIZATION_SCALE = 512 / EC;
 
 /**
+ * Largest distance, in common units, between a map position and its inverse
+ * projected forward again, for the inverse to count as valid.
+ */
+const ROUND_TRIP_TOLERANCE = 1e-5;
+
+/**
  * Interim stand-in for upstream deck.gl's experimental
  * `_CustomProjectionViewport` (v10.0.0-alpha.1), built on
  * `OrthographicViewport`.
@@ -221,18 +227,26 @@ function projectCenter(crs: CRSDescriptor, center: number[]): number[] {
 }
 
 /**
- * Map meters to WGS84, or `null` where the inverse fails: math.gl throws for
- * coordinates outside a projection's domain.
+ * Map meters to WGS84, or `null` where the inverse fails. math.gl throws for
+ * some coordinates outside a projection's domain, and beside the map it can
+ * return a wrapped longitude instead, which doesn't project back to where it
+ * came from.
  */
 function unprojectToWorld(
   crs: CRSDescriptor,
-  mapUnits: number[],
+  mapMeters: number[],
 ): [number, number, number] | null {
+  const { WGS84 } = crs.converter;
   try {
-    const world = crs.converter.WGS84.to([mapUnits[0]!, mapUnits[1]!, 0]);
-    return Number.isFinite(world[0]) && Number.isFinite(world[1])
-      ? [world[0]!, world[1]!, 0]
-      : null;
+    const world = WGS84.to([mapMeters[0]!, mapMeters[1]!, 0]);
+    if (!Number.isFinite(world[0]) || !Number.isFinite(world[1])) {
+      return null;
+    }
+    const roundTrip = WGS84.from(world);
+    const error =
+      Math.hypot(roundTrip[0]! - mapMeters[0]!, roundTrip[1]! - mapMeters[1]!) *
+      NORMALIZATION_SCALE;
+    return error <= ROUND_TRIP_TOLERANCE ? [world[0]!, world[1]!, 0] : null;
   } catch {
     return null;
   }
