@@ -13,6 +13,23 @@ map's own CRS.
 > See [visgl/deck.gl#10739](https://github.com/visgl/deck.gl/issues/10739) for
 > more information.
 
+## deck.gl v10
+
+The example runs on deck.gl 9.4. `src/custom-projection/` stands in for
+deck.gl v10's experimental `_CustomProjectionView`, and follows its API as
+of `v10.0.0-alpha.1`: the view takes a `crs` (a PROJ string, WKT, PROJJSON or
+one of the few EPSG codes math.gl knows, such as `EPSG:3857`), which math.gl
+5's projection engine (`@math.gl/geospatial`) resolves, as in v10.
+
+To move to deck.gl v10:
+
+1. Import `_CustomProjectionView` from `@deck.gl/core` in place of the
+   stand-in's `CustomProjectionView`.
+2. Resolve CRSs with math.gl's `projectionEngine.getCRS` in place of the
+   stand-in's `resolveCRS`.
+3. Move `pixelToWorld` out of `src/custom-projection/` (it works with
+   upstream's viewport too), then delete the directory.
+
 To view locally:
 
 ```bash
@@ -25,7 +42,7 @@ pnpm dev
 ## Limitations
 
 - Top-down camera only (no pitch or bearing), and no `maxBounds`.
-- Rasters assume the view's `fromCrs` is WGS84 lng/lat (the default).
+- Map CRSs must be in meters. Upstream also takes other linear units.
 - Polar-native rasters that contain a pole only render in their own polar
   projection. In a world projection the pole stretches into a line and their
   tiles straddle the antimeridian, which one mesh per tile can't represent.
@@ -34,15 +51,16 @@ pnpm dev
 - Tiles crossing the edge of the projection's domain are trimmed exactly only
   for grids whose rows are parallels (EPSG:4326, Web Mercator). Other sources
   are clamped to the domain. That folds the tile's mesh along the edge, and
-  the reprojector keeps refining until it hits its iteration cap. The polar
-  presets' domains therefore extend 20° past the equator, so whole-hemisphere
-  polar datasets like the NASA basemap stay inside them.
+  the reprojector keeps refining until it hits its iteration cap. Each map's
+  domain is the latitude band that math.gl clamps its CRS to: 60° past the
+  equator for polar stereographic, so whole-hemisphere polar datasets like
+  the NASA basemap stay inside it.
 - Geographic grids stop half a degree short of each pole, where their rows
   collapse to a point. That leaves a hole about 110 km across at the pole. The
   cut dates from when the mesh's error was measured in source pixels, which
   never converged there; in output pixels it does, and the cut saves only
   about 1% of the triangles.
-- Projections whose valid area isn't a lng/lat box, such as a single
+- Projections whose valid area isn't a latitude band, such as a single
   hemisphere in orthographic, aren't handled.
 - Switching projection refetches tiles: each projection gets its own tile
   layer.

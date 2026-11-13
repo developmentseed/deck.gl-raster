@@ -26,7 +26,7 @@ import {
   loadingWidgetProps,
 } from "deck.gl-raster-examples-shared";
 import "@deck.gl/widgets/stylesheet.css";
-import proj4 from "proj4";
+import type { CRSDescriptor } from "@math.gl/geospatial/projection/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LngLat } from "./context-layers.js";
 import {
@@ -34,10 +34,10 @@ import {
   geojsonLines,
   renderContextLayers,
 } from "./context-layers.js";
-import type { ProjectionConverter } from "./custom-projection/index.js";
 import {
   CustomProjectionView,
   pixelToWorld,
+  resolveCRS,
 } from "./custom-projection/index.js";
 import type { ElevationTileData } from "./datasets.js";
 import {
@@ -51,11 +51,15 @@ import {
   makeRenderVelocityTile,
   OVERLAYS,
 } from "./overlays.js";
-import { ProjectedCOGLayer } from "./projected-cog-layer/index.js";
+import {
+  lngLatDomain,
+  ProjectedCOGLayer,
+} from "./projected-cog-layer/index.js";
+import type { ProjectionPreset } from "./projections.js";
 import { PROJECTIONS } from "./projections.js";
 
-/** The world-coordinate CRS of every view: WGS84 longitude/latitude. */
-const FROM_CRS = "EPSG:4326";
+/** A projection preset whose CRS has resolved. */
+type ResolvedProjection = { preset: ProjectionPreset; crs: CRSDescriptor };
 
 /**
  * Optional starting state from the URL, e.g.
@@ -130,30 +134,47 @@ export default function App() {
     }
   });
 
-  // One converter, view and camera per projection. The view is memoized
-  // because deck.gl compares view props (including the converter's functions)
-  // to decide whether to rebuild viewports.
-  const { converter, view, initialViewState } = useMemo(() => {
-    const converter: ProjectionConverter = proj4(FROM_CRS, preset.toCrs);
+  // The projection on screen: the selected preset once its CRS has resolved
+  // (a few milliseconds). Until then the previous one stays up, so deck.gl
+  // keeps its device.
+  const [resolved, setResolved] = useState<ResolvedProjection | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve(resolveCRS(preset.crs)).then(
+      (crs) => {
+        if (!cancelled) {
+          setResolved({ preset, crs });
+        }
+      },
+      (error) => console.error(`Failed to resolve ${preset.crs}`, error),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [preset]);
+  const drawn = resolved?.preset;
+
+  // One view and camera per projection. The view is memoized because deck.gl
+  // compares view props to decide whether to rebuild viewports.
+  const { view, initialViewState } = useMemo(() => {
+    if (!drawn) {
+      return { view: null, initialViewState: null };
+    }
     return {
-      converter,
       // Once deck.gl ships `_CustomProjectionView`, this is the same call
       // with the upstream class; see README.md.
       view: new CustomProjectionView({
         id: "map",
         controller: true,
-        projection: converter,
-        fromCrs: FROM_CRS,
-        toCrs: preset.toCrs,
-        fromBounds: preset.fromBounds,
+        crs: drawn.crs,
       }),
       // A fresh object resets deck's internal view state on projection change.
       initialViewState:
-        preset.id === URL_STATE.projectionId && URL_STATE.camera
+        drawn.id === URL_STATE.projectionId && URL_STATE.camera
           ? { ...URL_STATE.camera }
-          : { ...preset.initialViewState },
+          : { ...drawn.initialViewState },
     };
-  }, [preset]);
+  }, [drawn]);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,27 +210,27 @@ export default function App() {
     }
   }, [device, colormapImage]);
 
-  const context = useMemo(
-    () =>
-      renderContextLayers({
-        idPrefix: preset.id,
-        fromBounds: preset.fromBounds,
-        project: (position) => converter.forward(position),
-        graticuleStep: preset.graticuleStep,
-        coastlines,
-        showGraticule,
-        showCoastlines,
-      }),
-    [preset, converter, coastlines, showGraticule, showCoastlines],
-  );
+  const context = useMemo(() => {
+    if (!resolved) {
+      return { below: [], above: [] };
+    }
+    const { preset: projection, crs } = resolved;
+    const converter = crs.converter.WGS84;
+    return renderContextLayers({
+      idPrefix: projection.id,
+      domain: lngLatDomain(converter),
+      project: (position) => converter.from(converter.normalize(position)),
+      graticuleStep: projection.graticuleStep,
+      coastlines,
+      showGraticule,
+      showCoastlines,
+    });
+  }, [resolved, coastlines, showGraticule, showCoastlines]);
 
   const rasterLayer = useMemo(() => {
     const common = {
       id: `cog-${dataset.id}`,
       source: dataset.url,
-      // Upstream's viewport doesn't expose its domain, so the layer gets it
-      // explicitly (the shim's viewport would also provide it).
-      fromBounds: preset.fromBounds,
       debug: debugState.debug,
       debugOpacity: debugState.debugOpacity,
     };
@@ -225,7 +246,7 @@ export default function App() {
       renderTile: makeRenderElevationTile(colormapTexture),
       onTileUnload: (tile) => tile.content?.texture.destroy(),
     });
-  }, [dataset, preset, colormapTexture, debugState]);
+  }, [dataset, colormapTexture, debugState]);
 
   const overlayLayer = useMemo(() => {
     if (!overlay || !colormapTexture) {
@@ -234,13 +255,12 @@ export default function App() {
     return new ProjectedCOGLayer<VelocityTileData>({
       id: `overlay-${overlay.id}`,
       source: overlay.url,
-      fromBounds: preset.fromBounds,
       getTileData: getVelocityTileData,
       renderTile: makeRenderVelocityTile(colormapTexture),
       onTileUnload: (tile) => tile.content?.texture.destroy(),
       opacity: 0.9,
     });
-  }, [overlay, preset, colormapTexture]);
+  }, [overlay, colormapTexture]);
 
   const layers = [
     ...context.below,
@@ -267,15 +287,17 @@ export default function App() {
         background: "#070b14",
       }}
     >
-      <DeckGL
-        ref={deckRef}
-        views={view}
-        initialViewState={initialViewState}
-        layers={layers}
-        widgets={[new LoadingWidget(loadingWidgetProps)]}
-        onDeviceInitialized={setDevice}
-        onHover={onHover}
-      />
+      {view && initialViewState ? (
+        <DeckGL
+          ref={deckRef}
+          views={view}
+          initialViewState={initialViewState}
+          layers={layers}
+          widgets={[new LoadingWidget(loadingWidgetProps)]}
+          onDeviceInitialized={setDevice}
+          onHover={onHover}
+        />
+      ) : null}
 
       <ControlPanel
         title={

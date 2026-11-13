@@ -122,6 +122,9 @@ importers:
       '@devseed-ui/collecticons-chakra':
         specifier: ^4.0.0
         version: 4.0.0(@chakra-ui/react@3.37.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@math.gl/web-mercator':
+        specifier: ^4.1.0
+        version: 4.1.0
       maplibre-gl:
         specifier: ^5.24.0
         version: 5.24.0
@@ -506,15 +509,15 @@ importers:
       '@math.gl/culling':
         specifier: ^4.1.0
         version: 4.1.0
+      '@math.gl/geospatial':
+        specifier: 5.0.0-beta.8
+        version: 5.0.0-beta.8(apache-arrow@21.2.0)
       '@math.gl/web-mercator':
         specifier: ^4.1.0
         version: 4.1.0
       deck.gl-raster-examples-shared:
         specifier: workspace:*
         version: link:../../_shared
-      proj4:
-        specifier: ^2.22.0
-        version: 2.22.0(geotiff@3.0.5)
       react:
         specifier: ^19.3.1
         version: 19.3.1
@@ -534,6 +537,9 @@ importers:
       gh-pages:
         specifier: ^6.3.0
         version: 6.3.0
+      proj4:
+        specifier: ^2.22.0
+        version: 2.22.0(geotiff@3.0.5)
       vite:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0)
@@ -4046,14 +4052,39 @@ packages:
   '@maplibre/vt-pbf@4.3.0':
     resolution: {integrity: sha512-jIvp8F5hQCcreqOOpEt42TJMUlsrEcpf/kI1T2v85YrQRV6PPXUcEXUg5karKtH6oh47XJZ4kHu56pUkOuqA7w==}
 
+  '@math.gl/arrow@5.0.0-beta.8':
+    resolution: {integrity: sha512-qdIn3V2lRJ5n2JPVqrMgwIqSQLOShQgzYCJyJDAwD0HVw00vhthZn5WY+vPPjH0nbaR/kR0Aj2izsULquf5KVA==}
+    peerDependencies:
+      apache-arrow: '>=17.0.0'
+    peerDependenciesMeta:
+      apache-arrow:
+        optional: true
+
   '@math.gl/core@4.1.0':
     resolution: {integrity: sha512-FrdHBCVG3QdrworwrUSzXIaK+/9OCRLscxI2OUy6sLOHyHgBMyfnEGs99/m3KNvs+95BsnQLWklVfpKfQzfwKA==}
+
+  '@math.gl/core@5.0.0-beta.8':
+    resolution: {integrity: sha512-5aJzRyUe0kAoCHsenFHd4/Gkqe0TLMOexggi1oHp5chrIETN878LjSChE8NRVA3RGL3uK6GeW00fZfC8kSeDcQ==}
 
   '@math.gl/culling@4.1.0':
     resolution: {integrity: sha512-jFmjFEACnP9kVl8qhZxFNhCyd47qPfSVmSvvjR0/dIL6R9oD5zhR1ub2gN16eKDO/UM7JF9OHKU3EBIfeR7gtg==}
 
+  '@math.gl/expressions@5.0.0-beta.8':
+    resolution: {integrity: sha512-V1oJJtKWKcFnTHGcJjod9DxLCDziZfN6jlTO8Mj7n8Q/syo4eNvvsWytJbYxby0HcwEfxl0ZIroZkZUcOKvnnA==}
+    peerDependencies:
+      apache-arrow: '>=17.0.0'
+    peerDependenciesMeta:
+      apache-arrow:
+        optional: true
+
+  '@math.gl/geometry@5.0.0-beta.8':
+    resolution: {integrity: sha512-CHK7HHkHCFjxySpBzNOkvXTtLEIgZOqyQSv0GQMLtdSKEh3x8Q+X+ansiZ/EfvHk6jkfv/HQAySzgL4s7uM0tw==}
+
   '@math.gl/geospatial@4.1.0':
     resolution: {integrity: sha512-BzsUhpVvnmleyYF6qdqJIip6FtIzJmnWuPTGhlBuPzh7VBHLonCFSPtQpbkRuoyAlbSyaGXcVt6p6lm9eK2vtg==}
+
+  '@math.gl/geospatial@5.0.0-beta.8':
+    resolution: {integrity: sha512-c16Vb2pJrVceKpsVh6IercBC1F5jZR2PXt9noAf7uDsTyUSpsxcm1IVDMHfz9Od5DXeUhcsQCjq8Re4t0M/mdQ==}
 
   '@math.gl/polygon@4.1.0':
     resolution: {integrity: sha512-YA/9PzaCRHbIP5/0E9uTYrqe+jsYTQoqoDWhf6/b0Ixz8bPZBaGDEafLg3z7ffBomZLacUty9U3TlPjqMtzPjA==}
@@ -4061,11 +4092,17 @@ packages:
   '@math.gl/sun@4.1.0':
     resolution: {integrity: sha512-i3q6OCBLSZ5wgZVhXg+X7gsjY/TUtuFW/2KBiq/U1ypLso3S4sEykoU/MGjxUv1xiiGtr+v8TeMbO1OBIh/HmA==}
 
+  '@math.gl/tasks@5.0.0-beta.8':
+    resolution: {integrity: sha512-KNy9fVivBk2d0NThFl76UTN8clG+Xt+MxlrPTSs/8nEzU53qlg0l2Xay8OQUFhHmjAh6dn8mDomc3pIiOnmquA==}
+
   '@math.gl/types@4.1.0':
     resolution: {integrity: sha512-clYZdHcmRvMzVK5fjeDkQlHUzXQSNdZ7s4xOqC3nJPgz4C/TZkUecTo9YS4PruZqtDda/ag4erndP0MIn40dGA==}
 
   '@math.gl/web-mercator@4.1.0':
     resolution: {integrity: sha512-HZo3vO5GCMkXJThxRJ5/QYUYRr3XumfT8CzNNCwoJfinxy5NtKUd7dusNTXn7yJ40UoB8FMIwkVwNlqaiRZZAw==}
+
+  '@math.gl/web-mercator@5.0.0-beta.8':
+    resolution: {integrity: sha512-Ci4eWsHgwYXRTKGqnr3kPsAIMFNTo0dlV5sUZ0nHaIkgj+koohMF/krnS7/+1pbkgiMGmiqOVStDlP8RwGYn4Q==}
 
   '@mdx-js/mdx@3.1.1':
     resolution: {integrity: sha512-f6ZO2ifpwAQIpzGWaBQT2TXxPv6z3RBzQKpVftEWN78Vl/YweF1uwussDx8ECAXVtr3Rs89fKyG9YlzUs9DyGQ==}
@@ -8450,6 +8487,9 @@ packages:
   pmtiles@4.5.0:
     resolution: {integrity: sha512-CBeD4SoUluFziGdy/8k7FOjQxQy486n+929W/tWophauvMICpkZ26vGBWhDt/6b1FZQWNaf4jFdT/5+q0Wii5w==}
 
+  polygon-clipping@0.15.7:
+    resolution: {integrity: sha512-nhfdr83ECBg6xtqOAJab1tbksbBAOMUltN60bU+llHVOL0e5Onm1WpAXXWXVB39L8AJFssoIhEVuy/S90MmotA==}
+
   postcss-attribute-case-insensitive@7.0.1:
     resolution: {integrity: sha512-Uai+SupNSqzlschRyNx3kbCTWgY/2hcwtHEI/ej2LJWc9JJ77qKgGptd8DHwY1mXtZ7Aoh4z4yxfwMBue9eNgw==}
     engines: {node: '>=18'}
@@ -9465,6 +9505,10 @@ packages:
   spdy@4.0.2:
     resolution: {integrity: sha512-r46gZQZQV+Kl9oItvl1JZZqJKGr+oEkB08A6BzkiR7593/7IbtuncXHd2YoYeTsG4157ZssMu9KYvUHLcjcDoA==}
     engines: {node: '>=6.0.0'}
+
+  splaytree@3.2.3:
+    resolution: {integrity: sha512-7OXrNWzy6CK+r7Ch9OLPBDTKfB6XlWHjX4P0RU5B3IgFuWPeYN0XtRtlexGRjgbQxpfaUve6jTAwBGWuGntz/w==}
+    engines: {node: '>=18.20 || >=20'}
 
   split-string@3.1.0:
     resolution: {integrity: sha512-NzNVhJDYpwceVVii8/Hu6DKfD2G+NrQHlS/V/qgv763EYudVwEcMQNxd2lh+0VrUByXN/oJkl5grOhYWvQUYiw==}
@@ -13877,19 +13921,55 @@ snapshots:
       pbf: 4.0.1
       supercluster: 8.0.1
 
+  '@math.gl/arrow@5.0.0-beta.8(apache-arrow@21.2.0)':
+    dependencies:
+      '@math.gl/core': 5.0.0-beta.8
+      '@math.gl/geometry': 5.0.0-beta.8
+      '@math.gl/tasks': 5.0.0-beta.8
+    optionalDependencies:
+      apache-arrow: 21.2.0
+
   '@math.gl/core@4.1.0':
     dependencies:
       '@math.gl/types': 4.1.0
+
+  '@math.gl/core@5.0.0-beta.8': {}
 
   '@math.gl/culling@4.1.0':
     dependencies:
       '@math.gl/core': 4.1.0
       '@math.gl/types': 4.1.0
 
+  '@math.gl/expressions@5.0.0-beta.8(apache-arrow@21.2.0)':
+    dependencies:
+      '@math.gl/arrow': 5.0.0-beta.8(apache-arrow@21.2.0)
+      '@math.gl/core': 5.0.0-beta.8
+      '@math.gl/geometry': 5.0.0-beta.8
+      '@math.gl/tasks': 5.0.0-beta.8
+    optionalDependencies:
+      apache-arrow: 21.2.0
+
+  '@math.gl/geometry@5.0.0-beta.8':
+    dependencies:
+      '@math.gl/core': 5.0.0-beta.8
+
   '@math.gl/geospatial@4.1.0':
     dependencies:
       '@math.gl/core': 4.1.0
       '@math.gl/types': 4.1.0
+
+  '@math.gl/geospatial@5.0.0-beta.8(apache-arrow@21.2.0)':
+    dependencies:
+      '@mapbox/martini': 0.2.0
+      '@math.gl/arrow': 5.0.0-beta.8(apache-arrow@21.2.0)
+      '@math.gl/core': 5.0.0-beta.8
+      '@math.gl/expressions': 5.0.0-beta.8(apache-arrow@21.2.0)
+      '@math.gl/geometry': 5.0.0-beta.8
+      '@math.gl/tasks': 5.0.0-beta.8
+      '@math.gl/web-mercator': 5.0.0-beta.8
+      polygon-clipping: 0.15.7
+    transitivePeerDependencies:
+      - apache-arrow
 
   '@math.gl/polygon@4.1.0':
     dependencies:
@@ -13897,11 +13977,17 @@ snapshots:
 
   '@math.gl/sun@4.1.0': {}
 
+  '@math.gl/tasks@5.0.0-beta.8': {}
+
   '@math.gl/types@4.1.0': {}
 
   '@math.gl/web-mercator@4.1.0':
     dependencies:
       '@math.gl/core': 4.1.0
+
+  '@math.gl/web-mercator@5.0.0-beta.8':
+    dependencies:
+      '@math.gl/core': 5.0.0-beta.8
 
   '@mdx-js/mdx@3.1.1':
     dependencies:
@@ -18963,6 +19049,11 @@ snapshots:
     dependencies:
       fflate: 0.8.3
 
+  polygon-clipping@0.15.7:
+    dependencies:
+      robust-predicates: 3.0.3
+      splaytree: 3.2.3
+
   postcss-attribute-case-insensitive@7.0.1(postcss@8.5.28):
     dependencies:
       postcss: 8.5.28
@@ -20333,6 +20424,8 @@ snapshots:
       spdy-transport: 3.0.0
     transitivePeerDependencies:
       - supports-color
+
+  splaytree@3.2.3: {}
 
   split-string@3.1.0:
     dependencies:

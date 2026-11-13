@@ -3,9 +3,11 @@ import {
   AffineTilesetLevel,
 } from "@developmentseed/deck.gl-raster";
 import { RasterReprojector } from "@developmentseed/raster-reproject";
-import proj4 from "proj4";
 import { describe, expect, it } from "vitest";
-import { CustomProjectionViewport } from "../src/custom-projection/index.js";
+import {
+  CustomProjectionViewport,
+  resolveCRS,
+} from "../src/custom-projection/index.js";
 import { CustomProjectionTileset2D } from "../src/projected-cog-layer/custom-projection-tileset-2d.js";
 import { createProjectionContext } from "../src/projected-cog-layer/projection-context.js";
 import { pixelRectToTriangulation } from "../src/projected-cog-layer/tile-geometry.js";
@@ -49,13 +51,10 @@ function globalGeographicDescriptor(
 
 describe("geographic tiles in polar views", () => {
   for (const presetId of ["arctic", "antarctic"]) {
-    it(`mesh every in-domain tile within the refinement cap (${presetId})`, () => {
+    it(`mesh every in-domain tile within the refinement cap (${presetId})`, async () => {
       const preset = PROJECTIONS.find((p) => p.id === presetId)!;
       const viewport = new CustomProjectionViewport({
-        projection: proj4("EPSG:4326", preset.toCrs),
-        fromCrs: "EPSG:4326",
-        toCrs: preset.toCrs,
-        fromBounds: preset.fromBounds,
+        crs: await resolveCRS(preset.crs),
         width: 1000,
         height: 800,
         center: preset.initialViewState.center,
@@ -63,11 +62,7 @@ describe("geographic tiles in polar views", () => {
       });
       const sizes = levelSizes(4);
       const descriptor = globalGeographicDescriptor(sizes);
-      const projection = createProjectionContext(
-        viewport,
-        descriptor,
-        preset.fromBounds,
-      );
+      const projection = createProjectionContext(viewport, descriptor);
       const tileset = new CustomProjectionTileset2D(
         { getTileData: () => null } as never,
         descriptor,

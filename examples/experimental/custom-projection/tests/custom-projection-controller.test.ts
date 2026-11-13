@@ -5,18 +5,20 @@ import {
   CustomProjectionController,
   CustomProjectionView,
   NORMALIZATION_SCALE,
+  resolveCRS,
 } from "../src/custom-projection/index.js";
 
 const ARCTIC =
   "+proj=stere +lat_0=90 +lat_ts=70 +lon_0=-45 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs";
 
+// Resolved up front, so the view finds the CRS when the controller asks it
+// for viewports.
+await resolveCRS(ARCTIC);
+
 function setup() {
   const view = new CustomProjectionView({
     id: "map",
-    projection: proj4("EPSG:4326", ARCTIC),
-    fromCrs: "EPSG:4326",
-    toCrs: ARCTIC,
-    fromBounds: [-180, 0, 180, 90],
+    crs: ARCTIC,
     controller: true,
   });
   const emitted: Record<string, any>[] = [];
