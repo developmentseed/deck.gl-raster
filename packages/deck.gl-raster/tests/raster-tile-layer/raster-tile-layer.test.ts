@@ -1,5 +1,9 @@
 import type { UpdateParameters } from "@deck.gl/core";
-import { CompositeLayer } from "@deck.gl/core";
+import {
+  CompositeLayer,
+  _GlobeViewport as GlobeViewport,
+  WebMercatorViewport,
+} from "@deck.gl/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RasterTileLayerProps } from "../../src/raster-tile-layer/index.js";
 import { RasterTileLayer } from "../../src/raster-tile-layer/index.js";
@@ -143,7 +147,13 @@ describe("RasterTileLayer world wrap", () => {
       ...props,
     } as RasterTileLayerProps);
     Object.assign(layer as object, {
-      context: { viewport: { resolution: globe ? 1 : undefined } },
+      context: {
+        viewport: globe
+          ? new GlobeViewport()
+          : Object.assign(Object.create(WebMercatorViewport.prototype), {
+              resolution: 0,
+            }),
+      },
       getSubLayerProps: <T>(p: T) => p,
     });
     const identity = (x: number, y: number): [number, number] => [x, y];
