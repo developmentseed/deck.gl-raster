@@ -1,20 +1,7 @@
 import type { Viewport } from "@deck.gl/core";
 import { OrthographicViewport } from "@deck.gl/core";
+import type { CRSDescriptor } from "@math.gl/geospatial/projection/core";
 import { pixelsToWorld } from "@math.gl/web-mercator";
-
-/**
- * A planar map converter, compatible with proj4js converters targeting a
- * meter-based CRS. Same shape as upstream deck.gl's `ProjectionConverter`.
- */
-export type ProjectionConverter = {
-  /** Converts world XYZ (`fromCrs`) to map meters (`toCrs`). */
-  forward: (position: number[]) => number[];
-  /** Converts map-meter XYZ back to world coordinates, or `null` outside its domain. */
-  inverse: (position: number[]) => number[] | null;
-};
-
-/** `[minX, minY, maxX, maxY]` in world coordinates (`fromCrs`). */
-export type FromBounds = [number, number, number, number];
 
 type OrthographicViewportOptions = NonNullable<
   ConstructorParameters<typeof OrthographicViewport>[0]
@@ -22,13 +9,15 @@ type OrthographicViewportOptions = NonNullable<
 
 /**
  * Options for {@link CustomProjectionViewport}. Mirrors upstream deck.gl's
- * `CustomProjectionViewportOptions`, minus `pitch`, `bearing`,
- * `getDistanceScale` and `orthographic`, which this shim does not support.
+ * `CustomProjectionViewportOptions` (v10.0.0-alpha.1), minus `pitch`,
+ * `bearing` and `orthographic`, which this shim does not support.
  */
 export type CustomProjectionViewportOptions = Omit<
   OrthographicViewportOptions,
   "target" | "flipY" | "zoom" | "zoomX" | "zoomY"
 > & {
+  /** The resolved target CRS. Must be projected, with axes in meters. */
+  crs: CRSDescriptor;
   /** Zoom level; each increment doubles the scale. Matches `MapView` zoom. */
   zoom?: number;
   /**
@@ -40,18 +29,7 @@ export type CustomProjectionViewportOptions = Omit<
   zoomX?: number;
   /** Shim-internal; see `zoomX`. */
   zoomY?: number;
-  /** Converts world XYZ in `fromCrs` to planar map-meter XYZ in `toCrs`, and back. */
-  projection: ProjectionConverter;
-  /** World-coordinate CRS name or PROJ string. Defaults to `"WGS84"`. */
-  fromCrs?: string;
-  /** Planar, meter-based map CRS name or PROJ string. */
-  toCrs?: string;
-  /**
-   * The projection's valid domain in `fromCrs`. Positions are clamped to it
-   * before being projected.
-   */
-  fromBounds?: FromBounds;
-  /** Camera center in `fromCrs` world coordinates. Defaults to `[0, 0, 0]`. */
+  /** Camera center in WGS84 longitude/latitude. Defaults to `[0, 0, 0]`. */
   center?: number[];
   /**
    * Camera center in map meters. Shim-internal: the controller writes it so
@@ -60,8 +38,9 @@ export type CustomProjectionViewportOptions = Omit<
    */
   target?: [number, number, number] | [number, number];
   /**
-   * Accepted for API parity with upstream (path subdivision). Unused by the
-   * shim: vector layers in this example are preprojected on the CPU.
+   * Subdivision intervals around the Earth, as upstream. Part of
+   * `projectionSignature`; otherwise unused by the shim, whose vector layers
+   * are projected on the CPU.
    */
   resolution?: number;
 };
@@ -70,76 +49,55 @@ export type CustomProjectionViewportOptions = Omit<
 const EC = 40075016.6855;
 
 /**
- * Common-space units per map meter. Identical to upstream's
+ * Common-space units per meter. Identical to upstream's
  * `NORMALIZATION_SCALE`, which makes zoom levels match `MapView`: at zoom `z`
  * there are `512 * 2 ** z` pixels per Earth circumference.
  */
 export const NORMALIZATION_SCALE = 512 / EC;
 
 /**
+ * Largest distance, in common units, between a map position and its inverse
+ * projected forward again, for the inverse to count as valid.
+ */
+const ROUND_TRIP_TOLERANCE = 1e-5;
+
+/**
  * Interim stand-in for upstream deck.gl's experimental
- * `_CustomProjectionViewport` (visgl/deck.gl#10741, unreleased as of deck.gl
- * 9.4), built on `OrthographicViewport`.
+ * `_CustomProjectionViewport` (v10.0.0-alpha.1), built on
+ * `OrthographicViewport`.
  *
- * World units are map meters in `toCrs`; common space is map meters scaled by
- * {@link NORMALIZATION_SCALE}, exactly as upstream. Differences from upstream:
+ * World units are map meters in `crs`; common space is map meters scaled by
+ * {@link NORMALIZATION_SCALE}, exactly as upstream. Differences from
+ * upstream:
  *
  * - Top-down orthographic camera only: no pitch or bearing.
- * - `project`/`unproject` and `getBounds` work in map meters, not `fromCrs`.
- *   Use {@link CustomProjectionViewport.preproject} /
- *   {@link CustomProjectionViewport.postUnproject} to convert.
+ * - Meter-based CRSs only. Upstream also scales other linear units.
+ * - `project`/`unproject`, `projectPosition` and `getBounds` work in map
+ *   meters, not WGS84. Convert with `crs.converter.WGS84`.
  * - Layers are never preprojected: positions must be supplied in map meters
  *   with `coordinateSystem: "cartesian"` (which upstream supports too).
  *
- * The properties shared with upstream — `preproject`, `postUnproject`,
- * `projectFlat`, `unprojectFlat`, `projectionSignature` — have upstream's
- * semantics, so code written against them works with both.
+ * The members shared with upstream (`crs`, `projectFlat`, `unprojectFlat`,
+ * `projectionSignature`) have upstream's semantics, so code written against
+ * them works with both.
  */
 export class CustomProjectionViewport extends OrthographicViewport {
   static override displayName = "CustomProjectionViewport";
 
-  /** The converter from `fromCrs` world coordinates to map meters. */
-  readonly projection: ProjectionConverter;
-  /** World-coordinate CRS name. */
-  readonly fromCrs: string;
-  /** Map CRS name. */
-  readonly toCrs: string | undefined;
-  /**
-   * The projection's valid domain in `fromCrs`. Shim-only: upstream's
-   * viewport keeps it private, so code that must also run on upstream should
-   * take the bounds explicitly (as `ProjectedCOGLayer`'s `fromBounds` prop
-   * does).
-   */
-  readonly fromBounds: FromBounds | undefined;
+  /** The target CRS. `crs.converter.WGS84` converts to and from map meters. */
+  readonly crs: CRSDescriptor;
   private readonly signature: string;
 
   constructor(opts: CustomProjectionViewportOptions) {
-    const {
-      projection,
-      fromBounds,
-      fromCrs = "WGS84",
-      toCrs,
-      resolution = 0,
-      center = [0, 0, 0],
-    } = opts;
+    const { crs, resolution = 0, center = [0, 0, 0] } = opts;
     if (!Number.isFinite(resolution) || resolution < 0) {
       throw new Error(
         "CustomProjectionViewport requires finite, non-negative resolution",
       );
     }
-    if (
-      fromBounds &&
-      (!fromBounds.every(Number.isFinite) ||
-        fromBounds[2] <= fromBounds[0] ||
-        fromBounds[3] <= fromBounds[1])
-    ) {
-      throw new Error(
-        "CustomProjectionViewport requires finite, increasing fromBounds",
-      );
-    }
+    assertMeterAxes(crs);
 
-    let target =
-      opts.target ?? projectWith(projection, fromBounds, [...center]);
+    let target = opts.target ?? projectCenter(crs, center);
     if (!Number.isFinite(target[0]) || !Number.isFinite(target[1])) {
       // A center the projection can't handle would make every matrix NaN.
       target = [0, 0, 0];
@@ -173,60 +131,16 @@ export class CustomProjectionViewport extends OrthographicViewport {
       ],
     };
 
-    this.projection = projection;
-    this.fromCrs = fromCrs;
-    this.toCrs = toCrs;
-    this.fromBounds = fromBounds;
-    this.signature = JSON.stringify([fromCrs, toCrs, resolution]);
+    this.crs = crs;
+    this.signature = JSON.stringify([crs.signature, resolution]);
   }
 
   /**
-   * An opaque signature based only on `fromCrs`, `toCrs` and `resolution`.
-   * Layers use it to invalidate projected positions.
+   * An opaque signature of the CRS and `resolution`. Layers use it to
+   * invalidate projected positions.
    */
   get projectionSignature(): string {
     return this.signature;
-  }
-
-  /**
-   * Converts world coordinates (`fromCrs`) to XYZ in map meters, clamping to
-   * `fromBounds` first. Independent of the camera.
-   */
-  preproject(position: number[]): [number, number, number] {
-    return projectWith(this.projection, this.fromBounds, position);
-  }
-
-  /**
-   * Converts map-meter XYZ back to world coordinates (`fromCrs`). Returns
-   * `null` when the inverse throws, returns non-finite values, or fails a
-   * forward round-trip check (some converters extrapolate outside their
-   * domain).
-   */
-  postUnproject(position: number[]): [number, number, number] | null {
-    const projected = [position[0]!, position[1]!, position[2] ?? 0];
-    try {
-      const input = this.projection.inverse(projected.slice());
-      if (!input || input.length < 2 || !input.every(Number.isFinite)) {
-        return null;
-      }
-      const roundTrip = this.projection.forward(input.slice());
-      if (
-        !Number.isFinite(roundTrip[0]) ||
-        !Number.isFinite(roundTrip[1]) ||
-        Math.hypot(
-          roundTrip[0]! - projected[0]!,
-          roundTrip[1]! - projected[1]!,
-        ) *
-          NORMALIZATION_SCALE >
-          1e-5
-      ) {
-        return null;
-      }
-      const bounded = clampToBounds(input, this.fromBounds);
-      return [bounded[0]!, bounded[1]!, bounded[2] ?? projected[2]!];
-    } catch {
-      return null;
-    }
   }
 
   /** Converts XY in map meters to common-space XY (fixed linear scale). */
@@ -240,11 +154,16 @@ export class CustomProjectionViewport extends OrthographicViewport {
   }
 
   /**
-   * Camera center in world coordinates (`fromCrs`), or `null` when the map
-   * center lies outside the projection's invertible area.
+   * Camera center in WGS84, normalized into the projection's rendering
+   * extent, or `null` where the inverse projection fails.
    */
   getCenterInWorld(): [number, number, number] | null {
-    return this.postUnproject([this.target[0], this.target[1], 0]);
+    const world = unprojectToWorld(this.crs, [this.target[0], this.target[1]]);
+    if (!world) {
+      return null;
+    }
+    const normalized = this.crs.converter.WGS84.normalize([...world]);
+    return [normalized[0]!, normalized[1]!, 0];
   }
 
   /**
@@ -262,40 +181,73 @@ export class CustomProjectionViewport extends OrthographicViewport {
 }
 
 /**
- * Convert a screen pixel to world coordinates (`fromCrs`), or `null` if it
- * falls outside the projection's invertible area.
+ * Convert a screen pixel to WGS84, or `null` where the inverse projection
+ * fails.
  *
  * Written against members that upstream's `_CustomProjectionViewport` shares
  * with the shim, so it works with both.
  */
 export function pixelToWorld(
-  viewport: Viewport & {
-    postUnproject(position: number[]): number[] | null;
-  },
+  viewport: Viewport & { crs: CRSDescriptor },
   pixel: [number, number],
 ): number[] | null {
   const common = pixelsToWorld(pixel, viewport.pixelUnprojectionMatrix, 0);
-  const mapMeters = viewport.unprojectFlat(common);
-  return viewport.postUnproject([mapMeters[0]!, mapMeters[1]!, 0]);
+  return unprojectToWorld(viewport.crs, viewport.unprojectFlat(common));
 }
 
-function projectWith(
-  projection: ProjectionConverter,
-  fromBounds: FromBounds | undefined,
-  position: number[],
-): [number, number, number] {
-  const projected = projection.forward(clampToBounds(position, fromBounds));
-  return [projected[0]!, projected[1]!, projected[2] ?? position[2] ?? 0];
-}
-
-function clampToBounds(
-  position: number[],
-  bounds: FromBounds | undefined,
-): number[] {
-  const result = position.slice();
-  if (bounds) {
-    result[0] = Math.max(bounds[0], Math.min(bounds[2], result[0]!));
-    result[1] = Math.max(bounds[1], Math.min(bounds[3], result[1]!));
+/**
+ * Throw unless every axis of `crs` is in meters. deck.gl's base `Viewport`
+ * calls `projectFlat` from its constructor, before a per-CRS scale could be
+ * stored, so the shim's scale is a constant.
+ */
+function assertMeterAxes(crs: CRSDescriptor): void {
+  const metersPerUnit = [crs.xUnit, crs.yUnit, crs.zUnit].map(
+    (unit) => unit.metersPerUnit,
+  );
+  if (!metersPerUnit.every((value) => value === 1)) {
+    throw new Error(
+      "CustomProjectionViewport requires linear CRS axes in meters",
+    );
   }
-  return result;
+}
+
+/**
+ * The camera target in map meters for a WGS84 center, normalized into the
+ * projection's rendering extent first. NaN when the center can't be
+ * projected.
+ */
+function projectCenter(crs: CRSDescriptor, center: number[]): number[] {
+  const { WGS84 } = crs.converter;
+  try {
+    return WGS84.from(WGS84.normalize([center[0]!, center[1]!, 0]));
+  } catch {
+    // math.gl rejects non-finite coordinates; the caller falls back.
+    return [Number.NaN, Number.NaN];
+  }
+}
+
+/**
+ * Map meters to WGS84, or `null` where the inverse fails. math.gl throws for
+ * some coordinates outside a projection's domain, and beside the map it can
+ * return a wrapped longitude instead, which doesn't project back to where it
+ * came from.
+ */
+function unprojectToWorld(
+  crs: CRSDescriptor,
+  mapMeters: number[],
+): [number, number, number] | null {
+  const { WGS84 } = crs.converter;
+  try {
+    const world = WGS84.to([mapMeters[0]!, mapMeters[1]!, 0]);
+    if (!Number.isFinite(world[0]) || !Number.isFinite(world[1])) {
+      return null;
+    }
+    const roundTrip = WGS84.from(world);
+    const error =
+      Math.hypot(roundTrip[0]! - mapMeters[0]!, roundTrip[1]! - mapMeters[1]!) *
+      NORMALIZATION_SCALE;
+    return error <= ROUND_TRIP_TOLERANCE ? [world[0]!, world[1]!, 0] : null;
+  } catch {
+    return null;
+  }
 }

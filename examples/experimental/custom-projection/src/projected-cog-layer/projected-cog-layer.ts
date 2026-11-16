@@ -10,7 +10,6 @@ import { PathLayer } from "@deck.gl/layers";
 import type { COGLayerProps } from "@developmentseed/deck.gl-geotiff";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
 import type {
-  Bounds,
   GetTileDataOptions,
   MinimalTileData,
   RasterTileLayerProps,
@@ -34,20 +33,13 @@ import { pixelRectToTriangulation } from "./tile-geometry.js";
 /** Same shape as `COGLayer`'s (unexported) default tile data. */
 type DefaultDataT = MinimalTileData & { texture: Texture; byteLength: number };
 
-/** Props for {@link ProjectedCOGLayer}. */
+/**
+ * Props for {@link ProjectedCOGLayer}: those of `COGLayer`. The projection,
+ * including its domain, comes from the view's CRS.
+ */
 export type ProjectedCOGLayerProps<
   DataT extends MinimalTileData = DefaultDataT,
-> = COGLayerProps<DataT> & {
-  /**
-   * The view's projection domain in lng/lat (the view's `fromBounds`). Tiles
-   * outside it are skipped, and geographic tiles crossing its edge are
-   * trimmed; without a domain, polar views fetch tiles from the wrong
-   * hemisphere and draw them clamped onto the map's rim. Defaults to the
-   * viewport's `fromBounds`, which only this example's shim exposes:
-   * upstream's viewport keeps it private, so pass it explicitly there.
-   */
-  fromBounds?: Bounds;
-};
+> = COGLayerProps<DataT>;
 
 type SubLayerProps<DataT> = TileLayerProps<DataT> & {
   id: string;
@@ -150,23 +142,15 @@ export class ProjectedCOGLayer<
     viewport: Viewport & CustomProjectionViewportLike,
     descriptor: RasterTilesetDescriptor,
   ): ProjectionContext {
-    const fromBounds =
-      (this.props as ProjectedCOGLayerProps<DataT>).fromBounds ??
-      viewport.fromBounds;
     const cached = this.state.projectionContext;
     if (
       cached &&
       cached.signature === viewport.projectionSignature &&
-      sameBounds(cached.fromBounds, fromBounds) &&
       this.state.projectionDescriptor === descriptor
     ) {
       return cached;
     }
-    const projection = createProjectionContext(
-      viewport,
-      descriptor,
-      fromBounds,
-    );
+    const projection = createProjectionContext(viewport, descriptor);
     this.state.projectionContext = projection;
     this.state.projectionDescriptor = descriptor;
     return projection;
@@ -215,7 +199,7 @@ export class ProjectedCOGLayer<
       // in the projection, so a new projection gets a new TileLayer (as
       // upstream recommends when switching projections). So does each refetch
       // (see `RasterTileLayer._refetchTiles`).
-      id: `projected-tile-layer-${this.id}-${projection.signature}-${projection.fromBounds?.join(",") ?? "world"}-${this.state.refetchCount ?? 0}`,
+      id: `projected-tile-layer-${this.id}-${projection.signature}-${this.state.refetchCount ?? 0}`,
       TilesetClass: TilesetFactory,
       getTileData: (tile) => this._getProjectedTileData(tile, getTileData),
       renderSubLayers: (props) =>
@@ -320,11 +304,6 @@ export class ProjectedCOGLayer<
     );
     return [rasterLayer, ...debugLayers];
   }
-}
-
-/** Whether two optional bounds are equal by value. */
-function sameBounds(a: Bounds | undefined, b: Bounds | undefined): boolean {
-  return a === b || (!!a && !!b && a.every((value, i) => value === b[i]));
 }
 
 /** A viewport's `projectionSignature`, or `null` if it has no custom projection. */

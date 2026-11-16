@@ -198,6 +198,8 @@ export class RasterTileset2D extends Tileset2D {
   private wgs84Bounds: Bounds;
   private getPixelRatio: () => number;
   private abortUnwantedLoads: boolean;
+  /** Tiles passed to `onTileUnload`. */
+  private unloadedTiles = new WeakSet<object>();
   private boundingVolumeCache: BoundingVolumeCache;
   private projectPosition: ProjectionFunction;
   private unprojectPosition: ProjectionFunction;
@@ -271,17 +273,30 @@ export class RasterTileset2D extends Tileset2D {
   }
 
   /**
-   * deck.gl's options, with `onTileUnload` wrapped to abort a still-loading
-   * tile first when {@link RasterTileset2DOptions.abortUnwantedLoads} is on:
-   * deck.gl evicts such tiles inside `update`, before {@link update}'s own
-   * pass sees them, and with the `best-available` refinement strategy
-   * replaced by {@link _bestAvailable}.
+   * deck.gl's options, with two callbacks wrapped and one strategy replaced:
+   *
+   * - `onTileUnload` aborts a still-loading tile first when
+   *   {@link RasterTileset2DOptions.abortUnwantedLoads} is on: deck.gl evicts
+   *   such tiles inside `update`, before {@link update}'s own pass sees them.
+   * - `onTileLoad` unloads a tile whose load finishes after the tile was
+   *   unloaded, such as one evicted mid-load, instead of reporting it loaded.
+   *   See visgl/deck.gl#10883.
+   * - The `best-available` refinement strategy is replaced by
+   *   {@link _bestAvailable}.
    */
   override setOptions(opts: Tileset2DProps): void {
-    const { onTileUnload, refinementStrategy } = opts;
+    const { onTileLoad, onTileUnload, refinementStrategy } = opts;
     super.setOptions({
       ...opts,
+      onTileLoad: (tile) => {
+        if (this.unloadedTiles.has(tile)) {
+          onTileUnload?.(tile);
+          return;
+        }
+        onTileLoad?.(tile);
+      },
       onTileUnload: (tile) => {
+        this.unloadedTiles.add(tile);
         if (this.abortUnwantedLoads && tile.isLoading) {
           tile.abort();
         }

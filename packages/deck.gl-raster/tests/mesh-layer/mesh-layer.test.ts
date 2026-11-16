@@ -1,6 +1,7 @@
 import { LayerManager } from "@deck.gl/core";
 import type { Device } from "@luma.gl/core";
 import type { ShaderModule } from "@luma.gl/shadertools";
+import { getShaderModuleDependencies } from "@luma.gl/shadertools";
 import { describe, expect, it, vi } from "vitest";
 import type { MeshTextureLayerProps } from "../../src/mesh-layer/mesh-layer.js";
 import { MeshTextureLayer } from "../../src/mesh-layer/mesh-layer.js";
@@ -50,8 +51,8 @@ const MESH = {
 /**
  * Render {@link MeshTextureLayer} through deck.gl's {@link LayerManager}. Each
  * call of `render` renders a new layer instance with the given props, as apps
- * do on every render, and returns the layer's model. `remove` renders no
- * layers.
+ * do on every render, and returns the layer's model. `layer` returns the last
+ * rendered layer. `remove` renders no layers.
  */
 function makeRenderer() {
   // The GPU resources deck.gl creates for the layer besides its model
@@ -67,10 +68,11 @@ function makeRenderer() {
     },
   });
 
+  let layer: FakeModelMeshTextureLayer | undefined;
   const render = (
     props: Partial<Pick<MeshTextureLayerProps, "mesh" | "renderPipeline">> = {},
   ): FakeModel => {
-    const layer = new FakeModelMeshTextureLayer({
+    layer = new FakeModelMeshTextureLayer({
       id: "mesh",
       mesh: MESH,
       renderPipeline: [],
@@ -80,7 +82,7 @@ function makeRenderer() {
     return layer.getModels()[0] as unknown as FakeModel;
   };
   const remove = () => layerManager.setLayers([]);
-  return { render, remove };
+  return { render, remove, layer: () => layer };
 }
 
 describe("MeshTextureLayer vertex arrays", () => {
@@ -112,5 +114,16 @@ describe("MeshTextureLayer vertex arrays", () => {
     model.destroy = () => model.vertexArray.destroy();
     remove();
     expect(model.vertexArray.destroy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("MeshTextureLayer shaders", () => {
+  it("leave out the lighting modules", () => {
+    const { render, layer } = makeRenderer();
+    render();
+    const modules = getShaderModuleDependencies(layer()!.getShaders().modules);
+    const names = modules.map((m) => m.name);
+    expect(names).not.toContain("phongMaterial");
+    expect(names).not.toContain("lighting");
   });
 });

@@ -150,8 +150,8 @@ type TraversalContext = {
  *   `RasterTileset2D` (see `isFineEnough`), with a source pixel's size
  *   measured from the screen area of the part of the tile that is drawn. That
  *   accounts for the projection's distortion wherever the tile lies.
- * - **Domain**: tiles entirely outside the projection's domain (`fromBounds`)
- *   are skipped, and partially outside geographic tiles get a mesh seed that
+ * - **Domain**: tiles entirely outside the projection's domain (from the
+ *   view's CRS) are skipped, and partially outside geographic tiles get a mesh seed that
  *   trims them to the domain.
  * - **Selection**: each tile is selected at most once, and never together
  *   with one of its ancestors.
@@ -456,7 +456,7 @@ export class CustomProjectionTileset2D extends Tileset2D {
       index.x,
       index.y,
     );
-    const { sourceToLngLat, lngLatToSource, fromBounds } = this.projection;
+    const { sourceToLngLat, lngLatToSource, domain } = this.projection;
 
     const domainRect = computeDomainPixelRect({
       corners,
@@ -465,7 +465,7 @@ export class CustomProjectionTileset2D extends Tileset2D {
       sourceToLngLat,
       lngLatToSource,
       inverseTransform,
-      fromBounds,
+      domain,
     });
 
     const sourceRing = sampleBoundary(corners, SAMPLES_PER_EDGE);
@@ -479,10 +479,9 @@ export class CustomProjectionTileset2D extends Tileset2D {
     const outsideDomain =
       domainRect === null ||
       !lngLatBounds ||
-      (fromBounds !== undefined &&
-        !boundsIntersect(lngLatBounds, fromBounds) &&
+      (!boundsIntersect(lngLatBounds, domain) &&
         !sampleGrid(corners, INTERIOR_GRID_SIZE).some(([x, y]) =>
-          insideBounds(sourceToLngLat(x, y), fromBounds),
+          insideBounds(sourceToLngLat(x, y), domain),
         ));
 
     const mapRing = this.toMapRing(sourceRing);

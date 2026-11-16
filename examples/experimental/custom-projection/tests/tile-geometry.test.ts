@@ -45,7 +45,7 @@ describe("computeDomainPixelRect", () => {
     // Northern hemisphere domain; the tile spans 20°N..20°S.
     const rect = computeDomainPixelRect({
       ...geographicTile(0, 20, 40, -20),
-      fromBounds: [-180, 0, 180, 90],
+      domain: [-180, 0, 180, 90],
     });
     expect(rect).toEqual([0, 0, 512, 256]);
   });
@@ -53,7 +53,7 @@ describe("computeDomainPixelRect", () => {
   it("keeps the tile off the pole", () => {
     const rect = computeDomainPixelRect({
       ...geographicTile(0, 90, 40, 50),
-      fromBounds: [-180, 0, 180, 90],
+      domain: [-180, 0, 180, 90],
     });
     // Meshing stops at 89.5°: half a degree of a 40° tile's 512 rows.
     expect(rect?.[1]).toBeCloseTo(6.4, 9);
@@ -77,7 +77,7 @@ describe("computeDomainPixelRect", () => {
         (lng / 180) * 256,
         ((90 - lat) / 180) * 256,
       ],
-      fromBounds: undefined,
+      domain: undefined,
     });
     expect(rect?.[1]).toBeCloseTo(1, 9);
     expect(rect?.[3]).toBeCloseTo(255, 9);
@@ -87,7 +87,7 @@ describe("computeDomainPixelRect", () => {
     expect(
       computeDomainPixelRect({
         ...geographicTile(0, 60, 40, 20),
-        fromBounds: [-180, 0, 180, 90],
+        domain: [-180, 0, 180, 90],
       }),
     ).toBeUndefined();
   });
@@ -96,7 +96,7 @@ describe("computeDomainPixelRect", () => {
     expect(
       computeDomainPixelRect({
         ...geographicTile(0, -20, 40, -60),
-        fromBounds: [-180, 0, 180, 90],
+        domain: [-180, 0, 180, 90],
       }),
     ).toBeNull();
   });
@@ -104,7 +104,7 @@ describe("computeDomainPixelRect", () => {
   it("trims longitude for a regional domain", () => {
     const rect = computeDomainPixelRect({
       ...geographicTile(-40, 60, 40, 20),
-      fromBounds: [0, -90, 180, 90],
+      domain: [0, -90, 180, 90],
     });
     expect(rect).toEqual([256, 0, 512, 512]);
   });
@@ -113,7 +113,7 @@ describe("computeDomainPixelRect", () => {
     const rotated = geographicTile(0, 60, 40, 20);
     rotated.corners.topRight = [40, 61];
     expect(
-      computeDomainPixelRect({ ...rotated, fromBounds: [-180, 0, 180, 90] }),
+      computeDomainPixelRect({ ...rotated, domain: [-180, 0, 180, 90] }),
     ).toBeUndefined();
   });
 });
