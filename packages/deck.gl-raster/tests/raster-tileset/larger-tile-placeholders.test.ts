@@ -52,7 +52,7 @@ function makeTileset(
   );
 }
 
-/** Every tile of an `n` × `n` level `z`. */
+/** Every tile of an `n` x `n` level `z`. */
 function grid(z: number, n: number): TileIndex[] {
   const indices: TileIndex[] = [];
   for (let y = 0; y < n; y++) {
@@ -93,8 +93,8 @@ function visible(tileset: ControlledTileset, z: number): string[] {
 const ids = (indices: TileIndex[]) =>
   indices.map(({ x, y, z }) => `${x}-${y}-${z}`).sort();
 
-// A 512 px overview in 128 px tiles (4 × 4), then a 1024 px full-resolution
-// image in 512 px tiles (2 × 2): each full-resolution tile covers 2 × 2
+// A 512 px overview in 128 px tiles (4 x 4), then a 1024 px full-resolution
+// image in 512 px tiles (2 x 2): each full-resolution tile covers 2 x 2
 // overview tiles.
 const OVERVIEW_THEN_FULL: [number, number][] = [
   [512, 128],
@@ -159,7 +159,7 @@ describe("best-available across larger tiles", () => {
   });
 
   it("falls back to a coarser tile where a covered tile isn't cached", () => {
-    // A 256 px overview in 128 px tiles (2 × 2) above the same two levels.
+    // A 256 px overview in 128 px tiles (2 x 2) above the same two levels.
     const tileset = makeTileset([[256, 128], ...OVERVIEW_THEN_FULL]);
     select(tileset, grid(0, 2));
     load(tileset, ids(grid(0, 2)));
