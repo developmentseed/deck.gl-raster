@@ -8,6 +8,9 @@ on:
       - reopened
       - synchronize
 
+permissions:
+  pull-requests: write # add the type label, creating it if missing
+
 jobs:
   lint:
     name: PR title
