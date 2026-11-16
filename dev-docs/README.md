@@ -23,7 +23,7 @@ but deferred. Read-only context until promoted into a spec.
 
 [`reports/`](reports/) holds research reports: a question, its answer
 and the evidence, with the raw notes, scripts and results in
-`reports/research_notes/`. Like specs, they're historical.
+`reports/research-notes/`. Like specs, they're historical.
 [`summaries/`](summaries/) has a short version of each report, under
 the same file name.
 

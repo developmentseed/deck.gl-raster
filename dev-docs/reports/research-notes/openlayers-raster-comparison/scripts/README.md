@@ -1,6 +1,6 @@
 # Scripts
 
-The measurements behind [the report](../../../OpenLayers%20raster%20comparison.md).
+The measurements behind [the report](../../../openlayers-raster-comparison.md).
 `results/` holds their output from 2026-11-16 (Apple M2 Pro, Node 24.21.0,
 proj4 2.22.0).
 
@@ -29,7 +29,7 @@ git -C ../openlayers checkout e50554baf350ea5ab1c1db6e7aa530b29fc5681f
 # PR #759's head commit, for reprojector-variants.mjs.
 git fetch origin pull/759/head
 
-cd "dev-docs/reports/research_notes/OpenLayers raster comparison/scripts"
+cd dev-docs/reports/research-notes/openlayers-raster-comparison/scripts
 OPENLAYERS_DIR=../../../../../../openlayers node openlayers-vs-ours.mjs
 OPENLAYERS_DIR=../../../../../../openlayers node overzoom-error.mjs
 node reprojector-variants.mjs

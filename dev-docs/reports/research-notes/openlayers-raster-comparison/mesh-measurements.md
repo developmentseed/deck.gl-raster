@@ -1,7 +1,7 @@
 # Mesh measurements: method, results and pitfalls
 
 Notes behind the mesh sections of
-[the report](../../OpenLayers%20raster%20comparison.md). The scripts are in
+[the report](../../openlayers-raster-comparison.md). The scripts are in
 [`scripts/`](scripts/) and their full output in
 [`scripts/results/`](scripts/results/).
 

@@ -3,9 +3,9 @@
 - **Date:** 2026-11-09 (research); 2026-11-16 (written up, measurements re-run)
 - **Code read:** deck.gl-raster [`a72d7a14`][dgr] (0.10.0-beta.4), OpenLayers
   [`e50554ba`][ol] (10.11.1-dev, BSD-2-Clause)
-- **Summary:** [`../summaries/OpenLayers raster comparison.md`](../summaries/OpenLayers%20raster%20comparison.md)
+- **Summary:** [`../summaries/openlayers-raster-comparison.md`](../summaries/openlayers-raster-comparison.md)
 - **Research notes, scripts and results:**
-  [`research_notes/OpenLayers raster comparison/`](research_notes/OpenLayers%20raster%20comparison/)
+  [`research-notes/openlayers-raster-comparison/`](research-notes/openlayers-raster-comparison/)
 
 ## The question
 
@@ -143,7 +143,7 @@ the same tolerance in output pixels. Experiment B runs each library as it
 runs: OpenLayers meshes every Web Mercator tile that overlaps the image, at the
 zoom where one screen pixel is about one source pixel. The method and its
 pitfalls are in
-[`mesh_measurements.md`](research_notes/OpenLayers%20raster%20comparison/mesh_measurements.md).
+[`mesh-measurements.md`](research-notes/openlayers-raster-comparison/mesh-measurements.md).
 
 **Experiment A, same job, 0.125 px** (errors in output px, times in ms):
 
@@ -199,7 +199,7 @@ What the tables show:
   - Our mesh of that tile hits the 10,000-insertion cap in 51 ms, most of its
     19,988 triangles have zero area, and its true error stays at 0.5-1.3 px
     (measuring it needs care: see
-    [Pitfalls](research_notes/OpenLayers%20raster%20comparison/mesh_measurements.md#pitfalls)).
+    [Pitfalls](research-notes/openlayers-raster-comparison/mesh-measurements.md#pitfalls)).
 
 **The 0.125 px default explains part of our cost, not all of it.** Error grows
 with the square of triangle size, so a 4x tighter tolerance costs about 4x the
@@ -295,7 +295,7 @@ The prototype runs `_legalize`'s in-circle test on the vertices' output
 positions instead of their UVs, negating y when the map mirrors the UV
 orientation (Web Mercator's y grows north, v grows south). It is a text patch
 of `delatin.ts`, `withMapSpaceDelaunayTest` in
-[`scripts/common.mjs`](research_notes/OpenLayers%20raster%20comparison/scripts/common.mjs).
+[`scripts/common.mjs`](research-notes/openlayers-raster-comparison/scripts/common.mjs).
 
 | 512 px tile, 0.125 px | `main`: triangles, ms | Map-space: triangles, ms | Map-space + [#759]: ms (vs `main`) |
 |---|---|---|---|
@@ -448,7 +448,7 @@ In order of value against effort:
    but the comparison measured it.
 2. **The map-space Delaunay test**, on a branch built on [#759], with the UV
    flip guard and an equator fix, measured with
-   [`reprojector-variants.mjs`](research_notes/OpenLayers%20raster%20comparison/scripts/reprojector-variants.mjs).
+   [`reprojector-variants.mjs`](research-notes/openlayers-raster-comparison/scripts/reprojector-variants.mjs).
    It is the largest mesh win available for global lat/lon data.
 3. **Forced splits or more test points** for the equator blind spot, which
    OpenLayers guards with its quarter-world rule ([#713]). The same
@@ -467,8 +467,8 @@ normalization as a default, and WebGL 1.
 
 ## Defects found in deck.gl-raster
 
-**Measured** ([`reprojector-variants.txt`](research_notes/OpenLayers%20raster%20comparison/scripts/results/reprojector-variants.txt),
-[`overzoom-refine.txt`](research_notes/OpenLayers%20raster%20comparison/scripts/results/overzoom-refine.txt)):
+**Measured** ([`reprojector-variants.txt`](research-notes/openlayers-raster-comparison/scripts/results/reprojector-variants.txt),
+[`overzoom-refine.txt`](research-notes/openlayers-raster-comparison/scripts/results/overzoom-refine.txt)):
 
 - **Lat/lon tiles that cross the equator get degenerate meshes at the default
   tolerance.** Of the 8,938 triangles in the 128° tile of 0.25° data, 530
@@ -508,11 +508,11 @@ normalization as a default, and WebGL 1.
 ## Reproducing
 
 The scripts, their README and their output are in
-[`research_notes/OpenLayers raster comparison/scripts/`](research_notes/OpenLayers%20raster%20comparison/scripts/).
+[`research-notes/openlayers-raster-comparison/scripts/`](research-notes/openlayers-raster-comparison/scripts/).
 The two feature surveys behind the usability section are
-[`openlayers_raster.md`](research_notes/OpenLayers%20raster%20comparison/openlayers_raster.md)
+[`openlayers-raster.md`](research-notes/openlayers-raster-comparison/openlayers-raster.md)
 and
-[`deckgl_raster.md`](research_notes/OpenLayers%20raster%20comparison/deckgl_raster.md).
+[`deckgl-raster.md`](research-notes/openlayers-raster-comparison/deckgl-raster.md).
 Both cite file and line at the commits above.
 
 [dgr]: https://github.com/developmentseed/deck.gl-raster/tree/a72d7a147717d0bf4ef7745ae1c887bcab6ae023

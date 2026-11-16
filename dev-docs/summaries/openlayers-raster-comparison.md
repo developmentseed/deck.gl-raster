@@ -1,7 +1,7 @@
 # OpenLayers raster comparison
 
 **Date:** 2026-11-09 (written up 2026-11-16)
-**Detailed version:** [`../reports/OpenLayers raster comparison.md`](../reports/OpenLayers%20raster%20comparison.md), with the research notes, scripts and results beside it.
+**Detailed version:** [`../reports/openlayers-raster-comparison.md`](../reports/openlayers-raster-comparison.md), with the research notes, scripts and results beside it.
 **Builds on:** [`../specs/2026-10-13-output-pixel-error-design.md`](../specs/2026-10-13-output-pixel-error-design.md) and [`../lod-and-pixel-matching.md`](../lod-and-pixel-matching.md).
 
 ## The question
