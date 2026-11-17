@@ -315,11 +315,11 @@ const experimentalExamples: Example[] = [
         <Link to="https://onnxruntime.ai/docs/tutorials/web/">
           ONNX Runtime Web
         </Link>{" "}
-        models, run on WebGPU over every tile{" "}
+        models, executed by WebGPU per{" "}
         <Link to="/deck.gl-raster/api/deck-gl-zarr/classes/ZarrLayer/">
           ZarrLayer
         </Link>{" "}
-        loads.
+        tile.
       </>
     ),
     href: "https://developmentseed.org/deck.gl-raster/examples/onnx-embeddings/",
