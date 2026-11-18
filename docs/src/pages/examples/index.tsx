@@ -307,6 +307,30 @@ const experimentalExamples: Example[] = [
     source:
       "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/pmtiles-terrain",
   },
+  {
+    title: "ONNX Embeddings",
+    description: (
+      <>
+        Search, cluster and classify AlphaEarth satellite embeddings with small{" "}
+        <Link to="https://onnxruntime.ai/docs/tutorials/web/">
+          ONNX Runtime Web
+        </Link>{" "}
+        models, executed by WebGPU per{" "}
+        <Link to="/deck.gl-raster/api/deck-gl-zarr/classes/ZarrLayer/">
+          ZarrLayer
+        </Link>{" "}
+        tile.
+      </>
+    ),
+    href: "https://developmentseed.org/deck.gl-raster/examples/onnx-embeddings/",
+    image: [
+      "/deck.gl-raster/img/onnx-embeddings-similarity.jpg",
+      "/deck.gl-raster/img/onnx-embeddings-clusters.jpg",
+      "/deck.gl-raster/img/onnx-embeddings-classifier.jpg",
+    ],
+    source:
+      "https://github.com/developmentseed/deck.gl-raster/tree/main/examples/experimental/onnx-embeddings",
+  },
 ];
 
 /**
