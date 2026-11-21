@@ -6,7 +6,7 @@ import type {
   LayerContext,
   UpdateParameters,
 } from "@deck.gl/core";
-import { CompositeLayer } from "@deck.gl/core";
+import { CompositeLayer, _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import type {
   _Tile2DHeader as Tile2DHeader,
   TileLayerProps,
@@ -773,7 +773,7 @@ export class RasterTileLayer<
     const { image, renderPipeline } = tileResult;
     const { width, height } = props.data;
 
-    const isGlobe = this.context.viewport.resolution !== undefined;
+    const isGlobe = this.context.viewport instanceof GlobeViewport;
     let reprojectionFns: ReprojectionFns;
     let coordinateSystem: CoordinateSystem;
     // The period of the mesh's x axis, if it wraps around.
