@@ -1,0 +1,30 @@
+# Refining a mesh past its tile's level
+
+node v24.21.0, proj4 2.22.0, Apple M2 Pro, darwin
+
+Each row halves the tolerance (one extra zoom level). "cap" = stopped after 1,000,000 refinement steps without reaching it.
+
+## UTM 33N, 10 m, 5 km (a Sentinel-2 tile at full resolution)
+
+| Extra levels | Tolerance (output px) | Triangles | Max error reached | Refine in place (ms) | From scratch (ms) | Folded tris | Zero-area tris | Duplicate vertices |
+|---|---|---|---|---|---|---|---|---|
+| +0 | 0.125 | 2 | 0.1029 | 0.05 | 0.12 | 0 | 0 | 0 |
+| +1 | 0.0625 | 4 | 0.0517 | 0.46 | 0.17 | 0 | 0 | 0 |
+| +2 | 0.03125 | 8 | 0.0258 | 0.16 | 0.32 | 0 | 0 | 0 |
+| +3 | 0.015625 | 16 | 0.0129 | 0.28 | 0.45 | 0 | 0 | 0 |
+| +4 | 0.0078125 | 32 | 0.0064 | 0.66 | 0.65 | 0 | 0 | 0 |
+| +5 | 0.00390625 | 64 | 0.0032 | 0.39 | 0.60 | 0 | 0 | 0 |
+| +6 | 0.001953125 | 128 | 0.0016 | 1.13 | 2.50 | 0 | 0 | 0 |
+
+## EPSG:4326, 0.25 deg, 128 deg from 80N to 48S (a coarse global tile)
+
+| Extra levels | Tolerance (output px) | Triangles | Max error reached | Refine in place (ms) | From scratch (ms) | Folded tris | Zero-area tris | Duplicate vertices |
+|---|---|---|---|---|---|---|---|---|
+| +0 | 0.125 | 8940 | 0.1249 | 53.88 | 45.46 | 6 | 525 | 6 |
+| +1 | 0.0625 | 15423 | 0.0625 | 33.00 | 67.38 | 6 | 542 | 11 |
+| +2 | 0.03125 | 31582 | 0.0312 | 73.81 | 164.29 | 9 | 109 | 28 |
+| +3 | 0.015625 | 61075 | 0.0156 | 139.56 | 413.79 | 9 | 149 | 38 |
+| +4 | 0.0078125 | 2061049 (cap) | 0.0135 | 5984.93 | 6305.72 | 993755 | 942 | 993841 |
+
+Last 100000 vertices added, by latitude band: -5 to 0 deg: 50000, 0 to 5 deg: 50000. Within 0.001 of the left or right edge (in u): 50000.
+
