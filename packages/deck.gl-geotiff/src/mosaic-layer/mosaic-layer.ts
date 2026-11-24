@@ -186,6 +186,8 @@ export type MosaicLayerProps<
 
     /**
      * Called when an item is evicted from the tile cache, with its source.
+     * An item still opening is unloaded with no source, then again with its
+     * source once the open finishes.
      */
     onSourceUnload?: (item: ItemT, info: { source?: SourceT }) => void;
 

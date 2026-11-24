@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@chakra-ui/react": "^3.37.0",
-    "@deck.gl/mapbox": "^9.4.1",
-    "@deck.gl/widgets": "^9.4.1",
+    "@deck.gl/mapbox": "^9.4.2",
+    "@deck.gl/widgets": "^9.4.2",
     "@devseed-ui/collecticons-chakra": "^4.0.0",
     "@math.gl/web-mercator": "^4.1.0",
     "maplibre-gl": "^5.24.0",

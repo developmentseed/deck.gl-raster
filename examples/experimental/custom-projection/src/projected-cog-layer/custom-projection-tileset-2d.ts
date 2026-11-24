@@ -235,21 +235,6 @@ export class CustomProjectionTileset2D extends Tileset2D {
     return selected;
   }
 
-  /**
-   * Release every cached tile's resources before dropping the cache.
-   *
-   * deck.gl's `Tileset2D.finalize` clears the cache without calling
-   * `onTileUnload`, so the tiles' GPU textures would leak each time the tile
-   * layer is replaced, which this example does on every projection or dataset
-   * change.
-   */
-  override finalize(): void {
-    for (const tile of this.tiles) {
-      this.opts.onTileUnload?.(tile);
-    }
-    super.finalize();
-  }
-
   override getTileId(index: TileIndex): string {
     return `${index.x}-${index.y}-${index.z}`;
   }
