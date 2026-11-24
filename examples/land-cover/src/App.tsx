@@ -144,7 +144,7 @@ export default function App() {
       getTileData,
       renderTile,
       onTileUnload: (tile) => tile.content?.texture.destroy(),
-      // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+      // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
       // doesn't know about it.
       beforeId: "aeroway-runway",
     });

@@ -1,5 +1,5 @@
-import type { MapboxOverlayProps } from "@deck.gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
+import type { MapLibreOverlayProps } from "@deck.gl/maplibre";
+import { MapLibreOverlay } from "@deck.gl/maplibre";
 import { useControl } from "react-map-gl/maplibre";
 
 /**
@@ -7,9 +7,9 @@ import { useControl } from "react-map-gl/maplibre";
  *
  * Drop inside a `<Map>` element: `<DeckGlOverlay layers={[layer]} interleaved />`.
  */
-export function DeckGlOverlay(props: MapboxOverlayProps) {
-  const overlay = useControl<MapboxOverlay>(
-    () => new MapboxOverlay(withReusedDevice(props)),
+export function DeckGlOverlay(props: MapLibreOverlayProps) {
+  const overlay = useControl<MapLibreOverlay>(
+    () => new MapLibreOverlay(withReusedDevice(props)),
   );
   overlay.setProps(withReusedDevice(props));
   return null;
@@ -28,7 +28,7 @@ export function DeckGlOverlay(props: MapboxOverlayProps) {
  * but not when it attaches to an existing context, as in interleaved mode
  * ({@link https://github.com/visgl/deck.gl/blob/5eded84b438eef83387dc6579c51670389053602/modules/core/src/lib/deck.ts#L434-L440 | deck.ts#L434-L440}).
  */
-function withReusedDevice(props: MapboxOverlayProps): MapboxOverlayProps {
+function withReusedDevice(props: MapLibreOverlayProps): MapLibreOverlayProps {
   return {
     ...props,
     deviceProps: { _reuseDevices: true, ...props.deviceProps },
