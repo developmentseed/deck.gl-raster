@@ -163,8 +163,6 @@ export class RasterTileset2D extends Tileset2D {
   private wgs84Bounds: Bounds;
   private getPixelRatio: () => number;
   private abortUnwantedLoads: boolean;
-  /** Tiles passed to `onTileUnload`. */
-  private unloadedTiles = new WeakSet<object>();
   private boundingVolumeCache: BoundingVolumeCache;
   private projectPosition: ProjectionFunction;
   private unprojectPosition: ProjectionFunction;
@@ -224,28 +222,16 @@ export class RasterTileset2D extends Tileset2D {
   }
 
   /**
-   * deck.gl's options, with two callbacks wrapped:
-   *
-   * - `onTileUnload` aborts a still-loading tile first when
-   *   {@link RasterTileset2DOptions.abortUnwantedLoads} is on: deck.gl evicts
-   *   such tiles inside `update`, before {@link update}'s own pass sees them.
-   * - `onTileLoad` unloads a tile whose load finishes after the tile was
-   *   unloaded, such as one evicted mid-load, instead of reporting it loaded.
-   *   See visgl/deck.gl#10883.
+   * deck.gl's options, with `onTileUnload` wrapped to abort a still-loading
+   * tile first when {@link RasterTileset2DOptions.abortUnwantedLoads} is on:
+   * deck.gl evicts such tiles inside `update`, before {@link update}'s own pass
+   * sees them.
    */
   override setOptions(opts: Tileset2DProps): void {
-    const { onTileLoad, onTileUnload } = opts;
+    const { onTileUnload } = opts;
     super.setOptions({
       ...opts,
-      onTileLoad: (tile) => {
-        if (this.unloadedTiles.has(tile)) {
-          onTileUnload?.(tile);
-          return;
-        }
-        onTileLoad?.(tile);
-      },
       onTileUnload: (tile) => {
-        this.unloadedTiles.add(tile);
         if (this.abortUnwantedLoads && tile.isLoading) {
           tile.abort();
         }
@@ -269,27 +255,6 @@ export class RasterTileset2D extends Tileset2D {
       }
     }
     return frame;
-  }
-
-  /**
-   * Unloads every cached tile. deck.gl's `Tileset2D.finalize` clears its cache
-   * without calling `onTileUnload`, so GPU resources that `getTileData` made
-   * for those tiles, like textures, would be freed only by garbage collection.
-   * A tile still loading is unloaded once its load finishes, since deck.gl
-   * keeps the data that `getTileData` returns after an abort. Not needed once
-   * https://github.com/visgl/deck.gl/pull/10883 lands.
-   */
-  override finalize(): void {
-    const { onTileUnload } = this.opts;
-    for (const tile of this.tiles) {
-      if (tile.isLoading) {
-        // `data` is a promise until the load finishes.
-        void Promise.resolve(tile.data).then(() => onTileUnload(tile));
-      } else {
-        onTileUnload(tile);
-      }
-    }
-    super.finalize();
   }
 
   /**

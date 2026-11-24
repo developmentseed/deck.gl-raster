@@ -117,7 +117,7 @@ describe("RasterTileset2D tile unloading", () => {
     expect(unloadedTiles(onTileUnload)).toEqual(tiles);
   });
 
-  it("unloads a tile still loading at finalize once its data arrives", async () => {
+  it("unloads a tile still loading at finalize again once its data arrives", async () => {
     const { getTileData, pending, resolveAll } = deferredTileData();
     const { tileset, onTileUnload } = makeTileset(getTileData);
     tileset.update(viewport);
@@ -125,8 +125,11 @@ describe("RasterTileset2D tile unloading", () => {
     const tiles = [...tileset.tiles];
     expect(pending).toHaveLength(tiles.length);
 
+    // deck.gl unloads every cached tile at finalize, before it has content.
     tileset.finalize();
-    expect(onTileUnload).not.toHaveBeenCalled();
+    expect(unloadedTiles(onTileUnload)).toEqual(tiles);
+    expect(tiles.every((tile) => tile.content === null)).toBe(true);
+    onTileUnload.mockClear();
     // getTileData ignores the abort and returns data anyway.
     resolveAll();
     await settle();

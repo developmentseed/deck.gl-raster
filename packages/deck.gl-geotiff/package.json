@@ -57,10 +57,10 @@
     "flatbush": "^4.6.2"
   },
   "peerDependencies": {
-    "@deck.gl/core": "^9.4.0",
-    "@deck.gl/geo-layers": "^9.4.0",
-    "@deck.gl/layers": "^9.4.0",
-    "@deck.gl/mesh-layers": "^9.4.0",
+    "@deck.gl/core": "^9.4.2",
+    "@deck.gl/geo-layers": "^9.4.2",
+    "@deck.gl/layers": "^9.4.2",
+    "@deck.gl/mesh-layers": "^9.4.2",
     "@luma.gl/core": "^9.4.0"
   },
   "volta": {

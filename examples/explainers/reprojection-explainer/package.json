@@ -11,9 +11,9 @@
   },
   "dependencies": {
     "@chakra-ui/react": "^3.37.0",
-    "@deck.gl/core": "^9.4.1",
-    "@deck.gl/extensions": "^9.4.1",
-    "@deck.gl/layers": "^9.4.1",
+    "@deck.gl/core": "^9.4.2",
+    "@deck.gl/extensions": "^9.4.2",
+    "@deck.gl/layers": "^9.4.2",
     "@developmentseed/affine": "workspace:^",
     "@developmentseed/raster-reproject": "workspace:^",
     "@luma.gl/core": "^9.4.2",

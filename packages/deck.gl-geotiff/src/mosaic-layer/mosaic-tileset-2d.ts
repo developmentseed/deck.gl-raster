@@ -85,24 +85,6 @@ export class MosaicTileset2D<ItemT extends MosaicItem> extends Tileset2D {
   }
 
   /**
-   * Unloads every cached item, which deck.gl's `finalize` skips until
-   * https://github.com/visgl/deck.gl/pull/10883 lands. An item still opening
-   * is unloaded once its open finishes.
-   */
-  override finalize(): void {
-    const { onTileUnload } = this.opts;
-    for (const tile of this.tiles) {
-      if (tile.isLoading) {
-        // `data` is a promise until the load finishes
-        void Promise.resolve(tile.data).then(() => onTileUnload(tile));
-      } else {
-        onTileUnload(tile);
-      }
-    }
-    super.finalize();
-  }
-
-  /**
    * Unloads every item, and opens the sources in view again on the next
    * update. deck.gl's `reloadAll` drops items without unloading them, and
    * keeps drawing the old ones (see #816).
