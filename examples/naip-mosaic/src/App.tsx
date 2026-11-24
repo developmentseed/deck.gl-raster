@@ -441,7 +441,7 @@ export default function App() {
           next.delete(item.id!);
           return next;
         }),
-      // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+      // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
       // doesn't know about it.
       beforeId: "boundary_country_outline",
     });
@@ -458,7 +458,7 @@ export default function App() {
         widthUnits: "pixels",
         getWidth: 2,
         // Over the mosaic, under the basemap's boundaries and labels
-        // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+        // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
         // doesn't know about it.
         beforeId: "boundary_country_outline",
       }),

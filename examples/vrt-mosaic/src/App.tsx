@@ -185,7 +185,7 @@ export default function App() {
             onTileUnload: (tile) => tile.content?.texture.destroy(),
           }),
         // Draw under the basemap's water, boundaries, roads and labels.
-        // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+        // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
         // doesn't know about it.
         beforeId: "waterway",
       }),

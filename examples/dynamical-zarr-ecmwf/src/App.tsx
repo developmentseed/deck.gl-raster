@@ -233,7 +233,7 @@ export default function App() {
                 filterMax,
               ],
             },
-            // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+            // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
             // doesn't know about it.
             beforeId: "boundary_county",
           }),

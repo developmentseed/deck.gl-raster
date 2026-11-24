@@ -120,7 +120,7 @@ export default function App() {
   const cogLayer = new COGLayer({
     id: "eox-cloudless",
     source: EOX_CLOUDLESS_URL,
-    // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+    // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
     // doesn't know about it.
     beforeId: BEFORE_ID,
   });
@@ -149,7 +149,7 @@ export default function App() {
         radiusUnits: "meters",
         radiusMinPixels: 1,
         pickable: true,
-        // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+        // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
         // doesn't know about it.
         beforeId: BEFORE_ID,
       }),

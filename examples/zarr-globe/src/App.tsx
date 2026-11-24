@@ -215,7 +215,7 @@ export default function App() {
             // culls back faces by default (deck.gl >= 9.4).
             // See visgl/deck.gl#9592.
             parameters: { depthCompare: "always" },
-            // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+            // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
             // doesn't know about it.
             beforeId: "boundary_country_outline",
           }),

@@ -425,7 +425,7 @@ export default function App() {
           updateTriggers: {
             renderTile: [rgb, view, backdrop, status?.renderVersion],
           },
-          // @ts-expect-error beforeId is injected by @deck.gl/mapbox; LayerProps
+          // @ts-expect-error beforeId is injected by @deck.gl/maplibre; LayerProps
           // doesn't know about it.
           beforeId: "boundary_country_outline",
         }),
