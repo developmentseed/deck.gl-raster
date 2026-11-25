@@ -5,7 +5,7 @@ import type {
   TextureSource,
   UpdateParameters,
 } from "@deck.gl/core";
-import { CompositeLayer } from "@deck.gl/core";
+import { CompositeLayer, _GlobeViewport as GlobeViewport } from "@deck.gl/core";
 import { PolygonLayer } from "@deck.gl/layers";
 import type {
   InitialTriangulation,
@@ -236,14 +236,11 @@ export class RasterLayer extends CompositeLayer<RasterLayerProps> {
       _wrapX,
     } = this.props;
 
-    // TEMPORARY GLOBE VIEW HACK:
-    //
-    // GlobeView (lnglat) uses viewport.resolution, the same detection as
-    // RasterTileLayer. THROWAWAY: globe renders a uniform grid instead of the
+    // On the globe, render a uniform grid instead of the
     // adaptive mesh, because Delatin's reprojection-error metric is blind to
     // sphere curvature and facets at low zoom. See globe-grid-mesh.ts and
     // dev-docs/specs/2026-05-21-globe-view-design.md.
-    const isGlobe = this.context?.viewport?.resolution !== undefined;
+    const isGlobe = this.context?.viewport instanceof GlobeViewport;
     if (isGlobe) {
       const { indices, positions64High, positions64Low, texCoords } =
         buildUniformGridMesh(reprojectionFns, width + 1, height + 1);

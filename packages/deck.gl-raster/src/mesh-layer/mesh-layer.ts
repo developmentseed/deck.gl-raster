@@ -191,20 +191,42 @@ export class MeshTextureLayer extends SimpleMeshLayer<
     const modules: ShaderModule[] = upstreamShaders.modules.filter(
       (m: ShaderModule) => m.name !== "phongMaterial",
     );
-    for (const m of this._resolveRenderPipeline()) {
-      modules.push(m.module);
-    }
-
-    return {
+    const pipeline = this._resolveRenderPipeline();
+    const shaders = {
       ...upstreamShaders,
-      // Override upstream's vertex shader with our copy that uses fp64
-      // emulation
       vs,
-      // Override upstream's fragment shader with our copy with modified
-      // injection points
       fs,
       modules,
     };
+
+    // deck.gl 10 assembles injections through shader plugins. deck.gl 9
+    // consumes them directly from the modules.
+    if ("plugins" in upstreamShaders) {
+      const rasterPlugins = pipeline.map(({ module }) => {
+        const { inject, ...shaderModule } = module;
+        return {
+          name: shaderModule.name,
+          module: shaderModule,
+          injections: Object.entries(inject ?? {}).map(([key, value]) => ({
+            stage: key.startsWith("vs:") ? "vertex" : "fragment",
+            target: key.slice(key.indexOf(":") + 1),
+            glsl: typeof value === "string" ? value : value.injection,
+            order: typeof value === "string" ? 0 : value.order,
+          })),
+        };
+      });
+      const upstreamPlugins = upstreamShaders.plugins;
+      return {
+        ...shaders,
+        plugins: [
+          ...(Array.isArray(upstreamPlugins) ? upstreamPlugins : []),
+          ...rasterPlugins,
+        ],
+      };
+    }
+
+    modules.push(...pipeline.map(({ module }) => module));
+    return shaders;
   }
 
   override draw(opts: any): void {
