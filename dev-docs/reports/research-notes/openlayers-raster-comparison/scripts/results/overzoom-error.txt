@@ -1,0 +1,8 @@
+# Mesh error under overzoom
+
+node v24.21.0, proj4 2.22.0, Apple M2 Pro, darwin
+
+| Mesh | Triangles | Max error (Mercator m) | CSS px at zoom 16 | zoom 18 | zoom 20 |
+|---|---|---|---|---|---|
+| Ours: one mesh for the tile, 0.125 output px | 2 | 1.458 | 1.22 | 4.88 | 19.54 |
+| OpenLayers: 48 target tiles at its finest level (OL z15), 0.5 px | 96 | 0.041 | 0.03 | 0.14 | 0.55 |
